@@ -3,7 +3,6 @@ use std::path::Path;
 use std::time::Duration;
 
 use bitfun_core::agentic::get_agent_registry;
-use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::plugin_runtime::{
     activate_managed_plugin, deactivate_managed_plugin, preview_managed_plugin_activation,
@@ -14,10 +13,11 @@ use bitfun_core::plugin_source::{
     ManagedPluginSourceIssue, ManagedPluginSourceSnapshot, ManagedPluginTrustDecision,
     ManagedPluginTrustLevel,
 };
-use bitfun_core::product_assembly::ProductAssemblyPlan;
+use bitfun_core::product_assembly::ProductRuntimeParts;
+use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 use bitfun_core::service::config::initialize_global_config;
 use bitfun_core::service::session_usage::{
-    generate_session_usage_report, render_usage_report_markdown, SessionUsageReportRequest,
+    render_usage_report_markdown, SessionUsageReportRequest,
 };
 
 async fn ensure_global_config_service(
@@ -217,36 +217,48 @@ pub(crate) async fn print_mcp_json_config() -> Result<()> {
     Ok(())
 }
 
+fn validate_usage_session_id(session_id: &str) -> Result<()> {
+    bitfun_agent_runtime::session_control::validate_session_id(session_id)
+        .map_err(anyhow::Error::msg)
+}
+
 pub(crate) async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
-    let agentic_system = crate::agent::agentic_system::init_agentic_system_for_cli().await?;
-    let path_manager = try_get_path_manager_arc().map_err(|error| anyhow!(error.to_string()))?;
-    let persistence_manager =
-        PersistenceManager::new(path_manager).map_err(|error| anyhow!(error.to_string()))?;
+    if let Some(session_id) = session_id.filter(|value| !value.trim().is_empty()) {
+        validate_usage_session_id(session_id)?;
+    }
     let workspace_path = std::env::current_dir().context("Failed to resolve current directory")?;
-    let coordinator = agentic_system.coordinator.clone();
+    let runtime = crate::initialize_core_services(
+        &workspace_path,
+        crate::runtime::approval::CliApprovalPolicy::Reject,
+        crate::BootstrapProfile::Management,
+    )
+    .await?;
     let resolved_session_id = match session_id {
         Some(session_id) if !session_id.trim().is_empty() => session_id.to_string(),
-        _ => coordinator
-            .list_sessions(&workspace_path)
+        _ => runtime
+            .agent_runtime()
+            .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
+                workspace_path: workspace_path.to_string_lossy().to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
             .await?
             .first()
             .map(|session| session.session_id.clone())
             .ok_or_else(|| anyhow!("No history sessions for current project"))?,
     };
 
-    let report = generate_session_usage_report(
-        &persistence_manager,
-        Some(agentic_system.token_usage_service.as_ref()),
-        SessionUsageReportRequest {
+    let report = runtime
+        .compatibility()
+        .generate_session_usage_report(SessionUsageReportRequest {
             session_id: resolved_session_id,
             workspace_path: Some(workspace_path.to_string_lossy().to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,
             include_hidden_subagents: true,
-        },
-    )
-    .await
-    .map_err(|error| anyhow!(error.to_string()))?;
+        })
+        .await
+        .map_err(|error| anyhow!(error.to_string()))?;
 
     println!("{}", render_usage_report_markdown(&report));
     Ok(())
@@ -610,7 +622,7 @@ pub(crate) async fn print_mcp_config_summary() -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn print_doctor(product_plan: &ProductAssemblyPlan) -> Result<bool> {
+pub(crate) async fn print_doctor(product_runtime: &ProductRuntimeParts) -> Result<bool> {
     let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
     let config_dir = crate::config::CliConfig::config_dir()?;
     let config_service = ensure_global_config_service().await?;
@@ -652,9 +664,28 @@ pub(crate) async fn print_doctor(product_plan: &ProductAssemblyPlan) -> Result<b
     println!("BitFun CLI doctor");
     println!();
     println!(
-        "[info] Product profile: {} (static plan only; runtime readiness not evaluated)",
-        product_plan.profile().id()
+        "[ok] Product runtime: {} assembly-ready",
+        product_runtime.plan().profile().id()
     );
+    println!("[ok] Runtime capability registrations: complete");
+    println!("[info] Execution owner: bitfun-core compatibility");
+    match product_runtime.plugin_runtime().availability() {
+        PluginRuntimeAvailability::Disabled { reason } => {
+            println!("[info] Plugin runtime: disabled ({reason})");
+        }
+        PluginRuntimeAvailability::ProjectionOnly { reason } => {
+            println!("[info] Plugin runtime: projection-only ({reason})");
+        }
+        PluginRuntimeAvailability::Unavailable { reason } => {
+            println!("[info] Plugin runtime: unavailable ({reason})");
+        }
+        PluginRuntimeAvailability::Available => {
+            println!("[ok] Plugin runtime: available");
+        }
+        _ => {
+            println!("[info] Plugin runtime: unknown");
+        }
+    }
     println!("[ok] Workspace: {}", workspace.display());
     println!("[ok] Config directory: {}", config_dir.display());
     println!("[ok] Agent modes: {}", modes.len());
@@ -702,4 +733,17 @@ pub(crate) async fn print_doctor(product_plan: &ProductAssemblyPlan) -> Result<b
         println!("Doctor checks passed.");
     }
     Ok(plugin_sources_ready)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_usage_session_id;
+
+    #[test]
+    fn usage_rejects_path_like_session_ids_before_runtime_initialization() {
+        let error = validate_usage_session_id("../../other-project/session")
+            .expect_err("usage must reject path-like session ids");
+
+        assert!(error.to_string().contains("session_id"), "{error}");
+    }
 }

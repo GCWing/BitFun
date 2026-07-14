@@ -40,24 +40,23 @@ impl SessionMessageTool {
     }
 
     fn validate_session_id(session_id: &str) -> Result<(), String> {
-        if session_id.is_empty() {
-            return Err("session_id cannot be empty".to_string());
-        }
-        if session_id == "." || session_id == ".." {
-            return Err("session_id cannot be '.' or '..'".to_string());
-        }
-        if session_id.contains('/') || session_id.contains('\\') {
-            return Err("session_id cannot contain path separators".to_string());
-        }
-        if !session_id
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+        bitfun_core_types::validate_session_id(session_id)
+    }
+
+    fn forwarded_user_input_metadata(context: &ToolUseContext) -> serde_json::Map<String, Value> {
+        use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+
+        let mut metadata = serde_json::Map::new();
+        if let Some(value @ (Value::Bool(_) | Value::String(_))) =
+            context.custom_data.get(USER_INPUT_AVAILABLE_CONTEXT_KEY)
         {
-            return Err(
-                "session_id can only contain ASCII letters, numbers, '-' and '_'".to_string(),
-            );
+            let is_boolean_fact = matches!(value, Value::Bool(_))
+                || matches!(value, Value::String(text) if matches!(text.as_str(), "true" | "false"));
+            if is_boolean_fact {
+                metadata.insert(USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(), value.clone());
+            }
         }
-        Ok(())
+        metadata
     }
 
     fn resolve_workspace(&self, workspace: &str, context: &ToolUseContext) -> BitFunResult<String> {
@@ -676,7 +675,7 @@ Allowed agent types when creating a session:
                 }),
                 prepended_reminders: prepended_messages,
                 attachments: Vec::new(),
-                metadata: serde_json::Map::new(),
+                metadata: Self::forwarded_user_input_metadata(context),
             })
             .await
             .map_err(|error| {
@@ -811,6 +810,24 @@ mod tests {
     }
 
     #[test]
+    fn session_message_forwards_noninteractive_user_input_fact() {
+        use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+
+        let mut context = empty_context();
+        context.custom_data.insert(
+            USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+            Value::Bool(false),
+        );
+
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(&context);
+
+        assert_eq!(
+            metadata.get(USER_INPUT_AVAILABLE_CONTEXT_KEY),
+            Some(&Value::Bool(false))
+        );
+    }
+
+    #[test]
     fn target_agent_type_uses_resolved_agent_type() {
         assert_eq!(
             SessionMessageTool::target_agent_type_from_resolution(Some("agentic".to_string()))
@@ -825,6 +842,7 @@ mod tests {
             session_id: "worker_1".to_string(),
             session_name: "Worker".to_string(),
             agent_type: "agentic".to_string(),
+            turn_count: 0,
             created_at_ms: 1,
             last_active_at_ms: 2,
         }];
@@ -841,6 +859,7 @@ mod tests {
             session_id: "worker_1".to_string(),
             session_name: "Worker".to_string(),
             agent_type: " ".to_string(),
+            turn_count: 0,
             created_at_ms: 1,
             last_active_at_ms: 2,
         }];

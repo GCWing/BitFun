@@ -63,6 +63,7 @@ use bitfun_agent_runtime::remote_file_delivery::{
     needs_computer_links_for_source, remote_file_delivery_reminder,
     TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
 };
+use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind,
     AgentThreadGoalDeliveryRequest, DelegationPolicy, RemoteExecPort, SessionStoragePathRequest,
@@ -107,6 +108,20 @@ fn turn_review_manifest_for_agent(
                 .or_else(|| metadata.get("deep_review_run_manifest"))
         })
         .cloned()
+}
+
+fn metadata_bool(metadata: Option<&serde_json::Value>, key: &str) -> Option<bool> {
+    metadata
+        .and_then(|metadata| metadata.get(key))
+        .and_then(serde_json::Value::as_bool)
+}
+
+fn should_require_tool_confirmation(
+    policy: DialogSubmissionPolicy,
+    user_message_metadata: Option<&serde_json::Value>,
+) -> bool {
+    policy.requires_tool_confirmation()
+        && metadata_bool(user_message_metadata, "acp_transport") != Some(true)
 }
 
 /// Subagent execution result
@@ -3040,27 +3055,40 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         additional_prepended_messages: Vec<Message>,
         suppress_session_title_generation: bool,
     ) -> BitFunResult<()> {
+        let requested_restore_path = match workspace_path.as_deref() {
+            Some(workspace_path) => Some(
+                Self::resolve_session_restore_path(
+                    workspace_path,
+                    remote_connection_id.as_deref(),
+                    remote_ssh_host.as_deref(),
+                )
+                .await?,
+            ),
+            None => None,
+        };
+
         // Get latest session, restoring from persistence on demand so every entry
-        // point can use the same start_dialog_turn flow.
+        // point can use the same start_dialog_turn flow. A loaded session must keep
+        // the same storage identity as this invocation.
         let session = match self.session_manager.get_session(&session_id) {
-            Some(session) => session,
+            Some(session) => {
+                if let Some(restore_path) = requested_restore_path.as_deref() {
+                    self.session_manager
+                        .ensure_session_storage_path(&session_id, restore_path)?;
+                }
+                session
+            }
             None => {
                 debug!(
                     "Session not found in memory, attempting restore before starting dialog: session_id={}",
                     session_id
                 );
-                let workspace_path = workspace_path.clone().ok_or_else(|| {
+                let restore_path = requested_restore_path.ok_or_else(|| {
                     BitFunError::Validation(format!(
                         "workspace_path is required when restoring session: {}",
                         session_id
                     ))
                 })?;
-                let restore_path = Self::resolve_session_restore_path(
-                    &workspace_path,
-                    remote_connection_id.as_deref(),
-                    remote_ssh_host.as_deref(),
-                )
-                .await?;
                 self.session_manager
                     .restore_session_from_storage_path(&restore_path, &session_id)
                     .await?
@@ -3535,13 +3563,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 run_manifest.to_string(),
             );
         }
-        if user_message_metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get("acp_transport"))
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false)
-        {
+        if metadata_bool(user_message_metadata.as_ref(), "acp_transport") == Some(true) {
             context_vars.insert("acp_transport".to_string(), "true".to_string());
+        }
+        if let Some(user_input_available) = metadata_bool(
+            user_message_metadata.as_ref(),
+            USER_INPUT_AVAILABLE_CONTEXT_KEY,
+        ) {
+            context_vars.insert(
+                USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+                user_input_available.to_string(),
+            );
         }
         if needs_computer_links_for_source(submission_policy.trigger_source) {
             context_vars.insert(
@@ -3554,6 +3586,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY.to_string(),
                 "true".to_string(),
             );
+        }
+        if should_require_tool_confirmation(submission_policy, user_message_metadata.as_ref()) {
+            context_vars.insert("require_tool_confirmation".to_string(), "true".to_string());
         }
         let session_workspace_path = session_workspace
             .as_ref()
@@ -3815,6 +3850,24 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
+    /// Strict maintenance barrier for callers that must not overlap an older
+    /// turn's tail writes. Unlike normal interactive cancellation, timeout is
+    /// returned as an error instead of being treated as best effort.
+    pub(crate) async fn ensure_session_execution_drained(
+        &self,
+        session_id: &str,
+        max_wait: Duration,
+    ) -> BitFunResult<()> {
+        let pending = self.wait_session_drained(session_id, max_wait).await;
+        if pending == 0 {
+            return Ok(());
+        }
+        Err(BitFunError::Timeout(format!(
+            "Session execution did not drain before maintenance: session_id={session_id}, pending={pending}, timeout_ms={}",
+            max_wait.as_millis()
+        )))
+    }
+
     async fn cancel_active_subagents_for_parent_turn(
         &self,
         parent_session_id: &str,
@@ -4065,8 +4118,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         parent_dialog_turn_ids: &HashSet<String>,
     ) -> BitFunResult<Vec<String>> {
         let session_ids = self
-            .session_manager
-            .collect_hidden_subagent_cascade_for_parent_turns(
+            .collect_hidden_subagent_sessions_for_parent_turns(
                 workspace_path,
                 parent_session_id,
                 parent_dialog_turn_ids,
@@ -4076,21 +4128,46 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let mut deleted_session_ids = Vec::new();
 
         for session_id in session_ids {
-            if let Err(e) = self
-                .cancel_active_turn_for_session(&session_id, Duration::from_secs(2))
-                .await
-            {
-                warn!(
-                    "Failed to cancel hidden subagent session before deletion: session_id={}, parent_session_id={}, error={}",
-                    session_id, parent_session_id, e
-                );
-            }
-
-            self.delete_session(workspace_path, &session_id).await?;
+            self.delete_hidden_subagent_session(workspace_path, parent_session_id, &session_id)
+                .await?;
             deleted_session_ids.push(session_id);
         }
 
         Ok(deleted_session_ids)
+    }
+
+    pub(crate) async fn collect_hidden_subagent_sessions_for_parent_turns(
+        &self,
+        workspace_path: &Path,
+        parent_session_id: &str,
+        parent_dialog_turn_ids: &HashSet<String>,
+    ) -> BitFunResult<Vec<String>> {
+        self.session_manager
+            .collect_hidden_subagent_cascade_for_parent_turns(
+                workspace_path,
+                parent_session_id,
+                parent_dialog_turn_ids,
+            )
+            .await
+    }
+
+    pub(crate) async fn delete_hidden_subagent_session(
+        &self,
+        workspace_path: &Path,
+        parent_session_id: &str,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        if let Err(e) = self
+            .cancel_active_turn_for_session(session_id, Duration::from_secs(2))
+            .await
+        {
+            warn!(
+                "Failed to cancel hidden subagent session before deletion: session_id={}, parent_session_id={}, error={}",
+                session_id, parent_session_id, e
+            );
+        }
+
+        self.delete_session(workspace_path, session_id).await
     }
 
     /// Restore session
@@ -6971,7 +7048,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     /// Emit event
-    async fn emit_event(&self, event: AgenticEvent) {
+    pub(crate) async fn emit_event(&self, event: AgenticEvent) {
         let _ = self
             .event_queue
             .enqueue(event, Some(EventPriority::Normal))
@@ -7207,6 +7284,7 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        turn_count: session.turn_count,
         created_at_ms: runtime_session_time_ms(session.created_at),
         last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
     }
@@ -7285,6 +7363,12 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
         &self,
         request: bitfun_runtime_ports::AgentSessionDeleteRequest,
     ) -> bitfun_runtime_ports::PortResult<()> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
         let effective_storage_path = Self::resolve_session_restore_path(
             &request.workspace_path,
             request.remote_connection_id.as_deref(),
@@ -7579,7 +7663,8 @@ mod tests {
     use super::{
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
-        turn_review_manifest_for_agent, ConversationCoordinator, SubagentExecutionRequest,
+        should_require_tool_confirmation, turn_review_manifest_for_agent, ConversationCoordinator,
+        SubagentExecutionRequest,
     };
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
@@ -7604,7 +7689,8 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{
         AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionRequest,
-        AgentSubmissionSource, DelegationPolicy, SubagentContextMode,
+        AgentSubmissionSource, DelegationPolicy, DialogQueuePriority, DialogSubmissionPolicy,
+        SubagentContextMode,
     };
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -7667,6 +7753,21 @@ mod tests {
 
         assert_cancellation_port::<ConversationCoordinator>();
         assert_state_port::<ConversationCoordinator>();
+    }
+
+    #[test]
+    fn local_cli_confirmation_override_excludes_acp_transport() {
+        let policy = DialogSubmissionPolicy::new(
+            AgentSubmissionSource::Cli,
+            DialogQueuePriority::Normal,
+            false,
+        );
+
+        assert!(should_require_tool_confirmation(policy, None));
+        assert!(!should_require_tool_confirmation(
+            policy,
+            Some(&serde_json::json!({ "acp_transport": true })),
+        ));
     }
 
     #[tokio::test]

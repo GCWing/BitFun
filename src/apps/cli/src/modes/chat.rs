@@ -1,25 +1,24 @@
 /// Chat mode implementation
 ///
 /// Interactive chat mode with TUI interface.
-/// Events are consumed directly from core's EventQueue.
+/// Events are observed through an independent runtime broadcast subscription.
 use anyhow::{anyhow, Result};
 use arboard::Clipboard;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
-use ratatui::backend::CrosstermBackend;
-use ratatui::Terminal;
 use std::collections::HashMap;
-use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::broadcast::error::TryRecvError;
 
-use bitfun_events::AgenticEvent;
+use bitfun_events::{AgenticEvent, ToolEventData};
 
-use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
+use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
+use crate::runtime::CliRuntimeContext;
 use crate::ui::agent_selector::AgentItem;
 use crate::ui::chat::{ChatView, MouseGestureOutcome};
 use crate::ui::command_palette::PaletteAction;
@@ -28,7 +27,7 @@ use crate::ui::mcp_add_dialog::McpAddAction;
 use crate::ui::mcp_selector::McpItem;
 use crate::ui::model_config_form::{ModelFormAction, ModelFormResult};
 use crate::ui::model_selector::ModelItem;
-use crate::ui::permission::PermissionAction;
+use crate::ui::permission::{PermissionAction, ALLOW_ALWAYS_RUNTIME_SCOPE};
 use crate::ui::provider_selector::ProviderSelection;
 use crate::ui::question::QuestionAction;
 use crate::ui::session_selector::{SessionAction, SessionItem};
@@ -39,11 +38,10 @@ use crate::ui::theme::{
     Appearance, EffectiveColorScheme, Theme,
 };
 use crate::ui::theme_selector::ThemeItem;
-use crate::ui::{init_terminal, restore_terminal};
+use crate::ui::{init_terminal, restore_terminal, TerminalGuard};
 use bitfun_core::agentic::agents::{
     get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
 };
-use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::agentic::tools::implementations::skills::{
     mode_overrides::{
         load_project_mode_skills_document_local, save_project_mode_skills_document_local,
@@ -54,9 +52,8 @@ use bitfun_core::agentic::tools::implementations::skills::{
 };
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::{
-    generate_session_usage_report, render_usage_report_markdown, SessionUsageReportRequest,
+    render_usage_report_markdown, SessionUsageReportRequest,
 };
-use bitfun_core::service::token_usage::TokenUsageService;
 
 /// Keyboard shortcuts help text
 const KEYBOARD_SHORTCUTS_HELP: &str = "\
@@ -79,6 +76,27 @@ Ctrl+C            Quit";
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
 /// Coalesce rapid resize bursts to reduce flicker during window drag.
 const RESIZE_REDRAW_DEBOUNCE_MS: u64 = 75;
+
+fn agent_event_stream_failure(error: TryRecvError) -> Option<String> {
+    match error {
+        TryRecvError::Empty => None,
+        TryRecvError::Lagged(skipped) => Some(format!(
+            "Agent event stream lagged by {skipped} events; chat state can no longer be trusted"
+        )),
+        TryRecvError::Closed => {
+            Some("Agent event stream closed; chat state can no longer be trusted".to_string())
+        }
+    }
+}
+
+fn mark_active_turn_failed(chat_state: &mut ChatState, error: &str) -> bool {
+    if chat_state.current_turn_id().is_none() {
+        return false;
+    }
+
+    chat_state.handle_turn_failed(error);
+    true
+}
 
 /// Chat mode exit reason
 #[derive(Debug, Clone, PartialEq)]
@@ -135,7 +153,7 @@ pub(crate) struct ChatMode {
     agent_type: String,
     workspace: Option<String>,
     agent: Arc<CoreAgentAdapter>,
-    token_usage_service: Arc<TokenUsageService>,
+    runtime: Arc<CliRuntimeContext>,
     /// If set, restore this existing session instead of creating a new one
     restore_session_id: Option<String>,
     /// If set, send this prompt automatically when the session starts
@@ -159,11 +177,10 @@ impl ChatMode {
         config: CliConfig,
         agent_type: String,
         workspace: Option<String>,
-        agentic_system: &AgenticSystem,
+        runtime: Arc<CliRuntimeContext>,
     ) -> Self {
         let agent = Arc::new(CoreAgentAdapter::new(
-            agentic_system.coordinator.clone(),
-            agentic_system.event_queue.clone(),
+            runtime.as_ref(),
             workspace.clone().map(PathBuf::from),
         ));
 
@@ -172,7 +189,7 @@ impl ChatMode {
             agent_type,
             workspace,
             agent,
-            token_usage_service: agentic_system.token_usage_service.clone(),
+            runtime,
             restore_session_id: None,
             initial_prompt: None,
             pending_mcp_op: None,
@@ -266,7 +283,11 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let workspace = self.workspace_path_for_sync(chat_state);
-        crate::account_sync::start_auto_sync_background(is_first_login, workspace);
+        crate::account_sync::start_auto_sync_background(
+            self.runtime.compatibility().clone(),
+            is_first_login,
+            workspace,
+        );
         self.open_account_panel(chat_view, rt_handle);
         chat_state.add_system_message(if is_first_login {
             "Sync started (use local / upload settings).".to_string()
@@ -434,7 +455,7 @@ impl ChatMode {
 
     pub(crate) fn run(
         &mut self,
-        existing_terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
+        existing_terminal: Option<TerminalGuard>,
     ) -> Result<ChatExitReason> {
         tracing::info!("Starting Chat mode, Agent: {}", self.agent_type);
         if let Some(ws) = &self.workspace {
@@ -468,33 +489,22 @@ impl ChatMode {
             tracing::info!("Restoring session: {}", restore_id);
             let agent = self.agent.clone();
             let rid = restore_id.clone();
-            let agent_type = self.agent_type.clone();
-            let workspace = self.workspace.clone();
 
             tokio::task::block_in_place(|| {
                 rt_handle.block_on(async {
                     // Restore session in core (loads metadata, messages, managers)
-                    agent.restore_session(&rid).await?;
-
-                    // Prefer session's stored workspace_path over startup workspace
-                    let effective_workspace = agent
-                        .coordinator()
-                        .get_session_manager()
-                        .get_session(&rid)
-                        .and_then(|s| s.config.workspace_path.clone())
-                        .or(workspace);
+                    let (summary, effective_workspace_path) =
+                        agent.restore_session_in_current_workspace(&rid).await?;
+                    let effective_workspace =
+                        Some(effective_workspace_path.to_string_lossy().to_string());
 
                     // Load historical messages for UI display
-                    let messages = agent
-                        .coordinator()
-                        .get_messages(&rid)
-                        .await
-                        .unwrap_or_default();
+                    let messages = agent.get_messages(&rid).await.unwrap_or_default();
 
                     let state = ChatState::from_core_messages(
                         rid.clone(),
-                        "Restored Session".to_string(),
-                        agent_type,
+                        summary.session_name,
+                        summary.agent_type,
                         effective_workspace,
                         &messages,
                     );
@@ -525,6 +535,7 @@ impl ChatMode {
         };
 
         // Keep ChatMode workspace in sync with the session's effective workspace
+        self.agent_type = chat_state.agent_type.clone();
         self.workspace = chat_state.workspace.clone();
 
         // Load current model name for display
@@ -543,6 +554,8 @@ impl ChatMode {
                 );
             }
         }
+
+        let mut event_rx = self.agent.event_source().subscribe();
 
         // Send initial prompt if provided (from startup page input)
         if let Some(prompt) = self.initial_prompt.take() {
@@ -570,14 +583,13 @@ impl ChatMode {
             }
         }
 
-        let event_queue = self.agent.event_queue().clone();
-
         let mut exit_reason = ChatExitReason::Quit;
         let mut should_quit = false;
         let mut needs_redraw = true;
         let mut subagent_parent_tools: HashMap<String, String> = HashMap::new();
         let mut last_spinner_redraw = Instant::now();
         let mut pending_resize_at: Option<Instant> = None;
+        let mut fatal_event_stream_error: Option<String> = None;
         let spinner_redraw_interval = Duration::from_millis(SPINNER_REDRAW_INTERVAL_MS);
         let resize_redraw_debounce = Duration::from_millis(RESIZE_REDRAW_DEBOUNCE_MS);
 
@@ -663,8 +675,37 @@ impl ChatMode {
             }
 
             // 2. Process core events (non-blocking)
-            let events =
-                tokio::task::block_in_place(|| rt_handle.block_on(event_queue.dequeue_batch(20)));
+            let mut events = Vec::with_capacity(20);
+            for _ in 0..20 {
+                match event_rx.try_recv() {
+                    Ok(envelope) => events.push(envelope),
+                    Err(error) => {
+                        let Some(mut failure) = agent_event_stream_failure(error) else {
+                            break;
+                        };
+
+                        // The adapter records the turn before DialogTurnStarted reaches the UI,
+                        // so cancellation must not depend on ChatState having seen that event.
+                        let agent = self.agent.clone();
+                        if let Err(cancel_error) = tokio::task::block_in_place(|| {
+                            rt_handle.block_on(agent.cancel_current_turn())
+                        }) {
+                            failure = format!(
+                                "{failure}; failed to cancel the active turn: {cancel_error}"
+                            );
+                        }
+                        mark_active_turn_failed(&mut chat_state, &failure);
+                        chat_view.invalidate_lines_cache();
+                        chat_view.set_status(Some(format!("Error: {failure}")));
+                        tracing::error!("{failure}");
+                        fatal_event_stream_error = Some(failure);
+                        break;
+                    }
+                }
+            }
+            if fatal_event_stream_error.is_some() {
+                break;
+            }
             for envelope in events {
                 let event = &envelope.event;
 
@@ -752,6 +793,24 @@ impl ChatMode {
                                 turn_id
                             );
                             continue;
+                        }
+                        if let ToolEventData::ConfirmationNeeded {
+                            tool_id, tool_name, ..
+                        } = tool_event
+                        {
+                            if self.runtime.approval_controller().is_allowed(tool_name) {
+                                let agent = self.agent.clone();
+                                let tool_id = tool_id.clone();
+                                match tokio::task::block_in_place(|| {
+                                    rt_handle.block_on(agent.confirm_tool(&tool_id, None))
+                                }) {
+                                    Ok(()) => continue,
+                                    Err(error) => tracing::error!(
+                                        "Failed to confirm runtime-approved tool; showing the permission prompt again: {}",
+                                        error
+                                    ),
+                                }
+                            }
                         }
                         chat_state.handle_tool_event(tool_event);
                         chat_view.invalidate_lines_cache();
@@ -982,7 +1041,16 @@ impl ChatMode {
             }
         }
 
-        restore_terminal(terminal)?;
+        let terminal_restore_result = restore_terminal(terminal);
+        if let Some(failure) = fatal_event_stream_error {
+            if let Err(restore_error) = terminal_restore_result {
+                return Err(anyhow!(
+                    "{failure}; failed to restore the terminal: {restore_error}"
+                ));
+            }
+            return Err(anyhow!(failure));
+        }
+        terminal_restore_result?;
         tracing::info!("Chat mode exited");
 
         Ok(exit_reason)
@@ -1006,55 +1074,63 @@ impl ChatMode {
                 PermissionAction::AllowOnce => {
                     let tool_id = prompt.tool_id.clone();
                     let agent = self.agent.clone();
-                    chat_state.permission_prompt = None;
                     tracing::info!("User allowed tool once: {}", tool_id);
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.confirm_tool(&tool_id, None).await {
-                                tracing::error!("Failed to confirm tool: {}", e);
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some("Tool confirmed".to_string()));
+                    match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.confirm_tool(&tool_id, None))
+                    }) {
+                        Ok(()) => {
+                            chat_state.permission_prompt = None;
+                            chat_view.set_status(Some("Tool confirmed".to_string()));
+                        }
+                        Err(error) => {
+                            tracing::error!("Failed to confirm tool: {}", error);
+                            chat_view.set_status(Some(format!("Error: {error}")));
+                        }
+                    }
                 }
                 PermissionAction::AllowAlways => {
                     let tool_id = prompt.tool_id.clone();
+                    let tool_name = prompt.tool_name().to_string();
                     let agent = self.agent.clone();
-                    chat_state.permission_prompt = None;
-                    tracing::info!("User allowed tool always: {}", tool_id);
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.confirm_tool(&tool_id, None).await {
-                                tracing::error!("Failed to confirm tool: {}", e);
-                            }
-                            // Skip all future tool confirmations
-                            if let Ok(svc) =
-                                bitfun_core::service::config::get_global_config_service().await
-                            {
-                                if let Err(e) =
-                                    svc.set_config("ai.skip_tool_confirmation", true).await
-                                {
-                                    tracing::warn!("Failed to set skip_tool_confirmation: {}", e);
-                                }
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some("Tool confirmed (always)".to_string()));
+                    tracing::info!(
+                        "User allowed tool {}: tool_id={}, tool_name={}",
+                        ALLOW_ALWAYS_RUNTIME_SCOPE,
+                        tool_id,
+                        tool_name
+                    );
+                    match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.confirm_tool(&tool_id, None))
+                    }) {
+                        Ok(()) => {
+                            self.runtime.approval_controller().allow_always(&tool_name);
+                            chat_state.permission_prompt = None;
+                            chat_view.set_status(Some(format!(
+                                "Tool approved {ALLOW_ALWAYS_RUNTIME_SCOPE}"
+                            )));
+                        }
+                        Err(error) => {
+                            tracing::error!("Failed to confirm tool: {}", error);
+                            chat_view.set_status(Some(format!("Error: {error}")));
+                        }
+                    }
                 }
                 PermissionAction::Reject(reason) => {
                     let tool_id = prompt.tool_id.clone();
                     let agent = self.agent.clone();
-                    chat_state.permission_prompt = None;
                     tracing::info!("User rejected tool: {}, reason: {}", tool_id, reason);
                     let reason_clone = reason.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.reject_tool(&tool_id, reason_clone).await {
-                                tracing::error!("Failed to reject tool: {}", e);
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some(format!("Tool rejected: {}", reason)));
+                    match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.reject_tool(&tool_id, reason_clone))
+                    }) {
+                        Ok(()) => {
+                            chat_state.permission_prompt = None;
+                            chat_view.set_status(Some(format!("Tool rejected: {}", reason)));
+                        }
+                        Err(error) => {
+                            tracing::error!("Failed to reject tool: {}", error);
+                            chat_view.set_status(Some(format!("Error: {error}")));
+                        }
+                    }
                 }
                 PermissionAction::None => {
                     // Permission prompt consumed the key, no further action
@@ -2042,38 +2118,27 @@ impl ChatMode {
             .clone()
             .or_else(|| self.workspace.clone())
             .or_else(|| Some(self.agent.workspace_path_string()));
-        let token_usage_service = self.token_usage_service.clone();
-        let session_manager = self.agent.coordinator().get_session_manager();
+        let agent = self.agent.clone();
 
         let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
                 let workspace_path = workspace_path.clone();
-                let token_usage_service = token_usage_service.clone();
-                let session_manager = session_manager.clone();
+                let agent = agent.clone();
                 rt_handle.block_on(async move {
                     let workspace_path = workspace_path
                         .filter(|path| !path.trim().is_empty())
                         .ok_or_else(|| anyhow!("Workspace path is required for usage reports"))?;
 
-                    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
-                        .map_err(|error| anyhow!(error.to_string()))?;
-                    let persistence_manager = PersistenceManager::new(path_manager)
-                        .map_err(|error| anyhow!(error.to_string()))?;
-
-                    let report = generate_session_usage_report(
-                        &persistence_manager,
-                        Some(token_usage_service.as_ref()),
-                        SessionUsageReportRequest {
+                    let report = agent
+                        .generate_session_usage_report(SessionUsageReportRequest {
                             session_id: session_id.clone(),
                             workspace_path: Some(workspace_path),
                             remote_connection_id: None,
                             remote_ssh_host: None,
                             include_hidden_subagents: true,
-                        },
-                    )
-                    .await
-                    .map_err(|error| anyhow!(error.to_string()))?;
+                        })
+                        .await?;
 
                     let markdown = render_usage_report_markdown(&report);
                     let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
@@ -2089,7 +2154,7 @@ impl ChatMode {
                         "usageReportStatus": "completed",
                     });
 
-                    session_manager
+                    agent
                         .append_completed_local_command_turn(
                             &session_id,
                             markdown,
@@ -3010,52 +3075,21 @@ impl ChatMode {
     ) -> Result<()> {
         let agent = self.agent.clone();
         let sid = new_session_id.to_string();
-        let agent_type = self.agent_type.clone();
-        let workspace = self.workspace.clone();
 
         let (new_state, restored_agent_type) = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                // Restore session in core
-                agent.restore_session(&sid).await?;
-
-                // Get session info for agent_type and workspace
-                let workspace_path = agent.workspace_path_buf();
-                let sessions = agent
-                    .coordinator()
-                    .list_sessions(&workspace_path)
-                    .await
-                    .unwrap_or_default();
-                let session_summary = sessions.iter().find(|s| s.session_id == sid);
-                let restored_agent_type = session_summary
-                    .map(|s| s.agent_type.clone())
-                    .unwrap_or_else(|| agent_type.clone());
-                let session_name = session_summary
-                    .map(|s| s.session_name.clone())
-                    .unwrap_or_else(|| "Restored Session".to_string());
-
-                // Use the current workspace filtered by the session list; fall back to the
-                // workspace supplied when this chat view was created.
-                let effective_workspace = workspace
-                    .clone()
-                    .or_else(|| Some(workspace_path.to_string_lossy().to_string()));
-
-                // Sync global workspace path from restored session
-                if let Some(ref ws) = effective_workspace {
-                    agent
-                        .set_workspace_path(Some(std::path::PathBuf::from(ws)))
-                        .await;
-                }
+                let (session_summary, effective_workspace_path) =
+                    agent.restore_session_in_current_workspace(&sid).await?;
+                let restored_agent_type = session_summary.agent_type.clone();
+                let effective_workspace =
+                    Some(effective_workspace_path.to_string_lossy().to_string());
 
                 // Load historical messages from core.
-                let messages = agent
-                    .coordinator()
-                    .get_messages(&sid)
-                    .await
-                    .unwrap_or_default();
+                let messages = agent.get_messages(&sid).await.unwrap_or_default();
 
                 let state = ChatState::from_core_messages(
                     sid.clone(),
-                    session_name,
+                    session_summary.session_name,
                     restored_agent_type.clone(),
                     effective_workspace,
                     &messages,
@@ -3559,13 +3593,7 @@ impl ChatMode {
         let current_session_id = chat_state.core_session_id.clone();
 
         let sessions = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                agent
-                    .coordinator()
-                    .list_sessions(&agent.workspace_path_buf())
-                    .await
-                    .unwrap_or_default()
-            })
+            rt_handle.block_on(async { agent.list_sessions().await.unwrap_or_default() })
         });
 
         if sessions.is_empty() {
@@ -3577,7 +3605,9 @@ impl ChatMode {
             .into_iter()
             .map(|s| {
                 let last_activity = {
-                    let elapsed = s.last_activity_at.elapsed().unwrap_or_default();
+                    let last_activity =
+                        std::time::UNIX_EPOCH + Duration::from_millis(s.last_active_at_ms);
+                    let elapsed = last_activity.elapsed().unwrap_or_default();
                     if elapsed.as_secs() < 60 {
                         "just now".to_string()
                     } else if elapsed.as_secs() < 3600 {
@@ -3618,13 +3648,7 @@ impl ChatMode {
         let sid = item.session_id.clone();
 
         let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let workspace_path = agent.workspace_path_buf();
-                agent
-                    .coordinator()
-                    .delete_session(&workspace_path, &sid)
-                    .await
-            })
+            rt_handle.block_on(async { agent.delete_session(&sid).await })
         });
 
         match result {
@@ -3896,5 +3920,49 @@ impl ChatMode {
         } else {
             chat_view.set_status(Some("Failed to update model".to_string()));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::broadcast::error::TryRecvError;
+
+    use super::{agent_event_stream_failure, mark_active_turn_failed};
+    use crate::chat_state::ChatState;
+
+    #[test]
+    fn agent_event_stream_failure_ignores_empty_queue() {
+        assert_eq!(agent_event_stream_failure(TryRecvError::Empty), None);
+    }
+
+    #[test]
+    fn agent_event_stream_failure_treats_lagged_and_closed_as_fatal() {
+        let lagged = agent_event_stream_failure(TryRecvError::Lagged(7))
+            .expect("lagged stream must be fatal");
+        assert!(lagged.contains("lagged by 7 events"));
+        assert!(lagged.contains("can no longer be trusted"));
+
+        let closed =
+            agent_event_stream_failure(TryRecvError::Closed).expect("closed stream must be fatal");
+        assert!(closed.contains("closed"));
+        assert!(closed.contains("can no longer be trusted"));
+    }
+
+    #[test]
+    fn agent_event_stream_failure_marks_active_turn_failed() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "hello");
+
+        assert!(mark_active_turn_failed(
+            &mut state,
+            "Agent event stream closed; chat state can no longer be trusted"
+        ));
+        assert_eq!(state.current_turn_id(), None);
+        assert!(!state.is_processing);
     }
 }

@@ -10,7 +10,7 @@ use std::collections::BinaryHeap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, Notify};
 
-const EVENT_BROADCAST_BUFFER: usize = 1024;
+const MIN_EVENT_BROADCAST_BUFFER: usize = 1024;
 const SLOW_EVENT_QUEUE_LATENCY_MS: u128 = 250;
 
 /// Event queue configuration
@@ -62,7 +62,11 @@ pub struct EventQueue {
 
 impl EventQueue {
     pub fn new(config: EventQueueConfig) -> Self {
-        let (broadcast_tx, _) = broadcast::channel(EVENT_BROADCAST_BUFFER);
+        // Keep subscriber backlog capacity at least as large as the existing
+        // dequeue queue budget so switching a consumer to broadcast does not
+        // reduce the amount of burst traffic it can tolerate.
+        let broadcast_capacity = config.max_queue_size.max(MIN_EVENT_BROADCAST_BUFFER);
+        let (broadcast_tx, _) = broadcast::channel(broadcast_capacity);
         Self {
             queue: Arc::new(Mutex::new(BinaryHeap::new())),
             notify: Arc::new(Notify::new()),
@@ -82,17 +86,23 @@ impl EventQueue {
         let envelope = EventEnvelope::new(event, priority);
         let event_id = envelope.id.clone();
 
-        let queue_len = {
+        let (queue_len, queued) = {
             let mut queue = self.queue.lock().await;
             if queue.len() >= self.config.max_queue_size {
-                warn!("Event queue full, dropping event: event_id={}", event_id);
-                return Ok(event_id);
+                warn!(
+                    "Event queue full, skipping legacy queue storage: event_id={}",
+                    event_id
+                );
+                (queue.len(), false)
+            } else {
+                queue.push(std::cmp::Reverse(envelope.clone()));
+                (queue.len(), true)
             }
-
-            queue.push(std::cmp::Reverse(envelope.clone()));
-            queue.len()
         };
 
+        // Broadcast delivery is authoritative for non-consuming runtime
+        // subscribers and must not depend on capacity in the legacy dequeue
+        // buffer.
         let _ = self.broadcast_tx.send(envelope);
 
         {
@@ -101,8 +111,9 @@ impl EventQueue {
             stats.pending_events = queue_len;
         }
 
-        // Notify waiting consumers
-        self.notify.notify_one();
+        if queued {
+            self.notify.notify_one();
+        }
 
         trace!(
             "Event enqueued: event_id={}, priority={:?}",
@@ -224,5 +235,123 @@ impl EventQueue {
 impl StreamEventSink for EventQueue {
     async fn enqueue(&self, event: AgenticEvent, priority: Option<EventPriority>) {
         let _ = EventQueue::enqueue(self, event, priority).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EventQueue, EventQueueConfig};
+    use bitfun_events::AgenticEvent;
+    use std::sync::Arc;
+    use tokio::sync::Barrier;
+
+    #[tokio::test]
+    async fn full_legacy_queue_does_not_drop_broadcast_delivery() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 1,
+            batch_size: 1,
+        });
+        let mut events = queue.subscribe();
+
+        for session_id in ["first", "second"] {
+            queue
+                .enqueue(
+                    AgenticEvent::SessionStateChanged {
+                        session_id: session_id.to_string(),
+                        new_state: "idle".to_string(),
+                    },
+                    None,
+                )
+                .await
+                .expect("event should enqueue");
+        }
+
+        assert_eq!(queue.len().await, 1);
+        assert_eq!(
+            events
+                .recv()
+                .await
+                .expect("first broadcast")
+                .event
+                .session_id(),
+            Some("first")
+        );
+        assert_eq!(
+            events
+                .recv()
+                .await
+                .expect("second broadcast")
+                .event
+                .session_id(),
+            Some("second")
+        );
+    }
+
+    #[tokio::test]
+    async fn default_sized_broadcast_preserves_bursts_above_legacy_1024_limit() {
+        let queue = EventQueue::new(EventQueueConfig::default());
+        let mut events = queue.subscribe();
+        const EVENT_COUNT: usize = 2048;
+
+        for index in 0..EVENT_COUNT {
+            queue
+                .enqueue(
+                    AgenticEvent::SessionStateChanged {
+                        session_id: "session".to_string(),
+                        new_state: index.to_string(),
+                    },
+                    None,
+                )
+                .await
+                .expect("event should enqueue");
+        }
+
+        for expected in 0..EVENT_COUNT {
+            let envelope = events.recv().await.expect("burst event must be retained");
+            assert!(matches!(
+                envelope.event,
+                AgenticEvent::SessionStateChanged { ref new_state, .. }
+                    if new_state == &expected.to_string()
+            ));
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_publishers_have_one_order_for_all_subscribers() {
+        const EVENT_COUNT: usize = 64;
+        let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let mut first = queue.subscribe();
+        let mut second = queue.subscribe();
+        let barrier = Arc::new(Barrier::new(EVENT_COUNT));
+        let mut tasks = Vec::with_capacity(EVENT_COUNT);
+
+        for index in 0..EVENT_COUNT {
+            let queue = queue.clone();
+            let barrier = barrier.clone();
+            tasks.push(tokio::spawn(async move {
+                barrier.wait().await;
+                queue
+                    .enqueue(
+                        AgenticEvent::SessionStateChanged {
+                            session_id: format!("event-{index}"),
+                            new_state: "idle".to_string(),
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("event should enqueue")
+            }));
+        }
+        for task in tasks {
+            task.await.expect("publisher should complete");
+        }
+
+        let mut first_ids = Vec::with_capacity(EVENT_COUNT);
+        let mut second_ids = Vec::with_capacity(EVENT_COUNT);
+        for _ in 0..EVENT_COUNT {
+            first_ids.push(first.recv().await.expect("first broadcast").id);
+            second_ids.push(second.recv().await.expect("second broadcast").id);
+        }
+        assert_eq!(first_ids, second_ids);
     }
 }

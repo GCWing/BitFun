@@ -815,6 +815,7 @@ mod tests {
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
                 agent_type: "agentic".to_string(),
+                turn_count: 3,
                 created_at_ms: 1000,
                 last_active_at_ms: 2000,
             }])

@@ -21,18 +21,18 @@ mod plugin_diagnostics;
 mod product_assembly;
 mod prompts;
 mod root_handlers;
+mod runtime;
 mod ui;
 
 use anyhow::{anyhow, Result};
 use bitfun_core::service::remote_connect::DeviceIdentity;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
 use config::CliConfig;
 use modes::chat::ChatMode;
-use modes::exec::ExecOutputFormat;
+use modes::exec::{ExecApprovalMode, ExecOutputFormat};
 
 // ======================== Global MCP Service ========================
 
@@ -121,12 +121,18 @@ enum Commands {
 
         /// Output git diff patch after execution (for SWE-bench evaluation)
         /// Without path outputs to terminal, with path saves to file
+        /// The snapshot is captured before writing an explicit output artifact;
+        /// the artifact itself is not included in the captured diff
         /// Example: --output-patch or --output-patch ./result.patch
         #[arg(long, num_args = 0..=1, default_missing_value = "-")]
         output_patch: Option<String>,
 
-        /// Tool execution requires confirmation (default: no confirmation to avoid blocking non-interactive mode)
-        #[arg(long)]
+        /// Auto-approve tool permissions that are not explicitly denied
+        #[arg(long, conflicts_with = "confirm")]
+        auto: bool,
+
+        /// Deprecated compatibility flag; confirmations are rejected in non-interactive mode
+        #[arg(long, hide = true, conflicts_with = "auto")]
         confirm: bool,
     },
 
@@ -346,6 +352,34 @@ enum SessionAction {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BootstrapProfile {
+    Interactive,
+    Execution,
+    Management,
+}
+
+impl BootstrapProfile {
+    const fn starts_peer_host(self) -> bool {
+        matches!(self, Self::Interactive)
+    }
+
+    const fn starts_mcp(self) -> bool {
+        matches!(self, Self::Interactive | Self::Execution)
+    }
+}
+
+impl SessionAction {
+    const fn bootstrap_profile(&self) -> BootstrapProfile {
+        match self {
+            Self::Resume { .. } | Self::Continue => BootstrapProfile::Interactive,
+            Self::List | Self::Show { .. } | Self::Delete { .. } | Self::Fork { .. } => {
+                BootstrapProfile::Management
+            }
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum ConfigAction {
     /// Show configuration
@@ -412,93 +446,100 @@ async fn initialize_terminal_service() {
     tracing::info!("Terminal service initialized");
 }
 
-/// Initialize all core services (config, AI client, agentic system).
-/// Returns (agentic_system, original_skip_confirmation).
+/// Initialize Core owners and assemble one invocation-scoped CLI runtime.
 async fn initialize_core_services(
-    skip_tool_confirmation: bool,
-) -> Result<(agent::agentic_system::AgenticSystem, bool)> {
+    workspace_root: &std::path::Path,
+    approval_policy: runtime::approval::CliApprovalPolicy,
+    bootstrap_profile: BootstrapProfile,
+) -> Result<std::sync::Arc<runtime::CliRuntimeContext>> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
     bitfun_core::service::config::initialize_global_config()
         .await
-        .expect("Failed to initialize global config service");
+        .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
     tracing::info!("Global config service initialized");
 
-    // Save and override tool confirmation setting
     let config_service = bitfun_core::service::config::get_global_config_service()
         .await
         .ok();
-    let original_skip_confirmation = if let Some(ref svc) = config_service {
-        let ai_config: bitfun_core::service::config::types::AIConfig =
-            svc.get_config(Some("ai")).await.unwrap_or_default();
-        ai_config.skip_tool_confirmation
-    } else {
-        false
-    };
-    if let Some(ref svc) = config_service {
-        let _ = svc
-            .set_config("ai.skip_tool_confirmation", skip_tool_confirmation)
-            .await;
-    }
 
     AIClientFactory::initialize_global()
         .await
-        .expect("Failed to initialize global AIClientFactory");
+        .map_err(|error| anyhow!("Failed to initialize global AIClientFactory: {error}"))?;
     tracing::info!("Global AI client factory initialized");
 
     initialize_terminal_service().await;
 
     let agentic_system = agent::agentic_system::init_agentic_system()
         .await
-        .expect("Failed to initialize agentic system");
+        .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
     tracing::info!("Agentic system initialized");
 
-    if let Err(e) = peer_host::ensure_peer_host_ready(&agentic_system).await {
-        tracing::warn!("Failed to initialize CLI peer host services: {e}");
-    } else {
-        tracing::info!("CLI peer host services initialized");
+    let runtime = std::sync::Arc::new(runtime::CliRuntimeContext::build(
+        agentic_system,
+        workspace_root,
+        approval_policy,
+    )?);
+    debug_assert!(runtime
+        .product()
+        .service_availability()
+        .iter()
+        .all(|entry| {
+            runtime
+                .services()
+                .has_capability(entry.requirement().service_capability())
+        }));
+    tracing::info!(
+        "CLI product runtime assembled: profile={}, services={}, harnesses={}, plugin_runtime={:?}",
+        runtime.product().plan().profile().id(),
+        runtime.product().service_availability().len(),
+        runtime.product().harness_provider_ids().len(),
+        runtime.product().plugin_runtime(),
+    );
+
+    if bootstrap_profile.starts_peer_host() {
+        if let Err(e) = peer_host::ensure_peer_host_ready(runtime.agentic_system()).await {
+            tracing::warn!("Failed to initialize CLI peer host services: {e}");
+        } else {
+            tracing::info!("CLI peer host services initialized");
+        }
     }
 
     // Initialize MCP service in background (non-blocking)
-    if let Some(ref cfg_svc) = config_service {
-        match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
-            Ok(mcp_service) => {
-                let mcp_service = std::sync::Arc::new(mcp_service);
-                MCP_SERVICE.set(mcp_service.clone()).ok();
+    if bootstrap_profile.starts_mcp() {
+        if let Some(ref cfg_svc) = config_service {
+            match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
+                Ok(mcp_service) => {
+                    let mcp_service = std::sync::Arc::new(mcp_service);
+                    MCP_SERVICE.set(mcp_service.clone()).ok();
 
-                // Mark as in progress
-                get_mcp_init_status().store(1, Ordering::Relaxed);
+                    // Mark as in progress
+                    get_mcp_init_status().store(1, Ordering::Relaxed);
 
-                // Background async initialization
-                tokio::spawn(async move {
-                    let result = mcp_service.server_manager().initialize_all().await;
-                    match result {
-                        Ok(_) => {
-                            tracing::info!("MCP servers initialized successfully");
-                            get_mcp_init_status().store(2, Ordering::Relaxed);
+                    // Background async initialization
+                    tokio::spawn(async move {
+                        let result = mcp_service.server_manager().initialize_all().await;
+                        match result {
+                            Ok(_) => {
+                                tracing::info!("MCP servers initialized successfully");
+                                get_mcp_init_status().store(2, Ordering::Relaxed);
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to initialize MCP servers: {}", e);
+                                get_mcp_init_status().store(3, Ordering::Relaxed);
+                            }
                         }
-                        Err(e) => {
-                            tracing::warn!("Failed to initialize MCP servers: {}", e);
-                            get_mcp_init_status().store(3, Ordering::Relaxed);
-                        }
-                    }
-                });
-            }
-            Err(e) => {
-                tracing::warn!("Failed to create MCP service: {}", e);
-                get_mcp_init_status().store(3, Ordering::Relaxed);
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to create MCP service: {}", e);
+                    get_mcp_init_status().store(3, Ordering::Relaxed);
+                }
             }
         }
     }
 
-    Ok((agentic_system, original_skip_confirmation))
-}
-
-/// Restore original tool confirmation setting
-async fn restore_tool_confirmation(original: bool) {
-    if let Ok(svc) = bitfun_core::service::config::get_global_config_service().await {
-        let _ = svc.set_config("ai.skip_tool_confirmation", original).await;
-    }
+    Ok(runtime)
 }
 
 /// Shutdown MCP servers gracefully
@@ -528,10 +569,19 @@ async fn run_interactive(
 
     // 2. Set workspace path
     let workspace = setup_workspace();
+    let workspace_path = workspace
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
 
     // 3. Initialize core services
-    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
-
+    let runtime = initialize_core_services(
+        &workspace_path,
+        runtime::approval::CliApprovalPolicy::Ask,
+        BootstrapProfile::Interactive,
+    )
+    .await?;
     // 3.5 Restore persisted account session (if any)
     if let Some(user_id) = account::try_restore_session().await {
         tracing::info!("Restored account session for user {user_id}");
@@ -545,7 +595,8 @@ async fn run_interactive(
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
-        agentic_system.coordinator.clone(),
+        runtime.agent_runtime().clone(),
+        runtime.compatibility().clone(),
         default_agent,
         workspace.clone(),
     );
@@ -553,7 +604,6 @@ async fn run_interactive(
 
     if let StartupResult::Exit = startup_result {
         shutdown_mcp_servers().await;
-        restore_tool_confirmation(original_skip_confirmation).await;
         ui::restore_terminal(terminal)?;
         println!("Goodbye!");
         return Ok(());
@@ -570,18 +620,18 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, &agentic_system);
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone());
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
     if let Some(prompt) = initial_prompt {
         chat_mode = chat_mode.with_initial_prompt(prompt);
     }
-    let _exit_reason = chat_mode.run(Some(terminal))?;
+    let chat_result = chat_mode.run(Some(terminal));
 
-    // 6. Cleanup
+    // 6. Cleanup, including fatal event-stream exits.
     shutdown_mcp_servers().await;
-    restore_tool_confirmation(original_skip_confirmation).await;
+    let _exit_reason = chat_result?;
     println!("Goodbye!");
 
     Ok(())
@@ -589,8 +639,41 @@ async fn run_interactive(
 
 // ======================== Main ========================
 
+#[derive(Debug)]
+struct ReportedCliError {
+    exit_code: i32,
+}
+
+impl std::fmt::Display for ReportedCliError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("CLI error was already reported")
+    }
+}
+
+impl std::error::Error for ReportedCliError {}
+
 async fn run_cli() -> Result<()> {
-    let cli = Cli::parse();
+    let raw_args = std::env::args_os().collect::<Vec<_>>();
+    let cli = match Cli::try_parse_from(&raw_args) {
+        Ok(cli) => cli,
+        Err(error)
+            if exec_requests_json_output(&raw_args)
+                && matches!(
+                    error.kind(),
+                    clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+                ) =>
+        {
+            error.print()?;
+            return Ok(());
+        }
+        Err(error) if exec_requests_json_output(&raw_args) => {
+            let exit_code = error.exit_code();
+            let error = anyhow!(error.to_string());
+            modes::exec::emit_preflight_json_error(ExecOutputFormat::Json, &error)?;
+            return Err(anyhow::Error::new(ReportedCliError { exit_code }));
+        }
+        Err(error) => error.exit(),
+    };
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
@@ -636,8 +719,19 @@ async fn run_cli() -> Result<()> {
             fork_session,
             output_format,
             output_patch,
+            auto,
             confirm,
         }) => {
+            let approval_mode = if auto {
+                ExecApprovalMode::Auto
+            } else {
+                if confirm {
+                    eprintln!(
+                        "Warning: --confirm is deprecated; non-interactive confirmations are rejected by default"
+                    );
+                }
+                ExecApprovalMode::Reject
+            };
             root_handlers::handle_exec_command(
                 config,
                 root_handlers::ExecCommandArgs {
@@ -650,15 +744,17 @@ async fn run_cli() -> Result<()> {
                     fork_session,
                     output_format,
                     output_patch,
-                    confirm,
+                    approval_mode,
                 },
             )
             .await?;
         }
 
         Some(Commands::Sessions { action }) => {
-            if let Some(session_id) = root_handlers::handle_session_action(action).await? {
-                run_interactive_with_session(config, session_id).await?;
+            if let Some((session_id, runtime)) =
+                root_handlers::handle_session_action(action).await?
+            {
+                run_interactive_with_session(config, session_id, runtime).await?;
             }
         }
 
@@ -727,8 +823,21 @@ async fn run_cli() -> Result<()> {
         }
 
         Some(Commands::Doctor) => {
-            let product_plan = product_assembly::cli_product_assembly_plan();
-            if !management::print_doctor(&product_plan).await? {
+            use std::sync::Arc;
+
+            use runtime::approval::{CliApprovalPolicy, CliPermissionService};
+            use runtime::services::{CliClock, CliRuntimeEventSink, CliRuntimeServicesProvider};
+
+            let workspace = std::env::current_dir()?;
+            let services = CliRuntimeServicesProvider::new(
+                &workspace,
+                Arc::new(CliPermissionService::new(CliApprovalPolicy::Reject)),
+                Arc::new(CliRuntimeEventSink::new(16)),
+                Arc::new(CliClock),
+            )?
+            .build()?;
+            let product_runtime = product_assembly::assemble_cli_runtime_parts(services)?;
+            if !management::print_doctor(&product_runtime).await? {
                 std::process::exit(1);
             }
         }
@@ -810,28 +919,57 @@ async fn run_cli() -> Result<()> {
     Ok(())
 }
 
-async fn run_interactive_with_session(config: CliConfig, session_id: String) -> Result<()> {
+fn exec_requests_json_output(args: &[std::ffi::OsString]) -> bool {
+    let values = args
+        .iter()
+        .skip(1)
+        .map(|value| value.to_string_lossy())
+        .collect::<Vec<_>>();
+    if !values.iter().any(|value| value == "exec") {
+        return false;
+    }
+
+    values.iter().enumerate().any(|(index, value)| {
+        value == "--output-format=json"
+            || (value == "--output-format"
+                && values.get(index + 1).is_some_and(|format| format == "json"))
+    })
+}
+
+async fn run_interactive_with_session(
+    config: CliConfig,
+    session_id: String,
+    runtime: std::sync::Arc<runtime::CliRuntimeContext>,
+) -> Result<()> {
     let mut terminal = ui::init_terminal()?;
     ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
 
-    let workspace = setup_workspace();
-    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
-    let workspace_path = workspace
-        .clone()
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("."));
-    let session = agentic_system
-        .coordinator
-        .restore_session(&workspace_path, &session_id)
-        .await?;
+    let workspace = Some(runtime.workspace_root().to_string_lossy().to_string());
+    let sessions = runtime
+        .agent_runtime()
+        .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
+            workspace_path: runtime.workspace_root().to_string_lossy().to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let agent_type = sessions
+        .iter()
+        .find(|session| session.session_id == session_id)
+        .map(|session| session.agent_type.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Session {session_id} was not found in the current workspace: {}",
+                runtime.workspace_root().display()
+            )
+        })?;
 
-    let mut chat_mode = ChatMode::new(config, session.agent_type, workspace, &agentic_system)
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone())
         .with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
     shutdown_mcp_servers().await;
-    restore_tool_confirmation(original_skip_confirmation).await;
     println!("Goodbye!");
 
     run_result?;
@@ -853,6 +991,9 @@ fn main() {
     match worker.join() {
         Ok(Ok(())) => {}
         Ok(Err(err)) => {
+            if let Some(reported) = err.downcast_ref::<ReportedCliError>() {
+                std::process::exit(reported.exit_code);
+            }
             eprintln!("Error: {err}");
             std::process::exit(1);
         }
@@ -943,5 +1084,73 @@ mod plugin_command_tests {
                 action: Some(PluginAction::Deactivate { package_id })
             }) if package_id == "acme.demo"
         ));
+    }
+}
+
+#[cfg(test)]
+mod bootstrap_profile_tests {
+    use super::{exec_requests_json_output, BootstrapProfile, SessionAction};
+
+    #[test]
+    fn profiles_start_only_their_requested_background_services() {
+        let cases = [
+            (BootstrapProfile::Interactive, true, true),
+            (BootstrapProfile::Execution, false, true),
+            (BootstrapProfile::Management, false, false),
+        ];
+
+        for (profile, starts_peer_host, starts_mcp) in cases {
+            assert_eq!(profile.starts_peer_host(), starts_peer_host);
+            assert_eq!(profile.starts_mcp(), starts_mcp);
+        }
+    }
+
+    #[test]
+    fn session_resume_and_continue_use_interactive_bootstrap() {
+        let resume = SessionAction::Resume {
+            id: "session-1".to_string(),
+        };
+
+        assert_eq!(resume.bootstrap_profile(), BootstrapProfile::Interactive);
+        assert_eq!(
+            SessionAction::Continue.bootstrap_profile(),
+            BootstrapProfile::Interactive
+        );
+    }
+
+    #[test]
+    fn session_management_actions_use_management_bootstrap() {
+        let actions = [
+            SessionAction::List,
+            SessionAction::Show {
+                id: "session-1".to_string(),
+            },
+            SessionAction::Delete {
+                id: "session-1".to_string(),
+            },
+            SessionAction::Fork {
+                id: "session-1".to_string(),
+                id_only: false,
+            },
+        ];
+
+        for action in actions {
+            assert_eq!(action.bootstrap_profile(), BootstrapProfile::Management);
+        }
+    }
+
+    #[test]
+    fn json_exec_parse_failures_are_detected_before_clap_exits() {
+        let args = [
+            "bitfun",
+            "exec",
+            "task",
+            "--output-format",
+            "json",
+            "--unknown-option",
+        ]
+        .map(std::ffi::OsString::from);
+
+        assert!(exec_requests_json_output(&args));
     }
 }

@@ -16,7 +16,7 @@ pub use ai::{
     ToolCallResponseInfo, ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
-pub use session::SessionKind;
+pub use session::{validate_session_id, SessionKind};
 pub use surface::{
     ApprovalSource, CapabilityRequest, CapabilityRequestKind, PermissionDecision, PermissionScope,
     RuntimeArtifactKind, RuntimeArtifactRef, SurfaceKind, ThreadEnvironment, ThreadEnvironmentKind,

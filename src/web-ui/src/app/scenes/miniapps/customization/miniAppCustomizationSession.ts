@@ -27,8 +27,8 @@ export function buildMiniAppCustomizationSessionRequest(
   };
 }
 
-function createSessionId(appId: string): string {
-  return `miniapp-customize:${appId}:${Date.now()}`;
+export function createMiniAppCustomizationSessionId(appId: string): string {
+  return `miniapp-customize-${appId}-${Date.now()}`;
 }
 
 export async function launchMiniAppCustomizationSession(params: {
@@ -49,7 +49,7 @@ export async function launchMiniAppCustomizationSession(params: {
     import('@/flow_chat/store/FlowChatStore'),
   ]);
   const request = buildMiniAppCustomizationSessionRequest({
-    sessionId: createSessionId(params.appId),
+    sessionId: createMiniAppCustomizationSessionId(params.appId),
     sessionName: params.sessionName,
     workspacePath: params.workspacePath,
   });

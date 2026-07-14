@@ -28,7 +28,8 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use bitfun_agent_runtime::tool_confirmation::{
-    resolve_tool_confirmation_gate, ToolConfirmationGateFacts,
+    resolve_tool_confirmation_policy_gate, ToolConfirmationContextPolicy,
+    ToolConfirmationPolicyGateFacts,
 };
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
 use bitfun_ai_adapters::{
@@ -776,8 +777,25 @@ impl RoundExecutor {
                     .get("skip_tool_confirmation")
                     .map(|v| v == "true")
                     .unwrap_or(false);
+                let require_from_context = context
+                    .context_vars
+                    .get("require_tool_confirmation")
+                    .map(|v| v == "true")
+                    .unwrap_or(false);
+                let context_policy = if require_from_context {
+                    ToolConfirmationContextPolicy::Require
+                } else if skip_from_context {
+                    ToolConfirmationContextPolicy::Skip
+                } else {
+                    ToolConfirmationContextPolicy::Inherit
+                };
 
-                let any_tool_needs_permission = if skip_confirmation || skip_from_context {
+                let skips_confirmation = match context_policy {
+                    ToolConfirmationContextPolicy::Require => false,
+                    ToolConfirmationContextPolicy::Skip => true,
+                    ToolConfirmationContextPolicy::Inherit => skip_confirmation,
+                };
+                let any_tool_needs_permission = if skips_confirmation {
                     false
                 } else {
                     let registry = get_global_tool_registry();
@@ -790,12 +808,13 @@ impl RoundExecutor {
                             .unwrap_or(false)
                     })
                 };
-                let needs_confirm = resolve_tool_confirmation_gate(ToolConfirmationGateFacts {
-                    global_skip_tool_confirmation: skip_confirmation,
-                    context_skip_tool_confirmation: skip_from_context,
-                    any_tool_needs_permission,
-                })
-                .confirm_before_run();
+                let needs_confirm =
+                    resolve_tool_confirmation_policy_gate(ToolConfirmationPolicyGateFacts {
+                        global_skip_tool_confirmation: skip_confirmation,
+                        context_policy,
+                        any_tool_needs_permission,
+                    })
+                    .confirm_before_run();
 
                 (needs_confirm, exec_timeout, confirm_timeout, task_policy)
             };

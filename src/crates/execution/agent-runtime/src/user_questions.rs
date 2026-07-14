@@ -107,8 +107,18 @@ pub fn get_user_input_manager() -> &'static UserInputManager {
     &USER_INPUT_MANAGER
 }
 
+pub const USER_INPUT_AVAILABLE_CONTEXT_KEY: &str = "user_input_available";
+
 pub fn ask_user_question_available_for_acp_transport(acp_transport: Option<&Value>) -> bool {
     !acp_transport.is_some_and(|value| value == "true" || value == &json!(true))
+}
+
+pub fn ask_user_question_available_in_context(
+    acp_transport: Option<&Value>,
+    user_input_available: Option<&Value>,
+) -> bool {
+    ask_user_question_available_for_acp_transport(acp_transport)
+        && !user_input_available.is_some_and(|value| value == "false" || value == &json!(false))
 }
 
 pub fn validate_ask_user_question_input(input: &AskUserQuestionInput) -> Result<(), String> {

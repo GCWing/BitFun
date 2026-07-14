@@ -3,7 +3,7 @@
 /// Inspired by opencode TUI's PermissionPrompt component.
 /// Three-level permission system:
 /// - Allow once: execute this tool call only
-/// - Allow always: auto-approve this tool type for the session
+/// - Allow always: auto-approve this tool type until the CLI runtime exits
 /// - Reject: deny execution (optionally with a reason)
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -16,6 +16,12 @@ use ratatui::{
 
 use super::string_utils::truncate_str;
 use super::theme::{tool_icon, StyleKind, Theme};
+
+pub(crate) const ALLOW_ALWAYS_RUNTIME_SCOPE: &str = "until this CLI runtime exits";
+
+fn allow_always_confirmation_text(tool_name: &str) -> String {
+    format!("This will auto-approve '{tool_name}' tool calls {ALLOW_ALWAYS_RUNTIME_SCOPE}.")
+}
 
 // ============ Data Types ============
 
@@ -67,6 +73,10 @@ impl PermissionPrompt {
             selected_option: 0,
             reject_reason: String::new(),
         }
+    }
+
+    pub(crate) fn tool_name(&self) -> &str {
+        &self.tool_name
     }
 
     /// Handle a key event. Returns a PermissionAction if the user made a decision.
@@ -302,10 +312,7 @@ fn render_confirm_always(frame: &mut Frame, prompt: &PermissionPrompt, theme: &T
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            format!(
-                "This will auto-approve '{}' tool calls for this session.",
-                prompt.tool_name
-            ),
+            allow_always_confirmation_text(&prompt.tool_name),
             theme.style(StyleKind::Muted),
         )),
     ];
@@ -554,4 +561,17 @@ fn extract_first_param(params: &serde_json::Value) -> String {
         }
     }
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allow_always_confirmation_text;
+
+    #[test]
+    fn allow_always_copy_describes_cli_runtime_lifetime() {
+        let text = allow_always_confirmation_text("run_terminal_cmd");
+
+        assert!(text.contains("until this CLI runtime exits"));
+        assert!(!text.contains("session"));
+    }
 }

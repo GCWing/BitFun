@@ -4,8 +4,9 @@
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::user_questions::{
-    ask_user_question_available_for_acp_transport, build_answered_user_question_result,
+    ask_user_question_available_in_context, build_answered_user_question_result,
     build_cancelled_user_question_result, validate_ask_user_question_input, AskUserQuestionInput,
+    USER_INPUT_AVAILABLE_CONTEXT_KEY,
 };
 use log::{debug, warn};
 use serde_json::{json, Value};
@@ -31,8 +32,9 @@ impl AskUserQuestionTool {
     }
 
     fn is_available_for_tool_context(context: Option<&ToolUseContext>) -> bool {
-        ask_user_question_available_for_acp_transport(
+        ask_user_question_available_in_context(
             context.and_then(|ctx| ctx.custom_data.get("acp_transport")),
+            context.and_then(|ctx| ctx.custom_data.get(USER_INPUT_AVAILABLE_CONTEXT_KEY)),
         )
     }
 
@@ -175,6 +177,12 @@ Usage notes:
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        if !Self::is_available_for_tool_context(Some(context)) {
+            return Err(crate::util::errors::BitFunError::tool(
+                "AskUserQuestion is unavailable because this execution surface cannot accept interactive user input",
+            ));
+        }
+
         // 1. Parse input parameters
         let tool_input: AskUserQuestionInput =
             serde_json::from_value(input.clone()).map_err(|e| {
@@ -294,6 +302,46 @@ mod tests {
         let context = context_with_custom_data(HashMap::new());
 
         assert!(tool.is_available_in_context(Some(&context)).await);
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_is_hidden_when_human_input_is_unavailable() {
+        let tool = AskUserQuestionTool::new();
+        let context = context_with_custom_data(HashMap::from([(
+            "user_input_available".to_string(),
+            serde_json::Value::Bool(false),
+        )]));
+
+        assert!(!tool.is_available_in_context(Some(&context)).await);
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_fails_without_waiting_when_human_input_is_unavailable() {
+        let tool = AskUserQuestionTool::new();
+        let context = context_with_custom_data(HashMap::from([(
+            "user_input_available".to_string(),
+            serde_json::Value::Bool(false),
+        )]));
+        let input = serde_json::json!({
+            "questions": [{
+                "question": "Continue?",
+                "header": "Continue",
+                "options": [
+                    { "label": "Yes", "description": "Continue" },
+                    { "label": "No", "description": "Stop" }
+                ]
+            }]
+        });
+
+        let error = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            tool.call(&input, &context),
+        )
+        .await
+        .expect("non-interactive question must not wait")
+        .expect_err("non-interactive question must fail");
+
+        assert!(error.to_string().contains("cannot accept interactive"));
     }
 
     #[test]

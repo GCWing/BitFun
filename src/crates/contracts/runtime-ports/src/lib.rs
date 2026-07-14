@@ -981,6 +981,8 @@ pub struct AgentSessionSummary {
     pub session_id: String,
     pub session_name: String,
     pub agent_type: String,
+    #[serde(default)]
+    pub turn_count: usize,
     pub created_at_ms: u64,
     pub last_active_at_ms: u64,
 }
@@ -1168,6 +1170,10 @@ impl DialogSubmissionPolicy {
     pub const fn with_skip_tool_confirmation(mut self, skip_tool_confirmation: bool) -> Self {
         self.skip_tool_confirmation = skip_tool_confirmation;
         self
+    }
+
+    pub const fn requires_tool_confirmation(self) -> bool {
+        matches!(self.trigger_source, DialogTriggerSource::Cli) && !self.skip_tool_confirmation
     }
 }
 
@@ -1952,6 +1958,25 @@ mod tests {
         let cli = DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli);
         assert_eq!(cli.queue_priority, DialogQueuePriority::Normal);
         assert!(!cli.skip_tool_confirmation);
+        assert!(cli.requires_tool_confirmation());
+        let cli_json = serde_json::to_value(cli).expect("serialize cli policy");
+        assert!(cli_json.get("requireToolConfirmation").is_none());
+
+        let auto = cli.with_skip_tool_confirmation(true);
+        assert!(auto.skip_tool_confirmation);
+        assert!(!auto.requires_tool_confirmation());
+    }
+
+    #[test]
+    fn legacy_cli_policy_without_require_field_still_requires_confirmation() {
+        let policy: DialogSubmissionPolicy = serde_json::from_value(serde_json::json!({
+            "triggerSource": "cli",
+            "queuePriority": "normal",
+            "skipToolConfirmation": false
+        }))
+        .expect("legacy policy");
+
+        assert!(policy.requires_tool_confirmation());
     }
 
     #[test]
@@ -2541,6 +2566,7 @@ mod tests {
             session_id: "session_1".to_string(),
             session_name: "Main".to_string(),
             agent_type: "agentic".to_string(),
+            turn_count: 3,
             created_at_ms: 1000,
             last_active_at_ms: 2000,
         };
@@ -2572,6 +2598,7 @@ mod tests {
         assert_eq!(list_json["remoteConnectionId"], "conn-1");
         assert_eq!(list_json["remoteSshHost"], "host-1");
         assert_eq!(summary_json["sessionId"], "session_1");
+        assert_eq!(summary_json["turnCount"], 3);
         assert_eq!(summary_json["createdAtMs"], 1000);
         assert_eq!(summary_json["lastActiveAtMs"], 2000);
         assert_eq!(delete_json["sessionId"], "session_1");

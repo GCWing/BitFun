@@ -79,28 +79,47 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 
 当前主线已经具备以下基础：
 
-- 交互式 TUI、Markdown/代码/Diff/工具卡片、权限交互基础、主题、模型/Agent/MCP/Skill/Subagent/Session 选择；
-  当前入口默认策略仍需按 CLI-P0 迁移。
-- `exec` 的 stdin、`text/json/stream-json`、会话恢复/分叉和 Patch 输出。
+- 交互式 TUI、Markdown/代码/Diff/工具卡片、主题、模型/Agent/MCP/Skill/Subagent/Session 选择；权限请求默认询问，
+  提供 `Allow once / Allow always / Reject`，其中 `Allow always` 只对当前运行上下文中的同名工具有效。
+- `exec` 支持 stdin、会话恢复/分叉、Patch 输出和 `text/json/stream-json`。非交互执行默认拒绝权限请求，
+  显式 `--auto` 才在本次调用内自动批准；兼容参数 `--confirm` 隐藏并映射到安全默认值。`Ctrl+C` 会请求取消
+  当前 turn；失败完成事件、事件流失步和 Patch 写入失败均返回错误结果。
 - Agent、模型、MCP、会话、用量、诊断、ACP 外部 Agent 和插件来源管理命令。
 - BitFun 原生插件目录的发现、内容校验、来源确认，以及 OpenCode custom tool 静态名称预览。
-- CLI 的 `doctor` 生产命令选择 `DeliveryProfile::Cli` 并投影 `ProductAssemblyPlan`；它展示静态 profile，
-  明确说明未评估运行时 readiness，不构造 Runtime Parts 或注册占位 provider。
+- CLI 本地 Agent 入口以类型化 `RuntimeServices` 调用 `ProductAssembler`，选择 `DeliveryProfile::Cli`，
+  并把 `ProductRuntimeParts`、Agent Runtime SDK、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
+- TUI、`exec`、会话和用量复用同一上下文。SDK 已承接会话创建/列举/删除、轮次提交和取消；
+  SDK v1 尚未覆盖的固定 ID、恢复视图、消息、分支、用量和工具确认由一个 Core 兼容门面转发给原 owner。
+- Agentic Event Queue 仍是唯一事件 owner；TUI 与 `exec` 使用独立广播订阅，不互相消费事件。
+- 有界旧队列只承担兼容存储；达到容量时不得抑制广播。CLI 保持一个后台 drain，订阅方一旦报告 lag/closed，
+  必须取消活动 turn 并显式失败，不能在状态不完整时继续报告成功。
+- 会话 ID 在进入存储路径前统一校验；运行时索引同时绑定 ID 与规范化存储路径，并以待提交 claim 计数保护
+  并发恢复。同一进程不能把另一个工作区中已加载的同 ID 会话当作当前会话，单个失败恢复也不能释放其他
+  同路径恢复仍在使用的绑定；已加载会话只校验身份，不通过完整 restore 重置活动状态。删除路径不能通过
+  相对路径、绝对路径或分隔符越出 sessions 根目录。
+- TUI 终端句柄由恢复守卫持有；初始化中途失败、正常返回、错误返回或 panic 展开都会尽力退出 alternate screen、
+  关闭输入捕获、关闭 raw mode 并显示光标。真实 PTY/ConPTY 故障注入仍需独立验收。
+- 初始化按入口分级：交互模式启动 Peer Host 与 MCP，`exec` 只启动 MCP；本地 session 管理和 usage 查询不启动
+  Peer Host/MCP。该分级不改变 Agentic/Terminal owner，也不等同于管理命令已有独立轻量 Runtime。
+- Peer Host 的 HostInvoke、Relay、控制器身份、确认和重连协议仍走既有兼容路径，不属于本次本地 Runtime 切换。
+- `doctor` 与 `health` 构造并校验真实 Runtime Parts，区分 assembly-ready、Core compatibility owner 和不可用扩展。
+  它们证明必需能力已注册，不把 Core 的 Network/Git/MCP compatibility marker 描述为外部服务实时可用。
 - 独立 CLI 测试与打包工作流；主 CI 的三平台 workspace check 同时覆盖 `bitfun-cli` 编译。
 
-首个只读计划诊断切片不等于 CLI 已完成独立产品化。当前 CLI crate 仍直接依赖 `bitfun-core` 的
-`product-full`，生产代码尚未消费 `ProductAssembler` 或 Runtime Parts；插件命令也仍以来源管理和静态预览为主。
+上述切换不等于运行时 owner 已迁移，也不表示 CLI-P0 全部完成。CLI crate 仍以 `bitfun-core/product-full`
+承载协调器、调度器、持久化、工具管线和部分 SDK v1 缺口；ACP stdio 仍走原入口，插件命令仍以来源管理和
+静态预览为主。兼容门面只转发，不重新计算或写入同一事实。
 
 目标态仍存在以下结构缺口：
 
 | 缺口 | 影响 | 本设计的处理 |
 |---|---|---|
-| CLI 只有 `doctor` 消费 `DeliveryProfile::Cli` 的静态计划；所有执行路径仍直接依赖 `bitfun-core/product-full` 和部分具体管理器 | CLI 能力仍难以独立裁剪，执行入口继续承担全局状态职责 | 接入 owner-owned Runtime Services、调用级权限和权威事件路径后，按行为等价测试逐条迁移到 Runtime Parts；迁移期间保留兼容门面。 |
+| CLI 已消费 Runtime Parts，但部分执行与持久化操作仍由 `bitfun-core/product-full` 兼容 owner 提供 | SDK 尚不能独立覆盖完整产品会话，过早删除兼容路径会改变行为 | 仅在稳定端口、真实嵌入方和行为等价测试齐备后迁移 owner；兼容门面保持单一且不扩展成第二套 Runtime。 |
 | TUI 编排、输入、命令、副作用和渲染仍有大文件聚集 | 交互回归难以隔离，终端状态与业务状态容易耦合 | 在现有模块上增量收敛为事件、状态归约、副作用和渲染四个边界，不重写全部 TUI。 |
 | CLI 配置只覆盖入口本地选项，缺少统一层级、来源解释和兼容导入 | 用户无法安全迁移其他 CLI 资产，也难以解释最终配置来源 | 建立 BitFun Canonical Config、来源视图和一次性导入报告。 |
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 直接发现 OpenCode 来源，后台准备真实执行版本；状态明确区分预览、准备、可用和降级。 |
 | Product Capability 已有，但品牌、资源、默认策略和发行配置没有统一产品定义 | 白标需要修改多处常量和工作流，能力隐藏不等于后端禁用 | 产品定义只在组装/构建边界选择身份、资源、能力包、默认策略和发行事实。 |
-| CLI 已有独立 Linux 测试，三平台编译由通用 workspace check 覆盖，但结构化协议和常规打包 smoke 尚未进入同一快速门禁 | 协议或产物回归仍可能晚于常规 PR 发现 | 在对应协议和产品构建切片中补 focused contract 与 smoke；避免为同一依赖图重复建立三平台编译矩阵。 |
+| CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；三平台编译由通用 workspace check 覆盖 | 真实模型审批/取消、Patch I/O 失败、PTY 与常规打包仍可能晚于 PR 发现 | 继续补进程级和 PTY 契约及 package smoke；避免为同一依赖图重复建立三平台编译矩阵。 |
 
 ## 3. 分阶段产品需求
 
@@ -108,16 +127,16 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 
 CLI-P0 的目标是建立后续功能补齐所需的稳定边界，不改变现有用户主路径。
 
-CLI-P0 不是一个统一重构 PR。首个切片只让生产入口选择 `DeliveryProfile::Cli`，读取静态 profile，
-不把服务需求或扩展计划解释为运行时 availability，并为一条用户可见诊断路径补入口验证和独立 CLI 测试。旧门面仅在后续执行切片
-行为等价成立后退出。
+CLI-P0 不是一个统一重构 PR。静态 profile、真实 Runtime Services、Runtime Parts、调用级审批、共享事件源和
+本地 Agent 纵向入口已接入；旧门面仅在后续 owner 迁移的行为等价成立后退出。配置解释、产品定制消费、TUI
+进一步拆分、ACP 切换和 package smoke 仍需独立交付，不能由本次运行时切换代替。
 
 其余工作独立立项，不能与 profile 迁移互相充当完成条件：
 
 | 切片 | 范围 | 退出条件 |
 |---|---|---|
-| 调用级审批 | TUI、`exec`、ACP 使用本次调用内的类型化 Approval Policy，不写回全局配置 | 交互/非交互默认值、显式批准和组织策略均有 focused test |
-| 输出协议 | 盘点 `text/json/stream-json` 消费方，再设计版本、序号、terminal event、stdout/stderr 和退出分类 | 真实消费者兼容测试与迁移窗口明确 |
+| 调用级审批 | TUI 与 `exec` 已使用调用级策略且不写全局配置；ACP 需独立迁移 | Runtime-context `Allow always`、审批规划、`exec` 安全默认值和显式 `--auto` 有 focused test；真实模型/PTY 审批流与 ACP 另行验收 |
+| 输出协议 | 保持通用 `text/json/stream-json` 心智，复用现有 Agentic envelope，不新建 CLI schema | 已覆盖结果/envelope 序列化、参数与前置 JSON 失败、失败完成、同会话跨 turn 隔离和 stream-json/Patch stdout 冲突；真实信号、模型权限失败与 Patch I/O 故障注入仍需进程级契约 |
 | 配置解释 | Canonical Config 层级、来源解释和兼容导入 dry-run | 不自动写入；冲突、未知字段和凭据引用可解释 |
 | 产品定制 | 消费最小产品定义、组装结果和已注册 TUI layout/theme ID | 第二个真实 CLI 产品复用后再提升公共字段 |
 | TUI 边界 | 增量提取终端恢复守卫、命令分发和副作用边界 | 不改版视觉设计，恢复/取消回归可单独验证 |
@@ -151,23 +170,25 @@ CLI-P1 应保证：
 
 - stdin、显式 prompt、固定/恢复/继续/分叉会话互斥关系可验证。
 - `stream-json` 每行一个完整事件；`json` 只输出一个完整结果文档；日志和诊断默认进入 stderr。
-- 事件包含 schema 版本、session/turn 身份、每 turn 单调 sequence、辅助时间、完成原因、用量和产物引用。
 - 失败使用稳定退出码分类：输入/配置、认证、权限、运行时、取消、超时、工具/工作流、输出写入。
-- 支持可选结果 JSON Schema 约束；Schema 失败不得伪装成成功结果。
 - 大型工具结果和二进制附件只在事件中传递存储引用，不把 data URL 或大块内容写入事件流。
-- 结构化模式下 Patch 只能进入版本化事件、结果文档、存储引用或显式文件，不能混入协议 stdout。
+- 结构化模式下 Patch 只能进入最终结果、已有事件、存储引用或显式文件，不能混入 `stream-json` stdout。
 
-候选 v1 协议只先约束语义形态；字段名、数值退出码和默认切换必须在真实消费方盘点与兼容测试后冻结：
+当前协议直接采用同类产品的通用输出心智，不建立 BitFun 专属的平行事件分类：
 
-| 项目 | v1 约束 |
+| 模式 | 当前约束 |
 |---|---|
-| `stream-json` | 每行一个 `{schema_version,type,session_id,turn_id,sequence,payload}` envelope；每 turn 恰有一个 terminal event。 |
-| `json` | 只输出一个 `{schema_version,outcome,session,turn,usage,artifacts,error}` 结果文档。 |
-| 退出码 | 至少区分成功、输入/配置、认证、权限、运行时、取消、超时、工具/工作流和输出写入；数值映射不得在无消费方证据时预先冻结。 |
-| 多错误 | terminal outcome 只设置一次，以首个因果终止错误为准；结果无法写出时由输出写入错误覆盖。 |
+| `text` | 最终助手文本写 stdout；进度、思考、工具状态、日志和诊断写 stderr。显式 `--output-patch -` 是用户选择的额外 stdout 内容。 |
+| `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。 |
+| `stream-json` | 每行直接序列化一个现有 `AgenticEventEnvelope`；不增加 `schema_version`、`sequence` 或第二套 CLI 事件 taxonomy。 |
+| 事件范围 | 只输出本次 session/turn 的事件，以及与其明确关联的 subagent link/tool 事件；同 session 的其他并发 turn 不得混入。 |
+| Patch | `json` 可把 `--output-patch -` 放入最终对象；`stream-json` 要求显式文件路径。Patch 是写出显式 Patch 文件前捕获的仓库 `HEAD` 相对工作区快照，包含 staged、unstaged、untracked 及命令启动前已有改动，不包含输出 artifact 本身，也不表达改动归因。 |
+| 权限 | 非交互默认拒绝并返回权限失败；`--auto` 只改变当前提交策略，不修改持久化配置。 |
+| 人工输入 | 非交互 `exec` 不暴露 `AskUserQuestion`；调用方必须在初始输入中提供完整上下文。该事实沿 Task、SessionMessage 及其自动回复链传播，避免子 Agent 或后续 turn 等待不存在的 stdin 处理器。 |
+| 终止 | terminal event 决定结果；`success=false` 不能映射为成功。`Ctrl+C` 请求取消，并在有界等待内继续转发当前 turn 的 terminal envelope 后返回取消结果。当前公开契约不新增 Agent turn 总时限参数；调用方可使用进程级期限，只有出现真实消费方时才单独设计 deadline。 |
 
-实施迁移时可新增显式 `--output-schema v1`；未指定时保留旧行为一个已公告的兼容窗口并在 stderr 提示弃用。
-兼容窗口、默认切换和旧协议退场由已盘点的真实消费方决定，不能无限期双轨。
+CLI 不提供 `--output-schema v1`。Codex/Claude 同类参数表达的是调用方提供的 JSON Schema，用于约束最终模型
+响应，不是协议版本选择；如未来支持，应复用该语义并独立设计，不能借此重定义事件 envelope。
 
 #### 管理与诊断
 
@@ -498,7 +519,7 @@ CLI Agent 能力加强必须落在共享 Agent Runtime、Tool Runtime 或 Harnes
 |---|---|
 | Capability/Profile | 产品组装结果/TUI 布局引用、依赖闭包、冲突、未知能力、缺失资源、产品能力上限和后端/入口一致性 |
 | TUI | Reducer/命令单测、渲染 snapshot、PTY resize/paste/interrupt/restore、Approval Policy、纯文本/屏幕阅读器、性能预算 |
-| Exec | v1 `json`/`stream-json` schema（后者为 JSONL）、单调序号/唯一 terminal event、stdout/stderr、退出码、旧协议迁移、取消、超时、resume/fork、大结果存储引用 |
+| Exec | 单结果 `json`、现有 `AgenticEventEnvelope` JSONL、stdout/stderr、权限默认值、取消、超时、resume/fork、Patch 与大结果存储引用 |
 | Config | 层级合并、来源解释、策略约束、资产处置、三类外部 fixture、MCP disabled、Skill 可执行资源、冲突、回滚和脱敏 |
 | Plugin | OpenCode 直接来源、依赖与真实导出、工具/全部稳定 Hook/Client、server 与 tui 双 target、加载顺序、超时、崩溃、过载、恢复、策略差异和 unsupported fixture |
 | Agent Runtime | session/turn/cancel、compact/checkpoint/rewind 的补偿/partial/re-entry、后台投递、Subagent、Hook 顺序和持久化恢复 |
@@ -507,14 +528,15 @@ CLI Agent 能力加强必须落在共享 Agent Runtime、Tool Runtime 或 Harnes
 | 平台 | Windows、macOS、Linux 的 build/smoke；Windows 单独覆盖 ConPTY、Ctrl+C、路径和进程树清理 |
 
 通用 `cargo check --workspace` 负责三平台 CLI 编译保护；独立 CLI CI 运行
-`cargo test --locked -p bitfun-cli`。结构化协议测试和打包 smoke test 在对应切片落地后进入门禁。
+`cargo test --locked -p bitfun-cli`。已落地的 focused 协议契约进入该测试；完整进程/PTY 矩阵与打包 smoke
+仍按对应切片补入门禁，不能由序列化单测代替。
 
 ### 10.2 阶段退出条件
 
 CLI-P0 完成：
 
-- CLI 使用显式组装计划和统一能力可用性，不新增入口侧产品逻辑。
-- 结构化输出、Approval Policy、配置来源和产品组装结果/TUI 布局消费有可复核契约测试。
+- CLI 使用真实 Runtime Parts 和统一能力可用性，不新增入口侧产品逻辑。
+- 结构化输出、Approval Policy、配置来源和产品组装结果/TUI 布局消费均有可复核契约测试。
 - 两个已解析产品输入能在不修改源码的情况下生成当前平台最小 CLI smoke artifact。
 - CLI 独立 CI 成为必需检查。
 

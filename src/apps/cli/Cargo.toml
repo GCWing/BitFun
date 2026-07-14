@@ -14,6 +14,9 @@ path = "src/main.rs"
 bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
+bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
+bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
 
 # CLI framework
 clap = { workspace = true }
@@ -71,7 +74,6 @@ tracing-subscriber = { workspace = true }
 tempfile = "3"
 sha2 = { workspace = true }
 hex = { workspace = true }
-bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 
 [features]
 default = []

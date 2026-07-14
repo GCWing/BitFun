@@ -36,6 +36,7 @@ use bitfun_services_integrations::remote_connect::{
 };
 use log::{debug, error, info};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, ConversationCoordinator, DialogQueuePriority,
@@ -389,6 +390,108 @@ fn core_agent_runtime_builder(
         .with_agent_registry(agent_registry)
 }
 
+#[derive(Clone)]
+struct ScheduledSessionManagementPort {
+    coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
+}
+
+impl ScheduledSessionManagementPort {
+    fn new(coordinator: Arc<ConversationCoordinator>, scheduler: Arc<DialogScheduler>) -> Self {
+        Self {
+            coordinator,
+            scheduler,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentSessionManagementPort for ScheduledSessionManagementPort {
+    async fn list_sessions(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionListRequest,
+    ) -> bitfun_runtime_ports::PortResult<Vec<bitfun_runtime_ports::AgentSessionSummary>> {
+        AgentSessionManagementPort::list_sessions(self.coordinator.as_ref(), request).await
+    }
+
+    async fn delete_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionDeleteRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        let storage_path = CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: std::path::PathBuf::from(&request.workspace_path),
+                remote_connection_id: request.remote_connection_id.clone(),
+                remote_ssh_host: request.remote_ssh_host.clone(),
+            })
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                    error.to_string(),
+                )
+            })?;
+        self.coordinator
+            .get_session_manager()
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                    error.to_string(),
+                )
+            })?;
+        let _maintenance = self
+            .scheduler
+            .begin_session_deletion(&request.session_id, &storage_path, Duration::from_secs(2))
+            .await
+            .map_err(|error| {
+                let kind = match error {
+                    crate::util::errors::BitFunError::Validation(_) => {
+                        bitfun_runtime_ports::PortErrorKind::InvalidRequest
+                    }
+                    crate::util::errors::BitFunError::NotFound(_) => {
+                        bitfun_runtime_ports::PortErrorKind::NotFound
+                    }
+                    crate::util::errors::BitFunError::Timeout(_) => {
+                        bitfun_runtime_ports::PortErrorKind::Timeout
+                    }
+                    crate::util::errors::BitFunError::Cancelled(_) => {
+                        bitfun_runtime_ports::PortErrorKind::Cancelled
+                    }
+                    _ => bitfun_runtime_ports::PortErrorKind::Backend,
+                };
+                bitfun_runtime_ports::PortError::new(kind, error.to_string())
+            })?;
+        AgentSessionManagementPort::delete_session(self.coordinator.as_ref(), request).await
+    }
+
+    async fn resolve_session_workspace_binding(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionWorkspaceRequest,
+    ) -> bitfun_runtime_ports::PortResult<Option<bitfun_runtime_ports::AgentSessionWorkspaceBinding>>
+    {
+        AgentSessionManagementPort::resolve_session_workspace_binding(
+            self.coordinator.as_ref(),
+            request,
+        )
+        .await
+    }
+}
+
+fn scheduled_session_management_port(
+    coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
+) -> Arc<dyn AgentSessionManagementPort> {
+    Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
+}
+
 pub(crate) struct CoreServiceAgentRuntime;
 
 impl CoreServiceAgentRuntime {
@@ -674,7 +777,8 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -696,7 +800,8 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -716,7 +821,8 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -729,6 +835,34 @@ impl CoreServiceAgentRuntime {
         )
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
+        .build()
+        .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn product_agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        services: bitfun_runtime_services::RuntimeServices,
+        harness_registry: bitfun_harness::HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
+
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .with_dialog_turn_port(dialog_turn)
+        .with_lifecycle_delivery_port(lifecycle_delivery)
+        .with_services(services)
+        .with_harness_registry(Arc::new(harness_registry))
         .build()
         .map_err(|error| error.to_string())
     }

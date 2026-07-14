@@ -1,6 +1,7 @@
 use crate::agentic::persistence::PersistenceManager;
 use crate::service::session::{
-    DialogTurnData, DialogTurnKind, ModelRoundData, ToolItemData, TurnStatus,
+    collect_hidden_subagent_cascade, DialogTurnData, DialogTurnKind, ModelRoundData,
+    SessionMetadata, ToolItemData, TurnStatus,
 };
 use crate::service::session_usage::classifier::classify_tool_usage;
 use crate::service::session_usage::redaction::{
@@ -44,16 +45,24 @@ pub async fn generate_session_usage_report(
     let turns = persistence_manager
         .load_session_turns(Path::new(&workspace_path), &request.session_id)
         .await?;
+    let (session_ids, subagent_scope_complete) = token_usage_session_scope(
+        persistence_manager,
+        Path::new(&workspace_path),
+        &request,
+        &turns,
+    )
+    .await;
+    let (token_turn_scope, turn_scope_complete) = token_usage_turn_scope(
+        persistence_manager,
+        Path::new(&workspace_path),
+        &request,
+        &turns,
+        &session_ids,
+    )
+    .await;
     let token_records = if let Some(service) = token_usage_service {
         service
-            .query_records(TokenUsageQuery {
-                model_id: None,
-                session_id: Some(request.session_id.clone()),
-                time_range: TimeRange::All,
-                limit: None,
-                offset: None,
-                include_subagent: request.include_hidden_subagents,
-            })
+            .query_records_for_sessions(token_usage_query(&request), &session_ids)
             .await
             .map_err(|error| {
                 BitFunError::service(format!("Failed to query token usage records: {}", error))
@@ -64,13 +73,142 @@ pub async fn generate_session_usage_report(
 
     let snapshot_facts = load_snapshot_facts(&request).await;
 
-    Ok(build_session_usage_report_from_sources(
+    Ok(build_session_usage_report_from_sources_with_scope(
         request,
         &turns,
         &token_records,
         &snapshot_facts,
         Utc::now().timestamp_millis(),
+        &token_turn_scope,
+        subagent_scope_complete && turn_scope_complete,
     ))
+}
+
+fn token_usage_query(request: &SessionUsageReportRequest) -> TokenUsageQuery {
+    TokenUsageQuery {
+        model_id: None,
+        // Hidden subagents use their own session IDs. The storage call receives
+        // the exact parent/child session set separately and scans history once.
+        session_id: None,
+        time_range: TimeRange::All,
+        limit: None,
+        offset: None,
+        include_subagent: request.include_hidden_subagents,
+    }
+}
+
+async fn token_usage_session_scope(
+    persistence_manager: &PersistenceManager,
+    workspace_path: &Path,
+    request: &SessionUsageReportRequest,
+    turns: &[DialogTurnData],
+) -> (HashSet<String>, bool) {
+    if !request.include_hidden_subagents {
+        return (HashSet::from([request.session_id.clone()]), true);
+    }
+    let metadata = persistence_manager
+        .list_session_metadata_including_internal(workspace_path)
+        .await
+        .ok();
+    token_usage_session_ids(request, turns, metadata.as_deref())
+}
+
+fn token_usage_session_ids(
+    request: &SessionUsageReportRequest,
+    turns: &[DialogTurnData],
+    metadata: Option<&[SessionMetadata]>,
+) -> (HashSet<String>, bool) {
+    let reportable_turns = turns
+        .iter()
+        .filter(|turn| is_reportable_usage_turn(turn))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut session_ids = HashSet::from([request.session_id.clone()]);
+    if !request.include_hidden_subagents {
+        return (session_ids, true);
+    }
+
+    let direct_session_ids = iter_tools(&reportable_turns)
+        .filter_map(|tool| tool.subagent_session_id.as_ref())
+        .cloned()
+        .collect::<HashSet<_>>();
+    let parent_turn_ids = reportable_turns
+        .iter()
+        .map(|turn| turn.turn_id.clone())
+        .collect::<HashSet<_>>();
+    let persisted_cascade = metadata
+        .map(|metadata| {
+            collect_hidden_subagent_cascade(
+                metadata.iter().cloned(),
+                &request.session_id,
+                &parent_turn_ids,
+            )
+            .into_iter()
+            .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default();
+    let complete = metadata.is_some() && direct_session_ids.is_subset(&persisted_cascade);
+    session_ids.extend(persisted_cascade);
+    session_ids.extend(direct_session_ids);
+    (session_ids, complete)
+}
+
+type TokenUsageTurnScope = HashMap<String, HashSet<String>>;
+
+fn extend_token_usage_turn_scope(
+    scope: &mut TokenUsageTurnScope,
+    session_id: &str,
+    turns: &[DialogTurnData],
+) {
+    let reportable_turns = turns
+        .iter()
+        .filter(|turn| is_reportable_usage_turn(turn))
+        .cloned()
+        .collect::<Vec<_>>();
+    scope
+        .entry(session_id.to_string())
+        .or_default()
+        .extend(reportable_turns.iter().map(|turn| turn.turn_id.clone()));
+    for tool in iter_tools(&reportable_turns) {
+        if let (Some(child_session_id), Some(child_turn_id)) = (
+            tool.subagent_session_id.as_ref(),
+            tool.subagent_dialog_turn_id.as_ref(),
+        ) {
+            scope
+                .entry(child_session_id.clone())
+                .or_default()
+                .insert(child_turn_id.clone());
+        }
+    }
+}
+
+async fn token_usage_turn_scope(
+    persistence_manager: &PersistenceManager,
+    workspace_path: &Path,
+    request: &SessionUsageReportRequest,
+    parent_turns: &[DialogTurnData],
+    session_ids: &HashSet<String>,
+) -> (TokenUsageTurnScope, bool) {
+    let mut scope = TokenUsageTurnScope::new();
+    extend_token_usage_turn_scope(&mut scope, &request.session_id, parent_turns);
+    if !request.include_hidden_subagents {
+        return (scope, true);
+    }
+
+    let mut complete = true;
+    for session_id in session_ids {
+        if session_id == &request.session_id {
+            continue;
+        }
+        match persistence_manager
+            .load_session_turns(workspace_path, session_id)
+            .await
+        {
+            Ok(turns) => extend_token_usage_turn_scope(&mut scope, session_id, &turns),
+            Err(_) => complete = false,
+        }
+    }
+    (scope, complete)
 }
 
 pub fn build_session_usage_report_from_turns(
@@ -95,17 +233,64 @@ pub fn build_session_usage_report_from_sources(
     snapshot_facts: &UsageSnapshotFacts,
     generated_at: i64,
 ) -> SessionUsageReport {
+    let (_, subagent_scope_complete) = token_usage_session_ids(&request, turns, None);
+    let mut token_turn_scope = TokenUsageTurnScope::new();
+    extend_token_usage_turn_scope(&mut token_turn_scope, &request.session_id, turns);
+    build_session_usage_report_from_sources_with_scope(
+        request,
+        turns,
+        token_records,
+        snapshot_facts,
+        generated_at,
+        &token_turn_scope,
+        subagent_scope_complete,
+    )
+}
+
+fn build_session_usage_report_from_sources_with_scope(
+    request: SessionUsageReportRequest,
+    turns: &[DialogTurnData],
+    token_records: &[TokenUsageRecord],
+    snapshot_facts: &UsageSnapshotFacts,
+    generated_at: i64,
+    token_turn_scope: &TokenUsageTurnScope,
+    subagent_scope_complete: bool,
+) -> SessionUsageReport {
     let reportable_turns: Vec<DialogTurnData> = turns
         .iter()
         .filter(|turn| is_reportable_usage_turn(turn))
         .cloned()
         .collect();
     let turns = reportable_turns.as_slice();
+    // Token usage is stored globally and session IDs are only unique within a
+    // workspace. Join records back to the exact parent/child lineage loaded
+    // from this workspace so equal identifiers elsewhere cannot contaminate
+    // the report.
+    let scoped_token_records: Vec<TokenUsageRecord> = token_records
+        .iter()
+        .filter(|record| {
+            token_turn_scope
+                .get(&record.session_id)
+                .is_some_and(|turn_ids| turn_ids.contains(&record.turn_id))
+                && (record.session_id == request.session_id || request.include_hidden_subagents)
+        })
+        .cloned()
+        .collect();
+    let includes_subagent_records = scoped_token_records
+        .iter()
+        .any(|record| record.session_id != request.session_id);
+    let token_records = scoped_token_records.as_slice();
     let mut report = SessionUsageReport::partial_unavailable(&request.session_id, generated_at);
     report.report_id = format!("usage-{}-{}", request.session_id, generated_at);
     report.workspace = build_workspace(&request);
-    report.scope = build_scope(turns, request.include_hidden_subagents);
-    report.coverage = build_coverage(&request, turns, token_records, snapshot_facts);
+    report.scope = build_scope(turns, includes_subagent_records);
+    report.coverage = build_coverage(
+        &request,
+        turns,
+        token_records,
+        snapshot_facts,
+        subagent_scope_complete,
+    );
     report.time = build_time_breakdown(turns, generated_at);
     report.tokens = build_token_breakdown(token_records);
     report.models = build_model_breakdown(turns, token_records);
@@ -200,9 +385,10 @@ fn build_coverage(
     turns: &[DialogTurnData],
     token_records: &[TokenUsageRecord],
     snapshot_facts: &UsageSnapshotFacts,
+    subagent_scope_complete: bool,
 ) -> UsageCoverage {
     let mut available = vec![UsageCoverageKey::WorkspaceIdentity];
-    if request.include_hidden_subagents {
+    if request.include_hidden_subagents && subagent_scope_complete {
         available.push(UsageCoverageKey::SubagentScope);
     }
     if turns
@@ -269,7 +455,14 @@ fn build_coverage(
         );
     }
     if missing.contains(&UsageCoverageKey::SubagentScope) {
-        notes.push("Subagent rows are excluded from this report scope.".to_string());
+        if request.include_hidden_subagents {
+            notes.push(
+                "Subagent coverage is partial; only token records linked by persisted session lineage are included."
+                    .to_string(),
+            );
+        } else {
+            notes.push("Subagent rows are excluded from this report scope.".to_string());
+        }
     }
     if snapshot_facts.source_available {
         notes.push(
@@ -1376,6 +1569,206 @@ mod tests {
         assert_eq!(
             report.workspace.path_label.as_deref(),
             Some("D:/workspace/bitfun")
+        );
+    }
+
+    #[test]
+    fn report_excludes_token_records_not_owned_by_loaded_turns() {
+        let request = test_request(None);
+        let mut unrelated_record = test_token_record("model-b", 200, 40, 0);
+        unrelated_record.turn_id = "turn-from-another-workspace".to_string();
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[test_turn("turn-1", 0, DialogTurnKind::UserDialog)],
+            &[test_token_record("model-a", 100, 20, 0), unrelated_record],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.tokens.total_tokens, Some(120));
+        assert_eq!(report.models.len(), 1);
+        assert_eq!(report.models[0].model_id, "model-a");
+    }
+
+    #[test]
+    fn report_excludes_equal_turn_id_from_another_session() {
+        let request = test_request(None);
+        let mut unrelated_record = test_token_record("model-b", 200, 40, 0);
+        unrelated_record.session_id = "session-from-another-workspace".to_string();
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[test_turn("turn-1", 0, DialogTurnKind::UserDialog)],
+            &[test_token_record("model-a", 100, 20, 0), unrelated_record],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.tokens.total_tokens, Some(120));
+        assert_eq!(report.models.len(), 1);
+        assert_eq!(report.models[0].model_id, "model-a");
+    }
+
+    #[test]
+    fn report_includes_only_linked_hidden_subagent_records_when_requested() {
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        let tool = &mut turn.model_rounds[0].tool_items[0];
+        tool.subagent_session_id = Some("child-session".to_string());
+        tool.subagent_dialog_turn_id = Some("child-turn".to_string());
+
+        let root_record = test_token_record("model-a", 100, 20, 0);
+        let mut child_record = test_token_record("model-b", 50, 10, 0);
+        child_record.session_id = "child-session".to_string();
+        child_record.turn_id = "child-turn".to_string();
+        child_record.is_subagent = true;
+        let records = [root_record, child_record];
+
+        let included = build_session_usage_report_from_turns(
+            test_request(None),
+            std::slice::from_ref(&turn),
+            &records,
+            1_778_347_200_000,
+        );
+        let mut excluded_request = test_request(None);
+        excluded_request.include_hidden_subagents = false;
+        let excluded = build_session_usage_report_from_turns(
+            excluded_request,
+            &[turn],
+            &records,
+            1_778_347_200_000,
+        );
+
+        assert_eq!(included.tokens.total_tokens, Some(180));
+        assert_eq!(included.models.len(), 2);
+        assert_eq!(excluded.tokens.total_tokens, Some(120));
+        assert_eq!(excluded.models.len(), 1);
+    }
+
+    #[test]
+    fn report_excludes_unverifiable_legacy_child_records_and_marks_lineage_partial() {
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.model_rounds[0].tool_items[0].subagent_session_id = Some("child-session".to_string());
+
+        let mut child_record = test_token_record("model-b", 50, 10, 0);
+        child_record.session_id = "child-session".to_string();
+        child_record.turn_id = "legacy-child-turn".to_string();
+        child_record.is_subagent = true;
+        let report = build_session_usage_report_from_turns(
+            test_request(None),
+            &[turn],
+            &[test_token_record("model-a", 100, 20, 0), child_record],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.tokens.total_tokens, Some(120));
+        assert!(!report.scope.includes_subagents);
+        assert!(report
+            .coverage
+            .missing
+            .contains(&UsageCoverageKey::SubagentScope));
+        assert!(report
+            .coverage
+            .notes
+            .iter()
+            .any(|note| note.contains("Subagent coverage is partial")));
+    }
+
+    #[test]
+    fn report_excludes_same_child_session_id_with_unowned_turn_id() {
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        let tool = &mut turn.model_rounds[0].tool_items[0];
+        tool.subagent_session_id = Some("child-session".to_string());
+        tool.subagent_dialog_turn_id = Some("owned-child-turn".to_string());
+
+        let mut owned = test_token_record("model-b", 50, 10, 0);
+        owned.session_id = "child-session".to_string();
+        owned.turn_id = "owned-child-turn".to_string();
+        owned.is_subagent = true;
+        let mut collision = test_token_record("model-c", 500, 100, 0);
+        collision.session_id = "child-session".to_string();
+        collision.turn_id = "other-workspace-turn".to_string();
+        collision.is_subagent = true;
+
+        let report = build_session_usage_report_from_turns(
+            test_request(None),
+            &[turn],
+            &[test_token_record("model-a", 100, 20, 0), owned, collision],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.tokens.total_tokens, Some(180));
+        assert_eq!(
+            report
+                .models
+                .iter()
+                .map(|model| model.model_id.as_str())
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from(["model-a", "model-b"])
+        );
+    }
+
+    #[test]
+    fn usage_scope_resolves_persisted_hidden_subagent_cascade() {
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.model_rounds[0].tool_items[0].subagent_session_id = Some("child-session".to_string());
+
+        let mut child = SessionMetadata::new(
+            "child-session".to_string(),
+            "Child".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        child.relationship = Some(crate::service::session::SessionRelationship {
+            kind: Some(crate::service::session::SessionRelationshipKind::Subagent),
+            parent_session_id: Some("session-1".to_string()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("turn-1".to_string()),
+            parent_turn_index: Some(0),
+            parent_tool_call_id: Some("tool-1".to_string()),
+            subagent_type: Some("Explore".to_string()),
+        });
+        let mut grandchild = SessionMetadata::new(
+            "grandchild-session".to_string(),
+            "Grandchild".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        grandchild.relationship = Some(crate::service::session::SessionRelationship {
+            kind: Some(crate::service::session::SessionRelationshipKind::Subagent),
+            parent_session_id: Some("child-session".to_string()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("child-turn".to_string()),
+            parent_turn_index: Some(0),
+            parent_tool_call_id: Some("child-tool".to_string()),
+            subagent_type: Some("Explore".to_string()),
+        });
+
+        let (session_ids, complete) =
+            token_usage_session_ids(&request, &[turn], Some(&[child, grandchild]));
+
+        assert!(complete);
+        assert_eq!(
+            session_ids,
+            HashSet::from([
+                "session-1".to_string(),
+                "child-session".to_string(),
+                "grandchild-session".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn usage_query_bounds_storage_results_to_parent_and_linked_children() {
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.model_rounds[0].tool_items[0].subagent_session_id = Some("child-session".to_string());
+
+        let (session_ids, complete) = token_usage_session_ids(&request, &[turn], None);
+
+        assert!(!complete);
+        assert_eq!(
+            session_ids,
+            HashSet::from(["session-1".to_string(), "child-session".to_string()])
         );
     }
 

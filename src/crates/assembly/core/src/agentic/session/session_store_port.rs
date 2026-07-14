@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use bitfun_runtime_ports::{
@@ -52,16 +52,71 @@ impl CoreSessionStorePort {
             .ok()
     }
 
-    fn resolved_sessions_dir_kind(
-        path_manager: &PathManager,
-        path: &std::path::Path,
-    ) -> Option<SessionStorageKind> {
+    fn has_parent_traversal(path: &Path) -> bool {
+        path.components()
+            .any(|component| matches!(component, Component::ParentDir))
+    }
+
+    fn nearest_existing_ancestor(path: &Path) -> Option<&Path> {
+        let mut candidate = Some(path);
+        while let Some(current) = candidate {
+            if current.exists() {
+                return Some(current);
+            }
+            candidate = current.parent();
+        }
+        None
+    }
+
+    fn is_confined_to_managed_root(root: &Path, path: &Path) -> bool {
+        if Self::has_parent_traversal(path) || !path.starts_with(root) {
+            return false;
+        }
+
+        if !root.exists() {
+            return true;
+        }
+
+        let Ok(canonical_root) = dunce::canonicalize(root) else {
+            return false;
+        };
+        let Some(existing_ancestor) = Self::nearest_existing_ancestor(path) else {
+            return false;
+        };
+        let Ok(canonical_ancestor) = dunce::canonicalize(existing_ancestor) else {
+            return false;
+        };
+
+        canonical_ancestor == canonical_root || canonical_ancestor.starts_with(canonical_root)
+    }
+
+    fn looks_like_resolved_sessions_dir(path_manager: &PathManager, path: &Path) -> bool {
         if path.file_name().and_then(|value| value.to_str()) != Some("sessions") {
+            return false;
+        }
+
+        if path.starts_with(path_manager.remote_ssh_mirror_root_dir()) {
+            return true;
+        }
+
+        let projects_root = path_manager.projects_root();
+        path.parent()
+            .and_then(Path::parent)
+            .is_some_and(|candidate| candidate == projects_root)
+    }
+
+    pub(crate) fn resolved_sessions_dir_kind(
+        path_manager: &PathManager,
+        path: &Path,
+    ) -> Option<SessionStorageKind> {
+        if Self::has_parent_traversal(path)
+            || path.file_name().and_then(|value| value.to_str()) != Some("sessions")
+        {
             return None;
         }
 
         let remote_mirror_root = path_manager.remote_ssh_mirror_root_dir();
-        if path.starts_with(&remote_mirror_root) {
+        if Self::is_confined_to_managed_root(&remote_mirror_root, path) {
             return Some(
                 if path
                     .components()
@@ -75,9 +130,11 @@ impl CoreSessionStorePort {
         }
 
         let projects_root = path_manager.projects_root();
-        path.parent()
+        let has_local_shape = path
+            .parent()
             .and_then(|runtime_root| runtime_root.parent())
-            .is_some_and(|candidate| candidate == projects_root.as_path())
+            .is_some_and(|candidate| candidate == projects_root.as_path());
+        (has_local_shape && Self::is_confined_to_managed_root(&projects_root, path))
             .then_some(SessionStorageKind::Local)
     }
 }
@@ -95,6 +152,12 @@ impl SessionStorePort for CoreSessionStorePort {
         request: SessionStoragePathRequest,
     ) -> PortResult<SessionStoragePathResolution> {
         let path_manager = self.path_manager();
+        if Self::has_parent_traversal(&request.workspace_path) {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Session workspace_path must not contain parent-directory traversal",
+            ));
+        }
         if let Some(storage_kind) =
             Self::resolved_sessions_dir_kind(&path_manager, &request.workspace_path)
         {
@@ -104,6 +167,12 @@ impl SessionStorePort for CoreSessionStorePort {
                 storage_kind,
                 request.remote_connection_id,
                 request.remote_ssh_host,
+            ));
+        }
+        if Self::looks_like_resolved_sessions_dir(&path_manager, &request.workspace_path) {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Resolved session storage path is outside its managed root",
             ));
         }
 
@@ -161,5 +230,70 @@ impl SessionStorePort for CoreSessionStorePort {
             identity.remote_connection_id,
             remote_ssh_host,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn test_port() -> (CoreSessionStorePort, PathBuf) {
+        let test_root =
+            std::env::temp_dir().join(format!("bitfun-session-store-port-{}", Uuid::new_v4()));
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            test_root.join("user"),
+        ));
+        (
+            CoreSessionStorePort::with_path_manager_for_tests(path_manager),
+            test_root,
+        )
+    }
+
+    #[tokio::test]
+    async fn resolved_sessions_path_rejects_parent_directory_traversal() {
+        let (port, test_root) = test_port();
+        let remote_root = port.path_manager().remote_ssh_mirror_root_dir();
+        let path = remote_root
+            .join("example-host")
+            .join("repo")
+            .join("..")
+            .join("outside")
+            .join("sessions");
+
+        let result = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: path,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await;
+
+        assert!(result.is_err());
+        let _ = std::fs::remove_dir_all(test_root);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn resolved_sessions_path_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let (port, test_root) = test_port();
+        let remote_root = port.path_manager().remote_ssh_mirror_root_dir();
+        let outside = test_root.join("outside");
+        std::fs::create_dir_all(outside.join("sessions")).expect("outside sessions directory");
+        std::fs::create_dir_all(&remote_root).expect("remote root");
+        symlink(&outside, remote_root.join("escape")).expect("escape symlink");
+
+        let result = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: remote_root.join("escape").join("sessions"),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await;
+
+        assert!(result.is_err());
+        let _ = std::fs::remove_dir_all(test_root);
     }
 }

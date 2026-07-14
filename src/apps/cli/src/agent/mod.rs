@@ -16,7 +16,7 @@ pub(crate) trait Agent: Send + Sync {
     async fn ensure_session(&self, agent_type: &str) -> Result<String>;
 
     /// Send a message to start a new dialog turn.
-    /// Returns the turn_id. Events are consumed externally via EventQueue.
+    /// Returns the turn_id. Events are observed through the runtime event source.
     async fn send_message(&self, message: String, agent_type: &str) -> Result<String>;
 
     /// Cancel the current dialog turn (if any)

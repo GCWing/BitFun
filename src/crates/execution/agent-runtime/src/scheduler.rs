@@ -126,6 +126,13 @@ pub struct ActiveDialogTurnStore {
     inner: dashmap::DashMap<String, ActiveDialogTurn>,
 }
 
+#[derive(Debug)]
+pub enum ActiveDialogTurnTakeResult {
+    Matched(ActiveDialogTurn),
+    Absent,
+    DifferentTurn,
+}
+
 impl ActiveDialogTurnStore {
     pub fn insert(&self, session_id: &str, turn: ActiveDialogTurn) {
         self.inner.insert(session_id.to_string(), turn);
@@ -135,8 +142,26 @@ impl ActiveDialogTurnStore {
         self.inner.remove(session_id).map(|(_, turn)| turn)
     }
 
+    /// Atomically take the active metadata only when it belongs to the
+    /// outcome's turn generation.
+    pub fn take_for_outcome(&self, session_id: &str, turn_id: &str) -> ActiveDialogTurnTakeResult {
+        match self.inner.entry(session_id.to_string()) {
+            dashmap::mapref::entry::Entry::Occupied(entry) if entry.get().turn_id() == turn_id => {
+                ActiveDialogTurnTakeResult::Matched(entry.remove())
+            }
+            dashmap::mapref::entry::Entry::Occupied(_) => ActiveDialogTurnTakeResult::DifferentTurn,
+            dashmap::mapref::entry::Entry::Vacant(_) => ActiveDialogTurnTakeResult::Absent,
+        }
+    }
+
     pub fn contains(&self, session_id: &str) -> bool {
         self.inner.contains_key(session_id)
+    }
+
+    pub fn matches_turn(&self, session_id: &str, turn_id: &str) -> bool {
+        self.inner
+            .get(session_id)
+            .is_some_and(|turn| turn.turn_id() == turn_id)
     }
 
     pub fn suppression_key_for_requester(
@@ -297,20 +322,27 @@ impl<T> DialogTurnQueue<T> {
     }
 
     pub fn dequeue_next(&self, session_id: &str) -> Option<T> {
-        self.inner
+        let turn = self
+            .inner
             .get_mut(session_id)
-            .and_then(|mut q| q.pop_front().map(|item| item.turn))
+            .and_then(|mut queue| queue.pop_front().map(|item| item.turn));
+        self.inner
+            .remove_if(session_id, |_, queue| queue.is_empty());
+        turn
     }
 
     pub fn remove_first_matching<F>(&self, session_id: &str, mut predicate: F) -> Option<T>
     where
         F: FnMut(&T) -> bool,
     {
-        self.inner.get_mut(session_id).and_then(|mut q| {
+        let turn = self.inner.get_mut(session_id).and_then(|mut q| {
             q.iter()
                 .position(|item| predicate(&item.turn))
                 .and_then(|index| q.remove(index).map(|item| item.turn))
-        })
+        });
+        self.inner
+            .remove_if(session_id, |_, queue| queue.is_empty());
+        turn
     }
 
     pub fn requeue_front(&self, session_id: &str, turn: T, priority: DialogQueuePriority) {
@@ -329,6 +361,7 @@ pub struct AgentSessionReplyPlan {
     pub target_remote_ssh_host: Option<String>,
     pub user_input: String,
     pub reminder_text: String,
+    pub user_message_metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -872,6 +905,7 @@ From session: {responder_session_id}\n\
 From workspace: {responder_workspace}\n\
 Status: {status}"
         ),
+        user_message_metadata: active_turn.user_message_metadata().cloned(),
     })
 }
 
@@ -914,6 +948,59 @@ pub fn resolve_dialog_steering_action(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn active_turn(turn_id: &str) -> ActiveDialogTurn {
+        ActiveDialogTurn::new(
+            turn_id.to_string(),
+            None,
+            None,
+            None,
+            "agentic".to_string(),
+            "input".to_string(),
+            None,
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+            None,
+        )
+    }
+
+    #[test]
+    fn active_turn_store_ignores_an_outcome_from_an_older_turn_generation() {
+        let store = ActiveDialogTurnStore::default();
+        store.insert("session-1", active_turn("turn-new"));
+
+        assert!(matches!(
+            store.take_for_outcome("session-1", "turn-old"),
+            ActiveDialogTurnTakeResult::DifferentTurn
+        ));
+        let ActiveDialogTurnTakeResult::Matched(turn) =
+            store.take_for_outcome("session-1", "turn-new")
+        else {
+            panic!("current turn should be removed");
+        };
+        assert_eq!(turn.turn_id(), "turn-new");
+        assert!(matches!(
+            store.take_for_outcome("session-1", "turn-new"),
+            ActiveDialogTurnTakeResult::Absent
+        ));
+    }
+
+    #[test]
+    fn dialog_turn_queue_reclaims_empty_session_entries() {
+        let queue = DialogTurnQueue::with_max_depth(4);
+        queue
+            .enqueue("dequeue", 1, DialogQueuePriority::Normal)
+            .expect("enqueue");
+        queue
+            .enqueue("remove", 2, DialogQueuePriority::Normal)
+            .expect("enqueue");
+
+        assert_eq!(queue.dequeue_next("dequeue"), Some(1));
+        assert_eq!(
+            queue.remove_first_matching("remove", |turn| *turn == 2),
+            Some(2)
+        );
+        assert!(queue.inner.is_empty());
+    }
 
     #[test]
     fn outcome_lifecycle_dispatches_completed_turn_and_verifies_goal() {

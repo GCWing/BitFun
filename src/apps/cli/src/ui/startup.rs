@@ -33,13 +33,12 @@ use ratatui::{
     widgets::{Block, Paragraph},
     Frame, Terminal,
 };
-use std::sync::Arc;
 use std::time::Duration;
 
+use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_core::agentic::agents::{
     get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
 };
-use bitfun_core::agentic::coordination::ConversationCoordinator;
 use bitfun_core::agentic::tools::implementations::skills::{
     mode_overrides::{
         load_project_mode_skills_document_local, save_project_mode_skills_document_local,
@@ -48,6 +47,7 @@ use bitfun_core::agentic::tools::implementations::skills::{
     registry::SkillRegistry,
     ModeSkillInfo, SkillInfo,
 };
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::GlobalConfigManager;
 
 /// Types of popups that can be shown on the startup page
@@ -195,7 +195,8 @@ pub(crate) struct StartupPage {
     theme_preview_original: Option<Theme>,
 
     // ── System context ──
-    coordinator: Arc<ConversationCoordinator>,
+    agent_runtime: AgentRuntime,
+    compatibility: CoreAgentRuntimeCompatibility,
 
     // ── State ──
     /// Selected agent type (can be changed via /agents or Tab)
@@ -215,7 +216,8 @@ pub(crate) struct StartupPage {
 
 impl StartupPage {
     pub(crate) fn new(
-        coordinator: Arc<ConversationCoordinator>,
+        agent_runtime: AgentRuntime,
+        compatibility: CoreAgentRuntimeCompatibility,
         default_agent: String,
         workspace: Option<String>,
     ) -> Self {
@@ -268,7 +270,8 @@ impl StartupPage {
             model_config_form: ModelConfigFormState::new(),
             login_form: LoginFormState::new(),
             theme_preview_original: None,
-            coordinator,
+            agent_runtime,
+            compatibility,
             agent_type: default_agent,
             model_display_name: String::new(),
             workspace_display: workspace.unwrap_or_else(|| {
@@ -1300,7 +1303,11 @@ impl StartupPage {
 
     fn start_sync_and_show_account(&mut self, is_first_login: bool) {
         let workspace = self.workspace_path_for_sync();
-        crate::account_sync::start_auto_sync_background(is_first_login, workspace);
+        crate::account_sync::start_auto_sync_background(
+            self.compatibility.clone(),
+            is_first_login,
+            workspace,
+        );
         self.open_account_panel();
         self.status = Some(if is_first_login {
             "Sync started (use local / upload settings).".to_string()
@@ -1372,12 +1379,16 @@ impl StartupPage {
 
     fn show_session_selector(&mut self) {
         self.push_current_popup_to_stack();
-        let coordinator = self.coordinator.clone();
+        let agent_runtime = self.agent_runtime.clone();
         let sessions = tokio::task::block_in_place(|| {
             let workspace_path = self.workspace_path_buf();
             tokio::runtime::Handle::current().block_on(async {
-                coordinator
-                    .list_sessions(&workspace_path)
+                agent_runtime
+                    .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
+                        workspace_path: workspace_path.to_string_lossy().to_string(),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    })
                     .await
                     .unwrap_or_default()
             })
@@ -1392,7 +1403,9 @@ impl StartupPage {
             .into_iter()
             .map(|s| {
                 let last_activity = {
-                    let elapsed = s.last_activity_at.elapsed().unwrap_or_default();
+                    let last_activity =
+                        std::time::UNIX_EPOCH + Duration::from_millis(s.last_active_at_ms);
+                    let elapsed = last_activity.elapsed().unwrap_or_default();
                     if elapsed.as_secs() < 60 {
                         "just now".to_string()
                     } else if elapsed.as_secs() < 3600 {
@@ -1416,13 +1429,21 @@ impl StartupPage {
     }
 
     fn handle_session_delete(&mut self, item: &SessionItem) {
-        let coordinator = self.coordinator.clone();
+        let agent_runtime = self.agent_runtime.clone();
         let sid = item.session_id.clone();
 
         let result = tokio::task::block_in_place(|| {
             let workspace_path = self.workspace_path_buf();
-            tokio::runtime::Handle::current()
-                .block_on(async { coordinator.delete_session(&workspace_path, &sid).await })
+            tokio::runtime::Handle::current().block_on(async {
+                agent_runtime
+                    .delete_session(bitfun_runtime_ports::AgentSessionDeleteRequest {
+                        workspace_path: workspace_path.to_string_lossy().to_string(),
+                        session_id: sid,
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    })
+                    .await
+            })
         });
 
         match result {

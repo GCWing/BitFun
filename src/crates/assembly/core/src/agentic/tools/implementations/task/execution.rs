@@ -29,6 +29,23 @@ fn build_deep_review_subagent_context(
     values
 }
 
+fn forward_user_input_availability(
+    context: &ToolUseContext,
+    subagent_context: &mut HashMap<String, String>,
+) {
+    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+
+    let Some(value) = context.custom_data.get(USER_INPUT_AVAILABLE_CONTEXT_KEY) else {
+        return;
+    };
+    let value = match value {
+        Value::Bool(value) => value.to_string(),
+        Value::String(value) if matches!(value.as_str(), "true" | "false") => value.clone(),
+        _ => return,
+    };
+    subagent_context.insert(USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(), value);
+}
+
 struct BackgroundTaskStartRequest<'a> {
     coordinator: &'a std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
     context: &'a ToolUseContext,
@@ -508,13 +525,17 @@ impl TaskTool {
             );
         }
 
-        let subagent_context = deep_review_subagent_role.map(|role| {
-            build_deep_review_subagent_context(
-                role,
-                subagent_type.as_deref(),
-                deep_review_run_manifest.as_ref(),
-            )
-        });
+        let mut subagent_context = deep_review_subagent_role
+            .map(|role| {
+                build_deep_review_subagent_context(
+                    role,
+                    subagent_type.as_deref(),
+                    deep_review_run_manifest.as_ref(),
+                )
+            })
+            .unwrap_or_default();
+        forward_user_input_availability(context, &mut subagent_context);
+        let subagent_context = (!subagent_context.is_empty()).then_some(subagent_context);
         let prepared_prompt = prompt;
         if run_in_background {
             return Self::start_background_task(BackgroundTaskStartRequest {
@@ -1006,5 +1027,31 @@ mod target_context_tests {
         .expect("target evidence should validate")
         .expect("target evidence should exist");
         assert!(evidence.allows_live_repository_context());
+    }
+
+    #[test]
+    fn child_context_preserves_non_interactive_user_input_boundary() {
+        let mut parent = ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: Default::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        };
+        parent.custom_data.insert(
+            bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+            Value::Bool(false),
+        );
+        let mut child = HashMap::new();
+
+        forward_user_input_availability(&parent, &mut child);
+
+        assert_eq!(child["user_input_available"], "false");
     }
 }

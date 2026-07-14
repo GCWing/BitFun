@@ -440,6 +440,10 @@ fn agent_session_reply_action_forwards_completed_outcome_with_legacy_reminder_te
     assert_eq!(plan.target_remote_ssh_host.as_deref(), Some("host-1"));
     assert_eq!(plan.user_input, "done");
     assert_eq!(
+        plan.user_message_metadata,
+        Some(serde_json::json!({"kind": "session_message"}))
+    );
+    assert_eq!(
         plan.reminder_text,
         "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
 From session: target-session\n\

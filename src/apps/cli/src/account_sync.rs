@@ -10,8 +10,7 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use bitfun_core::agentic::persistence::PersistenceManager;
-use bitfun_core::infrastructure::try_get_path_manager_arc;
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::get_global_config_service;
 use bitfun_core::service::remote_connect::{sync_state, AccountClient};
 
@@ -120,13 +119,17 @@ async fn emit_progress(
 
 /// Start auto-sync in the background. Returns immediately; progress is in
 /// [`current_sync_progress`].
-pub(crate) fn start_auto_sync_background(is_first_login: bool, workspace_path: PathBuf) {
+pub(crate) fn start_auto_sync_background(
+    compatibility: CoreAgentRuntimeCompatibility,
+    is_first_login: bool,
+    workspace_path: PathBuf,
+) {
     if AUTO_SYNC_IN_FLIGHT.swap(true, Ordering::SeqCst) {
         tracing::warn!("Account auto-sync already in flight; skipping duplicate start");
         return;
     }
     tokio::spawn(async move {
-        let result = run_auto_sync(is_first_login, &workspace_path).await;
+        let result = run_auto_sync(&compatibility, is_first_login, &workspace_path).await;
         AUTO_SYNC_IN_FLIGHT.store(false, Ordering::SeqCst);
         match result {
             Ok(r) => {
@@ -153,6 +156,7 @@ pub(crate) fn start_auto_sync_background(is_first_login: bool, workspace_path: P
 }
 
 pub(crate) async fn run_auto_sync(
+    compatibility: &CoreAgentRuntimeCompatibility,
     is_first_login: bool,
     workspace_path: &Path,
 ) -> Result<AutoSyncResult> {
@@ -222,16 +226,10 @@ pub(crate) async fn run_auto_sync(
     };
 
     emit_progress("listing_sessions", 18, None, None, None).await;
-    let path_manager = try_get_path_manager_arc().map_err(|e| anyhow!(e.to_string()))?;
-    let manager =
-        PersistenceManager::new(path_manager).map_err(|e| anyhow!("persistence manager: {e}"))?;
-
-    // PersistenceManager APIs take the workspace root and resolve the sessions
-    // directory internally (same path family as CLI session listing).
     let storage_path = workspace_path.to_path_buf();
 
-    let local_sessions = manager
-        .list_session_metadata(&storage_path)
+    let local_sessions = compatibility
+        .list_persisted_sessions(&storage_path)
         .await
         .map_err(|e| anyhow!("list sessions: {e}"))?;
 
@@ -247,8 +245,8 @@ pub(crate) async fn run_auto_sync(
     let mut sync_state_local = sync_state::load(&acct_session.user_id);
     let mut pending_uploads: Vec<(String, String, String)> = Vec::new();
     for meta in local_sessions.iter() {
-        let turns = manager
-            .load_session_turns(&storage_path, &meta.session_id)
+        let turns = compatibility
+            .load_persisted_session_turns(&storage_path, &meta.session_id, None)
             .await
             .map_err(|e| anyhow!("load turns: {e}"))?;
         let metadata_json =

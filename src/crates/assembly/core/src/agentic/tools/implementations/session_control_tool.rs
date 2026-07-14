@@ -520,7 +520,16 @@ Arguments:
                 self.ensure_session_exists(&runtime, &workspace, session_id)
                     .await?;
 
-                runtime
+                let scheduler = get_global_scheduler().ok_or_else(|| {
+                    BitFunError::tool("scheduler not initialized for session deletion".to_string())
+                })?;
+                let deletion_runtime = CoreServiceAgentRuntime::agent_runtime_with_scheduler_ports(
+                    coordinator.clone(),
+                    scheduler,
+                )
+                .map_err(BitFunError::tool)?;
+
+                deletion_runtime
                     .delete_session(AgentSessionDeleteRequest {
                         workspace_path: workspace.display_workspace.clone(),
                         session_id: session_id.to_string(),

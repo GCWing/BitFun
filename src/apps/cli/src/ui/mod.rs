@@ -42,33 +42,112 @@ use ratatui::{
     Terminal,
 };
 use std::io;
+use std::ops::{Deref, DerefMut};
+
+type CliTerminal = Terminal<CrosstermBackend<io::Stdout>>;
+
+pub(crate) struct TerminalGuard {
+    terminal: Option<CliTerminal>,
+}
+
+impl Deref for TerminalGuard {
+    type Target = CliTerminal;
+
+    fn deref(&self) -> &Self::Target {
+        self.terminal
+            .as_ref()
+            .expect("terminal guard must own a terminal")
+    }
+}
+
+impl DerefMut for TerminalGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.terminal
+            .as_mut()
+            .expect("terminal guard must own a terminal")
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        if let Some(mut terminal) = self.terminal.take() {
+            let _ = restore_terminal_inner(&mut terminal);
+        }
+    }
+}
 
 /// Initialize terminal
-pub(crate) fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+pub(crate) fn init_terminal() -> Result<TerminalGuard> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(
+    if let Err(error) = execute!(
         stdout,
         EnterAlternateScreen,
         EnableMouseCapture,
         EnableBracketedPaste
-    )?;
+    ) {
+        let _ = disable_raw_mode();
+        let _ = execute!(
+            stdout,
+            DisableBracketedPaste,
+            DisableMouseCapture,
+            LeaveAlternateScreen
+        );
+        return Err(error.into());
+    }
     let backend = CrosstermBackend::new(stdout);
-    let terminal = Terminal::new(backend)?;
-    Ok(terminal)
+    let terminal = match Terminal::new(backend) {
+        Ok(terminal) => terminal,
+        Err(error) => {
+            let mut stdout = io::stdout();
+            let _ = disable_raw_mode();
+            let _ = execute!(
+                stdout,
+                DisableBracketedPaste,
+                DisableMouseCapture,
+                LeaveAlternateScreen
+            );
+            return Err(error.into());
+        }
+    };
+    Ok(TerminalGuard {
+        terminal: Some(terminal),
+    })
 }
 
 /// Restore terminal
-pub(crate) fn restore_terminal(mut terminal: Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
-    disable_raw_mode()?;
-    execute!(
+pub(crate) fn restore_terminal(mut guard: TerminalGuard) -> Result<()> {
+    let result = guard
+        .terminal
+        .as_mut()
+        .map(restore_terminal_inner)
+        .unwrap_or(Ok(()));
+    guard.terminal.take();
+    result
+}
+
+fn restore_terminal_inner(terminal: &mut CliTerminal) -> Result<()> {
+    let mut errors = Vec::new();
+    if let Err(error) = disable_raw_mode() {
+        errors.push(format!("disable raw mode: {error}"));
+    }
+    if let Err(error) = execute!(
         terminal.backend_mut(),
         DisableBracketedPaste,
         DisableMouseCapture,
         LeaveAlternateScreen
-    )?;
-    terminal.show_cursor()?;
-    Ok(())
+    ) {
+        errors.push(format!("restore terminal screen: {error}"));
+    }
+    if let Err(error) = terminal.show_cursor() {
+        errors.push(format!("show terminal cursor: {error}"));
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(errors.join("; ")))
+    }
 }
 
 /// Render a loading/status message on the terminal (stays in alternate screen)

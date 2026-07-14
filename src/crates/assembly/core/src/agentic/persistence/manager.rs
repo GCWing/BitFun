@@ -10,7 +10,9 @@ use crate::agentic::core::{
 use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
 use crate::agentic::memories::external_context::dialog_turn_uses_external_context;
 use crate::agentic::session::transcript_render::{render_transcript, transcript_fingerprint};
-use crate::agentic::session::{SessionPromptCache, TokenAnchor, PROMPT_CACHE_SCHEMA_VERSION};
+use crate::agentic::session::{
+    CoreSessionStorePort, SessionPromptCache, TokenAnchor, PROMPT_CACHE_SCHEMA_VERSION,
+};
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::PathManager;
 use crate::service::config::get_global_config_service;
@@ -292,6 +294,10 @@ impl PersistenceManager {
         })
     }
 
+    fn validate_session_id(session_id: &str) -> BitFunResult<()> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)
+    }
+
     /// Get PathManager reference
     pub fn path_manager(&self) -> &Arc<PathManager> {
         &self.path_manager
@@ -314,20 +320,8 @@ impl PersistenceManager {
         self.path_manager.project_sessions_dir(workspace_path)
     }
 
-    fn is_resolved_sessions_dir(&self, path: &Path) -> bool {
-        if path.file_name().and_then(|value| value.to_str()) != Some("sessions") {
-            return false;
-        }
-
-        let remote_mirror_root = self.path_manager.remote_ssh_mirror_root_dir();
-        if path.starts_with(&remote_mirror_root) {
-            return true;
-        }
-
-        let projects_root = self.path_manager.projects_root();
-        path.parent()
-            .and_then(|runtime_root| runtime_root.parent())
-            .is_some_and(|candidate| candidate == projects_root.as_path())
+    pub(crate) fn is_resolved_sessions_dir(&self, path: &Path) -> bool {
+        CoreSessionStorePort::resolved_sessions_dir_kind(self.path_manager.as_ref(), path).is_some()
     }
 
     fn metadata_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -419,6 +413,18 @@ impl PersistenceManager {
 
     fn session_layout(&self, workspace_path: &Path) -> SessionStorageLayout {
         SessionStorageLayout::new(self.project_sessions_dir(workspace_path))
+    }
+
+    pub(crate) fn session_storage_exists(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        Self::validate_session_id(session_id)?;
+        Ok(self
+            .session_layout(workspace_path)
+            .session_dir(session_id)
+            .exists())
     }
 
     fn session_metadata_store(&self, workspace_path: &Path) -> SessionMetadataStore {
@@ -860,6 +866,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         metadata: &SessionMetadata,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(&metadata.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.session_metadata_store(workspace_path)
             .save_metadata(metadata)
@@ -873,6 +880,7 @@ impl PersistenceManager {
         session_id: &str,
         mode: SessionMemoryMode,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let metadata_update_lock = self
             .get_session_metadata_update_lock(workspace_path, session_id)
             .await;
@@ -892,6 +900,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let metadata_update_lock = self
             .get_session_metadata_update_lock(workspace_path, session_id)
             .await;
@@ -937,6 +946,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<SessionMetadata>> {
+        Self::validate_session_id(session_id)?;
         self.session_metadata_store(workspace_path)
             .load_metadata(session_id)
             .await
@@ -969,6 +979,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<SessionPromptCache>> {
+        Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredSessionPromptCacheFile>(
                 &self.prompt_cache_path(workspace_path, session_id),
@@ -983,6 +994,7 @@ impl PersistenceManager {
         session_id: &str,
         cache: &SessionPromptCache,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, session_id).await?;
 
@@ -1001,6 +1013,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         match fs::remove_file(self.prompt_cache_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
@@ -1016,6 +1029,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<Vec<TokenAnchor>>> {
+        Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredTokenAnchorsFile>(
                 &self.token_anchors_path(workspace_path, session_id),
@@ -1030,6 +1044,7 @@ impl PersistenceManager {
         session_id: &str,
         anchors: &[TokenAnchor],
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, session_id).await?;
 
@@ -1049,6 +1064,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         match fs::remove_file(self.token_anchors_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
@@ -1068,6 +1084,7 @@ impl PersistenceManager {
         turn_index: usize,
         messages: &[Message],
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1092,6 +1109,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<Option<Vec<Message>>> {
+        Self::validate_session_id(session_id)?;
         let snapshot = self
             .read_json_optional::<StoredTurnContextSnapshotFile>(&self.context_snapshot_path(
                 workspace_path,
@@ -1107,6 +1125,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+        Self::validate_session_id(session_id)?;
         let started_at = Instant::now();
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
@@ -1185,6 +1204,7 @@ impl PersistenceManager {
         turn_index: usize,
         snapshot: &TurnSkillAgentSnapshot,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1207,6 +1227,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+        Self::validate_session_id(session_id)?;
         let stored = self
             .read_json_optional::<StoredTurnSkillAgentSnapshotFile>(
                 &self.skill_agent_snapshot_path(workspace_path, session_id, turn_index),
@@ -1221,6 +1242,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(());
@@ -1261,6 +1283,7 @@ impl PersistenceManager {
         session_id: &str,
         snapshot: &TurnSkillAgentSnapshot,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1281,6 +1304,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+        Self::validate_session_id(session_id)?;
         let stored = self
             .read_json_optional::<StoredSkillAgentBaselineOverrideFile>(
                 &self.skill_agent_baseline_override_path(workspace_path, session_id),
@@ -1295,6 +1319,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(());
@@ -1337,6 +1362,7 @@ impl PersistenceManager {
 
     /// Save session
     pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
+        Self::validate_session_id(&session.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &session.session_id)
             .await?;
@@ -1368,6 +1394,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
+        Self::validate_session_id(session_id)?;
         let (session, _) = self
             .load_session_with_turns(workspace_path, session_id)
             .await?;
@@ -1442,6 +1469,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        Self::validate_session_id(session_id)?;
         self.load_session_with_turns_timed(workspace_path, session_id)
             .await
             .map(|(session, turns, _)| (session, turns))
@@ -1452,6 +1480,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionTurnLoadTiming)> {
+        Self::validate_session_id(session_id)?;
         let request = SessionTurnLoadRequest {
             workspace_path: workspace_path.to_path_buf(),
             session_id: session_id.to_string(),
@@ -1537,6 +1566,7 @@ impl PersistenceManager {
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        Self::validate_session_id(session_id)?;
         self.load_session_with_tail_turns_timed(workspace_path, session_id, tail_turn_count)
             .await
             .map(|(session, turns, total_turn_count, _)| (session, turns, total_turn_count))
@@ -1548,6 +1578,7 @@ impl PersistenceManager {
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize, SessionTurnLoadTiming)> {
+        Self::validate_session_id(session_id)?;
         let request = SessionTurnLoadRequest {
             workspace_path: workspace_path.to_path_buf(),
             session_id: session_id.to_string(),
@@ -1675,6 +1706,7 @@ impl PersistenceManager {
         session_id: &str,
         state: &SessionState,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         let mut stored_state = self
             .load_stored_session_state(workspace_path, session_id)
@@ -1703,6 +1735,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.session_metadata_store(workspace_path)
             .delete_session_dir_and_index(session_id)
             .await
@@ -1747,6 +1780,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         turn: &DialogTurnData,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(&turn.session_id)?;
         let save_started_at = Instant::now();
         self.ensure_runtime_for_write(workspace_path).await?;
         let metadata_update_lock = self
@@ -1860,6 +1894,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<Option<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredDialogTurnFile>(&self.turn_path(
                 workspace_path,
@@ -1953,6 +1988,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         let started_at = Instant::now();
         let scan_started_at = Instant::now();
         let indexed_paths = self
@@ -1991,6 +2027,7 @@ impl PersistenceManager {
         session_id: &str,
         count: usize,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         if count == 0 {
             return Ok(Vec::new());
         }
@@ -2084,6 +2121,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         if !self.turns_dir(workspace_path, session_id).exists() {
             return Ok(());
         }
@@ -2118,6 +2156,7 @@ impl PersistenceManager {
         session_id: &str,
         count: usize,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let start = turns.len().saturating_sub(count);
         Ok(turns[start..].to_vec())
@@ -2148,6 +2187,7 @@ impl PersistenceManager {
         compression_id: &str,
         trigger: &str,
     ) -> BitFunResult<Option<CompressionTranscriptArtifact>> {
+        Self::validate_session_id(session_id)?;
         let all_turns = self.load_session_turns(workspace_path, session_id).await?;
         let selected_indices = all_turns
             .iter()
@@ -2296,6 +2336,7 @@ impl PersistenceManager {
         session_id: &str,
         start_turn_index: usize,
     ) -> BitFunResult<usize> {
+        Self::validate_session_id(session_id)?;
         let dir = self.compression_transcripts_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(0);
@@ -2339,6 +2380,8 @@ impl PersistenceManager {
         target_session_id: &str,
         end_turn_index: usize,
     ) -> BitFunResult<usize> {
+        Self::validate_session_id(source_session_id)?;
+        Self::validate_session_id(target_session_id)?;
         let source_dir = self.compression_transcripts_dir(workspace_path, source_session_id);
         if !source_dir.exists() {
             return Ok(0);
@@ -2392,6 +2435,7 @@ impl PersistenceManager {
         session_id: &str,
         options: &SessionTranscriptExportOptions,
     ) -> BitFunResult<SessionTranscriptExport> {
+        Self::validate_session_id(session_id)?;
         if self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -2501,6 +2545,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<usize> {
+        Self::validate_session_id(session_id)?;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 
@@ -2542,6 +2587,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<usize> {
+        Self::validate_session_id(session_id)?;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 
@@ -2578,6 +2624,7 @@ impl PersistenceManager {
     }
 
     pub async fn touch_session(&self, workspace_path: &Path, session_id: &str) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         if let Some(mut metadata) = self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -2639,6 +2686,20 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[tokio::test]
+    async fn unsafe_session_ids_are_rejected_before_turn_path_resolution() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        let error = manager
+            .load_session_turns(workspace.path(), "../another-project/session")
+            .await
+            .expect_err("path-like session id must be rejected");
+
+        assert!(error.to_string().contains("session_id"), "{error}");
     }
 
     #[tokio::test]

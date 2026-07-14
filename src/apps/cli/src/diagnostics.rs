@@ -10,8 +10,13 @@ pub(crate) enum ExitKind {
     SessionCreateFailed,
     SendMessageFailed,
     DialogTurnFailed,
+    PermissionRejected,
+    Cancelled,
+    EventStreamFailed,
+    SettlementTimedOut,
     SystemError,
     ExecError,
+    PatchUnavailable,
     PatchWriteFailed,
 }
 
@@ -21,8 +26,13 @@ impl ExitKind {
             Self::SessionCreateFailed => "session_create_failed",
             Self::SendMessageFailed => "send_message_failed",
             Self::DialogTurnFailed => "dialog_turn_failed",
+            Self::PermissionRejected => "permission_rejected",
+            Self::Cancelled => "cancelled",
+            Self::EventStreamFailed => "event_stream_failed",
+            Self::SettlementTimedOut => "settlement_timed_out",
             Self::SystemError => "system_error",
             Self::ExecError => "exec_error",
+            Self::PatchUnavailable => "patch_unavailable",
             Self::PatchWriteFailed => "patch_write_failed",
         }
     }

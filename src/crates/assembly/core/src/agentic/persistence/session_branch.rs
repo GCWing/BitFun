@@ -12,6 +12,8 @@ impl PersistenceManager {
         workspace_path: &Path,
         request: &SessionBranchRequest,
     ) -> BitFunResult<SessionBranchResult> {
+        bitfun_core_types::validate_session_id(&request.source_session_id)
+            .map_err(BitFunError::Validation)?;
         let source_session = self
             .load_session(workspace_path, &request.source_session_id)
             .await?;

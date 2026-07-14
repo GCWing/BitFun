@@ -4,23 +4,52 @@
 //! Event consumption is NOT done here — it's done in the chat/exec mode main loops.
 
 use anyhow::Result;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 use tokio::sync::Mutex;
 
 use super::Agent;
-use bitfun_core::agentic::coordination::{
-    ConversationCoordinator, DialogSubmissionPolicy, DialogTriggerSource,
+use bitfun_agent_runtime::sdk::{
+    AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    AgentSessionListRequest, AgentTurnCancellationRequest,
 };
-use bitfun_core::agentic::core::SessionConfig;
-use bitfun_core::agentic::events::EventQueue;
+use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use bitfun_core::agentic::core::Message;
+use bitfun_core::agentic::persistence::session_branch::SessionBranchResult;
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
+use bitfun_core::service::session::DialogTurnData;
+use bitfun_core::service::session_usage::{SessionUsageReport, SessionUsageReportRequest};
+use bitfun_runtime_ports::{AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy};
+
+use crate::runtime::approval::CliApprovalPolicy;
+use crate::runtime::events::CliAgentEventSource;
+use crate::runtime::CliRuntimeContext;
+
+fn validated_session_summary(
+    sessions: &[AgentSessionSummary],
+    session_id: &str,
+    workspace_path: &Path,
+) -> Result<AgentSessionSummary> {
+    sessions
+        .iter()
+        .find(|summary| summary.session_id == session_id)
+        .cloned()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Session {session_id} was not found in the current workspace: {}",
+                workspace_path.display()
+            )
+        })
+}
 
 /// Core-based Agent implementation.
 /// Stateless regarding agent_type — callers pass it per-call.
 pub(crate) struct CoreAgentAdapter {
-    coordinator: Arc<ConversationCoordinator>,
-    event_queue: Arc<EventQueue>,
-    workspace_path: Arc<Mutex<Option<PathBuf>>>,
+    runtime: AgentRuntime,
+    compatibility: CoreAgentRuntimeCompatibility,
+    event_source: CliAgentEventSource,
+    approval_policy: CliApprovalPolicy,
+    workspace_path: Arc<RwLock<Option<PathBuf>>>,
     /// Session ID — uses Mutex for interior mutability
     session_id: Arc<Mutex<Option<String>>>,
     /// Current turn ID (for cancellation)
@@ -28,35 +57,27 @@ pub(crate) struct CoreAgentAdapter {
 }
 
 impl CoreAgentAdapter {
-    pub(crate) fn new(
-        coordinator: Arc<ConversationCoordinator>,
-        event_queue: Arc<EventQueue>,
-        workspace_path: Option<PathBuf>,
-    ) -> Self {
+    pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
         Self {
-            coordinator,
-            event_queue,
-            workspace_path: Arc::new(Mutex::new(workspace_path)),
+            runtime: runtime.agent_runtime().clone(),
+            compatibility: runtime.compatibility().clone(),
+            event_source: runtime.agent_events().clone(),
+            approval_policy: runtime.approval_policy(),
+            workspace_path: Arc::new(RwLock::new(workspace_path)),
             session_id: Arc::new(Mutex::new(None)),
             current_turn_id: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Get the event queue (for external event consumption)
-    pub(crate) fn event_queue(&self) -> &Arc<EventQueue> {
-        &self.event_queue
-    }
-
-    /// Get the coordinator (for advanced operations like list_sessions, get_messages)
-    pub(crate) fn coordinator(&self) -> &Arc<ConversationCoordinator> {
-        &self.coordinator
+    pub(crate) fn event_source(&self) -> &CliAgentEventSource {
+        &self.event_source
     }
 
     pub(crate) fn workspace_path_buf(&self) -> PathBuf {
         self.workspace_path
-            .try_lock()
-            .ok()
-            .and_then(|guard| guard.clone())
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("."))
     }
@@ -65,9 +86,130 @@ impl CoreAgentAdapter {
         self.workspace_path_buf().to_string_lossy().to_string()
     }
 
-    pub(crate) async fn set_workspace_path(&self, workspace_path: Option<PathBuf>) {
-        let mut guard = self.workspace_path.lock().await;
-        *guard = workspace_path;
+    fn current_workspace_path(&self) -> PathBuf {
+        self.workspace_path_buf()
+    }
+
+    async fn list_sessions_in_workspace(
+        &self,
+        workspace_path: &Path,
+    ) -> Result<Vec<AgentSessionSummary>> {
+        self.runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: workspace_path.to_string_lossy().to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
+    pub(crate) async fn list_sessions(&self) -> Result<Vec<AgentSessionSummary>> {
+        let workspace_path = self.current_workspace_path();
+        self.list_sessions_in_workspace(&workspace_path).await
+    }
+
+    pub(crate) async fn restore_session_in_current_workspace(
+        &self,
+        session_id: &str,
+    ) -> Result<(AgentSessionSummary, PathBuf)> {
+        tracing::info!("Restoring session: {}", session_id);
+
+        let effective_workspace = self.current_workspace_path();
+        let sessions = self
+            .list_sessions_in_workspace(&effective_workspace)
+            .await?;
+        let summary = validated_session_summary(&sessions, session_id, &effective_workspace)?;
+
+        self.compatibility
+            .restore_session(&effective_workspace, session_id)
+            .await?;
+
+        let mut session_id_guard = self.session_id.lock().await;
+        let mut turn_id_guard = self.current_turn_id.lock().await;
+        let mut workspace_guard = self
+            .workspace_path
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *workspace_guard = Some(effective_workspace.clone());
+        *session_id_guard = Some(session_id.to_string());
+        *turn_id_guard = None;
+
+        Ok((summary, effective_workspace))
+    }
+
+    pub(crate) async fn delete_session(&self, session_id: &str) -> Result<()> {
+        self.runtime
+            .delete_session(AgentSessionDeleteRequest {
+                workspace_path: self.workspace_path_string(),
+                session_id: session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
+    pub(crate) async fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
+        self.compatibility
+            .get_messages(session_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn update_session_model(
+        &self,
+        session_id: &str,
+        model_id: &str,
+    ) -> Result<()> {
+        self.compatibility
+            .update_session_model(session_id, model_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn branch_session_at_latest_turn(
+        &self,
+        source_session_id: &str,
+    ) -> Result<SessionBranchResult> {
+        self.compatibility
+            .branch_session_at_latest_turn(&self.workspace_path_buf(), source_session_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn generate_session_usage_report(
+        &self,
+        request: SessionUsageReportRequest,
+    ) -> Result<SessionUsageReport> {
+        self.compatibility
+            .generate_session_usage_report(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn append_completed_local_command_turn(
+        &self,
+        session_id: &str,
+        content: String,
+        turn_id: Option<String>,
+        timestamp_ms: Option<u64>,
+        metadata: Option<serde_json::Value>,
+    ) -> Result<DialogTurnData> {
+        self.compatibility
+            .append_completed_local_command_turn(
+                session_id,
+                content,
+                turn_id,
+                timestamp_ms,
+                metadata,
+            )
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) fn is_turn_processing(&self, session_id: &str, turn_id: &str) -> bool {
+        self.compatibility.is_turn_processing(session_id, turn_id)
     }
 
     fn build_default_session_name() -> String {
@@ -89,22 +231,27 @@ impl CoreAgentAdapter {
         let mut effective_agent_type = agent_type.to_string();
 
         let workspace = self.workspace_path_buf();
-        if let Ok(sessions) = self.coordinator.list_sessions(&workspace).await {
+        if let Ok(sessions) = self
+            .runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: workspace.to_string_lossy().to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+        {
             if let Some(summary) = sessions.iter().find(|s| s.session_id == session_id) {
                 session_name = summary.session_name.clone();
                 effective_agent_type = summary.agent_type.clone();
             }
         }
 
-        self.coordinator
+        self.compatibility
             .create_session_with_id(
-                Some(session_id.to_string()),
+                session_id.to_string(),
                 session_name,
                 effective_agent_type,
-                SessionConfig {
-                    workspace_path: Some(self.workspace_path_string()),
-                    ..Default::default()
-                },
+                self.workspace_path_string(),
             )
             .await?;
 
@@ -113,23 +260,16 @@ impl CoreAgentAdapter {
     }
 
     async fn ensure_backend_session_alive(&self, session_id: &str, agent_type: &str) -> Result<()> {
+        let workspace = self.workspace_path_buf();
         if self
-            .coordinator
-            .get_session_manager()
-            .get_session(session_id)
-            .is_some()
+            .compatibility
+            .is_session_loaded(&workspace, session_id)
+            .await?
         {
             return Ok(());
         }
-
-        tracing::warn!(
-            "Backend session not present in memory, attempting restore: {}",
-            session_id
-        );
-
-        let workspace = self.workspace_path_buf();
         match self
-            .coordinator
+            .compatibility
             .restore_session(&workspace, session_id)
             .await
         {
@@ -137,14 +277,14 @@ impl CoreAgentAdapter {
                 tracing::info!("Backend session restored: {}", session_id);
                 Ok(())
             }
-            Err(restore_err) => {
+            Err(error) if Self::is_session_not_found_error(&error.to_string()) => {
                 tracing::warn!(
-                    "Restore failed, recreating backend session: {}, error={}",
-                    session_id,
-                    restore_err
+                    "Session is unavailable, recreating backend session: {}",
+                    session_id
                 );
                 self.recreate_session_with_id(session_id, agent_type).await
             }
+            Err(error) => Err(anyhow::anyhow!(error.to_string())),
         }
     }
 
@@ -156,15 +296,12 @@ impl CoreAgentAdapter {
         let mut session_id_guard = self.session_id.lock().await;
 
         let session = self
-            .coordinator
+            .compatibility
             .create_session_with_id(
-                Some(session_id.clone()),
+                session_id.clone(),
                 Self::build_default_session_name(),
                 agent_type.to_string(),
-                SessionConfig {
-                    workspace_path: Some(self.workspace_path_string()),
-                    ..Default::default()
-                },
+                self.workspace_path_string(),
             )
             .await?;
 
@@ -187,16 +324,17 @@ impl Agent for CoreAgentAdapter {
         }
 
         let session = self
-            .coordinator
-            .create_session(
-                Self::build_default_session_name(),
-                agent_type.to_string(),
-                SessionConfig {
-                    workspace_path: Some(self.workspace_path_string()),
-                    ..Default::default()
-                },
-            )
-            .await?;
+            .runtime
+            .create_session(AgentSessionCreateRequest {
+                session_name: Self::build_default_session_name(),
+                agent_type: agent_type.to_string(),
+                workspace_path: Some(self.workspace_path_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
         let id = session.session_id.clone();
 
@@ -219,22 +357,31 @@ impl Agent for CoreAgentAdapter {
             *turn_guard = Some(turn_id.clone());
         }
 
-        // Start the dialog turn — this is async, events will arrive via EventQueue
-        let start_result = self
-            .coordinator
-            .start_dialog_turn(
-                session_id.clone(),
-                message.clone(),
-                None,
-                Some(turn_id.clone()),
-                agent_type.to_string(),
-                Some(self.workspace_path_string()),
-                None,
-                None,
-                DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
-                None,
-            )
-            .await;
+        // Start the dialog turn; events arrive through the shared broadcast source.
+        let mut metadata = serde_json::Map::new();
+        if self.approval_policy != CliApprovalPolicy::Ask {
+            metadata.insert(
+                USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+                serde_json::Value::Bool(false),
+            );
+        }
+        let request = AgentDialogTurnRequest {
+            session_id: session_id.clone(),
+            message: message.clone(),
+            original_message: None,
+            turn_id: Some(turn_id.clone()),
+            agent_type: agent_type.to_string(),
+            workspace_path: Some(self.workspace_path_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli)
+                .with_skip_tool_confirmation(self.approval_policy == CliApprovalPolicy::Auto),
+            reply_route: None,
+            prepended_reminders: Vec::new(),
+            attachments: Vec::new(),
+            metadata,
+        };
+        let start_result = self.runtime.submit_dialog_turn(request.clone()).await;
 
         if let Err(err) = start_result {
             if Self::is_session_not_found_error(&err.to_string()) {
@@ -245,22 +392,12 @@ impl Agent for CoreAgentAdapter {
                 );
                 self.ensure_backend_session_alive(&session_id, agent_type)
                     .await?;
-                self.coordinator
-                    .start_dialog_turn(
-                        session_id,
-                        message,
-                        None,
-                        Some(turn_id.clone()),
-                        agent_type.to_string(),
-                        Some(self.workspace_path_string()),
-                        None,
-                        None,
-                        DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
-                        None,
-                    )
-                    .await?;
+                self.runtime
+                    .submit_dialog_turn(request)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
             } else {
-                return Err(err.into());
+                return Err(anyhow::anyhow!(err.to_string()));
             }
         }
 
@@ -268,14 +405,27 @@ impl Agent for CoreAgentAdapter {
     }
 
     async fn cancel_current_turn(&self) -> Result<()> {
-        let session_id_guard = self.session_id.lock().await;
-        let turn_id_guard = self.current_turn_id.lock().await;
+        let session_id = self.session_id.lock().await.clone();
+        let turn_id = self.current_turn_id.lock().await.clone();
 
-        if let (Some(session_id), Some(turn_id)) = (&*session_id_guard, &*turn_id_guard) {
+        if let (Some(session_id), Some(turn_id)) = (session_id, turn_id) {
             tracing::info!("Cancelling turn: session={}, turn={}", session_id, turn_id);
-            self.coordinator
-                .cancel_dialog_turn(session_id, turn_id)
-                .await?;
+            self.runtime
+                .cancel_turn(AgentTurnCancellationRequest {
+                    session_id,
+                    turn_id: Some(turn_id.clone()),
+                    source: Some(AgentSubmissionSource::Cli),
+                    requester_session_id: None,
+                    reason: Some("user_cancelled".to_string()),
+                    wait_timeout_ms: None,
+                })
+                .await
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+
+            let mut turn_id_guard = self.current_turn_id.lock().await;
+            if turn_id_guard.as_deref() == Some(turn_id.as_str()) {
+                *turn_id_guard = None;
+            }
         }
 
         Ok(())
@@ -285,16 +435,17 @@ impl Agent for CoreAgentAdapter {
         let mut session_id_guard = self.session_id.lock().await;
 
         let session = self
-            .coordinator
-            .create_session(
-                Self::build_default_session_name(),
-                agent_type.to_string(),
-                SessionConfig {
-                    workspace_path: Some(self.workspace_path_string()),
-                    ..Default::default()
-                },
-            )
-            .await?;
+            .runtime
+            .create_session(AgentSessionCreateRequest {
+                session_name: Self::build_default_session_name(),
+                agent_type: agent_type.to_string(),
+                workspace_path: Some(self.workspace_path_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
         let id = session.session_id.clone();
 
@@ -305,15 +456,8 @@ impl Agent for CoreAgentAdapter {
     }
 
     async fn restore_session(&self, session_id: &str) -> Result<()> {
-        tracing::info!("Restoring session: {}", session_id);
-        let workspace = self.workspace_path_buf();
-        self.coordinator
-            .restore_session(&workspace, session_id)
+        self.restore_session_in_current_workspace(session_id)
             .await?;
-
-        let mut session_id_guard = self.session_id.lock().await;
-        *session_id_guard = Some(session_id.to_string());
-
         Ok(())
     }
 
@@ -323,7 +467,7 @@ impl Agent for CoreAgentAdapter {
         updated_input: Option<serde_json::Value>,
     ) -> Result<()> {
         tracing::info!("Confirming tool execution: {}", tool_id);
-        self.coordinator
+        self.compatibility
             .confirm_tool(tool_id, updated_input)
             .await
             .map_err(|e| anyhow::anyhow!("Confirm tool failed: {}", e))
@@ -331,7 +475,7 @@ impl Agent for CoreAgentAdapter {
 
     async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<()> {
         tracing::info!("Rejecting tool execution: {}, reason: {}", tool_id, reason);
-        self.coordinator
+        self.compatibility
             .reject_tool(tool_id, reason)
             .await
             .map_err(|e| anyhow::anyhow!("Reject tool failed: {}", e))
@@ -339,10 +483,58 @@ impl Agent for CoreAgentAdapter {
 
     async fn submit_user_answers(&self, tool_id: &str, answers: serde_json::Value) -> Result<()> {
         tracing::info!("Submitting user answers for tool: {}", tool_id);
-        use bitfun_core::agentic::tools::user_input_manager::get_user_input_manager;
-        let manager = get_user_input_manager();
-        manager
-            .send_answer(tool_id, answers)
+        self.compatibility
+            .submit_user_answers(tool_id, answers)
             .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use bitfun_runtime_ports::AgentSessionSummary;
+
+    use super::validated_session_summary;
+
+    fn session_summary(session_id: &str) -> AgentSessionSummary {
+        AgentSessionSummary {
+            session_id: session_id.to_string(),
+            session_name: "Workspace session".to_string(),
+            agent_type: "agentic".to_string(),
+            turn_count: 1,
+            created_at_ms: 1,
+            last_active_at_ms: 2,
+        }
+    }
+
+    #[test]
+    fn workspace_restore_validation_accepts_listed_session() {
+        let sessions = vec![session_summary("session-in-workspace")];
+
+        let summary = validated_session_summary(
+            &sessions,
+            "session-in-workspace",
+            Path::new("D:/workspace/current"),
+        )
+        .expect("listed session should be restorable");
+
+        assert_eq!(summary.session_id, "session-in-workspace");
+    }
+
+    #[test]
+    fn workspace_restore_validation_rejects_session_outside_current_workspace() {
+        let sessions = vec![session_summary("different-session")];
+
+        let error = validated_session_summary(
+            &sessions,
+            "session-from-another-workspace",
+            Path::new("D:/workspace/current"),
+        )
+        .expect_err("a session absent from the workspace-scoped list must be rejected");
+
+        let message = error.to_string();
+        assert!(message.contains("session-from-another-workspace"));
+        assert!(message.contains("D:/workspace/current"));
     }
 }

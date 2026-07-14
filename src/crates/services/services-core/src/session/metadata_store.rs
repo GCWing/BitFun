@@ -12,6 +12,7 @@ use super::page::{build_session_metadata_page, empty_session_metadata_page};
 use super::types::{SessionMetadata, StoredSessionIndexFile, StoredSessionMetadataFile};
 use super::SessionMetadataPage;
 use crate::json_store::{JsonFileStore, JsonFileStoreError};
+use bitfun_core_types::validate_session_id;
 use log::warn;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -52,6 +53,16 @@ pub enum SessionMetadataStoreError {
         #[source]
         source: std::io::Error,
     },
+    #[error("Invalid session ID: {0}")]
+    InvalidSessionId(String),
+    #[error("Failed to resolve session storage path {path}: {source}")]
+    ResolveSessionStoragePath {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Session path escapes the sessions root: path={path}, root={root}")]
+    UnsafeSessionStoragePath { path: PathBuf, root: PathBuf },
 }
 
 impl SessionMetadataStoreError {
@@ -357,6 +368,8 @@ impl SessionMetadataStore {
         &self,
         metadata: &SessionMetadata,
     ) -> Result<(), SessionMetadataStoreError> {
+        validate_session_id(&metadata.session_id)
+            .map_err(SessionMetadataStoreError::InvalidSessionId)?;
         self.ensure_session_dir(&metadata.session_id).await?;
         let metadata_path = self.metadata_path(&metadata.session_id);
         let file = StoredSessionMetadataFile::new(metadata.clone());
@@ -381,6 +394,7 @@ impl SessionMetadataStore {
         &self,
         session_id: &str,
     ) -> Result<Option<SessionMetadata>, SessionMetadataStoreError> {
+        validate_session_id(session_id).map_err(SessionMetadataStoreError::InvalidSessionId)?;
         let path = self.metadata_path(session_id);
         Ok(self
             .read_json_optional::<StoredSessionMetadataFile>(&path)
@@ -392,11 +406,32 @@ impl SessionMetadataStore {
         &self,
         session_id: &str,
     ) -> Result<(), SessionMetadataStoreError> {
+        validate_session_id(session_id).map_err(SessionMetadataStoreError::InvalidSessionId)?;
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
         let dir = self.session_dir(session_id);
         let metadata_file_removed = self.metadata_path(session_id).exists();
         if dir.exists() {
+            let root = fs::canonicalize(self.sessions_root())
+                .await
+                .map_err(
+                    |source| SessionMetadataStoreError::ResolveSessionStoragePath {
+                        path: self.sessions_root().to_path_buf(),
+                        source,
+                    },
+                )?;
+            let resolved_dir = fs::canonicalize(&dir).await.map_err(|source| {
+                SessionMetadataStoreError::ResolveSessionStoragePath {
+                    path: dir.clone(),
+                    source,
+                }
+            })?;
+            if resolved_dir == root || !resolved_dir.starts_with(&root) {
+                return Err(SessionMetadataStoreError::UnsafeSessionStoragePath {
+                    path: resolved_dir,
+                    root,
+                });
+            }
             fs::remove_dir_all(&dir)
                 .await
                 .map_err(|source| SessionMetadataStoreError::DeleteSessionDir { source })?;
@@ -594,5 +629,69 @@ mod tests {
             .await
             .expect("list after delete")
             .is_empty());
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn metadata_store_preserves_existing_non_traversing_component_ids() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+        let session_id = "legacy:session:1";
+
+        store
+            .save_metadata(&metadata(session_id, 10))
+            .await
+            .expect("save legacy metadata");
+        assert!(store
+            .load_metadata(session_id)
+            .await
+            .expect("load legacy metadata")
+            .is_some());
+        store
+            .delete_session_dir_and_index(session_id)
+            .await
+            .expect("delete legacy session");
+        assert!(!dir.path().join(session_id).exists());
+    }
+
+    #[tokio::test]
+    async fn metadata_store_rejects_session_delete_path_traversal() {
+        let parent = tempdir().expect("parent tempdir");
+        let sessions_root = parent.path().join("sessions");
+        std::fs::create_dir_all(&sessions_root).expect("sessions root");
+        let sentinel = parent.path().join("sentinel");
+        std::fs::create_dir_all(&sentinel).expect("sentinel");
+        std::fs::write(sentinel.join("keep.txt"), "keep").expect("sentinel file");
+        let store = SessionMetadataStore::new(&sessions_root);
+
+        for unsafe_id in ["..", "../sentinel", "C:\\sentinel"] {
+            assert!(
+                store.delete_session_dir_and_index(unsafe_id).await.is_err(),
+                "unsafe session id must fail: {unsafe_id}"
+            );
+        }
+
+        assert_eq!(
+            std::fs::read_to_string(sentinel.join("keep.txt")).expect("sentinel remains"),
+            "keep"
+        );
+    }
+
+    #[tokio::test]
+    async fn metadata_store_rejects_path_like_ids_for_reads_and_writes() {
+        let dir = tempdir().expect("tempdir");
+        let store = SessionMetadataStore::new(dir.path());
+
+        assert!(store.load_metadata("../outside").await.is_err());
+        assert!(store
+            .save_metadata(&metadata("../outside", 10))
+            .await
+            .is_err());
+        assert!(!dir
+            .path()
+            .parent()
+            .expect("parent")
+            .join("outside")
+            .exists());
     }
 }
