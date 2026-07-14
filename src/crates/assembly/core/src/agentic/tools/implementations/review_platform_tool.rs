@@ -270,7 +270,7 @@ When returning pull request results to the user, include the provider web URL so
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {

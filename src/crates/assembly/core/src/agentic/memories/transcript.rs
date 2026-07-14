@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn memory_transcript_clears_get_tool_spec_results() {
-        let mut turn = base_turn("load a collapsed tool");
+        let mut turn = base_turn("load a deferred tool");
         let mut round = base_round();
         round.tool_items.push(ToolItemData {
             id: "tool_1".to_string(),

@@ -111,8 +111,8 @@ mod tests {
         let mode = AgenticMode::new();
         let overrides = mode.tool_exposure_overrides();
 
-        assert_eq!(overrides.get("WebSearch"), Some(&ToolExposure::Expanded));
-        assert_eq!(overrides.get("WebFetch"), Some(&ToolExposure::Expanded));
+        assert_eq!(overrides.get("WebSearch"), Some(&ToolExposure::Direct));
+        assert_eq!(overrides.get("WebFetch"), Some(&ToolExposure::Direct));
         assert!(mode.default_tools().contains(&"WebSearch".to_string()));
         assert!(mode.default_tools().contains(&"WebFetch".to_string()));
     }

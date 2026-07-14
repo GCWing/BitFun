@@ -71,8 +71,9 @@ pub struct ToolExecutionContext {
     pub context_vars: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
     pub(crate) delegation_policy: DelegationPolicy,
-    pub collapsed_tools: Vec<String>,
-    pub unlocked_collapsed_tools: Vec<String>,
+    pub deferred_tools: Vec<String>,
+    pub loaded_deferred_tool_specs: Vec<bitfun_agent_tools::LoadedDeferredToolSpec>,
+    pub catalog_generation: u64,
     /// Allowed tools list (whitelist)
     /// If empty, allow all registered tools
     /// If not empty, only allow tools in the list to be executed

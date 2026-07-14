@@ -227,7 +227,7 @@ impl Tool for ViewImageTool {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Expanded
+        ToolExposure::Direct
     }
 
     fn input_schema(&self) -> Value {
@@ -522,7 +522,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts,
             custom_data: HashMap::new(),
             computer_use_host: None,

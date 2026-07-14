@@ -2,7 +2,8 @@ use crate::tool_snapshot::{
     materialize_tool_snapshot, MaterializedToolSnapshot, ToolProviderIdentity,
 };
 use crate::{
-    DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
+    DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult,
+    ToolDecorator, CALL_DEFERRED_TOOL_NAME,
 };
 use async_trait::async_trait;
 use bitfun_core_types::ToolImageAttachment;
@@ -69,14 +70,24 @@ pub trait PortableToolContextProvider: Send + Sync {
 pub const GET_TOOL_SPEC_TOOL_NAME: &str = "GetToolSpec";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CollapsedToolUsageError {
+pub enum DeferredToolUsageError {
     RequiresGetToolSpec {
         tool_name: String,
         get_tool_spec_tool_name: String,
     },
+    RequiresGateway {
+        tool_name: String,
+        gateway_tool_name: String,
+    },
+    StaleSpec {
+        tool_name: String,
+        loaded_generation: u64,
+        current_generation: u64,
+        get_tool_spec_tool_name: String,
+    },
 }
 
-impl fmt::Display for CollapsedToolUsageError {
+impl fmt::Display for DeferredToolUsageError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::RequiresGetToolSpec {
@@ -84,13 +95,29 @@ impl fmt::Display for CollapsedToolUsageError {
                 get_tool_spec_tool_name,
             } => write!(
                 formatter,
-                "Tool '{tool_name}' is collapsed. Call {get_tool_spec_tool_name} first with {{\"tool_name\":\"{tool_name}\"}} to read its full usage instructions and input schema, then try again."
+                "Tool '{tool_name}' is deferred. Call {get_tool_spec_tool_name} first with {{\"tool_name\":\"{tool_name}\"}} to read its full usage instructions and input schema, then call it through CallDeferredTool."
+            ),
+            Self::RequiresGateway {
+                tool_name,
+                gateway_tool_name,
+            } => write!(
+                formatter,
+                "Tool '{tool_name}' is deferred and cannot be called directly. Use {gateway_tool_name} with {{\"tool_name\":\"{tool_name}\",\"args\":{{...}}}}."
+            ),
+            Self::StaleSpec {
+                tool_name,
+                loaded_generation,
+                current_generation,
+                get_tool_spec_tool_name,
+            } => write!(
+                formatter,
+                "The loaded spec for deferred tool '{tool_name}' is stale (loaded catalog generation {loaded_generation}, current generation {current_generation}). Call {get_tool_spec_tool_name} again before using CallDeferredTool."
             ),
         }
     }
 }
 
-impl std::error::Error for CollapsedToolUsageError {}
+impl std::error::Error for DeferredToolUsageError {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolExecutionAccessError {
@@ -130,31 +157,48 @@ pub fn validate_tool_allowed_by_list(
     })
 }
 
-pub fn validate_collapsed_tool_usage(
+pub fn validate_deferred_tool_usage(
     tool_name: &str,
-    collapsed_tools: &[String],
-    loaded_collapsed_tools: &[String],
+    invocation_is_deferred: bool,
+    deferred_tools: &[String],
+    loaded_deferred_tool_specs: &[LoadedDeferredToolSpec],
+    current_catalog_generation: u64,
     get_tool_spec_tool_name: &str,
-) -> Result<(), CollapsedToolUsageError> {
+) -> Result<(), DeferredToolUsageError> {
     if tool_name == get_tool_spec_tool_name {
         return Ok(());
     }
 
-    if !collapsed_tools
+    if !deferred_tools
         .iter()
-        .any(|collapsed_tool| collapsed_tool == tool_name)
+        .any(|deferred_tool| deferred_tool == tool_name)
     {
         return Ok(());
     }
 
-    if loaded_collapsed_tools
-        .iter()
-        .any(|loaded_tool| loaded_tool == tool_name)
-    {
-        return Ok(());
+    if !invocation_is_deferred {
+        return Err(DeferredToolUsageError::RequiresGateway {
+            tool_name: tool_name.to_string(),
+            gateway_tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
+        });
     }
 
-    Err(CollapsedToolUsageError::RequiresGetToolSpec {
+    if let Some(loaded) = loaded_deferred_tool_specs
+        .iter()
+        .find(|loaded| loaded.tool_name == tool_name)
+    {
+        if loaded.catalog_generation == current_catalog_generation {
+            return Ok(());
+        }
+        return Err(DeferredToolUsageError::StaleSpec {
+            tool_name: tool_name.to_string(),
+            loaded_generation: loaded.catalog_generation,
+            current_generation: current_catalog_generation,
+            get_tool_spec_tool_name: get_tool_spec_tool_name.to_string(),
+        });
+    }
+
+    Err(DeferredToolUsageError::RequiresGetToolSpec {
         tool_name: tool_name.to_string(),
         get_tool_spec_tool_name: get_tool_spec_tool_name.to_string(),
     })
@@ -162,8 +206,8 @@ pub fn validate_collapsed_tool_usage(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToolExposure {
-    Expanded,
-    Collapsed,
+    Direct,
+    Deferred,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -185,11 +229,7 @@ impl ToolManifestDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PromptVisibleToolManifestItem {
-    Expanded(ToolManifestDefinition),
-    Collapsed {
-        name: String,
-        short_description: String,
-    },
+    Direct(ToolManifestDefinition),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,24 +242,24 @@ pub struct ToolManifestPolicyTool {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolManifestPolicyResolution {
     pub allowed_tool_names: Vec<String>,
-    pub expanded_tool_names: Vec<String>,
-    pub collapsed_tool_names: Vec<String>,
+    pub direct_tool_names: Vec<String>,
+    pub deferred_tool_names: Vec<String>,
 }
 
 #[derive(Clone)]
 pub struct ContextualVisibleTools<Tool: ?Sized> {
     pub allowed_tool_names: Vec<String>,
-    pub expanded_tools: Vec<ToolRef<Tool>>,
-    pub collapsed_tool_names: Vec<String>,
-    pub collapsed_tools: Vec<ToolRef<Tool>>,
+    pub direct_tools: Vec<ToolRef<Tool>>,
+    pub deferred_tool_names: Vec<String>,
+    pub deferred_tools: Vec<ToolRef<Tool>>,
 }
 
 #[derive(Clone)]
 pub struct ContextualToolManifest<Tool: ?Sized> {
     pub allowed_tool_names: Vec<String>,
-    pub expanded_tools: Vec<ToolRef<Tool>>,
-    pub collapsed_tool_names: Vec<String>,
-    pub collapsed_tools: Vec<ToolRef<Tool>>,
+    pub direct_tools: Vec<ToolRef<Tool>>,
+    pub deferred_tool_names: Vec<String>,
+    pub deferred_tools: Vec<ToolRef<Tool>>,
     pub tool_definitions: Vec<ToolManifestDefinition>,
 }
 
@@ -234,8 +274,8 @@ pub fn resolve_tool_manifest_policy(
         .map(String::as_str)
         .collect::<std::collections::HashSet<_>>();
     let mut allowed_tool_names = allowed_tools.to_vec();
-    let mut expanded_tool_names = Vec::new();
-    let mut collapsed_tool_names = Vec::new();
+    let mut direct_tool_names = Vec::new();
+    let mut deferred_tool_names = Vec::new();
 
     for tool in tool_snapshot {
         if !tool.available || !allowed_set.contains(tool.name.as_str()) {
@@ -247,30 +287,28 @@ pub fn resolve_tool_manifest_policy(
             .copied()
             .unwrap_or(tool.default_exposure);
         match exposure {
-            ToolExposure::Expanded => expanded_tool_names.push(tool.name.clone()),
-            ToolExposure::Collapsed => collapsed_tool_names.push(tool.name.clone()),
+            ToolExposure::Direct => direct_tool_names.push(tool.name.clone()),
+            ToolExposure::Deferred => deferred_tool_names.push(tool.name.clone()),
         }
     }
 
-    if !collapsed_tool_names.is_empty() {
-        if !allowed_tool_names
-            .iter()
-            .any(|name| name == get_tool_spec_tool_name)
-        {
-            allowed_tool_names.push(get_tool_spec_tool_name.to_string());
-        }
-        if tool_snapshot
-            .iter()
-            .any(|tool| tool.name == get_tool_spec_tool_name)
-        {
-            expanded_tool_names.push(get_tool_spec_tool_name.to_string());
+    if !deferred_tool_names.is_empty() {
+        for gateway_name in [get_tool_spec_tool_name, CALL_DEFERRED_TOOL_NAME] {
+            if !allowed_tool_names.iter().any(|name| name == gateway_name) {
+                allowed_tool_names.push(gateway_name.to_string());
+            }
+            if tool_snapshot.iter().any(|tool| tool.name == gateway_name)
+                && !direct_tool_names.iter().any(|name| name == gateway_name)
+            {
+                direct_tool_names.push(gateway_name.to_string());
+            }
         }
     }
 
     ToolManifestPolicyResolution {
         allowed_tool_names,
-        expanded_tool_names,
-        collapsed_tool_names,
+        direct_tool_names,
+        deferred_tool_names,
     }
 }
 
@@ -306,38 +344,10 @@ fn tools_by_name<Tool: ToolRegistryItem + ?Sized>(
         .collect()
 }
 
-pub fn build_collapsed_tool_stub_definition(
-    tool_name: &str,
-    short_description: &str,
-) -> ToolManifestDefinition {
-    // Keep the prompt-visible stub stable for the life of the conversation.
-    // GetToolSpec returns the full schema out-of-band; replacing this stub with
-    // a different tool definition mid-session changes the request prefix and
-    // causes provider-side prefix/KV cache misses on later rounds.
-    // We still need a stub definition in the request because some providers
-    // constrain model tool calls to the exact tool list attached to that
-    // request. Without a prompt-visible stub entry, the model may be unable to
-    // call the collapsed tool at all, even after GetToolSpec has described it.
-    ToolManifestDefinition::new(
-        tool_name,
-        format!(
-            "THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({{\"tool_name\":\"{}\"}}) to load its schema. After that, you can call {} directly. Any direct call before loading will fail validation.\nSummary: {}",
-            tool_name,
-            tool_name,
-            short_description,
-        ),
-        serde_json::json!({
-            "type": "object",
-            "additionalProperties": true,
-            "properties": {}
-        }),
-    )
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GetToolSpecCollapsedToolSummary {
+pub struct GetToolSpecDeferredToolSummary {
     pub name: String,
-    pub short_description: String,
+    pub short_description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -345,6 +355,7 @@ pub struct GetToolSpecDetail {
     pub tool_name: String,
     pub description: String,
     pub input_schema: Value,
+    pub catalog_generation: u64,
 }
 
 impl GetToolSpecDetail {
@@ -353,6 +364,7 @@ impl GetToolSpecDetail {
             "tool_name": self.tool_name.clone(),
             "description": self.description.clone(),
             "input_schema": self.input_schema.clone(),
+            "catalog_generation": self.catalog_generation,
         })
     }
 }
@@ -365,39 +377,44 @@ pub fn get_tool_spec_input_schema() -> Value {
         "properties": {
             "tool_name": {
                 "type": "string",
-                "description": "Exact collapsed tool name to load, using the tool's canonical casing from the catalog (for example, \"Git\"). Do not pass a command such as \"git status\" or an operation such as \"status\" here."
+                "description": "Exact deferred tool name to load, using the tool's canonical casing from the catalog (for example, \"Git\"). Do not pass a command such as \"git status\" or an operation such as \"status\" here."
             }
         }
     })
 }
 
 pub fn get_tool_spec_short_description() -> String {
-    "Discover collapsed tools and read their detailed definitions.".to_string()
+    "Discover deferred tools and read their detailed definitions.".to_string()
 }
 
 pub fn build_get_tool_spec_description() -> String {
-    r#"Read full schema before first calling a collapsed tool.
+    r#"Read the full schema before first calling a deferred tool through CallDeferredTool.
 
 Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation."#
         .to_string()
 }
 
 pub fn build_get_tool_spec_catalog_description(
-    collapsed_tools: &[GetToolSpecCollapsedToolSummary],
+    deferred_tools: &[GetToolSpecDeferredToolSummary],
 ) -> Option<String> {
-    if collapsed_tools.is_empty() {
+    if deferred_tools.is_empty() {
         return None;
     }
 
-    let collapsed_tools_list = collapsed_tools
+    let deferred_tools_list = deferred_tools
         .iter()
-        .map(|tool| format!("- {}", tool.name))
+        .map(|tool| match tool.short_description.as_deref() {
+            Some(description) if !description.trim().is_empty() => {
+                format!("- {}: {}", tool.name, description)
+            }
+            _ => format!("- {}", tool.name),
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
     Some(format!(
-        "<collapsed_tools>\n{}\n</collapsed_tools>",
-        collapsed_tools_list
+        "<deferred_tools>\n{}\n</deferred_tools>",
+        deferred_tools_list
     ))
 }
 
@@ -445,7 +462,7 @@ pub fn validate_get_tool_spec_input(input: &Value) -> ValidationResult {
 
 pub fn build_get_tool_spec_duplicate_load_hint(tool_name: &str) -> String {
     format!(
-        "Tool '{}' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use '{}' directly.",
+        "Tool '{}' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use CallDeferredTool with tool_name '{}' and put the tool arguments inside args.",
         tool_name, tool_name
     )
 }
@@ -479,17 +496,17 @@ pub fn build_get_tool_spec_already_available_result(tool_name: &str) -> ToolResu
     }
 }
 
-pub fn build_get_tool_spec_unavailable_collapsed_hint(tool_name: &str) -> String {
+pub fn build_get_tool_spec_unavailable_deferred_hint(tool_name: &str) -> String {
     format!("'{}' is not available in the current context", tool_name)
 }
 
-pub fn build_get_tool_spec_unavailable_collapsed_result(tool_name: &str) -> ToolResult {
+pub fn build_get_tool_spec_unavailable_deferred_result(tool_name: &str) -> ToolResult {
     ToolResult::Result {
         data: serde_json::json!({
             "tool_name": tool_name,
-            "available_collapsed_tool": false
+            "available_deferred_tool": false
         }),
-        result_for_assistant: Some(build_get_tool_spec_unavailable_collapsed_hint(tool_name)),
+        result_for_assistant: Some(build_get_tool_spec_unavailable_deferred_hint(tool_name)),
         image_attachments: None,
     }
 }
@@ -519,14 +536,14 @@ pub enum GetToolSpecExecutionPlan<'a> {
 
 pub fn resolve_get_tool_spec_execution_plan<'a>(
     input: &'a Value,
-    loaded_collapsed_tools: &[String],
+    loaded_deferred_tool_names: &[String],
 ) -> Result<GetToolSpecExecutionPlan<'a>, GetToolSpecExecutionError> {
     let tool_name = input
         .get("tool_name")
         .and_then(|value| value.as_str())
         .ok_or(GetToolSpecExecutionError::MissingToolName)?;
 
-    if loaded_collapsed_tools
+    if loaded_deferred_tool_names
         .iter()
         .any(|loaded| loaded == tool_name)
     {
@@ -542,16 +559,23 @@ pub fn resolve_get_tool_spec_execution_plan<'a>(
 pub struct GetToolSpecLoadObservation<'a> {
     pub tool_name: &'a str,
     pub loaded_tool_name: Option<&'a str>,
+    pub catalog_generation: Option<u64>,
     pub is_error: bool,
 }
 
-pub fn collect_loaded_collapsed_tool_names(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedDeferredToolSpec {
+    pub tool_name: String,
+    pub catalog_generation: u64,
+}
+
+pub fn collect_loaded_deferred_tool_specs(
     observations: &[GetToolSpecLoadObservation<'_>],
-    collapsed_tool_names: &[String],
+    deferred_tool_names: &[String],
     get_tool_spec_tool_name: &str,
-) -> Vec<String> {
-    let collapsed_set: HashSet<&str> = collapsed_tool_names.iter().map(String::as_str).collect();
-    let mut loaded = BTreeSet::new();
+) -> Vec<LoadedDeferredToolSpec> {
+    let deferred_set: HashSet<&str> = deferred_tool_names.iter().map(String::as_str).collect();
+    let mut loaded = BTreeMap::new();
 
     for observation in observations {
         if observation.is_error || observation.tool_name != get_tool_spec_tool_name {
@@ -562,19 +586,32 @@ pub fn collect_loaded_collapsed_tool_names(
             continue;
         };
 
-        if collapsed_set.contains(tool_name) {
-            loaded.insert(tool_name.to_string());
+        if deferred_set.contains(tool_name) {
+            if let Some(catalog_generation) = observation.catalog_generation {
+                loaded.insert(
+                    tool_name.to_string(),
+                    LoadedDeferredToolSpec {
+                        tool_name: tool_name.to_string(),
+                        catalog_generation,
+                    },
+                );
+            }
         }
     }
 
-    loaded.into_iter().collect()
+    loaded.into_values().collect()
 }
 
-pub fn build_get_tool_spec_assistant_detail(description: &str, input_schema: &Value) -> String {
+pub fn build_get_tool_spec_assistant_detail(
+    tool_name: &str,
+    description: &str,
+    input_schema: &Value,
+) -> String {
     format!(
-        "<description>\n{}\n</description>\n<input_schema>\n{}\n</input_schema>",
+        "<description>\n{}\n</description>\n<input_schema>\n{}\n</input_schema>\n<execution>\nCallDeferredTool({{\"tool_name\":\"{}\",\"args\":{{...}}}})\n</execution>",
         escape_get_tool_spec_xml_text(description),
-        escape_get_tool_spec_xml_text(&input_schema.to_string())
+        escape_get_tool_spec_xml_text(&input_schema.to_string()),
+        escape_get_tool_spec_xml_text(tool_name),
     )
 }
 
@@ -582,6 +619,7 @@ pub fn build_get_tool_spec_detail_result(detail: &GetToolSpecDetail) -> ToolResu
     ToolResult::Result {
         data: detail.to_value(),
         result_for_assistant: Some(build_get_tool_spec_assistant_detail(
+            &detail.tool_name,
             &detail.description,
             &detail.input_schema,
         )),
@@ -627,11 +665,7 @@ pub fn build_prompt_visible_tool_manifest_definitions(
     let mut definitions = items
         .iter()
         .map(|item| match item {
-            PromptVisibleToolManifestItem::Expanded(definition) => definition.clone(),
-            PromptVisibleToolManifestItem::Collapsed {
-                name,
-                short_description,
-            } => build_collapsed_tool_stub_definition(name, short_description),
+            PromptVisibleToolManifestItem::Direct(definition) => definition.clone(),
         })
         .collect::<Vec<_>>();
     sort_tool_manifest_definitions(&mut definitions);
@@ -651,7 +685,7 @@ pub trait ToolRegistryItem: Send + Sync {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Expanded
+        ToolExposure::Direct
     }
 
     fn is_readonly(&self) -> bool {
@@ -744,27 +778,34 @@ pub trait GetToolSpecCatalogProvider<Tool: ?Sized, Context>: Send + Sync
 where
     Context: Sync,
 {
-    async fn collapsed_tools_for_get_tool_spec(
+    async fn deferred_tools_for_get_tool_spec(
         &self,
         context: Option<&Context>,
     ) -> Result<Vec<ToolRef<Tool>>, String>;
+
+    async fn catalog_generation(&self) -> u64 {
+        0
+    }
 
     async fn available_tools_for_get_tool_spec(
         &self,
         context: Option<&Context>,
     ) -> Result<Vec<ToolRef<Tool>>, String> {
-        self.collapsed_tools_for_get_tool_spec(context).await
+        self.deferred_tools_for_get_tool_spec(context).await
     }
 }
 
-pub fn summarize_get_tool_spec_collapsed_tools<Tool: ToolRegistryItem + ?Sized>(
-    collapsed_tools: &[ToolRef<Tool>],
-) -> Vec<GetToolSpecCollapsedToolSummary> {
-    collapsed_tools
+pub fn summarize_get_tool_spec_deferred_tools<Tool: ToolRegistryItem + ?Sized>(
+    deferred_tools: &[ToolRef<Tool>],
+) -> Vec<GetToolSpecDeferredToolSummary> {
+    deferred_tools
         .iter()
-        .map(|tool| GetToolSpecCollapsedToolSummary {
+        .map(|tool| GetToolSpecDeferredToolSummary {
             name: tool.name().to_string(),
-            short_description: tool.short_description(),
+            short_description: match tool.dynamic_tool_info() {
+                Some(info) if info.mcp.is_some() => None,
+                _ => Some(tool.short_description()),
+            },
         })
         .collect()
 }
@@ -778,8 +819,8 @@ where
     Context: Sync,
     Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
 {
-    let collapsed_tools = provider.collapsed_tools_for_get_tool_spec(context).await?;
-    let summaries = summarize_get_tool_spec_collapsed_tools(&collapsed_tools);
+    let deferred_tools = provider.deferred_tools_for_get_tool_spec(context).await?;
+    let summaries = summarize_get_tool_spec_deferred_tools(&deferred_tools);
     Ok(build_get_tool_spec_catalog_description(&summaries))
 }
 
@@ -864,7 +905,7 @@ where
 }
 
 pub async fn resolve_get_tool_spec_detail<Tool, Context>(
-    collapsed_tools: &[ToolRef<Tool>],
+    deferred_tools: &[ToolRef<Tool>],
     tool_name: &str,
     context: &Context,
     get_tool_spec_tool_name: &str,
@@ -873,7 +914,7 @@ where
     Tool: ContextualToolManifestItem<Context> + ?Sized,
     Context: Sync,
 {
-    let tool = collapsed_tools
+    let tool = deferred_tools
         .iter()
         .find(|tool| tool.name() == tool_name)
         .ok_or_else(|| format!("'{tool_name}' is not available in the current context"))?;
@@ -892,6 +933,7 @@ where
         tool_name: tool_name.to_string(),
         description,
         input_schema,
+        catalog_generation: 0,
     })
 }
 
@@ -906,22 +948,16 @@ where
     Context: Sync,
     Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
 {
-    let collapsed_tools = provider
-        .collapsed_tools_for_get_tool_spec(Some(context))
+    let deferred_tools = provider
+        .deferred_tools_for_get_tool_spec(Some(context))
         .await?;
-    resolve_get_tool_spec_detail(
-        &collapsed_tools,
-        tool_name,
-        context,
-        get_tool_spec_tool_name,
-    )
-    .await
+    resolve_get_tool_spec_detail(&deferred_tools, tool_name, context, get_tool_spec_tool_name).await
 }
 
 pub async fn resolve_get_tool_spec_execution_result_from_provider<Tool, Context, Provider>(
     provider: &Provider,
     input: &Value,
-    loaded_collapsed_tools: &[String],
+    loaded_deferred_tool_specs: &[LoadedDeferredToolSpec],
     context: &Context,
     get_tool_spec_tool_name: &str,
 ) -> Result<ToolResult, GetToolSpecExecutionError>
@@ -930,23 +966,33 @@ where
     Context: Sync,
     Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
 {
-    match resolve_get_tool_spec_execution_plan(input, loaded_collapsed_tools)? {
+    let current_generation = provider.catalog_generation().await;
+    let loaded_names = loaded_deferred_tool_specs
+        .iter()
+        .filter(|spec| spec.catalog_generation == current_generation)
+        .map(|spec| spec.tool_name.clone())
+        .collect::<Vec<_>>();
+    match resolve_get_tool_spec_execution_plan(input, &loaded_names)? {
         GetToolSpecExecutionPlan::DuplicateLoad(result) => Ok(result),
         GetToolSpecExecutionPlan::LoadDetail { tool_name } => {
-            let collapsed_tools = provider
-                .collapsed_tools_for_get_tool_spec(Some(context))
+            let deferred_tools = provider
+                .deferred_tools_for_get_tool_spec(Some(context))
                 .await
                 .map_err(GetToolSpecExecutionError::Detail)?;
 
-            if collapsed_tools.iter().any(|tool| tool.name() == tool_name) {
+            if deferred_tools.iter().any(|tool| tool.name() == tool_name) {
                 let detail = resolve_get_tool_spec_detail(
-                    &collapsed_tools,
+                    &deferred_tools,
                     tool_name,
                     context,
                     get_tool_spec_tool_name,
                 )
                 .await
                 .map_err(GetToolSpecExecutionError::Detail)?;
+                let detail = GetToolSpecDetail {
+                    catalog_generation: current_generation,
+                    ..detail
+                };
                 return Ok(build_get_tool_spec_detail_result(&detail));
             }
 
@@ -958,7 +1004,7 @@ where
                 return Ok(build_get_tool_spec_already_available_result(tool_name));
             }
 
-            Ok(build_get_tool_spec_unavailable_collapsed_result(tool_name))
+            Ok(build_get_tool_spec_unavailable_deferred_result(tool_name))
         }
     }
 }
@@ -1020,13 +1066,13 @@ where
     pub async fn execute(
         &self,
         input: &Value,
-        loaded_collapsed_tools: &[String],
+        loaded_deferred_tool_specs: &[LoadedDeferredToolSpec],
         context: &Context,
     ) -> Result<ToolResult, GetToolSpecExecutionError> {
         resolve_get_tool_spec_execution_result_from_provider(
             self.provider,
             input,
-            loaded_collapsed_tools,
+            loaded_deferred_tool_specs,
             context,
             self.tool_name,
         )
@@ -1036,10 +1082,10 @@ where
     pub async fn call_results(
         &self,
         input: &Value,
-        loaded_collapsed_tools: &[String],
+        loaded_deferred_tool_specs: &[LoadedDeferredToolSpec],
         context: &Context,
     ) -> Result<Vec<ToolResult>, GetToolSpecExecutionError> {
-        self.execute(input, loaded_collapsed_tools, context)
+        self.execute(input, loaded_deferred_tool_specs, context)
             .await
             .map(|result| vec![result])
     }
@@ -1116,14 +1162,14 @@ where
         exposure_overrides,
         get_tool_spec_tool_name,
     );
-    let expanded_tools = tools_by_name(tool_snapshot, &policy.expanded_tool_names);
-    let collapsed_tools = tools_by_name(tool_snapshot, &policy.collapsed_tool_names);
+    let direct_tools = tools_by_name(tool_snapshot, &policy.direct_tool_names);
+    let deferred_tools = tools_by_name(tool_snapshot, &policy.deferred_tool_names);
 
     ContextualVisibleTools {
         allowed_tool_names: policy.allowed_tool_names,
-        expanded_tools,
-        collapsed_tool_names: policy.collapsed_tool_names,
-        collapsed_tools,
+        direct_tools,
+        deferred_tool_names: policy.deferred_tool_names,
+        deferred_tools,
     }
 }
 
@@ -1147,39 +1193,30 @@ where
     )
     .await;
 
-    let mut manifest_items = Vec::with_capacity(
-        visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len(),
-    );
-    for tool in &visible_tools.expanded_tools {
+    let mut manifest_items = Vec::with_capacity(visible_tools.direct_tools.len());
+    for tool in &visible_tools.direct_tools {
         let description = tool
             .description_with_context(context)
             .await
             .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
         let parameters = tool.input_schema_for_model_with_context(context).await;
 
-        manifest_items.push(PromptVisibleToolManifestItem::Expanded(
+        manifest_items.push(PromptVisibleToolManifestItem::Direct(
             ToolManifestDefinition::new(tool.name().to_string(), description, parameters),
         ));
     }
 
-    for tool in &visible_tools.collapsed_tools {
-        manifest_items.push(PromptVisibleToolManifestItem::Collapsed {
-            name: tool.name().to_string(),
-            short_description: tool.short_description(),
-        });
-    }
-
     // This prompt-visible tool-definition list is part of the request prefix.
-    // Once a turn starts, enrich collapsed tools through GetToolSpec results
+    // Once a turn starts, enrich deferred tools through GetToolSpec results
     // instead of mutating this list, or later rounds will lose prefix-cache
     // reuse even if the actual tool set is unchanged.
     let tool_definitions = build_prompt_visible_tool_manifest_definitions(&manifest_items);
 
     ContextualToolManifest {
         allowed_tool_names: visible_tools.allowed_tool_names,
-        expanded_tools: visible_tools.expanded_tools,
-        collapsed_tool_names: visible_tools.collapsed_tool_names,
-        collapsed_tools: visible_tools.collapsed_tools,
+        direct_tools: visible_tools.direct_tools,
+        deferred_tool_names: visible_tools.deferred_tool_names,
+        deferred_tools: visible_tools.deferred_tools,
         tool_definitions,
     }
 }
@@ -1526,16 +1563,16 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
             .map(|metadata| metadata.info.clone())
     }
 
-    pub fn is_tool_collapsed(&self, name: &str) -> bool {
+    pub fn is_tool_deferred(&self, name: &str) -> bool {
         self.tools
             .get(name)
-            .is_some_and(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+            .is_some_and(|tool| tool.default_exposure() == ToolExposure::Deferred)
     }
 
-    pub fn get_collapsed_tool_names(&self) -> Vec<String> {
+    pub fn get_deferred_tool_names(&self) -> Vec<String> {
         self.tools
             .iter()
-            .filter(|(_, tool)| tool.default_exposure() == ToolExposure::Collapsed)
+            .filter(|(_, tool)| tool.default_exposure() == ToolExposure::Deferred)
             .map(|(name, _)| name.clone())
             .collect()
     }
@@ -2505,22 +2542,22 @@ mod tests {
     }
 
     #[test]
-    fn get_tool_spec_catalog_description_lists_names_only() {
+    fn get_tool_spec_catalog_description_keeps_builtin_summaries_optional() {
         let description = build_get_tool_spec_catalog_description(&[
-            GetToolSpecCollapsedToolSummary {
+            GetToolSpecDeferredToolSummary {
                 name: "Git".to_string(),
-                short_description: "Inspect repository state.".to_string(),
+                short_description: Some("Inspect repository state.".to_string()),
             },
-            GetToolSpecCollapsedToolSummary {
+            GetToolSpecDeferredToolSummary {
                 name: "WebFetch".to_string(),
-                short_description: "Fetch a URL.".to_string(),
+                short_description: None,
             },
         ])
         .expect("catalog description");
 
         assert!(description.contains("- Git"));
         assert!(description.contains("- WebFetch"));
-        assert!(!description.contains("Inspect repository state."));
+        assert!(description.contains("- Git: Inspect repository state."));
         assert!(!description.contains("Fetch a URL."));
     }
 

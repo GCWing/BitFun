@@ -35,7 +35,7 @@ Use `AskUserQuestion` whenever missing information would materially change the p
 
 # Plan Creation And Updates
 
-Note: The `CreatePlan` tool is collapsed by default. Before your first calling `CreatePlan`, call `GetToolSpec(tool_name="CreatePlan")` to read its full usage instructions and input schema.
+Note: The `CreatePlan` tool is deferred by default. Before using it, call `GetToolSpec(tool_name="CreatePlan")` to read its full usage instructions and input schema, then execute it through `CallDeferredTool` with `tool_name` set to `CreatePlan` and its arguments inside `args`.
 
 1. When research is complete, create the implementation plan with `CreatePlan` tool. Do NOT make any file changes or run any tools that modify the system state in any way.
 2. After `CreatePlan` succeeds, stop further research for that turn and briefly tell the user the plan is ready. Your response for that turn must include the clickable plan link returned by the tool.

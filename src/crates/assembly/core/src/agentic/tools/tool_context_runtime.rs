@@ -36,7 +36,9 @@ use bitfun_agent_runtime::checkpoint::{
     LightCheckpointWorkspaceFacts,
 };
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
-use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
+use bitfun_agent_tools::{
+    LoadedDeferredToolSpec, PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind,
+};
 #[cfg(feature = "canvas-runtime")]
 use bitfun_product_domains::canvas::CanvasStoragePort;
 use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort, ToolRuntimeHandles};
@@ -63,7 +65,7 @@ pub struct ToolUseContext {
     pub session_id: Option<String>,
     pub dialog_turn_id: Option<String>,
     pub workspace: Option<WorkspaceBinding>,
-    pub unlocked_collapsed_tools: Vec<String>,
+    pub loaded_deferred_tool_specs: Vec<LoadedDeferredToolSpec>,
     pub primary_model_facts: PrimaryModelFacts,
     /// Extended context data passed from execution layer to tools.
     pub custom_data: HashMap<String, Value>,
@@ -164,7 +166,7 @@ impl ToolUseContext {
             session_id: None,
             dialog_turn_id: None,
             workspace,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -245,7 +247,7 @@ pub(crate) fn build_tool_use_context_for_execution_context(
         session_id: Some(context.session_id.clone()),
         dialog_turn_id: Some(context.dialog_turn_id.clone()),
         workspace: context.workspace.clone(),
-        unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
+        loaded_deferred_tool_specs: context.loaded_deferred_tool_specs.clone(),
         primary_model_facts: context.primary_model_facts.clone(),
         custom_data: build_tool_context_custom_data(context),
         computer_use_host,
@@ -278,7 +280,7 @@ pub(crate) fn build_tool_description_context(
         session_id: None,
         dialog_turn_id: None,
         workspace: workspace.cloned(),
-        unlocked_collapsed_tools: Vec::new(),
+        loaded_deferred_tool_specs: Vec::new(),
         primary_model_facts,
         custom_data,
         computer_use_host: None,
@@ -716,9 +718,17 @@ mod context_facts_tests {
     };
     use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
+    use bitfun_agent_tools::LoadedDeferredToolSpec;
     use std::collections::{BTreeSet, HashMap};
     use std::path::PathBuf;
     use tool_runtime::context::PrimaryModelFacts;
+
+    fn loaded_spec(tool_name: &str) -> LoadedDeferredToolSpec {
+        LoadedDeferredToolSpec {
+            tool_name: tool_name.to_string(),
+            catalog_generation: 0,
+        }
+    }
 
     fn local_context(root: &str) -> ToolUseContext {
         ToolUseContext {
@@ -727,7 +737,7 @@ mod context_facts_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from(root))),
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -744,7 +754,7 @@ mod context_facts_tests {
             session_id: Some("session-1".to_string()),
             dialog_turn_id: Some("turn-1".to_string()),
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/project"))),
-            unlocked_collapsed_tools: vec!["WebFetch".to_string()],
+            loaded_deferred_tool_specs: vec![loaded_spec("WebFetch")],
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -789,7 +799,7 @@ mod context_facts_tests {
             session_id: Some("session-runtime".to_string()),
             dialog_turn_id: Some("turn-runtime".to_string()),
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/runtime"))),
-            unlocked_collapsed_tools: vec!["WebFetch".to_string(), "Git".to_string()],
+            loaded_deferred_tool_specs: vec![loaded_spec("WebFetch"), loaded_spec("Git")],
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data,
             computer_use_host: None,
@@ -851,7 +861,7 @@ mod context_facts_tests {
                 "Dev SSH".to_string(),
                 session_identity,
             )),
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -904,7 +914,7 @@ mod path_resolution_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from(root))),
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -928,7 +938,7 @@ mod path_resolution_tests {
                 "Dev SSH".to_string(),
                 session_identity,
             )),
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -954,7 +964,7 @@ mod path_resolution_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -1233,7 +1243,7 @@ mod call_runtime_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -1270,7 +1280,7 @@ mod call_runtime_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -1311,7 +1321,7 @@ mod call_runtime_tests {
             session_id: Some("subagent-session".to_string()),
             dialog_turn_id: Some("subagent-turn".to_string()),
             workspace: None,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data,
             computer_use_host: None,
@@ -1368,7 +1378,7 @@ mod context_builder_tests {
         assert!(context.session_id.is_none());
         assert!(context.dialog_turn_id.is_none());
         assert!(context.workspace.is_none());
-        assert!(context.unlocked_collapsed_tools.is_empty());
+        assert!(context.loaded_deferred_tool_specs.is_empty());
         assert!(context.cancellation_token().is_none());
         assert!(context.workspace_services().is_none());
         assert!(context.runtime_tool_restrictions.is_tool_allowed("Write"));
@@ -1393,11 +1403,19 @@ mod task_context_tests {
         SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolTask,
     };
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use bitfun_agent_tools::LoadedDeferredToolSpec;
     use bitfun_runtime_ports::DelegationPolicy;
     use serde_json::json;
     use std::collections::{BTreeSet, HashMap};
     use tokio_util::sync::CancellationToken;
     use tool_runtime::context::PrimaryModelFacts;
+
+    fn loaded_spec(tool_name: &str) -> LoadedDeferredToolSpec {
+        LoadedDeferredToolSpec {
+            tool_name: tool_name.to_string(),
+            catalog_generation: 0,
+        }
+    }
 
     fn task_with_context_vars() -> ToolTask {
         let mut context_vars = HashMap::new();
@@ -1446,8 +1464,9 @@ mod task_context_tests {
                     dialog_turn_id: "parent_turn".to_string(),
                 }),
                 delegation_policy: DelegationPolicy::top_level().spawn_child(),
-                collapsed_tools: vec!["WebFetch".to_string()],
-                unlocked_collapsed_tools: vec!["WebFetch".to_string()],
+                deferred_tools: vec!["WebFetch".to_string()],
+                loaded_deferred_tool_specs: vec![loaded_spec("WebFetch")],
+                catalog_generation: 0,
                 allowed_tools: vec!["WebFetch".to_string()],
                 runtime_tool_restrictions: ToolRuntimeRestrictions {
                     allowed_tool_names: BTreeSet::from(["WebFetch".to_string()]),
@@ -1474,7 +1493,10 @@ mod task_context_tests {
         assert_eq!(context.agent_type.as_deref(), Some("agent"));
         assert_eq!(context.session_id.as_deref(), Some("session_1"));
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
-        assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
+        assert_eq!(
+            context.loaded_deferred_tool_specs,
+            vec![loaded_spec("WebFetch")]
+        );
         assert!(context.cancellation_token().is_some());
         assert!(context
             .runtime_tool_restrictions

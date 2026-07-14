@@ -130,7 +130,7 @@ fn resolve_pipeline_invocation(
 
     if invocation.is_deferred()
         && !context
-            .collapsed_tools
+            .deferred_tools
             .iter()
             .any(|tool_name| tool_name == &invocation.effective_tool_name)
     {
@@ -350,7 +350,7 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
         ToolExecutionAdmissionRejection::AllowedList(error) => {
             BitFunError::Validation(error.to_string())
         }
-        ToolExecutionAdmissionRejection::Collapsed(error) => {
+        ToolExecutionAdmissionRejection::Deferred(error) => {
             BitFunError::Validation(error.to_string())
         }
     }
@@ -793,11 +793,13 @@ impl ToolPipeline {
         // evaluates repeated patterns only after observing actual tool results.
         if task.invocation.is_deferred() {
             if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
-                tool_name: &wire_tool_name,
+                tool_name: &tool_name,
                 allowed_tools: &task.context.allowed_tools,
                 runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-                collapsed_tools: &task.context.collapsed_tools,
-                loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+                invocation_is_deferred: true,
+                deferred_tools: &task.context.deferred_tools,
+                loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
+                current_catalog_generation: task.context.catalog_generation,
                 get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
             }) {
                 let error_msg = err.to_string();
@@ -826,8 +828,10 @@ impl ToolPipeline {
             tool_name: &tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-            collapsed_tools: &task.context.collapsed_tools,
-            loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+            invocation_is_deferred: task.invocation.is_deferred(),
+            deferred_tools: &task.context.deferred_tools,
+            loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
+            current_catalog_generation: task.context.catalog_generation,
             get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
         }) {
             let error_msg = err.to_string();
@@ -1614,7 +1618,7 @@ mod tests {
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use async_trait::async_trait;
-    use bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME;
+    use bitfun_agent_tools::{LoadedDeferredToolSpec, CALL_DEFERRED_TOOL_NAME};
     use bitfun_runtime_ports::{
         RoundInjection, RoundInjectionExecutionPolicy, RoundInjectionKind, RoundInjectionTarget,
         RoundInjectionToolPreemption,
@@ -1624,6 +1628,13 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
     use tokio::time::{sleep, Duration};
+
+    fn loaded_spec(tool_name: &str, catalog_generation: u64) -> LoadedDeferredToolSpec {
+        LoadedDeferredToolSpec {
+            tool_name: tool_name.to_string(),
+            catalog_generation,
+        }
+    }
 
     #[test]
     fn recovered_write_without_separator_is_rejected_as_potentially_truncated_path() {
@@ -1827,8 +1838,9 @@ mod tests {
             context_vars: HashMap::new(),
             subagent_parent_info: None,
             delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
-            collapsed_tools: Vec::new(),
-            unlocked_collapsed_tools: Vec::new(),
+            deferred_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
+            catalog_generation: 0,
             allowed_tools: Vec::new(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             steering_interrupt: None,
@@ -1909,8 +1921,8 @@ mod tests {
             CALL_DEFERRED_TOOL_NAME.to_string(),
             "get_weather".to_string(),
         ];
-        context.collapsed_tools = vec!["get_weather".to_string()];
-        context.unlocked_collapsed_tools = vec!["get_weather".to_string()];
+        context.deferred_tools = vec!["get_weather".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec("get_weather", 0)];
 
         let mut call = test_tool_call("deferred_1", CALL_DEFERRED_TOOL_NAME);
         call.arguments = json!({
@@ -1952,7 +1964,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deferred_gateway_requires_get_tool_spec_unlock() {
+    async fn deferred_gateway_requires_loaded_get_tool_spec_result() {
         let pipeline = test_tool_pipeline();
         register_capturing_test_tool(&pipeline, "get_weather", Arc::new(Mutex::new(None))).await;
 
@@ -1961,7 +1973,7 @@ mod tests {
             CALL_DEFERRED_TOOL_NAME.to_string(),
             "get_weather".to_string(),
         ];
-        context.collapsed_tools = vec!["get_weather".to_string()];
+        context.deferred_tools = vec!["get_weather".to_string()];
 
         let mut call = test_tool_call("deferred_locked", CALL_DEFERRED_TOOL_NAME);
         call.arguments = json!({
@@ -2042,8 +2054,8 @@ mod tests {
             CALL_DEFERRED_TOOL_NAME.to_string(),
             "write_weather".to_string(),
         ];
-        context.collapsed_tools = vec!["write_weather".to_string()];
-        context.unlocked_collapsed_tools = vec!["write_weather".to_string()];
+        context.deferred_tools = vec!["write_weather".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec("write_weather", 0)];
 
         let mut call = test_tool_call("deferred_permission", CALL_DEFERRED_TOOL_NAME);
         call.arguments = json!({
@@ -2335,10 +2347,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pipeline_admission_collapsed_tool_rejection_updates_failed_state_before_validation() {
+    async fn pipeline_admission_deferred_tool_rejection_updates_failed_state_before_validation() {
         let pipeline = test_tool_pipeline();
         let mut context = test_tool_execution_context();
-        context.collapsed_tools = vec!["WebFetch".to_string()];
+        context.deferred_tools = vec!["WebFetch".to_string()];
 
         let results = pipeline
             .execute_tools(
@@ -2354,7 +2366,7 @@ mod tests {
         assert_failed_task_contains(
             &pipeline,
             "tool_1",
-            "Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}",
+            "Tool 'WebFetch' is deferred and cannot be called directly",
         );
     }
 
@@ -2532,8 +2544,8 @@ mod tests {
         task.context
             .context_vars
             .insert("acp_transport".to_string(), "true".to_string());
-        task.context.collapsed_tools = vec!["WebFetch".to_string()];
-        task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
+        task.context.deferred_tools = vec!["WebFetch".to_string()];
+        task.context.loaded_deferred_tool_specs = vec![loaded_spec("WebFetch", 0)];
         task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: ["WebFetch"].into_iter().map(str::to_string).collect(),
             denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
@@ -2547,7 +2559,10 @@ mod tests {
         assert_eq!(context.agent_type.as_deref(), Some("agent"));
         assert_eq!(context.session_id.as_deref(), Some("session_1"));
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
-        assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
+        assert_eq!(
+            context.loaded_deferred_tool_specs,
+            vec![loaded_spec("WebFetch", 0)]
+        );
         assert!(context.cancellation_token().is_some());
         assert!(context
             .runtime_tool_restrictions
@@ -2571,19 +2586,21 @@ mod tests {
     }
 
     #[test]
-    fn collapsed_tool_requires_tool_catalog_unlock() {
+    fn deferred_tool_requires_loaded_catalog_spec() {
         let mut task = test_tool_task("tool_1", "WebFetch");
-        task.context.collapsed_tools = vec!["WebFetch".to_string()];
+        task.context.deferred_tools = vec!["WebFetch".to_string()];
 
         let err = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-            collapsed_tools: &task.context.collapsed_tools,
-            loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+            invocation_is_deferred: true,
+            deferred_tools: &task.context.deferred_tools,
+            loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
+            current_catalog_generation: task.context.catalog_generation,
             get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
         })
-        .expect_err("collapsed tool should require GetToolSpec unlock");
+        .expect_err("deferred tool should require a loaded GetToolSpec result");
 
         assert!(err
             .to_string()
@@ -2591,17 +2608,19 @@ mod tests {
     }
 
     #[test]
-    fn tool_catalog_rejects_reloading_already_unlocked_tool() {
+    fn tool_catalog_rejects_reloading_already_loaded_tool() {
         let mut task = test_tool_task("tool_1", "GetToolSpec");
         task.tool_call.arguments = json!({ "tool_name": "WebFetch" });
-        task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
+        task.context.loaded_deferred_tool_specs = vec![loaded_spec("WebFetch", 0)];
 
         let result = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-            collapsed_tools: &task.context.collapsed_tools,
-            loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+            invocation_is_deferred: false,
+            deferred_tools: &task.context.deferred_tools,
+            loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
+            current_catalog_generation: task.context.catalog_generation,
             get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
         });
 

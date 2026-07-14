@@ -9,7 +9,7 @@ use crate::define_readonly_subagent_with_overrides;
 
 fn reviewer_tool_exposure_overrides() -> AgentToolPolicyOverrides {
     let mut overrides = AgentToolPolicyOverrides::default();
-    overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
+    overrides.insert("GetFileDiff".to_string(), ToolExposure::Direct);
     overrides
 }
 

@@ -16,7 +16,7 @@ impl Default for DeepReviewAgent {
 impl DeepReviewAgent {
     pub fn new() -> Self {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
+        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Direct);
 
         Self {
             default_tools: vec![
@@ -89,7 +89,7 @@ mod tests {
         assert!(!tools.contains(&"Task".to_string()));
         assert_eq!(
             agent.tool_exposure_overrides().get("GetFileDiff"),
-            Some(&ToolExposure::Expanded),
+            Some(&ToolExposure::Direct),
         );
         assert!(tools.contains(&"submit_code_review".to_string()));
         assert!(!tools.contains(&"AskUserQuestion".to_string()));

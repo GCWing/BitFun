@@ -16,8 +16,8 @@ impl Default for ReviewFixerAgent {
 impl ReviewFixerAgent {
     pub fn new() -> Self {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
-        tool_exposure_overrides.insert("Git".to_string(), ToolExposure::Expanded);
+        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Direct);
+        tool_exposure_overrides.insert("Git".to_string(), ToolExposure::Direct);
         Self {
             default_tools: vec![
                 "Read".to_string(),

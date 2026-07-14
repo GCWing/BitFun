@@ -134,12 +134,16 @@ impl ToolRegistry {
         self.inner.get_dynamic_tool_info(name)
     }
 
-    pub fn is_tool_collapsed(&self, name: &str) -> bool {
-        self.inner.is_tool_collapsed(name)
+    pub fn is_tool_deferred(&self, name: &str) -> bool {
+        self.inner.is_tool_deferred(name)
     }
 
-    pub fn get_collapsed_tool_names(&self) -> Vec<String> {
-        self.inner.get_collapsed_tool_names()
+    pub fn get_deferred_tool_names(&self) -> Vec<String> {
+        self.inner.get_deferred_tool_names()
+    }
+
+    pub fn current_snapshot_generation(&self) -> u64 {
+        self.inner.current_snapshot_generation()
     }
 
     /// Get all tool names
@@ -416,6 +420,7 @@ mod tests {
             "CreatePlan",
             "submit_code_review",
             "GetToolSpec",
+            "CallDeferredTool",
             "GetFileDiff",
             "CreateCanvas",
             "ReadCanvas",
@@ -508,9 +513,9 @@ mod tests {
             "runtime assembly must preserve legacy create_tool_registry output"
         );
         assert_eq!(
-            assembled_registry.get_collapsed_tool_names(),
-            compatibility_registry.get_collapsed_tool_names(),
-            "runtime assembly must preserve product collapsed-tool catalog"
+            assembled_registry.get_deferred_tool_names(),
+            compatibility_registry.get_deferred_tool_names(),
+            "runtime assembly must preserve product deferred-tool catalog"
         );
 
         for tool_name in ["Write", "Edit", "Delete"] {
@@ -541,9 +546,9 @@ mod tests {
             "product tool runtime owner must preserve legacy registry output"
         );
         assert_eq!(
-            owner_registry.get_collapsed_tool_names(),
-            compatibility_registry.get_collapsed_tool_names(),
-            "product tool runtime owner must preserve collapsed-tool exposure"
+            owner_registry.get_deferred_tool_names(),
+            compatibility_registry.get_deferred_tool_names(),
+            "product tool runtime owner must preserve deferred-tool exposure"
         );
     }
 
@@ -559,9 +564,9 @@ mod tests {
             "custom decorator assembly must keep provider tool order stable"
         );
         assert_eq!(
-            registry.get_collapsed_tool_names(),
-            compatibility_registry.get_collapsed_tool_names(),
-            "custom decorator assembly must keep collapsed exposure stable"
+            registry.get_deferred_tool_names(),
+            compatibility_registry.get_deferred_tool_names(),
+            "custom decorator assembly must keep deferred exposure stable"
         );
 
         for tool_name in ["Write", "GetToolSpec", "WebFetch"] {
@@ -577,23 +582,23 @@ mod tests {
     }
 
     #[test]
-    fn registry_marks_collapsed_tools_for_get_tool_spec() {
+    fn registry_marks_deferred_tools_for_get_tool_spec() {
         let registry = create_tool_registry();
 
-        assert!(registry.is_tool_collapsed("WebFetch"));
-        assert!(registry.is_tool_collapsed("GetFileDiff"));
-        assert!(!registry.is_tool_collapsed("GetToolSpec"));
-        assert!(registry.is_tool_collapsed("Git"));
-        assert!(registry.is_tool_collapsed("ReviewPlatform"));
-        assert!(!registry.is_tool_collapsed("InitMiniApp"));
+        assert!(registry.is_tool_deferred("WebFetch"));
+        assert!(registry.is_tool_deferred("GetFileDiff"));
+        assert!(!registry.is_tool_deferred("GetToolSpec"));
+        assert!(registry.is_tool_deferred("Git"));
+        assert!(registry.is_tool_deferred("ReviewPlatform"));
+        assert!(!registry.is_tool_deferred("InitMiniApp"));
     }
 
     #[test]
-    fn registry_preserves_collapsed_tool_manifest_for_owner_migration() {
+    fn registry_preserves_deferred_tool_manifest_for_owner_migration() {
         let registry = create_tool_registry();
 
         assert_eq!(
-            registry.get_collapsed_tool_names(),
+            registry.get_deferred_tool_names(),
             vec![
                 "CreatePlan",
                 "GetFileDiff",
@@ -614,7 +619,7 @@ mod tests {
                 "ComputerUse",
                 "Playbook",
             ],
-            "collapsed tool manifest must stay stable before moving registry or manifest ownership"
+            "deferred tool manifest must stay stable before moving registry or manifest ownership"
         );
     }
 

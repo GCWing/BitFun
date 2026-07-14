@@ -37,7 +37,7 @@ pub trait Tool: Send + Sync {
     /// This is tool-owned metadata: registries and agent manifests may use it
     /// as the baseline before applying any higher-level overrides.
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Expanded
+        ToolExposure::Direct
     }
 
     /// Input mode definition - using JSON Schema

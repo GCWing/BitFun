@@ -30,8 +30,9 @@ use crate::agentic::session::{
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
-    collect_product_unlocked_collapsed_tools, GetToolSpecTool,
+    collect_product_loaded_deferred_tool_specs, GetToolSpecTool,
 };
+use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::tools::{
     resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, ToolRuntimeRestrictions,
 };
@@ -949,9 +950,9 @@ impl ExecutionEngine {
             } else {
                 None
             },
-            collapsed_tool_listing: if has_tool_definition("GetToolSpec") {
-                GetToolSpecTool::build_collapsed_tools_context_section(
-                    &manifest.collapsed_tool_summaries,
+            deferred_tool_listing: if has_tool_definition("GetToolSpec") {
+                GetToolSpecTool::build_deferred_tools_context_section(
+                    &manifest.deferred_tool_summaries,
                 )
             } else {
                 None
@@ -1077,7 +1078,7 @@ impl ExecutionEngine {
         let runtime_context = prompt_builder.build_runtime_context_reminder().await;
 
         PrependedPromptReminders {
-            collapsed_tool_listing: prompt_builder.build_collapsed_tool_listing_reminder(),
+            deferred_tool_listing: prompt_builder.build_deferred_tool_listing_reminder(),
             skill_listing: baseline_tool_sections
                 .as_ref()
                 .and_then(|sections| sections.render_skill_listing_reminder()),
@@ -1183,7 +1184,7 @@ impl ExecutionEngine {
         prepended_prompt_reminders: &PrependedPromptReminders,
     ) {
         debug!(
-            "Turn prompt scaffold resolved: session_id={}, turn_id={}, stage={}, system_prompt_len={} bytes, skill_listing_len={}, agent_listing_len={}, collapsed_tool_listing_len={}, user_context_len={}, runtime_context_len={}",
+            "Turn prompt scaffold resolved: session_id={}, turn_id={}, stage={}, system_prompt_len={} bytes, skill_listing_len={}, agent_listing_len={}, deferred_tool_listing_len={}, user_context_len={}, runtime_context_len={}",
             session_id,
             turn_id,
             stage,
@@ -1199,7 +1200,7 @@ impl ExecutionEngine {
                 .map(|text| text.len())
                 .unwrap_or(0),
             prepended_prompt_reminders
-                .collapsed_tool_listing
+                .deferred_tool_listing
                 .as_ref()
                 .map(|text| text.len())
                 .unwrap_or(0),
@@ -1377,8 +1378,9 @@ impl ExecutionEngine {
             workspace: input.context.workspace.clone(),
             model_exchange_trace_dir,
             available_tools: finalize_tool_names,
-            collapsed_tools: Vec::new(),
-            unlocked_collapsed_tools: Vec::new(),
+            deferred_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
+            catalog_generation: 0,
             model_name: input.ai_client.config.model.clone(),
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
@@ -1865,8 +1867,8 @@ impl ExecutionEngine {
             })
             .unwrap_or_default();
         // Snapshot prompt-visible tool definitions once for this turn. Do not
-        // re-resolve or rewrite them after GetToolSpec unlocks a collapsed tool:
-        // the unlocked detail travels in tool results, while mutating the tool
+        // re-resolve or rewrite them after GetToolSpec loads a deferred tool spec:
+        // the loaded detail travels in tool results, while mutating the tool
         // definitions would change the request prefix and trigger provider
         // prefix/KV cache misses on subsequent rounds.
         let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
@@ -2673,9 +2675,9 @@ impl ExecutionEngine {
         } else {
             None
         };
-        let collapsed_tools = tool_manifest
+        let deferred_tools = tool_manifest
             .as_ref()
-            .map(|manifest| manifest.collapsed_tool_names.clone())
+            .map(|manifest| manifest.deferred_tool_names.clone())
             .unwrap_or_default();
         let tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
             Self::build_tool_listing_sections(manifest, &tool_description_context).await
@@ -2708,7 +2710,7 @@ impl ExecutionEngine {
         };
         let final_tool_names = Self::finalize_tool_names(tool_definitions.as_deref());
         debug!(
-            "Primary model and tool manifest resolved: session_id={}, turn_id={}, resolved_primary_model_id={}, primary_model_api_format={}, primary_model_supports_image_inputs={}, final_tool_count={}, final_tool_names={:?}, collapsed_tool_names={:?}",
+            "Primary model and tool manifest resolved: session_id={}, turn_id={}, resolved_primary_model_id={}, primary_model_api_format={}, primary_model_supports_image_inputs={}, final_tool_count={}, final_tool_names={:?}, deferred_tool_names={:?}",
             context.session_id,
             context.dialog_turn_id,
             primary_model_facts.model_id,
@@ -2716,7 +2718,7 @@ impl ExecutionEngine {
             primary_model_facts.supports_image_inputs,
             final_tool_names.len(),
             final_tool_names,
-            collapsed_tools,
+            deferred_tools,
         );
 
         // 4. Resolve the prompt scaffold used by model requests in this turn.
@@ -3094,8 +3096,13 @@ impl ExecutionEngine {
             if context.skip_tool_confirmation {
                 round_context_vars.insert("skip_tool_confirmation".to_string(), "true".to_string());
             }
-            let unlocked_collapsed_tools =
-                collect_product_unlocked_collapsed_tools(&messages, &collapsed_tools);
+            let loaded_deferred_tool_specs =
+                collect_product_loaded_deferred_tool_specs(&messages, &deferred_tools);
+            let catalog_generation = {
+                let registry = get_global_tool_registry();
+                let generation = registry.read().await.current_snapshot_generation();
+                generation
+            };
 
             let model_exchange_trace_dir = self
                 .session_manager
@@ -3111,8 +3118,9 @@ impl ExecutionEngine {
                 workspace: context.workspace.clone(),
                 model_exchange_trace_dir,
                 available_tools: available_tools.clone(),
-                collapsed_tools: collapsed_tools.clone(),
-                unlocked_collapsed_tools,
+                deferred_tools: deferred_tools.clone(),
+                loaded_deferred_tool_specs,
+                catalog_generation,
                 model_name: ai_client.config.model.clone(),
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),

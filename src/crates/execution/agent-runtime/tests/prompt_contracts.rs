@@ -42,7 +42,7 @@ fn tool_listing_sections_render_only_present_sections() {
     let sections = ToolListingSections {
         skill_listing: Some("skill-a\nskill-b".to_string()),
         agent_listing: None,
-        collapsed_tool_listing: Some("Search: summary".to_string()),
+        deferred_tool_listing: Some("Search: summary".to_string()),
     };
 
     assert!(!sections.is_empty());
@@ -52,15 +52,15 @@ fn tool_listing_sections_render_only_present_sections() {
         .starts_with("# Skill Listing\nA skill is a set of instructions"));
     assert!(sections.render_agent_listing_reminder().is_none());
     assert!(sections
-        .render_collapsed_tool_listing_reminder()
-        .expect("collapsed tool listing should render")
-        .starts_with("# Collapsed Tool Listing\n"));
+        .render_deferred_tool_listing_reminder()
+        .expect("deferred tool listing should render")
+        .starts_with("# Deferred Tool Listing\n"));
 }
 
 #[test]
 fn prepended_prompt_reminders_keep_runtime_injection_order() {
     let reminders = PrependedPromptReminders {
-        collapsed_tool_listing: Some("collapsed-tools".to_string()),
+        deferred_tool_listing: Some("deferred-tools".to_string()),
         skill_listing: Some("skills".to_string()),
         agent_listing: Some("agents".to_string()),
         runtime_context: Some("runtime-context".to_string()),
@@ -70,7 +70,7 @@ fn prepended_prompt_reminders_keep_runtime_injection_order() {
     assert_eq!(
         reminders.ordered_reminders(),
         vec![
-            "collapsed-tools",
+            "deferred-tools",
             "skills",
             "agents",
             "runtime-context",

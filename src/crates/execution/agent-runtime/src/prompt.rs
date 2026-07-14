@@ -8,10 +8,10 @@ If the user names a skill (with `[$SkillName]` or plain text) OR the task clearl
 Below is the list of skills that can be used with the Skill tool. Each entry includes a name and description"#;
 const AGENT_LISTING_TITLE: &str = "# Agent Listing";
 const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";
-const COLLAPSED_TOOL_LISTING_TITLE: &str = "# Collapsed Tool Listing";
-const COLLAPSED_TOOL_LISTING_GUIDANCE: &str = r#"The folling tools are intentionally collapsed. Their listed descriptions are short summaries rather than full usage instructions.
-Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full schema.
-After reading the returned spec, call the real tool directly by its own name.
+const DEFERRED_TOOL_LISTING_TITLE: &str = "# Deferred Tool Listing";
+const DEFERRED_TOOL_LISTING_GUIDANCE: &str = r#"The following tools are intentionally deferred. Their listed descriptions are short summaries rather than full usage instructions.
+Before calling a deferred tool, call `GetToolSpec` with its exact tool name to read its full schema.
+After reading the returned spec, call `CallDeferredTool` with the exact tool name and put the target arguments inside `args`.
 If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again."#;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -548,14 +548,14 @@ impl UserContextSection {
 pub struct ToolListingSections {
     pub skill_listing: Option<String>,
     pub agent_listing: Option<String>,
-    pub collapsed_tool_listing: Option<String>,
+    pub deferred_tool_listing: Option<String>,
 }
 
 impl ToolListingSections {
     pub fn is_empty(&self) -> bool {
         self.skill_listing.is_none()
             && self.agent_listing.is_none()
-            && self.collapsed_tool_listing.is_none()
+            && self.deferred_tool_listing.is_none()
     }
 
     pub fn render_skill_listing_reminder(&self) -> Option<String> {
@@ -578,14 +578,14 @@ impl ToolListingSections {
         })
     }
 
-    pub fn render_collapsed_tool_listing_reminder(&self) -> Option<String> {
-        self.collapsed_tool_listing
+    pub fn render_deferred_tool_listing_reminder(&self) -> Option<String> {
+        self.deferred_tool_listing
             .as_deref()
-            .map(|collapsed_tool_listing| {
+            .map(|deferred_tool_listing| {
                 Self::render_section(
-                    COLLAPSED_TOOL_LISTING_TITLE,
-                    collapsed_tool_listing,
-                    Some(COLLAPSED_TOOL_LISTING_GUIDANCE),
+                    DEFERRED_TOOL_LISTING_TITLE,
+                    deferred_tool_listing,
+                    Some(DEFERRED_TOOL_LISTING_GUIDANCE),
                 )
             })
     }
@@ -600,7 +600,7 @@ impl ToolListingSections {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PrependedPromptReminders {
-    pub collapsed_tool_listing: Option<String>,
+    pub deferred_tool_listing: Option<String>,
     pub skill_listing: Option<String>,
     pub agent_listing: Option<String>,
     pub runtime_context: Option<String>,
@@ -610,8 +610,8 @@ pub struct PrependedPromptReminders {
 impl PrependedPromptReminders {
     pub fn ordered_reminders(&self) -> Vec<&str> {
         let mut reminders = Vec::new();
-        if let Some(collapsed_tool_listing) = self.collapsed_tool_listing.as_deref() {
-            reminders.push(collapsed_tool_listing);
+        if let Some(deferred_tool_listing) = self.deferred_tool_listing.as_deref() {
+            reminders.push(deferred_tool_listing);
         }
         if let Some(skill_listing) = self.skill_listing.as_deref() {
             reminders.push(skill_listing);

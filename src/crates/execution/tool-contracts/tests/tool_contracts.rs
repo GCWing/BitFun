@@ -7,35 +7,35 @@ use bitfun_agent_tools::{
     AcpExternalAgentToolDefinitionInput, ACP_TOOL_PREFIX, ACP_TOOL_SUFFIX,
 };
 use bitfun_agent_tools::{
-    build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
-    build_get_tool_spec_assistant_detail, build_get_tool_spec_detail_result,
-    build_get_tool_spec_duplicate_load_hint, build_get_tool_spec_duplicate_load_result,
-    build_prompt_visible_tool_manifest_definitions, build_tool_execution_timeout_presentation,
-    build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
-    build_tool_session_runtime_artifact_reference, call_deferred_tool_input_schema,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
-    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
-    is_tool_path_allowed_by_resolved_roots, normalize_host_path, normalize_runtime_relative_path,
-    parse_bitfun_current_session_uri, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
-    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
-    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
-    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
+    build_bitfun_runtime_uri, build_get_tool_spec_assistant_detail,
+    build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
+    build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
+    build_tool_execution_timeout_presentation, build_tool_path_policy_denial_message,
+    build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
+    call_deferred_tool_input_schema, collect_loaded_deferred_tool_specs,
+    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
+    get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
+    is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
+    normalize_runtime_relative_path, parse_bitfun_current_session_uri, parse_bitfun_runtime_uri,
+    posix_resolve_path_with_workspace, posix_style_path_is_absolute,
+    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
+    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
+    resolve_get_tool_spec_detail_from_provider,
     resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
     resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
     resolve_tool_path_with_context_roots, resolve_workspace_tool_path,
-    sort_tool_manifest_definitions, summarize_get_tool_spec_collapsed_tools,
-    tool_path_is_effectively_absolute, validate_collapsed_tool_usage, validate_get_tool_spec_input,
+    sort_tool_manifest_definitions, summarize_get_tool_spec_deferred_tools,
+    tool_path_is_effectively_absolute, validate_deferred_tool_usage, validate_get_tool_spec_input,
     validate_mcp_tool_bridge_input, validate_tool_allowed_by_list,
     validate_tool_execution_admission, CallDeferredToolInputError, DynamicMcpToolInfo,
-    DynamicToolInfo, GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError,
+    DynamicToolInfo, GetToolSpecDeferredToolSummary, GetToolSpecExecutionError,
     GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
-    McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput, PromptVisibleToolManifestItem,
-    ResolvedToolInvocation, ToolContextFacts, ToolExecutionAdmissionRejection,
-    ToolExecutionAdmissionRequest, ToolExposure, ToolImageAttachment, ToolManifestDefinition,
-    ToolManifestPolicyTool, ToolPathBackend, ToolPathOperation, ToolPathResolution,
-    ToolRenderOptions, ToolResult, ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult,
-    CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
+    LoadedDeferredToolSpec, McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput,
+    PromptVisibleToolManifestItem, ResolvedToolInvocation, ToolContextFacts,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
+    ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
+    ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
+    ToolWorkspaceKind, ValidationResult, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
@@ -1357,35 +1357,73 @@ fn runtime_artifact_reference_owner_preserves_session_prefix_and_rejects_escape(
 }
 
 #[test]
-fn collapsed_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
-    let collapsed_tools = vec!["WebFetch".to_string()];
-    let loaded_collapsed_tools = Vec::new();
+fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
+    let deferred_tools = vec!["WebFetch".to_string()];
+    let loaded_deferred_tool_specs = Vec::new();
 
-    let err = validate_collapsed_tool_usage(
+    let err = validate_deferred_tool_usage(
         "WebFetch",
-        &collapsed_tools,
-        &loaded_collapsed_tools,
+        true,
+        &deferred_tools,
+        &loaded_deferred_tool_specs,
+        0,
         GET_TOOL_SPEC_TOOL_NAME,
     )
-    .expect_err("collapsed tool should require GetToolSpec unlock");
+    .expect_err("deferred tool should require GetToolSpec unlock");
     assert_eq!(
         err.to_string(),
-        "Tool 'WebFetch' is collapsed. Call GetToolSpec first with {\"tool_name\":\"WebFetch\"} to read its full usage instructions and input schema, then try again."
+        "Tool 'WebFetch' is deferred. Call GetToolSpec first with {\"tool_name\":\"WebFetch\"} to read its full usage instructions and input schema, then call it through CallDeferredTool."
     );
 
-    let loaded_collapsed_tools = vec!["WebFetch".to_string()];
-    validate_collapsed_tool_usage(
+    let loaded_deferred_tool_specs = vec![LoadedDeferredToolSpec {
+        tool_name: "WebFetch".to_string(),
+        catalog_generation: 0,
+    }];
+    validate_deferred_tool_usage(
         "WebFetch",
-        &collapsed_tools,
-        &loaded_collapsed_tools,
+        true,
+        &deferred_tools,
+        &loaded_deferred_tool_specs,
+        0,
         GET_TOOL_SPEC_TOOL_NAME,
     )
-    .expect("loaded collapsed tool should be executable");
+    .expect("loaded deferred tool should be executable");
 
-    validate_collapsed_tool_usage(
+    let stale = validate_deferred_tool_usage(
+        "WebFetch",
+        true,
+        &deferred_tools,
+        &[LoadedDeferredToolSpec {
+            tool_name: "WebFetch".to_string(),
+            catalog_generation: 41,
+        }],
+        42,
         GET_TOOL_SPEC_TOOL_NAME,
-        &collapsed_tools,
+    )
+    .expect_err("stale deferred spec should require a reload");
+    assert!(stale
+        .to_string()
+        .contains("loaded catalog generation 41, current generation 42"));
+
+    let direct = validate_deferred_tool_usage(
+        "WebFetch",
+        false,
+        &deferred_tools,
+        &loaded_deferred_tool_specs,
+        0,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .expect_err("deferred tools must not be called directly");
+    assert!(direct
+        .to_string()
+        .contains("deferred and cannot be called directly"));
+
+    validate_deferred_tool_usage(
+        GET_TOOL_SPEC_TOOL_NAME,
+        false,
+        &deferred_tools,
         &[],
+        0,
         GET_TOOL_SPEC_TOOL_NAME,
     )
     .expect("GetToolSpec itself is the unlock path");
@@ -1418,8 +1456,10 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["Read".to_string()],
         runtime_tool_restrictions: &restrictions,
-        collapsed_tools: &["WebFetch".to_string()],
-        loaded_collapsed_tools: &[],
+        invocation_is_deferred: true,
+        deferred_tools: &["WebFetch".to_string()],
+        loaded_deferred_tool_specs: &[],
+        current_catalog_generation: 0,
         get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
     };
 
@@ -1439,8 +1479,10 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &restrictions,
-        collapsed_tools: &["WebFetch".to_string()],
-        loaded_collapsed_tools: &[],
+        invocation_is_deferred: true,
+        deferred_tools: &["WebFetch".to_string()],
+        loaded_deferred_tool_specs: &[],
+        current_catalog_generation: 0,
         get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
     };
 
@@ -1460,15 +1502,17 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &ToolRuntimeRestrictions::default(),
-        collapsed_tools: &["WebFetch".to_string()],
-        loaded_collapsed_tools: &[],
+        invocation_is_deferred: true,
+        deferred_tools: &["WebFetch".to_string()],
+        loaded_deferred_tool_specs: &[],
+        current_catalog_generation: 0,
         get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
     };
 
     let err = validate_tool_execution_admission(request)
-        .expect_err("collapsed tool should require GetToolSpec after access gates pass");
+        .expect_err("deferred tool should require GetToolSpec after access gates pass");
 
-    assert!(matches!(err, ToolExecutionAdmissionRejection::Collapsed(_)));
+    assert!(matches!(err, ToolExecutionAdmissionRejection::Deferred(_)));
     assert!(err
         .to_string()
         .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
@@ -1556,13 +1600,13 @@ fn dynamic_tool_provider_contract_is_available_from_agent_tools_boundary() {
 
 #[test]
 fn tool_exposure_contract_keeps_lightweight_wire_shape() {
-    let collapsed = ToolExposure::Collapsed;
+    let collapsed = ToolExposure::Deferred;
     let value = serde_json::to_value(collapsed).expect("serialize exposure");
 
-    assert_eq!(value, json!("Collapsed"));
+    assert_eq!(value, json!("Deferred"));
     assert_eq!(
         serde_json::from_value::<ToolExposure>(value).expect("deserialize exposure"),
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     );
 }
 
@@ -1596,27 +1640,27 @@ fn tool_manifest_policy_keeps_get_tool_spec_insertion_and_registry_order() {
     let tools = vec![
         ToolManifestPolicyTool {
             name: "Read".to_string(),
-            default_exposure: ToolExposure::Expanded,
+            default_exposure: ToolExposure::Direct,
             available: true,
         },
         ToolManifestPolicyTool {
             name: "WebSearch".to_string(),
-            default_exposure: ToolExposure::Collapsed,
+            default_exposure: ToolExposure::Deferred,
             available: true,
         },
         ToolManifestPolicyTool {
             name: "WebFetch".to_string(),
-            default_exposure: ToolExposure::Collapsed,
+            default_exposure: ToolExposure::Deferred,
             available: true,
         },
         ToolManifestPolicyTool {
             name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
-            default_exposure: ToolExposure::Expanded,
+            default_exposure: ToolExposure::Direct,
             available: true,
         },
         ToolManifestPolicyTool {
             name: "HiddenUnavailable".to_string(),
-            default_exposure: ToolExposure::Expanded,
+            default_exposure: ToolExposure::Direct,
             available: false,
         },
     ];
@@ -1639,13 +1683,14 @@ fn tool_manifest_policy_keeps_get_tool_spec_insertion_and_registry_order() {
             "WebSearch",
             "HiddenUnavailable",
             GET_TOOL_SPEC_TOOL_NAME,
+            CALL_DEFERRED_TOOL_NAME,
         ]
     );
     assert_eq!(
-        policy.expanded_tool_names,
+        policy.direct_tool_names,
         vec!["Read", GET_TOOL_SPEC_TOOL_NAME]
     );
-    assert_eq!(policy.collapsed_tool_names, vec!["WebSearch", "WebFetch"]);
+    assert_eq!(policy.deferred_tool_names, vec!["WebSearch", "WebFetch"]);
 }
 
 #[test]
@@ -1653,12 +1698,12 @@ fn tool_manifest_policy_preserves_explicit_get_tool_spec_duplicate_runtime_contr
     let tools = vec![
         ToolManifestPolicyTool {
             name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
-            default_exposure: ToolExposure::Expanded,
+            default_exposure: ToolExposure::Direct,
             available: true,
         },
         ToolManifestPolicyTool {
             name: "WebFetch".to_string(),
-            default_exposure: ToolExposure::Collapsed,
+            default_exposure: ToolExposure::Deferred,
             available: true,
         },
     ];
@@ -1670,75 +1715,61 @@ fn tool_manifest_policy_preserves_explicit_get_tool_spec_duplicate_runtime_contr
 
     assert_eq!(
         policy.allowed_tool_names,
-        vec![GET_TOOL_SPEC_TOOL_NAME, "WebFetch"]
+        vec![GET_TOOL_SPEC_TOOL_NAME, "WebFetch", CALL_DEFERRED_TOOL_NAME]
     );
     assert_eq!(
-        policy.expanded_tool_names,
-        vec![GET_TOOL_SPEC_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME],
-        "core currently appends the runtime GetToolSpec entry whenever collapsed tools exist"
+        policy.direct_tool_names,
+        vec![GET_TOOL_SPEC_TOOL_NAME],
+        "explicit GetToolSpec must not be duplicated when deferred tools exist"
     );
-    assert_eq!(policy.collapsed_tool_names, vec!["WebFetch"]);
+    assert_eq!(policy.deferred_tool_names, vec!["WebFetch"]);
 }
 
 #[test]
 fn get_tool_spec_load_collector_preserves_collapsed_runtime_contract() {
-    let collapsed_tools = vec!["WebFetch".to_string(), "GetFileDiff".to_string()];
+    let deferred_tools = vec!["WebFetch".to_string(), "GetFileDiff".to_string()];
     let observations = vec![
         GetToolSpecLoadObservation {
             tool_name: GET_TOOL_SPEC_TOOL_NAME,
             loaded_tool_name: Some("WebFetch"),
+            catalog_generation: Some(42),
             is_error: false,
         },
         GetToolSpecLoadObservation {
             tool_name: GET_TOOL_SPEC_TOOL_NAME,
             loaded_tool_name: Some("Read"),
+            catalog_generation: Some(42),
             is_error: false,
         },
         GetToolSpecLoadObservation {
             tool_name: GET_TOOL_SPEC_TOOL_NAME,
             loaded_tool_name: Some("GetFileDiff"),
+            catalog_generation: Some(42),
             is_error: true,
         },
         GetToolSpecLoadObservation {
             tool_name: "Read",
             loaded_tool_name: Some("WebFetch"),
+            catalog_generation: Some(42),
             is_error: false,
         },
         GetToolSpecLoadObservation {
             tool_name: GET_TOOL_SPEC_TOOL_NAME,
             loaded_tool_name: Some("WebFetch"),
+            catalog_generation: Some(42),
             is_error: false,
         },
     ];
 
-    let loaded = collect_loaded_collapsed_tool_names(
-        &observations,
-        &collapsed_tools,
-        GET_TOOL_SPEC_TOOL_NAME,
-    );
+    let loaded =
+        collect_loaded_deferred_tool_specs(&observations, &deferred_tools, GET_TOOL_SPEC_TOOL_NAME);
 
-    assert_eq!(loaded, vec!["WebFetch".to_string()]);
-}
-
-#[test]
-fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
-    let stub = build_collapsed_tool_stub_definition(
-        "WebFetch",
-        "Fetch a URL and return readable content.",
-    );
-
-    assert_eq!(stub.name, "WebFetch");
-    assert!(stub.description.contains("Fetch a URL"));
-    assert!(stub
-        .description
-        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
     assert_eq!(
-        stub.parameters,
-        json!({
-            "type": "object",
-            "additionalProperties": true,
-            "properties": {}
-        })
+        loaded,
+        vec![LoadedDeferredToolSpec {
+            tool_name: "WebFetch".to_string(),
+            catalog_generation: 42,
+        }]
     );
 }
 
@@ -1764,18 +1795,14 @@ fn tool_manifest_sorting_preserves_prompt_visible_order() {
 }
 
 #[test]
-fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
+fn prompt_visible_manifest_builder_omits_deferred_tools_from_provider_manifest() {
     let definitions = build_prompt_visible_tool_manifest_definitions(&[
-        PromptVisibleToolManifestItem::Collapsed {
-            name: "WebFetch".to_string(),
-            short_description: "Fetch readable web content.".to_string(),
-        },
-        PromptVisibleToolManifestItem::Expanded(ToolManifestDefinition::new(
+        PromptVisibleToolManifestItem::Direct(ToolManifestDefinition::new(
             "Read",
             "Read files from the workspace.",
             json!({ "type": "object", "properties": { "path": { "type": "string" } } }),
         )),
-        PromptVisibleToolManifestItem::Expanded(ToolManifestDefinition::new(
+        PromptVisibleToolManifestItem::Direct(ToolManifestDefinition::new(
             "Bash",
             "Run shell commands.",
             json!({ "type": "object", "properties": { "command": { "type": "string" } } }),
@@ -1787,16 +1814,13 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
             .iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Bash", "Read", "WebFetch"]
+        vec!["Bash", "Read"]
     );
     assert_eq!(definitions[0].description, "Run shell commands.");
     assert_eq!(
         definitions[0].parameters["properties"]["command"]["type"],
         json!("string")
     );
-    assert!(definitions[2]
-        .description
-        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
 }
 
 #[test]
@@ -1835,7 +1859,7 @@ fn get_tool_spec_contract_preserves_input_schema_and_validation() {
 fn get_tool_spec_contract_preserves_static_metadata_and_use_message() {
     assert_eq!(
         get_tool_spec_short_description(),
-        "Discover collapsed tools and read their detailed definitions."
+        "Discover deferred tools and read their detailed definitions."
     );
     assert!(get_tool_spec_is_readonly());
     assert!(get_tool_spec_is_concurrency_safe(Some(&json!({
@@ -1857,6 +1881,7 @@ fn get_tool_spec_contract_preserves_static_metadata_and_use_message() {
 #[test]
 fn get_tool_spec_contract_escapes_assistant_detail_for_xml_sections() {
     let detail = build_get_tool_spec_assistant_detail(
+        "Git",
         "Use <danger> & keep output valid.",
         &json!({
             "type": "object",
@@ -1870,6 +1895,7 @@ fn get_tool_spec_contract_escapes_assistant_detail_for_xml_sections() {
 
     assert!(detail.contains("<description>\nUse &lt;danger&gt; &amp; keep output valid."));
     assert!(detail.contains("\"description\":\"Match &lt;tag&gt; &amp; symbols\""));
+    assert!(detail.contains("CallDeferredTool({\"tool_name\":\"Git\",\"args\":{...}})"));
     assert!(!detail.contains("Use <danger> & keep output valid."));
 }
 
@@ -1877,7 +1903,7 @@ fn get_tool_spec_contract_escapes_assistant_detail_for_xml_sections() {
 fn get_tool_spec_contract_preserves_duplicate_load_hint() {
     assert_eq!(
         build_get_tool_spec_duplicate_load_hint("WebFetch"),
-        "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly."
+        "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use CallDeferredTool with tool_name 'WebFetch' and put the tool arguments inside args."
     );
 }
 
@@ -1899,7 +1925,7 @@ fn get_tool_spec_contract_builds_duplicate_load_result() {
     assert_eq!(
         result_for_assistant.as_deref(),
         Some(
-            "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly."
+            "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use CallDeferredTool with tool_name 'WebFetch' and put the tool arguments inside args."
         )
     );
     assert_eq!(image_attachments, None);
@@ -1919,6 +1945,7 @@ fn get_tool_spec_contract_builds_detail_result() {
                 }
             }
         }),
+        catalog_generation: 42,
     });
 
     let ToolResult::Result {
@@ -2172,7 +2199,7 @@ impl ContextualToolManifestItem<ManifestTestContext> for ContextualManifestTool 
 }
 
 fn registry_marker_tool(name: &str, provider_id: Option<&str>) -> Arc<RegistryMarkerTool> {
-    registry_marker_tool_with_exposure(name, provider_id, ToolExposure::Expanded)
+    registry_marker_tool_with_exposure(name, provider_id, ToolExposure::Direct)
 }
 
 fn registry_marker_tool_with_exposure(
@@ -2239,7 +2266,7 @@ impl ToolCatalogSnapshotProvider<RegistryMarkerTool> for RegistryMarkerSnapshotP
 impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
     for ContextualManifestSnapshotProvider
 {
-    async fn collapsed_tools_for_get_tool_spec(
+    async fn deferred_tools_for_get_tool_spec(
         &self,
         context: Option<&ManifestTestContext>,
     ) -> Result<Vec<Arc<ContextualManifestTool>>, String> {
@@ -2247,7 +2274,7 @@ impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
             Some(context) => {
                 let mut tools = Vec::new();
                 for tool in &self.tools {
-                    if tool.default_exposure() == ToolExposure::Collapsed
+                    if tool.default_exposure() == ToolExposure::Deferred
                         && tool.is_available_in_context(context).await
                     {
                         tools.push(tool.clone());
@@ -2258,7 +2285,7 @@ impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
             None => self
                 .tools
                 .iter()
-                .filter(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+                .filter(|tool| tool.default_exposure() == ToolExposure::Deferred)
                 .cloned()
                 .collect(),
         };
@@ -2291,7 +2318,7 @@ impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
 impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
     for ErroringGetToolSpecProvider
 {
-    async fn collapsed_tools_for_get_tool_spec(
+    async fn deferred_tools_for_get_tool_spec(
         &self,
         _context: Option<&ManifestTestContext>,
     ) -> Result<Vec<Arc<ContextualManifestTool>>, String> {
@@ -2495,7 +2522,7 @@ fn generic_tool_runtime_assembly_installs_static_providers_with_decorator() {
             vec![registry_marker_tool_with_exposure(
                 "WebFetch",
                 None,
-                ToolExposure::Collapsed,
+                ToolExposure::Deferred,
             )],
         ),
     ];
@@ -2512,9 +2539,9 @@ fn generic_tool_runtime_assembly_installs_static_providers_with_decorator() {
         "runtime assembly must preserve static provider order while applying the decorator"
     );
     assert_eq!(
-        registry.get_collapsed_tool_names(),
+        registry.get_deferred_tool_names(),
         vec!["decorated_WebFetch".to_string()],
-        "runtime assembly must preserve collapsed exposure after decoration"
+        "runtime assembly must preserve deferred exposure after decoration"
     );
 }
 
@@ -2546,7 +2573,7 @@ fn generic_tool_runtime_assembly_materializes_plans_before_registry_install() {
         "assembly must own generic plan materialization plus registry installation"
     );
     assert_eq!(
-        registry.get_collapsed_tool_names(),
+        registry.get_deferred_tool_names(),
         Vec::<String>::new(),
         "decorator-based plan materialization must not change exposure"
     );
@@ -2559,18 +2586,18 @@ fn generic_tool_registry_preserves_exposure_catalog_contract() {
     registry.register_tool(registry_marker_tool_with_exposure(
         "WebFetch",
         None,
-        ToolExposure::Collapsed,
+        ToolExposure::Deferred,
     ));
     registry.register_tool(registry_marker_tool_with_exposure(
         "Git",
         None,
-        ToolExposure::Collapsed,
+        ToolExposure::Deferred,
     ));
 
-    assert!(!registry.is_tool_collapsed("Read"));
-    assert!(registry.is_tool_collapsed("WebFetch"));
+    assert!(!registry.is_tool_deferred("Read"));
+    assert!(registry.is_tool_deferred("WebFetch"));
     assert_eq!(
-        registry.get_collapsed_tool_names(),
+        registry.get_deferred_tool_names(),
         vec!["WebFetch".to_string(), "Git".to_string()]
     );
 }
@@ -2578,16 +2605,16 @@ fn generic_tool_registry_preserves_exposure_catalog_contract() {
 #[tokio::test]
 async fn generic_readonly_enabled_filter_preserves_registry_order() {
     let tools = vec![
-        registry_marker_tool_with_access("Read", None, ToolExposure::Expanded, true, true),
-        registry_marker_tool_with_access("Write", None, ToolExposure::Expanded, false, true),
+        registry_marker_tool_with_access("Read", None, ToolExposure::Direct, true, true),
+        registry_marker_tool_with_access("Write", None, ToolExposure::Direct, false, true),
         registry_marker_tool_with_access(
             "DisabledReadonly",
             None,
-            ToolExposure::Expanded,
+            ToolExposure::Direct,
             true,
             false,
         ),
-        registry_marker_tool_with_access("WebFetch", None, ToolExposure::Collapsed, true, true),
+        registry_marker_tool_with_access("WebFetch", None, ToolExposure::Deferred, true, true),
     ];
 
     let readonly_names = resolve_readonly_enabled_tools(&tools)
@@ -2607,8 +2634,8 @@ async fn generic_readonly_enabled_filter_preserves_registry_order() {
 fn manifest_policy_tools_from_registry_snapshot_preserve_exposure_and_availability() {
     let tools = vec![
         registry_marker_tool("Read", None),
-        registry_marker_tool_with_exposure("WebFetch", None, ToolExposure::Collapsed),
-        registry_marker_tool_with_exposure("Git", None, ToolExposure::Collapsed),
+        registry_marker_tool_with_exposure("WebFetch", None, ToolExposure::Deferred),
+        registry_marker_tool_with_exposure("Git", None, ToolExposure::Deferred),
     ];
     let available_tool_names = ["Read".to_string(), "Git".to_string()]
         .into_iter()
@@ -2622,17 +2649,17 @@ fn manifest_policy_tools_from_registry_snapshot_preserve_exposure_and_availabili
         vec![
             ToolManifestPolicyTool {
                 name: "Read".to_string(),
-                default_exposure: ToolExposure::Expanded,
+                default_exposure: ToolExposure::Direct,
                 available: true,
             },
             ToolManifestPolicyTool {
                 name: "WebFetch".to_string(),
-                default_exposure: ToolExposure::Collapsed,
+                default_exposure: ToolExposure::Deferred,
                 available: false,
             },
             ToolManifestPolicyTool {
                 name: "Git".to_string(),
-                default_exposure: ToolExposure::Collapsed,
+                default_exposure: ToolExposure::Deferred,
                 available: true,
             },
         ]
@@ -2642,10 +2669,10 @@ fn manifest_policy_tools_from_registry_snapshot_preserve_exposure_and_availabili
 #[tokio::test]
 async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contract() {
     let tools = vec![
-        contextual_manifest_tool("Read", ToolExposure::Expanded, None),
-        contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
-        contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
-        contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Expanded, None),
+        contextual_manifest_tool("Read", ToolExposure::Direct, None),
+        contextual_manifest_tool("WebFetch", ToolExposure::Deferred, None),
+        contextual_manifest_tool("Git", ToolExposure::Deferred, Some("other-agent")),
+        contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Direct, None),
     ];
 
     let manifest = resolve_contextual_tool_manifest(
@@ -2668,31 +2695,32 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
             "WebFetch".to_string(),
             "Git".to_string(),
             GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            CALL_DEFERRED_TOOL_NAME.to_string(),
         ],
         "GetToolSpec insertion must preserve the runtime allowed-list contract"
     );
     assert_eq!(
-        manifest.collapsed_tool_names,
+        manifest.deferred_tool_names,
         vec!["WebFetch".to_string()],
-        "unavailable collapsed tools must not leak into the prompt-visible unlock catalog"
+        "unavailable deferred tools must not leak into the prompt-visible unlock catalog"
     );
     assert_eq!(
         manifest
-            .expanded_tools
+            .direct_tools
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
         vec!["Read", GET_TOOL_SPEC_TOOL_NAME],
-        "expanded tool handles must follow the resolved runtime policy"
+        "direct tool handles must follow the resolved runtime policy"
     );
     assert_eq!(
         manifest
-            .collapsed_tools
+            .deferred_tools
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
         vec!["WebFetch"],
-        "collapsed tool handles must follow the resolved runtime policy"
+        "deferred tool handles must follow the resolved runtime policy"
     );
     assert_eq!(
         manifest
@@ -2700,7 +2728,7 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Read", "WebFetch", GET_TOOL_SPEC_TOOL_NAME],
+        vec!["Read", GET_TOOL_SPEC_TOOL_NAME],
         "prompt-visible manifest ordering must stay stable when the owner moves"
     );
 
@@ -2712,26 +2740,20 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
     assert_eq!(read.description, "Read description for agentic");
     assert_eq!(read.parameters["properties"]["agent"]["const"], "agentic");
 
-    let web_fetch = manifest
+    assert!(!manifest
         .tool_definitions
         .iter()
-        .find(|tool| tool.name == "WebFetch")
-        .expect("collapsed WebFetch stub");
-    assert!(web_fetch
-        .description
-        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
-    assert_eq!(web_fetch.parameters["additionalProperties"], true);
-    assert_eq!(web_fetch.parameters["properties"], json!({}));
+        .any(|tool| tool.name == "WebFetch"));
 }
 
 #[tokio::test]
 async fn contextual_manifest_resolver_accepts_snapshot_provider_boundary() {
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![
-            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
-            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
-            contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
-            contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Expanded, None),
+            contextual_manifest_tool("Read", ToolExposure::Direct, None),
+            contextual_manifest_tool("WebFetch", ToolExposure::Deferred, None),
+            contextual_manifest_tool("Git", ToolExposure::Deferred, Some("other-agent")),
+            contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Direct, None),
         ],
     };
 
@@ -2755,6 +2777,7 @@ async fn contextual_manifest_resolver_accepts_snapshot_provider_boundary() {
             "WebFetch".to_string(),
             "Git".to_string(),
             GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            CALL_DEFERRED_TOOL_NAME.to_string(),
         ],
         "provider-backed resolution must preserve allowed-list semantics"
     );
@@ -2764,11 +2787,11 @@ async fn contextual_manifest_resolver_accepts_snapshot_provider_boundary() {
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Read", "WebFetch", GET_TOOL_SPEC_TOOL_NAME],
+        vec!["Read", GET_TOOL_SPEC_TOOL_NAME],
         "provider-backed resolution must preserve prompt-visible manifest ordering"
     );
     assert_eq!(
-        manifest.collapsed_tool_names,
+        manifest.deferred_tool_names,
         vec!["WebFetch".to_string()],
         "provider-backed resolution must preserve context-aware availability filtering"
     );
@@ -2778,10 +2801,10 @@ async fn contextual_manifest_resolver_accepts_snapshot_provider_boundary() {
 async fn tool_catalog_runtime_facade_owns_manifest_and_readonly_paths() {
     let manifest_provider = ContextualManifestSnapshotProvider {
         tools: vec![
-            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
-            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
-            contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
-            contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Expanded, None),
+            contextual_manifest_tool("Read", ToolExposure::Direct, None),
+            contextual_manifest_tool("WebFetch", ToolExposure::Deferred, None),
+            contextual_manifest_tool("Git", ToolExposure::Deferred, Some("other-agent")),
+            contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Direct, None),
         ],
     };
     let runtime = ToolCatalogRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
@@ -2807,20 +2830,21 @@ async fn tool_catalog_runtime_facade_owns_manifest_and_readonly_paths() {
             "WebFetch".to_string(),
             "Git".to_string(),
             GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            CALL_DEFERRED_TOOL_NAME.to_string(),
         ],
         "runtime facade must preserve allowed-list insertion"
     );
     assert_eq!(
         visible_tools
-            .expanded_tools
+            .direct_tools
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
         vec!["Read", GET_TOOL_SPEC_TOOL_NAME],
-        "runtime facade must preserve expanded handle order"
+        "runtime facade must preserve direct handle order"
     );
     assert_eq!(
-        visible_tools.collapsed_tool_names,
+        visible_tools.deferred_tool_names,
         vec!["WebFetch".to_string()],
         "runtime facade must preserve context-aware collapsed filtering"
     );
@@ -2842,16 +2866,16 @@ async fn tool_catalog_runtime_facade_owns_manifest_and_readonly_paths() {
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Read", "WebFetch", GET_TOOL_SPEC_TOOL_NAME],
+        vec!["Read", GET_TOOL_SPEC_TOOL_NAME],
         "runtime facade must preserve prompt-visible manifest order"
     );
 
     let readonly_provider = RegistryMarkerSnapshotProvider {
         tools: vec![
-            registry_marker_tool_with_access("Read", None, ToolExposure::Expanded, true, true),
-            registry_marker_tool_with_access("Write", None, ToolExposure::Expanded, false, true),
-            registry_marker_tool_with_access("Disabled", None, ToolExposure::Expanded, true, false),
-            registry_marker_tool_with_access("WebFetch", None, ToolExposure::Collapsed, true, true),
+            registry_marker_tool_with_access("Read", None, ToolExposure::Direct, true, true),
+            registry_marker_tool_with_access("Write", None, ToolExposure::Direct, false, true),
+            registry_marker_tool_with_access("Disabled", None, ToolExposure::Direct, true, false),
+            registry_marker_tool_with_access("WebFetch", None, ToolExposure::Deferred, true, true),
         ],
     };
     let readonly_runtime = ToolCatalogRuntime::<RegistryMarkerTool, ManifestTestContext, _>::new(
@@ -2874,30 +2898,30 @@ async fn tool_catalog_runtime_facade_owns_manifest_and_readonly_paths() {
 
 #[tokio::test]
 async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
-    let collapsed_tools = vec![
-        contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
-        contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Collapsed, None),
+    let deferred_tools = vec![
+        contextual_manifest_tool("WebFetch", ToolExposure::Deferred, None),
+        contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Deferred, None),
     ];
     let context = ManifestTestContext { agent: "agentic" };
 
-    let summaries = summarize_get_tool_spec_collapsed_tools(&collapsed_tools);
+    let summaries = summarize_get_tool_spec_deferred_tools(&deferred_tools);
     assert_eq!(
         summaries,
         vec![
-            GetToolSpecCollapsedToolSummary {
+            GetToolSpecDeferredToolSummary {
                 name: "WebFetch".to_string(),
-                short_description: "WebFetch short description".to_string(),
+                short_description: Some("WebFetch short description".to_string()),
             },
-            GetToolSpecCollapsedToolSummary {
+            GetToolSpecDeferredToolSummary {
                 name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
-                short_description: "GetToolSpec short description".to_string(),
+                short_description: Some("GetToolSpec short description".to_string()),
             },
         ],
-        "catalog summaries must preserve collapsed tool order and short descriptions"
+        "catalog summaries must preserve deferred tool order and short descriptions"
     );
 
     let detail = resolve_get_tool_spec_detail(
-        &collapsed_tools,
+        &deferred_tools,
         "WebFetch",
         &context,
         GET_TOOL_SPEC_TOOL_NAME,
@@ -2923,19 +2947,20 @@ async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
                         "const": "agentic"
                     }
                 }
-            }
+            },
+            "catalog_generation": 0
         }),
         "detail JSON shape must stay compatible with GetToolSpec execution output"
     );
 
     let missing =
-        resolve_get_tool_spec_detail(&collapsed_tools, "Git", &context, GET_TOOL_SPEC_TOOL_NAME)
+        resolve_get_tool_spec_detail(&deferred_tools, "Git", &context, GET_TOOL_SPEC_TOOL_NAME)
             .await
             .expect_err("missing tool should stay a validation-style error");
     assert_eq!(missing, "'Git' is not available in the current context");
 
     let self_inspection = resolve_get_tool_spec_detail(
-        &collapsed_tools,
+        &deferred_tools,
         GET_TOOL_SPEC_TOOL_NAME,
         &context,
         GET_TOOL_SPEC_TOOL_NAME,
@@ -2949,9 +2974,9 @@ async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
 async fn get_tool_spec_catalog_provider_preserves_runtime_catalog_contract() {
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![
-            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
-            contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
-            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
+            contextual_manifest_tool("WebFetch", ToolExposure::Deferred, None),
+            contextual_manifest_tool("Git", ToolExposure::Deferred, Some("other-agent")),
+            contextual_manifest_tool("Read", ToolExposure::Direct, None),
         ],
     };
     let context = ManifestTestContext { agent: "agentic" };
@@ -2976,7 +3001,10 @@ async fn get_tool_spec_provider_execution_returns_duplicate_result_without_detai
     let result = resolve_get_tool_spec_execution_result_from_provider(
         &ErroringGetToolSpecProvider,
         &input,
-        &["WebFetch".to_string()],
+        &[LoadedDeferredToolSpec {
+            tool_name: "WebFetch".to_string(),
+            catalog_generation: 0,
+        }],
         &context,
         GET_TOOL_SPEC_TOOL_NAME,
     )
@@ -3006,7 +3034,7 @@ async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() 
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![contextual_manifest_tool(
             "WebFetch",
-            ToolExposure::Collapsed,
+            ToolExposure::Deferred,
             None,
         )],
     };
@@ -3049,8 +3077,8 @@ async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() 
 async fn get_tool_spec_provider_execution_returns_already_available_result_for_expanded_tool() {
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![
-            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
-            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
+            contextual_manifest_tool("WebFetch", ToolExposure::Deferred, None),
+            contextual_manifest_tool("Read", ToolExposure::Direct, None),
         ],
     };
     let context = ManifestTestContext { agent: "agentic" };
@@ -3091,7 +3119,7 @@ async fn get_tool_spec_runtime_facade_owns_execution_path() {
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![contextual_manifest_tool(
             "WebFetch",
-            ToolExposure::Collapsed,
+            ToolExposure::Deferred,
             None,
         )],
     };
@@ -3105,7 +3133,7 @@ async fn get_tool_spec_runtime_facade_owns_execution_path() {
     let result = runtime
         .execute(&input, &[], &context)
         .await
-        .expect("collapsed tool detail should resolve through runtime facade");
+        .expect("deferred tool detail should resolve through runtime facade");
 
     let ToolResult::Result { data, .. } = result else {
         panic!("expected normal tool result");
@@ -3123,7 +3151,7 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![contextual_manifest_tool(
             "WebFetch",
-            ToolExposure::Collapsed,
+            ToolExposure::Deferred,
             None,
         )],
     };
@@ -3161,7 +3189,10 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
     let duplicate_results = duplicate_runtime
         .call_results(
             &json!({ "tool_name": "WebFetch" }),
-            &["WebFetch".to_string()],
+            &[LoadedDeferredToolSpec {
+                tool_name: "WebFetch".to_string(),
+                catalog_generation: 0,
+            }],
             &context,
         )
         .await
@@ -3180,7 +3211,7 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
     assert_eq!(
         result_for_assistant.as_deref(),
         Some(
-            "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly."
+            "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use CallDeferredTool with tool_name 'WebFetch' and put the tool arguments inside args."
         )
     );
     assert!(image_attachments.is_none());
@@ -3220,7 +3251,7 @@ async fn get_tool_spec_provider_execution_returns_unavailable_result_for_unknown
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![contextual_manifest_tool(
             "WebFetch",
-            ToolExposure::Collapsed,
+            ToolExposure::Deferred,
             None,
         )],
     };
@@ -3247,7 +3278,7 @@ async fn get_tool_spec_provider_execution_returns_unavailable_result_for_unknown
     };
 
     assert_eq!(data["tool_name"], "Git");
-    assert_eq!(data["available_collapsed_tool"], false);
+    assert_eq!(data["available_deferred_tool"], false);
     assert_eq!(
         result_for_assistant.as_deref(),
         Some("'Git' is not available in the current context")
@@ -3313,14 +3344,14 @@ async fn generic_tool_registry_materializes_provider_effect_and_stale_call_contr
     registry.register_tool(registry_marker_tool_with_access(
         "external_search",
         Some("provider-a"),
-        ToolExposure::Collapsed,
+        ToolExposure::Deferred,
         true,
         true,
     ));
     registry.register_tool(registry_marker_tool_with_access(
         "write_file",
         None,
-        ToolExposure::Expanded,
+        ToolExposure::Direct,
         false,
         true,
     ));
@@ -3345,7 +3376,7 @@ async fn generic_tool_registry_materializes_provider_effect_and_stale_call_contr
             .tool("external_search")
             .expect("external tool")
             .exposure,
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     );
     assert!(
         snapshot

@@ -226,6 +226,6 @@ mod tests {
     #[test]
     fn init_miniapp_stays_expanded_for_assistant_creation() {
         let tool = InitMiniAppTool::new();
-        assert_eq!(tool.default_exposure(), ToolExposure::Expanded);
+        assert_eq!(tool.default_exposure(), ToolExposure::Direct);
     }
 }

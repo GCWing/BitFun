@@ -67,8 +67,8 @@ pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides 
     // WebSearch/WebFetch expanded so models do not need a GetToolSpec
     // unlock round-trip when switching between those modes.
     let mut overrides = AgentToolPolicyOverrides::default();
-    overrides.insert("WebSearch".to_string(), ToolExposure::Expanded);
-    overrides.insert("WebFetch".to_string(), ToolExposure::Expanded);
+    overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
+    overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
     overrides
 }
 
