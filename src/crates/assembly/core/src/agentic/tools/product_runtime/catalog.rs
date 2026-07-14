@@ -262,7 +262,9 @@ mod tests {
         resolve_product_tool_manifest, ProductToolCatalogProvider,
     };
     use crate::agentic::agents::AgentToolPolicyOverrides;
-    use crate::agentic::tools::framework::{ToolExposure, ToolResult};
+    use crate::agentic::tools::framework::{
+        DynamicMcpToolInfo, DynamicToolInfo, Tool, ToolExposure, ToolResult,
+    };
     use crate::agentic::tools::registry::create_tool_registry;
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -271,6 +273,58 @@ mod tests {
     };
     use serde_json::json;
     use std::collections::HashMap;
+    use std::sync::Arc;
+
+    struct DeferredMcpCatalogTool;
+
+    #[async_trait::async_trait]
+    impl Tool for DeferredMcpCatalogTool {
+        fn name(&self) -> &str {
+            "mcp__github__search_repos"
+        }
+
+        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+            Ok("Search GitHub repositories".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "Search repositories through GitHub MCP".to_string()
+        }
+
+        fn default_exposure(&self) -> ToolExposure {
+            ToolExposure::Deferred
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            json!({
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                    "query": { "type": "string" }
+                }
+            })
+        }
+
+        fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {
+            Some(DynamicToolInfo {
+                provider_id: "github".to_string(),
+                provider_kind: Some("mcp".to_string()),
+                mcp: Some(DynamicMcpToolInfo {
+                    server_id: "github".to_string(),
+                    server_name: "GitHub".to_string(),
+                    tool_name: "search_repos".to_string(),
+                }),
+            })
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+            Ok(Vec::new())
+        }
+    }
 
     fn tool_context(agent_type: Option<&str>) -> ToolUseContext {
         ToolUseContext {
@@ -420,6 +474,71 @@ mod tests {
             .find(|tool| tool.name == "CallDeferredTool")
             .expect("deferred execution gateway definition");
         assert_eq!(gateway.parameters["required"], json!(["tool_name", "args"]));
+    }
+
+    #[tokio::test]
+    async fn deferred_mcp_tool_omits_schema_from_manifest_but_keeps_get_tool_spec_detail() {
+        let registry = create_tool_registry();
+        let tool_snapshot = vec![
+            registry
+                .get_tool(GET_TOOL_SPEC_TOOL_NAME)
+                .expect("GetToolSpec gateway"),
+            registry
+                .get_tool("CallDeferredTool")
+                .expect("CallDeferredTool gateway"),
+            Arc::new(DeferredMcpCatalogTool) as Arc<dyn Tool>,
+        ];
+        let context = tool_context(Some("agentic"));
+        let manifest = bitfun_agent_tools::resolve_contextual_tool_manifest(
+            &tool_snapshot,
+            &["mcp__github__search_repos".to_string()],
+            &AgentToolPolicyOverrides::default(),
+            &context,
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .await;
+
+        assert_eq!(
+            manifest.deferred_tool_names,
+            vec!["mcp__github__search_repos".to_string()]
+        );
+        assert_eq!(
+            manifest
+                .tool_definitions
+                .iter()
+                .map(|definition| definition.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![GET_TOOL_SPEC_TOOL_NAME, "CallDeferredTool"]
+        );
+
+        let detail = bitfun_agent_tools::resolve_get_tool_spec_detail(
+            &manifest.deferred_tools,
+            "mcp__github__search_repos",
+            &context,
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .await
+        .expect("MCP detail remains available through GetToolSpec");
+        assert_eq!(detail.description, "Search GitHub repositories");
+        assert_eq!(detail.input_schema["required"], json!(["query"]));
+
+        let resolved: super::ResolvedToolManifest = manifest.into();
+        assert_eq!(resolved.deferred_tool_summaries.len(), 1);
+        assert_eq!(
+            resolved.deferred_tool_summaries[0].name,
+            "mcp__github__search_repos"
+        );
+        assert_eq!(
+            resolved.deferred_tool_summaries[0].short_description, None,
+            "MCP descriptions must not re-enter the deferred listing"
+        );
+        assert_eq!(
+            crate::agentic::tools::product_runtime::GetToolSpecTool::build_deferred_tools_context_section(
+                &resolved.deferred_tool_summaries,
+            )
+            .as_deref(),
+            Some("<deferred_tools>\n- mcp__github__search_repos\n</deferred_tools>")
+        );
     }
 
     #[tokio::test]

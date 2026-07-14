@@ -516,6 +516,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn deferred_mcp_large_result_uses_effective_policy_and_keeps_wire_identity() {
+        let root = temp_workspace("deferred-mcp");
+        let context = test_context(root.clone());
+        let result = tool_result(
+            "mcp_call_1",
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            "x".repeat(DEFAULT_MAX_TOOL_RESULT_CHARS + 1),
+        );
+
+        let processed =
+            maybe_persist_large_tool_result_for_tool(result, "mcp__github__search_repos", &context)
+                .await;
+
+        assert_eq!(
+            processed.tool_name,
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME
+        );
+        assert!(processed
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with(PERSISTED_OUTPUT_TAG));
+        let output_path = context
+            .current_workspace_session_tool_result_path("session_1", "mcp_call_1.txt")
+            .expect("deferred MCP tool result path");
+        assert!(output_path.exists());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
     async fn bash_full_output_persists_even_when_assistant_text_is_already_truncated() {
         let root = temp_workspace("bash");
         let context = test_context(root.clone());
