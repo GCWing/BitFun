@@ -82,16 +82,11 @@ pub struct QueuedTurn {
     execution: QueuedTurnExecution,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) enum QueuedTurnExecution {
+    #[default]
     Standard,
     HiddenSubagent(HiddenSubagentQueuedExecution),
-}
-
-impl Default for QueuedTurnExecution {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -1388,7 +1383,7 @@ impl DialogScheduler {
                                 .coordinator
                                 .prepare_goal_continuation_after_turn(
                                     &session_id,
-                                    &outcome.turn_id(),
+                                    outcome.turn_id(),
                                     active_turn.user_input(),
                                     active_turn.user_message_metadata(),
                                     turn_completed,
@@ -1804,6 +1799,14 @@ pub fn clear_thread_goal_continuation_abort(session_id: &str) {
 mod tests {
     use super::*;
     use bitfun_runtime_ports::{AgentDialogPrependedReminder, AgentInputAttachment, PortErrorKind};
+
+    #[test]
+    fn queued_turn_execution_default_is_standard() {
+        assert!(matches!(
+            QueuedTurnExecution::default(),
+            QueuedTurnExecution::Standard
+        ));
+    }
 
     fn agent_session_active_turn(source_session_id: &str) -> ActiveDialogTurn {
         ActiveDialogTurn::new(

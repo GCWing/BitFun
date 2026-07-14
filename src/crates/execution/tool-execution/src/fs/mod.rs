@@ -19,7 +19,6 @@ pub use list_dir::{
     build_remote_list_commands, parse_remote_list_entries, RemoteListCommandPlan, RemoteListEntry,
 };
 pub use write_file::{
-    parse_write_local_file_mode, write_file_success_outcome, write_local_file,
-    write_same_content_outcome, WriteLocalFileMode, WriteLocalFileOutcome, WriteLocalFileRequest,
-    WriteLocalFileStatus,
+    write_file_success_outcome, write_local_file, write_same_content_outcome,
+    WriteLocalFileOutcome, WriteLocalFileRequest, WriteLocalFileStatus,
 };

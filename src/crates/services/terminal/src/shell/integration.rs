@@ -56,15 +56,41 @@ pub enum CommandState {
 }
 
 impl CommandState {
-    /// Check if we should still collect output (executing or just finished)
-    ///
-    /// Note: This only checks the state itself. `ShellIntegration::should_collect_output()`
-    /// also considers the `post_command_collecting` flag for ConPTY late output.
+    /// Check if the command lifecycle can still produce command output.
     pub fn should_collect_output(&self) -> bool {
         matches!(
             self,
             CommandState::Executing | CommandState::Finished { .. }
         )
+    }
+}
+
+/// Attribution state for output rendered after a command has semantically finished.
+///
+/// PowerShell on Windows can emit the D/A/B integration markers before ConPTY
+/// delivers the command's final rendered output. Keeping the command ID in this
+/// state lets us recover that output without treating later input rendering as
+/// part of the completed command.
+#[derive(Debug, Clone, PartialEq, Default)]
+enum PostCommandCapture {
+    #[default]
+    Inactive,
+    /// CommandFinished was received, but PromptStart has not been observed yet.
+    AwaitingPrompt { command_id: String },
+    /// PromptStart was received; inspect the A-to-B region for prompt text.
+    DetectingReorder { command_id: String },
+    /// No prompt text appeared between A and B, so trailing text is late output.
+    CollectingLateOutput { command_id: String },
+}
+
+impl PostCommandCapture {
+    fn command_id_for_output(&self) -> Option<&str> {
+        match self {
+            Self::AwaitingPrompt { command_id } | Self::CollectingLateOutput { command_id } => {
+                Some(command_id)
+            }
+            Self::Inactive | Self::DetectingReorder { .. } => None,
+        }
     }
 }
 
@@ -84,6 +110,8 @@ pub enum ShellIntegrationEvent {
     PropertyChanged { key: String, value: String },
     /// Output data received during command execution
     OutputData { command_id: String, data: String },
+    /// Plain terminal text with OSC integration control sequences removed.
+    PlainOutput { data: String },
 }
 
 /// Shell integration parser and state tracker
@@ -112,16 +140,9 @@ pub struct ShellIntegration {
     last_exit_code: Option<i32>,
     /// Flag indicating a command just finished (for output collection)
     command_just_finished: bool,
-    /// Flag for collecting late output after CommandFinished.
-    /// On Windows, ConPTY may deliver rendered output AFTER shell integration
-    /// sequences (CommandFinished/PromptStart/CommandInputStart). This flag
-    /// keeps output collection active until the next CommandExecutionStart.
-    post_command_collecting: bool,
-    /// When true, we are between PromptStart and CommandInputStart,
-    /// checking whether prompt text exists to detect ConPTY reordering.
-    detecting_conpty_reorder: bool,
-    /// Buffer for plain text that was NOT collected by shell integration
-    /// (i.e., output received while `should_collect()` returned false).
+    /// Attribution for output rendered after CommandFinished.
+    post_command_capture: PostCommandCapture,
+    /// Buffer for plain text that was not attributed to a command.
     /// This captures the terminal state after command execution, including
     /// prompts (e.g., `$ `, `dquote> `) and other non-command output.
     /// Cleared when a new command starts executing.
@@ -144,8 +165,7 @@ impl ShellIntegration {
             in_osc: false,
             last_exit_code: None,
             command_just_finished: false,
-            post_command_collecting: false,
-            detecting_conpty_reorder: false,
+            post_command_capture: PostCommandCapture::Inactive,
             recent_plain_output: String::new(),
         }
     }
@@ -185,11 +205,23 @@ impl ShellIntegration {
         self.has_rich_detection
     }
 
-    /// Check if output should be collected, considering both state and post-command flag.
-    /// On Windows ConPTY, rendered output may arrive after shell integration sequences
-    /// have already transitioned the state to Prompt/Input.
-    fn should_collect(&self) -> bool {
-        self.state.should_collect_output() || self.post_command_collecting
+    /// Resolve the command that should own text at the current parser position.
+    fn output_command_id(&self) -> Option<&str> {
+        match self.state {
+            CommandState::Executing => self.current_command_id.as_deref(),
+            CommandState::Finished { .. } | CommandState::Prompt | CommandState::Input => {
+                self.post_command_capture.command_id_for_output()
+            }
+            CommandState::Idle => None,
+        }
+    }
+
+    /// Stop attributing post-command rendering before new input is written to the PTY.
+    ///
+    /// This intentionally leaves an actively executing command untouched so interactive
+    /// stdin does not stop collection of that command's later output.
+    pub fn notify_input_written(&mut self) {
+        self.post_command_capture = PostCommandCapture::Inactive;
     }
 
     /// Get accumulated output for current command
@@ -213,6 +245,7 @@ impl ShellIntegration {
     pub fn process_data(&mut self, data: &str) -> Vec<ShellIntegrationEvent> {
         let mut events = Vec::new();
         let mut plain_output = String::new();
+        let mut transcript_output = String::new();
         let mut chars = data.chars().peekable();
 
         while let Some(ch) = chars.next() {
@@ -235,16 +268,12 @@ impl ShellIntegration {
                             OscSequence::CommandFinished { .. } | OscSequence::PromptStart
                         );
                         if should_flush && !plain_output.is_empty() {
-                            if self.should_collect() {
+                            if let Some(command_id) = self.output_command_id().map(str::to_owned) {
                                 self.output_buffer.push_str(&plain_output);
-                                if let Some(cmd_id) = &self.current_command_id {
-                                    events.push(ShellIntegrationEvent::OutputData {
-                                        command_id: cmd_id.clone(),
-                                        data: std::mem::take(&mut plain_output),
-                                    });
-                                } else {
-                                    plain_output.clear();
-                                }
+                                events.push(ShellIntegrationEvent::OutputData {
+                                    command_id,
+                                    data: std::mem::take(&mut plain_output),
+                                });
                             } else {
                                 // Not collecting output (e.g., shell is showing prompt
                                 // or in continuation mode). Capture this text so the
@@ -255,16 +284,22 @@ impl ShellIntegration {
                         }
 
                         // ConPTY reorder detection: at CommandInputStart, if no
-                        // prompt text accumulated since PromptStart, ConPTY sent
-                        // the sequences before the rendered output. Re-enable
-                        // post-command collection so late output is captured.
-                        if self.detecting_conpty_reorder
-                            && matches!(seq, OscSequence::CommandInputStart)
-                        {
-                            if plain_output.is_empty() {
-                                self.post_command_collecting = true;
-                            }
-                            self.detecting_conpty_reorder = false;
+                        // prompt text accumulated since PromptStart, the integration
+                        // markers overtook the rendered output. Preserve the finished
+                        // command ID until the host writes the next input.
+                        if matches!(seq, OscSequence::CommandInputStart) {
+                            let capture = std::mem::take(&mut self.post_command_capture);
+                            self.post_command_capture = match capture {
+                                PostCommandCapture::DetectingReorder { command_id }
+                                    if plain_output.is_empty() =>
+                                {
+                                    PostCommandCapture::CollectingLateOutput { command_id }
+                                }
+                                PostCommandCapture::DetectingReorder { .. } => {
+                                    PostCommandCapture::Inactive
+                                }
+                                other => other,
+                            };
                         }
 
                         if let Some(event) = self.handle_sequence(seq) {
@@ -286,29 +321,33 @@ impl ShellIntegration {
                 } else {
                     // Not an OSC sequence, include the ESC in output
                     plain_output.push(ch);
+                    transcript_output.push(ch);
                 }
             } else {
                 plain_output.push(ch);
+                transcript_output.push(ch);
             }
         }
 
-        // Accumulate plain output if we should collect output.
-        // Continue collecting after Finished via post_command_collecting flag,
-        // because ConPTY may deliver rendered output after shell integration sequences.
+        // Accumulate text only when it has a concrete command owner. This includes
+        // ConPTY late output after the parser has already transitioned to Prompt/Input.
         if !plain_output.is_empty() {
-            if self.should_collect() {
+            if let Some(command_id) = self.output_command_id().map(str::to_owned) {
                 self.output_buffer.push_str(&plain_output);
-
-                if let Some(cmd_id) = &self.current_command_id {
-                    events.push(ShellIntegrationEvent::OutputData {
-                        command_id: cmd_id.clone(),
-                        data: plain_output,
-                    });
-                }
+                events.push(ShellIntegrationEvent::OutputData {
+                    command_id,
+                    data: plain_output,
+                });
             } else {
                 // Not collecting output — capture as recent terminal state
                 self.recent_plain_output.push_str(&plain_output);
             }
+        }
+
+        if !transcript_output.is_empty() {
+            events.push(ShellIntegrationEvent::PlainOutput {
+                data: transcript_output,
+            });
         }
 
         events
@@ -398,16 +437,16 @@ impl ShellIntegration {
     fn handle_sequence(&mut self, seq: OscSequence) -> Option<ShellIntegrationEvent> {
         match seq {
             OscSequence::PromptStart => {
-                // When we see the next prompt, the previous command is truly done
-                // Clear all state from previous command
-                if self.post_command_collecting {
-                    // Temporarily disable post-command collection.
-                    // If no prompt text appears between PromptStart and
-                    // CommandInputStart, ConPTY reordering is detected and
-                    // collection will be re-enabled at CommandInputStart.
-                    self.post_command_collecting = false;
-                    self.detecting_conpty_reorder = true;
-                }
+                // Temporarily stop collection while inspecting the A-to-B prompt region.
+                // If that region is empty, CommandInputStart will restore attribution
+                // using the retained finished-command ID.
+                let capture = std::mem::take(&mut self.post_command_capture);
+                self.post_command_capture = match capture {
+                    PostCommandCapture::AwaitingPrompt { command_id } => {
+                        PostCommandCapture::DetectingReorder { command_id }
+                    }
+                    _ => PostCommandCapture::Inactive,
+                };
                 self.current_command_id = None;
                 self.current_command = None;
                 self.state = CommandState::Prompt;
@@ -424,8 +463,7 @@ impl ShellIntegration {
                 // Clear previous command's exit code when new command starts
                 self.last_exit_code = None;
                 self.command_just_finished = false;
-                self.post_command_collecting = false;
-                self.detecting_conpty_reorder = false;
+                self.post_command_capture = PostCommandCapture::Inactive;
 
                 // Generate command ID if we have a command
                 if self.current_command.is_some() {
@@ -447,11 +485,18 @@ impl ShellIntegration {
                 // Save exit code - this survives state transitions
                 self.last_exit_code = exit_code;
                 self.command_just_finished = true;
-                // Keep collecting output after finish — ConPTY may deliver
-                // rendered output after the shell integration sequences.
-                self.post_command_collecting = true;
+                // Retain the command ID separately because PromptStart clears the
+                // active command before ConPTY necessarily delivers rendered output.
+                self.post_command_capture = self
+                    .current_command_id
+                    .as_ref()
+                    .map(|command_id| PostCommandCapture::AwaitingPrompt {
+                        command_id: command_id.clone(),
+                    })
+                    .unwrap_or(PostCommandCapture::Inactive);
 
-                // Emit event but keep command_id for output collection
+                // Emit event but keep current_command_id until PromptStart so output
+                // arriving between D and A remains attributable.
                 let event = self.current_command_id.as_ref().map(|cmd_id| {
                     ShellIntegrationEvent::CommandFinished {
                         command_id: cmd_id.clone(),
@@ -730,6 +775,157 @@ mod tests {
 
         assert_eq!(integration.get_output(), "test\n");
         assert_eq!(integration.get_recent_plain_output(), "$ ");
+    }
+
+    #[test]
+    fn conpty_reordered_output_retains_finished_command_id() {
+        let mut integration = ShellIntegration::new();
+
+        integration.process_data("\x1b]633;E;ls;nonce123\x07");
+        let started_events = integration.process_data("\x1b]633;C\x07\r\n");
+        let command_id = started_events
+            .iter()
+            .find_map(|event| match event {
+                ShellIntegrationEvent::CommandStarted { command_id, .. } => {
+                    Some(command_id.clone())
+                }
+                _ => None,
+            })
+            .expect("command should start");
+
+        integration.process_data("first output\r\n");
+        let events = integration.process_data(concat!(
+            "\x1b[?25l",
+            "\x1b]633;D;0\x07",
+            "\x1b]633;A\x07",
+            "\x1b]633;P;Cwd=C:\\\\workspace\x07",
+            "\x1b]633;B\x07",
+            "late output\r\nPS C:\\\\workspace> "
+        ));
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                ShellIntegrationEvent::OutputData {
+                    command_id: output_command_id,
+                    data,
+                } if output_command_id == &command_id && data.contains("late output")
+            )
+        }));
+        assert!(integration.get_output().contains("late output"));
+    }
+
+    #[test]
+    fn conpty_reordered_output_can_arrive_in_a_later_chunk() {
+        let mut integration = ShellIntegration::new();
+
+        integration.process_data("\x1b]633;E;echo test;nonce123\x07");
+        let started_events = integration.process_data("\x1b]633;C\x07");
+        let command_id = started_events
+            .iter()
+            .find_map(|event| match event {
+                ShellIntegrationEvent::CommandStarted { command_id, .. } => {
+                    Some(command_id.clone())
+                }
+                _ => None,
+            })
+            .expect("command should start");
+
+        integration.process_data(
+            "\x1b]633;D;0\x07\x1b]633;A\x07\x1b]633;P;Cwd=C:\\\\workspace\x07\x1b]633;B\x07",
+        );
+        let events = integration.process_data("test\r\nPS C:\\\\workspace> ");
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                ShellIntegrationEvent::OutputData {
+                    command_id: output_command_id,
+                    data,
+                } if output_command_id == &command_id && data.contains("test")
+            )
+        }));
+    }
+
+    #[test]
+    fn input_written_stops_post_command_output_attribution() {
+        let mut integration = ShellIntegration::new();
+
+        integration.process_data("\x1b]633;E;echo test;nonce123\x07");
+        integration.process_data("\x1b]633;C\x07");
+        integration.process_data(
+            "\x1b]633;D;0\x07\x1b]633;A\x07\x1b]633;P;Cwd=C:\\\\workspace\x07\x1b]633;B\x07",
+        );
+
+        let late_events = integration.process_data("test\r\nPS C:\\\\workspace> ");
+        assert!(late_events
+            .iter()
+            .any(|event| matches!(event, ShellIntegrationEvent::OutputData { .. })));
+
+        integration.notify_input_written();
+        let input_events = integration.process_data("echo next\x1b[38;2;128;128;128m prediction");
+
+        assert!(!input_events
+            .iter()
+            .any(|event| matches!(event, ShellIntegrationEvent::OutputData { .. })));
+        assert!(input_events.iter().any(|event| {
+            matches!(event, ShellIntegrationEvent::PlainOutput { data } if data.contains("prediction"))
+        }));
+    }
+
+    #[test]
+    fn input_written_does_not_stop_executing_command_output() {
+        let mut integration = ShellIntegration::new();
+
+        integration.process_data("\x1b]633;E;interactive;nonce123\x07");
+        integration.process_data("\x1b]633;C\x07");
+        integration.notify_input_written();
+        let events = integration.process_data("continued output\r\n");
+
+        assert!(events.iter().any(|event| {
+            matches!(event, ShellIntegrationEvent::OutputData { data, .. } if data == "continued output\r\n")
+        }));
+    }
+
+    #[test]
+    fn plain_output_omits_integration_control_sequences() {
+        let mut integration = ShellIntegration::new();
+
+        let events = integration.process_data("PS> echo hello\r\n\x1b]633;D;0\x07hello\r\n");
+        let plain_output: String = events
+            .into_iter()
+            .filter_map(|event| match event {
+                ShellIntegrationEvent::PlainOutput { data } => Some(data),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(plain_output, "PS> echo hello\r\nhello\r\n");
+    }
+
+    #[test]
+    fn command_output_excludes_pre_execution_input_rendering() {
+        let mut integration = ShellIntegration::new();
+        let input_events =
+            integration.process_data("PS> echo hello\x1b[?25l\x1b[38;2;128;128;128m prediction");
+
+        assert!(input_events.iter().any(|event| {
+            matches!(event, ShellIntegrationEvent::PlainOutput { data } if data.contains("prediction"))
+        }));
+        assert!(!input_events
+            .iter()
+            .any(|event| matches!(event, ShellIntegrationEvent::OutputData { .. })));
+
+        let command_events =
+            integration.process_data("\x1b]633;E;echo hello;nonce123\x07\x1b]633;C\x07");
+        assert!(command_events.iter().any(|event| {
+            matches!(event, ShellIntegrationEvent::CommandStarted { command, .. } if command == "echo hello")
+        }));
+
+        let output_events = integration.process_data("hello\r\n");
+        assert!(output_events.iter().any(|event| {
+            matches!(event, ShellIntegrationEvent::OutputData { data, .. } if data == "hello\r\n")
+        }));
     }
 
     #[test]

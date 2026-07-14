@@ -42,6 +42,8 @@ describe('collectModifiedFilePathsFromTurns', () => {
       turn('baseline', [tool('Write', { file_path: 'src/before.ts' })]),
       turn('fix', [
         tool('Write', { file_path: 'D:/workspace/project/src/auth.ts' }),
+        tool('Write', { payload: '+++ D:/workspace/project/src/combined.ts\nexport {};' }),
+        tool('Write', { payload: '+++ D:/workspace/project/src/empty.ts' }),
         tool('Edit', { filePath: 'src/helper.ts' }),
         tool('write_file', { path: 'src/auth.ts' }),
         tool('Write', { file_path: 'src/failed.ts' }, false),
@@ -49,7 +51,7 @@ describe('collectModifiedFilePathsFromTurns', () => {
       ]),
     ], 'baseline', 'D:/workspace/project');
 
-    expect(paths).toEqual(['src/auth.ts', 'src/helper.ts']);
+    expect(paths).toEqual(['src/auth.ts', 'src/combined.ts', 'src/empty.ts', 'src/helper.ts']);
   });
 
   it('marks command and Git tools as requiring a conservative workspace fallback', () => {

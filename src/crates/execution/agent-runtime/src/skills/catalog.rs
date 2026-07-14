@@ -27,10 +27,14 @@ pub(super) struct BuiltinSkillSpec {
     pub(super) group: BuiltinSkillGroup,
 }
 
-const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
+pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "agent-browser",
         group: BuiltinSkillGroup::ComputerUse,
+    },
+    BuiltinSkillSpec {
+        dir_name: "agent-eval-canvas",
+        group: BuiltinSkillGroup::Canvas,
     },
     BuiltinSkillSpec {
         dir_name: "docs-canvas",

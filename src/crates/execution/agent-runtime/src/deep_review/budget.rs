@@ -11,8 +11,7 @@ use super::concurrency_policy::{
 };
 use super::diagnostics::DeepReviewRuntimeDiagnostics;
 use super::execution_policy::{
-    reviewer_agent_type_count, DeepReviewExecutionPolicy, DeepReviewPolicyViolation,
-    DeepReviewSubagentRole,
+    DeepReviewExecutionPolicy, DeepReviewPolicyViolation, DeepReviewSubagentRole,
 };
 use super::queue::DeepReviewCapacityQueueReason;
 use super::shared_context::{
@@ -39,10 +38,9 @@ pub enum ReviewDiffBudgetAdmission {
 #[derive(Debug)]
 struct DeepReviewTurnBudget {
     judge_calls: usize,
-    /// Tracks total reviewer calls (across all roles) per turn.
-    /// Capped by `max_same_role_instances * reviewer_agent_type_count() +
-    /// extra_subagent_ids.len()` so the orchestrator cannot spawn an unbounded
-    /// number of same-role instances.
+    /// Tracks total optional specialist calls across all roles per turn.
+    /// New strict manifests cap this at one; legacy manifests retain their
+    /// historical policy-derived allowance.
     reviewer_calls: usize,
     reviewer_calls_by_subagent: HashMap<String, usize>,
     retries_used_by_subagent: HashMap<String, usize>,
@@ -554,8 +552,7 @@ impl DeepReviewBudgetTracker {
                     return Ok(());
                 }
 
-                let max_reviewer_calls = policy.max_same_role_instances
-                    * (reviewer_agent_type_count() + policy.extra_subagent_ids.len());
+                let max_reviewer_calls = policy.max_reviewer_calls;
                 if budget.reviewer_calls >= max_reviewer_calls {
                     return Err(DeepReviewPolicyViolation::new(
                         "deep_review_reviewer_budget_exhausted",
@@ -960,6 +957,41 @@ fn normalize_budget_subagent_type(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn run_manifest_can_cap_on_demand_specialists_to_one_call() {
+        let tracker = DeepReviewBudgetTracker::default();
+        let policy =
+            DeepReviewExecutionPolicy::default().with_run_manifest_execution_policy(&json!({
+                "reviewMode": "deep",
+                "strategyLevel": "deep",
+                "executionPolicy": {
+                    "maxReviewerCalls": 1
+                }
+            }));
+
+        tracker
+            .record_task(
+                "turn-on-demand-specialist",
+                &policy,
+                DeepReviewSubagentRole::Reviewer,
+                "ReviewSecurity",
+                false,
+            )
+            .expect("first specialist should be admitted");
+        let error = tracker
+            .record_task(
+                "turn-on-demand-specialist",
+                &policy,
+                DeepReviewSubagentRole::Reviewer,
+                "ReviewArchitecture",
+                false,
+            )
+            .expect_err("second specialist should exceed the strict-run budget");
+
+        assert_eq!(error.code, "deep_review_reviewer_budget_exhausted");
+    }
 
     #[test]
     fn review_diff_budget_does_not_charge_an_identical_page_twice() {

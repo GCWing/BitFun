@@ -1,11 +1,14 @@
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
+use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
 use crate::service::git::git_service::GitService;
 use crate::service::git::git_types::GitDiffParams;
 use crate::service::git::git_utils::get_repository_root;
-use crate::service::review_platform::{ReviewPlatformError, ReviewPlatformService};
+use crate::service::review_platform::{
+    ReviewPlatformError, ReviewPlatformKind, ReviewPlatformPullRequestFileDiff,
+    ReviewPlatformService,
+};
 use crate::service::snapshot::manager::get_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -29,6 +32,112 @@ use std::path::Path;
 /// 2. Git HEAD diff (if git repository)
 /// 3. Return full file content
 pub struct GetFileDiffTool;
+
+type ExactReviewTarget = (String, String, Vec<String>, Option<String>);
+
+struct ExactReviewDiffRequest<'a> {
+    workspace_root: &'a Path,
+    logical_path: &'a str,
+    base_revision: &'a str,
+    head_revision: &'a str,
+    paths: &'a [String],
+    fingerprint: Option<&'a str>,
+    diff_offset: usize,
+    cursor_binding: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ProviderFileDiffRoute {
+    Identity {
+        platform: ReviewPlatformKind,
+        host: String,
+        project_path: String,
+        pull_request_id: String,
+        base_revision: String,
+        head_revision: String,
+        file_path: String,
+        file_page_hint: Option<u32>,
+        repository_path: Option<String>,
+    },
+    WorkspaceRemote {
+        repository_path: String,
+        remote_id: String,
+        pull_request_id: String,
+        base_revision: String,
+        head_revision: String,
+        file_path: String,
+        file_page_hint: Option<u32>,
+    },
+    Unavailable,
+}
+
+#[async_trait]
+trait ProviderFileDiffService: Sync {
+    async fn acquire(
+        &self,
+        route: &ProviderFileDiffRoute,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError>;
+}
+
+struct CoreProviderFileDiffService;
+
+#[async_trait]
+impl ProviderFileDiffService for CoreProviderFileDiffService {
+    async fn acquire(
+        &self,
+        route: &ProviderFileDiffRoute,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        match route {
+            ProviderFileDiffRoute::Identity {
+                platform,
+                host,
+                project_path,
+                pull_request_id,
+                base_revision,
+                head_revision,
+                file_path,
+                file_page_hint,
+                repository_path,
+            } => {
+                ReviewPlatformService::pull_request_file_diff_by_identity(
+                    *platform,
+                    host,
+                    project_path,
+                    pull_request_id,
+                    base_revision,
+                    head_revision,
+                    file_path,
+                    *file_page_hint,
+                    repository_path.as_deref(),
+                )
+                .await
+            }
+            ProviderFileDiffRoute::WorkspaceRemote {
+                repository_path,
+                remote_id,
+                pull_request_id,
+                base_revision,
+                head_revision,
+                file_path,
+                file_page_hint,
+            } => {
+                ReviewPlatformService::pull_request_file_diff(
+                    repository_path,
+                    remote_id,
+                    pull_request_id,
+                    base_revision,
+                    head_revision,
+                    file_path,
+                    *file_page_hint,
+                )
+                .await
+            }
+            ProviderFileDiffRoute::Unavailable => Err(ReviewPlatformError::Api(
+                "Prepared provider diff route is unavailable".to_string(),
+            )),
+        }
+    }
+}
 const REVIEW_NEW_FILE_CONTENT_LIMIT: u64 = 16 * 1024;
 // Keep prepared pages below the shared 50k-character persistence threshold so
 // every page remains directly visible even when live repository reads are
@@ -79,6 +188,63 @@ impl GetFileDiffTool {
         })
     }
 
+    fn pull_request_file_diff_route(
+        context: &ToolUseContext,
+        evidence: &ReviewTargetEvidence,
+        logical_path: &str,
+    ) -> BitFunResult<ProviderFileDiffRoute> {
+        let pull_request = evidence.pull_request().ok_or_else(|| {
+            BitFunError::tool("Prepared pull request Review identity is unavailable".to_string())
+        })?;
+        let platform = match pull_request.platform() {
+            "github" => Some(ReviewPlatformKind::Github),
+            "gitlab" => Some(ReviewPlatformKind::Gitlab),
+            "gitcode" => None,
+            value => {
+                return Err(BitFunError::tool(format!(
+                    "Prepared pull request provider is unsupported: {value}"
+                )))
+            }
+        };
+        let base_revision = evidence.base_revision().ok_or_else(|| {
+            BitFunError::tool("Prepared pull request base revision is unavailable".to_string())
+        })?;
+        let head_revision = evidence.head_revision().ok_or_else(|| {
+            BitFunError::tool("Prepared pull request head revision is unavailable".to_string())
+        })?;
+        let file_page_hint = evidence.file_page_hint_for_path(logical_path, 100);
+        if let Some(platform) = platform {
+            return Ok(ProviderFileDiffRoute::Identity {
+                platform,
+                host: pull_request.host().to_string(),
+                project_path: pull_request.project_path().to_string(),
+                pull_request_id: pull_request.pull_request_id().to_string(),
+                base_revision: base_revision.to_string(),
+                head_revision: head_revision.to_string(),
+                file_path: logical_path.to_string(),
+                file_page_hint,
+                repository_path: context
+                    .workspace_root()
+                    .map(|path| path.to_string_lossy().into_owned()),
+            });
+        }
+        let Some(repository_path) = context.workspace_root() else {
+            return Ok(ProviderFileDiffRoute::Unavailable);
+        };
+        if pull_request.remote_id().trim().is_empty() {
+            return Ok(ProviderFileDiffRoute::Unavailable);
+        }
+        Ok(ProviderFileDiffRoute::WorkspaceRemote {
+            repository_path: repository_path.to_string_lossy().into_owned(),
+            remote_id: pull_request.remote_id().to_string(),
+            pull_request_id: pull_request.pull_request_id().to_string(),
+            base_revision: base_revision.to_string(),
+            head_revision: head_revision.to_string(),
+            file_path: logical_path.to_string(),
+            file_page_hint,
+        })
+    }
+
     fn workspace_relative_path(file_path: &Path, context: &ToolUseContext) -> Option<String> {
         let workspace_root = context.workspace_root()?;
         file_path.strip_prefix(workspace_root).ok().map(|path| {
@@ -126,7 +292,7 @@ impl GetFileDiffTool {
     fn exact_review_target(
         relative_path: &str,
         context: &ToolUseContext,
-    ) -> BitFunResult<Option<(String, String, Vec<String>, Option<String>)>> {
+    ) -> BitFunResult<Option<ExactReviewTarget>> {
         let Some(evidence) = Self::target_evidence(context)? else {
             return Ok(None);
         };
@@ -155,17 +321,17 @@ impl GetFileDiffTool {
         )))
     }
 
-    async fn exact_review_diff(
-        &self,
-        workspace_root: &Path,
-        logical_path: &str,
-        base_revision: &str,
-        head_revision: &str,
-        paths: &[String],
-        fingerprint: Option<&str>,
-        diff_offset: usize,
-        cursor_binding: &str,
-    ) -> BitFunResult<Value> {
+    async fn exact_review_diff(&self, request: ExactReviewDiffRequest<'_>) -> BitFunResult<Value> {
+        let ExactReviewDiffRequest {
+            workspace_root,
+            logical_path,
+            base_revision,
+            head_revision,
+            paths,
+            fingerprint,
+            diff_offset,
+            cursor_binding,
+        } = request;
         let diff_content =
             GitService::get_review_diff(workspace_root, base_revision, head_revision, paths)
                 .await
@@ -213,6 +379,24 @@ impl GetFileDiffTool {
         logical_path: &str,
         diff_offset: usize,
     ) -> BitFunResult<Option<Value>> {
+        self.pull_request_review_diff_with_service(
+            context,
+            evidence,
+            logical_path,
+            diff_offset,
+            &CoreProviderFileDiffService,
+        )
+        .await
+    }
+
+    async fn pull_request_review_diff_with_service(
+        &self,
+        context: &ToolUseContext,
+        evidence: &ReviewTargetEvidence,
+        logical_path: &str,
+        diff_offset: usize,
+        service: &dyn ProviderFileDiffService,
+    ) -> BitFunResult<Option<Value>> {
         if evidence.source() != ReviewTargetEvidenceSource::PullRequest {
             return Ok(None);
         }
@@ -232,18 +416,18 @@ impl GetFileDiffTool {
                 "Exact provider diff is unavailable for this prepared pull request file",
             )));
         }
-        let pull_request = evidence.pull_request().ok_or_else(|| {
-            BitFunError::tool("Prepared pull request Review identity is unavailable".to_string())
-        })?;
-        let base_revision = evidence.base_revision().ok_or_else(|| {
-            BitFunError::tool("Prepared pull request base revision is unavailable".to_string())
-        })?;
-        let head_revision = evidence.head_revision().ok_or_else(|| {
-            BitFunError::tool("Prepared pull request head revision is unavailable".to_string())
-        })?;
-        let repository_path = context.workspace_root().ok_or_else(|| {
-            BitFunError::tool("Workspace root is required for pull request Review".to_string())
-        })?;
+        let route = Self::pull_request_file_diff_route(context, evidence, logical_path)?;
+        if route == ProviderFileDiffRoute::Unavailable {
+            if let Some((parent_turn_id, _)) = Self::review_budget_identity(context) {
+                record_review_diff_limitation(parent_turn_id);
+            }
+            return Ok(Some(Self::limited_review_diff_data(
+                logical_path,
+                "limited",
+                "provider_file_diff_unavailable",
+                "Exact provider diff requires the prepared workspace remote binding",
+            )));
+        }
         let Some((parent_turn_id, _)) = Self::review_budget_identity(context) else {
             return Ok(Some(Self::limited_review_diff_data(
                 logical_path,
@@ -260,17 +444,7 @@ impl GetFileDiffTool {
                 "Provider diff acquisition allowance exhausted for this Review turn",
             )));
         }
-        let diff = match ReviewPlatformService::pull_request_file_diff(
-            repository_path.to_string_lossy().as_ref(),
-            pull_request.remote_id(),
-            pull_request.pull_request_id(),
-            base_revision,
-            head_revision,
-            logical_path,
-            evidence.file_page_hint_for_path(logical_path, 100),
-        )
-        .await
-        {
+        let diff = match service.acquire(&route).await {
             Ok(diff) => diff,
             Err(ReviewPlatformError::StaleTarget(_)) => {
                 if let Some((parent_turn_id, _)) = Self::review_budget_identity(context) {
@@ -1050,7 +1224,7 @@ This tool compares the current file content against:
 3. Full file content (if neither baseline nor git is available)
 
 Usage:
-- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
+- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool.
 - The diff is returned in unified diff format, showing additions (+) and deletions (-).
 - The response includes diff_type indicating the source: "baseline", "git", or "full".
 - The response includes stats for additions and deletions.
@@ -1099,7 +1273,7 @@ Usage:
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The file to get diff for. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
+                    "description": "The file to get diff for. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI returned by another tool."
                 }
             },
             "required": ["file_path"],
@@ -1159,12 +1333,11 @@ Usage:
                     };
                 }
                 None => {
-                    if is_bitfun_runtime_uri(file_path) {
+                    if is_bitfun_tool_uri(file_path) {
                         return ValidationResult {
                             result: false,
                             message: Some(
-                                "Tool context is required to resolve bitfun runtime URIs"
-                                    .to_string(),
+                                "Tool context is required to resolve BitFun URIs".to_string(),
                             ),
                             error_code: Some(400),
                             meta: None,
@@ -1446,19 +1619,19 @@ Usage:
                 BitFunError::tool("Workspace root is required for Review target diff".to_string())
             })?;
             let data = self
-                .exact_review_diff(
+                .exact_review_diff(ExactReviewDiffRequest {
                     workspace_root,
                     logical_path,
-                    &base_revision,
-                    &head_revision,
-                    &paths,
-                    fingerprint.as_deref(),
+                    base_revision: &base_revision,
+                    head_revision: &head_revision,
+                    paths: &paths,
+                    fingerprint: fingerprint.as_deref(),
                     diff_offset,
-                    prepared_evidence
+                    cursor_binding: prepared_evidence
                         .as_ref()
                         .map(ReviewTargetEvidence::fingerprint)
                         .unwrap_or_default(),
-                )
+                })
                 .await?;
             let data = Self::apply_review_diff_budget(
                 data,
@@ -1663,7 +1836,38 @@ Usage:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Command;
+    use std::{process::Command, sync::Mutex};
+
+    #[derive(Default)]
+    struct RecordingProviderDiffService {
+        requests: Mutex<Vec<ProviderFileDiffRoute>>,
+    }
+
+    #[async_trait]
+    impl ProviderFileDiffService for RecordingProviderDiffService {
+        async fn acquire(
+            &self,
+            route: &ProviderFileDiffRoute,
+        ) -> Result<
+            crate::service::review_platform::ReviewPlatformPullRequestFileDiff,
+            ReviewPlatformError,
+        > {
+            self.requests
+                .lock()
+                .expect("recording service lock should be available")
+                .push(route.clone());
+            Ok(
+                crate::service::review_platform::ReviewPlatformPullRequestFileDiff {
+                    path: "src/lib.rs".to_string(),
+                    old_path: None,
+                    status: crate::service::review_platform::ReviewFileStatus::Modified,
+                    base_revision: "1111111111111111111111111111111111111111".to_string(),
+                    head_revision: "2222222222222222222222222222222222222222".to_string(),
+                    diff: "@@ -1 +1 @@\n-old\n+new".to_string(),
+                },
+            )
+        }
+    }
 
     fn git(root: &Path, args: &[&str]) {
         let output = Command::new("git")
@@ -1817,6 +2021,191 @@ mod tests {
 
         assert_eq!(data["evidence_limited"], true);
         assert_eq!(data["limitation"], "provider_file_diff_unavailable");
+    }
+
+    #[test]
+    fn pull_request_diff_route_uses_prepared_provider_identity_not_remote_id() {
+        let mut context = prepared_context();
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "evidencePack": {
+                    "reviewTarget": {
+                        "version": 1,
+                        "source": "pull_request",
+                        "fingerprint": "provider-route-fingerprint",
+                        "baseRevision": "1111111111111111111111111111111111111111",
+                        "headRevision": "2222222222222222222222222222222222222222",
+                        "completeness": "complete",
+                        "workspaceBinding": "unavailable",
+                        "pullRequest": {
+                            "remoteId": "fabricated-remote-that-must-not-route",
+                            "platform": "github",
+                            "host": "github.com",
+                            "projectPath": "exact/project",
+                            "pullRequestId": "42",
+                            "number": 42,
+                            "webUrl": "https://github.com/exact/project/pull/42"
+                        },
+                        "files": [{
+                            "path": "src/lib.rs",
+                            "status": "modified",
+                            "completeness": "complete"
+                        }],
+                        "limitations": []
+                    }
+                }
+            }),
+        );
+        let evidence = GetFileDiffTool::target_evidence(&context)
+            .expect("evidence should parse")
+            .expect("evidence should exist");
+
+        let route =
+            GetFileDiffTool::pull_request_file_diff_route(&context, &evidence, "src/lib.rs")
+                .expect("prepared provider route should be exact");
+
+        assert_eq!(
+            route,
+            ProviderFileDiffRoute::Identity {
+                platform: ReviewPlatformKind::Github,
+                host: "github.com".to_string(),
+                project_path: "exact/project".to_string(),
+                pull_request_id: "42".to_string(),
+                base_revision: "1111111111111111111111111111111111111111".to_string(),
+                head_revision: "2222222222222222222222222222222222222222".to_string(),
+                file_path: "src/lib.rs".to_string(),
+                file_page_hint: Some(1),
+                repository_path: None,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn gitcode_prepared_diff_reaches_workspace_remote_service_boundary() {
+        let directory = tempfile::tempdir().expect("temporary workspace should be created");
+        let mut context = prepared_context();
+        attach_review_budget_identity(&mut context, "gitcode-workspace-route");
+        context.workspace = Some(crate::agentic::WorkspaceBinding::new(
+            None,
+            directory.path().to_path_buf(),
+        ));
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "evidencePack": {
+                    "reviewTarget": {
+                        "version": 1,
+                        "source": "pull_request",
+                        "fingerprint": "gitcode-provider-route-fingerprint",
+                        "baseRevision": "1111111111111111111111111111111111111111",
+                        "headRevision": "2222222222222222222222222222222222222222",
+                        "completeness": "complete",
+                        "workspaceBinding": "unavailable",
+                        "pullRequest": {
+                            "remoteId": "origin:gitcode:example__repo",
+                            "platform": "gitcode",
+                            "host": "gitcode.com",
+                            "projectPath": "example/repo",
+                            "pullRequestId": "42",
+                            "number": 42,
+                            "webUrl": "https://gitcode.com/example/repo/pull/42"
+                        },
+                        "files": [{
+                            "path": "src/lib.rs",
+                            "status": "modified",
+                            "completeness": "complete"
+                        }],
+                        "limitations": []
+                    }
+                }
+            }),
+        );
+        let evidence = GetFileDiffTool::target_evidence(&context)
+            .expect("GitCode evidence should parse")
+            .expect("GitCode evidence should exist");
+        let service = RecordingProviderDiffService::default();
+
+        let data = GetFileDiffTool::new()
+            .pull_request_review_diff_with_service(&context, &evidence, "src/lib.rs", 0, &service)
+            .await
+            .expect("GitCode provider diff should be structured")
+            .expect("GitCode evidence should be handled");
+
+        assert!(data["diff_content"]
+            .as_str()
+            .is_some_and(|diff| diff.contains("-old\n+new")));
+        assert_eq!(
+            service
+                .requests
+                .lock()
+                .expect("recording service lock should be available")
+                .as_slice(),
+            &[ProviderFileDiffRoute::WorkspaceRemote {
+                repository_path: directory.path().to_string_lossy().into_owned(),
+                remote_id: "origin:gitcode:example__repo".to_string(),
+                pull_request_id: "42".to_string(),
+                base_revision: "1111111111111111111111111111111111111111".to_string(),
+                head_revision: "2222222222222222222222222222222222222222".to_string(),
+                file_path: "src/lib.rs".to_string(),
+                file_page_hint: Some(1),
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn gitcode_prepared_diff_without_workspace_binding_is_honestly_unavailable() {
+        let mut context = prepared_context();
+        attach_review_budget_identity(&mut context, "gitcode-missing-workspace-route");
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "evidencePack": {
+                    "reviewTarget": {
+                        "version": 1,
+                        "source": "pull_request",
+                        "fingerprint": "gitcode-missing-workspace-fingerprint",
+                        "baseRevision": "1111111111111111111111111111111111111111",
+                        "headRevision": "2222222222222222222222222222222222222222",
+                        "completeness": "complete",
+                        "workspaceBinding": "unavailable",
+                        "pullRequest": {
+                            "remoteId": "origin:gitcode:example__repo",
+                            "platform": "gitcode",
+                            "host": "gitcode.com",
+                            "projectPath": "example/repo",
+                            "pullRequestId": "42",
+                            "number": 42,
+                            "webUrl": "https://gitcode.com/example/repo/pull/42"
+                        },
+                        "files": [{
+                            "path": "src/lib.rs",
+                            "status": "modified",
+                            "completeness": "complete"
+                        }],
+                        "limitations": []
+                    }
+                }
+            }),
+        );
+        let evidence = GetFileDiffTool::target_evidence(&context)
+            .expect("GitCode evidence should parse")
+            .expect("GitCode evidence should exist");
+        let service = RecordingProviderDiffService::default();
+
+        let data = GetFileDiffTool::new()
+            .pull_request_review_diff_with_service(&context, &evidence, "src/lib.rs", 0, &service)
+            .await
+            .expect("missing GitCode binding should be structured")
+            .expect("GitCode evidence should be handled");
+
+        assert_eq!(data["evidence_limited"], true);
+        assert_eq!(data["limitation"], "provider_file_diff_unavailable");
+        assert!(service
+            .requests
+            .lock()
+            .expect("recording service lock should be available")
+            .is_empty());
     }
 
     #[tokio::test]

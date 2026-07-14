@@ -30,12 +30,12 @@ export interface DeepReviewConsentControls {
 
 function getInitialReviewCallFacts(preview: ReviewTeamRunManifest): {
   planned: number;
-  parallel: number;
+  maximum: number;
 } {
   const planned = Math.max(1, preview.tokenBudget.estimatedReviewerCalls || 1);
   return {
     planned,
-    parallel: Math.max(1, Math.min(planned, preview.concurrencyPolicy.maxParallelInstances)),
+    maximum: Math.max(planned, preview.tokenBudget.maxReviewerCalls || planned),
   };
 }
 
@@ -165,7 +165,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
           </strong>
           <span>
             {t('deepReviewConsent.parallelCalls', {
-              count: callFacts.parallel,
+              count: callFacts.maximum,
             })}
           </span>
         </div>

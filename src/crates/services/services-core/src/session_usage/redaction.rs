@@ -10,7 +10,7 @@ pub struct RedactedLabel {
 pub fn redact_usage_label(input: &str, max_chars: usize) -> RedactedLabel {
     let mut value: String = input
         .chars()
-        .filter_map(|ch| if ch.is_control() { Some(' ') } else { Some(ch) })
+        .map(|ch| if ch.is_control() { ' ' } else { ch })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()

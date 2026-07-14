@@ -1,8 +1,10 @@
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
+use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
 pub struct DeepReviewAgent {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for DeepReviewAgent {
@@ -13,6 +15,9 @@ impl Default for DeepReviewAgent {
 
 impl DeepReviewAgent {
     pub fn new() -> Self {
+        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
+        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
+
         Self {
             default_tools: vec![
                 "LaunchReviewAgent".to_string(),
@@ -23,6 +28,7 @@ impl DeepReviewAgent {
                 "GetFileDiff".to_string(),
                 "submit_code_review".to_string(),
             ],
+            tool_exposure_overrides,
         }
     }
 }
@@ -42,7 +48,7 @@ impl Agent for DeepReviewAgent {
     }
 
     fn description(&self) -> &str {
-        r#"Read-only strict-review orchestrator for substantial changes. It dispatches independent specialist reviewers, runs a quality-inspector pass, and submits a consolidated evidence-backed report. A separate ReviewFixer owns approved remediation."#
+        r#"Read-only strict reviewer for substantial changes. It reviews the prepared target directly, may request one focused specialist or conditional quality check, and submits an evidence-backed report. A separate ReviewFixer owns approved remediation."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -51,6 +57,10 @@ impl Agent for DeepReviewAgent {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
+    }
+
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
@@ -68,14 +78,19 @@ impl Agent for DeepReviewAgent {
 #[cfg(test)]
 mod tests {
     use super::{Agent, DeepReviewAgent};
+    use crate::agentic::tools::framework::ToolExposure;
 
     #[test]
-    fn deep_review_agent_has_team_orchestration_tools() {
+    fn deep_review_agent_has_optional_validation_tools() {
         let agent = DeepReviewAgent::new();
         let tools = agent.default_tools();
 
         assert!(tools.contains(&"LaunchReviewAgent".to_string()));
         assert!(!tools.contains(&"Task".to_string()));
+        assert_eq!(
+            agent.tool_exposure_overrides().get("GetFileDiff"),
+            Some(&ToolExposure::Expanded),
+        );
         assert!(tools.contains(&"submit_code_review".to_string()));
         assert!(!tools.contains(&"AskUserQuestion".to_string()));
         assert!(!tools.contains(&"Edit".to_string()));

@@ -2,9 +2,9 @@
 
 # OpenCode Adapter
 
-This crate owns OpenCode-compatible source discovery and trust-gated candidate
-mapping. It validates OpenCode import shapes such as `opencode.json` and
-`.opencode/plugins/*.js|ts`, then exposes source facts, diagnostics, and typed
+This crate owns OpenCode-compatible package interpretation and trust-gated
+candidate mapping. It validates managed package content such as `opencode.json`
+and `.opencode/plugins/*.js|ts`, then exposes source facts, diagnostics, and typed
 effect candidates through a narrow Plugin Runtime Host adapter. It must not own
 product policy, host lifecycle, sandboxing, UI implementation, or effect
 result writes.
@@ -19,9 +19,10 @@ Product-source boundary:
   plugin source records, manifests, hashes, diagnostics, and trust state before
   those facts can enter the product-side enablement or execution path. The
   adapter itself must not enable or execute plugins.
-- `load_opencode_workspace_adapter` must receive BitFun source trust snapshots
-  through existing `PluginSourceRef` values plus a trust epoch; OpenCode
-  directory scanning must not promote sources to trusted on its own.
+- `load_opencode_package_adapter` receives fixed managed package content and an
+  optional source-service activation authority. Without that authority,
+  `SourceApproved` remains untrusted at the Host boundary and produces no
+  candidates.
 - Trusted custom tool declarations may only be mapped as provider candidates;
   final tool creation, permission decisions, and audit facts must stay in the
   tool ABI, permission, and product owner path.
@@ -34,22 +35,25 @@ Product-source boundary:
 - Depend on stable contracts such as `bitfun-runtime-ports` and the
   `PluginHostAdapter` boundary trait, not `bitfun-core`, app crates, Tauri
   APIs, product UI, or concrete service managers.
-- Keep OpenCode config JSON import and workspace plugin import parsing inside
-  this crate. Cross-crate outputs must go through `load_opencode_workspace_adapter`
+- Keep OpenCode config JSON and plugin source parsing inside this crate.
+  Cross-crate outputs must go through `load_opencode_package_adapter`
   and Plugin Runtime Host DTOs; do not expose raw OpenCode JSON or source
   syntax as product contracts.
+- Current source inspection recognizes only the tested declarative subset. It is
+  not a general JavaScript or TypeScript parser. Packages with no recognized
+  entry and recognized unsupported hooks must produce diagnostics; other syntax
+  is outside the current compatibility claim.
 - Unsupported OpenCode capabilities must be explicit diagnostics or typed
   unsupported candidates. Do not silently ignore them.
-- The public API budget is limited to `load_opencode_workspace_adapter`. New
+- The public API budget is limited to `load_opencode_package_adapter`. New
   public symbols or changes to public entry signatures and semantics require an
   updated public API budget, current consumer, and focused host-path tests.
 - This crate may provide private OpenCode compatibility import projectors and
   fixtures for adapter verification. The public entry remains limited to
-  `load_opencode_workspace_adapter`, called through Plugin Runtime Host.
-- This PR keeps production Product Assembly wiring out of scope. A future
-  reviewed registration path may call the public factory through Plugin Runtime
-  Host, but must update boundary guards and focused host-path tests in the same
-  change.
+  `load_opencode_package_adapter`, called by the reviewed product composition
+  root before the returned adapter is injected into Plugin Runtime Host.
+- Production assembly is limited to `bitfun-core/plugin_runtime`; boundary
+  guards and focused host-path tests must change with any additional consumer.
 - Production crates must not depend on `bitfun_opencode_adapter` internals.
   Unsupported capabilities must return diagnostics or typed unsupported states
   instead of failing at runtime on external plugin content.

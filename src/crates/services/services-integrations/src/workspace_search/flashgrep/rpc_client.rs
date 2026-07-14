@@ -222,10 +222,7 @@ where
 pub(crate) fn drain_content_length_messages(buffer: &mut Vec<u8>) -> Result<Vec<ServerMessage>> {
     let mut messages = Vec::new();
 
-    loop {
-        let Some(header_end) = find_header_end(buffer) else {
-            break;
-        };
+    while let Some(header_end) = find_header_end(buffer) {
         let header = String::from_utf8_lossy(&buffer[..header_end]);
         let mut content_length = None;
         for line in header.lines() {

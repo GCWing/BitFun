@@ -492,13 +492,12 @@ pub fn generated_locale_entry_from_code(
             for entry in GENERATED_LOCALE_CONTRACT {
                 for alias in entry.aliases {
                     let alias = alias.to_ascii_lowercase();
-                    if normalized == alias || normalized.starts_with(&format!("{alias}-")) {
-                        if best_match
+                    if (normalized == alias || normalized.starts_with(&format!("{alias}-")))
+                        && best_match
                             .map(|(_, current_len)| alias.len() > current_len)
                             .unwrap_or(true)
-                        {
-                            best_match = Some((entry, alias.len()));
-                        }
+                    {
+                        best_match = Some((entry, alias.len()));
                     }
                 }
             }

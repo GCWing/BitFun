@@ -258,6 +258,46 @@ impl Default for I18nService {
     }
 }
 
+// Global singleton (optional)
+static GLOBAL_I18N_SERVICE: LazyLock<Arc<RwLock<Option<Arc<I18nService>>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(None)));
+
+/// Gets the global i18n service.
+pub async fn get_global_i18n_service() -> Option<Arc<I18nService>> {
+    GLOBAL_I18N_SERVICE.read().await.clone()
+}
+
+/// Updates the global i18n service locale if it has been initialized.
+pub async fn sync_global_i18n_service_locale(locale: LocaleId) -> BitFunResult<bool> {
+    if let Some(service) = get_global_i18n_service().await {
+        service.set_locale(locale).await?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Sets the global i18n service.
+pub async fn set_global_i18n_service(service: Arc<I18nService>) {
+    let mut global = GLOBAL_I18N_SERVICE.write().await;
+    *global = Some(service);
+}
+
+/// Initializes the global i18n service.
+pub async fn initialize_global_i18n_service(
+    config_service: Option<Arc<ConfigService>>,
+) -> BitFunResult<Arc<I18nService>> {
+    let service = match config_service {
+        Some(cs) => Arc::new(I18nService::with_config_service(cs)),
+        None => Arc::new(I18nService::new()),
+    };
+
+    service.initialize().await?;
+    set_global_i18n_service(service.clone()).await;
+
+    Ok(service)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,44 +346,4 @@ mod tests {
             "shared.features.notReal"
         );
     }
-}
-
-// Global singleton (optional)
-static GLOBAL_I18N_SERVICE: LazyLock<Arc<RwLock<Option<Arc<I18nService>>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(None)));
-
-/// Gets the global i18n service.
-pub async fn get_global_i18n_service() -> Option<Arc<I18nService>> {
-    GLOBAL_I18N_SERVICE.read().await.clone()
-}
-
-/// Updates the global i18n service locale if it has been initialized.
-pub async fn sync_global_i18n_service_locale(locale: LocaleId) -> BitFunResult<bool> {
-    if let Some(service) = get_global_i18n_service().await {
-        service.set_locale(locale).await?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
-
-/// Sets the global i18n service.
-pub async fn set_global_i18n_service(service: Arc<I18nService>) {
-    let mut global = GLOBAL_I18N_SERVICE.write().await;
-    *global = Some(service);
-}
-
-/// Initializes the global i18n service.
-pub async fn initialize_global_i18n_service(
-    config_service: Option<Arc<ConfigService>>,
-) -> BitFunResult<Arc<I18nService>> {
-    let service = match config_service {
-        Some(cs) => Arc::new(I18nService::with_config_service(cs)),
-        None => Arc::new(I18nService::new()),
-    };
-
-    service.initialize().await?;
-    set_global_i18n_service(service.clone()).await;
-
-    Ok(service)
 }

@@ -4,7 +4,7 @@
  */
 
 import { FlowChatStore } from '../../store/FlowChatStore';
-import { extractFilePathFromJsonBuffer, parsePartialJson } from '../../../shared/utils/partialJsonParser';
+import { extractFilePathFromJsonBuffer, parsePartialJson, splitFilePathAndContent } from '../../../shared/utils/partialJsonParser';
 import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
@@ -216,11 +216,23 @@ function applyParamsPartial(
     }
 
     if (isWriteTool) {
-      const extractedPath = extractFilePathFromJsonBuffer(newBuffer);
-      const hasPath = ['file_path', 'filePath', 'filepath', 'target_file', 'targetFile', 'path', 'filename']
-        .some((key) => typeof parsedParams[key] === 'string' && parsedParams[key].length > 0);
-      if (extractedPath && !hasPath) {
-        parsedParams = { ...parsedParams, file_path: extractedPath };
+      const combinedParts = splitFilePathAndContent(parsedParams.payload);
+      if (combinedParts) {
+        parsedParams = {
+          ...parsedParams,
+          file_path: combinedParts.filePath,
+          content: combinedParts.content,
+        };
+      } else {
+        if (typeof parsedParams.payload === 'string') {
+          parsedParams = { ...parsedParams, content: parsedParams.payload };
+        }
+        const extractedPath = extractFilePathFromJsonBuffer(newBuffer);
+        const hasPath = ['file_path', 'filePath', 'filepath', 'target_file', 'targetFile', 'path', 'filename']
+          .some((key) => typeof parsedParams[key] === 'string' && parsedParams[key].length > 0);
+        if (extractedPath && !hasPath) {
+          parsedParams = { ...parsedParams, file_path: extractedPath };
+        }
       }
     }
     

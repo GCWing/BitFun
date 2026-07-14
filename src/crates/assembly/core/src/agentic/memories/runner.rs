@@ -200,11 +200,11 @@ impl MemoryPhase2Runner {
         info!(
             "Memory phase2 run started: generate_memories={}, limit={}, max_unused_days={}, phase2_lease_seconds={}, phase2_success_cooldown_seconds={}, phase2_retry_delay_seconds={}, memory_root={}",
             config.memories.generate_memories,
-            config.memories.max_raw_memories_for_consolidation.max(1).min(4096),
-            config.memories.max_unused_days.max(0).min(365),
-            config.memories.phase2_lease_seconds.max(60).min(24 * 60 * 60),
-            config.memories.phase2_success_cooldown_seconds.max(0).min(7 * 24 * 60 * 60),
-            config.memories.phase2_retry_delay_seconds.max(60).min(24 * 60 * 60),
+            config.memories.max_raw_memories_for_consolidation.clamp(1, 4096),
+            config.memories.max_unused_days.clamp(0, 365),
+            config.memories.phase2_lease_seconds.clamp(60, 24 * 60 * 60),
+            config.memories.phase2_success_cooldown_seconds.clamp(0, 7 * 24 * 60 * 60),
+            config.memories.phase2_retry_delay_seconds.clamp(60, 24 * 60 * 60),
             self.memory_root.display()
         );
         if !config.memories.generate_memories {
@@ -218,8 +218,7 @@ impl MemoryPhase2Runner {
                 config
                     .memories
                     .phase2_success_cooldown_seconds
-                    .max(0)
-                    .min(7 * 24 * 60 * 60),
+                    .clamp(0, 7 * 24 * 60 * 60),
             );
             if cooldown_until.is_some_and(|until| until > now) {
                 info!(
@@ -272,10 +271,9 @@ impl MemoryPhase2Runner {
         let limit = config
             .memories
             .max_raw_memories_for_consolidation
-            .max(1)
-            .min(4096);
+            .clamp(1, 4096);
         let candidate_scan_limit = 4096;
-        let max_unused_days = config.memories.max_unused_days.max(0).min(365);
+        let max_unused_days = config.memories.max_unused_days.clamp(0, 365);
         let candidate_rows = self
             .db
             .list_phase2_input_candidates(candidate_scan_limit, max_unused_days)
@@ -785,6 +783,51 @@ pub fn current_unix_secs() -> i64 {
         .unwrap_or_default()
 }
 
+async fn phase2_retry_delay_seconds() -> BitFunResult<i64> {
+    let config = get_phase2_runtime_config().await;
+    Ok(config
+        .memories
+        .phase2_retry_delay_seconds
+        .clamp(60, 24 * 60 * 60))
+}
+
+async fn phase2_lease_seconds() -> BitFunResult<i64> {
+    let config = get_phase2_runtime_config().await;
+    Ok(config.memories.phase2_lease_seconds.clamp(60, 24 * 60 * 60))
+}
+
+fn select_phase2_model_id(
+    config: &crate::service::config::types::GlobalConfig,
+) -> BitFunResult<String> {
+    let ai = &config.ai;
+    let model_ref = config.memories.consolidation_model.as_deref().or(config
+        .ai
+        .default_models
+        .primary
+        .as_deref());
+
+    model_ref
+        .and_then(|model_ref| ai.resolve_model_selection(model_ref))
+        .or_else(|| ai.first_enabled_model_id())
+        .ok_or_else(|| {
+            BitFunError::service("No enabled model available for memory phase2".to_string())
+        })
+}
+
+fn build_phase2_user_prompt(memory_root: &std::path::Path) -> String {
+    format!(
+        "Consolidate the workspace at:\n{}\n\nFocus on the selected stage-1 memories in raw_memories.md and the rollout_summaries directory. Return a concise markdown result.",
+        memory_root.display()
+    )
+}
+
+async fn get_phase2_runtime_config() -> crate::service::config::types::GlobalConfig {
+    match get_global_config_service().await {
+        Ok(service) => service.get_config(None).await.unwrap_or_default(),
+        Err(_) => crate::service::config::types::GlobalConfig::default(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -964,7 +1007,7 @@ mod tests {
         ];
         for row in &rows {
             save_memory_row_metadata(&persistence, row, SessionMemoryMode::Enabled).await;
-            runner.db.upsert_memory(&row).await.unwrap();
+            runner.db.upsert_memory(row).await.unwrap();
         }
 
         let report = runner
@@ -1255,55 +1298,5 @@ mod tests {
         .await
         .unwrap();
         assert!(summary.starts_with("v1\n"));
-    }
-}
-
-async fn phase2_retry_delay_seconds() -> BitFunResult<i64> {
-    let config = get_phase2_runtime_config().await;
-    Ok(config
-        .memories
-        .phase2_retry_delay_seconds
-        .max(60)
-        .min(24 * 60 * 60))
-}
-
-async fn phase2_lease_seconds() -> BitFunResult<i64> {
-    let config = get_phase2_runtime_config().await;
-    Ok(config
-        .memories
-        .phase2_lease_seconds
-        .max(60)
-        .min(24 * 60 * 60))
-}
-
-fn select_phase2_model_id(
-    config: &crate::service::config::types::GlobalConfig,
-) -> BitFunResult<String> {
-    let ai = &config.ai;
-    let model_ref = config.memories.consolidation_model.as_deref().or(config
-        .ai
-        .default_models
-        .primary
-        .as_deref());
-
-    model_ref
-        .and_then(|model_ref| ai.resolve_model_selection(model_ref))
-        .or_else(|| ai.first_enabled_model_id())
-        .ok_or_else(|| {
-            BitFunError::service("No enabled model available for memory phase2".to_string())
-        })
-}
-
-fn build_phase2_user_prompt(memory_root: &std::path::Path) -> String {
-    format!(
-        "Consolidate the workspace at:\n{}\n\nFocus on the selected stage-1 memories in raw_memories.md and the rollout_summaries directory. Return a concise markdown result.",
-        memory_root.display()
-    )
-}
-
-async fn get_phase2_runtime_config() -> crate::service::config::types::GlobalConfig {
-    match get_global_config_service().await {
-        Ok(service) => service.get_config(None).await.unwrap_or_default(),
-        Err(_) => crate::service::config::types::GlobalConfig::default(),
     }
 }

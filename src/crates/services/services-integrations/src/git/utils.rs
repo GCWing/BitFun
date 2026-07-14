@@ -358,43 +358,6 @@ pub async fn execute_git_readonly_command(
     }
 }
 
-#[cfg(test)]
-mod review_git_output_tests {
-    use super::*;
-
-    #[test]
-    fn repository_root_ignores_an_invalid_lexical_git_marker() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let nested = temp.path().join("nested");
-        std::fs::create_dir_all(temp.path().join(".git")).expect("fake git marker");
-        std::fs::create_dir_all(&nested).expect("nested directory");
-
-        assert!(get_repository_root(&nested).is_err());
-    }
-
-    #[test]
-    fn repository_root_preserves_a_valid_lexical_worktree_root() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        Repository::init(temp.path()).expect("repository");
-        let nested = temp.path().join("nested");
-        std::fs::create_dir_all(&nested).expect("nested directory");
-
-        assert_eq!(
-            get_repository_root(&nested).expect("repository root"),
-            temp.path().to_string_lossy()
-        );
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_rejects_output_before_unbounded_buffering() {
-        let reader = tokio::io::repeat(b'x');
-        let error = read_bounded_review_git_stream(reader)
-            .await
-            .expect_err("unbounded output must be rejected");
-        assert!(error.to_string().contains("8 MiB safety limit"));
-    }
-}
-
 /// Executes a Git command synchronously and returns the raw output including exit code.
 pub fn execute_git_command_sync_raw(
     repo_path: &str,
@@ -446,4 +409,41 @@ pub fn check_git_available() -> bool {
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod review_git_output_tests {
+    use super::*;
+
+    #[test]
+    fn repository_root_ignores_an_invalid_lexical_git_marker() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let nested = temp.path().join("nested");
+        std::fs::create_dir_all(temp.path().join(".git")).expect("fake git marker");
+        std::fs::create_dir_all(&nested).expect("nested directory");
+
+        assert!(get_repository_root(&nested).is_err());
+    }
+
+    #[test]
+    fn repository_root_preserves_a_valid_lexical_worktree_root() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        Repository::init(temp.path()).expect("repository");
+        let nested = temp.path().join("nested");
+        std::fs::create_dir_all(&nested).expect("nested directory");
+
+        assert_eq!(
+            get_repository_root(&nested).expect("repository root"),
+            temp.path().to_string_lossy()
+        );
+    }
+
+    #[tokio::test]
+    async fn bounded_reader_rejects_output_before_unbounded_buffering() {
+        let reader = tokio::io::repeat(b'x');
+        let error = read_bounded_review_git_stream(reader)
+            .await
+            .expect_err("unbounded output must be rejected");
+        assert!(error.to_string().contains("8 MiB safety limit"));
+    }
 }

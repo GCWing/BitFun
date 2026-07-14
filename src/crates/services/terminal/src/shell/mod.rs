@@ -8,7 +8,7 @@ pub mod integration;
 mod profiles;
 mod scripts_manager;
 
-pub use detection::ShellDetector;
+pub use detection::{DetectedShell, ShellDetector, ShellDiscoverySource};
 pub use integration::{
     get_injection_command, get_integration_script_content, get_integration_script_path,
     CommandState, OscSequence, ShellIntegration, ShellIntegrationEvent, ShellIntegrationManager,
@@ -19,9 +19,10 @@ pub use scripts_manager::ScriptsManager;
 use serde::{Deserialize, Serialize};
 
 /// Supported shell types
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ShellType {
     /// Bash shell
+    #[cfg_attr(not(windows), default)]
     Bash,
     /// Zsh shell
     Zsh,
@@ -30,6 +31,7 @@ pub enum ShellType {
     /// PowerShell (Windows PowerShell)
     PowerShell,
     /// PowerShell Core (cross-platform)
+    #[cfg_attr(windows, default)]
     PowerShellCore,
     /// Windows CMD
     Cmd,
@@ -131,19 +133,6 @@ impl ShellType {
     }
 }
 
-impl Default for ShellType {
-    fn default() -> Self {
-        #[cfg(windows)]
-        {
-            ShellType::PowerShellCore
-        }
-        #[cfg(not(windows))]
-        {
-            ShellType::Bash
-        }
-    }
-}
-
 impl std::fmt::Display for ShellType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -158,5 +147,18 @@ impl std::fmt::Display for ShellType {
             ShellType::Csh => write!(f, "csh"),
             ShellType::Custom(name) => write!(f, "{}", name),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ShellType;
+
+    #[test]
+    fn shell_default_remains_platform_specific() {
+        #[cfg(windows)]
+        assert_eq!(ShellType::default(), ShellType::PowerShellCore);
+        #[cfg(not(windows))]
+        assert_eq!(ShellType::default(), ShellType::Bash);
     }
 }

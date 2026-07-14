@@ -90,6 +90,38 @@
     width: 100%;
   }
 
+  &__shell-option,
+  &__shell-value {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__shell-option-name,
+  &__shell-value-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__shell-value {
+    width: 100%;
+  }
+
+  &__shell-tooltip {
+    max-width: min(480px, calc(100vw - 32px));
+  }
+
+  &__shell-tooltip-name {
+    font-weight: var(--font-weight-medium);
+  }
+
+  &__shell-tooltip-path {
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+    font-family: var(--font-family-mono);
+  }
+
   &__no-shells {
     padding: 12px 16px;
     border: 1px dashed var(--border-base);

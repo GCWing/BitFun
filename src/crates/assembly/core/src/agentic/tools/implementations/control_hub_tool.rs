@@ -536,21 +536,19 @@ Branch on `ok` and `error.code`, not on English messages.
             "connect" => {
                 let mode = Self::browser_connect_mode_from_params(params);
 
-                if mode == "headless" {
-                    if !BrowserLauncher::is_cdp_available(port).await {
-                        return Ok(err_response(
-                            "browser",
-                            "connect",
-                            ControlHubError::new(
-                                ErrorCode::NotAvailable,
-                                format!(
-                                    "Headless browser test port {} is not available. Start the dedicated headless browser first, then connect via ControlHub browser actions.",
-                                    port
-                                ),
-                            )
-                            .with_hints(Self::headless_browser_connect_hints(port)),
-                        ));
-                    }
+                if mode == "headless" && !BrowserLauncher::is_cdp_available(port).await {
+                    return Ok(err_response(
+                        "browser",
+                        "connect",
+                        ControlHubError::new(
+                            ErrorCode::NotAvailable,
+                            format!(
+                                "Headless browser test port {} is not available. Start the dedicated headless browser first, then connect via ControlHub browser actions.",
+                                port
+                            ),
+                        )
+                        .with_hints(Self::headless_browser_connect_hints(port)),
+                    ));
                 }
 
                 let kind = if let Some(browser_str) = params.get("browser").and_then(|v| v.as_str())

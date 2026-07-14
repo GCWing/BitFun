@@ -1,7 +1,7 @@
 # BitFun 智能体工作流交互与边界补充设计
 
 > 范围：为 [../agent-workflow-staged-plan.md](../agent-workflow-staged-plan.md) 中的场景提供交互和边界补充。
-> 本文不定义新的 Agent Kernel、Harness、QDP 或 DeepReview 核心对象模型；实现时优先复用既有 session、task、Agent Kernel/Harness long-running queue、DeepReview manifest、work packets、runtime events 和质量数据面契约。
+> 本文不定义新的 Agent Kernel、Harness、QDP 或 DeepReview 核心对象模型；实现时优先复用既有 session、task、Agent Kernel/Harness long-running queue、DeepReview manifest、runtime events 和质量数据面契约。历史 work packets 仅用于旧会话兼容。
 
 ## 1. 设计定位
 
@@ -16,7 +16,7 @@
 - 不定义新的 workflow DSL。
 - 不定义新的 P0/P1/P2/P3/P4。
 - 不定义新的持久化实体作为 P0/P1 前置。
-- 不把 L2/L3 审查或任务控制台放入默认路径。
+- 不把固定多 reviewer 严格审查或任务控制台放入默认路径。
 
 ## 2. 复用边界
 
@@ -24,7 +24,7 @@
 |---|---|---|
 | 任务生命周期、取消、恢复、事件顺序 | Agent Kernel | 只消费状态，不新增并行生命周期 |
 | 工具执行、验证命令、subagent 调用 | Execution | 只返回工具/验证结果，不写产品结论 |
-| DeepReview 内部 capacity queue、只读 reviewer、report enrichment | 现有 DeepReview 架构 | 仅 L3 严格审查复用，不作为通用 workflow/task queue |
+| DeepReview 内部 capacity queue、只读 reviewer、report enrichment | 现有 DeepReview 架构 | 仅显式 L3 严格审查复用，不作为通用 workflow/task queue |
 | 权限、执行域、沙箱、凭据和网络 | Security Boundary | 成本或审查确认不能绕过安全确认 |
 | 证据、指标和回放 | Quality Data Plane | P0/P1 不新增默认事件；先用既有最小事件 |
 | GUI 展示和用户决策 | Product Surface | 展示状态、预算、风险和下一步，不拥有权威事实 |
@@ -34,28 +34,27 @@
 | 场景 | 默认投影 | 允许升级 |
 |---|---|---|
 | 低风险任务 | 任务完成摘要 | 用户显式要求更稳时可做本地 L1 |
-| 本地显式审查 | Review 面板 | 高风险建议 L2；不进入 PR/团队流程 |
-| PR / 受保护分支 / 团队规则审查 | Review 面板 + 就绪度摘要 | 大型 PR、强策略或核心接口变更才 L3 |
+| 本地显式审查 | Review 面板 | 始终一个只读 reviewer；不进入 PR/团队流程 |
+| PR / 受保护分支 / 团队规则审查 | Review 面板 + 就绪度摘要 | 当前仅显式 strict 入口进入 L3；受管策略只能提示 |
 | CI/测试失败 | 长任务条 + 失败摘要 | 多独立失败且 oracle 可用时队列化 |
-| PR comments 批量修复 | 单一任务控制台 | 评论冲突或高风险路径触发定向审查 |
+| PR comments 批量修复 | 单一任务控制台 | 评论冲突或高风险路径由同一 reviewer 定向复核；不自动扩展 reviewer |
 | 大迁移/审计 | 样本报告 + 预算确认 + 控制台 | 样本成功后扩大并发 |
 
 ## 4. Review 交互
 
-Review 是用户唯一需要理解的审查入口。内部可复用 L0-L3，但用户不需要理解 DeepReview、subagent 或 work packets。
+Review 是用户唯一需要理解的审查入口。普通 Review 固定为一个只读 reviewer；显式 Strict Review 复用 L3 DeepReview，由主审直接完成更深检查并自行决定是否需要一次专家或条件质量检查。用户不需要理解 DeepReview、subagent 或历史 work packets。
 
 入口兼容约束：
 
 - `/DeepReview` 只作为迁移窗口内的历史兼容输入，等价路由到 “Review: Strict”，不作为高级别名、调试入口或长期产品入口。
-- child session、auxiliary pane、work packets 和内部 capacity queue 默认后台化；普通用户只看到统一 Review 面板。
+- child session 和 auxiliary pane 默认后台化；历史 work packets 与 capacity queue 只服务旧会话兼容，普通用户只看到统一 Review 面板。
 - 如果辅助 pane 因排障需要暴露，必须折叠到高级详情，并同步更新 DeepReview 架构文档，避免形成第二套产品入口。
 
 | 强度 | 用户看到 | 默认限制 |
 |---|---|---|
 | L0 | 快速检查摘要 | 不创建 reviewer |
-| L1 | 独立快速审查结果 | 一个只读 reviewer |
-| L2 | 定向审查合并结果 | 只选命中风险的 1-3 个方向 |
-| L3 | 严格审查结果和覆盖说明 | 预算确认后才启动，且可调整范围 |
+| L1 | 独立审查结果 | 一个只读 reviewer，由模型决定检查深度 |
+| L3 | 严格审查结果和覆盖说明 | 仅 `/review strict`、`/DeepReview` 兼容输入或内部显式 strict follow-up，确认后启动 |
 
 Review 面板只按问题呈现：
 
@@ -73,8 +72,8 @@ Review 面板只按问题呈现：
 
 | 触发 | UI 行为 |
 |---|---|
-| 预计 token 或耗时明显增加 | 展示收益、成本和范围控制选项 |
-| 需要多个 reviewer | 说明新增覆盖范围和预计成本 |
+| 显式 Strict Review | 展示范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界；不估算底层模型请求或 token |
+| 主审决定请求专家或质量检查 | 只在具体不确定性、高严重度、冲突或低置信度时发生，不提前承诺固定覆盖角色 |
 | 需要并发 worker | 说明节省墙钟时间和冲突风险 |
 | 预算接近上限 | 暂停扩大执行，给出追加预算、保留核心检查、只收敛已完成 |
 | oracle 不可靠 | 停止扩大，改为人工确认或小样本建议 |
@@ -83,8 +82,8 @@ Review 面板只按问题呈现：
 
 成本确认最低契约：
 
-- 只有从轻路径升级为 L2/L3 review、并发 worker、批量队列或长任务控制台时才弹出预算确认。
-- 预算确认必须同时展示估算 token/时间区间、可换来的覆盖或墙钟收益、范围控制选项和停止条件。
+- 只有进入显式 L3 strict review、并发 worker、批量队列或长任务控制台时才弹出预算确认。
+- 当前 Strict Review 确认展示范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界。底层模型请求与 Token 估算、启动前范围调整和停止选项尚未实现，不写成当前能力。
 - 预算确认不能替代安全确认；执行位置、沙箱等级、写入范围、网络/凭据状态仍由安全边界提供。
 
 ## 6. 批量任务 GUI
@@ -110,7 +109,7 @@ Review 面板只按问题呈现：
 | 情况 | 默认动作 |
 |---|---|
 | 小任务且无风险 | 不升级，结束时列未验证项 |
-| 用户准备 PR | 建议 L1，风险命中再 L2 |
+| 用户准备 PR | 建议一个 L1 reviewer；风险信号作为模型关注点，不自动增加 reviewer |
 | 验证失败且可分解 | 先聚类，再决定是否队列化 |
 | 多个 item 共享同一 contract | 串行或请求用户决策 |
 | 两轮审查无新增有效问题 | 建议停止或保留核心检查 |
@@ -130,9 +129,9 @@ Review 面板只按问题呈现：
 | 验证 | 目的 |
 |---|---|
 | 低风险任务不显示 workflow UI | 防止默认体验变重 |
-| 本地显式 L1 审查能调整范围或跳过 | 防止过度审查 |
+| 本地显式 L1 审查保持用户给定的目标范围 | 防止静默扩大审查 |
 | PR/团队审查不进入 P0 默认路径 | 保持既有阶段边界 |
-| L2/L3 前有成本说明 | 防止 token 无感知上涨 |
+| 显式 L3 前有成本说明 | 防止 token 无感知上涨 |
 | CI 多失败能只收敛已完成部分 | 提升解决率而不是追求全量完成 |
 | 大迁移样本失败不会扩大执行 | 控制大规模自动化风险 |
 | 安全确认不能被 review 或预算确认替代 | 保持安全边界独立 |

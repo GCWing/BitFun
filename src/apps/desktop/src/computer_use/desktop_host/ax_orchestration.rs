@@ -12,21 +12,31 @@
 use super::macos;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use super::resolve_pid;
+use super::DesktopComputerUseHost;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 use super::LINUX_LEGACY_AX_UNAVAILABLE;
 #[cfg(target_os = "macos")]
 use super::{require_macos_background_input, resolve_pid_macos};
-use super::{CachedInteractiveView, CachedVisualMarkView, DesktopComputerUseHost};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use super::{CachedInteractiveView, CachedVisualMarkView};
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
+use bitfun_core::agentic::tools::computer_use_host::ComputerScreenshot;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use bitfun_core::agentic::tools::computer_use_host::ComputerUseHost;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use bitfun_core::agentic::tools::computer_use_host::VisualMark;
 use bitfun_core::agentic::tools::computer_use_host::{
     AppClickParams, AppSelector, AppStateSnapshot, AppWaitPredicate, ClickTarget,
-    ComputerScreenshot, ComputerUseHost, InteractiveActionResult, InteractiveClickParams,
-    InteractiveScrollParams, InteractiveTypeTextParams, InteractiveView, InteractiveViewOpts,
-    VisualActionResult, VisualClickParams, VisualMark, VisualMarkView, VisualMarkViewOpts,
+    InteractiveActionResult, InteractiveClickParams, InteractiveScrollParams,
+    InteractiveTypeTextParams, InteractiveView, InteractiveViewOpts, VisualActionResult,
+    VisualClickParams, VisualMarkView, VisualMarkViewOpts,
 };
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 #[cfg(target_os = "macos")]
 use log::debug;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use log::warn;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::time::{Duration, Instant};
 
 impl DesktopComputerUseHost {
@@ -1422,6 +1432,7 @@ impl DesktopComputerUseHost {
 /// view either. The digest is meant to detect *structural* changes
 /// (elements appeared, disappeared, or moved noticeably), not cosmetic
 /// noise.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn compute_interactive_view_digest(
     elements: &[bitfun_core::agentic::tools::computer_use_host::InteractiveElement],
 ) -> String {
@@ -1449,6 +1460,7 @@ fn compute_interactive_view_digest(
     out
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn compute_visual_mark_view_digest(marks: &[VisualMark], screenshot_id: Option<&str>) -> String {
     use sha1::{Digest, Sha1};
     let mut hasher = Sha1::new();
@@ -1470,6 +1482,7 @@ fn compute_visual_mark_view_digest(marks: &[VisualMark], screenshot_id: Option<&
     out
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn build_regular_visual_marks(
     shot: &ComputerScreenshot,
     opts: &VisualMarkViewOpts,
@@ -1541,6 +1554,7 @@ fn build_regular_visual_marks(
     Ok(marks)
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn visual_marks_to_overlay_elements(
     marks: &[VisualMark],
 ) -> Vec<bitfun_core::agentic::tools::computer_use_host::InteractiveElement> {
@@ -1563,6 +1577,7 @@ fn visual_marks_to_overlay_elements(
         .collect()
 }
 
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
 pub(super) fn detect_regular_grid_rect_from_screenshot(
     shot: &ComputerScreenshot,
     rows: u32,
@@ -1613,6 +1628,7 @@ pub(super) fn detect_regular_grid_rect_from_screenshot(
     Ok((x0 as i32, y0 as i32, w, h))
 }
 
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
 fn projection_darkness(
     img: &image::RgbImage,
     left: u32,
@@ -1647,6 +1663,7 @@ fn projection_darkness(
     smooth_projection(&out, 2)
 }
 
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
 fn smooth_projection(values: &[f64], radius: usize) -> Vec<f64> {
     if values.is_empty() {
         return Vec::new();
@@ -1661,6 +1678,7 @@ fn smooth_projection(values: &[f64], radius: usize) -> Vec<f64> {
     out
 }
 
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
 fn detect_regular_line_sequence(
     projection: &[f64],
     count: u32,
@@ -1789,6 +1807,7 @@ fn detect_regular_line_sequence(
         })
 }
 
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
 fn top_regular_positions(
     scores: &[f64],
     count: u32,
@@ -1832,10 +1851,12 @@ fn top_regular_positions(
 /// error text rather than introducing a typed error enum because every
 /// `BitFunError::tool` is already string-based throughout the host
 /// surface; adding a new variant would ripple through ~40 callers.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn is_stale_interactive_view_error(err: &BitFunError) -> bool {
     err.to_string().contains("STALE_INTERACTIVE_VIEW")
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn is_stale_visual_mark_view_error(err: &BitFunError) -> bool {
     err.to_string().contains("STALE_VISUAL_MARK_VIEW")
 }

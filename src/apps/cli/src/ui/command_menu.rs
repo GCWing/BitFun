@@ -172,10 +172,7 @@ impl CommandMenuState {
             return None;
         }
 
-        let area = match self.last_area {
-            Some(area) => area,
-            None => return None,
-        };
+        let area = self.last_area?;
 
         let in_menu = mouse.column >= area.x
             && mouse.column < area.x.saturating_add(area.width)
@@ -216,11 +213,10 @@ impl CommandMenuState {
         let Some(area) = self.last_area else {
             return false;
         };
-        let in_menu = mouse.column >= area.x
+        mouse.column >= area.x
             && mouse.column < area.x.saturating_add(area.width)
             && mouse.row >= area.y
-            && mouse.row < area.y.saturating_add(area.height);
-        in_menu
+            && mouse.row < area.y.saturating_add(area.height)
     }
 
     fn selected_item(&self) -> Option<&CommandSpec> {

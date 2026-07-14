@@ -49,6 +49,7 @@ dashmap = { workspace = true }
 dirs = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 # Windows process-tree ownership

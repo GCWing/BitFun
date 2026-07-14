@@ -698,6 +698,14 @@ export function runManifestParserSelfTest({
       throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
     }
   }
+  for (const dep of ['sha2', 'windows']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('review-platform')) {
+      throw new Error(`services-integrations review-platform must own optional dependency ${dep}`);
+    }
+  }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'product-domains',
   );
@@ -850,6 +858,9 @@ export function runManifestParserSelfTest({
   const opencodeAdapterPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/adapters/opencode-adapter/src/lib.rs',
   );
+  const managedPluginActivationPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/assembly/core/src/plugin_runtime.rs',
+  );
   const parsedPluginReexports = collectPluginRootReexports(`
     pub use plugin::{PluginDispatchEnvelope, PluginResponseEnvelope};
     pub use self::plugin::{
@@ -948,9 +959,9 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_workspace_adapter'
+    'load_opencode_package_adapter'
   ) {
-    throw new Error('OpenCode adapter public API budget must stay limited to source adapter loading');
+    throw new Error('OpenCode adapter public API budget must stay limited to one reviewed factory');
   }
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
     for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
@@ -964,6 +975,14 @@ export function runManifestParserSelfTest({
     if (entry.wireImpact !== false) {
       throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
     }
+  }
+  if (
+    (managedPluginActivationPublicApiRule?.allowedSymbolEntries || [])
+      .map((entry) => entry.symbol)
+      .join(',') !==
+    'ManagedPluginCandidateView,ManagedPluginActivationView,ManagedPluginDeactivationResult,preview_managed_plugin_activation,activate_managed_plugin,deactivate_managed_plugin'
+  ) {
+    throw new Error('managed plugin activation API budget must stay limited to six product-facing symbols');
   }
   const appHostAbiRule = forbiddenContentUnderRules.find((rule) => rule.path === 'src/apps');
   if (!appHostAbiRule) {
@@ -1003,8 +1022,15 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('OpenCode adapter manifest guard must allow its own manifest');
   }
+  if (
+    !opencodeManifestRule.allowManifestPaths?.includes(
+      'src/crates/assembly/core/Cargo.toml',
+    )
+  ) {
+    throw new Error('OpenCode adapter manifest guard must allow the reviewed core composition root');
+  }
   const opencodeSourceRules = forbiddenContentUnderRules.filter((rule) =>
-    rule.reason.includes('OpenCode adapter must not become a production dependency'),
+    rule.reason.includes('OpenCode adapter production imports are limited'),
   );
   for (const scanRoot of ['src', 'BitFun-Installer/src-tauri']) {
     if (!opencodeSourceRules.some((rule) => rule.path === scanRoot)) {
@@ -1018,6 +1044,13 @@ export function runManifestParserSelfTest({
     !opencodeSourceRegex?.test('bitfun_opencode_adapter::OpenCodePluginAdapter')
   ) {
     throw new Error('OpenCode adapter source guard must catch direct, alias, and extern imports');
+  }
+  if (
+    !opencodeSourceRules
+      .find((rule) => rule.path === 'src')
+      ?.patterns?.[0]?.allowPaths?.includes('src/crates/assembly/core/src/plugin_runtime.rs')
+  ) {
+    throw new Error('OpenCode adapter source guard must allow only the reviewed core composition file');
   }
   const runtimeServicesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'runtime-services',

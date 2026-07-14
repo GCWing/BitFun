@@ -392,6 +392,17 @@ pub(super) fn ok_result_with_context_full(
     Ok(r)
 }
 
+/// Whether an element's global bounds fall within any visible display.
+#[allow(dead_code)]
+pub(super) fn is_element_on_screen(gx: f64, gy: f64, width: f64, height: f64) -> bool {
+    // Element must have reasonable size (not a giant container)
+    if width > 3000.0 || height > 2000.0 {
+        return false;
+    }
+    // Center must be resolvable to a display
+    DisplayInfo::from_point(gx.round() as i32, gy.round() as i32).is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,15 +549,4 @@ mod tests {
         let (nx, ny) = global_xy_to_native_with_display(&d, 100.0, 200.0).unwrap();
         assert_eq!((nx, ny), (100, 200));
     }
-}
-
-/// Whether an element's global bounds fall within any visible display.
-#[allow(dead_code)]
-pub(super) fn is_element_on_screen(gx: f64, gy: f64, width: f64, height: f64) -> bool {
-    // Element must have reasonable size (not a giant container)
-    if width > 3000.0 || height > 2000.0 {
-        return false;
-    }
-    // Center must be resolvable to a display
-    DisplayInfo::from_point(gx.round() as i32, gy.round() as i32).is_ok()
 }

@@ -63,10 +63,7 @@ pub fn strip_tool_invocation_artifacts(content: &str) -> String {
 
 fn strip_delimited_block(content: &str, open_prefix: &str, close_tag: &str) -> String {
     let mut result = content.to_string();
-    loop {
-        let Some(start) = result.find(open_prefix) else {
-            break;
-        };
+    while let Some(start) = result.find(open_prefix) {
         let Some(relative_end) = result[start..].find(close_tag) else {
             result = result[..start].to_string();
             break;

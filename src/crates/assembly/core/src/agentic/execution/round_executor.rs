@@ -216,11 +216,7 @@ impl RoundExecutor {
                             delay_ms,
                             err_msg
                         );
-                        if let Err(cancel_err) =
-                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
-                        {
-                            return Err(cancel_err);
-                        }
+                        Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                         attempt_index += 1;
                         continue;
                     }
@@ -329,11 +325,7 @@ impl RoundExecutor {
                                     .count(),
                                 err_msg
                             );
-                            if let Err(cancel_err) =
-                                Self::sleep_with_cancellation(delay_ms, &cancel_token).await
-                            {
-                                return Err(cancel_err);
-                            }
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                             attempt_index += 1;
                             continue;
                         }
@@ -420,11 +412,7 @@ impl RoundExecutor {
                             result.tool_calls.len(),
                             partial_recovery_reason
                         );
-                        if let Err(cancel_err) =
-                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
-                        {
-                            return Err(cancel_err);
-                        }
+                        Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                         attempt_index += 1;
                         continue;
                     }
@@ -452,11 +440,7 @@ impl RoundExecutor {
                                 delay_ms,
                                 result.tool_calls.len()
                             );
-                            if let Err(cancel_err) =
-                                Self::sleep_with_cancellation(delay_ms, &cancel_token).await
-                            {
-                                return Err(cancel_err);
-                            }
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                             attempt_index += 1;
                             continue;
                         }
@@ -503,11 +487,7 @@ impl RoundExecutor {
                             max_attempts,
                             delay_ms
                         );
-                        if let Err(cancel_err) =
-                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
-                        {
-                            return Err(cancel_err);
-                        }
+                        Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                         attempt_index += 1;
                         continue;
                     }
@@ -555,11 +535,7 @@ impl RoundExecutor {
                             delay_ms,
                             err_msg
                         );
-                        if let Err(cancel_err) =
-                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
-                        {
-                            return Err(cancel_err);
-                        }
+                        Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                         attempt_index += 1;
                         continue;
                     }

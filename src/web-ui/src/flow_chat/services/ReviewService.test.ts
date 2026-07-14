@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   insertReviewSessionSummaryMarker: vi.fn(),
   openBtwSessionInAuxPane: vi.fn(),
   closeBtwSessionInAuxPane: vi.fn(),
-  decideReviewQuality: vi.fn(),
   deleteSession: vi.fn(),
   discardLocalSession: vi.fn(),
   sessions: new Map<string, unknown>(),
@@ -27,7 +26,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/infrastructure/api', () => ({
   agentAPI: {
-    decideReviewQuality: (...args: unknown[]) => mocks.decideReviewQuality(...args),
     deleteSession: (...args: unknown[]) => mocks.deleteSession(...args),
   },
 }));
@@ -152,14 +150,6 @@ describe('ReviewService', () => {
         targetEvidence: targetEvidence(),
       }),
     );
-    mocks.decideReviewQuality.mockResolvedValue({
-      level: 'l1',
-      executionMode: 'standard',
-      strategyLevel: 'quick',
-      reason: 'risk_score',
-      score: 1,
-      requiresConsent: false,
-    });
   });
 
   it('prepares a small session review without constructing a review team', async () => {
@@ -182,7 +172,7 @@ describe('ReviewService', () => {
     expect(mocks.buildDeepReviewLaunchFromSessionFiles).not.toHaveBeenCalled();
   });
 
-  it('measures the current diff for a file-scoped follow-up decision', async () => {
+  it('measures the current diff for a file-scoped review', async () => {
     mocks.resolveCurrentFileReviewSnapshot.mockImplementationOnce(
       async (_workspacePath, target) => ({
         target,
@@ -213,29 +203,10 @@ describe('ReviewService', () => {
       }),
       'remote-connection-1',
     );
-    expect(mocks.decideReviewQuality).toHaveBeenCalledWith(expect.objectContaining({
-      target: expect.objectContaining({
-        fileCount: 2,
-        totalLinesChanged: 3,
-      }),
-    }));
+    expect(mocks.buildDeepReviewLaunchFromSessionFiles).not.toHaveBeenCalled();
   });
 
-  it('prepares one immutable L2 launch for a medium target', async () => {
-    mocks.decideReviewQuality.mockResolvedValueOnce({
-      level: 'l2',
-      executionMode: 'strict',
-      strategyLevel: 'normal',
-      reason: 'risk_score',
-      score: 6,
-      requiresConsent: true,
-    });
-    const manifest = runManifest('normal');
-    mocks.buildDeepReviewLaunchFromSessionFiles.mockResolvedValue({
-      prompt: 'team prompt',
-      runManifest: manifest,
-    });
-
+  it('keeps a medium target on the single-agent standard path', async () => {
     const files = Array.from({ length: 6 }, (_, index) => `src/file-${index}.ts`);
     const prepared = await prepareReviewLaunchFromSessionFiles(files, {
       workspacePath: 'D:/workspace/project',
@@ -247,41 +218,15 @@ describe('ReviewService', () => {
     });
 
     expect(prepared).toMatchObject({
-      mode: 'strict',
-      level: 'l2',
-      strategyLevel: 'normal',
-      prompt: 'team prompt',
-      runManifest: manifest,
+      mode: 'standard',
+      level: 'l1',
+      strategyLevel: 'quick',
+      requiresConsent: false,
     });
-    expect(mocks.buildDeepReviewLaunchFromSessionFiles).toHaveBeenCalledWith(
-      files,
-      undefined,
-      'D:/workspace/project',
-      expect.objectContaining({
-        qualityDecision: expect.objectContaining({
-          level: 'l2',
-          strategyLevel: 'normal',
-          reason: 'risk_score',
-        }),
-        resolvedTarget: expect.objectContaining({
-          changeStats: expect.objectContaining({ fileCount: 6 }),
-        }),
-        maxCoreReviewers: 3,
-        maxExtraReviewers: 0,
-        includeQualityGate: false,
-      }),
-    );
+    expect(mocks.buildDeepReviewLaunchFromSessionFiles).not.toHaveBeenCalled();
   });
 
   it('maps legacy DeepReview commands to the explicit L3 path', async () => {
-    mocks.decideReviewQuality.mockResolvedValueOnce({
-      level: 'l3',
-      executionMode: 'strict',
-      strategyLevel: 'deep',
-      reason: 'explicit_strict',
-      score: 1,
-      requiresConsent: true,
-    });
     const manifest = runManifest('deep');
     mocks.resolveSlashCommandReviewTarget.mockResolvedValue({
       target: manifest.target,
@@ -308,6 +253,43 @@ describe('ReviewService', () => {
       strategyLevel: 'deep',
       runManifest: manifest,
     });
+    expect(mocks.buildDeepReviewLaunchFromSlashCommand).toHaveBeenCalledWith(
+      '/DeepReview focus on auth',
+      'D:/workspace/project',
+      expect.objectContaining({
+        strategyOverride: 'deep',
+        qualityDecision: { level: 'l3' },
+      }),
+    );
+  });
+
+  it('forces explicit strict session review onto the deep manifest strategy', async () => {
+    const manifest = runManifest('deep');
+    mocks.buildDeepReviewLaunchFromSessionFiles.mockResolvedValue({
+      prompt: 'strict prompt',
+      runManifest: manifest,
+    });
+
+    const prepared = await prepareReviewLaunchFromSessionFiles(['src/auth.ts'], {
+      workspacePath: 'D:/workspace/project',
+      intent: 'strict',
+    });
+
+    expect(prepared).toMatchObject({
+      mode: 'strict',
+      level: 'l3',
+      strategyLevel: 'deep',
+      runManifest: manifest,
+    });
+    expect(mocks.buildDeepReviewLaunchFromSessionFiles).toHaveBeenCalledWith(
+      ['src/auth.ts'],
+      undefined,
+      'D:/workspace/project',
+      expect.objectContaining({
+        strategyOverride: 'deep',
+        qualityDecision: { level: 'l3' },
+      }),
+    );
   });
 
   it('rejects targets that exceed the evidence file boundary before quality selection', async () => {
@@ -328,7 +310,6 @@ describe('ReviewService', () => {
       ['src/file.ts'],
       { workspacePath: 'D:/workspace/project' },
     )).rejects.toThrow('exceeds the bounded evidence file limit');
-    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
   });
 
   it('blocks remote Git ranges before spending reviewer capacity', async () => {
@@ -358,7 +339,6 @@ describe('ReviewService', () => {
       '/remote/workspace',
       'remote-1',
     )).rejects.toThrow('Remote Git range Review is not supported yet');
-    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
     expect(mocks.buildDeepReviewLaunchFromSlashCommand).not.toHaveBeenCalled();
   });
 
@@ -449,7 +429,6 @@ describe('ReviewService', () => {
       '/remote/workspace',
       'remote-1',
     )).rejects.toThrow('Remote workspace Review is not supported');
-    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
   });
 
   it('blocks an empty confirmed workspace snapshot before spending reviewer capacity', async () => {
@@ -475,7 +454,6 @@ describe('ReviewService', () => {
       '/review',
       'D:/workspace/project',
     )).rejects.toThrow('There are no workspace changes to review.');
-    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
   });
 
   it('blocks unresolved workspace evidence before spending reviewer capacity', async () => {
@@ -499,7 +477,6 @@ describe('ReviewService', () => {
 
     await expect(prepareReviewLaunchFromSlashCommand('/review focus on auth'))
       .rejects.toThrow('could not be prepared as bounded evidence');
-    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
   });
 
   it('launches standard review as a read-only CodeReview child in the shared pane', async () => {

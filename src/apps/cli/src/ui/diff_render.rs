@@ -152,8 +152,8 @@ fn render_unified<'a>(
     for &idx in &changed_indices {
         let start = idx.saturating_sub(context_size);
         let end = (idx + context_size + 1).min(entries.len());
-        for i in start..end {
-            visible[i] = true;
+        for is_visible in &mut visible[start..end] {
+            *is_visible = true;
         }
     }
 
@@ -389,8 +389,8 @@ fn render_split<'a>(
     for &idx in &changed_indices {
         let start = idx.saturating_sub(context_size);
         let end = (idx + context_size + 1).min(entries.len());
-        for i in start..end {
-            visible[i] = true;
+        for is_visible in &mut visible[start..end] {
+            *is_visible = true;
         }
     }
 

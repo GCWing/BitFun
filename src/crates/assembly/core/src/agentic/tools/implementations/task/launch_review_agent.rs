@@ -157,9 +157,9 @@ impl LaunchReviewAgentTool {
     }
 
     fn render_description() -> String {
-        r#"Launch a DeepReview review team member.
+        r#"Launch one optional DeepReview specialist or conditional quality inspector.
 
-Use this tool to dispatch review team members. It starts a new fresh subagent session and waits for the result.
+The DeepReview agent is the primary reviewer. Use this tool only when a concrete uncertainty needs one focused fresh perspective, or when a high-severity, conflicting, or low-confidence conclusion needs ReviewJudge validation. New strict runs allow at most one specialist and one ReviewJudge call.
 
 Built-in review agent types:
 - `ReviewBusinessLogic`: product behavior, business logic, state transitions, and user-visible correctness.
@@ -169,7 +169,7 @@ Built-in review agent types:
 - `ReviewFrontend`: i18n, frontend performance, accessibility, state management, frontend-backend API contracts, and platform boundaries.
 - `ReviewJudge`: final quality-inspector pass after reviewer outputs are available.
 
-Extra active reviewers may be provided by the run manifest. Use only a `subagent_type` that belongs to the active DeepReview team for this run.
+Extra active reviewers may be provided by the run manifest. Use only a `subagent_type` that belongs to the active DeepReview specialist pool for this run. Do not split files, launch routine parallel coverage, or repeat the primary review.
 
 Do not put `subagent_type`, `description`, `model_id`, `timeout_seconds`, `retry`, `auto_retry`, or `retry_coverage` inside the prompt string.
 
@@ -260,7 +260,7 @@ impl Tool for LaunchReviewAgentTool {
     }
 
     fn short_description(&self) -> String {
-        "Launch a DeepReview review team member and collect the result.".to_string()
+        "Launch one optional DeepReview specialist or quality check.".to_string()
     }
 
     fn input_schema(&self) -> Value {

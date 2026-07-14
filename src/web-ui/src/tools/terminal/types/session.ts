@@ -39,10 +39,14 @@ export interface SessionResponse {
 }
 
 export interface ShellInfo {
+  /** Stable identifier for a discovered executable. */
+  id?: string;
   shellType: string;
   name: string;
   path: string;
   version?: string;
+  /** Discovery source reported by terminal-core, such as `path` or `systemInstall`. */
+  discoverySource?: string;
   available: boolean;
 }
 

@@ -5,8 +5,15 @@
  */
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { basename, dirname, join, relative, sep } from 'path';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'fs';
 import { ensureOpenSslWindows } from './ensure-openssl-windows.mjs';
 import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
 
@@ -45,12 +52,17 @@ async function main() {
     flashgrepBinary,
   });
   const tauriBin = join(ROOT, 'node_modules', '.bin', 'tauri');
-  const r = spawnSync(tauriBin, ['build', '--config', tauriConfig, ...forward], {
-    cwd: desktopDir,
-    env: process.env,
-    stdio: 'inherit',
-    shell: true,
-  });
+  const tauriArgs = ['build', '--config', tauriConfig, ...forward];
+  const buildStartedAtMs = Date.now();
+  let r = runTauriBuild(tauriBin, tauriArgs, desktopDir);
+
+  if (!r.error && shouldRetryMacDmgBuild(r, forward, desktopDir, buildStartedAtMs)) {
+    console.warn(
+      '[tauri-build] DMG bundling failed after the macOS app bundle was created; retrying once in 10 seconds.'
+    );
+    await new Promise((resolveRetry) => setTimeout(resolveRetry, 10_000));
+    r = runTauriBuild(tauriBin, tauriArgs, desktopDir);
+  }
 
   if (r.error) {
     console.error(r.error);
@@ -62,6 +74,80 @@ async function main() {
   }
 
   process.exit(r.status ?? 1);
+}
+
+function runTauriBuild(tauriBin, args, desktopDir) {
+  return spawnSync(tauriBin, args, {
+    cwd: desktopDir,
+    env: process.env,
+    stdio: 'inherit',
+    shell: true,
+  });
+}
+
+export function shouldRetryMacDmgBuild(
+  result,
+  args,
+  desktopDir,
+  buildStartedAtMs,
+  runtime = {}
+) {
+  const platform = runtime.platform ?? process.platform;
+  const githubActions = runtime.githubActions ?? process.env.GITHUB_ACTIONS;
+  if (
+    result.status === 0 ||
+    platform !== 'darwin' ||
+    githubActions !== 'true' ||
+    args.includes('--no-bundle') ||
+    !requestsDmgBundle(args)
+  ) {
+    return false;
+  }
+
+  const configuredTargetDir = runtime.cargoTargetDir ?? process.env.CARGO_TARGET_DIR;
+  const targetDir = configuredTargetDir
+    ? isAbsolute(configuredTargetDir)
+      ? configuredTargetDir
+      : resolve(desktopDir, configuredTargetDir)
+    : join(runtime.root ?? ROOT, 'target');
+  const target = optionValue(args, '--target');
+  const profile = args.includes('--debug') ? 'debug' : optionValue(args, '--profile') || 'release';
+  const bundleDir = join(
+    targetDir,
+    ...(target ? [target] : []),
+    profile,
+    'bundle',
+    'macos'
+  );
+
+  try {
+    return readdirSync(bundleDir, { withFileTypes: true }).some(
+      (entry) =>
+        entry.isDirectory() &&
+        entry.name.endsWith('.app') &&
+        statSync(join(bundleDir, entry.name)).mtimeMs >= buildStartedAtMs - 1_000
+    );
+  } catch {
+    return false;
+  }
+}
+
+function requestsDmgBundle(args) {
+  const bundles = optionValue(args, '--bundles');
+  return bundles === undefined || bundles.split(',').some((bundle) => bundle.trim() === 'dmg');
+}
+
+function optionValue(args, option) {
+  const inlinePrefix = `${option}=`;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === option) {
+      return args[i + 1];
+    }
+    if (args[i].startsWith(inlinePrefix)) {
+      return args[i].slice(inlinePrefix.length);
+    }
+  }
+  return undefined;
 }
 
 function prepareTauriConfig(baseConfigPath, { desktopDir, flashgrepBinary }) {
@@ -194,7 +280,9 @@ function findDmgFiles(dir) {
   return results;
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

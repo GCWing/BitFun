@@ -135,7 +135,7 @@ impl AgentSelectorState {
                 let is_current = self
                     .current_agent_id
                     .as_ref()
-                    .map_or(false, |id| id == &agent.id);
+                    .is_some_and(|id| id == &agent.id);
 
                 let marker = if is_current { "● " } else { "  " };
                 let marker_style = if is_current {
@@ -183,10 +183,7 @@ impl AgentSelectorState {
             return None;
         }
 
-        let area = match self.last_area {
-            Some(area) => area,
-            None => return None,
-        };
+        let area = self.last_area?;
 
         let in_popup = mouse.column >= area.x
             && mouse.column < area.x.saturating_add(area.width)

@@ -5,9 +5,14 @@ use std::time::Duration;
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
+use bitfun_core::plugin_runtime::{
+    activate_managed_plugin, deactivate_managed_plugin, preview_managed_plugin_activation,
+    ManagedPluginActivationView, ManagedPluginDeactivationResult,
+};
 use bitfun_core::plugin_source::{
-    refresh_managed_plugin_sources, set_managed_plugin_trust, ManagedPluginSourceSnapshot,
-    ManagedPluginTrustDecision, ManagedPluginTrustLevel,
+    refresh_managed_plugin_sources, set_managed_plugin_trust, ManagedPluginSourceError,
+    ManagedPluginSourceIssue, ManagedPluginSourceSnapshot, ManagedPluginTrustDecision,
+    ManagedPluginTrustLevel,
 };
 use bitfun_core::service::config::initialize_global_config;
 use bitfun_core::service::session_usage::{
@@ -322,6 +327,187 @@ pub(crate) async fn set_plugin_trust(
     Ok(())
 }
 
+pub(crate) async fn activate_plugin(package_id: &str, confirm: Option<&str>) -> Result<()> {
+    let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
+    let view = if let Some(content_hash) = confirm {
+        activate_managed_plugin(&workspace, package_id, Some(content_hash)).await
+    } else {
+        preview_managed_plugin_activation(&workspace, package_id).await
+    }
+    .map_err(|error| {
+        let diagnostic = crate::plugin_diagnostics::escape_terminal_text(&error.to_string());
+        if confirm.is_some() {
+            anyhow!(
+                "{}\nRe-run `bitfun-cli plugins activate {}` to preview the current content, then confirm with the new content hash.",
+                diagnostic,
+                crate::plugin_diagnostics::escape_terminal_text(package_id)
+            )
+        } else {
+            anyhow!(diagnostic)
+        }
+    })?;
+
+    print_plugin_activation(&view, confirm.is_none());
+    if confirm.is_none() {
+        println!();
+        println!(
+            "No activation state changed. Re-run `bitfun-cli plugins activate {} --confirm {}` to confirm this exact package content.",
+            crate::plugin_diagnostics::escape_terminal_text(package_id),
+            crate::plugin_diagnostics::escape_terminal_text(&view.content_hash)
+        );
+    }
+    Ok(())
+}
+
+pub(crate) async fn deactivate_plugin(package_id: &str) -> Result<()> {
+    let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
+    let result = deactivate_managed_plugin(&workspace, package_id)
+        .await
+        .map_err(|error| {
+            let diagnostic = crate::plugin_diagnostics::escape_terminal_text(&error.to_string());
+            if matches!(
+                error,
+                ManagedPluginSourceError::DeactivationPersistenceUncertain { .. }
+            ) {
+                anyhow!(
+                    "{diagnostic}\nThe saved state may already be cleared. Retry `bitfun-cli plugins deactivate {}` to confirm the result; the operation is idempotent.",
+                    crate::plugin_diagnostics::escape_terminal_text(package_id)
+                )
+            } else {
+                anyhow!(diagnostic)
+            }
+        })?;
+    match result {
+        ManagedPluginDeactivationResult::Deactivated {
+            package_id,
+            diagnostics,
+        } => {
+            let package_id = crate::plugin_diagnostics::escape_terminal_text(&package_id);
+            println!("Plugin package {package_id} was deactivated.");
+            print_deactivation_diagnostics(&diagnostics);
+        }
+        ManagedPluginDeactivationResult::ResidualActivationCleared {
+            package_id,
+            current_package_available,
+            diagnostics,
+        } => {
+            let package_id = crate::plugin_diagnostics::escape_terminal_text(&package_id);
+            match current_package_available {
+                Some(true) => println!(
+                    "Plugin package {package_id} previous source's saved activation state was cleared; the current package was not active."
+                ),
+                Some(false) => println!(
+                    "Plugin package {package_id} is unavailable; its saved activation state was cleared."
+                ),
+                None => println!(
+                    "Plugin package {package_id} saved activation state was cleared; current package availability could not be determined."
+                ),
+            }
+            print_deactivation_diagnostics(&diagnostics);
+        }
+        ManagedPluginDeactivationResult::AlreadyInactive {
+            package_id,
+            current_package_available,
+            diagnostics,
+        } => {
+            let package_id = crate::plugin_diagnostics::escape_terminal_text(&package_id);
+            match current_package_available {
+                Some(true) => println!("Plugin package {package_id} was already inactive."),
+                Some(false) => println!(
+                    "Plugin package {package_id} is unavailable and has no saved activation state."
+                ),
+                None => println!(
+                    "Plugin package {package_id} has no saved activation state; current package availability could not be determined."
+                ),
+            }
+            print_deactivation_diagnostics(&diagnostics);
+        }
+    }
+    println!("No plugin code or candidate effect was executed.");
+    Ok(())
+}
+
+fn print_deactivation_diagnostics(diagnostics: &[ManagedPluginSourceIssue]) {
+    for diagnostic in diagnostics {
+        println!("- {}", render_plugin_source_issue(diagnostic));
+    }
+}
+
+fn render_plugin_source_issue(issue: &ManagedPluginSourceIssue) -> String {
+    format!(
+        "[{}:{}] {}: {}",
+        if issue.is_error { "error" } else { "warn" },
+        crate::plugin_diagnostics::escape_terminal_text(&issue.code),
+        crate::plugin_diagnostics::escape_terminal_text(&issue.source_path),
+        crate::plugin_diagnostics::escape_terminal_text(&issue.message)
+    )
+}
+
+fn print_plugin_activation(view: &ManagedPluginActivationView, preview: bool) {
+    println!(
+        "Plugin activation {}",
+        if preview { "preview" } else { "result" }
+    );
+    println!();
+    println!(
+        "Package: {} {}",
+        crate::plugin_diagnostics::escape_terminal_text(&view.package_id),
+        crate::plugin_diagnostics::escape_terminal_text(&view.version)
+    );
+    println!(
+        "Adapter: {}",
+        crate::plugin_diagnostics::escape_terminal_text(&view.adapter)
+    );
+    println!("Content hash: {}", view.content_hash);
+    println!(
+        "Custom tool candidates: {}",
+        if view.provider_candidates_supported {
+            "supported"
+        } else {
+            "not found"
+        }
+    );
+    println!(
+        "Permission required before use: {}",
+        if view.permission_required {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+    println!("Entries: {}", view.entry_ids.len());
+    for entry_id in &view.entry_ids {
+        println!(
+            "- {}",
+            crate::plugin_diagnostics::escape_terminal_text(entry_id)
+        );
+    }
+    println!(
+        "{}: {}",
+        if preview {
+            "Declared candidates requiring permission"
+        } else {
+            "Candidates requiring permission"
+        },
+        view.candidates.len()
+    );
+    for candidate in &view.candidates {
+        println!(
+            "- {} -> {} (risk: {})",
+            crate::plugin_diagnostics::escape_terminal_text(&candidate.entry_id),
+            crate::plugin_diagnostics::escape_terminal_text(&candidate.target),
+            candidate.risk_level
+        );
+    }
+    for diagnostic in &view.diagnostics {
+        println!(
+            "- [diagnostic] {}",
+            crate::plugin_diagnostics::escape_terminal_text(diagnostic)
+        );
+    }
+    println!("Plugin code was not executed and no tool was registered.");
+}
+
 fn print_plugin_snapshot(snapshot: &ManagedPluginSourceSnapshot) {
     let approved_count = snapshot
         .packages
@@ -355,7 +541,11 @@ fn print_plugin_snapshot(snapshot: &ManagedPluginSourceSnapshot) {
             crate::plugin_diagnostics::escape_terminal_text(&package.package_id),
             crate::plugin_diagnostics::escape_terminal_text(&package.version),
             package.source_scope,
-            plugin_trust_label(package.trust_level),
+            if snapshot.discovery_complete {
+                plugin_trust_label(package.trust_level)
+            } else {
+                "review state unavailable"
+            },
         );
         println!(
             "  Source: {}",
@@ -366,20 +556,30 @@ fn print_plugin_snapshot(snapshot: &ManagedPluginSourceSnapshot) {
             crate::plugin_diagnostics::escape_terminal_text(&package.adapter)
         );
         println!("  Content hash: {}", package.content_hash);
-        println!("  Execution: unavailable; source review does not enable this package");
+        println!(
+            "  Activation: {}",
+            if !snapshot.discovery_complete {
+                "unknown; source discovery is incomplete"
+            } else if package.activated {
+                "active for candidate projection; plugin code is not executed"
+            } else {
+                "inactive; source review does not activate this package"
+            }
+        );
     }
     for issue in &snapshot.issues {
-        println!(
-            "- [{}:{}] {}: {}",
-            if issue.is_error { "error" } else { "warn" },
-            crate::plugin_diagnostics::escape_terminal_text(&issue.code),
-            crate::plugin_diagnostics::escape_terminal_text(&issue.source_path),
-            crate::plugin_diagnostics::escape_terminal_text(&issue.message)
-        );
+        println!("- {}", render_plugin_source_issue(issue));
     }
     println!(
         "{}",
         crate::plugin_diagnostics::render_source_review_epoch(snapshot.trust_epoch)
+    );
+    println!(
+        "Activation epoch: {}",
+        snapshot
+            .activation_epoch
+            .map(|epoch| epoch.to_string())
+            .unwrap_or_else(|| "unavailable".to_string())
     );
 }
 
@@ -430,6 +630,11 @@ pub(crate) async fn print_doctor() -> Result<bool> {
         .iter()
         .filter(|package| package.trust_level == ManagedPluginTrustLevel::SourceApproved)
         .count();
+    let active_plugin_count = plugin_sources
+        .packages
+        .iter()
+        .filter(|package| package.activated)
+        .count();
     let plugin_warning_count = plugin_sources
         .issues
         .iter()
@@ -464,14 +669,18 @@ pub(crate) async fn print_doctor() -> Result<bool> {
             plugin_error_count,
         )
     );
-    for issue in plugin_sources.issues.iter().take(10) {
+    if plugin_sources.discovery_complete {
         println!(
-            "  - [{}:{}] {}: {}",
-            if issue.is_error { "error" } else { "warn" },
-            crate::plugin_diagnostics::escape_terminal_text(&issue.code),
-            crate::plugin_diagnostics::escape_terminal_text(&issue.source_path),
-            crate::plugin_diagnostics::escape_terminal_text(&issue.message)
+            "[ok] Managed plugin source integrity checked; {} active. Candidate projection was not probed.",
+            active_plugin_count
         );
+    } else {
+        println!(
+            "[error] Managed plugin source scan is incomplete; review and activation status are unavailable. Candidate projection was not probed."
+        );
+    }
+    for issue in plugin_sources.issues.iter().take(10) {
+        println!("  - {}", render_plugin_source_issue(issue));
     }
     if plugin_sources.issues.len() > 10 {
         println!(

@@ -4,6 +4,8 @@ mod screenshot;
 use screenshot::{ComputerUseNavFocus, PointerMap, ScreenshotCacheEntry};
 
 use async_trait::async_trait;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use bitfun_core::agentic::tools::computer_use_host::VisualMark;
 use bitfun_core::agentic::tools::computer_use_host::{
     ActionRecord, AppClickParams, AppInfo, AppSelector, AppShortcutsSnapshot, AppStateSnapshot,
     AppWaitPredicate, ClickTarget, ComputerScreenshot, ComputerUseDisplayInfo, ComputerUseHost,
@@ -12,7 +14,7 @@ use bitfun_core::agentic::tools::computer_use_host::{
     ComputerUseSessionSnapshot, InteractiveActionResult, InteractiveClickParams,
     InteractiveScrollParams, InteractiveTypeTextParams, InteractiveView, InteractiveViewOpts,
     LoopDetectionResult, UiElementLocateQuery, UiElementLocateResult, VisualActionResult,
-    VisualClickParams, VisualMark, VisualMarkView, VisualMarkViewOpts,
+    VisualClickParams, VisualMarkView, VisualMarkViewOpts,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use bitfun_core::agentic::tools::computer_use_host::{
@@ -20,6 +22,7 @@ use bitfun_core::agentic::tools::computer_use_host::{
 };
 use bitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use log::debug;
 use screenshots::display_info::DisplayInfo;
 use screenshots::Screen;
@@ -144,12 +147,15 @@ struct ComputerUseSessionMutableState {
     /// Most-recent Set-of-Mark interactive view per pid. Used to resolve
     /// `interactive_*` numeric `i` indices back to AX node indices and to
     /// detect stale-view usage via `before_view_digest`.
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     interactive_view_cache: std::collections::HashMap<i32, CachedInteractiveView>,
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     visual_mark_cache: std::collections::HashMap<i32, CachedVisualMarkView>,
     /// Most-recent focused-window screenshot coordinate map per application
     /// pid. `app_click(target: image_xy | image_grid)` must use the same
     /// image basis the model saw from `get_app_state`, not whichever global
     /// computer-use screenshot happened to run last.
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     app_pointer_maps: std::collections::HashMap<i32, PointerMap>,
     /// Exact screenshot-id keyed coordinate maps. This is the strongest
     /// addressing basis for arbitrary visual targets because it survives
@@ -158,6 +164,7 @@ struct ComputerUseSessionMutableState {
 }
 
 #[derive(Debug, Clone)]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 struct CachedInteractiveView {
     digest: String,
     /// `i` → `node_idx` map (dense, indexed by `i`).
@@ -165,6 +172,7 @@ struct CachedInteractiveView {
 }
 
 #[derive(Debug, Clone)]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 struct CachedVisualMarkView {
     digest: String,
     marks: Vec<VisualMark>,
@@ -185,8 +193,11 @@ impl ComputerUseSessionMutableState {
             optimizer: ComputerUseOptimizer::new(),
             last_mutation_kind: None,
             preferred_display_id: None,
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
             interactive_view_cache: std::collections::HashMap::new(),
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
             visual_mark_cache: std::collections::HashMap::new(),
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
             app_pointer_maps: std::collections::HashMap::new(),
             screenshot_pointer_maps: std::collections::HashMap::new(),
         }
@@ -1738,6 +1749,7 @@ async fn resolve_pid_macos(host: &DesktopComputerUseHost, app: &AppSelector) -> 
 /// matching entry (e.g. it exited between resolution and this lookup) —
 /// `get_app_shortcuts` should never fail just because the display name
 /// couldn't be resolved.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 async fn app_info_for_pid(host: &DesktopComputerUseHost, pid: i32) -> AppInfo {
     host.list_apps(true)
         .await

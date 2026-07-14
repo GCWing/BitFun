@@ -756,17 +756,15 @@ impl ChatState {
                 }
                 _ => {}
             },
-            AgenticEvent::ModelRoundStarted { round_index, .. } => {
-                if *round_index > 0 {
-                    self.update_tool(parent_tool_id, |tool| {
-                        let progress = tool
-                            .subagent_progress
-                            .get_or_insert_with(SubagentProgress::default);
-                        progress.current_tool_name = None;
-                        progress.current_tool_title = Some(format!("Round {}", round_index + 1));
-                    });
-                    self.rebuild_streaming_message();
-                }
+            AgenticEvent::ModelRoundStarted { round_index, .. } if *round_index > 0 => {
+                self.update_tool(parent_tool_id, |tool| {
+                    let progress = tool
+                        .subagent_progress
+                        .get_or_insert_with(SubagentProgress::default);
+                    progress.current_tool_name = None;
+                    progress.current_tool_title = Some(format!("Round {}", round_index + 1));
+                });
+                self.rebuild_streaming_message();
             }
             _ => {}
         }
@@ -993,7 +991,24 @@ fn extract_tool_title(tool_name: &str, params: &serde_json::Value) -> Option<Str
 
     // Tool-specific extraction for common tools
     match tool_name {
-        "Read" | "Write" | "Edit" | "Delete" | "GetFileDiff" => obj
+        "Write" => obj
+            .get("payload")
+            .and_then(|value| value.as_str())
+            .and_then(|value| {
+                let first_line = value.split_once('\n').map_or(value, |(path, _)| path);
+                first_line
+                    .strip_suffix('\r')
+                    .unwrap_or(first_line)
+                    .strip_prefix("+++ ")
+            })
+            .filter(|path| !path.trim().is_empty())
+            .or_else(|| {
+                obj.get("file_path")
+                    .or_else(|| obj.get("path"))
+                    .and_then(|value| value.as_str())
+            })
+            .map(|path| truncate_string(path, 50)),
+        "Read" | "Edit" | "Delete" | "GetFileDiff" => obj
             .get("path")
             .and_then(|v| v.as_str())
             .map(|s| truncate_string(s, 50)),

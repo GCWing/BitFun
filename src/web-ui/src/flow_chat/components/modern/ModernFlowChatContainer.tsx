@@ -1028,7 +1028,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     if (pinStatus === 'pending') {
       setQueuedHeaderTurnPinId(null);
       setPendingHeaderTurnId(null);
-      return false;
+      return true;
     }
 
     setQueuedHeaderTurnPinId(turnId);

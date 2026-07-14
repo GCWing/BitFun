@@ -16,6 +16,10 @@ pub(crate) struct TextInput {
     scroll_offset: usize,
 }
 
+fn wrapped_visual_line_count(text_width: usize, available_width: usize) -> usize {
+    text_width.div_ceil(available_width)
+}
+
 /// Style configuration for rendering a TextInput.
 pub(super) struct TextInputStyle {
     pub(super) first_line_prefix: &'static str,
@@ -221,7 +225,7 @@ impl TextInput {
                 if text_w == 0 {
                     1
                 } else {
-                    (text_w + avail - 1) / avail
+                    wrapped_visual_line_count(text_w, avail)
                 }
             })
             .sum()
@@ -254,7 +258,7 @@ impl TextInput {
             if text_w == 0 {
                 visual_row += 1;
             } else {
-                visual_row += (text_w + avail - 1) / avail;
+                visual_row += wrapped_visual_line_count(text_w, avail);
             }
         }
 
@@ -393,5 +397,43 @@ impl TextInput {
                 ));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TextInput;
+
+    #[test]
+    fn empty_text_has_one_visual_line_and_prefix_cursor_position() {
+        let mut input = TextInput::new();
+        input.set_text("");
+
+        assert_eq!(input.visual_line_count_with_prefix(6, 2), 1);
+        assert_eq!(input.cursor_visual_position(6, 2), (0, 2));
+    }
+
+    #[test]
+    fn exact_width_multiple_preserves_line_count_and_cursor_position() {
+        let mut input = TextInput::new();
+        input.set_text("abcdefgh");
+
+        assert_eq!(input.visual_line_count_with_prefix(6, 2), 2);
+        assert_eq!(input.cursor_visual_position(6, 2), (1, 6));
+    }
+
+    #[test]
+    fn remainder_adds_visual_line_and_places_cursor_on_it() {
+        let mut input = TextInput::new();
+        input.set_text("abcdefghi");
+
+        assert_eq!(input.visual_line_count_with_prefix(6, 2), 3);
+        assert_eq!(input.cursor_visual_position(6, 2), (2, 3));
+    }
+
+    #[test]
+    fn available_visual_width_is_always_nonzero() {
+        assert_eq!(TextInput::avail_width(0, usize::MAX), 1);
+        assert_eq!(TextInput::avail_width(u16::MAX, 0), u16::MAX as usize);
     }
 }

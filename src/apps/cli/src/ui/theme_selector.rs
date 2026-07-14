@@ -128,10 +128,7 @@ impl ThemeSelectorState {
             .items
             .iter()
             .map(|t| {
-                let is_current = self
-                    .current_theme_id
-                    .as_ref()
-                    .map_or(false, |id| id == &t.id);
+                let is_current = self.current_theme_id.as_ref().is_some_and(|id| id == &t.id);
 
                 let marker = if is_current { "● " } else { "  " };
                 let marker_style = if is_current {
@@ -176,11 +173,10 @@ impl ThemeSelectorState {
         let Some(area) = self.last_area else {
             return false;
         };
-        let in_popup = mouse.column >= area.x
+        mouse.column >= area.x
             && mouse.column < area.x.saturating_add(area.width)
             && mouse.row >= area.y
-            && mouse.row < area.y.saturating_add(area.height);
-        in_popup
+            && mouse.row < area.y.saturating_add(area.height)
     }
 
     pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<ThemeItem> {

@@ -1,14 +1,19 @@
 //! Independent, read-only code reviewer.
 
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
+use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
 pub struct CodeReviewAgent {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl CodeReviewAgent {
     pub fn new() -> Self {
+        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
+        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
+
         Self {
             default_tools: vec![
                 "Read".to_string(),
@@ -18,6 +23,7 @@ impl CodeReviewAgent {
                 "GetFileDiff".to_string(),
                 "submit_code_review".to_string(),
             ],
+            tool_exposure_overrides,
         }
     }
 }
@@ -54,6 +60,10 @@ impl Agent for CodeReviewAgent {
         self.default_tools.clone()
     }
 
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
+    }
+
     fn user_context_policy(&self) -> UserContextPolicy {
         UserContextPolicy::empty()
             .with_workspace_context()
@@ -69,6 +79,7 @@ impl Agent for CodeReviewAgent {
 #[cfg(test)]
 mod tests {
     use super::{Agent, CodeReviewAgent};
+    use crate::agentic::tools::framework::ToolExposure;
 
     #[test]
     fn code_review_agent_is_an_independent_readonly_reviewer() {
@@ -78,6 +89,10 @@ mod tests {
         assert!(tools.contains(&"Read".to_string()));
         assert!(tools.contains(&"Grep".to_string()));
         assert!(tools.contains(&"GetFileDiff".to_string()));
+        assert_eq!(
+            agent.tool_exposure_overrides().get("GetFileDiff"),
+            Some(&ToolExposure::Expanded),
+        );
         assert!(tools.contains(&"submit_code_review".to_string()));
         assert!(agent.description().contains("one isolated instance"));
         assert!(!agent.description().contains("two or three"));

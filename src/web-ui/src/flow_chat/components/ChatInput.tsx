@@ -30,6 +30,10 @@ import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
 import { getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
+import {
+  resolveSlashActionInputValue,
+  type SlashActionId,
+} from '../utils/slashActionSelection';
 import { notificationService } from '@/shared/notification-system';
 import { inputReducer, initialInputState } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -115,7 +119,7 @@ export interface ChatInputProps {
 
 type SlashActionItem = {
   kind: 'action';
-  id: string;
+  id: SlashActionId;
   command: string;
   label: string;
 };
@@ -1802,7 +1806,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       ...(isPrimarySlashActionVisible({ actionId: 'btw', isBtwSession, canLaunchReview })
         ? [{
             kind: 'action' as const,
-            id: 'btw',
+            id: 'btw' as const,
             command: '/btw',
             label: t('btw.title'),
           }]
@@ -1810,27 +1814,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       ...(isPrimarySlashActionVisible({ actionId: 'review', isBtwSession, canLaunchReview })
         ? [{
             kind: 'action' as const,
-            id: 'review',
+            id: 'review' as const,
             command: '/review',
             label: t('chatInput.reviewAction'),
           }]
         : []),
       {
         kind: 'action',
-        id: 'goal',
+        id: 'goal' as const,
         command: '/goal',
         label: t('chatInput.goalAction'),
       },
       {
         kind: 'action',
-        id: 'usage',
+        id: 'usage' as const,
         command: '/usage',
         label: t('chatInput.usageAction'),
       },
       ...(canUseSkillsForTarget
         ? [{
             kind: 'action' as const,
-            id: 'reload-skills',
+            id: 'reload-skills' as const,
             command: '/reload-skills',
             label: t('chatInput.reloadSkillsAction'),
           }]
@@ -1839,13 +1843,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         ? [
             {
               kind: 'action' as const,
-              id: 'compact',
+              id: 'compact' as const,
               command: '/compact',
               label: t('chatInput.compactAction'),
             },
             {
               kind: 'action' as const,
-              id: 'init',
+              id: 'init' as const,
               command: '/init',
               label: t('chatInput.initAction'),
             },
@@ -2953,58 +2957,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, [requestModeChange]);
 
-  const selectSlashCommandAction = useCallback((actionId: string) => {
+  const selectSlashCommandAction = useCallback((actionId: SlashActionId) => {
     const raw = inputState.value || '';
-    const lower = raw.trimStart().toLowerCase();
-
-    let next = raw;
-
-    if (actionId === 'btw') {
-      if (isBtwSession) {
-        return;
-      }
-      if (!isSlashCommand(lower, '/btw')) {
-        next = '/btw ';
-      } else {
-        // Normalize to "/btw " + rest, preserving any already typed question.
-        const m = raw.match(/^(\s*)\/btw\b/i);
-        if (m) {
-          const leadingWs = m[1] || '';
-          const rest = raw.slice(m[0].length);
-          next = `${leadingWs}/btw ${rest.trimStart()}`;
-        } else {
-          next = '/btw ';
-        }
-      }
-    } else if (actionId === 'compact') {
-      next = '/compact';
-    } else if (actionId === 'goal') {
-      if (!isSlashCommand(lower, '/goal')) {
-        next = '/goal ';
-      } else {
-        const m = raw.match(/^(\s*)\/goal\b/i);
-        if (m) {
-          const leadingWs = m[1] || '';
-          const rest = raw.slice(m[0].length);
-          next = `${leadingWs}/goal ${rest.trimStart()}`;
-        } else {
-          next = '/goal ';
-        }
-      }
-    } else if (actionId === 'usage') {
-      next = '/usage';
-    } else if (actionId === 'init') {
-      next = '/init';
-    } else if (actionId === 'reload-skills') {
-      // /reload-skills takes no arguments. Setting the value to the bare
-      // command lets the user immediately press Enter to dispatch it
-      // (which is the same path /usage and /init use).
-      next = '/reload-skills';
-    } else {
+    const next = resolveSlashActionInputValue(actionId, raw, isBtwSession);
+    if (next === null) {
       return;
     }
 
     dispatchInput({ type: 'SET_VALUE', payload: next });
+    inputValueRef.current = next;
     // Clear the machine's queued input so the queuedInput sync effect does not overwrite
     // the just-set "/btw ..." value back to the stale "/" that was queued while processing.
     setQueuedInput(null);

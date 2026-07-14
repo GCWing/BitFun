@@ -119,7 +119,7 @@ impl ViewImageTool {
         let local_path = Path::new(input_path);
         if !context.is_some_and(|ctx| ctx.is_remote())
             && local_path.is_absolute()
-            && !crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri(input_path)
+            && !crate::agentic::tools::workspace_paths::is_bitfun_tool_uri(input_path)
         {
             return Ok(ResolvedImagePath::Local(local_path.to_path_buf()));
         }
@@ -236,7 +236,7 @@ impl Tool for ViewImageTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Path to an image file. Use an absolute local path, a workspace-relative path, or an exact bitfun://runtime URI returned by another tool."
+                    "description": "Path to an image file. Use an absolute local path, a workspace-relative path, or an exact bitfun:// URI returned by another tool."
                 },
                 "detail": {
                     "type": "string",

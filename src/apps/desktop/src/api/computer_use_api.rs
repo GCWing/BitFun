@@ -4,6 +4,7 @@ use crate::api::app_state::AppState;
 use crate::computer_use::DesktopComputerUseHost;
 use bitfun_core::agentic::tools::computer_use_host::ComputerUseHost;
 use bitfun_core::service::config::types::AIConfig;
+#[cfg(target_os = "windows")]
 use bitfun_core::util::process_manager;
 use serde::{Deserialize, Serialize};
 use tauri::State;

@@ -69,6 +69,7 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         builtin_skill_group_key("agent-browser"),
         Some("computer-use")
     );
+    assert_eq!(builtin_skill_group_key("agent-eval-canvas"), Some("canvas"));
     assert_eq!(builtin_skill_group_key("bitfun-canvas"), Some("canvas"));
     assert_eq!(builtin_skill_group_key("pr-review-canvas"), Some("canvas"));
     assert_eq!(builtin_skill_group_key("docs-canvas"), Some("canvas"));

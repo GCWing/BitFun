@@ -266,7 +266,7 @@ impl SessionSelectorState {
                 let is_current = self
                     .current_session_id
                     .as_ref()
-                    .map_or(false, |id| id == &session.session_id);
+                    .is_some_and(|id| id == &session.session_id);
 
                 let marker = if is_current { "● " } else { "  " };
                 let marker_style = if is_current {

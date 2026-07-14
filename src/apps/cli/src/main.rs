@@ -222,6 +222,15 @@ enum PluginAction {
     Deny { package_id: String },
     /// Revoke the current package approval for this workspace
     Revoke { package_id: String },
+    /// Preview or confirm activation of one source-approved package
+    Activate {
+        package_id: String,
+        /// Confirm the exact content hash displayed by the activation preview
+        #[arg(long, value_name = "CONTENT_HASH")]
+        confirm: Option<String>,
+    },
+    /// Deactivate one package for this workspace
+    Deactivate { package_id: String },
 }
 
 #[derive(Subcommand)]
@@ -362,11 +371,24 @@ fn terminal_scripts_dir() -> std::path::PathBuf {
 }
 
 async fn initialize_terminal_service() {
+    use bitfun_core::infrastructure::try_get_path_manager_arc;
     use bitfun_core::service::runtime::RuntimeManager;
     use bitfun_core::service::terminal::{TerminalApi, TerminalConfig};
 
     let mut terminal_config = TerminalConfig::default();
     terminal_config.shell_integration.scripts_dir = Some(terminal_scripts_dir());
+    match try_get_path_manager_arc() {
+        Ok(path_manager) => {
+            terminal_config.transcript.root_dir =
+                Some(path_manager.user_data_dir().join("terminals"));
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Failed to configure terminal transcript storage; recording is disabled: {}",
+                error
+            );
+        }
+    }
 
     if let Ok(runtime_manager) = RuntimeManager::new() {
         let current_path = std::env::var("PATH").ok();
@@ -520,15 +542,12 @@ async fn run_interactive(
     );
     let startup_result = startup_page.run(&mut terminal)?;
 
-    match startup_result {
-        StartupResult::Exit => {
-            shutdown_mcp_servers().await;
-            restore_tool_confirmation(original_skip_confirmation).await;
-            ui::restore_terminal(terminal)?;
-            println!("Goodbye!");
-            return Ok(());
-        }
-        _ => {}
+    if let StartupResult::Exit = startup_result {
+        shutdown_mcp_servers().await;
+        restore_tool_confirmation(original_skip_confirmation).await;
+        ui::restore_terminal(terminal)?;
+        println!("Goodbye!");
+        return Ok(());
     }
 
     // 5. Parse startup result and enter chat
@@ -682,6 +701,15 @@ async fn run_cli() -> Result<()> {
                     bitfun_core::plugin_source::ManagedPluginTrustDecision::Revoked,
                 )
                 .await?;
+            }
+            Some(PluginAction::Activate {
+                package_id,
+                confirm,
+            }) => {
+                management::activate_plugin(&package_id, confirm.as_deref()).await?;
+            }
+            Some(PluginAction::Deactivate { package_id }) => {
+                management::deactivate_plugin(&package_id).await?;
             }
         },
 
@@ -863,6 +891,46 @@ mod plugin_command_tests {
             revoke.command,
             Some(Commands::Plugins {
                 action: Some(PluginAction::Revoke { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let preview = Cli::try_parse_from(["bitfun-cli", "plugins", "activate", "acme.demo"])
+            .expect("parse plugin activation preview");
+        assert!(matches!(
+            preview.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: None,
+                })
+            }) if package_id == "acme.demo"
+        ));
+
+        let confirm = Cli::try_parse_from([
+            "bitfun-cli",
+            "plugins",
+            "activate",
+            "acme.demo",
+            "--confirm",
+            "sha256:previewed",
+        ])
+        .expect("parse confirmed plugin activation");
+        assert!(matches!(
+            confirm.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: Some(content_hash),
+                })
+            }) if package_id == "acme.demo" && content_hash == "sha256:previewed"
+        ));
+
+        let deactivate = Cli::try_parse_from(["bitfun-cli", "plugins", "deactivate", "acme.demo"])
+            .expect("parse plugin deactivation");
+        assert!(matches!(
+            deactivate.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Deactivate { package_id })
             }) if package_id == "acme.demo"
         ));
     }

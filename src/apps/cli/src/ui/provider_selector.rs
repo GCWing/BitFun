@@ -297,10 +297,7 @@ impl ProviderSelectorState {
             return None;
         }
 
-        let area = match self.last_area {
-            Some(a) => a,
-            None => return None,
-        };
+        let area = self.last_area?;
 
         let in_popup = mouse.column >= area.x
             && mouse.column < area.x.saturating_add(area.width)
@@ -433,7 +430,7 @@ impl ProviderSelectorState {
                     let is_selected = self
                         .selectable_row_indices
                         .get(self.selected)
-                        .map_or(false, |&ri| ri == row_idx);
+                        .is_some_and(|&ri| ri == row_idx);
 
                     self.render_item_row(
                         frame,
@@ -448,7 +445,7 @@ impl ProviderSelectorState {
                     let is_selected = self
                         .selectable_row_indices
                         .get(self.selected)
-                        .map_or(false, |&ri| ri == row_idx);
+                        .is_some_and(|&ri| ri == row_idx);
 
                     self.render_item_row(
                         frame,

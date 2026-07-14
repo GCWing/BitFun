@@ -440,15 +440,15 @@ impl ModelConfigFormState {
             return Some("Max tokens must be a number".into());
         }
         // Validate JSON fields if non-empty
-        if !self.custom_headers.trim().is_empty() {
-            if serde_json::from_str::<serde_json::Value>(self.custom_headers.trim()).is_err() {
-                return Some("Custom headers must be valid JSON".into());
-            }
+        if !self.custom_headers.trim().is_empty()
+            && serde_json::from_str::<serde_json::Value>(self.custom_headers.trim()).is_err()
+        {
+            return Some("Custom headers must be valid JSON".into());
         }
-        if !self.custom_request_body.trim().is_empty() {
-            if serde_json::from_str::<serde_json::Value>(self.custom_request_body.trim()).is_err() {
-                return Some("Custom request body must be valid JSON".into());
-            }
+        if !self.custom_request_body.trim().is_empty()
+            && serde_json::from_str::<serde_json::Value>(self.custom_request_body.trim()).is_err()
+        {
+            return Some("Custom request body must be valid JSON".into());
         }
         None
     }

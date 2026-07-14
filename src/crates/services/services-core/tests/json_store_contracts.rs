@@ -38,7 +38,7 @@ impl Drop for TestTempDir {
 #[tokio::test]
 async fn json_store_returns_none_for_missing_file() {
     let root = TestTempDir::new("missing");
-    let store = JsonFileStore::default();
+    let store = JsonFileStore;
 
     let value = store
         .read_optional::<TestPayload>(&root.path().join("missing.json"))
@@ -51,7 +51,7 @@ async fn json_store_returns_none_for_missing_file() {
 #[tokio::test]
 async fn json_store_creates_parent_dirs_and_round_trips_payload() {
     let root = TestTempDir::new("round-trip");
-    let store = JsonFileStore::default();
+    let store = JsonFileStore;
     let path = root.path().join("nested").join("payload.json");
     let payload = TestPayload {
         label: "session metadata".to_string(),
@@ -72,7 +72,7 @@ async fn json_store_creates_parent_dirs_and_round_trips_payload() {
 
 #[tokio::test]
 async fn json_store_reports_no_parent_directory() {
-    let store = JsonFileStore::default();
+    let store = JsonFileStore;
 
     let error = store
         .write_atomic(
