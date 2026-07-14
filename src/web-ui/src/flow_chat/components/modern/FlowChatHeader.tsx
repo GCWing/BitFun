@@ -54,7 +54,7 @@ export interface FlowChatHeaderProps {
   sessionId?: string;
   /** Ordered turn summaries used by header navigation. */
   turns?: FlowChatHeaderTurnSummary[];
-  /** Jump to a specific turn. Return false when the selection is rejected or still pending. */
+  /** Jump to a specific turn. Return false only when the selection is rejected. */
   onJumpToTurn?: (turnId: string) => boolean | void;
   /** Jump to the currently displayed turn. */
   onJumpToCurrentTurn?: () => void;
