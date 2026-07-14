@@ -2233,7 +2233,7 @@ async fn handle_chat(
         });
         let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
         match exec_remote_rpc(state, &cmd_json).await {
-            Ok(resp) => {
+            Ok(_resp) => {
                 // The response contains {resp: "message_sent", session_id, turn_id}.
                 // For now, show a brief confirmation. A future improvement could
                 // poll for the agent's reply and stream it back.

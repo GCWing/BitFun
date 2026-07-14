@@ -80,14 +80,20 @@ impl ShellDetector {
             candidates.extend(platform::non_windows_pwsh_candidates());
         }
 
-        let mut shells = Self::validate_candidates(candidates);
         #[cfg(windows)]
-        if let Some(git_bash) = platform::detect_git_bash() {
-            if !shells.iter().any(|shell| shell.id == git_bash.id) {
-                shells.push(git_bash);
+        {
+            let mut shells = Self::validate_candidates(candidates);
+            if let Some(git_bash) = platform::detect_git_bash() {
+                if !shells.iter().any(|shell| shell.id == git_bash.id) {
+                    shells.push(git_bash);
+                }
             }
+            shells
         }
-        shells
+        #[cfg(not(windows))]
+        {
+            Self::validate_candidates(candidates)
+        }
     }
 
     /// Detect Git Bash while excluding Windows' WSL compatibility executable.

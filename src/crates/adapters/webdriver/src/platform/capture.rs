@@ -184,9 +184,10 @@ mod imp {
 
         let empty_dict: objc2::rc::Retained<NSDictionary<NSBitmapImageRepPropertyKey, AnyObject>> =
             NSDictionary::new();
-        let png_data = bitmap_rep
-            .representationUsingType_properties(NSBitmapImageFileType::PNG, &empty_dict)
-            .ok_or("Failed to convert image to PNG")?;
+        let png_data = unsafe {
+            bitmap_rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &empty_dict)
+        }
+        .ok_or("Failed to convert image to PNG")?;
 
         Ok(BASE64_STANDARD.encode(png_data.to_vec()))
     }

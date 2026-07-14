@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use super::{DetectedShell, ShellCandidate, ShellDetector, ShellDiscoverySource, ShellType};
+#[cfg(windows)]
+use super::DetectedShell;
+use super::{ShellCandidate, ShellDetector, ShellDiscoverySource, ShellType};
 
 #[cfg(windows)]
 pub(super) fn windows_command_candidates() -> Vec<ShellCandidate> {

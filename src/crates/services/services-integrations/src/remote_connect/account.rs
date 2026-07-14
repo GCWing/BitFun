@@ -381,12 +381,8 @@ impl AccountClient {
             return Err(Self::into_error(resp).await);
         }
         let bytes = resp.bytes().await?;
-        let payload: SessionsListResponse = serde_json::from_slice(&bytes).map_err(|e| {
-            anyhow!(
-                "decode sessions list failed ({} bytes): {e}",
-                bytes.len()
-            )
-        })?;
+        let payload: SessionsListResponse = serde_json::from_slice(&bytes)
+            .map_err(|e| anyhow!("decode sessions list failed ({} bytes): {e}", bytes.len()))?;
         Ok(payload
             .sessions
             .into_iter()
@@ -753,6 +749,7 @@ struct SettingsEntry {
     #[serde(default)]
     version: i64,
     #[serde(default)]
+    #[allow(dead_code)]
     updated_at: i64,
 }
 

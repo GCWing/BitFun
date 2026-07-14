@@ -783,6 +783,8 @@ struct SecureManagedRoot {
 }
 
 struct SecurePackageDirectory {
+    // Retained for Windows / fallback open paths; Unix reads via directory fd.
+    #[cfg_attr(unix, allow(dead_code))]
     path: PathBuf,
     #[cfg(unix)]
     handle: std::fs::File,

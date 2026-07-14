@@ -24,6 +24,7 @@ use bitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use log::debug;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use screenshots::display_info::DisplayInfo;
 use screenshots::Screen;
 use std::sync::atomic::{AtomicU64, Ordering};
