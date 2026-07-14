@@ -5283,6 +5283,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await;
             return Err(error);
         }
+        if let Some(source_session_id) = prompt_cache_source_session_id.as_deref() {
+            self.session_manager
+                .seed_forked_edit_constraints(source_session_id, &session_id);
+        }
         drop(session_name);
         drop(session_config);
         drop(created_by);
@@ -6121,6 +6125,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager
             .seed_forked_skill_agent_listing_baselines(parent_session_id, &child_session.session_id)
             .await;
+        self.session_manager
+            .seed_forked_edit_constraints(parent_session_id, &child_session.session_id);
 
         self.session_manager
             .replace_context_messages(&child_session.session_id, snapshot.messages)

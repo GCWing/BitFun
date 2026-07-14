@@ -226,7 +226,7 @@ impl FileWriteTool {
             .as_object()
             .into_iter()
             .flat_map(|object| object.keys())
-            .filter(|name| name.as_str() != "payload")
+            .filter(|name| !matches!(name.as_str(), "payload" | "force"))
             .cloned()
             .collect::<Vec<_>>();
         parameter_names.sort();
@@ -254,7 +254,7 @@ impl FileWriteTool {
                 .collect::<Vec<_>>()
                 .join(", ");
             assistant_message.push_str(&format!(
-                " The Write tool accepts only the `payload` parameter; these additional parameters were ignored and should not be passed again: {}.",
+                " The Write tool accepts `payload` and the optional `force` escape hatch; these additional parameters were ignored and should not be passed again: {}.",
                 formatted_names
             ));
         }
@@ -281,6 +281,11 @@ impl FileWriteTool {
                 "payload": {
                     "type": "string",
                     "description": "A path-first Write payload in the format `+++ {absolute_file_path_or_bitfun_uri}\n{file_content}`. Content lines do not need a leading `+`."
+                },
+                "force": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Only set true after a prior call was rejected for touching a file the task said not to modify, and you have stated a legitimate reason for overriding that constraint."
                 }
             },
             "required": ["payload"],
@@ -420,6 +425,23 @@ impl Tool for FileWriteTool {
         };
 
         if let Some(ctx) = context {
+            if let ParsedWritePayload::Target { file_path, .. } = &parsed {
+                let force = input
+                    .get("force")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                if let Ok(resolved) = ctx.resolve_tool_path(file_path) {
+                    if Self::file_exists(ctx, &resolved).await {
+                        if let Some(rejection) =
+                            crate::agentic::execution::edit_constraint_guard::check(
+                                context, file_path, force,
+                            )
+                        {
+                            return rejection;
+                        }
+                    }
+                }
+            }
             let preflight_error = match &parsed {
                 ParsedWritePayload::Target { file_path, .. } => {
                     Self::preflight_write_error(ctx, file_path).await

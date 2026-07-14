@@ -102,6 +102,11 @@ Important notes:
                 "recursive": {
                     "type": "boolean",
                     "description": "If true, recursively delete directories and their contents. Required when deleting non-empty directories. Default: false"
+                },
+                "force": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Only set true after a prior call was rejected for touching a file the task said not to modify, AND you have a legitimate reason unrelated to making your own code compile or pass tests. State that reason in your response before retrying with this set."
                 }
             },
             "required": ["path"]
@@ -152,6 +157,16 @@ Important notes:
                 error_code: Some(400),
                 meta: None,
             };
+        }
+
+        let force = input
+            .get("force")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(rejection) =
+            crate::agentic::execution::edit_constraint_guard::check(context, path_str, force)
+        {
+            return rejection;
         }
 
         let resolved = match context.map(|ctx| ctx.resolve_tool_path(path_str)) {

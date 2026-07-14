@@ -165,6 +165,10 @@ pub struct SessionManager {
     token_anchor_store: Arc<TokenAnchorStore>,
     turn_skill_agent_snapshot_store: Arc<TurnSkillAgentSnapshotStore>,
     skill_agent_baseline_override_snapshot_store: Arc<DashMap<String, TurnSkillAgentSnapshot>>,
+    /// Session-scoped cache of "don't modify X" constraints extracted from the
+    /// first user message (see edit_constraint_guard). In-memory only, not
+    /// persisted — cheap to re-extract on session restore if ever evicted.
+    edit_constraints_store: Arc<DashMap<String, Vec<crate::agentic::execution::edit_constraint_guard::ExtractedConstraint>>>,
     file_read_state_store: Arc<FileReadStateStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
@@ -1563,6 +1567,7 @@ impl SessionManager {
             token_anchor_store: Arc::new(TokenAnchorStore::new()),
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
             skill_agent_baseline_override_snapshot_store: Arc::new(DashMap::new()),
+            edit_constraints_store: Arc::new(DashMap::new()),
             file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
@@ -1769,6 +1774,7 @@ impl SessionManager {
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
+        let edit_constraints_store = self.edit_constraints_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
@@ -1797,6 +1803,7 @@ impl SessionManager {
                 token_anchor_store,
                 turn_skill_agent_snapshot_store,
                 skill_agent_baseline_override_snapshot_store,
+                edit_constraints_store,
                 file_read_state_store,
                 evidence_ledger,
                 persistence_manager,
@@ -2386,6 +2393,37 @@ impl SessionManager {
         if let Some(snapshot) = latest_parent_snapshot.or(prompt_listing_baseline) {
             self.remember_turn_skill_agent_snapshot(child_session_id, 0, snapshot)
                 .await;
+        }
+    }
+
+    /// Caches the edit-constraint extraction result for `session_id`. In-memory
+    /// only (see field docs) — no persistence roundtrip.
+    pub fn remember_edit_constraints(
+        &self,
+        session_id: &str,
+        constraints: Vec<crate::agentic::execution::edit_constraint_guard::ExtractedConstraint>,
+    ) {
+        self.edit_constraints_store
+            .insert(session_id.to_string(), constraints);
+    }
+
+    /// Returns the cached constraints for `session_id`, or `None` if extraction
+    /// has not run for this session yet (distinct from `Some(vec![])`, which
+    /// means extraction ran and found no constraints).
+    pub fn edit_constraints(
+        &self,
+        session_id: &str,
+    ) -> Option<Vec<crate::agentic::execution::edit_constraint_guard::ExtractedConstraint>> {
+        self.edit_constraints_store
+            .get(session_id)
+            .map(|value| value.clone())
+    }
+
+    /// Subagents inherit the parent task's edit constraints instead of
+    /// re-extracting (same task, same prohibitions, avoids a redundant call).
+    pub fn seed_forked_edit_constraints(&self, parent_session_id: &str, child_session_id: &str) {
+        if let Some(constraints) = self.edit_constraints(parent_session_id) {
+            self.remember_edit_constraints(child_session_id, constraints);
         }
     }
 
@@ -6003,6 +6041,7 @@ impl SessionManager {
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
+        let edit_constraints_store = self.edit_constraints_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
 
@@ -6076,6 +6115,7 @@ impl SessionManager {
                             file_read_state_store.as_ref(),
                             evidence_ledger.as_ref(),
                         );
+                        edit_constraints_store.remove(&candidate.session_id);
                     }
                 }
             }
@@ -9562,6 +9602,37 @@ mod tests {
                 .await,
             Some(baseline)
         );
+    }
+
+    #[tokio::test]
+    async fn edit_constraints_are_cached_and_inherited_by_forked_children() {
+        use crate::agentic::execution::edit_constraint_guard::{
+            ConstraintMatcher, ExtractedConstraint,
+        };
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager);
+
+        // Uncached: distinct from "cached but empty".
+        assert_eq!(manager.edit_constraints("parent-session"), None);
+
+        let constraints = vec![ExtractedConstraint {
+            description: "don't modify test files".to_string(),
+            matcher: ConstraintMatcher::TestFiles,
+        }];
+        manager.remember_edit_constraints("parent-session", constraints.clone());
+        assert_eq!(manager.edit_constraints("parent-session"), Some(constraints.clone()));
+
+        // A forked child with no prior extraction inherits the parent's list.
+        assert_eq!(manager.edit_constraints("child-session"), None);
+        manager.seed_forked_edit_constraints("parent-session", "child-session");
+        assert_eq!(manager.edit_constraints("child-session"), Some(constraints));
+
+        // Seeding from a parent with no cached constraints is a no-op, not a panic.
+        manager.seed_forked_edit_constraints("no-such-parent", "another-child");
+        assert_eq!(manager.edit_constraints("another-child"), None);
     }
 
     #[tokio::test]

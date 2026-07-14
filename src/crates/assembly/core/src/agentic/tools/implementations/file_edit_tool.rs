@@ -143,6 +143,11 @@ impl Tool for FileEditTool {
                     "type": "boolean",
                     "default": false,
                     "description": "Replace all occurrences of old_string (default false)"
+                },
+                "force": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Only set true after a prior call was rejected for touching a file the task said not to modify, AND you have a legitimate reason unrelated to making your own code compile or pass tests. State that reason in your response before retrying with this set."
                 }
             },
             "required": ["file_path", "old_string", "new_string"],
@@ -203,6 +208,16 @@ impl Tool for FileEditTool {
                 error_code: Some(400),
                 meta: None,
             };
+        }
+
+        let force = input
+            .get("force")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(rejection) =
+            crate::agentic::execution::edit_constraint_guard::check(context, file_path, force)
+        {
+            return rejection;
         }
 
         let old_string = input
