@@ -65,15 +65,65 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'remote_connect_set_bot_verbose_mode',
 ]);
 
+/**
+ * Session / workspace / chat path — must not wait behind git/SSH/editor noise.
+ * Kept as an allowlist so new background commands default to normal/low.
+ */
+const HIGH_PRIORITY_COMMANDS = new Set([
+  'restore_session_view',
+  'restore_session_with_turns',
+  'restore_session',
+  'load_session_turns',
+  'list_persisted_sessions',
+  'list_persisted_sessions_page',
+  'list_persisted_sessions_count',
+  'get_session_thread_goal',
+  'touch_session_activity',
+  'create_session',
+  'delete_session',
+  'rename_session',
+  'archive_session',
+  'get_workspace_list',
+  'get_workspaces',
+  'list_workspaces',
+  'open_workspace',
+  'get_workspace_info',
+  'peer_mode_ping',
+  'peer_control_attach',
+  'peer_control_detach',
+]);
+
 export function isPeerLocalOnlyCommand(command: string): boolean {
   return LOCAL_ONLY_COMMANDS.has(command);
 }
+
+export type PeerInvokePriority = 'high' | 'normal' | 'low';
+
+export function peerInvokePriorityFor(command: string): PeerInvokePriority {
+  if (HIGH_PRIORITY_COMMANDS.has(command)) {
+    return 'high';
+  }
+  if (
+    command.startsWith('git_') ||
+    command.startsWith('ssh_') ||
+    command === 'get_file_metadata' ||
+    command === 'read_file_content' ||
+    command === 'get_config' ||
+    command === 'get_configs'
+  ) {
+    return 'low';
+  }
+  return 'normal';
+}
+
+/** Max in-flight HostInvoke RPCs per controller. Keep low to avoid relay 504 pile-ups. */
+export const PEER_HOST_INVOKE_MAX_CONCURRENT = 2;
 
 type DeviceRpcFn = (targetDeviceId: string, commandJson: string) => Promise<string>;
 
 export interface PeerDeviceTransportHooks {
   /** Fired only for transport/RPC layer failures, not product command errors. */
-  onHostInvokeTransportFailure?: (error: unknown) => void;
+  onHostInvokeTransportFailure?: (error: unknown, meta?: { action: string; priority: PeerInvokePriority }) => void;
   onHostInvokeSuccess?: () => void;
 }
 
@@ -95,20 +145,36 @@ export class PeerProductCommandError extends Error {
   }
 }
 
+interface QueuedPeerRequest {
+  priority: PeerInvokePriority;
+  enqueuedAt: number;
+  run: () => Promise<void>;
+}
+
 /**
  * Routes product invokes to a peer device via account Device RPC HostInvoke,
  * while keeping account / window / remote-connect commands on the local host.
  * Event listen stays local — peer events are re-emitted onto this machine.
  * Failures never fall back to the local product data plane.
+ *
+ * HostInvoke calls are priority-queued with a small concurrency limit so
+ * session hydrate is not starved by background git/SSH/editor RPCs.
  */
 export class PeerDeviceTransportAdapter implements ITransportAdapter {
   private readonly local = new TauriTransportAdapter();
   private connected = false;
+  private activeCount = 0;
+  private readonly queues: Record<PeerInvokePriority, QueuedPeerRequest[]> = {
+    high: [],
+    normal: [],
+    low: [],
+  };
 
   constructor(
     private readonly targetDeviceId: string,
     private readonly deviceRpc: DeviceRpcFn,
     private readonly hooks: PeerDeviceTransportHooks = {},
+    private readonly maxConcurrent: number = PEER_HOST_INVOKE_MAX_CONCURRENT,
   ) {}
 
   getTargetDeviceId(): string {
@@ -130,7 +196,94 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       return this.local.request<T>(action, params, timing);
     }
 
+    const priority = peerInvokePriorityFor(action);
+    return this.enqueue(priority, () => this.invokeOnPeer<T>(action, params, timing, transportStartedAt));
+  }
+
+  listen<T>(event: string, callback: (data: T) => void): () => void {
+    return this.local.listen<T>(event, callback);
+  }
+
+  async waitForListenerRegistrations?(): Promise<void> {
+    await this.local.waitForListenerRegistrations?.();
+  }
+
+  async disconnect(): Promise<void> {
+    await this.local.disconnect();
+    this.connected = false;
+    for (const priority of ['high', 'normal', 'low'] as const) {
+      this.queues[priority].length = 0;
+    }
+    this.activeCount = 0;
+  }
+
+  isConnected(): boolean {
+    return this.connected && this.local.isConnected();
+  }
+
+  /** Test helper: current queued depths by priority. */
+  getQueueDepthsForTest(): Record<PeerInvokePriority, number> {
+    return {
+      high: this.queues.high.length,
+      normal: this.queues.normal.length,
+      low: this.queues.low.length,
+    };
+  }
+
+  private enqueue<T>(priority: PeerInvokePriority, task: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.queues[priority].push({
+        priority,
+        enqueuedAt: nowMs(),
+        run: async () => {
+          try {
+            resolve(await task());
+          } catch (error) {
+            reject(error);
+          }
+        },
+      });
+      this.pump();
+    });
+  }
+
+  private pump(): void {
+    while (this.activeCount < this.maxConcurrent) {
+      const next = this.dequeueNext();
+      if (!next) {
+        return;
+      }
+      this.activeCount += 1;
+      void next.run().finally(() => {
+        this.activeCount -= 1;
+        this.pump();
+      });
+    }
+  }
+
+  private dequeueNext(): QueuedPeerRequest | undefined {
+    // Prefer high, then normal. Allow low only when nothing higher is waiting,
+    // so background git/SSH cannot monopolize slots after a hydrate burst.
+    if (this.queues.high.length > 0) {
+      return this.queues.high.shift();
+    }
+    if (this.queues.normal.length > 0) {
+      return this.queues.normal.shift();
+    }
+    if (this.queues.low.length > 0) {
+      return this.queues.low.shift();
+    }
+    return undefined;
+  }
+
+  private async invokeOnPeer<T>(
+    action: string,
+    params: unknown,
+    timing: TransportRequestTiming | undefined,
+    transportStartedAt: number,
+  ): Promise<T> {
     const invokeStartedAt = nowMs();
+    const priority = peerInvokePriorityFor(action);
     const commandJson = JSON.stringify({
       cmd: 'host_invoke',
       command: action,
@@ -167,25 +320,8 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
         throw error;
       }
       log.error('Peer HostInvoke transport failed', { action, error });
-      this.hooks.onHostInvokeTransportFailure?.(error);
+      this.hooks.onHostInvokeTransportFailure?.(error, { action, priority });
       throw error;
     }
-  }
-
-  listen<T>(event: string, callback: (data: T) => void): () => void {
-    return this.local.listen<T>(event, callback);
-  }
-
-  async waitForListenerRegistrations?(): Promise<void> {
-    await this.local.waitForListenerRegistrations?.();
-  }
-
-  async disconnect(): Promise<void> {
-    await this.local.disconnect();
-    this.connected = false;
-  }
-
-  isConnected(): boolean {
-    return this.connected && this.local.isConnected();
   }
 }

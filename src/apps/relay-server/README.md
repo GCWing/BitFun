@@ -194,6 +194,12 @@ client_max_body_size 100M;
 
 When diagnosing 413s, check **both** gates: reverse-proxy `client_max_body_size` (or equivalent) **and** Axum `DefaultBodyLimit`. The effective limit is the stricter of the two. Direct host-port access (e.g. `host:9701` without a proxy) only hits the Axum limit.
 
+#### Device RPC timeouts (Peer HostInvoke)
+
+`POST /api/devices/:target_device_id/rpc` waits up to **120 seconds** for the target device to answer over WebSocket (`RPC_TIMEOUT` in `src/routes/devices.rs`). Peer Device Mode uses this path for every product `invoke`.
+
+If a reverse proxy sits in front of the relay, its read / response timeouts must be **≥ 120s** (recommend 130s), or the proxy returns **HTTP 504 Gateway Timeout** before Axum can. See `Caddyfile` for the `transport http` timeout settings.
+
 ## WebSocket Protocol (Desktop Only)
 
 Only desktop clients connect via WebSocket. Mobile clients use the HTTP endpoints above.

@@ -373,6 +373,13 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       clearInterval(heartbeatInterval.current);
     }
 
+    // Peer Device Mode routes product invokes to the peer; controller-local SSH
+    // heartbeats must not flood HostInvoke with unrelated connection checks.
+    if ((window as Window & { __bitfunPeerModeActive?: boolean }).__bitfunPeerModeActive) {
+      heartbeatInterval.current = null;
+      return;
+    }
+
     heartbeatInterval.current = window.setInterval(async () => {
       try {
         const connected = await sshApi.isConnected(connId);
@@ -387,6 +394,10 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   startHeartbeatRef.current = startHeartbeat;
 
   const checkRemoteWorkspace = useCallback(async () => {
+    if ((window as Window & { __bitfunPeerModeActive?: boolean }).__bitfunPeerModeActive) {
+      log.info('checkRemoteWorkspace: skipped while peer device mode is active');
+      return;
+    }
     try {
       // ── Collect all remote workspaces to reconnect ──────────────────────
       const wmState0 = workspaceManager.getState();
@@ -613,6 +624,22 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
     return unsubscribe;
   }, [checkRemoteWorkspace]);
+
+  // Pause controller SSH heartbeats / reconnect while Peer Device Mode is active.
+  useEffect(() => {
+    const onPeerModeChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ active?: boolean }>).detail;
+      const active = detail?.active === true;
+      (window as Window & { __bitfunPeerModeActive?: boolean }).__bitfunPeerModeActive = active;
+      if (active && heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
+        heartbeatInterval.current = null;
+        log.info('Paused SSH heartbeat while peer device mode is active');
+      }
+    };
+    window.addEventListener('peer-mode:changed', onPeerModeChanged);
+    return () => window.removeEventListener('peer-mode:changed', onPeerModeChanged);
+  }, []);
 
   useEffect(() => {
     return workspaceManager.addEventListener(event => {

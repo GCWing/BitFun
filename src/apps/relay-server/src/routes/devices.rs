@@ -20,7 +20,7 @@ use crate::routes::api::AppState;
 use crate::routes::websocket::OutboundProtocol;
 
 #[cfg(not(test))]
-const RPC_TIMEOUT: Duration = Duration::from_secs(60);
+const RPC_TIMEOUT: Duration = Duration::from_secs(120);
 #[cfg(test)]
 const RPC_TIMEOUT: Duration = Duration::from_millis(100);
 

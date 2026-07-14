@@ -25,8 +25,13 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('PeerDeviceMode');
 
-const PEER_RPC_FAILURE_LIMIT = 3;
+/** Only high/normal HostInvoke transport failures count toward auto-exit. */
+const PEER_RPC_FAILURE_LIMIT = 5;
 const PEER_PING_INTERVAL_MS = 20_000;
+
+function emitPeerModeChanged(detail: { active: boolean; deviceId?: string }): void {
+  window.dispatchEvent(new CustomEvent('peer-mode:changed', { detail }));
+}
 
 export type PeerModeState =
   | { active: false }
@@ -177,6 +182,7 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await restoreLocalTransport();
       await setPeerControllerActive(false, false);
       setPeerMode({ active: false });
+      emitPeerModeChanged({ active: false, deviceId });
       rpcFailuresRef.current = 0;
       await reloadConfigFromCurrentTransport();
       await rebootstrapWorkspaces();
@@ -193,13 +199,26 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [restoreLocalTransport]);
 
-  const notePeerTransportFailure = useCallback((error: unknown) => {
+  const notePeerTransportFailure = useCallback((
+    error: unknown,
+    meta?: { action: string; priority: 'high' | 'normal' | 'low' },
+  ) => {
     if (!peerModeRef.current.active) {
+      return;
+    }
+    // Background git/SSH/editor noise must not force-exit Peer Mode.
+    if (meta?.priority === 'low') {
+      log.warn('Peer transport failure ignored for auto-exit (low priority)', {
+        action: meta.action,
+        error,
+      });
       return;
     }
     rpcFailuresRef.current += 1;
     log.warn('Peer transport failure counted', {
       failures: rpcFailuresRef.current,
+      action: meta?.action,
+      priority: meta?.priority,
       error,
     });
     if (rpcFailuresRef.current >= PEER_RPC_FAILURE_LIMIT) {
@@ -262,6 +281,7 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       attached = true;
 
       setPeerMode({ active: true, deviceId, deviceName });
+      emitPeerModeChanged({ active: true, deviceId });
       rpcFailuresRef.current = 0;
       await reloadConfigFromCurrentTransport();
       await rebootstrapWorkspaces();
@@ -279,6 +299,7 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         await restoreLocalTransport();
         await setPeerControllerActive(false, false);
         setPeerMode({ active: false });
+        emitPeerModeChanged({ active: false, deviceId });
         await reloadConfigFromCurrentTransport();
         await rebootstrapWorkspaces();
       } catch (rollbackError) {

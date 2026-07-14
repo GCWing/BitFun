@@ -529,6 +529,24 @@ function isUnsupportedTauriCommandError(error: unknown, command: string): boolea
     normalizedMessage.includes('is not a function');
 }
 
+/** Transport / gateway failures must fail hydrate instead of falling through to more RPCs. */
+function isSessionRestoreTransportError(error: unknown): boolean {
+  const anyError = error as { message?: unknown; context?: { originalError?: unknown } };
+  const originalError = anyError?.context?.originalError;
+  const messageParts = [
+    anyError?.message,
+    typeof originalError === 'string' ? originalError : (originalError as { message?: unknown })?.message,
+  ].filter((part): part is string => typeof part === 'string');
+  const normalizedMessage = messageParts.join(' ').toLowerCase();
+  return (
+    normalizedMessage.includes('504') ||
+    normalizedMessage.includes('gateway timeout') ||
+    normalizedMessage.includes('peer hostinvoke transport') ||
+    normalizedMessage.includes('timed out') ||
+    normalizedMessage.includes('timeout')
+  );
+}
+
 function restoreCommandSupportKey(
   command: string,
   remoteConnectionId?: string,
@@ -4090,6 +4108,9 @@ export class FlowChatStore {
             durationMs: elapsedMs(restoreStartedAt),
           });
         } catch (error) {
+          if (isSessionRestoreTransportError(error)) {
+            throw error;
+          }
           contextRestoreState = 'pending';
           startupTrace.markPhase('historical_session_restore_failed', {
             remote,
