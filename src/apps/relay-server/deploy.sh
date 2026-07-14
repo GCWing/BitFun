@@ -118,10 +118,46 @@ fi
 echo ""
 echo "=== Deploy complete ==="
 echo "Relay server running on port 9700"
-echo "Caddy proxy on ports 80/443"
 echo ""
-echo "Custom Server URL examples for BitFun Desktop:"
-echo "  - Direct relay:        http://<YOUR_SERVER_IP>:9700"
+
+CONTAINER_NAME="bitfun-relay"
+RELAY_ADMIN_DB="/app/data/bitfun_relay.db"
+ADD_USER_CMD="docker exec -it ${CONTAINER_NAME} /app/relay-admin --db ${RELAY_ADMIN_DB} add-user --username <name>"
+
+print_client_url_hint() {
+  echo "Point BitFun Desktop / CLI Auth Server URL to:"
+  echo "  http://<YOUR_SERVER_IP>:9700"
+  echo "See README.md for sync, Peer Device Mode, and proxy timeouts."
+}
+
+if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1 \
+  && [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" = "true" ]; then
+  # Empty DB prints "No accounts found."; otherwise a USERNAME header + rows.
+  USER_LIST="$(
+    docker exec "$CONTAINER_NAME" /app/relay-admin --db "$RELAY_ADMIN_DB" list-users 2>/dev/null || true
+  )"
+  if echo "$USER_LIST" | grep -q '^No accounts found\.'; \
+    || ! echo "$USER_LIST" | grep -q '^USERNAME'; then
+    echo "No relay accounts yet. Account login will not work until you create one."
+    echo "Run:"
+    echo "  ${ADD_USER_CMD}"
+    echo "(omit --password to enter the password interactively)"
+    echo ""
+    print_client_url_hint
+  else
+    USER_COUNT="$(
+      echo "$USER_LIST" | awk 'NR>2 && NF { count++ } END { print count+0 }'
+    )"
+    echo "Relay accounts found: ${USER_COUNT}"
+    echo ""
+    print_client_url_hint
+  fi
+else
+  echo "Warning: container '${CONTAINER_NAME}' is not running; skipped account check."
+  echo "After it is up, create an account with:"
+  echo "  ${ADD_USER_CMD}"
+fi
+
 echo ""
 echo "Check status:  docker compose ps"
 echo "Start:         bash start.sh"

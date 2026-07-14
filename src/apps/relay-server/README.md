@@ -1,35 +1,181 @@
 # BitFun Relay Server
 
-WebSocket relay server for BitFun Remote Connect. It bridges desktop (WebSocket) and mobile (HTTP) clients while forwarding end-to-end encrypted payloads.
+WebSocket / HTTP relay for BitFun **Remote Connect** and **account login**.
+
+Open-source BitFun does **not** ship a public hosted login service. If you want
+Desktop / CLI **account login**, cross-device session & settings sync, or
+**Peer Device Mode** (control another online device on the same account), you
+must:
+
+1. Deploy this relay yourself
+2. Enable the account database (`RELAY_DB_PATH`)
+3. Create user accounts out-of-band with `relay-admin` (no public sign-up)
+4. Point BitFun Desktop or CLI at your relay URL and log in
+
+The relay stays **zero-knowledge**: clients encrypt with a master key derived
+locally; the server stores Argon2id password hashes and AES-GCM-wrapped keys,
+never plaintext passwords or decryptable sync payloads.
+
+## Two operating modes
+
+| Mode | When | What you get |
+|------|------|----------------|
+| **Pure relay** | `RELAY_DB_PATH` unset | Room pairing + mobile HTTP ↔ Desktop WebSocket bridge only. **No** account login, sync, or Peer Device Mode. |
+| **Account-enabled** | `RELAY_DB_PATH` set to a persistent SQLite path | Everything above **plus** login, device presence, device RPC (Peer HostInvoke), encrypted session/settings sync. |
+
+Docker Compose in this directory **already enables account mode**
+(`RELAY_DB_PATH=/app/data/bitfun_relay.db`). Manual / cargo runs must set the
+variable yourself or accounts stay disabled.
 
 ## Features
 
-- Desktop connects via WebSocket, mobile via HTTP
+- Desktop and CLI connect via WebSocket; mobile uses HTTP
 - End-to-end encrypted passthrough (the server does not decrypt payloads)
 - Correlation-based HTTP-to-WebSocket request-response matching
 - Per-room mobile-web static file upload and serving
 - Heartbeat-based connection management with configurable room TTL
-- Optional zero-knowledge account storage (E2E encrypted — the server never sees passwords or master keys)
+- Optional zero-knowledge account storage + device routing + sync
 - Docker deployment support with optional Caddy reverse proxy
 
-## Quick Start
+## Open-source: enable account login (recommended path)
+
+Use this checklist on a machine you control (VPS, LAN server, or localhost).
+
+### 1. Deploy the relay
+
+```bash
+git clone https://github.com/GCWing/BitFun
+cd BitFun/src/apps/relay-server
+bash deploy.sh
+```
+
+`deploy.sh` must run **on the target server** (it does not SSH elsewhere).
+Requires Docker and Docker Compose.
+
+After a successful start, the script runs `relay-admin list-users`. If the
+database has **no accounts**, it prints the exact `add-user` command to run
+next (account login will not work until you create at least one user).
+
+Verify:
+
+```bash
+curl -fsS http://127.0.0.1:9700/health
+docker compose ps
+```
+
+### 2. Confirm account database is on
+
+Compose sets:
+
+```yaml
+RELAY_DB_PATH=/app/data/bitfun_relay.db
+```
+
+Data lives in the `relay-db` Docker volume. If you run the binary without
+Compose, export a persistent path first:
+
+```bash
+export RELAY_DB_PATH=/var/lib/bitfun/bitfun_relay.db
+mkdir -p "$(dirname "$RELAY_DB_PATH")"
+RELAY_PORT=9700 ./target/release/bitfun-relay-server
+```
+
+If the process logs `RELAY_DB_PATH not set — account features disabled`, login
+will fail with “account features disabled” until you fix the env and restart.
+
+### 3. Create accounts (`relay-admin`)
+
+There is **no** public registration API. Operators create users with
+`relay-admin` (bundled in the Docker image). `--db` must be the **same path**
+as `RELAY_DB_PATH`.
+
+```bash
+# Interactive password prompt (recommended)
+docker exec -it bitfun-relay \
+  /app/relay-admin --db /app/data/bitfun_relay.db add-user --username alice
+
+# Non-interactive (scripts / CI)
+docker exec bitfun-relay \
+  /app/relay-admin --db /app/data/bitfun_relay.db add-user \
+  --username alice --password 'choose-a-strong-password'
+
+# List accounts
+docker exec bitfun-relay \
+  /app/relay-admin --db /app/data/bitfun_relay.db list-users
+```
+
+Other commands:
+
+```bash
+# Reset password (also rotates the master key — old synced blobs become unreadable)
+docker exec -it bitfun-relay \
+  /app/relay-admin --db /app/data/bitfun_relay.db reset-password --username alice
+
+# Rename (credentials / user_id unchanged)
+docker exec bitfun-relay \
+  /app/relay-admin --db /app/data/bitfun_relay.db rename-user \
+  --username alice --new-username alice2
+
+# Delete account and all of its relay-side data
+docker exec bitfun-relay \
+  /app/relay-admin --db /app/data/bitfun_relay.db delete-user --username alice
+```
+
+Without Docker, build and run the same tool from this crate:
+
+```bash
+cargo build --release -p bitfun-relay-server
+./target/release/relay-admin --db "$RELAY_DB_PATH" add-user --username alice
+```
+
+### 4. Point BitFun clients at your relay
+
+Relay URL examples:
+
+- Direct: `http://<YOUR_SERVER_IP>:9700`
+- Localhost: `http://127.0.0.1:9700`
+- Behind a reverse proxy: `https://relay.example.com` (only add a path prefix
+  such as `/relay` if your proxy is configured that way)
+
+**Desktop**
+
+1. Open account / login UI (or Remote Connect self-hosted settings, depending
+   on your build).
+2. Set **Auth Server / Relay URL** to the URL above.
+3. Sign in with the username and password you created with `relay-admin`.
+
+**CLI**
+
+1. Run `bitfun-cli`, open `/login`.
+2. Fill **Auth Server**, **Username**, **Password**, then Login.
+3. After login, the CLI can act as a **Peer Host** for same-account Desktops.
+
+Clients remember a non-secret hint (`~/.bitfun/account_hint.json`: username +
+relay URL) and an encrypted session file for restart without retyping the
+password.
+
+### 5. What works after login
+
+- Encrypted **settings / session sync** across devices on the same account
+- **Device list** and online presence for that account
+- **Peer Device Mode**: one Desktop controls another online Desktop **or** CLI
+  host over device RPC (`HostInvoke` / `DeviceEvent`)
+- Same machine Desktop + CLI share one `device_id`; the **last successful**
+  `AuthConnect` wins as the live Peer Host for that id
+
+## Quick Start (service ops)
 
 ### Recommended: Run on the target server
 
 ```bash
-# Clone on the target server
 git clone https://github.com/GCWing/BitFun
 cd BitFun/src/apps/relay-server
-
-# Deploy to the current machine
 bash deploy.sh
 ```
 
-`deploy.sh` must run on the target server itself. It deploys to the current machine only and does not SSH to another host.
-
 ### Service Operations
 
-Run these commands on the target server inside this directory:
+Run these on the target server inside this directory:
 
 ```bash
 bash start.sh
@@ -46,45 +192,39 @@ Notes:
 - `restart.sh` restarts the service when running, or starts it when stopped.
 - The container uses `restart: unless-stopped`.
 
-### What URL should I fill in BitFun Desktop?
-
-In **Remote Connect → Self-Hosted → Server URL**, use one of:
-
-- `http://<YOUR_SERVER_IP>:9700`
-
-`/relay` is only needed when your reverse proxy is configured with that path prefix.
-
 ### Network Binding
 
-By default, the relay process listens on `0.0.0.0:9700` (all interfaces) and Docker Compose publishes the container port on the host's `0.0.0.0:9700`.
+By default the relay listens on `0.0.0.0:9700` and Compose publishes that port
+on the host.
 
-If you need to restrict the service to localhost only, set the environment variable before running `start.sh`/`restart.sh`/`deploy.sh`:
+Restrict to localhost:
 
 ```bash
 export RELAY_HOST_BIND_IP=127.0.0.1
 bash deploy.sh
 ```
 
-### Manual Run
+### Manual Run (without Docker)
 
 ```bash
-# From project root
+# From repository root
 cargo build --release -p bitfun-relay-server
 
-# Run
+# Account-enabled (persistent DB path required for login)
+export RELAY_DB_PATH="$HOME/.bitfun-relay/bitfun_relay.db"
+mkdir -p "$(dirname "$RELAY_DB_PATH")"
 RELAY_PORT=9700 ./target/release/bitfun-relay-server
 ```
 
 ## Deployment Checklist
 
-1. Open required ports:
-   - `9700` for direct relay access
-   - `80/443` when using Caddy or another reverse proxy
-2. Verify the health endpoint:
-   - `http://<server-ip>:9700/health`
-3. Decide the final URL strategy:
-   - direct port or reverse proxy domain
-4. Fill the same URL into BitFun Desktop custom server settings
+1. Open ports: `9700` (direct), and `80/443` if using Caddy / another proxy.
+2. Hit `http://<server-ip>:9700/health`.
+3. Confirm `RELAY_DB_PATH` if you need accounts (Compose does this for you).
+4. Create at least one user with `relay-admin`.
+5. Fill the same relay URL into Desktop / CLI and log in.
+6. If you terminate TLS on a reverse proxy, raise body size and read timeouts
+   (see sync + device RPC notes below).
 
 ## Environment Variables
 
@@ -94,7 +234,7 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 | `RELAY_STATIC_DIR` | _(none)_ | Path to mobile web static files fallback SPA. When unset, no fallback static files are served. Docker Compose sets this to `/app/static`. |
 | `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
 | `RELAY_ROOM_TTL` | `3600` | Room TTL in seconds (0 = no expiry) |
-| `RELAY_DB_PATH` | _(none)_ | SQLite database path for account storage. When unset, the relay runs in pure-relay mode with no account features. Set to a persistent path (e.g. `/app/data/bitfun_relay.db`) to enable account login, device routing, and cross-device session/settings sync. The server stays zero-knowledge: it only stores Argon2id password hashes and AES-GCM-wrapped master keys — never plaintext passwords or master keys. Accounts are provisioned via the `relay-admin` CLI (see below). |
+| `RELAY_DB_PATH` | _(none)_ | SQLite path for account storage. **Unset = pure relay (no login).** Set a persistent path (Compose: `/app/data/bitfun_relay.db`) to enable login, device routing, and sync. Accounts are provisioned only via `relay-admin`. |
 
 ## API Endpoints
 
@@ -102,43 +242,41 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check (returns status, version, uptime, room and connection counts) |
+| `/health` | GET | Health check (status, version, uptime, room and connection counts) |
 | `/api/info` | GET | Server info (name, version, protocol version) |
 
-### Account (optional — requires `RELAY_DB_PATH`)
+### Account (requires `RELAY_DB_PATH`)
 
-Zero-knowledge authentication. Clients derive an Argon2id KEK locally and send only password hashes; the server never sees plaintext passwords or master keys. Brute-force protection: per-account exponential-backoff lockout + per-IP sliding-window rate limit. Accounts are **provisioned out-of-band** (no public registration endpoint) so the relay never handles a password.
+Zero-knowledge authentication. Clients derive an Argon2id KEK locally and send
+only password hashes. Brute-force protection: per-account lockout + per-IP rate
+limit. **No public registration endpoint.**
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/auth/login/challenge` | POST | Fetch KDF params + wrapped master key for local derivation |
 | `/api/auth/login` | POST | Verify password hash and issue a token; returns `{ token, user_id }` |
+| `/api/auth/logout` | POST | Revoke the caller's token |
+| `/api/auth/delegate` | POST | Issue a delegated token for a paired client (authenticated caller) |
 
-#### Account Provisioning (`relay-admin` CLI)
+### Devices (requires `RELAY_DB_PATH` + Bearer token)
 
-Accounts are created out-of-band via the `relay-admin` binary (shipped inside the Docker image). No public registration endpoint is exposed.
+Used by Desktop / CLI / mobile-web for presence and Peer Device Mode RPC.
 
-```bash
-# All commands require --db pointing to the same SQLite file as RELAY_DB_PATH
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/devices` | GET | List devices for the account (online + offline) |
+| `/api/devices/:target_device_id/rpc` | POST | Route an opaque encrypted RPC to an **online** device (waits up to **120s**) |
+| `/api/devices/:target_device_id` | DELETE | Remove a device registration (and drop any live WS session) |
 
-# Add an account (interactive password prompt, recommended)
-docker exec -it <container> /app/relay-admin --db /app/data/bitfun_relay.db add-user --username alice
+#### Device RPC timeouts (Peer HostInvoke)
 
-# Add with password on the command line (for scripts)
-docker exec <container> /app/relay-admin --db /app/data/bitfun_relay.db add-user --username alice --password "Secret123!"
+`POST /api/devices/:target_device_id/rpc` waits up to **120 seconds** for the
+target device (`RPC_TIMEOUT` in `src/routes/devices.rs`). Peer Device Mode uses
+this for product `invoke` calls.
 
-# List all accounts
-docker exec <container> /app/relay-admin --db /app/data/bitfun_relay.db list-users
-
-# Reset password (generates new salts + new master key;
-# previously synced encrypted data becomes unreadable)
-docker exec -it <container> /app/relay-admin --db /app/data/bitfun_relay.db reset-password --username alice
-
-# Delete an account and all its data
-docker exec <container> /app/relay-admin --db /app/data/bitfun_relay.db delete-user --username alice
-```
-
-The tool performs the same client-side Argon2id key derivation and AES-256-GCM master-key wrapping as the login client, then writes only non-secret artifacts (salts, hashes, wrapped key) to the database. Passwords are never stored. When `--password` is omitted the tool prompts with hidden input and asks for confirmation.
+Reverse proxies in front of the relay must use a read / response timeout
+**≥ 120s** (recommend 130s), or clients see **HTTP 504** before Axum finishes.
+See `Caddyfile` for `transport http` timeout settings.
 
 ### Room Operations (Mobile HTTP → Desktop WS bridge)
 
@@ -160,11 +298,12 @@ The tool performs the same client-side Argon2id key derivation and AES-256-GCM m
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/ws` | WebSocket | Desktop client connection endpoint |
+| `/ws` | WebSocket | Desktop **and CLI** account / room clients |
 
-### Cross-Device Sync (optional — requires `RELAY_DB_PATH` + Bearer token)
+### Cross-Device Sync (requires `RELAY_DB_PATH` + Bearer token)
 
-Encrypted session and settings blobs, stored opaquely on the relay. All payloads are AES-256-GCM encrypted client-side with the account master key; the relay cannot read them.
+Encrypted session and settings blobs. All payloads are AES-256-GCM encrypted
+client-side with the account master key; the relay cannot read them.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -177,14 +316,15 @@ Encrypted session and settings blobs, stored opaquely on the relay. All payloads
 
 #### Request body size limits (Axum vs reverse proxy)
 
-Session sync posts a **full** encrypted session bundle (metadata + all dialog turns). Long conversations with large tool outputs routinely exceed Axum’s default ~2 MiB request body limit and fail with **HTTP 413 Payload Too Large**.
+Session sync posts a **full** encrypted session bundle. Large conversations can
+exceed Axum’s default ~2 MiB limit and fail with **HTTP 413**.
 
-This server raises the limit on `POST /api/sync/sessions` and `POST /api/sync/settings` to **64 MiB** (`SYNC_BODY_LIMIT` in `src/routes/sync.rs`).
-
-If you put nginx / Caddy / another reverse proxy in front of the relay (common for TLS on port 443 → container `9700`), you must also raise the proxy body limit, or the proxy will reject large uploads **before** Axum sees them:
+This server raises the limit on sync POSTs to **64 MiB** (`SYNC_BODY_LIMIT` in
+`src/routes/sync.rs`). Proxies must raise their body limit too, or they reject
+uploads before Axum sees them:
 
 ```nginx
-# nginx example — must be >= Axum SYNC_BODY_LIMIT (64M)
+# nginx — must be >= Axum SYNC_BODY_LIMIT (64M)
 client_max_body_size 100M;
 ```
 
@@ -192,22 +332,18 @@ client_max_body_size 100M;
 # Caddy: request_body { max_size 100MB }
 ```
 
-When diagnosing 413s, check **both** gates: reverse-proxy `client_max_body_size` (or equivalent) **and** Axum `DefaultBodyLimit`. The effective limit is the stricter of the two. Direct host-port access (e.g. `host:9701` without a proxy) only hits the Axum limit.
+When diagnosing 413s, check **both** the proxy and Axum. Direct host-port access
+only hits the Axum limit.
 
-#### Device RPC timeouts (Peer HostInvoke)
+## WebSocket Protocol
 
-`POST /api/devices/:target_device_id/rpc` waits up to **120 seconds** for the target device to answer over WebSocket (`RPC_TIMEOUT` in `src/routes/devices.rs`). Peer Device Mode uses this path for every product `invoke`.
+Desktop and CLI use WebSocket for rooms and/or account device routing. Mobile
+clients use the HTTP endpoints above.
 
-If a reverse proxy sits in front of the relay, its read / response timeouts must be **≥ 120s** (recommend 130s), or the proxy returns **HTTP 504 Gateway Timeout** before Axum can. See `Caddyfile` for the `transport http` timeout settings.
-
-## WebSocket Protocol (Desktop Only)
-
-Only desktop clients connect via WebSocket. Mobile clients use the HTTP endpoints above.
-
-### Desktop → Server (Inbound)
+### Client → Server (Inbound)
 
 ```json
-// Create a room
+// Create a room (Remote Connect room bridge)
 { "type": "create_room", "room_id": "optional-id", "device_id": "...", "device_type": "desktop", "public_key": "base64..." }
 
 // Respond to a bridged HTTP request (pair or command)
@@ -216,53 +352,43 @@ Only desktop clients connect via WebSocket. Mobile clients use the HTTP endpoint
 // Heartbeat
 { "type": "heartbeat" }
 
-// Account-authenticated device routing (parallel to room pairing)
+// Account-authenticated device routing (requires RELAY_DB_PATH)
 { "type": "auth_connect", "token": "...", "device_name": "..." }
 { "type": "device_message", "target_device_id": "...", "correlation_id": "...", "encrypted_data": "base64...", "nonce": "base64..." }
 ```
 
-### Server → Desktop (Outbound)
+A second `auth_connect` with the same `(user_id, device_id)` **replaces** the
+previous live connection (last connect wins).
+
+### Server → Client (Outbound)
 
 ```json
-// Room created confirmation
 { "type": "room_created", "room_id": "..." }
-
-// Pair request forwarded from mobile HTTP
 { "type": "pair_request", "correlation_id": "...", "public_key": "base64...", "device_id": "...", "device_name": "..." }
-
-// Encrypted command forwarded from mobile HTTP
 { "type": "command", "correlation_id": "...", "encrypted_data": "base64...", "nonce": "base64..." }
-
-// Heartbeat acknowledgment
 { "type": "heartbeat_ack" }
-
-// Device routing responses
 { "type": "auth_ok", "user_id": "...", "device_id": "..." }
 { "type": "auth_error", "message": "..." }
 { "type": "incoming_device_message", "source_device_id": "...", "correlation_id": "...", "encrypted_data": "base64...", "nonce": "base64..." }
 { "type": "device_presence", "devices": [{ "device_id": "...", "device_name": "..." }] }
-
-// Error
 { "type": "error", "message": "..." }
 ```
 
 ## Architecture
 
 ```
-Mobile Phone ──HTTP POST──► Relay Server ◄──WebSocket── Desktop Client
-                               │
-                          E2E Encrypted
-                          (server cannot
-                           read messages)
+Mobile ──HTTP──► Relay ◄──WebSocket── Desktop / CLI
+                   │
+              opaque E2E payloads
+              (optional SQLite for
+               accounts / sync / devices)
 ```
 
-The relay server bridges HTTP and WebSocket:
-
-- **Desktop** connects via WebSocket, creates a room, and stays connected.
-- **Mobile** sends HTTP POST requests such as `/pair` and `/command`.
-- The relay forwards requests to the desktop over WebSocket with correlation IDs, waits for the response, and returns it over HTTP.
-- The relay only manages rooms and forwards opaque encrypted payloads.
-- Per-room mobile-web static files can be uploaded and served at `/r/:room_id/`.
+- **Room bridge**: Desktop creates a room; mobile posts `/pair` and `/command`;
+  the relay correlates HTTP ↔ WebSocket without reading ciphertext.
+- **Account plane** (when `RELAY_DB_PATH` is set): clients log in over HTTP,
+  then `auth_connect` on WebSocket; device RPC and sync store opaque blobs.
+- Per-room mobile-web files can be served at `/r/:room_id/`.
 
 ## Directory structure
 
@@ -277,20 +403,20 @@ relay-server/
 │   ├── bin/
 │   │   └── relay_admin.rs  # relay-admin CLI binary
 │   ├── relay/              # Room manager + device routing manager
-│   └── routes/             # HTTP/WS route handlers (auth, sync, api, websocket)
+│   └── routes/             # HTTP/WS route handlers (auth, devices, sync, api, websocket)
 ├── static/                 # Mobile-web static files
-├── Cargo.toml              # Crate manifest
-├── Dockerfile              # Docker build
-├── docker-compose.yml      # Docker Compose config
-├── Caddyfile               # Optional reverse proxy config
-├── deploy.sh               # Deploy on the target server itself
-├── start.sh                # Start service if not already running
-├── stop.sh                 # Stop running service
-├── restart.sh              # Restart service, or start if stopped
+├── Cargo.toml
+├── Dockerfile
+├── docker-compose.yml      # Sets RELAY_DB_PATH for account mode
+├── Caddyfile               # Optional reverse proxy (body + RPC timeouts)
+├── deploy.sh
+├── start.sh / stop.sh / restart.sh
 └── README.md
 ```
 
 ## About `src/apps/server` vs `src/apps/relay-server`
 
-- Remote Connect self-hosted deployment uses the relay server in this directory.
-- `src/apps/server` is a different application and is not the relay service used by mobile and desktop Remote Connect.
+- Self-hosted Remote Connect **and** open-source account login use **this**
+  `relay-server` directory.
+- `src/apps/server` is a different application and is not the relay used by
+  Desktop / CLI / mobile Remote Connect.
