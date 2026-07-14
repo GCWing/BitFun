@@ -7,12 +7,13 @@
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy, CircleHelp } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
 import type { FlowChatState, Session } from '../../../../../flow_chat/types/flow-chat';
+import { hasPendingAskUserQuestion, resolveTrackedTurn } from '../../../../../flow_chat/utils/askUserQuestionState';
 import { useSceneStore } from '../../../../stores/sceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
@@ -232,11 +233,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       const parts: string[] = [s.activeSessionId ?? ''];
       for (const session of s.sessions.values()) {
         const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+        const trackedTurn = resolveTrackedTurn(session);
+        const hasAskUser = hasPendingAskUserQuestion(trackedTurn);
         parts.push(
           `${session.sessionId}|${session.isTransient ? '1':'0'}|${session.sessionKind}|` +
           `${session.parentSessionId ?? ''}|${session.parentToolCallId ?? ''}|${session.subagentType ?? ''}|` +
           `${session.workspacePath ?? ''}|${session.mode ?? ''}|${session.needsUserAttention ? '1':'0'}|` +
-          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${session.title ?? ''}`
+          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${hasAskUser ? '1':'0'}|${trackedTurn?.id ?? ''}|${session.title ?? ''}`
         );
       }
       return parts.join(';');
@@ -957,6 +960,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const sessionModeKey = resolveSessionModeType(session);
           const sessionTitle = resolveSessionTitle(session);
           const isRunning = runningSessionIds.has(session.sessionId);
+          const isWaitingForUserAnswer = isRunning && hasPendingAskUserQuestion(
+            resolveTrackedTurn(session),
+          );
           const isHighPriority = !!session.needsUserAttention;
           const backgroundSubagentActivity = !isChildSession
             ? backgroundSubagentActivityByParent.get(session.sessionId)
@@ -1054,13 +1060,24 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               {showSessionModeIcon ? (
                 <span className="bitfun-nav-panel__inline-item-icon-slot">
                   {isRunning ? (
-                    <Loader2
-                      size={14}
-                      className={[
-                        'bitfun-nav-panel__inline-item-icon',
-                        'is-running',
-                      ].join(' ')}
-                    />
+                    isWaitingForUserAnswer ? (
+                      <CircleHelp
+                        size={14}
+                        className={[
+                          'bitfun-nav-panel__inline-item-icon',
+                          'is-ask-user',
+                        ].join(' ')}
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Loader2
+                        size={14}
+                        className={[
+                          'bitfun-nav-panel__inline-item-icon',
+                          'is-running',
+                        ].join(' ')}
+                      />
+                    )
                   ) : (
                     <SessionIcon
                       size={14}
@@ -1098,6 +1115,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     />
                   ) : null}
                 </span>
+              ) : null}
+
+              {isWaitingForUserAnswer ? (
+                <span className="sr-only">{t('nav.sessions.needsUserInput')}</span>
               ) : null}
 
               {isEditing ? (

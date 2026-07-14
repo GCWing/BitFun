@@ -20,6 +20,7 @@ import { useNavSceneStore } from '../../stores/navSceneStore';
 import { getSceneNav } from '../../scenes/nav-registry';
 import type { SceneTabId } from '../SceneBar/types';
 import MainNav from './MainNav';
+import AskUserAnnouncer from './AskUserAnnouncer';
 import PersistentFooterActions from './components/PersistentFooterActions';
 import { PeerRemoteBadge } from '@/infrastructure/peer-device/PeerRemoteBadge';
 import './NavPanel.scss';
@@ -83,6 +84,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
 
   return (
     <nav className={`bitfun-nav-panel ${className}`} aria-label={t('nav.aria.mainNav')} data-testid="nav-panel">
+      <AskUserAnnouncer />
       <div ref={contentRef} className={contentCls}>
 
         <div className="bitfun-nav-panel__layer bitfun-nav-panel__layer--main">
