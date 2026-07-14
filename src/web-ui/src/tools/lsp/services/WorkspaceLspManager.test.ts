@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
-const listenMock = vi.hoisted(() => vi.fn(async () => () => {}));
+const listenMock = vi.hoisted(() => vi.fn(() => () => {}));
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: invokeMock
-}));
-
-vi.mock('@tauri-apps/api/event', () => ({
-  listen: listenMock
+vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
+  api: {
+    invoke: invokeMock,
+    listen: listenMock,
+  },
 }));
 
 vi.mock('@/shared/notification-system', () => ({
@@ -45,7 +44,7 @@ describe('WorkspaceLspManager', () => {
   afterEach(() => {
     invokeMock.mockReset();
     listenMock.mockReset();
-    listenMock.mockResolvedValue(() => {});
+    listenMock.mockReturnValue(() => {});
     (WorkspaceLspManager as unknown as {
       instances: Map<string, WorkspaceLspManager>;
     }).instances.clear();
