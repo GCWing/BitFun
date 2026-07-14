@@ -16,6 +16,26 @@ The relay stays **zero-knowledge**: clients encrypt with a master key derived
 locally; the server stores Argon2id password hashes and AES-GCM-wrapped keys,
 never plaintext passwords or decryptable sync payloads.
 
+## Supported deploy hosts
+
+One-click Docker deploy (`bash deploy.sh`) targets:
+
+| OS | CPU |
+|----|-----|
+| Linux | **amd64** (`x86_64`) |
+| Linux | **arm64** (`aarch64`) |
+
+Requirements: Docker Engine + Compose V2 (`docker compose`) **or** legacy
+`docker-compose`, plus permission to talk to the Docker daemon.
+
+Build natively on the server (do **not** set `DOCKER_DEFAULT_PLATFORM` to a
+foreign arch unless you intentionally cross-build with qemu). On small
+memory VPS (common on arm64), use:
+
+```bash
+RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
+```
+
 ## Two operating modes
 
 | Mode | When | What you get |
@@ -50,7 +70,7 @@ bash deploy.sh
 ```
 
 `deploy.sh` must run **on the target server** (it does not SSH elsewhere).
-Requires Docker and Docker Compose.
+Requires Docker and Docker Compose on **linux/amd64** or **linux/arm64**.
 
 After a successful start, the script runs `relay-admin list-users`. If the
 database has **no accounts**, it prints the exact `add-user` command to run
@@ -411,6 +431,7 @@ relay-server/
 ├── Caddyfile               # Optional reverse proxy (body + RPC timeouts)
 ├── deploy.sh
 ├── start.sh / stop.sh / restart.sh
+├── common.sh               # Shared helpers for the scripts above
 └── README.md
 ```
 

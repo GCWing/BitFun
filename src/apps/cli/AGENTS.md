@@ -86,3 +86,9 @@ input, session control, config import, plugin management, or product assembly
 behavior changes. Theme/color changes require `pnpm run theme:color-audit:all`.
 Packaging or branding changes require the CLI package smoke path and a clean-tree
 two-product build assertion.
+
+## Install for end users
+
+Prefer [`install.sh`](install.sh) / [`README.md`](README.md): release build, copy to
+`~/.local/bin`, and idempotent `~/.bashrc` / `~/.zshrc` PATH wiring so users can
+run `bitfun-cli` after install.

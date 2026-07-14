@@ -3,6 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Pass through optional parallelism limit for low-memory hosts:
+        #   RELAY_CARGO_BUILD_JOBS=1 docker compose build
+        CARGO_BUILD_JOBS: ${RELAY_CARGO_BUILD_JOBS:-}
+    # Intentionally no `platform:` pin — build/run for the host CPU
+    # (linux/amd64 on x86_64, linux/arm64 on aarch64).
     container_name: bitfun-relay
     restart: unless-stopped
     ports:
@@ -17,6 +23,12 @@ services:
       - ./static:/app/static:ro
       - room-web:/app/room-web
       - relay-db:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9700/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # Optional: Caddy reverse proxy for automatic HTTPS.
   # Uncomment if you need HTTPS / domain-based access.

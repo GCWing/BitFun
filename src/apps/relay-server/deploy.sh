@@ -5,11 +5,18 @@
 # Run this script on the target server itself after SSH login.
 # It deploys to the current machine only; it does not SSH to a remote host.
 #
-# Prerequisites: Docker, Docker Compose
+# Supported hosts: Linux amd64 (x86_64) and arm64 (aarch64) with Docker.
+#
+# Prerequisites: Docker + Compose V2 (`docker compose`) or legacy docker-compose
+#
+# Low-memory VPS tip (especially arm64):
+#   RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "${SCRIPT_DIR}/common.sh"
 
 SKIP_BUILD=false
 SKIP_HEALTH_CHECK=false
@@ -25,27 +32,19 @@ Run location:
   Execute this script on the target server itself after SSH login.
   This script only deploys to the current machine.
 
+Supported architectures:
+  linux/amd64 (x86_64), linux/arm64 (aarch64)
+
 Options:
-  --skip-build         Skip docker compose build, only restart services
+  --skip-build         Skip docker compose build, only recreate/start services
   --skip-health-check  Skip post-deploy health check
   -h, --help           Show this help message
+
+Environment:
+  RELAY_HOST_BIND_IP       Host bind address for published port (default 0.0.0.0)
+  RELAY_CARGO_BUILD_JOBS   Limit rustc parallelism inside Docker (e.g. 1 on small VPS)
+  DOCKER_DEFAULT_PLATFORM  Leave unset for native host builds (recommended)
 EOF
-}
-
-check_command() {
-  local cmd="$1"
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Error: '$cmd' is required but not installed."
-    exit 1
-  fi
-}
-
-check_docker_compose() {
-  if docker compose version >/dev/null 2>&1; then
-    return 0
-  fi
-  echo "Error: Docker Compose (docker compose) is required."
-  exit 1
 }
 
 for arg in "$@"; do
@@ -64,103 +63,56 @@ for arg in "$@"; do
   esac
 done
 
-echo "=== BitFun Relay Server Deploy ==="
-echo "Target: current machine"
-echo "Note: run this script on the target server after SSH login."
-check_command docker
-check_docker_compose
+HOST_ARCH="$(host_arch_label)"
 
+echo "=== BitFun Relay Server Deploy ==="
+echo "Target: current machine ($(uname -s) / ${HOST_ARCH}, uname=$(uname -m))"
+echo "Note: run this script on the target server after SSH login."
+
+assert_supported_arch
+require_docker_daemon
+resolve_compose
+warn_if_forced_foreign_platform
+
+echo "Compose: ${COMPOSE[*]}"
 cd "$SCRIPT_DIR"
 
-# Stop old containers if running
-echo "[1/3] Stopping old containers (if running)..."
-docker compose down 2>/dev/null || true
-echo "  Done."
-
-# Build
+# Build first so a compile failure does not take down a running relay.
 if [ "$SKIP_BUILD" = true ]; then
-  echo "[2/3] Skipping Docker build (--skip-build)"
+  echo "[1/2] Skipping Docker build (--skip-build)"
 else
-  echo "[2/3] Building Docker images..."
-  docker compose build
+  echo "[1/2] Building Docker image for host architecture (${HOST_ARCH})..."
+  BUILD_ARGS=()
+  if [ -n "${RELAY_CARGO_BUILD_JOBS:-}" ]; then
+    BUILD_ARGS+=(--build-arg "CARGO_BUILD_JOBS=${RELAY_CARGO_BUILD_JOBS}")
+    echo "  Using CARGO_BUILD_JOBS=${RELAY_CARGO_BUILD_JOBS}"
+  fi
+  # Do not pass --platform unless the user explicitly set DOCKER_DEFAULT_PLATFORM;
+  # native builds on amd64/arm64 servers are the supported path.
+  compose build "${BUILD_ARGS[@]}"
 fi
 
-# Start
-echo "[3/3] Starting services..."
-docker compose up -d
+echo "[2/2] Starting / recreating services..."
+compose up -d --force-recreate --remove-orphans
 
 if [ "$SKIP_HEALTH_CHECK" = false ]; then
   echo "Waiting for services to start..."
-  sleep 5
-  echo "Checking relay health endpoint..."
-  if command -v curl >/dev/null 2>&1; then
-    MAX_RETRIES=6
-    RETRY=0
-    while [ $RETRY -lt $MAX_RETRIES ]; do
-      if curl -fsS --max-time 5 "http://127.0.0.1:9700/health" >/dev/null 2>&1; then
-        echo "Health check passed: http://127.0.0.1:9700/health"
-        break
-      fi
-      RETRY=$((RETRY + 1))
-      if [ $RETRY -lt $MAX_RETRIES ]; then
-        echo "  Retry $RETRY/$MAX_RETRIES in 3s..."
-        sleep 3
-      else
-        echo "Warning: health check failed after $MAX_RETRIES attempts. Check logs:"
-        docker compose logs --tail=30 relay-server
-      fi
-    done
-  else
-    echo "Warning: 'curl' not found, skipped health check."
-  fi
+  sleep 2
+  wait_for_relay_health 12
 fi
 
 echo ""
 echo "=== Deploy complete ==="
-echo "Relay server running on port 9700"
+echo "Relay server running on port 9700 (host arch: ${HOST_ARCH})"
 echo ""
-
-CONTAINER_NAME="bitfun-relay"
-RELAY_ADMIN_DB="/app/data/bitfun_relay.db"
-ADD_USER_CMD="docker exec -it ${CONTAINER_NAME} /app/relay-admin --db ${RELAY_ADMIN_DB} add-user --username <name>"
-
-print_client_url_hint() {
-  echo "Point BitFun Desktop / CLI Auth Server URL to:"
-  echo "  http://<YOUR_SERVER_IP>:9700"
-  echo "See README.md for sync, Peer Device Mode, and proxy timeouts."
-}
-
-if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1 \
-  && [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" = "true" ]; then
-  # Empty DB prints "No accounts found."; otherwise a USERNAME header + rows.
-  USER_LIST="$(
-    docker exec "$CONTAINER_NAME" /app/relay-admin --db "$RELAY_ADMIN_DB" list-users 2>/dev/null || true
-  )"
-  if echo "$USER_LIST" | grep -q '^No accounts found\.'; \
-    || ! echo "$USER_LIST" | grep -q '^USERNAME'; then
-    echo "No relay accounts yet. Account login will not work until you create one."
-    echo "Run:"
-    echo "  ${ADD_USER_CMD}"
-    echo "(omit --password to enter the password interactively)"
-    echo ""
-    print_client_url_hint
-  else
-    USER_COUNT="$(
-      echo "$USER_LIST" | awk 'NR>2 && NF { count++ } END { print count+0 }'
-    )"
-    echo "Relay accounts found: ${USER_COUNT}"
-    echo ""
-    print_client_url_hint
-  fi
-else
-  echo "Warning: container '${CONTAINER_NAME}' is not running; skipped account check."
-  echo "After it is up, create an account with:"
-  echo "  ${ADD_USER_CMD}"
-fi
-
+check_relay_accounts_or_remind
 echo ""
-echo "Check status:  docker compose ps"
+echo "Point BitFun Desktop / CLI Auth Server URL to:"
+echo "  http://<YOUR_SERVER_IP>:9700"
+echo "See README.md for sync, Peer Device Mode, and proxy timeouts."
+echo ""
+echo "Check status:  bash -c 'cd \"${SCRIPT_DIR}\" && ${COMPOSE[*]} ps'"
 echo "Start:         bash start.sh"
 echo "Restart:       bash restart.sh"
 echo "Stop:          bash stop.sh"
-echo "View logs:     docker compose logs -f relay-server"
+echo "View logs:     ${COMPOSE[*]} logs -f relay-server"

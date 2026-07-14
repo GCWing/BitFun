@@ -5,7 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER_NAME="bitfun-relay"
+# shellcheck source=common.sh
+source "${SCRIPT_DIR}/common.sh"
 
 usage() {
   cat <<'EOF'
@@ -20,30 +21,6 @@ Run location:
 Behavior:
   If the relay service is already running, this script exits without starting it again.
 EOF
-}
-
-check_command() {
-  local cmd="$1"
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Error: '$cmd' is required but not installed."
-    exit 1
-  fi
-}
-
-check_docker_compose() {
-  if docker compose version >/dev/null 2>&1; then
-    return 0
-  fi
-  echo "Error: Docker Compose (docker compose) is required."
-  exit 1
-}
-
-container_exists() {
-  docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1
-}
-
-container_running() {
-  [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" = "true" ]
 }
 
 for arg in "$@"; do
@@ -61,9 +38,8 @@ for arg in "$@"; do
 done
 
 echo "=== BitFun Relay Server Start ==="
-check_command docker
-check_docker_compose
-
+require_docker_daemon
+resolve_compose
 cd "$SCRIPT_DIR"
 
 if container_running; then
@@ -77,10 +53,10 @@ else
   echo "Relay service is not created yet. Creating and starting it..."
 fi
 
-docker compose up -d
+compose up -d
 
 echo ""
 echo "Relay service started."
 echo "Relay endpoint: http://<this-server-ip>:9700"
-echo "Check status:  docker compose ps"
-echo "View logs:     docker compose logs -f relay-server"
+echo "Check status:  ${COMPOSE[*]} ps"
+echo "View logs:     ${COMPOSE[*]} logs -f relay-server"
