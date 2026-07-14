@@ -26,18 +26,31 @@ const READ_TOOL_NAME: &str = "Read";
 const BASH_TOOL_NAME: &str = "Bash";
 const SHELL_MAX_TOOL_RESULT_CHARS: usize = 30_000;
 
+#[cfg(test)]
 pub(crate) async fn maybe_persist_large_tool_result(
+    result: ToolResult,
+    context: &ToolUseContext,
+) -> ToolResult {
+    let effective_tool_name = result.tool_name.clone();
+    maybe_persist_large_tool_result_for_tool(result, &effective_tool_name, context).await
+}
+
+pub(crate) async fn maybe_persist_large_tool_result_for_tool(
     mut result: ToolResult,
+    effective_tool_name: &str,
     context: &ToolUseContext,
 ) -> ToolResult {
     let policy = ToolResultStoragePolicy::default();
-    if should_skip_tool_result(&result) || visible_content_is_compacted(&result) {
+    if should_skip_tool_result(&result, effective_tool_name)
+        || visible_content_is_compacted(&result)
+    {
         return result;
     }
 
-    let per_tool_limit = effective_per_tool_limit(&result.tool_name, policy);
+    let per_tool_limit = effective_per_tool_limit(effective_tool_name, policy);
     let visible_chars = result_visible_content(&result).chars().count();
-    let content_override = content_override_if_oversized(&result, per_tool_limit);
+    let content_override =
+        content_override_if_oversized(&result, effective_tool_name, per_tool_limit);
     if visible_chars <= per_tool_limit
         && content_override.is_none()
         && !json_result_is_oversized(&result, per_tool_limit)
@@ -53,7 +66,7 @@ pub(crate) async fn maybe_persist_large_tool_result(
         Err(error) => {
             warn!(
                 "Failed to persist oversized tool result: tool_name={}, tool_id={}, error={}",
-                result.tool_name, result.tool_id, error
+                effective_tool_name, result.tool_id, error
             );
             result
         }
@@ -115,8 +128,8 @@ pub(crate) async fn apply_round_tool_result_budget(
     results
 }
 
-fn should_skip_tool_result(result: &ToolResult) -> bool {
-    result.tool_name == GET_TOOL_SPEC_TOOL_NAME
+fn should_skip_tool_result(result: &ToolResult, effective_tool_name: &str) -> bool {
+    effective_tool_name == GET_TOOL_SPEC_TOOL_NAME
         || result
             .image_attachments
             .as_ref()
@@ -127,7 +140,7 @@ fn collect_round_budget_candidates(results: &[ToolResult]) -> Vec<ToolResultPers
     results
         .iter()
         .enumerate()
-        .filter(|(_, result)| !should_skip_tool_result(result))
+        .filter(|(_, result)| !should_skip_tool_result(result, &result.tool_name))
         .filter(|(_, result)| !visible_content_is_compacted(result))
         .map(|(index, result)| ToolResultPersistenceCandidate {
             index,
@@ -265,8 +278,12 @@ fn effective_per_tool_limit(tool_name: &str, policy: ToolResultStoragePolicy) ->
     }
 }
 
-fn content_override_if_oversized(result: &ToolResult, limit: usize) -> Option<String> {
-    if result.tool_name != BASH_TOOL_NAME {
+fn content_override_if_oversized(
+    result: &ToolResult,
+    effective_tool_name: &str,
+    limit: usize,
+) -> Option<String> {
+    if effective_tool_name != BASH_TOOL_NAME {
         return None;
     }
 

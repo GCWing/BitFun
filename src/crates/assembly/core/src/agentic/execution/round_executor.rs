@@ -854,6 +854,7 @@ impl RoundExecutor {
                         .map(|tc| crate::agentic::tools::pipeline::ToolExecutionResult {
                             tool_id: tc.tool_id.clone(),
                             tool_name: tc.tool_name.clone(),
+                            effective_tool_name: tc.tool_name.clone(),
                             result: crate::agentic::core::ToolResult {
                                 tool_id: tc.tool_id.clone(),
                                 tool_name: tc.tool_name.clone(),

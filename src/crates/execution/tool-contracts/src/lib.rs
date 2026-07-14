@@ -5,6 +5,7 @@
 
 pub mod acp_tool_bridge;
 pub mod computer_use;
+pub mod deferred_tool;
 pub mod element_token;
 pub mod execution_gate;
 pub mod file_guidance;
@@ -28,6 +29,12 @@ pub use acp_tool_bridge::{
 pub use bitfun_core_types::ToolImageAttachment;
 pub use bitfun_runtime_ports::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
+};
+pub use deferred_tool::{
+    call_deferred_tool_description, call_deferred_tool_input_schema,
+    call_deferred_tool_short_description, parse_call_deferred_tool_input, CallDeferredToolInput,
+    CallDeferredToolInputError, ResolvedToolInvocation, ToolInvocationKind,
+    CALL_DEFERRED_TOOL_NAME,
 };
 pub use execution_gate::{
     validate_tool_execution_admission, ToolExecutionAdmissionRejection,

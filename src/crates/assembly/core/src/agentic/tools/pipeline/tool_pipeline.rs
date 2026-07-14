@@ -27,7 +27,7 @@ use bitfun_agent_tools::{
     build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
     truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
-    validate_tool_execution_admission, ToolExecutionAdmissionRejection,
+    validate_tool_execution_admission, ResolvedToolInvocation, ToolExecutionAdmissionRejection,
     ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::RoundInjectionToolPreemption;
@@ -50,7 +50,8 @@ use tool_runtime::pipeline::{
 fn convert_tool_result(
     framework_result: FrameworkToolResult,
     tool_id: &str,
-    tool_name: &str,
+    wire_tool_name: &str,
+    effective_tool_name: &str,
 ) -> ModelToolResult {
     match framework_result {
         FrameworkToolResult::Result {
@@ -63,11 +64,11 @@ fn convert_tool_result(
             // "completed successfully" can hide fields the model needs for the
             // next decision.
             let assistant_text = result_for_assistant
-                .or_else(|| Some(render_tool_result_for_assistant(tool_name, &data)));
+                .or_else(|| Some(render_tool_result_for_assistant(effective_tool_name, &data)));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
+                tool_name: wire_tool_name.to_string(),
                 result: data,
                 result_for_assistant: assistant_text,
                 is_error: false,
@@ -76,11 +77,14 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::Progress { content, .. } => {
-            let assistant_text = Some(render_tool_result_for_assistant(tool_name, &content));
+            let assistant_text = Some(render_tool_result_for_assistant(
+                effective_tool_name,
+                &content,
+            ));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
+                tool_name: wire_tool_name.to_string(),
                 result: content,
                 result_for_assistant: assistant_text,
                 is_error: false,
@@ -89,11 +93,11 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::StreamChunk { data, .. } => {
-            let assistant_text = Some(render_tool_result_for_assistant(tool_name, &data));
+            let assistant_text = Some(render_tool_result_for_assistant(effective_tool_name, &data));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
+                tool_name: wire_tool_name.to_string(),
                 result: data,
                 result_for_assistant: assistant_text,
                 is_error: false,
@@ -102,6 +106,44 @@ fn convert_tool_result(
             }
         }
     }
+}
+
+fn resolve_pipeline_invocation(
+    tool_call: &ToolCall,
+    context: &ToolExecutionContext,
+) -> (ResolvedToolInvocation, Option<String>) {
+    let invocation = match ResolvedToolInvocation::from_wire_call(
+        tool_call.tool_name.clone(),
+        tool_call.arguments.clone(),
+    ) {
+        Ok(invocation) => invocation,
+        Err(error) => {
+            return (
+                ResolvedToolInvocation::direct(
+                    tool_call.tool_name.clone(),
+                    tool_call.arguments.clone(),
+                ),
+                Some(error.to_string()),
+            );
+        }
+    };
+
+    if invocation.is_deferred()
+        && !context
+            .collapsed_tools
+            .iter()
+            .any(|tool_name| tool_name == &invocation.effective_tool_name)
+    {
+        let effective_tool_name = invocation.effective_tool_name.clone();
+        return (
+            invocation,
+            Some(format!(
+                "Tool '{effective_tool_name}' is not an available deferred tool in the current context"
+            )),
+        );
+    }
+
+    (invocation, None)
 }
 
 /// Convert core::ToolResult to framework::ToolResult
@@ -134,27 +176,38 @@ fn build_error_execution_result(
     task: Option<ToolTask>,
     error: &BitFunError,
 ) -> ToolExecutionResult {
-    let (tool_id, tool_name, execution_time_ms, provided_arguments) = if let Some(task) = task {
-        let preview = task
-            .tool_call
-            .raw_arguments
-            .as_deref()
-            .map(truncate_raw_tool_arguments_preview)
-            .unwrap_or_else(|| truncate_tool_arguments_preview(&task.tool_call.arguments));
-        (
-            task.tool_call.tool_id,
-            task.tool_call.tool_name,
-            elapsed_ms_since(task.created_at),
-            Some(preview),
-        )
-    } else {
-        warn!("Task not found in state manager: {}", task_id);
-        (task_id.to_string(), "unknown".to_string(), 0, None)
-    };
+    let (tool_id, wire_tool_name, effective_tool_name, execution_time_ms, provided_arguments) =
+        if let Some(task) = task {
+            let preview = if task.invocation.is_deferred() {
+                truncate_tool_arguments_preview(task.effective_arguments())
+            } else {
+                task.tool_call
+                    .raw_arguments
+                    .as_deref()
+                    .map(truncate_raw_tool_arguments_preview)
+                    .unwrap_or_else(|| truncate_tool_arguments_preview(task.effective_arguments()))
+            };
+            (
+                task.tool_call.tool_id,
+                task.tool_call.tool_name,
+                task.invocation.effective_tool_name,
+                elapsed_ms_since(task.created_at),
+                Some(preview),
+            )
+        } else {
+            warn!("Task not found in state manager: {}", task_id);
+            (
+                task_id.to_string(),
+                "unknown".to_string(),
+                "unknown".to_string(),
+                0,
+                None,
+            )
+        };
     let error_message = error.to_string();
     let category = classify_tool_error(error);
     let presentation = build_tool_execution_error_presentation(
-        &tool_name,
+        &effective_tool_name,
         category,
         &error_message,
         provided_arguments,
@@ -162,10 +215,11 @@ fn build_error_execution_result(
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
-        tool_name: tool_name.clone(),
+        tool_name: wire_tool_name.clone(),
+        effective_tool_name,
         result: ModelToolResult {
             tool_id,
-            tool_name,
+            tool_name: wire_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
@@ -180,10 +234,12 @@ fn build_user_steering_interrupted_result(
     task_id: &str,
     task: Option<ToolTask>,
 ) -> ToolExecutionResult {
-    let (tool_id, tool_name, execution_time_ms) = if let Some(task) = task {
+    let (tool_id, wire_tool_name, effective_tool_name, execution_time_ms) = if let Some(task) = task
+    {
         (
             task.tool_call.tool_id,
             task.tool_call.tool_name,
+            task.invocation.effective_tool_name,
             elapsed_ms_since(task.created_at),
         )
     } else {
@@ -191,17 +247,23 @@ fn build_user_steering_interrupted_result(
             "Task not found while building steering-interrupted result: {}",
             task_id
         );
-        (task_id.to_string(), "unknown".to_string(), 0)
+        (
+            task_id.to_string(),
+            "unknown".to_string(),
+            "unknown".to_string(),
+            0,
+        )
     };
 
-    let presentation = build_user_steering_interrupted_presentation(&tool_name);
+    let presentation = build_user_steering_interrupted_presentation(&effective_tool_name);
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
-        tool_name: tool_name.clone(),
+        tool_name: wire_tool_name.clone(),
+        effective_tool_name,
         result: ModelToolResult {
             tool_id,
-            tool_name,
+            tool_name: wire_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
@@ -217,10 +279,12 @@ fn build_user_rejected_tool_result(
     task: Option<ToolTask>,
     instruction: Option<&str>,
 ) -> ToolExecutionResult {
-    let (tool_id, tool_name, execution_time_ms) = if let Some(task) = task {
+    let (tool_id, wire_tool_name, effective_tool_name, execution_time_ms) = if let Some(task) = task
+    {
         (
             task.tool_call.tool_id,
             task.tool_call.tool_name,
+            task.invocation.effective_tool_name,
             elapsed_ms_since(task.created_at),
         )
     } else {
@@ -228,18 +292,24 @@ fn build_user_rejected_tool_result(
             "Task not found while building user-rejected result: {}",
             task_id
         );
-        (task_id.to_string(), "unknown".to_string(), 0)
+        (
+            task_id.to_string(),
+            "unknown".to_string(),
+            "unknown".to_string(),
+            0,
+        )
     };
 
     let presentation =
-        build_user_rejected_tool_presentation_with_instruction(&tool_name, instruction);
+        build_user_rejected_tool_presentation_with_instruction(&effective_tool_name, instruction);
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
-        tool_name: tool_name.clone(),
+        tool_name: wire_tool_name.clone(),
+        effective_tool_name,
         result: ModelToolResult {
             tool_id,
-            tool_name,
+            tool_name: wire_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
             is_error: false,
@@ -445,28 +515,41 @@ impl ToolPipeline {
         }
 
         info!("Executing tools: count={}", tool_calls.len());
-        let tool_names: Vec<String> = tool_calls
+        let resolved_tool_calls = tool_calls
             .iter()
-            .map(|tool_call| tool_call.tool_name.clone())
-            .collect();
+            .map(|tool_call| {
+                let (invocation, resolution_error) =
+                    resolve_pipeline_invocation(tool_call, &context);
+                (tool_call.clone(), invocation, resolution_error)
+            })
+            .collect::<Vec<_>>();
+        let tool_names = resolved_tool_calls
+            .iter()
+            .map(|(_, invocation, _)| invocation.effective_tool_name.clone())
+            .collect::<Vec<_>>();
 
-        let subagent_call_count = tool_calls
+        let subagent_call_count = resolved_tool_calls
             .iter()
-            .filter(|tool_call| tool_call.tool_name == SUBAGENT_LAUNCH_TOOL_NAME)
+            .filter(|(_, invocation, _)| {
+                invocation.effective_tool_name == SUBAGENT_LAUNCH_TOOL_NAME
+            })
             .count();
 
         // Determine concurrency safety for each tool call
         let concurrency_flags: Vec<bool> = {
             let registry = self.tool_registry.read().await;
-            tool_calls
+            resolved_tool_calls
                 .iter()
-                .map(|tc| {
+                .map(|(_, invocation, resolution_error)| {
+                    if resolution_error.is_some() {
+                        return false;
+                    }
                     let tool_is_concurrency_safe = registry
-                        .get_tool(&tc.tool_name)
-                        .map(|tool| tool.is_concurrency_safe(Some(&tc.arguments)))
+                        .get_tool(&invocation.effective_tool_name)
+                        .map(|tool| tool.is_concurrency_safe(Some(&invocation.effective_arguments)))
                         .unwrap_or(false);
                     tool_call_concurrency_safe_for_batch(
-                        &tc.tool_name,
+                        &invocation.effective_tool_name,
                         tool_is_concurrency_safe,
                         subagent_call_count,
                         options.subagent_batch_execution_policy,
@@ -477,9 +560,15 @@ impl ToolPipeline {
         let concurrency_safe_count = concurrency_flags.iter().filter(|&&flag| flag).count();
 
         // Create tasks for all tool calls
-        let mut task_ids = Vec::with_capacity(tool_calls.len());
-        for tool_call in tool_calls {
-            let task = ToolTask::new(tool_call, context.clone(), options.clone());
+        let mut task_ids = Vec::with_capacity(resolved_tool_calls.len());
+        for (tool_call, invocation, resolution_error) in resolved_tool_calls {
+            let task = ToolTask::new_resolved(
+                tool_call,
+                invocation,
+                resolution_error,
+                context.clone(),
+                options.clone(),
+            );
             let tool_id = self.state_manager.create_task(task).await;
             task_ids.push(tool_id);
         }
@@ -633,26 +722,29 @@ impl ToolPipeline {
             .get_task(&tool_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Tool task not found: {}", tool_id)))?;
 
-        let tool_name = task.tool_call.tool_name.clone();
-        let tool_args = task.tool_call.arguments.clone();
+        let wire_tool_name = task.tool_call.tool_name.clone();
+        let tool_name = task.invocation.effective_tool_name.clone();
+        let tool_args = task.invocation.effective_arguments.clone();
         let tool_is_error = task.tool_call.is_error;
         let recovered_from_truncation = task.tool_call.recovered_from_truncation;
         let queue_wait_ms = elapsed_ms_since(task.created_at);
         let mut confirmation_wait_ms = 0;
 
         debug!(
-            "Tool task details: tool_name={}, tool_id={}, queue_wait_ms={}",
-            tool_name, tool_id, queue_wait_ms
+            "Tool task details: tool_name={}, wire_tool_name={}, tool_id={}, queue_wait_ms={}",
+            tool_name, wire_tool_name, tool_id, queue_wait_ms
         );
 
-        let invalid_call_error = if tool_name.is_empty() || tool_is_error {
+        let invalid_call_error = if let Some(error) = task.invocation_resolution_error.clone() {
+            Some(error)
+        } else if wire_tool_name.is_empty() || tool_is_error {
             let raw_arguments_preview = task
                 .tool_call
                 .raw_arguments
                 .as_deref()
                 .map(truncate_raw_tool_arguments_preview);
             Some(build_invalid_tool_call_error_message(
-                &tool_name,
+                &wire_tool_name,
                 tool_is_error,
                 recovered_from_truncation,
                 raw_arguments_preview,
@@ -699,6 +791,37 @@ impl ToolPipeline {
         // Repetition alone is not execution failure: polling and status checks
         // may legitimately reuse identical arguments. The execution engine
         // evaluates repeated patterns only after observing actual tool results.
+        if task.invocation.is_deferred() {
+            if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+                tool_name: &wire_tool_name,
+                allowed_tools: &task.context.allowed_tools,
+                runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+                collapsed_tools: &task.context.collapsed_tools,
+                loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+                get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+            }) {
+                let error_msg = err.to_string();
+                warn!("Deferred tool gateway admission rejected: {}", error_msg);
+
+                self.state_manager
+                    .update_state(
+                        &tool_id,
+                        ToolExecutionState::Failed {
+                            error: error_msg,
+                            is_retryable: false,
+                            duration_ms: None,
+                            queue_wait_ms: None,
+                            preflight_ms: None,
+                            confirmation_wait_ms: None,
+                            execution_ms: None,
+                        },
+                    )
+                    .await;
+
+                return Err(map_tool_execution_admission_rejection(err));
+            }
+        }
+
         if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
             tool_name: &tool_name,
             allowed_tools: &task.context.allowed_tools,
@@ -730,16 +853,11 @@ impl ToolPipeline {
 
         let tool = {
             let registry = self.tool_registry.read().await;
-            registry
-                .get_tool(&task.tool_call.tool_name)
-                .ok_or_else(|| {
-                    let error_msg = format!(
-                        "Tool '{}' is not registered or enabled.",
-                        task.tool_call.tool_name,
-                    );
-                    error!("{}", error_msg);
-                    BitFunError::tool(error_msg)
-                })?
+            registry.get_tool(&tool_name).ok_or_else(|| {
+                let error_msg = format!("Tool '{}' is not registered or enabled.", tool_name);
+                error!("{}", error_msg);
+                BitFunError::tool(error_msg)
+            })?
         };
 
         let cancellation_token = CancellationToken::new();
@@ -898,10 +1016,11 @@ impl ToolPipeline {
                         let presentation = build_tool_confirmation_timeout_presentation(&tool_name);
                         return Ok(ToolExecutionResult {
                             tool_id: tool_id.clone(),
-                            tool_name: tool_name.clone(),
+                            tool_name: wire_tool_name.clone(),
+                            effective_tool_name: tool_name.clone(),
                             result: ModelToolResult {
                                 tool_id,
-                                tool_name,
+                                tool_name: wire_tool_name,
                                 result: presentation.result_json,
                                 result_for_assistant: Some(presentation.result_for_assistant),
                                 is_error: false,
@@ -974,11 +1093,13 @@ impl ToolPipeline {
         match result {
             Ok(tool_result) => {
                 let duration_ms = elapsed_ms_u64(start_time);
-                let mut tool_result = tool_result_storage::maybe_persist_large_tool_result(
-                    tool_result,
-                    &tool_context,
-                )
-                .await;
+                let mut tool_result =
+                    tool_result_storage::maybe_persist_large_tool_result_for_tool(
+                        tool_result,
+                        &tool_name,
+                        &tool_context,
+                    )
+                    .await;
                 tool_result.duration_ms = Some(duration_ms);
 
                 // The tool call succeeded with arguments that we patched
@@ -1022,7 +1143,8 @@ impl ToolPipeline {
 
                 Ok(ToolExecutionResult {
                     tool_id,
-                    tool_name,
+                    tool_name: wire_tool_name,
+                    effective_tool_name: tool_name,
                     result: tool_result,
                     execution_time_ms: duration_ms,
                 })
@@ -1095,10 +1217,11 @@ impl ToolPipeline {
 
                     return Ok(ToolExecutionResult {
                         tool_id: timed_out_tool_id.clone(),
-                        tool_name: timed_out_tool_name.clone(),
+                        tool_name: wire_tool_name.clone(),
+                        effective_tool_name: timed_out_tool_name.clone(),
                         result: ModelToolResult {
                             tool_id: timed_out_tool_id,
-                            tool_name: timed_out_tool_name,
+                            tool_name: wire_tool_name,
                             result: presentation.result_json,
                             result_for_assistant: Some(presentation.result_for_assistant),
                             is_error: false,
@@ -1206,7 +1329,7 @@ impl ToolPipeline {
 
         let tool_context = self.build_tool_use_context(task, cancellation_token);
 
-        let execution_future = tool.call(&task.tool_call.arguments, &tool_context);
+        let execution_future = tool.call(task.effective_arguments(), &tool_context);
 
         let pipeline_timeout_secs = if tool.manages_own_execution_timeout() {
             None
@@ -1222,7 +1345,7 @@ impl ToolPipeline {
                     .map_err(|_| {
                         BitFunError::Timeout(format!(
                             "Tool execution timeout: {}",
-                            task.tool_call.tool_name
+                            task.effective_tool_name()
                         ))
                     })?;
                 result?
@@ -1237,11 +1360,18 @@ impl ToolPipeline {
         tool_results
             .into_iter()
             .last()
-            .map(|r| convert_tool_result(r, &task.tool_call.tool_id, &task.tool_call.tool_name))
+            .map(|r| {
+                convert_tool_result(
+                    r,
+                    &task.tool_call.tool_id,
+                    &task.tool_call.tool_name,
+                    task.effective_tool_name(),
+                )
+            })
             .ok_or_else(|| {
                 BitFunError::Tool(format!(
                     "Tool did not return result: {}",
-                    task.tool_call.tool_name
+                    task.effective_tool_name()
                 ))
             })
     }
@@ -1289,7 +1419,7 @@ impl ToolPipeline {
                 // Send StreamChunk event
                 let _event_data = ToolEventData::StreamChunk {
                     tool_id: task.tool_call.tool_id.clone(),
-                    tool_name: task.tool_call.tool_name.clone(),
+                    tool_name: task.effective_tool_name().to_string(),
                     data: data.clone(),
                 };
             }
@@ -1484,13 +1614,14 @@ mod tests {
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use async_trait::async_trait;
+    use bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME;
     use bitfun_runtime_ports::{
         RoundInjection, RoundInjectionExecutionPolicy, RoundInjectionKind, RoundInjectionTarget,
         RoundInjectionToolPreemption,
     };
     use serde_json::json;
     use std::collections::HashMap;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
     use tokio::time::{sleep, Duration};
 
@@ -1536,6 +1667,75 @@ mod tests {
         response: serde_json::Value,
         delay_ms: u64,
         needs_permissions: bool,
+    }
+
+    struct CapturingTestTool {
+        name: String,
+        received_arguments: Arc<Mutex<Option<serde_json::Value>>>,
+    }
+
+    #[async_trait]
+    impl Tool for CapturingTestTool {
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok("capturing test tool".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "capturing test tool".to_string()
+        }
+
+        fn is_readonly(&self) -> bool {
+            true
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            json!({
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["city"],
+                "properties": {
+                    "city": { "type": "string" }
+                }
+            })
+        }
+
+        async fn validate_input(
+            &self,
+            input: &serde_json::Value,
+            _context: Option<&ToolUseContext>,
+        ) -> ValidationResult {
+            let valid = input
+                .get("city")
+                .and_then(serde_json::Value::as_str)
+                .is_some()
+                && input.as_object().is_some_and(|object| object.len() == 1);
+            ValidationResult {
+                result: valid,
+                message: (!valid).then(|| "city must be the only target argument".to_string()),
+                error_code: (!valid).then_some(400),
+                meta: None,
+            }
+        }
+
+        async fn call_impl(
+            &self,
+            input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            *self
+                .received_arguments
+                .lock()
+                .expect("capturing tool argument lock") = Some(input.clone());
+            Ok(vec![ToolResult::Result {
+                data: json!({ "received": input }),
+                result_for_assistant: None,
+                image_attachments: None,
+            }])
+        }
     }
 
     #[async_trait]
@@ -1680,6 +1880,195 @@ mod tests {
                 delay_ms,
                 needs_permissions: true,
             }));
+    }
+
+    async fn register_capturing_test_tool(
+        pipeline: &ToolPipeline,
+        name: &str,
+        received_arguments: Arc<Mutex<Option<serde_json::Value>>>,
+    ) {
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(CapturingTestTool {
+                name: name.to_string(),
+                received_arguments,
+            }));
+    }
+
+    #[tokio::test]
+    async fn deferred_gateway_executes_effective_target_and_preserves_wire_identity() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+
+        let mut context = test_tool_execution_context();
+        context.allowed_tools = vec![
+            CALL_DEFERRED_TOOL_NAME.to_string(),
+            "get_weather".to_string(),
+        ];
+        context.collapsed_tools = vec!["get_weather".to_string()];
+        context.unlocked_collapsed_tools = vec!["get_weather".to_string()];
+
+        let mut call = test_tool_call("deferred_1", CALL_DEFERRED_TOOL_NAME);
+        call.arguments = json!({
+            "tool_name": "get_weather",
+            "args": { "city": "Shanghai" }
+        });
+
+        let results = pipeline
+            .execute_tools(
+                vec![call],
+                context,
+                ToolExecutionOptions {
+                    confirm_before_run: false,
+                    ..ToolExecutionOptions::default()
+                },
+            )
+            .await
+            .expect("deferred tool execution");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].tool_name, CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(results[0].effective_tool_name, "get_weather");
+        assert_eq!(results[0].result.tool_name, CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(results[0].result.result["received"]["city"], "Shanghai");
+        assert_eq!(
+            *received_arguments
+                .lock()
+                .expect("capturing tool argument lock"),
+            Some(json!({ "city": "Shanghai" }))
+        );
+
+        let task = pipeline
+            .state_manager
+            .get_task("deferred_1")
+            .expect("deferred tool task");
+        assert_eq!(task.tool_call.tool_name, CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(task.effective_tool_name(), "get_weather");
+        assert_eq!(task.effective_arguments(), &json!({ "city": "Shanghai" }));
+    }
+
+    #[tokio::test]
+    async fn deferred_gateway_requires_get_tool_spec_unlock() {
+        let pipeline = test_tool_pipeline();
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::new(Mutex::new(None))).await;
+
+        let mut context = test_tool_execution_context();
+        context.allowed_tools = vec![
+            CALL_DEFERRED_TOOL_NAME.to_string(),
+            "get_weather".to_string(),
+        ];
+        context.collapsed_tools = vec!["get_weather".to_string()];
+
+        let mut call = test_tool_call("deferred_locked", CALL_DEFERRED_TOOL_NAME);
+        call.arguments = json!({
+            "tool_name": "get_weather",
+            "args": { "city": "Shanghai" }
+        });
+
+        let results = pipeline
+            .execute_tools(vec![call], context, ToolExecutionOptions::default())
+            .await
+            .expect("pipeline should return a per-tool error result");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].tool_name, CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(results[0].effective_tool_name, "get_weather");
+        assert!(results[0].result.is_error);
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Call GetToolSpec first"));
+    }
+
+    #[tokio::test]
+    async fn deferred_gateway_does_not_dispatch_direct_tools() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+
+        let mut context = test_tool_execution_context();
+        context.allowed_tools = vec![
+            CALL_DEFERRED_TOOL_NAME.to_string(),
+            "get_weather".to_string(),
+        ];
+
+        let mut call = test_tool_call("deferred_direct", CALL_DEFERRED_TOOL_NAME);
+        call.arguments = json!({
+            "tool_name": "get_weather",
+            "args": { "city": "Shanghai" }
+        });
+
+        let results = pipeline
+            .execute_tools(vec![call], context, ToolExecutionOptions::default())
+            .await
+            .expect("pipeline should return a per-tool error result");
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_error);
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("not an available deferred tool"));
+        assert_eq!(
+            *received_arguments
+                .lock()
+                .expect("capturing tool argument lock"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn deferred_gateway_uses_effective_target_permission_policy() {
+        let pipeline = test_tool_pipeline();
+        register_permissioned_static_test_tool(
+            &pipeline,
+            "write_weather",
+            json!({ "ok": true }),
+            0,
+        )
+        .await;
+
+        let mut context = test_tool_execution_context();
+        context.allowed_tools = vec![
+            CALL_DEFERRED_TOOL_NAME.to_string(),
+            "write_weather".to_string(),
+        ];
+        context.collapsed_tools = vec!["write_weather".to_string()];
+        context.unlocked_collapsed_tools = vec!["write_weather".to_string()];
+
+        let mut call = test_tool_call("deferred_permission", CALL_DEFERRED_TOOL_NAME);
+        call.arguments = json!({
+            "tool_name": "write_weather",
+            "args": { "city": "Shanghai" }
+        });
+
+        let results = pipeline
+            .execute_tools(
+                vec![call],
+                context,
+                ToolExecutionOptions {
+                    confirmation_timeout_secs: Some(0),
+                    ..ToolExecutionOptions::default()
+                },
+            )
+            .await
+            .expect("permission timeout should be returned as a tool result");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].tool_name, CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(results[0].effective_tool_name, "write_weather");
+        assert_eq!(results[0].result.tool_name, CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(results[0].result.result["category"], "confirmation_timeout");
+        assert_eq!(results[0].result.result["tool_name"], "write_weather");
     }
 
     fn test_round_injection(
@@ -2103,6 +2492,7 @@ mod tests {
                 image_attachments: None,
             },
             "tool_1",
+            "Bash",
             "Bash",
         );
 

@@ -6,6 +6,7 @@ use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
+use bitfun_agent_tools::ResolvedToolInvocation;
 use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -89,6 +90,8 @@ pub struct ToolExecutionContext {
 #[derive(Debug, Clone)]
 pub struct ToolTask {
     pub tool_call: ToolCall,
+    pub invocation: ResolvedToolInvocation,
+    pub invocation_resolution_error: Option<String>,
     pub context: ToolExecutionContext,
     pub options: ToolExecutionOptions,
     pub state: ToolExecutionState,
@@ -103,8 +106,24 @@ impl ToolTask {
         context: ToolExecutionContext,
         options: ToolExecutionOptions,
     ) -> Self {
+        let invocation = ResolvedToolInvocation::direct(
+            tool_call.tool_name.clone(),
+            tool_call.arguments.clone(),
+        );
+        Self::new_resolved(tool_call, invocation, None, context, options)
+    }
+
+    pub fn new_resolved(
+        tool_call: ToolCall,
+        invocation: ResolvedToolInvocation,
+        invocation_resolution_error: Option<String>,
+        context: ToolExecutionContext,
+        options: ToolExecutionOptions,
+    ) -> Self {
         Self {
             tool_call,
+            invocation,
+            invocation_resolution_error,
             context,
             options,
             state: ToolExecutionState::Queued { position: 0 },
@@ -113,13 +132,30 @@ impl ToolTask {
             completed_at: None,
         }
     }
+
+    pub fn effective_tool_name(&self) -> &str {
+        &self.invocation.effective_tool_name
+    }
+
+    pub fn effective_arguments(&self) -> &serde_json::Value {
+        &self.invocation.effective_arguments
+    }
+
+    pub fn update_effective_arguments(&mut self, arguments: serde_json::Value) {
+        self.invocation
+            .replace_effective_arguments(arguments.clone());
+        self.tool_call.arguments = self.invocation.wire_arguments.clone();
+    }
 }
 
 /// Tool execution result wrapper
 #[derive(Debug, Clone)]
 pub struct ToolExecutionResult {
     pub tool_id: String,
+    /// Provider-facing tool name. For deferred calls this remains CallDeferredTool.
     pub tool_name: String,
+    /// Runtime target used for validation, permissions, hooks, and execution.
+    pub effective_tool_name: String,
     pub result: crate::agentic::core::ToolResult,
     pub execution_time_ms: u64,
 }

@@ -97,9 +97,11 @@ impl ToolStateManager {
         if let Some(mut task) = self.tasks.get_mut(tool_id) {
             debug!(
                 "Updated tool arguments: tool_id={}, old_args={:?}, new_args={:?}",
-                tool_id, task.tool_call.arguments, new_arguments
+                tool_id,
+                task.effective_arguments(),
+                new_arguments
             );
-            task.tool_call.arguments = new_arguments;
+            task.update_effective_arguments(new_arguments);
         }
     }
 
@@ -152,7 +154,7 @@ impl ToolStateManager {
                 dependencies: dependencies.clone(),
             },
             ToolExecutionState::Running { .. } => ToolStateEventKind::Running {
-                params: task.tool_call.arguments.clone(),
+                params: task.effective_arguments().clone(),
                 timeout_seconds: task.options.timeout_secs,
             },
             ToolExecutionState::Streaming {
@@ -233,7 +235,7 @@ impl ToolStateManager {
         };
         let tool_event = tool_state_event_data(ToolStateEventFacts {
             tool_id: task.tool_call.tool_id.clone(),
-            tool_name: task.tool_call.tool_name.clone(),
+            tool_name: task.effective_tool_name().to_string(),
             state,
         });
 
