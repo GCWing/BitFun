@@ -570,8 +570,14 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                       {d.device_name}
                       {isLocal && <span className="account-login-dialog__device-badge">{t('accountLogin.thisDevice')}</span>}
                     </span>
-                    <span className="account-login-dialog__device-id">
-                      {d.device_id.slice(0, 8)} · {d.online ? t('accountLogin.online') : t('accountLogin.offline')}
+                    <span className="account-login-dialog__device-meta">
+                      <span className="account-login-dialog__device-id">
+                        {d.device_id.slice(0, 8)}
+                      </span>
+                      <span className="account-login-dialog__device-status">
+                        {' · '}
+                        {d.online ? t('accountLogin.online') : t('accountLogin.offline')}
+                      </span>
                     </span>
                   </div>
                   {isLocal

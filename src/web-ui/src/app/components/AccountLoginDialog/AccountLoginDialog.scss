@@ -99,10 +99,23 @@
     color: var(--color-text-primary);
   }
 
-  &__device-id {
-    font-family: monospace;
+  &__device-meta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
     font-size: 10px;
+    font-family: var(--font-family-sans);
     color: var(--color-text-tertiary);
+    line-height: 1.4;
+  }
+
+  &__device-id {
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__device-status {
+    font-family: var(--font-family-sans);
   }
 
   &__overwrite-notice {
@@ -389,7 +402,7 @@
     font-size: 11px;
     color: var(--color-text-secondary);
     padding: 4px 0 8px;
-    font-family: monospace;
+    font-family: var(--font-family-mono);
   }
 
   &__session-list {
