@@ -369,11 +369,24 @@ fn terminal_scripts_dir() -> std::path::PathBuf {
 }
 
 async fn initialize_terminal_service() {
+    use bitfun_core::infrastructure::try_get_path_manager_arc;
     use bitfun_core::service::runtime::RuntimeManager;
     use bitfun_core::service::terminal::{TerminalApi, TerminalConfig};
 
     let mut terminal_config = TerminalConfig::default();
     terminal_config.shell_integration.scripts_dir = Some(terminal_scripts_dir());
+    match try_get_path_manager_arc() {
+        Ok(path_manager) => {
+            terminal_config.transcript.root_dir =
+                Some(path_manager.user_data_dir().join("terminals"));
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Failed to configure terminal transcript storage; recording is disabled: {}",
+                error
+            );
+        }
+    }
 
     if let Ok(runtime_manager) = RuntimeManager::new() {
         let current_path = std::env::var("PATH").ok();

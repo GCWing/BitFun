@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use bitfun_core::service::runtime::RuntimeManager;
 use bitfun_core::service::terminal::TerminalEvent;
@@ -46,6 +47,19 @@ impl TerminalState {
             // Set scripts directory to app data dir: {config_dir}/bitfun/temp/scripts
             let scripts_dir = Self::get_scripts_dir();
             config.shell_integration.scripts_dir = Some(scripts_dir);
+
+            match try_get_path_manager_arc() {
+                Ok(path_manager) => {
+                    config.transcript.root_dir =
+                        Some(path_manager.user_data_dir().join("terminals"));
+                }
+                Err(error) => {
+                    warn!(
+                        "Failed to configure terminal transcript storage; recording is disabled: {}",
+                        error
+                    );
+                }
+            }
 
             // Prepend BitFun-managed runtime dirs to PATH so Bash/Skill commands can
             // run on machines without preinstalled dev tools.

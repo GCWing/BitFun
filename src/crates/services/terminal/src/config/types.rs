@@ -34,6 +34,10 @@ pub struct TerminalConfig {
     /// Terminal dimensions
     pub default_cols: u16,
     pub default_rows: u16,
+
+    /// Persistent plain-text transcript settings for user-created terminal sessions.
+    #[serde(default)]
+    pub transcript: TerminalTranscriptConfig,
 }
 
 impl Default for TerminalConfig {
@@ -49,6 +53,37 @@ impl Default for TerminalConfig {
             shell_integration: ShellIntegrationConfig::default(),
             default_cols: 80,
             default_rows: 24,
+            transcript: TerminalTranscriptConfig::default(),
+        }
+    }
+}
+
+/// Persistent plain-text transcript settings for user-created terminal sessions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TerminalTranscriptConfig {
+    /// Transcript root directory. `None` disables recording so reusable terminal-core
+    /// consumers do not choose a product storage location themselves.
+    #[serde(default)]
+    pub root_dir: Option<PathBuf>,
+
+    /// Maximum size of a single append-only segment before the next write rotates it.
+    pub segment_size_bytes: u64,
+
+    /// Number of recent segments retained for one terminal session.
+    pub retained_segments_per_session: usize,
+
+    /// Number of recent sessions retained unless more sessions are currently active.
+    pub max_recent_sessions: usize,
+}
+
+impl Default for TerminalTranscriptConfig {
+    fn default() -> Self {
+        Self {
+            root_dir: None,
+            segment_size_bytes: 4 * 1024 * 1024,
+            retained_segments_per_session: 4,
+            max_recent_sessions: 10,
         }
     }
 }
