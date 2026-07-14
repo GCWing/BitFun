@@ -1,10 +1,11 @@
 //! CLI account login and device-routing (RPC control) support.
 //!
 //! This module lets the CLI log in to a BitFun relay account and then become
-//! RPC-controllable by other devices on the same account. The flow mirrors the
-//! desktop implementation but is kept minimal: a single global AccountSession,
-//! a background WS task that decrypts incoming device messages and dispatches
-//! them through the shared `RemoteServer`, and simple text-based listing.
+//! RPC-controllable by other devices on the same account.
+//!
+//! Incoming `HostInvoke` / `DeviceEvent` messages are handled by
+//! `crate::peer_host` (Peer Device Mode host). Other remote-connect commands
+//! still go through `RemoteServer`.
 //!
 //! The master key lives in memory only and is lost when the CLI exits.
 
@@ -50,7 +51,7 @@ fn device_relay_client() -> &'static RwLock<Option<Arc<RelayClient>>> {
 
 /// Read both the session and relay URL, returning owned clones to avoid holding
 /// locks across awaits.
-async fn read_account_context() -> Result<(AccountSession, String)> {
+pub(crate) async fn read_account_context() -> Result<(AccountSession, String)> {
     let session = account_session().read().await.clone();
     let relay_url = account_relay_url().read().await.clone();
     match (session, relay_url) {
@@ -60,13 +61,13 @@ async fn read_account_context() -> Result<(AccountSession, String)> {
 }
 
 /// Whether an account session is currently held.
-pub async fn is_logged_in() -> bool {
+pub(crate) async fn is_logged_in() -> bool {
     account_session().read().await.is_some()
 }
 
 /// Attempt to restore a persisted session from disk.  Called at startup.
 /// Returns `Some(user_id)` if a session was restored.
-pub async fn try_restore_session() -> Option<String> {
+pub(crate) async fn try_restore_session() -> Option<String> {
     match session_store::load_session() {
         Ok(Some((token, user_id, master_key, relay_url))) => {
             let session = AccountSession {
@@ -88,8 +89,9 @@ pub async fn try_restore_session() -> Option<String> {
 }
 
 /// Whether the relay has reported the account token as expired/invalid.
-/// The chat loop can call this to prompt the user to re-login.
-pub fn is_token_expired() -> bool {
+/// Intended for the TUI to prompt re-login when account pages open.
+#[allow(dead_code)]
+pub(crate) fn is_token_expired() -> bool {
     TOKEN_EXPIRED.load(Ordering::Relaxed)
 }
 
@@ -98,192 +100,104 @@ fn current_device_identity() -> Result<DeviceIdentity> {
     DeviceIdentity::from_current_machine().map_err(|e| anyhow!("detect device: {e}"))
 }
 
-/// Prompt for a line of input from stdin with the terminal in cooked mode.
+/// Structured result of a successful credential login.
+#[derive(Debug, Clone)]
+pub(crate) struct LoginResult {
+    pub user_id: String,
+    pub relay_url: String,
+    /// True when the relay already has a settings blob (Desktop overwrite prompt).
+    pub has_cloud_settings: bool,
+    pub status_message: String,
+}
+
+/// Log in with credentials collected by the Login TUI form.
 ///
-/// `secret=true` disables local echo (best-effort — used for passwords). The
-/// caller must have already left raw mode so that line editing works normally.
-fn prompt_line(prompt: &str, secret: bool) -> Result<String> {
-    use std::io::{self, Write};
-    print!("{}", prompt);
-    io::stdout().flush()?;
-
-    let value = if secret {
-        read_password()?
-    } else {
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        buf
-    };
-    Ok(value.trim_end_matches(['\r', '\n']).to_string())
-}
-
-/// Read a password from stdin with echo disabled. Falls back to plain
-/// `read_line` if terminal echo control is unavailable.
-fn read_password() -> Result<String> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::io::AsRawFd;
-        let stdin = std::io::stdin();
-        let fd = stdin.as_raw_fd();
-        // Attempt to disable ECHO; if it fails, fall back to normal read.
-        let disabled = disable_echo(fd).is_ok();
-        let result = (|| {
-            let mut buf = String::new();
-            std::io::stdin().read_line(&mut buf)?;
-            Ok(buf)
-        })();
-        if disabled {
-            let _ = restore_echo(fd);
-            // Print a newline so the next prompt starts on a fresh line.
-            println!();
-        }
-        return result;
+/// Same fields as Desktop Account Login: Auth Server (relay URL), Username,
+/// Password. Persists encrypted session + non-secret hint, then starts device
+/// routing so this CLI becomes a Peer Device Mode host.
+pub(crate) async fn login_with_credentials(
+    relay_url: &str,
+    username: &str,
+    password: &str,
+) -> Result<LoginResult> {
+    let relay_url = relay_url.trim();
+    let username = username.trim();
+    if relay_url.is_empty() {
+        return Err(anyhow!("Auth Server is required"));
     }
-    #[cfg(not(unix))]
-    {
-        let mut buf = String::new();
-        std::io::stdin().read_line(&mut buf)?;
-        Ok(buf)
-    }
-}
-
-#[cfg(unix)]
-fn disable_echo(fd: std::os::unix::io::RawFd) -> std::io::Result<()> {
-    // Minimal termios binding to avoid pulling in another crate. Only the
-    // fields needed to toggle ECHO are touched.
-    use std::mem::MaybeUninit;
-    extern "C" {
-        fn tcgetattr(fd: i32, termios: *mut Termios) -> i32;
-        fn tcsetattr(fd: i32, optional_actions: i32, termios: *const Termios) -> i32;
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone)]
-    struct Termios {
-        c_iflag: u32,
-        c_oflag: u32,
-        c_cflag: u32,
-        c_lflag: u32,
-        c_line: u8,
-        c_cc: [u8; 32],
-        c_ispeed: u32,
-        c_ospeed: u32,
-    }
-    const ECHO: u32 = 0o000010;
-    const ECHONL: u32 = 0o000100;
-    const TCSANOW: i32 = 0;
-    unsafe {
-        let mut t: MaybeUninit<Termios> = MaybeUninit::uninit();
-        if tcgetattr(fd, t.as_mut_ptr()) != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        let mut t = t.assume_init();
-        t.c_lflag &= !(ECHO);
-        t.c_lflag |= ECHONL;
-        if tcsetattr(fd, TCSANOW, &t) != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn restore_echo(fd: std::os::unix::io::RawFd) -> std::io::Result<()> {
-    use std::mem::MaybeUninit;
-    extern "C" {
-        fn tcgetattr(fd: i32, termios: *mut Termios) -> i32;
-        fn tcsetattr(fd: i32, optional_actions: i32, termios: *const Termios) -> i32;
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone)]
-    struct Termios {
-        c_iflag: u32,
-        c_oflag: u32,
-        c_cflag: u32,
-        c_lflag: u32,
-        c_line: u8,
-        c_cc: [u8; 32],
-        c_ispeed: u32,
-        c_ospeed: u32,
-    }
-    const ECHO: u32 = 0o000010;
-    const ECHONL: u32 = 0o000100;
-    const TCSANOW: i32 = 0;
-    unsafe {
-        let mut t: MaybeUninit<Termios> = MaybeUninit::uninit();
-        if tcgetattr(fd, t.as_mut_ptr()) != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        let mut t = t.assume_init();
-        t.c_lflag |= ECHO;
-        t.c_lflag &= !ECHONL;
-        if tcsetattr(fd, TCSANOW, &t) != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-    }
-    Ok(())
-}
-
-/// Default relay URL used when the user presses Enter at the prompt.
-const DEFAULT_RELAY_URL: &str = "https://remote.openbitfun.com/relay";
-
-/// Run the interactive login flow.
-///
-/// `read_input` is called for each prompt while the terminal is in cooked
-/// mode. Returns a short status message for the chat view. The caller is
-/// responsible for leaving raw mode before calling this and re-enabling it
-/// afterwards.
-pub async fn login_interactive() -> Result<String> {
-    let relay_url = prompt_line(&format!("Relay URL [{}]: ", DEFAULT_RELAY_URL), false)?;
-    let relay_url = if relay_url.is_empty() {
-        DEFAULT_RELAY_URL.to_string()
-    } else {
-        relay_url
-    };
-    let username = prompt_line("Username: ", false)?;
     if username.is_empty() {
-        return Err(anyhow!("username is required"));
+        return Err(anyhow!("Username is required"));
     }
-    let password = prompt_line("Password: ", true)?;
     if password.is_empty() {
-        return Err(anyhow!("password is required"));
+        return Err(anyhow!("Password is required"));
     }
 
     let device = current_device_identity()?;
     let client = AccountClient::new();
     let session = client
-        .login(&relay_url, &username, &password, &device)
+        .login(relay_url, username, password, &device)
         .await
         .map_err(|e| anyhow!("login failed: {e}"))?;
+
+    let has_cloud_settings = client
+        .fetch_settings(relay_url, &session)
+        .await
+        .unwrap_or(None)
+        .is_some();
 
     let user_id = session.user_id.clone();
     let device_name = device.device_name.clone();
     let token = session.token.clone();
     let master_key = session.master_key;
     *account_session().write().await = Some(session);
-    *account_relay_url().write().await = Some(relay_url.clone());
+    *account_relay_url().write().await = Some(relay_url.to_string());
 
-    // Persist session for restart recovery.
-    if let Err(e) = session_store::save_session(&token, &user_id, &master_key, &relay_url) {
+    if let Err(e) = session_store::save_session(&token, &user_id, &master_key, relay_url) {
         tracing::warn!("Failed to persist session: {e}");
     }
+    session_store::save_credential_hint(username, relay_url);
 
     TOKEN_EXPIRED.store(false, Ordering::Relaxed);
 
-    // Establish device routing so the CLI becomes RPC-controllable.
-    let connect_result = spawn_device_routing(&relay_url, &device_name).await;
+    let connect_result = spawn_device_routing(relay_url, &device_name).await;
     let routing_msg = match connect_result {
-        Ok(()) => " Device routing connected.".to_string(),
+        Ok(()) => " Device routing connected (Peer Host ready).".to_string(),
         Err(e) => format!(" (Warning: device routing failed: {e})"),
     };
 
-    Ok(format!(
-        "Logged in as user {} on {}.{}",
-        user_id, relay_url, routing_msg
-    ))
+    Ok(LoginResult {
+        user_id: user_id.clone(),
+        relay_url: relay_url.to_string(),
+        has_cloud_settings,
+        status_message: format!(
+            "Logged in as user {} on {}.{}",
+            user_id, relay_url, routing_msg
+        ),
+    })
+}
+
+/// Snapshot of the logged-in account for the Account status page.
+#[derive(Debug, Clone)]
+pub(crate) struct AccountInfo {
+    pub user_id: String,
+    pub relay_url: String,
+    pub device_id: String,
+    pub device_name: String,
+}
+
+pub(crate) async fn account_info() -> Result<AccountInfo> {
+    let (session, relay_url) = read_account_context().await?;
+    let device = current_device_identity()?;
+    Ok(AccountInfo {
+        user_id: session.user_id,
+        relay_url,
+        device_id: device.device_id,
+        device_name: device.device_name,
+    })
 }
 
 /// Public wrapper for restoring device routing after session restore at startup.
-pub async fn restore_device_routing(device_name: &str) -> Result<()> {
+pub(crate) async fn restore_device_routing(device_name: &str) -> Result<()> {
     let relay_url = account_relay_url()
         .read()
         .await
@@ -334,14 +248,14 @@ async fn spawn_device_routing(relay_url: &str, device_name: &str) -> Result<()> 
 }
 
 /// Disconnect the device-routing connection (if any).
-pub async fn stop_device_routing() {
+pub(crate) async fn stop_device_routing() {
     if let Some(client) = device_relay_client().write().await.take() {
         client.disconnect().await;
     }
 }
 
 /// Log out: tear down routing, revoke the token (best-effort), clear state.
-pub async fn logout() -> Result<()> {
+pub(crate) async fn logout() -> Result<()> {
     stop_device_routing().await;
     let result = read_account_context().await;
     if let Ok((session, relay_url)) = result {
@@ -352,6 +266,7 @@ pub async fn logout() -> Result<()> {
     *account_session().write().await = None;
     *account_relay_url().write().await = None;
     session_store::clear_session();
+    session_store::clear_credential_hint();
     TOKEN_EXPIRED.store(false, Ordering::Relaxed);
     Ok(())
 }
@@ -392,7 +307,7 @@ async fn handle_relay_event(
                         return;
                     }
                 };
-            use remote_connect::remote_server::RemoteCommand;
+            use remote_connect::remote_server::{RemoteCommand, RemoteResponse};
             let cmd: RemoteCommand = match serde_json::from_str(&plaintext) {
                 Ok(c) => c,
                 Err(e) => {
@@ -402,18 +317,46 @@ async fn handle_relay_event(
             };
             tracing::info!("Device command from {source_device_id}: {cmd:?} corr={correlation_id}");
 
-            let server = RemoteServer::new(session.master_key);
-            let response = server.dispatch(&cmd).await;
-            match server.encrypt_response(&response, None) {
+            let response = match &cmd {
+                RemoteCommand::HostInvoke { command, args } => {
+                    crate::peer_host::handle_host_invoke(command, args.clone()).await
+                }
+                RemoteCommand::DeviceEvent { .. } => {
+                    crate::peer_host::handle_device_event_command()
+                }
+                other => {
+                    let server = RemoteServer::new(session.master_key);
+                    server.dispatch(other).await
+                }
+            };
+
+            let resp_json = match serde_json::to_string(&response) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!("Failed to serialize RPC response: {e}");
+                    serde_json::to_string(&RemoteResponse::Error {
+                        message: format!("failed to serialize RPC response: {e}"),
+                    })
+                    .unwrap_or_else(|_| {
+                        r#"{"resp":"error","message":"serialize failed"}"#.to_string()
+                    })
+                }
+            };
+
+            match encryption::encrypt_to_base64(&session.master_key, &resp_json) {
                 Ok((enc_resp, resp_nonce)) => {
-                    let _ = relay_client
-                        .send_device_message(
-                            &source_device_id,
-                            &correlation_id,
-                            &enc_resp,
-                            &resp_nonce,
-                        )
-                        .await;
+                    // HTTP RPC bridge expects replies targeted at "rpc".
+                    let reply_target = if source_device_id == "rpc" {
+                        "rpc"
+                    } else {
+                        source_device_id.as_str()
+                    };
+                    if let Err(e) = relay_client
+                        .send_device_message(reply_target, &correlation_id, &enc_resp, &resp_nonce)
+                        .await
+                    {
+                        tracing::warn!("Failed to send RPC response: {e}");
+                    }
                 }
                 Err(e) => {
                     tracing::warn!("Failed to encrypt RPC response: {e}");
@@ -433,16 +376,30 @@ async fn handle_relay_event(
     }
 }
 
+/// Context needed by Peer Host DeviceEvent fan-out.
+pub(crate) async fn peer_fanout_context() -> Result<(AccountSession, Arc<RelayClient>)> {
+    let session = account_session()
+        .read()
+        .await
+        .clone()
+        .ok_or_else(|| anyhow!("not logged in"))?;
+    let client = device_relay_client()
+        .read()
+        .await
+        .clone()
+        .ok_or_else(|| anyhow!("device routing not connected"))?;
+    Ok((session, client))
+}
+
 /// A textual device listing entry for display.
-pub struct AccountDevice {
-    pub device_id: String,
-    pub device_name: String,
-    pub online: bool,
-    pub last_seen_at: Option<i64>,
+pub(crate) struct AccountDevice {
+    pub(crate) device_id: String,
+    pub(crate) device_name: String,
+    pub(crate) online: bool,
 }
 
 /// List all devices in the account.
-pub async fn list_devices() -> Result<Vec<AccountDevice>> {
+pub(crate) async fn list_devices() -> Result<Vec<AccountDevice>> {
     let (session, relay_url) = read_account_context().await?;
     let devices = AccountClient::new()
         .list_devices(&relay_url, &session)
@@ -453,36 +410,6 @@ pub async fn list_devices() -> Result<Vec<AccountDevice>> {
             device_id: d.device_id,
             device_name: d.device_name,
             online: d.online,
-            last_seen_at: d.last_seen_at,
         })
         .collect())
-}
-
-/// Build a simple text report of account devices.
-pub fn format_devices(devices: &[AccountDevice]) -> String {
-    if devices.is_empty() {
-        return "No devices found on this account.".to_string();
-    }
-    let mut lines = Vec::new();
-    lines.push(format!("Account devices ({}):", devices.len()));
-    for d in devices {
-        let status = if d.online { "online" } else { "offline" };
-        let last = match d.last_seen_at {
-            Some(ts) => format!(", last seen {}", format_ts(ts)),
-            None => String::new(),
-        };
-        lines.push(format!(
-            "  • {} — {} [{}]{}",
-            d.device_name, d.device_id, status, last
-        ));
-    }
-    lines.join("\n")
-}
-
-fn format_ts(ts: i64) -> String {
-    use chrono::{DateTime, Utc};
-    match DateTime::<Utc>::from_timestamp(ts, 0) {
-        Some(dt) => dt.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-        None => ts.to_string(),
-    }
 }

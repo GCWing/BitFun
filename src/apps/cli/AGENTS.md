@@ -11,6 +11,11 @@ before Product Profile, TUI Blueprint, branding, packaging, runtime, or plugin a
 
 - This app owns Clap commands, TUI state and rendering, terminal input/lifecycle,
   CLI-local settings, structured output projection, and user-facing CLI diagnostics.
+- Peer Device Mode **host** support lives in `src/peer_host/`: after `/login`
+  (same Auth Server / Username / Password flow and `~/.bitfun` session/hint
+  files as Desktop), device routing stays up so Desktop controllers can
+  HostInvoke this process. CLI is not a Peer Mode controller. Same-machine
+  Desktop+CLI share one `device_id`; last AuthConnect wins.
 - Shared session, turn, task, tool, permission, context, checkpoint, Subagent,
   Harness, MCP, plugin, and capability facts belong to their runtime owners.
 - Existing `bitfun-core/product-full` compatibility paths may remain during a

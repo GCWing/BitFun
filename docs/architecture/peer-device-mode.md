@@ -2,7 +2,8 @@
 
 Peer Device Mode switches the desktop (and mobile control target) data plane
 onto another same-account online BitFun device. The React shell stays local;
-product invokes and agentic events come from the peer.
+product invokes and agentic events come from the peer. The peer may be Desktop
+or CLI: both speak the same HostInvoke / DeviceEvent protocol.
 
 ## Product goal
 
@@ -51,8 +52,12 @@ FS) and must not be mixed with Peer Device Mode.
   - editor disk sync poll slows to 15s (from 1s)
   - canvas snapshot poll slows to 15s (from 2s)
   - workspace search-index poll slows to 30s idle / 5s active
-- Peer: decrypt → allow/deny → webview bridge `peer-host-invoke://request` →
-  same Tauri handlers as local UI → `peer_host_invoke_complete`.
+- Peer: decrypt → allow/deny → execute on the peer host:
+  - Desktop: webview bridge `peer-host-invoke://request` → same Tauri handlers
+    as local UI → `peer_host_invoke_complete`
+  - CLI: Core HostInvoke registry (`WorkspaceService`, FS, config, session,
+    git, `DialogScheduler`) — no webview. Desktop-only surfaces (MiniApp /
+    cron / ACP list) return empty or no-op so hydrate does not fail.
 - Events: peer agentic projection (and other product events such as terminal /
   FS / MCP interaction) fan-out as `RemoteCommand::DeviceEvent` to attached
   controllers; controller re-emits the same event names locally.
@@ -80,6 +85,10 @@ Still use normal `openWorkspace` / create-workspace flows (not SSH
 
 - Desktop host invoke / fan-out: `src/apps/desktop/src/api/peer_host_invoke.rs`,
   `remote_connect_api.rs`
+- CLI host invoke / fan-out: `src/apps/cli/src/peer_host/` (Core registry; no
+  webview bridge). Device routing in `src/apps/cli/src/account.rs` special-cases
+  `HostInvoke` / `DeviceEvent`. Same machine Desktop+CLI share one `device_id`;
+  last `AuthConnect` wins.
 - Frontend mode + transport: `src/web-ui/src/infrastructure/peer-device/`,
   `adapters/peer-device-adapter.ts`
 - Peer directory picker: `pickWorkspaceDirectory.ts`, `PeerDirectoryBrowser.tsx`,

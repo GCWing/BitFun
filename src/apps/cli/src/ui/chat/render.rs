@@ -99,6 +99,9 @@ impl ChatView {
         // Command palette overlay (Ctrl+P)
         self.command_palette.render(frame, size, &self.theme);
 
+        // Dedicated login page (full viewport takeover)
+        self.login_form.render(frame, size, &self.theme);
+
         // Info popup overlay (topmost)
         if let Some(ref msg) = self.info_popup {
             super::widgets::render_info_popup(frame, size, msg, self.theme.primary);

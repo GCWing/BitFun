@@ -5,6 +5,7 @@
 /// - Single command execution
 /// - Batch task processing
 mod account;
+mod account_sync;
 mod acp_cli;
 mod agent;
 #[allow(dead_code)]
@@ -15,6 +16,7 @@ mod diagnostics;
 mod logging;
 mod management;
 mod modes;
+mod peer_host;
 mod plugin_diagnostics;
 mod prompts;
 mod root_handlers;
@@ -450,6 +452,12 @@ async fn initialize_core_services(
         .expect("Failed to initialize agentic system");
     tracing::info!("Agentic system initialized");
 
+    if let Err(e) = peer_host::ensure_peer_host_ready(&agentic_system).await {
+        tracing::warn!("Failed to initialize CLI peer host services: {e}");
+    } else {
+        tracing::info!("CLI peer host services initialized");
+    }
+
     // Initialize MCP service in background (non-blocking)
     if let Some(ref cfg_svc) = config_service {
         match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
@@ -527,8 +535,8 @@ async fn run_interactive(
     if let Some(user_id) = account::try_restore_session().await {
         tracing::info!("Restored account session for user {user_id}");
         // Re-establish device routing so the CLI becomes RPC-controllable.
-        let device = DeviceIdentity::from_current_machine()
-            .map_err(|e| anyhow!("detect device: {e}"))?;
+        let device =
+            DeviceIdentity::from_current_machine().map_err(|e| anyhow!("detect device: {e}"))?;
         if let Err(e) = account::restore_device_routing(&device.device_name).await {
             tracing::warn!("Failed to restore device routing: {e}");
         }

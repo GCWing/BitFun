@@ -33,7 +33,10 @@ impl ChatView {
         self.command_palette.is_visible()
     }
 
-    pub(crate) fn command_palette_handle_key(&mut self, key: crossterm::event::KeyEvent) -> PaletteAction {
+    pub(crate) fn command_palette_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> PaletteAction {
         self.command_palette.handle_key_event(key)
     }
 
@@ -44,7 +47,10 @@ impl ChatView {
         self.command_palette.handle_mouse_event(mouse)
     }
 
-    pub(crate) fn command_palette_captures_mouse(&self, mouse: &crossterm::event::MouseEvent) -> bool {
+    pub(crate) fn command_palette_captures_mouse(
+        &self,
+        mouse: &crossterm::event::MouseEvent,
+    ) -> bool {
         self.command_palette.captures_mouse(mouse)
     }
 
@@ -306,7 +312,10 @@ impl ChatView {
         self.mcp_add_dialog.is_visible()
     }
 
-    pub(crate) fn mcp_add_dialog_handle_key(&mut self, key: crossterm::event::KeyEvent) -> McpAddAction {
+    pub(crate) fn mcp_add_dialog_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> McpAddAction {
         self.mcp_add_dialog.handle_key_event(key)
     }
 
@@ -389,7 +398,10 @@ impl ChatView {
         self.provider_selector.handle_mouse_event(mouse)
     }
 
-    pub(crate) fn provider_selector_captures_mouse(&self, mouse: &crossterm::event::MouseEvent) -> bool {
+    pub(crate) fn provider_selector_captures_mouse(
+        &self,
+        mouse: &crossterm::event::MouseEvent,
+    ) -> bool {
         self.provider_selector.captures_mouse(mouse)
     }
 
@@ -438,5 +450,63 @@ impl ChatView {
         key: crossterm::event::KeyEvent,
     ) -> ModelFormAction {
         self.model_config_form.handle_key_event(key)
+    }
+
+    // ============ Account login form ============
+
+    pub(crate) fn show_login_form(&mut self) {
+        self.login_form.show();
+        self.popup_stack.push(PopupType::LoginForm);
+    }
+
+    pub(crate) fn login_form_visible(&self) -> bool {
+        self.login_form.is_visible()
+    }
+
+    pub(crate) fn hide_login_form(&mut self) {
+        self.login_form.hide();
+    }
+
+    pub(crate) fn reshow_login_form(&mut self) {
+        self.login_form.show();
+    }
+
+    pub(crate) fn login_form_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> LoginFormAction {
+        self.login_form.handle_key_event(key)
+    }
+
+    pub(crate) fn login_form_set_error(&mut self, message: impl Into<String>) {
+        self.login_form.set_error(message);
+    }
+
+    pub(crate) fn login_form_insert_paste(&mut self, text: &str) {
+        self.login_form.insert_paste(text);
+    }
+
+    pub(crate) fn show_account_panel(
+        &mut self,
+        info: crate::account::AccountInfo,
+        devices: Vec<crate::account::AccountDevice>,
+        sync_progress: crate::account_sync::SyncProgress,
+    ) {
+        self.login_form.show_account(info, devices, sync_progress);
+        self.popup_stack.push(PopupType::LoginForm);
+    }
+
+    pub(crate) fn show_sync_choice_panel(&mut self, user_id: &str, relay_url: &str) {
+        self.login_form.show_sync_choice(user_id, relay_url);
+        self.popup_stack.push(PopupType::LoginForm);
+    }
+
+    pub(crate) fn update_account_panel_progress(
+        &mut self,
+        devices: Option<Vec<crate::account::AccountDevice>>,
+        sync_progress: crate::account_sync::SyncProgress,
+    ) {
+        self.login_form
+            .update_account_progress(devices, sync_progress);
     }
 }

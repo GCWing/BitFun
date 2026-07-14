@@ -6,6 +6,7 @@ pub(crate) mod chat;
 mod command_menu;
 pub(crate) mod command_palette;
 mod diff_render;
+pub(crate) mod login_form;
 mod markdown;
 pub(crate) mod mcp_add_dialog;
 pub(crate) mod mcp_selector;

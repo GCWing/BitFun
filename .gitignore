@@ -67,6 +67,8 @@ tests/e2e/reports/
 
 # Eval job artifacts
 .eval/
+.tmp/
+tmp/
 Cross.toml
 
 # BitFun sandbox data - auto managed

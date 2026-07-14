@@ -1,6 +1,7 @@
 use super::agent_selector::{AgentItem, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::login_form::{LoginFormAction, LoginFormState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
 use super::model_selector::{ModelItem, ModelSelectorState};
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
@@ -61,6 +62,7 @@ enum PopupType {
     ThemeSelector,
     ProviderSelector,
     ModelConfigForm,
+    LoginForm,
 }
 
 /// Navigation stack for managing popup hierarchy
@@ -116,8 +118,9 @@ Ctrl+C            Exit";
 
 /// Random tips shown on the startup page
 const TIPS: &[&str] = &[
-    "Type / for slash commands (e.g. /help, /models, /agents)",
+    "Type / for slash commands (e.g. /help, /login, /models)",
     "Press Tab to cycle between agents",
+    "Use /login to sign in for Peer Device Mode / multi-device sync",
     "Use /init to explore your repo and generate AGENTS.md",
     "Press Ctrl+E to toggle browse mode for scrolling history",
     "Use /sessions to list and continue previous conversations",
@@ -188,6 +191,7 @@ pub(crate) struct StartupPage {
     theme_selector: ThemeSelectorState,
     provider_selector: ProviderSelectorState,
     model_config_form: ModelConfigFormState,
+    login_form: LoginFormState,
     theme_preview_original: Option<Theme>,
 
     // ── System context ──
@@ -262,6 +266,7 @@ impl StartupPage {
             theme_selector: ThemeSelectorState::new(),
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
+            login_form: LoginFormState::new(),
             theme_preview_original: None,
             coordinator,
             agent_type: default_agent,
@@ -320,12 +325,16 @@ impl StartupPage {
             || self.theme_selector.is_visible()
             || self.provider_selector.is_visible()
             || self.model_config_form.is_visible()
+            || self.login_form.is_visible()
     }
 
     pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
         terminal.clear()?;
 
         loop {
+            if self.login_form.is_visible() {
+                self.refresh_account_panel_live();
+            }
             terminal.draw(|f| self.render(f))?;
 
             if event::poll(Duration::from_millis(50))? {
@@ -373,8 +382,12 @@ impl StartupPage {
                             }
                         }
                         if !paste_buf.is_empty() {
-                            self.text_input.insert_paste(&paste_buf);
-                            self.refresh_command_menu();
+                            if self.login_form.is_visible() {
+                                self.login_form.insert_paste(&paste_buf);
+                            } else {
+                                self.text_input.insert_paste(&paste_buf);
+                                self.refresh_command_menu();
+                            }
                         }
                         for ev in non_key_events {
                             self.handle_non_key_event(ev, terminal)?;
@@ -425,8 +438,12 @@ impl StartupPage {
                 }
             }
             Event::Paste(text) => {
-                self.text_input.insert_paste(&text);
-                self.refresh_command_menu();
+                if self.login_form.is_visible() {
+                    self.login_form.insert_paste(&text);
+                } else {
+                    self.text_input.insert_paste(&text);
+                    self.refresh_command_menu();
+                }
             }
             Event::Resize(_, _) => {
                 // Avoid full-screen clear on every resize event to reduce flicker.
@@ -481,6 +498,9 @@ impl StartupPage {
 
         // Overlay: command palette (Ctrl+P)
         self.command_palette.render(frame, size, &self.theme);
+
+        // Dedicated login page (full viewport takeover)
+        self.login_form.render(frame, size, &self.theme);
 
         // Overlay: info popup (highest priority)
         if let Some(ref msg) = self.info_popup {
@@ -883,6 +903,12 @@ impl StartupPage {
             return None;
         }
 
+        if self.login_form.is_visible() {
+            self.refresh_account_panel_live();
+            let action = self.login_form.handle_key_event(key);
+            return self.handle_login_form_action(action);
+        }
+
         // ── Command palette intercepts all keys when visible ──
 
         if self.command_palette.is_visible() {
@@ -1067,6 +1093,13 @@ impl StartupPage {
                     prompt: Some("/mcps".to_string()),
                 });
             }
+            // Account group
+            "login" => {
+                self.show_login_form();
+            }
+            "logout" => {
+                return self.handle_command("/logout");
+            }
             // System group
             "help" => {
                 self.info_popup = Some(KEYBOARD_SHORTCUTS_HELP.to_string());
@@ -1129,6 +1162,24 @@ impl StartupPage {
                     prompt: Some("/acp".to_string()),
                 });
             }
+            "/login" => {
+                self.show_login_form();
+            }
+            "/logout" => {
+                let logged_in = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
+                });
+                if !logged_in {
+                    self.status = Some("Not logged in.".to_string());
+                } else {
+                    match tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    }) {
+                        Ok(()) => self.status = Some("Logged out.".to_string()),
+                        Err(e) => self.status = Some(format!("Logout failed: {e}")),
+                    }
+                }
+            }
             "/usage" => {
                 self.status = Some("No active session for /usage.".to_string());
             }
@@ -1184,7 +1235,139 @@ impl StartupPage {
         } else if self.model_config_form.is_visible() {
             self.popup_stack.push(PopupType::ModelConfigForm);
             self.model_config_form.hide();
+        } else if self.login_form.is_visible() {
+            self.popup_stack.push(PopupType::LoginForm);
+            self.login_form.hide();
         }
+    }
+
+    fn show_login_form(&mut self) {
+        self.close_all_popups();
+        let logged_in = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
+        });
+        if logged_in {
+            self.open_account_panel();
+        } else {
+            self.login_form.show();
+        }
+    }
+
+    fn workspace_path_for_sync(&self) -> std::path::PathBuf {
+        self.workspace_path_buf()
+    }
+
+    fn open_account_panel(&mut self) {
+        let (info, devices, progress) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let info = crate::account::account_info().await;
+                let devices = crate::account::list_devices().await.unwrap_or_default();
+                let progress = crate::account_sync::current_sync_progress().await;
+                (info, devices, progress)
+            })
+        });
+        match info {
+            Ok(info) => self.login_form.show_account(info, devices, progress),
+            Err(e) => {
+                self.status = Some(format!("Failed to load account: {e}"));
+                self.login_form.show();
+            }
+        }
+    }
+
+    fn refresh_account_panel_live(&mut self) {
+        if !self.login_form.is_visible() {
+            return;
+        }
+        let progress = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(crate::account_sync::current_sync_progress())
+        });
+        // Refresh devices occasionally while syncing / after done.
+        let devices = if matches!(
+            progress.status,
+            crate::account_sync::SyncStatus::Syncing | crate::account_sync::SyncStatus::Done
+        ) {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(crate::account::list_devices())
+                    .ok()
+            })
+        } else {
+            None
+        };
+        self.login_form.update_account_progress(devices, progress);
+    }
+
+    fn start_sync_and_show_account(&mut self, is_first_login: bool) {
+        let workspace = self.workspace_path_for_sync();
+        crate::account_sync::start_auto_sync_background(is_first_login, workspace);
+        self.open_account_panel();
+        self.status = Some(if is_first_login {
+            "Sync started (use local / upload settings).".to_string()
+        } else {
+            "Sync started (use cloud / download settings).".to_string()
+        });
+    }
+
+    fn handle_login_form_action(&mut self, action: LoginFormAction) -> Option<StartupResult> {
+        match action {
+            LoginFormAction::Submit(creds) => {
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(
+                        crate::account::login_with_credentials(
+                            &creds.relay_url,
+                            &creds.username,
+                            &creds.password,
+                        ),
+                    )
+                });
+                match result {
+                    Ok(login) => {
+                        self.status = Some(login.status_message.clone());
+                        if login.has_cloud_settings {
+                            self.login_form
+                                .show_sync_choice(&login.user_id, &login.relay_url);
+                        } else {
+                            self.start_sync_and_show_account(true);
+                        }
+                    }
+                    Err(e) => {
+                        self.login_form.set_error(format!("Login failed: {e}"));
+                    }
+                }
+            }
+            LoginFormAction::SyncUseLocal => {
+                self.start_sync_and_show_account(true);
+            }
+            LoginFormAction::SyncUseCloud => {
+                self.start_sync_and_show_account(false);
+            }
+            LoginFormAction::SyncCancel => {
+                let _ = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                });
+                self.login_form.show();
+                self.status = Some("Sync cancelled; logged out.".to_string());
+            }
+            LoginFormAction::Logout => {
+                match tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                }) {
+                    Ok(()) => {
+                        self.login_form.show();
+                        self.status = Some("Logged out.".to_string());
+                    }
+                    Err(e) => {
+                        self.login_form.set_error(format!("Logout failed: {e}"));
+                    }
+                }
+            }
+            LoginFormAction::Cancel => {
+                self.status = Some("Account panel closed".to_string());
+            }
+            LoginFormAction::None => {}
+        }
+        None
     }
 
     fn show_session_selector(&mut self) {
@@ -2038,6 +2221,8 @@ impl StartupPage {
             self.provider_selector.hide();
         } else if self.model_config_form.is_visible() {
             self.model_config_form.hide();
+        } else if self.login_form.is_visible() {
+            self.login_form.hide();
         }
 
         // If there's a previous popup in the stack, re-show it
@@ -2052,6 +2237,7 @@ impl StartupPage {
                 PopupType::ThemeSelector => self.theme_selector.reshow(),
                 PopupType::ProviderSelector => self.provider_selector.reshow(),
                 PopupType::ModelConfigForm => self.model_config_form.reshow(),
+                PopupType::LoginForm => self.login_form.show(),
             }
         }
     }
@@ -2068,6 +2254,7 @@ impl StartupPage {
         self.cancel_theme_preview();
         self.provider_selector.hide();
         self.model_config_form.hide();
+        self.login_form.hide();
         self.popup_stack.clear();
     }
 

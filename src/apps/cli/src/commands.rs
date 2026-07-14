@@ -78,15 +78,11 @@ pub(crate) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "/login",
-        description: "Log in to BitFun account for multi-device sync",
+        description: "Account login / status (sync progress when signed in)",
     },
     CommandSpec {
         name: "/logout",
         description: "Log out of BitFun account",
-    },
-    CommandSpec {
-        name: "/devices",
-        description: "List devices on this account",
     },
 ];
 
@@ -131,6 +127,14 @@ pub(crate) const STARTUP_COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "/acp",
         description: "Show ACP server setup",
+    },
+    CommandSpec {
+        name: "/login",
+        description: "Account login / status (sync progress when signed in)",
+    },
+    CommandSpec {
+        name: "/logout",
+        description: "Log out of BitFun account",
     },
     CommandSpec {
         name: "/init",

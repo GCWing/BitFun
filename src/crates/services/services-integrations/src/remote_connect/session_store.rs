@@ -97,17 +97,17 @@ fn hostname_string() -> Option<String> {
 /// Best-effort current username retrieval (cross-platform).
 fn username_string() -> Option<String> {
     if cfg!(target_os = "windows") {
-        std::env::var("USERNAME").or_else(|_| std::env::var("USER")).ok()
-    } else {
-        std::env::var("USER")
+        std::env::var("USERNAME")
+            .or_else(|_| std::env::var("USER"))
             .ok()
-            .or_else(|| {
-                std::process::Command::new("whoami")
-                    .output()
-                    .ok()
-                    .and_then(|o| String::from_utf8(o.stdout).ok())
-                    .map(|s| s.trim().to_string())
-            })
+    } else {
+        std::env::var("USER").ok().or_else(|| {
+            std::process::Command::new("whoami")
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+        })
     }
 }
 
@@ -130,8 +130,7 @@ pub fn save_session(
     let json = serde_json::to_string(&payload).context("serialize session payload")?;
 
     let key = derive_machine_key();
-    let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow!("cipher init: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow!("cipher init: {e}"))?;
 
     let mut nonce_bytes = [0u8; NONCE_SIZE];
     OsRng.fill_bytes(&mut nonce_bytes);
@@ -164,7 +163,11 @@ pub fn load_session() -> Result<Option<(String, String, [u8; 32], String)>> {
     let encoded = match std::fs::read_to_string(&path) {
         Ok(data) => data,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(anyhow!("read session file: {e}").context(path.to_string_lossy().to_string())),
+        Err(e) => {
+            return Err(
+                anyhow!("read session file: {e}").context(path.to_string_lossy().to_string())
+            )
+        }
     };
 
     let packed = BASE64
@@ -180,8 +183,7 @@ pub fn load_session() -> Result<Option<(String, String, [u8; 32], String)>> {
         .map_err(|_| anyhow!("nonce conversion"))?;
 
     let key = derive_machine_key();
-    let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow!("cipher init: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow!("cipher init: {e}"))?;
     let plaintext = cipher
         .decrypt(Nonce::from_slice(&nonce_arr), ciphertext)
         .map_err(|e| anyhow!("decrypt session: {e}"))?;
@@ -209,6 +211,52 @@ pub fn load_session() -> Result<Option<(String, String, [u8; 32], String)>> {
 /// Remove the persisted session file (called on logout).
 pub fn clear_session() {
     if let Ok(path) = session_file_path() {
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+// ── Credential hint (non-secret: username + relay_url) ─────────────────
+// Shared by Desktop and CLI so login forms pre-fill the same values.
+
+fn credential_hint_path() -> Result<PathBuf> {
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
+    Ok(home.join(".bitfun").join("account_hint.json"))
+}
+
+/// Non-secret login pre-fill (never stores password or master key).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountHint {
+    pub username: String,
+    pub relay_url: String,
+}
+
+/// Persist username + relay URL for the next login form.
+pub fn save_credential_hint(username: &str, relay_url: &str) {
+    let hint = AccountHint {
+        username: username.to_string(),
+        relay_url: relay_url.to_string(),
+    };
+    let Ok(path) = credential_hint_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string(&hint) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+/// Load the persisted credential hint, if any.
+pub fn load_credential_hint() -> Option<AccountHint> {
+    let path = credential_hint_path().ok()?;
+    let json = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&json).ok()
+}
+
+/// Clear the credential hint (called on logout).
+pub fn clear_credential_hint() {
+    if let Ok(path) = credential_hint_path() {
         let _ = std::fs::remove_file(&path);
     }
 }

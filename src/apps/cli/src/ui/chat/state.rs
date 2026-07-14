@@ -11,6 +11,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use super::agent_selector::{AgentItem, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::login_form::{LoginFormAction, LoginFormState};
 use super::markdown::MarkdownRenderer;
 use super::mcp_add_dialog::{McpAddAction, McpAddDialogState};
 use super::mcp_selector::{McpAction, McpItem, McpSelectorState};
@@ -41,6 +42,7 @@ pub(crate) enum PopupType {
     McpAddDialog,
     ProviderSelector,
     ModelConfigForm,
+    LoginForm,
     ThemeSelector,
     InfoPopup,
 }
@@ -152,6 +154,8 @@ pub(crate) struct ChatView {
     provider_selector: ProviderSelectorState,
     /// Model config form state (step 2 of add model)
     model_config_form: ModelConfigFormState,
+    /// Account login form (dedicated full-viewport page)
+    login_form: LoginFormState,
     /// Theme selector popup state
     theme_selector: ThemeSelectorState,
 
@@ -254,6 +258,7 @@ impl ChatView {
             mcp_add_dialog: McpAddDialogState::new(),
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
+            login_form: LoginFormState::new(),
             theme_selector: ThemeSelectorState::new(),
             pending_command: None,
             pending_mcp_toggle: None,

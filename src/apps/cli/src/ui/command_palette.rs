@@ -106,6 +106,19 @@ fn default_palette_items() -> Vec<PaletteItem> {
             description: "Manage MCP servers".into(),
             group: "MCP".into(),
         },
+        // Account group
+        PaletteItem {
+            id: "login".into(),
+            label: "Login".into(),
+            description: "Log in to BitFun account".into(),
+            group: "Account".into(),
+        },
+        PaletteItem {
+            id: "logout".into(),
+            label: "Logout".into(),
+            description: "Log out of BitFun account".into(),
+            group: "Account".into(),
+        },
         // System group
         PaletteItem {
             id: "help".into(),

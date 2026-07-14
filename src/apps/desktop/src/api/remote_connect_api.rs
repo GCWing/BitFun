@@ -2,6 +2,9 @@
 
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use bitfun_core::agentic::persistence::PersistenceManager;
+use bitfun_core::service::remote_connect::session_store::{
+    clear_credential_hint, load_credential_hint, save_credential_hint, AccountHint,
+};
 use bitfun_core::service::remote_connect::{
     bot::{self, weixin, BotConfig},
     lan, session_store, sync_state, AccountClient, AccountSession, ConnectionMethod,
@@ -116,8 +119,7 @@ pub fn fanout_peer_device_event(event: String, payload: serde_json::Value) {
         return;
     }
     let tx = PEER_EVENT_FANOUT_TX.get_or_init(|| {
-        let (tx, mut rx) =
-            tokio::sync::mpsc::unbounded_channel::<(String, serde_json::Value)>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(String, serde_json::Value)>();
         tokio::spawn(async move {
             while let Some((event, payload)) = rx.recv().await {
                 fanout_peer_device_event_once(event, payload).await;
@@ -345,46 +347,7 @@ async fn read_account_context() -> Result<(AccountSession, String), String> {
 }
 
 // ── Credential persistence (non-secret: username + relay_url only) ──────
-
-/// Path to the persisted credential hint file (non-secret data only).
-fn credential_hint_path() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".bitfun").join("account_hint.json")
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AccountHint {
-    pub username: String,
-    pub relay_url: String,
-}
-
-/// Persist non-secret credentials (username + relay_url) so the login dialog
-/// can pre-fill them on next startup. No password or master key is stored.
-fn save_credential_hint(username: &str, relay_url: &str) {
-    let hint = AccountHint {
-        username: username.to_string(),
-        relay_url: relay_url.to_string(),
-    };
-    let path = credential_hint_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(json) = serde_json::to_string(&hint) {
-        let _ = std::fs::write(&path, json);
-    }
-}
-
-/// Load the persisted credential hint. Returns None if not found or invalid.
-fn load_credential_hint() -> Option<AccountHint> {
-    let path = credential_hint_path();
-    let json = std::fs::read_to_string(&path).ok()?;
-    serde_json::from_str(&json).ok()
-}
-
-/// Clear the credential hint (called on logout).
-fn clear_credential_hint() {
-    let _ = std::fs::remove_file(credential_hint_path());
-}
+// Owned by shared `session_store` so Desktop and CLI use the same hint file.
 
 /// Tauri command: get the persisted credential hint for pre-filling the login form.
 #[tauri::command]
