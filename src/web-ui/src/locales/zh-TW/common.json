@@ -525,6 +525,8 @@
     "noCurrentWorkspace": "此裝置目前沒有開啟的工作區，請選擇最近工作區或新建",
     "noSessions": "目前工作區暫無工作階段",
     "sessionExpired": "登入已失效，請重新登入",
+    "relayUnreachable": "無法連接中繼服務。請檢查服務位址與網路，或退出登入後重試。",
+    "retryConnect": "重試連線",
     "enteredPeerMode": "已連接到遠端裝置：{{name}}",
     "peerRemoteLabel": "{{name}}",
     "peerRemoteBadgeTitle": "遠端裝置：{{name}}",

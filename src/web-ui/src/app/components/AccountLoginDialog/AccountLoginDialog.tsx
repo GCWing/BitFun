@@ -23,6 +23,7 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { usePeerDeviceMode } from '@/infrastructure/peer-device/PeerDeviceContext';
 import { useAccountSyncStore, ensureAccountSyncProgressListener } from '@/infrastructure/account/accountSyncStore';
 import type { AccountSyncPhase } from '@/infrastructure/account/accountSyncStore';
+import { isAccountAuthFailure } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountLoginDialog.scss';
@@ -63,16 +64,6 @@ function syncPhaseLabel(
   }
 }
 
-function isAccountAuthFailure(error: unknown): boolean {
-  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
-  return (
-    msg.includes('401')
-    || msg.includes('unauthorized')
-    || msg.includes('invalid or expired token')
-    || msg.includes('relay auth error')
-  );
-}
-
 interface AccountLoginDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -104,6 +95,9 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
   const [devices, setDevices] = useState<AccountDeviceInfo[]>([]);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
+  /** Only true after a successful list_devices response; gates the empty-state copy. */
+  const [devicesReady, setDevicesReady] = useState(false);
+  const [relayError, setRelayError] = useState<string | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   /** Prevent overlapping background syncs from rapid clicks. */
   const syncInFlightRef = useRef(false);
@@ -111,6 +105,8 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const resetState = useCallback(() => {
     setDevices([]);
     setLocalDeviceId(null);
+    setDevicesReady(false);
+    setRelayError(null);
     if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
   }, []);
 
@@ -125,6 +121,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setError(t('accountLogin.sessionExpired'));
   }, [resetState, t]);
 
+  const markRelayUnreachable = useCallback(() => {
+    setDevicesReady(false);
+    setRelayError(t('accountLogin.relayUnreachable'));
+  }, [t]);
+
   const refreshDevices = useCallback(async () => {
     try {
       let list = await remoteConnectAPI.accountListDevices();
@@ -134,13 +135,35 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         list = await remoteConnectAPI.accountListDevices();
       }
       setDevices(list);
+      setDevicesReady(true);
+      setRelayError(null);
     } catch (e) {
       log.warn('refreshDevices failed', e);
       if (isAccountAuthFailure(e)) {
         await handleSessionExpired(e);
+      } else {
+        markRelayUnreachable();
       }
     }
-  }, [localDeviceId, handleSessionExpired]);
+  }, [localDeviceId, handleSessionExpired, markRelayUnreachable]);
+
+  const handleRetryConnect = useCallback(async () => {
+    setLoading(true);
+    setRelayError(null);
+    try {
+      await remoteConnectAPI.accountConnectDevices();
+      await refreshDevices();
+    } catch (err) {
+      log.warn('retry connect failed', err);
+      if (isAccountAuthFailure(err)) {
+        await handleSessionExpired(err);
+        return;
+      }
+      markRelayUnreachable();
+    } finally {
+      setLoading(false);
+    }
+  }, [handleSessionExpired, markRelayUnreachable, refreshDevices]);
 
   const applyPresenceOnline = useCallback((onlineDevices: Array<{ device_id: string; device_name: string }>) => {
     const onlineIds = new Set(onlineDevices.map(d => d.device_id));
@@ -195,6 +218,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     });
     remoteConnectAPI.accountStatus().then(async (status) => {
       if (status.logged_in && status.user_id) {
+        setView('devices');
         try {
           await remoteConnectAPI.accountConnectDevices();
         } catch (err) {
@@ -203,9 +227,9 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
             await handleSessionExpired(err);
             return;
           }
+          markRelayUnreachable();
         }
-        setView('devices');
-        refreshDevices();
+        void refreshDevices();
         startDevicePolling();
       }
     });
@@ -232,7 +256,15 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       unlistenPresence();
       unlistenSettings();
     };
-  }, [isOpen, refreshDevices, resetState, startDevicePolling, applyPresenceOnline, handleSessionExpired]);
+  }, [
+    isOpen,
+    refreshDevices,
+    resetState,
+    startDevicePolling,
+    applyPresenceOnline,
+    handleSessionExpired,
+    markRelayUnreachable,
+  ]);
 
   const validate = useCallback(() => {
     if (!username.trim() || !password.trim() || !authServer.trim()) {
@@ -516,7 +548,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
         {view === 'devices' && (
           <div className="account-login-dialog__scroll">
-            {syncStatus !== 'idle' && (
+            {syncStatus !== 'idle' && !relayError && (
               <div className={`account-login-dialog__sync-indicator ${syncStatus}`}>
                 <div className="account-login-dialog__sync-indicator-row">
                   {syncStatus === 'syncing' && <RefreshCw size={14} className="spinning" />}
@@ -554,11 +586,20 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                 )}
               </div>
             )}
+            {relayError && (
+              <div className="account-login-dialog__error-banner">
+                <Alert
+                  type="error"
+                  message={relayError}
+                  className="account-login-dialog__error-alert"
+                />
+              </div>
+            )}
             <div className="account-login-dialog__device-list">
-              {devices.length === 0 && (
+              {!relayError && devicesReady && devices.length === 0 && (
                 <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>
               )}
-              {devices.map((d) => {
+              {!relayError && devices.map((d) => {
                 const isLocal = localDeviceId === d.device_id;
                 return (
                 <div key={d.device_id}
@@ -599,6 +640,12 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               })}
             </div>
             <div className="account-login-dialog__actions">
+              {relayError && (
+                <Button variant="primary" size="small" onClick={handleRetryConnect} disabled={loading}>
+                  <RefreshCw size={14} />
+                  {t('accountLogin.retryConnect')}
+                </Button>
+              )}
               <Button variant="secondary" size="small" onClick={handleLogout} disabled={loading}>
                 {t('accountLogin.logout')}
               </Button>

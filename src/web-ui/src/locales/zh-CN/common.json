@@ -525,6 +525,8 @@
     "noCurrentWorkspace": "该设备当前没有打开的工作区，请选择最近工作区或新建",
     "noSessions": "当前工作区暂无会话",
     "sessionExpired": "登录已失效，请重新登录",
+    "relayUnreachable": "无法连接中继服务。请检查服务地址与网络，或退出登录后重试。",
+    "retryConnect": "重试连接",
     "enteredPeerMode": "已连接到远程设备：{{name}}",
     "peerRemoteLabel": "{{name}}",
     "peerRemoteBadgeTitle": "远程设备：{{name}}",

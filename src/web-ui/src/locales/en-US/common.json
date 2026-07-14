@@ -525,6 +525,8 @@
     "noCurrentWorkspace": "This device has no open workspace. Select a recent one or create a new workspace.",
     "noSessions": "No sessions in this workspace",
     "sessionExpired": "Session expired. Please log in again.",
+    "relayUnreachable": "Cannot reach the relay server. Check the server URL and network, or log out and try again.",
+    "retryConnect": "Retry",
     "enteredPeerMode": "Connected to remote device: {{name}}",
     "peerRemoteLabel": "{{name}}",
     "peerRemoteBadgeTitle": "Remote device: {{name}}",
