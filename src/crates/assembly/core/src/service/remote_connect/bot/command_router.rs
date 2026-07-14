@@ -2700,23 +2700,25 @@ mod menu_tests {
     use super::*;
 
     #[test]
-    fn main_menu_assistant_has_four_items() {
+    fn main_menu_assistant_has_five_items() {
         let state = BotChatState::new("c".into());
         let view = main_menu_view(&state, strings_for(BotLanguage::ZhCN));
-        assert_eq!(view.items.len(), 4);
+        assert_eq!(view.items.len(), 5);
         assert!(view.items.iter().any(|i| i.command == "/new"));
         assert!(view.items.iter().any(|i| i.command == "/resume"));
         assert!(view.items.iter().any(|i| i.command == "/switch"));
+        assert!(view.items.iter().any(|i| i.command == "/devices"));
         assert!(view.items.iter().any(|i| i.command == "/settings"));
     }
 
     #[test]
-    fn main_menu_expert_has_five_items() {
+    fn main_menu_expert_has_six_items() {
         let mut state = BotChatState::new("c".into());
         state.display_mode = BotDisplayMode::Pro;
         let view = main_menu_view(&state, strings_for(BotLanguage::ZhCN));
-        assert_eq!(view.items.len(), 5);
+        assert_eq!(view.items.len(), 6);
         assert!(view.items.iter().any(|i| i.command == "/new_code_session"));
+        assert!(view.items.iter().any(|i| i.command == "/devices"));
     }
 
     /// Main menu must NOT surface the random session UUID tail. The user
