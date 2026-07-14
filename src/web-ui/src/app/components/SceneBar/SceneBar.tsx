@@ -14,12 +14,13 @@ import { useCurrentSettingsTabTitle } from '../../hooks/useCurrentSettingsTabTit
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { createLogger } from '@/shared/utils/logger';
 import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
+import { PeerRemoteBadge } from '@/infrastructure/peer-device/PeerRemoteBadge';
 import './SceneBar.scss';
 
 const log = createLogger('SceneBar');
 
 const INTERACTIVE_SELECTOR =
-  'button, input, textarea, select, a, [role="button"], [contenteditable="true"], .window-controls';
+  'button, input, textarea, select, a, [role="button"], [contenteditable="true"], .window-controls, .bitfun-peer-remote-badge';
 
 interface SceneBarProps {
   className?: string;
@@ -111,6 +112,8 @@ const SceneBar: React.FC<SceneBarProps> = ({
           );
         })}
       </div>
+
+      <div className="bitfun-scene-bar__status"><PeerRemoteBadge /></div>
 
       {hasWindowControls && (
         <div className="bitfun-scene-bar__controls">

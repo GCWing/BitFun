@@ -1,0 +1,49 @@
+/**
+ * Peer Remote status chip on SceneBar.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-peer-remote-badge {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-1;
+  min-width: 0;
+  max-width: min(320px, 36vw);
+  height: 26px;
+  margin: 0 $size-gap-2;
+  padding: 0 8px;
+  border-radius: $size-radius-sm;
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  line-height: 1.2;
+  flex-shrink: 1;
+
+  &__icon {
+    flex-shrink: 0;
+    color: var(--color-warning);
+  }
+
+  &__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__disconnect {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-warning);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0;
+    text-decoration: underline;
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+}

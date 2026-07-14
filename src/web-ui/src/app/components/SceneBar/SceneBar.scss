@@ -28,6 +28,17 @@ $_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
     overflow: hidden;
   }
 
+  &__status {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    min-width: 0;
+
+    &:empty {
+      display: none;
+    }
+  }
+
   &__controls {
     display: flex;
     align-items: center;
