@@ -232,6 +232,23 @@ pub async fn get_global_config_service() -> BitFunResult<Arc<ConfigService>> {
     GlobalConfigManager::get_service().await
 }
 
+/// Load user-defined terminal environment variables (`terminal.env_vars`)
+/// from the global configuration. Returns an empty map when the config
+/// service is unavailable or the key is unset, so callers can always merge
+/// the result over a base environment.
+pub async fn load_terminal_env_vars() -> std::collections::HashMap<String, String> {
+    let Ok(config_service) = get_global_config_service().await else {
+        return std::collections::HashMap::new();
+    };
+    match config_service
+        .get_config::<super::types::TerminalConfig>(Some("terminal"))
+        .await
+    {
+        Ok(cfg) => cfg.env_vars,
+        Err(_) => std::collections::HashMap::new(),
+    }
+}
+
 /// Convenience helper: initialize the global configuration service.
 pub async fn initialize_global_config() -> BitFunResult<()> {
     GlobalConfigManager::initialize().await

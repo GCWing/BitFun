@@ -7,7 +7,7 @@ use crate::infrastructure::events::event_system::BackendEvent::{
     ToolExecutionProgress, ToolTerminalReady,
 };
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
-use crate::service::config::global::get_global_config_service;
+use crate::service::config::global::{get_global_config_service, load_terminal_env_vars};
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -714,6 +714,8 @@ Usage notes:
 
         // 3. Foreground: get or create the primary terminal session
         let terminal_ready_started_at = Instant::now();
+        let mut session_env = Self::noninteractive_env();
+        session_env.extend(load_terminal_env_vars().await);
         let primary_session_id = binding
             .get_or_create(
                 chat_session_id,
@@ -725,7 +727,7 @@ Usage notes:
                         &chat_session_id[..8.min(chat_session_id.len())]
                     )),
                     shell_type: shell_type.clone(),
-                    env: Some(Self::noninteractive_env()),
+                    env: Some(session_env),
                     source: Some(SessionSource::Agent),
                     ..Default::default()
                 },

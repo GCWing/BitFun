@@ -175,6 +175,35 @@
       "panelPositionUpdated": "Terminal panel location updated",
       "saveFailed": "Failed to save configuration",
       "refreshed": "Available terminals list refreshed"
+    },
+    "envVars": {
+      "title": "Environment Variables",
+      "hint": "Custom environment variables applied to every new terminal session and to agent command execution. Changes take effect for new terminals; already-open sessions are not affected. Setting PATH overrides the managed runtime PATH.",
+      "save": "Save",
+      "empty": "No environment variables configured. Add a row or import a file.",
+      "importFile": {
+        "button": "Import from File",
+        "filterName": "Environment files"
+      },
+      "columns": {
+        "key": "Key",
+        "value": "Value",
+        "keyPlaceholder": "VAR_NAME",
+        "valuePlaceholder": "value"
+      },
+      "actions": {
+        "addRow": "Add Row",
+        "delete": "Delete"
+      },
+      "messages": {
+        "loading": "Loading...",
+        "loadFailed": "Failed to load environment variables",
+        "saved": "Environment variables saved",
+        "saveFailed": "Failed to save environment variables",
+        "imported": "Imported {{count}} variable(s)",
+        "importedWithSkipped": "Imported {{count}} variable(s), skipped {{skipped}} invalid line(s)",
+        "importFailed": "Failed to import environment variables"
+      }
     }
   },
   "windowBehavior": {

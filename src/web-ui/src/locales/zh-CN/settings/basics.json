@@ -175,6 +175,35 @@
       "panelPositionUpdated": "终端显示位置已更新",
       "saveFailed": "保存配置失败",
       "refreshed": "已刷新可用终端列表"
+    },
+    "envVars": {
+      "title": "环境变量",
+      "hint": "自定义环境变量,将应用于每个新终端会话及 Agent 命令执行。更改对新开终端生效;已打开的会话不受影响。设置 PATH 会覆盖运行时托管的 PATH。",
+      "save": "保存",
+      "empty": "尚未配置环境变量。可添加一行或从文件导入。",
+      "importFile": {
+        "button": "从文件导入",
+        "filterName": "环境变量文件"
+      },
+      "columns": {
+        "key": "变量名",
+        "value": "变量值",
+        "keyPlaceholder": "VAR_NAME",
+        "valuePlaceholder": "value"
+      },
+      "actions": {
+        "addRow": "添加一行",
+        "delete": "删除"
+      },
+      "messages": {
+        "loading": "加载中...",
+        "loadFailed": "加载环境变量失败",
+        "saved": "环境变量已保存",
+        "saveFailed": "保存环境变量失败",
+        "imported": "已导入 {{count}} 个变量",
+        "importedWithSkipped": "已导入 {{count}} 个变量,跳过 {{skipped}} 行无效内容",
+        "importFailed": "导入环境变量失败"
+      }
     }
   },
   "windowBehavior": {

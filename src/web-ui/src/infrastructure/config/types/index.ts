@@ -578,6 +578,7 @@ export type ConfigPath =
   | 'terminal'
   | 'terminal.default_shell'
   | 'terminal.terminal_panel_position'
+  | 'terminal.env_vars'
   | 'workspace'
   | 'ai'
   | 'ai.default_model'

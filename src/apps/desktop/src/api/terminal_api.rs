@@ -10,6 +10,7 @@ use tokio::sync::Mutex;
 
 use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use bitfun_core::service::runtime::RuntimeManager;
+use bitfun_core::service::config::load_terminal_env_vars;
 use bitfun_core::service::terminal::TerminalEvent;
 use bitfun_core::service::terminal::{
     AcknowledgeRequest as CoreAcknowledgeRequest, CloseSessionRequest as CoreCloseSessionRequest,
@@ -424,12 +425,14 @@ pub async fn terminal_create(
     let api = state.get_or_init_api().await?;
 
     let parsed_shell_type = request.shell_type.and_then(|s| parse_shell_type(&s));
+    let mut env = request.env.unwrap_or_default();
+    env.extend(load_terminal_env_vars().await);
     let core_request = CoreCreateSessionRequest {
         session_id: request.session_id,
         name: request.name,
         shell_type: parsed_shell_type,
         working_directory: request.working_directory,
-        env: request.env,
+        env: if env.is_empty() { None } else { Some(env) },
         cols: request.cols,
         rows: request.rows,
         remote_connection_id: None,
