@@ -22,6 +22,7 @@ import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStor
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
 import './AboutDialog.scss';
 import './AboutDialogLinks.scss';
+import './AboutDialogOpenSource.scss';
 
 const log = createLogger('AboutDialog');
 

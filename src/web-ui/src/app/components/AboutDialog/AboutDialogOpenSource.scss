@@ -1,0 +1,219 @@
+/**
+ * About dialog open-source sub-page styles.
+ * Isolated into its own stylesheet so merges that re-resolve AboutDialog.scss
+ * do not silently drop the sub-page styling. The 861deb97 merge previously
+ * discarded the 63065594 redesign of this sub-page (sub-* layout classes and
+ * the redesigned dependency-* cards), causing the open-source dialog to fall
+ * back to default chrome (unpadded content, default h3 headings, bare count
+ * numbers, and dependency-name <button> boxes). Restored here verbatim.
+ */
+
+@use '../../../component-library/styles/tokens' as *;
+
+// ==================== Sub-dialog content shell ====================
+
+.bitfun-about-dialog__sub-content {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: min(520px, calc(100vh - 200px));
+  overflow-y: auto;
+}
+
+.bitfun-about-dialog__sub-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+// ==================== Category section ====================
+
+.bitfun-about-dialog__sub-category {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bitfun-about-dialog__sub-category-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.bitfun-about-dialog__sub-category-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.bitfun-about-dialog__sub-category-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+}
+
+.bitfun-about-dialog__sub-category-count--frontend {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60A5FA;
+}
+
+.bitfun-about-dialog__sub-category-count--backend {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34D399;
+}
+
+// ==================== Dependencies list grid ====================
+
+.bitfun-about-dialog__dependencies-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.bitfun-about-dialog__dependency-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  min-width: 0;
+
+  &:hover {
+    background: linear-gradient(135deg,
+      rgba(59, 130, 246, 0.08) 0%,
+      rgba(139, 92, 246, 0.05) 100%
+    );
+    border-color: rgba(59, 130, 246, 0.25);
+    transform: translateY(-1px);
+    box-shadow:
+      0 4px 12px rgba(96, 165, 250, 0.1),
+      0 2px 4px rgba(0, 0, 0, 0.1);
+
+    .bitfun-about-dialog__dependency-icon {
+      background: rgba(59, 130, 246, 0.15);
+
+      svg {
+        color: var(--color-accent-500);
+      }
+    }
+  }
+}
+
+.bitfun-about-dialog__dependency-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+
+  svg {
+    width: 13px;
+    height: 13px;
+    color: var(--color-text-muted);
+    transition: color 0.2s ease;
+  }
+}
+
+.bitfun-about-dialog__dependency-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.bitfun-about-dialog__dependency-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-family: 'Consolas', 'Monaco', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: var(--color-accent-400);
+    text-decoration: underline;
+  }
+}
+
+.bitfun-about-dialog__dependency-license {
+  font-size: 9px;
+  color: var(--color-text-muted);
+}
+
+.bitfun-about-dialog__dependency-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 8px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-left: auto;
+  flex-shrink: 0;
+
+  &--frontend {
+    background: rgba(59, 130, 246, 0.1);
+    color: #60A5FA;
+    border: 1px solid rgba(59, 130, 246, 0.15);
+  }
+
+  &--backend {
+    background: rgba(52, 211, 153, 0.1);
+    color: #34D399;
+    border: 1px solid rgba(52, 211, 153, 0.15);
+  }
+}
+
+// ==================== Footnote ====================
+
+.bitfun-about-dialog__sub-footnote {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+// ==================== Responsive ====================
+
+@media (max-width: 580px) {
+  .bitfun-about-dialog__sub-content {
+    padding: 16px 16px 20px;
+    max-height: min(460px, calc(100vh - 160px));
+  }
+
+  .bitfun-about-dialog__dependencies-grid {
+    grid-template-columns: 1fr;
+  }
+}
