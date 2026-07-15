@@ -207,7 +207,11 @@ export default class EntryAbility extends RustAbility {
       }
       return '';
     });
-    this.appUpdater.check(this.context);
+    const autoUpdateEnabled = RustModule.getAppConfigBool('app.auto_update');
+    hilog.info(0x0000, 'vnext', 'autoUpdateEnabled: ' + autoUpdateEnabled);
+    if (autoUpdateEnabled) {
+      this.appUpdater.check(this.context);
+    }
     return super.onWindowStageCreate(windowStage);
   }
 
