@@ -67,12 +67,12 @@ pub(crate) async fn dispatch(
         "update_session_model" => session::update_session_model(state, args).await,
         "ensure_coordinator_session" => session::ensure_coordinator_session(state, args).await,
         "get_available_modes" => session::get_available_modes().await,
-        "get_session_stats" => session::get_session_stats(args).await,
+        "get_session_stats" => session::get_session_stats(state, args).await,
         "save_session_turn" => session::save_session_turn(state, args).await,
 
         // Snapshot / rollback
         "rollback_to_turn" => snapshot::rollback_to_turn(state, args).await,
-        "get_session_files" => snapshot::get_session_files(args).await,
+        "get_session_files" => snapshot::get_session_files(state, args).await,
 
         // Dialog / tools
         "start_dialog_turn" => dialog::start_dialog_turn(state, args).await,

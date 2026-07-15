@@ -236,7 +236,7 @@ flowchart LR
 | 产品形态 | 当前 P0 插件能力 | 入口行为 |
 |---|---|---|
 | Desktop / product-full | 生产入口仍直接依赖 `bitfun-core/product-full`；当前没有 managed-plugin 管理或 OpenCode 静态预览的生产 UI/调用方 | 共享代码可编译不等于 Desktop 已消费插件能力 |
-| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；只为 BitFun 原生包提供来源审核、启用预览、精确内容确认和停用 | 本地 Agent 路径选择 `DeliveryProfile::Cli`，校验必需 Runtime Service 注册并消费 Runtime Parts/SDK；SDK 缺口由单一 Core 兼容门面转发。部分注册仍是 compatibility marker，不代表实时探活；插件 binding 明确禁用，不执行 OpenCode 插件代码 |
+| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；只为 BitFun 原生包提供来源审核、启用预览、精确内容确认和停用 | 本地 Agent 与 Peer Host 路径选择 `DeliveryProfile::Cli`，校验必需 Runtime Service 注册并消费同一 Runtime Parts/SDK；SDK 缺口由单一 Core 兼容门面转发。Peer Host 不再构造第二套调度、持久化或事件 owner。部分注册仍是 compatibility marker，不代表实时探活；插件 binding 明确禁用，不执行 OpenCode 插件代码 |
 | ACP | 生产入口仍直接依赖 `bitfun-core/product-full` | `DeliveryProfile::Acp` 尚未进入入口组装；不得把测试中的 profile 解释为生产隔离 |
 | Server / Remote | 当前生产路由没有插件状态消费闭环；Remote 插件执行未实现 | 不在本地替远端项目发现、准备或执行插件；未接入时返回明确不支持 |
 | Web / Mobile Web | 依赖现有后端入口，不持有插件执行单元 | 对应 profile 当前为空计划或未接入生产，不能据枚举值宣称独立产品能力 |

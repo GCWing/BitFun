@@ -23,6 +23,7 @@ import { WorkspaceLspManager } from '@/tools/lsp/services/WorkspaceLspManager';
 import { lspAdapterManager } from '@/tools/lsp/services/LspAdapterManager';
 import { createLogger } from '@/shared/utils/logger';
 import { setPeerDeviceModeActiveFlag } from './peerModeFlag';
+import { shouldSurfacePeerDetachFailure } from './peerDetachPolicy';
 
 const log = createLogger('PeerDeviceMode');
 
@@ -172,11 +173,13 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
     exitInFlightRef.current = true;
     const { deviceId, deviceName } = peerModeRef.current;
+    let detachError: unknown;
     try {
       try {
         const localInfo = await remoteConnectAPI.getDeviceInfo();
         await detachPeerControl(deviceId, localInfo.device_id);
       } catch (error) {
+        detachError = error;
         log.warn('Failed to detach peer control subscription', error);
       }
 
@@ -195,6 +198,11 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             detail: { deviceId, deviceName, reason },
           }),
         );
+      }
+      if (detachError && shouldSurfacePeerDetachFailure(reason)) {
+        throw detachError instanceof Error
+          ? detachError
+          : new Error('Peer work may still be running after disconnect');
       }
     } finally {
       exitInFlightRef.current = false;

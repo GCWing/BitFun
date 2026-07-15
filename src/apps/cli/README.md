@@ -6,7 +6,9 @@ The local Agent paths build the CLI product profile once per invocation. Interac
 session commands, and usage reports use that invocation-scoped runtime context and event source.
 Local management queries do not start Peer Host or MCP; `exec` starts MCP but not Peer Host.
 Core remains the compatibility owner for execution and persistence operations not yet covered by the
-Agent Runtime SDK; plugin execution is not enabled by this assembly path.
+Agent Runtime SDK. When interactive mode enables Peer Host, Peer dialog submission, cancellation,
+and agent-event fan-out reuse the same runtime context; Peer Host does not construct another
+scheduler, persistence manager, or event queue. Plugin execution is not enabled by this assembly path.
 
 ## Common commands
 

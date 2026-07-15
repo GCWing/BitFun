@@ -143,12 +143,20 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
 fn cli_local_persistence_stays_behind_core_compatibility_facade() {
     const ACCOUNT_SYNC: &str = include_str!("../src/account_sync.rs");
     const STARTUP_PAGE: &str = include_str!("../src/ui/startup.rs");
+    const PEER_BOOTSTRAP: &str = include_str!("../src/peer_host/bootstrap.rs");
+    const PEER_STATE: &str = include_str!("../src/peer_host/state.rs");
+    const PEER_SESSION_COMMANDS: &str = include_str!("../src/peer_host/commands/session.rs");
+    const PEER_SNAPSHOT_COMMANDS: &str = include_str!("../src/peer_host/commands/snapshot.rs");
     const CORE_RUNTIME_SERVICES: &str =
         include_str!("../../../crates/assembly/core/src/product_runtime/runtime_services.rs");
 
     for (path, source) in [
         ("account_sync.rs", ACCOUNT_SYNC),
         ("ui/startup.rs", STARTUP_PAGE),
+        ("peer_host/bootstrap.rs", PEER_BOOTSTRAP),
+        ("peer_host/state.rs", PEER_STATE),
+        ("peer_host/commands/session.rs", PEER_SESSION_COMMANDS),
+        ("peer_host/commands/snapshot.rs", PEER_SNAPSHOT_COMMANDS),
     ] {
         assert!(
             !source.contains("PersistenceManager"),
@@ -167,5 +175,18 @@ fn cli_local_persistence_stays_behind_core_compatibility_facade() {
     assert!(
         !CORE_RUNTIME_SERVICES.contains("pub fn persistence_manager"),
         "runtime services provider must not expose a concrete persistence factory"
+    );
+    assert!(
+        !PEER_BOOTSTRAP.contains("DialogScheduler::new")
+            && !PEER_BOOTSTRAP.contains("get_global_scheduler"),
+        "Peer Host must consume the invocation-scoped scheduler instead of assembling one"
+    );
+    assert!(
+        !PEER_STATE.contains("pub(crate) persistence")
+            && !PEER_SESSION_COMMANDS.contains("state.persistence")
+            && !PEER_SNAPSHOT_COMMANDS.contains("state.persistence")
+            && !PEER_SESSION_COMMANDS.contains("get_snapshot_manager_for_workspace")
+            && !PEER_SNAPSHOT_COMMANDS.contains("get_snapshot_manager_for_workspace"),
+        "Peer Host persistence operations must stay behind the Core compatibility facade"
     );
 }

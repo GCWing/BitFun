@@ -498,7 +498,7 @@ async fn initialize_core_services(
     );
 
     if bootstrap_profile.starts_peer_host() {
-        if let Err(e) = peer_host::ensure_peer_host_ready(runtime.agentic_system()).await {
+        if let Err(e) = peer_host::ensure_peer_host_ready(runtime.as_ref()).await {
             tracing::warn!("Failed to initialize CLI peer host services: {e}");
         } else {
             tracing::info!("CLI peer host services initialized");

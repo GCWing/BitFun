@@ -139,7 +139,8 @@ fn should_require_tool_confirmation(
     policy: DialogSubmissionPolicy,
     user_message_metadata: Option<&serde_json::Value>,
 ) -> bool {
-    policy.requires_tool_confirmation()
+    (policy.requires_tool_confirmation()
+        || metadata_bool(user_message_metadata, "require_tool_confirmation") == Some(true))
         && metadata_bool(user_message_metadata, "acp_transport") != Some(true)
 }
 
@@ -295,6 +296,53 @@ fn format_background_subagent_display_text(
         }
         Err(_) => "Background subagent failed before producing a final result.".to_string(),
     }
+}
+
+fn background_subagent_delivery_metadata(
+    background_task_id: &str,
+    parent: &SubagentParentInfo,
+    subagent_session_id: &str,
+    subagent_dialog_turn_id: &str,
+    require_tool_confirmation: bool,
+    agent_type: &str,
+    task_description: &str,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut metadata = serde_json::Map::from_iter([
+        ("kind".to_string(), serde_json::json!("background_result")),
+        ("sourceKind".to_string(), serde_json::json!("subagent")),
+        (
+            "backgroundTaskId".to_string(),
+            serde_json::json!(background_task_id),
+        ),
+        (
+            "parentSessionId".to_string(),
+            serde_json::json!(parent.session_id.as_str()),
+        ),
+        (
+            "parentDialogTurnId".to_string(),
+            serde_json::json!(parent.dialog_turn_id.as_str()),
+        ),
+        (
+            "subagentSessionId".to_string(),
+            serde_json::json!(subagent_session_id),
+        ),
+        (
+            "subagentDialogTurnId".to_string(),
+            serde_json::json!(subagent_dialog_turn_id),
+        ),
+        ("subagentType".to_string(), serde_json::json!(agent_type)),
+        (
+            "taskDescription".to_string(),
+            serde_json::json!(task_description),
+        ),
+    ]);
+    if require_tool_confirmation {
+        metadata.insert(
+            "require_tool_confirmation".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+    metadata
 }
 
 fn build_subagent_session_relationship(
@@ -659,6 +707,9 @@ pub struct ConversationCoordinator {
     active_subagent_executions: Arc<DashMap<String, ActiveSubagentExecution>>,
     /// Background Task runs keyed by background_task_id.
     background_subagent_tasks: Arc<DashMap<String, BackgroundSubagentTaskControl>>,
+    /// Cancelled deliveries consumed by the scheduler after it acquires the
+    /// parent session's operation lock.
+    background_subagent_delivery_suppressions: Arc<DashMap<String, ()>>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
     scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
     /// Round-boundary user steering source (mid-turn user message injection); injected after construction
@@ -1210,6 +1261,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             active_subagent_executions: Arc::new(DashMap::new()),
             background_subagent_tasks: Arc::new(DashMap::new()),
+            background_subagent_delivery_suppressions: Arc::new(DashMap::new()),
             scheduler_notify_tx: OnceLock::new(),
             round_injection_source: OnceLock::new(),
             active_turns_per_session: Arc::new(DashMap::new()),
@@ -6542,6 +6594,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         suppress_delivery
     }
 
+    #[cfg(test)]
+    pub(crate) fn register_background_subagent_task_for_test(
+        &self,
+        background_task_id: &str,
+        parent_session_id: &str,
+        subagent_session_id: &str,
+    ) {
+        self.register_background_subagent_task(
+            background_task_id.to_string(),
+            parent_session_id.to_string(),
+            subagent_session_id.to_string(),
+            BackgroundSubagentCancelTarget::Direct(CancellationToken::new()),
+        );
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_background_subagent_task_for_test(&self, background_task_id: &str) -> bool {
+        self.background_subagent_tasks
+            .contains_key(background_task_id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn suppress_background_subagent_task_for_test(
+        &self,
+        background_task_id: &str,
+    ) -> bool {
+        self.background_subagent_tasks
+            .remove_if(background_task_id, |task_id, control| {
+                control.suppress_delivery.store(true, Ordering::SeqCst);
+                self.mark_background_subagent_delivery_suppression(task_id.clone());
+                true
+            })
+            .is_some()
+    }
+
     pub(crate) async fn cancel_background_subagents_for_parent(
         &self,
         parent_session_id: &str,
@@ -6550,22 +6637,109 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.ensure_subagent_session_loaded_for_reuse(subagent_session_id, parent_session_id, None)
             .await?;
 
-        let controls: Vec<(String, BackgroundSubagentTaskControl)> = self
+        let controls = self.claim_background_subagent_controls(|control| {
+            control.parent_session_id == parent_session_id
+                && control.subagent_session_id == subagent_session_id
+        });
+        let background_task_ids = controls
+            .iter()
+            .map(|(background_task_id, _)| background_task_id.clone())
+            .collect::<Vec<_>>();
+        let cancelled = self.cancel_background_subagent_controls(controls).await?;
+        if let Some(scheduler) = get_global_scheduler() {
+            scheduler
+                .cancel_background_result_deliveries(parent_session_id, &background_task_ids)
+                .await
+                .map_err(BitFunError::tool)?;
+        }
+        Ok(cancelled)
+    }
+
+    pub(crate) async fn cancel_background_subagents_for_parent_session(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<usize> {
+        let controls = self.claim_background_subagent_controls(|control| {
+            control.parent_session_id == parent_session_id
+        });
+
+        self.cancel_background_subagent_controls(controls).await
+    }
+
+    pub(crate) fn take_background_subagent_delivery_suppression(
+        &self,
+        background_task_id: &str,
+    ) -> bool {
+        self.background_subagent_delivery_suppressions
+            .remove(background_task_id)
+            .is_some()
+    }
+
+    pub(crate) fn mark_background_subagent_delivery_suppression(&self, background_task_id: String) {
+        self.background_subagent_delivery_suppressions
+            .insert(background_task_id, ());
+    }
+
+    pub(crate) fn finish_background_subagent_delivery(&self, background_task_id: &str) {
+        self.background_subagent_tasks.remove(background_task_id);
+        self.background_subagent_delivery_suppressions
+            .remove(background_task_id);
+    }
+
+    pub(crate) fn background_subagent_control_available_for_injection(
+        &self,
+        background_task_id: &str,
+    ) -> bool {
+        self.background_subagent_tasks
+            .get(background_task_id)
+            .is_some_and(|control| !control.suppress_delivery.load(Ordering::SeqCst))
+    }
+
+    pub(crate) fn claim_background_subagent_control_for_injection(
+        &self,
+        background_task_id: &str,
+    ) -> bool {
+        self.background_subagent_tasks
+            .remove_if(background_task_id, |_, control| {
+                !control.suppress_delivery.load(Ordering::SeqCst)
+            })
+            .is_some()
+    }
+
+    fn claim_background_subagent_controls(
+        &self,
+        matches: impl Fn(&BackgroundSubagentTaskControl) -> bool,
+    ) -> Vec<(String, BackgroundSubagentTaskControl)> {
+        let candidate_ids = self
             .background_subagent_tasks
             .iter()
-            .filter(|entry| {
-                entry.parent_session_id == parent_session_id
-                    && entry.subagent_session_id == subagent_session_id
+            .filter(|entry| matches(entry.value()))
+            .map(|entry| entry.key().clone())
+            .collect::<Vec<_>>();
+        candidate_ids
+            .into_iter()
+            .filter_map(|background_task_id| {
+                self.background_subagent_tasks
+                    .remove_if(&background_task_id, |task_id, control| {
+                        if !matches(control) {
+                            return false;
+                        }
+                        control.suppress_delivery.store(true, Ordering::SeqCst);
+                        self.mark_background_subagent_delivery_suppression(task_id.clone());
+                        true
+                    })
             })
-            .map(|entry| (entry.key().clone(), entry.value().clone()))
-            .collect();
+            .collect()
+    }
 
+    async fn cancel_background_subagent_controls(
+        &self,
+        controls: Vec<(String, BackgroundSubagentTaskControl)>,
+    ) -> BitFunResult<usize> {
         for (background_task_id, control) in &controls {
-            control.suppress_delivery.store(true, Ordering::SeqCst);
-            self.background_subagent_tasks.remove(background_task_id);
             debug!(
                 "Cancelling background subagent task: background_task_id={}, parent_session_id={}, subagent_session_id={}",
-                background_task_id, parent_session_id, subagent_session_id
+                background_task_id, control.parent_session_id, control.subagent_session_id
             );
             match &control.cancel_target {
                 BackgroundSubagentCancelTarget::Scheduler(handle) => {
@@ -6574,7 +6748,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     } else {
                         warn!(
                             "Cannot cancel scheduler-backed background subagent because scheduler is unavailable: background_task_id={}, subagent_session_id={}",
-                            background_task_id, subagent_session_id
+                            background_task_id, control.subagent_session_id
                         );
                     }
                 }
@@ -6697,6 +6871,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
             })?
             .to_string();
+        let subagent_dialog_turn_id = request
+            .dialog_turn_id
+            .as_deref()
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "prepared hidden subagent request is missing dialog_turn_id".to_string(),
+                )
+            })?
+            .to_string();
         let agent_type = request.agent_type.clone();
         let subagent_parent_info = match request.subagent_parent_info.clone() {
             Some(info) => info,
@@ -6727,6 +6910,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let parent_workspace_path = parent_session.config.workspace_path.clone();
         let parent_remote_connection_id = parent_session.config.remote_connection_id.clone();
         let parent_remote_ssh_host = parent_session.config.remote_ssh_host.clone();
+        let parent_requires_tool_confirmation = get_global_scheduler().is_some_and(|scheduler| {
+            scheduler.active_turn_requires_tool_confirmation(
+                &subagent_parent_info.session_id,
+                &subagent_parent_info.dialog_turn_id,
+            )
+        });
         let background_task_id = format!("bg-subagent-{}", uuid::Uuid::new_v4());
         let background_task_id_for_delivery = background_task_id.clone();
         let task_description = request.user_input_text.clone();
@@ -6767,7 +6956,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 BackgroundSubagentCancelTarget::Scheduler(cancel_handle.clone()),
             );
             let background_subagent_tasks = self.background_subagent_tasks.clone();
+            let background_delivery_suppressions =
+                self.background_subagent_delivery_suppressions.clone();
             let subagent_session_id_for_delivery = subagent_session_id.clone();
+            let subagent_dialog_turn_id_for_delivery = subagent_dialog_turn_id.clone();
 
             tokio::spawn(async move {
                 let result = match parent_cancel_token.as_ref() {
@@ -6789,8 +6981,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     }
                     None => Self::await_hidden_subagent_receiver(receiver).await,
                 };
-                background_subagent_tasks.remove(&background_task_id_for_delivery);
                 if suppress_delivery.load(Ordering::SeqCst) {
+                    background_subagent_tasks.remove(&background_task_id_for_delivery);
+                    background_delivery_suppressions.remove(&background_task_id_for_delivery);
                     debug!(
                         "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
                         background_task_id_for_delivery, subagent_parent_info.session_id
@@ -6815,32 +7008,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     ),
                 };
 
-                let mut metadata = serde_json::Map::new();
-                metadata.insert(
-                    "kind".to_string(),
-                    serde_json::Value::String("background_result".to_string()),
-                );
-                metadata.insert(
-                    "sourceKind".to_string(),
-                    serde_json::Value::String("subagent".to_string()),
-                );
-                metadata.insert(
-                    "backgroundTaskId".to_string(),
-                    serde_json::Value::String(background_task_id_for_delivery.clone()),
-                );
-                metadata.insert(
-                    "subagentType".to_string(),
-                    serde_json::Value::String(agent_type),
-                );
-                metadata.insert(
-                    "taskDescription".to_string(),
-                    serde_json::Value::String(task_description),
+                let metadata = background_subagent_delivery_metadata(
+                    &background_task_id_for_delivery,
+                    &subagent_parent_info,
+                    &subagent_session_id_for_delivery,
+                    &subagent_dialog_turn_id_for_delivery,
+                    parent_requires_tool_confirmation,
+                    &agent_type,
+                    &task_description,
                 );
 
                 let runtime =
                     match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
                         Ok(runtime) => runtime,
                         Err(error) => {
+                            background_subagent_tasks.remove(&background_task_id_for_delivery);
+                            background_delivery_suppressions
+                                .remove(&background_task_id_for_delivery);
                             warn!(
                                 "Agent runtime lifecycle delivery is not available; background subagent result dropped: background_task_id={}, parent_session_id={}, error={}",
                                 background_task_id_for_delivery,
@@ -6850,6 +7034,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             return;
                         }
                     };
+
+                if suppress_delivery.load(Ordering::SeqCst) {
+                    background_subagent_tasks.remove(&background_task_id_for_delivery);
+                    background_delivery_suppressions.remove(&background_task_id_for_delivery);
+                    debug!(
+                        "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
+                        background_task_id_for_delivery, subagent_parent_info.session_id
+                    );
+                    return;
+                }
 
                 if let Err(error) = runtime
                     .deliver_background_result(AgentBackgroundResultRequest {
@@ -6864,6 +7058,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     })
                     .await
                 {
+                    background_subagent_tasks.remove(&background_task_id_for_delivery);
+                    background_delivery_suppressions.remove(&background_task_id_for_delivery);
                     warn!(
                         "Failed to deliver background subagent result through scheduler path: background_task_id={}, parent_session_id={}, error={}",
                         background_task_id_for_delivery,
@@ -6906,7 +7102,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             BackgroundSubagentCancelTarget::Direct(background_cancel_token),
         );
         let background_subagent_tasks = self.background_subagent_tasks.clone();
+        let background_delivery_suppressions =
+            self.background_subagent_delivery_suppressions.clone();
         let subagent_session_id_for_delivery = subagent_session_id.clone();
+        let subagent_dialog_turn_id_for_delivery = subagent_dialog_turn_id.clone();
 
         tokio::spawn(async move {
             let (delivery_text, display_text) = match coordinator
@@ -6933,8 +7132,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 ),
             };
             cancel_bridge_handle.abort();
-            background_subagent_tasks.remove(&background_task_id_for_delivery);
             if suppress_delivery.load(Ordering::SeqCst) {
+                background_subagent_tasks.remove(&background_task_id_for_delivery);
+                background_delivery_suppressions.remove(&background_task_id_for_delivery);
                 debug!(
                     "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
                     background_task_id_for_delivery, subagent_parent_info.session_id
@@ -6942,32 +7142,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 return;
             }
 
-            let mut metadata = serde_json::Map::new();
-            metadata.insert(
-                "kind".to_string(),
-                serde_json::Value::String("background_result".to_string()),
-            );
-            metadata.insert(
-                "sourceKind".to_string(),
-                serde_json::Value::String("subagent".to_string()),
-            );
-            metadata.insert(
-                "backgroundTaskId".to_string(),
-                serde_json::Value::String(background_task_id_for_delivery.clone()),
-            );
-            metadata.insert(
-                "subagentType".to_string(),
-                serde_json::Value::String(agent_type),
-            );
-            metadata.insert(
-                "taskDescription".to_string(),
-                serde_json::Value::String(task_description),
+            let metadata = background_subagent_delivery_metadata(
+                &background_task_id_for_delivery,
+                &subagent_parent_info,
+                &subagent_session_id_for_delivery,
+                &subagent_dialog_turn_id_for_delivery,
+                parent_requires_tool_confirmation,
+                &agent_type,
+                &task_description,
             );
 
             let runtime =
                 match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
                     Ok(runtime) => runtime,
                     Err(error) => {
+                        background_subagent_tasks.remove(&background_task_id_for_delivery);
+                        background_delivery_suppressions.remove(&background_task_id_for_delivery);
                         warn!(
                             "Agent runtime lifecycle delivery is not available; background subagent result dropped: background_task_id={}, parent_session_id={}, error={}",
                             background_task_id_for_delivery, subagent_parent_info.session_id, error
@@ -6975,6 +7165,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         return;
                     }
                 };
+
+            if suppress_delivery.load(Ordering::SeqCst) {
+                background_subagent_tasks.remove(&background_task_id_for_delivery);
+                background_delivery_suppressions.remove(&background_task_id_for_delivery);
+                debug!(
+                    "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
+                    background_task_id_for_delivery, subagent_parent_info.session_id
+                );
+                return;
+            }
 
             if let Err(error) = runtime
                 .deliver_background_result(AgentBackgroundResultRequest {
@@ -6989,6 +7189,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 })
                 .await
             {
+                background_subagent_tasks.remove(&background_task_id_for_delivery);
+                background_delivery_suppressions.remove(&background_task_id_for_delivery);
                 warn!(
                     "Failed to deliver background subagent result: background_task_id={}, parent_session_id={}, error={}",
                     background_task_id_for_delivery,
@@ -7786,10 +7988,11 @@ fn merge_prepended_messages_for_turn(
 #[cfg(test)]
 mod tests {
     use super::{
-        merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
-        resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
-        should_require_tool_confirmation, turn_review_manifest_for_agent,
-        validate_background_subagent_delivery, ConversationCoordinator, SubagentExecutionRequest,
+        background_subagent_delivery_metadata, merge_prepended_messages_for_turn,
+        normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
+        resolve_agent_submission_turn_id, should_require_tool_confirmation,
+        turn_review_manifest_for_agent, validate_background_subagent_delivery,
+        ConversationCoordinator, SubagentExecutionRequest,
     };
     use crate::agentic::agents::{CustomSubagent, CustomSubagentKind, UserContextPolicy};
     use crate::agentic::core::{
@@ -7895,6 +8098,147 @@ mod tests {
             policy,
             Some(&serde_json::json!({ "acp_transport": true })),
         ));
+    }
+
+    #[test]
+    fn peer_metadata_can_only_strengthen_tool_confirmation() {
+        let desktop_policy = DialogSubmissionPolicy::new(
+            AgentSubmissionSource::DesktopUi,
+            DialogQueuePriority::Normal,
+            false,
+        );
+        let peer_metadata = serde_json::json!({ "require_tool_confirmation": true });
+
+        assert!(should_require_tool_confirmation(
+            desktop_policy,
+            Some(&peer_metadata)
+        ));
+        assert!(!should_require_tool_confirmation(
+            desktop_policy,
+            Some(&serde_json::json!({
+                "require_tool_confirmation": true,
+                "acp_transport": true,
+            }))
+        ));
+    }
+
+    #[test]
+    fn background_subagent_delivery_identifies_its_exact_parent_turn() {
+        let parent = SubagentParentInfo {
+            session_id: "parent-session".to_string(),
+            dialog_turn_id: "parent-turn".to_string(),
+            tool_call_id: "tool-call".to_string(),
+        };
+
+        let metadata = background_subagent_delivery_metadata(
+            "background-task",
+            &parent,
+            "subagent-session",
+            "subagent-turn",
+            true,
+            "agentic",
+            "Investigate",
+        );
+
+        assert_eq!(metadata["kind"], serde_json::json!("background_result"));
+        assert_eq!(metadata["sourceKind"], serde_json::json!("subagent"));
+        assert_eq!(
+            metadata["parentSessionId"],
+            serde_json::json!("parent-session")
+        );
+        assert_eq!(
+            metadata["parentDialogTurnId"],
+            serde_json::json!("parent-turn")
+        );
+        assert_eq!(
+            metadata["subagentSessionId"],
+            serde_json::json!("subagent-session")
+        );
+        assert_eq!(
+            metadata["subagentDialogTurnId"],
+            serde_json::json!("subagent-turn")
+        );
+        assert_eq!(
+            metadata["require_tool_confirmation"],
+            serde_json::json!(true)
+        );
+        assert!(should_require_tool_confirmation(
+            DialogSubmissionPolicy::for_source(AgentSubmissionSource::AgentSession),
+            Some(&serde_json::Value::Object(metadata))
+        ));
+
+        let non_peer_metadata = background_subagent_delivery_metadata(
+            "background-task",
+            &parent,
+            "subagent-session",
+            "subagent-turn",
+            false,
+            "agentic",
+            "Investigate",
+        );
+        assert!(!non_peer_metadata.contains_key("require_tool_confirmation"));
+    }
+
+    #[tokio::test]
+    async fn completed_background_control_cannot_be_claimed_for_late_cancellation() {
+        let (coordinator, _) = test_coordinator();
+        coordinator.register_background_subagent_task(
+            "background-task".to_string(),
+            "parent-session".to_string(),
+            "subagent-session".to_string(),
+            super::BackgroundSubagentCancelTarget::Direct(
+                tokio_util::sync::CancellationToken::new(),
+            ),
+        );
+        coordinator.finish_background_subagent_delivery("background-task");
+
+        let claimed = coordinator.claim_background_subagent_controls(|control| {
+            control.parent_session_id == "parent-session"
+                && control.subagent_session_id == "subagent-session"
+        });
+
+        assert!(claimed.is_empty());
+        assert!(!coordinator.take_background_subagent_delivery_suppression("background-task"));
+    }
+
+    #[tokio::test]
+    async fn injection_and_cancellation_claim_the_same_background_control_once() {
+        let (coordinator, _) = test_coordinator();
+        coordinator.register_background_subagent_task(
+            "delivery-wins".to_string(),
+            "parent-session".to_string(),
+            "subagent-session".to_string(),
+            super::BackgroundSubagentCancelTarget::Direct(
+                tokio_util::sync::CancellationToken::new(),
+            ),
+        );
+        assert!(coordinator.claim_background_subagent_control_for_injection("delivery-wins"));
+        assert!(coordinator
+            .claim_background_subagent_controls(|control| {
+                control.parent_session_id == "parent-session"
+                    && control.subagent_session_id == "subagent-session"
+            })
+            .is_empty());
+
+        coordinator.register_background_subagent_task(
+            "cancellation-wins".to_string(),
+            "parent-session".to_string(),
+            "subagent-session".to_string(),
+            super::BackgroundSubagentCancelTarget::Direct(
+                tokio_util::sync::CancellationToken::new(),
+            ),
+        );
+        assert_eq!(
+            coordinator
+                .claim_background_subagent_controls(|control| {
+                    control.parent_session_id == "parent-session"
+                        && control.subagent_session_id == "subagent-session"
+                })
+                .len(),
+            1
+        );
+        assert!(!coordinator.claim_background_subagent_control_for_injection("cancellation-wins"));
+        assert!(coordinator.take_background_subagent_delivery_suppression("cancellation-wins"));
     }
 
     #[tokio::test]

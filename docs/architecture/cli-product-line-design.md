@@ -88,9 +88,10 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - BitFun 原生插件目录的发现、内容校验、来源确认，以及 OpenCode custom tool 静态名称预览。
 - CLI 本地 Agent 入口以类型化 `RuntimeServices` 调用 `ProductAssembler`，选择 `DeliveryProfile::Cli`，
   并把 `ProductRuntimeParts`、Agent Runtime SDK、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
-- TUI、`exec`、会话和用量复用同一上下文。SDK 已承接会话创建/列举/删除、轮次提交和取消；
-  SDK v1 尚未覆盖的固定 ID、恢复视图、消息、分支、用量和工具确认由一个 Core 兼容门面转发给原 owner。
-- Agentic Event Queue 仍是唯一事件 owner；TUI 与 `exec` 使用独立广播订阅，不互相消费事件。
+- TUI、`exec`、会话、用量和交互模式下的 Peer Host 复用同一上下文。SDK 已承接会话创建/列举/删除、
+  轮次提交和取消；SDK v1 尚未覆盖的固定 ID、恢复视图、消息、分支、用量、快照和工具确认由一个 Core
+  兼容门面转发给原 owner。
+- Agentic Event Queue 仍是唯一事件 owner；TUI、`exec` 与 Peer Host 使用独立广播订阅，不互相消费事件。
 - 有界旧队列只承担兼容存储；达到容量时不得抑制广播。CLI 保持一个后台 drain，订阅方一旦报告 lag/closed，
   必须取消活动 turn 并显式失败，不能在状态不完整时继续报告成功。
 - 会话 ID 在进入存储路径前统一校验；运行时索引同时绑定 ID 与规范化存储路径，并以待提交 claim 计数保护
@@ -101,14 +102,24 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
   关闭输入捕获、关闭 raw mode 并显示光标。真实 PTY/ConPTY 故障注入仍需独立验收。
 - 初始化按入口分级：交互模式启动 Peer Host 与 MCP，`exec` 只启动 MCP；本地 session 管理和 usage 查询不启动
   Peer Host/MCP。该分级不改变 Agentic/Terminal owner，也不等同于管理命令已有独立轻量 Runtime。
-- Peer Host 的 HostInvoke、Relay、控制器身份、确认和重连协议仍走既有兼容路径，不属于本次本地 Runtime 切换。
+- Peer Host 保持既有 HostInvoke / DeviceEvent wire schema 与 Relay 路由，但执行已接入上述调用级上下文：
+  对话提交和精确取消走 SDK，会话与快照缺口走单一 Core 兼容门面。Peer Host 只跟踪由 Peer 提交的根 turn、
+  其子 turn 与待确认工具；可确认工具始终由控制器确认，即使宿主全局策略跳过确认，Agent 也会暂停等待控制器。
+  该 Peer 专属确认要求会沿精确后台结果 follow-up 保留。后台结果按 Core 内部元数据中的精确父 turn 与来源子 turn
+  继承 ownership；仅在父 turn 仍运行时注入，否则排在
+  无关 turn 之后并保留 Peer ownership。来源 turn 完成而结果仍等待会话串行化时，仅保留有界、一次性内部 tombstone；
+  会话清理或事件流中断会移除它。最后一个控制器离线
+  或分离、事件订阅 lag/closed 时取消这些 turn；事件失步同时投递既有失败 terminal event，终态在实际发送尝试前
+  不提前清理，队列关闭时改走同一直接投递路径。事件以入队时的控制器快照为上界，每个目标发送前再确认仍连接；
+  单目标投递租约将分离或离线移除与本地 Relay 入队尝试串行化。显式断开无法确认取消时，本地界面仍安全退出并
+  显示警告。不承诺本次变更范围外的 ACK、重放或重连恢复。
 - `doctor` 与 `health` 构造并校验真实 Runtime Parts，区分 assembly-ready、Core compatibility owner 和不可用扩展。
   它们证明必需能力已注册，不把 Core 的 Network/Git/MCP compatibility marker 描述为外部服务实时可用。
 - 独立 CLI 测试与打包工作流；主 CI 的三平台 workspace check 同时覆盖 `bitfun-cli` 编译。
 
 上述切换不等于运行时 owner 已迁移，也不表示 CLI-P0 全部完成。CLI crate 仍以 `bitfun-core/product-full`
-承载协调器、调度器、持久化、工具管线和部分 SDK v1 缺口；ACP stdio 仍走原入口，插件命令仍以来源管理和
-静态预览为主。兼容门面只转发，不重新计算或写入同一事实。
+承载协调器、调度器、持久化、工具管线和部分 SDK v1 缺口，但 Peer Host 不再自行构造这些 owner；ACP stdio
+仍走原入口，插件命令仍以来源管理和静态预览为主。兼容门面只转发，不重新计算或写入同一事实。
 
 目标态仍存在以下结构缺口：
 

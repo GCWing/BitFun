@@ -3405,6 +3405,8 @@ impl ExecutionEngine {
                         round_index
                     );
                     for injection in pending {
+                        let injection_id = injection.id.clone();
+                        let injection_kind = injection.kind;
                         let wrapped = match injection.kind {
                             RoundInjectionKind::UserSteering => format!(
                                 "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
@@ -3450,6 +3452,12 @@ impl ExecutionEngine {
                             EventPriority::Normal,
                         )
                         .await;
+                        source.acknowledge_consumed(
+                            &context.session_id,
+                            &context.dialog_turn_id,
+                            &injection_id,
+                            injection_kind,
+                        );
                         injection_applied = true;
                     }
                 }

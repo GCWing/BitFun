@@ -1,12 +1,12 @@
 use bitfun_agent_runtime::scheduler::{
     build_thread_goal_objective_updated_delivery_plan, build_thread_goal_resumed_delivery_plan,
     resolve_agent_session_reply_action, resolve_background_delivery_action,
-    resolve_background_delivery_injection, resolve_dialog_start_route,
-    resolve_dialog_steering_action, ActiveDialogTurn, ActiveDialogTurnStore,
-    AgentSessionReplyAction, BackgroundDeliveryAction, BackgroundDeliveryFacts,
-    BackgroundInjectionKind, DialogReplySuppressionSet, DialogRoundInjectionInterrupt,
-    DialogStartRoute, DialogStartRouteFacts, DialogSteeringAction, DialogTurnQueue,
-    DialogTurnQueueError, SessionAbortFlags, SessionRoundInjectionBuffer,
+    resolve_background_delivery_injection, resolve_background_delivery_injection_for_turn,
+    resolve_dialog_start_route, resolve_dialog_steering_action, ActiveDialogTurn,
+    ActiveDialogTurnStore, AgentSessionReplyAction, BackgroundDeliveryAction,
+    BackgroundDeliveryFacts, BackgroundInjectionKind, DialogReplySuppressionSet,
+    DialogRoundInjectionInterrupt, DialogStartRoute, DialogStartRouteFacts, DialogSteeringAction,
+    DialogTurnQueue, DialogTurnQueueError, SessionAbortFlags, SessionRoundInjectionBuffer,
     ThreadGoalDeliveryReminderKind, TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus,
     DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
 };
@@ -118,6 +118,24 @@ fn background_delivery_injection_builds_background_result_with_display_fallback(
     assert_eq!(
         injection.execution_policy.tool_preemption,
         RoundInjectionToolPreemption::None
+    );
+}
+
+#[test]
+fn background_delivery_injection_can_target_one_exact_turn() {
+    let created_at = SystemTime::now();
+    let injection = resolve_background_delivery_injection_for_turn(
+        BackgroundInjectionKind::BackgroundResult,
+        "injection-id".to_string(),
+        "result content".to_string(),
+        None,
+        created_at,
+        "turn-1".to_string(),
+    );
+
+    assert_eq!(
+        injection.target,
+        RoundInjectionTarget::ExactTurn("turn-1".to_string())
     );
 }
 
@@ -616,6 +634,22 @@ fn round_injection_buffer_drains_only_messages_for_the_active_turn() {
     assert_eq!(remaining.len(), 1);
     assert_eq!(remaining[0].content, "other");
     assert_eq!(buffer.pending_count("s1"), 0);
+}
+
+#[test]
+fn round_injection_buffer_removes_one_exact_delivery_by_id() {
+    let buffer = SessionRoundInjectionBuffer::default();
+    buffer.push("s1", exact_turn_msg("turn-a", "first"));
+    buffer.push("s1", exact_turn_msg("turn-a", "second"));
+
+    let removed = buffer
+        .remove_by_id("s1", "id-turn-a-first")
+        .expect("remove exact injection");
+
+    assert_eq!(removed.content, "first");
+    assert_eq!(buffer.pending_count("s1"), 1);
+    assert!(buffer.remove_by_id("s1", "missing").is_none());
+    assert_eq!(buffer.drain_for_turn("s1", "turn-a")[0].content, "second");
 }
 
 fn exact_turn_msg(turn_id: &str, content: &str) -> RoundInjection {
