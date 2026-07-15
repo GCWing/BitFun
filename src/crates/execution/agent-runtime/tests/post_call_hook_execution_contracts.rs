@@ -1,6 +1,6 @@
 use bitfun_agent_runtime::post_call_hooks::{
     resolve_deep_review_shared_context_tool_use, run_successful_tool_post_call_hooks,
-    DeepReviewSharedContextToolUseFacts, SuccessfulToolPostCallHookExecutor,
+    DeepReviewSharedContextToolUseFacts, HookResult, SuccessfulToolPostCallHookExecutor,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -20,6 +20,15 @@ impl SuccessfulToolPostCallHookExecutor<&str> for RecordingExecutor {
     ) {
         self.calls
             .push((tool_name.to_string(), input.clone(), (*context).to_string()));
+    }
+
+    fn behavior_guard(
+        &mut self,
+        _tool_name: &str,
+        _input: &Value,
+        _context: &&str,
+    ) -> HookResult {
+        HookResult::Continue
     }
 }
 

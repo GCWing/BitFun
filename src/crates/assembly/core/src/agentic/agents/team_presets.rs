@@ -44,8 +44,26 @@ fn legions_dir() -> PathBuf {
     get_path_manager_arc().user_config_dir().join(LEGIONS_SUBDIR)
 }
 
-fn preset_path(id: &str) -> PathBuf {
-    legions_dir().join(format!("{id}.json"))
+fn preset_path(id: &str) -> Result<PathBuf, String> {
+    validate_preset_id(id)?;
+    Ok(legions_dir().join(format!("{id}.json")))
+}
+
+/// Validate preset id to prevent path traversal.
+/// Allowed characters: alphanumeric, underscore, and hyphen.
+fn validate_preset_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Legion preset id must not be empty".to_string());
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(format!(
+            "Invalid legion preset id '{id}': only letters, digits, underscores, and hyphens are allowed"
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_legions_dir() -> std::io::Result<()> {
@@ -78,7 +96,7 @@ pub fn list_presets() -> Result<Vec<LegionPreset>, String> {
 
 /// Load a single preset by id.
 pub fn get_preset(id: &str) -> Result<LegionPreset, String> {
-    let path = preset_path(id);
+    let path = preset_path(id)?;
     if !path.is_file() {
         return Err(format!("Legion preset '{id}' not found"));
     }
@@ -90,7 +108,7 @@ pub fn get_preset(id: &str) -> Result<LegionPreset, String> {
 /// Create or overwrite a preset.
 pub fn create_preset(preset: &LegionPreset) -> Result<(), String> {
     ensure_legions_dir().map_err(|e| format!("Failed to create legions dir: {e}"))?;
-    let path = preset_path(&preset.id);
+    let path = preset_path(&preset.id)?;
     let raw =
         serde_json::to_string_pretty(preset).map_err(|e| format!("Failed to serialise: {e}"))?;
     std::fs::write(&path, raw).map_err(|e| format!("Failed to write preset: {e}"))
@@ -98,7 +116,7 @@ pub fn create_preset(preset: &LegionPreset) -> Result<(), String> {
 
 /// Update an existing preset (id must already exist).
 pub fn update_preset(preset: &LegionPreset) -> Result<(), String> {
-    let path = preset_path(&preset.id);
+    let path = preset_path(&preset.id)?;
     if !path.is_file() {
         return Err(format!("Legion preset '{}' not found", preset.id));
     }
@@ -109,7 +127,7 @@ pub fn update_preset(preset: &LegionPreset) -> Result<(), String> {
 
 /// Delete a preset by id.
 pub fn delete_preset(id: &str) -> Result<(), String> {
-    let path = preset_path(id);
+    let path = preset_path(id)?;
     if !path.is_file() {
         return Err(format!("Legion preset '{id}' not found"));
     }

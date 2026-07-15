@@ -282,5 +282,33 @@
     "Debug": "除錯模式：系統性地診斷和修復程式碼中的錯誤",
     "Claw": "抓取模式：從外部來源提取和整合資訊",
     "Team": "團隊模式：協調多個智慧體協同完成複雜任務"
+  },
+  "legionPattern": {
+    "back": "返回",
+    "choosePattern": "選擇模式",
+    "orchestrationPatterns": "編排模式",
+    "overview": "概覽",
+    "complexity": "複雜度：L{{level}}",
+    "nodesCount": "{{count}} 個節點",
+    "edgesCount": "{{count}} 條邊",
+    "noEdges": "無邊關係（獨立智慧體）",
+    "usePattern": "使用此模式",
+    "gate": "關卡",
+    "nodes": "節點（{{count}}）",
+    "edges": "邊（{{count}}）",
+    "meta": {
+      "nodes": "節點",
+      "edges": "邊",
+      "gate": "關卡"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2l3": "L2-L3",
+      "l3": "L3",
+      "l4": "L4",
+      "l5l6": "L5-L6",
+      "l6": "L6",
+      "l7": "L7"
+    }
   }
 }

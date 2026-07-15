@@ -1,6 +1,6 @@
 //! LegionControl tool — load and instantiate legion templates.
 //!
-//! Reads `.bitfun/config/legions/<id>.json`, topologically sorts nodes by
+//! Reads `<user-config>/legions/<id>.json`, topologically sorts nodes by
 //! edges, creates each node via `SessionControl` path, and returns the
 //! created session list.
 
@@ -8,11 +8,13 @@ use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler}
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::infrastructure::get_path_manager_arc;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
-    AgentDialogTurnRequest, AgentSessionCreateRequest, DialogSubmissionPolicy, DialogTriggerSource,
+    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    DialogSubmissionPolicy, DialogTriggerSource,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -69,8 +71,9 @@ impl LegionControlTool {
     }
 
     fn config_dir(&self) -> PathBuf {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        home.join(".bitfun").join("config").join("legions")
+        get_path_manager_arc()
+            .user_config_dir()
+            .join("legions")
     }
 
     fn legion_path(&self, legion_id: &str) -> PathBuf {
@@ -88,7 +91,7 @@ impl Tool for LegionControlTool {
         Ok(concat!(
             "Load and instantiate a legion template.\n\n",
             "Actions:\n",
-            "- load: Read a legion template from `.bitfun/config/legions/<id>.json`, ",
+            "- load: Read a legion template from the user config directory, ",
             "topologically sort nodes by edges, create each node as a new agent session ",
             "via SessionControl, and return the created session list.\n",
             "- list: List available legion templates.\n\n",
@@ -273,8 +276,9 @@ impl LegionControlTool {
         let node_map: HashMap<&str, &LegionNode> =
             template.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
-        // Create sessions in topological order
+        // Create sessions in topological order with rollback on failure
         let mut created_sessions: Vec<serde_json::Value> = Vec::new();
+        let mut created_session_ids: Vec<(String, String)> = Vec::new(); // (session_id, workspace)
         let mut session_lines: Vec<String> = vec![format!(
             "## Legion: {} ({})",
             template.name, template.id
@@ -284,7 +288,8 @@ impl LegionControlTool {
 
         // Batch create: group independent nodes per topological layer
         let layers = build_topological_layers(&sorted_ids, &template.edges);
-        for (layer_idx, layer) in layers.iter().enumerate() {
+        let mut creation_result: BitFunResult<()> = Ok(());
+        'creation: for (layer_idx, layer) in layers.iter().enumerate() {
             if layer.len() > 1 {
                 session_lines.push(format!(
                     "**Layer {} ({} parallel nodes):**",
@@ -305,7 +310,7 @@ impl LegionControlTool {
                     format!("{}-{}", template.name, node.role)
                 };
 
-                let session = runtime
+                let session = match runtime
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: node.agent.clone(),
@@ -330,9 +335,18 @@ impl LegionControlTool {
                         },
                     })
                     .await
-                    .map_err(|error| {
-                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
-                    })?;
+                {
+                    Ok(session) => session,
+                    Err(error) => {
+                        creation_result = Err(BitFunError::tool(
+                            CoreServiceAgentRuntime::runtime_error_message(error),
+                        ));
+                        break 'creation;
+                    }
+                };
+
+                created_session_ids
+                    .push((session.session_id.clone(), workspace.clone()));
 
                 let entry = json!({
                     "node_id": node.id,
@@ -352,6 +366,38 @@ impl LegionControlTool {
             if layer.len() > 1 {
                 session_lines.push(String::new());
             }
+        }
+
+        // Rollback on failure: delete all successfully created sessions
+        if creation_result.is_err() {
+            let error_msg = creation_result.unwrap_err();
+            let mut delete_errors: Vec<String> = Vec::new();
+            for (sid, ws) in &created_session_ids {
+                if let Err(e) = runtime
+                    .delete_session(AgentSessionDeleteRequest {
+                        workspace_path: ws.clone(),
+                        session_id: sid.clone(),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    })
+                    .await
+                {
+                    delete_errors.push(format!("  {}: {}", sid, e));
+                }
+            }
+            let mut msg = format!(
+                "Failed to create all legion sessions. {} Created {} session(s) which were cleaned up.",
+                error_msg,
+                created_session_ids.len()
+            );
+            if !delete_errors.is_empty() {
+                msg.push_str(&format!(
+                    "\nNote: {} session(s) could not be cleaned up:\n{}",
+                    delete_errors.len(),
+                    delete_errors.join("\n")
+                ));
+            }
+            return Err(BitFunError::tool(msg));
         }
 
         // Append edge structure

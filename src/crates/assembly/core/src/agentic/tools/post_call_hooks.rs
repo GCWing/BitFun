@@ -23,6 +23,18 @@ struct StaleToolState {
     consecutive_count: u32,
 }
 
+/// Remove the stale-tracking entry for a given session.
+///
+/// Callers (e.g. session lifecycle hooks) should invoke this when a session
+/// is completed, deleted, or cancelled so that the global tracker does not
+/// grow without bound.
+#[allow(dead_code)]
+pub(crate) fn remove_stale_tracker_for_session(session_id: &str) {
+    if let Ok(mut tracker) = STALE_TRACKER.lock() {
+        tracker.remove(session_id);
+    }
+}
+
 /// Max consecutive same-tool calls before abort.
 const STALE_STRATEGY_THRESHOLD: u32 = 3;
 

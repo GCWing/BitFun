@@ -1,10 +1,13 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ArrowLeft, GitBranch, Network } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button, IconButton } from '@/component-library';
+import { useNotification } from '@/shared/notification-system';
 import PATTERNS, {
   type LegionPatternNode,
   type LegionPatternEdge,
 } from '../data/orchestration-patterns';
+import { LegionPresetAPI } from '@/infrastructure/api/service-api/LegionPresetAPI';
 import '../AgentsView.scss';
 
 interface CreateLegionPageProps {
@@ -12,23 +15,46 @@ interface CreateLegionPageProps {
 }
 
 const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
+  const { t } = useTranslation('scenes/agents');
+  const { success: notifySuccess, error: notifyError } = useNotification();
   const [selectedPatternId, setSelectedPatternId] = useState<string>(PATTERNS[0]?.id ?? '');
+  const [saving, setSaving] = useState(false);
 
-  const patternOptions = useMemo(() => PATTERNS, []);
-
-  const selectedPattern = useMemo(
-    () => patternOptions.find((p) => p.id === selectedPatternId) ?? null,
-    [patternOptions, selectedPatternId],
-  );
+  const selectedPattern = PATTERNS.find((p) => p.id === selectedPatternId) ?? null;
 
   const handleSelectPattern = useCallback((id: string) => {
     setSelectedPatternId(id);
   }, []);
 
-  const handleSave = useCallback(() => {
-    // TODO: save legion preset to backend via Tauri command
-    onBack();
-  }, [onBack]);
+  const handleSave = useCallback(async () => {
+    if (!selectedPattern || saving) return;
+    setSaving(true);
+    try {
+      await LegionPresetAPI.createPreset({
+        id: selectedPattern.id,
+        name: selectedPattern.name,
+        description: selectedPattern.description,
+        nodes: selectedPattern.nodes.map((n) => ({
+          id: n.id,
+          agent: n.agent,
+          role: n.role,
+          prompt: n.prompt,
+          gate: n.gate,
+        })),
+        edges: selectedPattern.edges.map((e) => ({
+          from: e.from,
+          to: e.to,
+          condition: e.condition,
+        })),
+      });
+      notifySuccess(`Legion preset "${selectedPattern.name}" saved`);
+      onBack();
+    } catch (err) {
+      notifyError(`Failed to save legion preset: ${err}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [selectedPattern, saving, onBack, notifySuccess, notifyError]);
 
   const renderNodeList = (nodes: LegionPatternNode[]) => (
     <div className="legion-node-list">
@@ -39,7 +65,7 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
             <span className="legion-node-role">{node.role}</span>
             <span className="legion-node-agent">{node.agent}</span>
           </div>
-          {node.gate ? <span className="legion-node-gate">GATE</span> : null}
+          {node.gate ? <span className="legion-node-gate">{t('legionPattern.gate')}</span> : null}
         </div>
       ))}
     </div>
@@ -69,27 +95,28 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
       <div className="create-agent-page__header">
         <IconButton
           onClick={onBack}
-          aria-label="Back"
+          aria-label={t('legionPattern.back')}
           data-testid="create-legion-back"
         >
           <ArrowLeft size={18} />
         </IconButton>
         <h1 className="create-agent-page__title">
-          {selectedPattern ? selectedPattern.name : 'Choose a Pattern'}
+          {selectedPattern ? selectedPattern.name : t('legionPattern.choosePattern')}
         </h1>
       </div>
 
       {/* Pattern selector */}
       <section className="create-agent-page__section">
-        <h2 className="create-agent-page__section-title">Orchestration Patterns</h2>
+        <h2 className="create-agent-page__section-title">{t('legionPattern.orchestrationPatterns')}</h2>
         <div className="legion-pattern-grid">
-          {patternOptions.map((pattern) => (
+          {PATTERNS.map((pattern) => (
             <div
               key={pattern.id}
               className={`legion-pattern-chip ${pattern.id === selectedPatternId ? 'legion-pattern-chip--active' : ''}`}
               onClick={() => handleSelectPattern(pattern.id)}
               role="button"
               tabIndex={0}
+              aria-pressed={pattern.id === selectedPatternId}
               onKeyDown={(e) => e.key === 'Enter' && handleSelectPattern(pattern.id)}
               data-testid="legion-pattern-option"
               data-pattern-id={pattern.id}
@@ -105,19 +132,19 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
         <>
           {/* Summary */}
           <section className="create-agent-page__section">
-            <h2 className="create-agent-page__section-title">Overview</h2>
+            <h2 className="create-agent-page__section-title">{t('legionPattern.overview')}</h2>
             <p className="legion-summary-desc">{selectedPattern.description}</p>
             <div className="legion-summary-meta">
-              <span>Complexity: L{selectedPattern.complexityLevel}</span>
-              <span>{selectedPattern.nodes.length} nodes</span>
-              <span>{selectedPattern.edges.length} edges</span>
+              <span>{t('legionPattern.complexity', { level: selectedPattern.complexityLevel })}</span>
+              <span>{t('legionPattern.nodesCount', { count: selectedPattern.nodes.length })}</span>
+              <span>{t('legionPattern.edgesCount', { count: selectedPattern.edges.length })}</span>
             </div>
           </section>
 
           {/* Nodes */}
           <section className="create-agent-page__section">
             <h2 className="create-agent-page__section-title">
-              Nodes ({selectedPattern.nodes.length})
+              {t('legionPattern.nodes', { count: selectedPattern.nodes.length })}
             </h2>
             {renderNodeList(selectedPattern.nodes)}
           </section>
@@ -125,20 +152,20 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
           {/* Edges */}
           <section className="create-agent-page__section">
             <h2 className="create-agent-page__section-title">
-              Edges ({selectedPattern.edges.length})
+              {t('legionPattern.edges', { count: selectedPattern.edges.length })}
             </h2>
             {selectedPattern.edges.length > 0
               ? renderEdgeList(selectedPattern.edges, selectedPattern.nodes)
-              : <p className="legion-empty-hint">No edges (self-contained agent)</p>}
+              : <p className="legion-empty-hint">{t('legionPattern.noEdges')}</p>}
           </section>
 
           {/* Actions */}
           <div className="create-agent-page__actions">
             <Button variant="secondary" onClick={onBack}>
-              Back
+              {t('legionPattern.back')}
             </Button>
-            <Button variant="primary" onClick={handleSave} data-testid="create-legion-save">
-              Use Pattern
+            <Button variant="primary" onClick={handleSave} disabled={saving} data-testid="create-legion-save">
+              {saving ? t('loading') : t('legionPattern.usePattern')}
             </Button>
           </div>
         </>
