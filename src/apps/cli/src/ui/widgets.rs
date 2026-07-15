@@ -8,28 +8,28 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-pub struct Spinner {
+pub(super) struct Spinner {
     frame: usize,
 }
 
 impl Spinner {
     const FRAMES: &'static [&'static str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-    pub fn new(_style: Style) -> Self {
+    pub(super) fn new(_style: Style) -> Self {
         Self { frame: 0 }
     }
 
-    pub fn tick(&mut self) {
+    pub(super) fn tick(&mut self) {
         self.frame = (self.frame + 1) % Self::FRAMES.len();
     }
 
-    pub fn current(&self) -> &str {
+    pub(super) fn current(&self) -> &str {
         Self::FRAMES[self.frame]
     }
 }
 
 /// Render a centered info popup overlay. Press any key to dismiss.
-pub fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, accent: Color) {
+pub(super) fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, accent: Color) {
     let lines: Vec<Line> = message
         .lines()
         .map(|l| {

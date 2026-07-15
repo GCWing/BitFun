@@ -354,11 +354,23 @@ fn tool_kind(tool_name: &str) -> ToolKind {
     }
 }
 
+fn split_write_payload(input: &serde_json::Value) -> Option<(&str, &str)> {
+    let value = input.get("payload")?.as_str()?;
+    let (first_line, content) = value.split_once('\n').unwrap_or((value, ""));
+    let first_line = first_line.strip_suffix('\r').unwrap_or(first_line);
+    let file_path = first_line.strip_prefix("+++ ")?;
+    (!file_path.trim().is_empty()).then_some((file_path, content))
+}
+
 fn tool_locations(input: &serde_json::Value) -> Vec<ToolCallLocation> {
-    input
-        .get("file_path")
-        .or_else(|| input.get("path"))
-        .and_then(|value| value.as_str())
+    split_write_payload(input)
+        .map(|(file_path, _)| file_path)
+        .or_else(|| {
+            input
+                .get("file_path")
+                .or_else(|| input.get("path"))
+                .and_then(|value| value.as_str())
+        })
         .filter(|path| !path.trim().is_empty())
         .map(|path| vec![ToolCallLocation::new(PathBuf::from(path))])
         .unwrap_or_default()
@@ -413,6 +425,19 @@ fn is_large_text_payload_tool(tool_name: &str) -> bool {
 }
 
 fn sanitize_large_text_fields(object: &mut serde_json::Map<String, serde_json::Value>) {
+    if let Some(value) = object.get_mut("payload") {
+        if let Some(combined) = value.as_str() {
+            let combined_len = combined.len();
+            if let Some((file_path, content)) = combined.split_once('\n') {
+                if let Some(preview) = large_text_preview(content) {
+                    *value = serde_json::Value::String(format!("{}\n{}", file_path, preview));
+                    object.insert("payload_bytes".to_string(), serde_json::json!(combined_len));
+                    object.insert("payload_truncated".to_string(), serde_json::json!(true));
+                }
+            }
+        }
+    }
+
     for key in ["content", "contents", "old_string", "new_string"] {
         let Some(value) = object.get_mut(key) else {
             continue;
@@ -440,17 +465,34 @@ fn large_text_preview(content: &str) -> Option<String> {
 }
 
 fn write_input_status_text(input: &serde_json::Value) -> String {
-    let path = input
-        .get("file_path")
-        .or_else(|| input.get("path"))
-        .and_then(|value| value.as_str())
-        .unwrap_or("file");
-    let content_len = input
-        .get("content")
-        // Legacy alias kept for replaying older Write tool-call transcripts.
-        .or_else(|| input.get("contents"))
-        .and_then(|value| value.as_str())
-        .map(str::len)
+    let combined = split_write_payload(input);
+    let raw_payload = input.get("payload").and_then(serde_json::Value::as_str);
+    let path = combined
+        .map(|(file_path, _)| file_path)
+        .or_else(|| {
+            input
+                .get("file_path")
+                .or_else(|| input.get("path"))
+                .and_then(|value| value.as_str())
+        })
+        .unwrap_or_else(|| {
+            if raw_payload.is_some() {
+                "workspace temporary file"
+            } else {
+                "file"
+            }
+        });
+    let content_len = combined
+        .map(|(_, content)| content.len())
+        .or_else(|| raw_payload.map(str::len))
+        .or_else(|| {
+            input
+                .get("content")
+                // Legacy alias kept for replaying older Write tool-call transcripts.
+                .or_else(|| input.get("contents"))
+                .and_then(|value| value.as_str())
+                .map(str::len)
+        })
         .unwrap_or(0);
 
     format!("Writing {} ({} bytes).", path, content_len)
@@ -569,6 +611,84 @@ mod tests {
             update.fields.raw_output,
             Some(serde_json::json!({ "stdout": "ok" }))
         );
+    }
+
+    #[test]
+    fn write_started_supports_combined_payload_input() {
+        let mut seen = HashSet::new();
+        let event = ToolEventData::Started {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Write".to_string(),
+            params: serde_json::json!({
+                "payload": "+++ src/lib.rs\nhello\n",
+            }),
+            timeout_seconds: None,
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+
+        assert_eq!(
+            update.fields.locations.as_ref().unwrap()[0].path,
+            PathBuf::from("src/lib.rs")
+        );
+        assert_eq!(
+            update.fields.raw_input,
+            Some(serde_json::json!({
+                "payload": "+++ src/lib.rs\nhello\n",
+            }))
+        );
+    }
+
+    #[test]
+    fn write_started_supports_path_only_empty_file_input() {
+        let mut seen = HashSet::new();
+        let event = ToolEventData::Started {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Write".to_string(),
+            params: serde_json::json!({
+                "payload": "+++ src/empty.rs",
+            }),
+            timeout_seconds: None,
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+
+        assert_eq!(
+            update.fields.locations.as_ref().unwrap()[0].path,
+            PathBuf::from("src/empty.rs")
+        );
+        assert_eq!(
+            write_input_status_text(&serde_json::json!({
+                "payload": "+++ src/empty.rs",
+            })),
+            "Writing src/empty.rs (0 bytes)."
+        );
+    }
+
+    #[test]
+    fn combined_write_sanitization_preserves_path_and_truncates_only_content() {
+        let file_path = "src/generated.rs";
+        let content = "x".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS + 10);
+        let combined = format!("+++ {}\n{}", file_path, content);
+
+        let sanitized = sanitize_tool_input("Write", serde_json::json!({ "payload": combined }));
+        let sanitized_combined = sanitized["payload"]
+            .as_str()
+            .expect("combined input should remain a string");
+        let (sanitized_path, sanitized_content) = sanitized_combined
+            .split_once('\n')
+            .expect("sanitized combined input should retain its separator");
+
+        assert_eq!(sanitized_path, format!("+++ {}", file_path));
+        assert_eq!(sanitized_content.len(), ACP_LARGE_TEXT_PREVIEW_CHARS);
+        assert_eq!(sanitized["payload_bytes"], combined.len());
+        assert_eq!(sanitized["payload_truncated"], true);
     }
 
     #[test]

@@ -76,7 +76,7 @@ impl MCPConnection {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn with_initialize_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.initialize_timeout = timeout;
         self

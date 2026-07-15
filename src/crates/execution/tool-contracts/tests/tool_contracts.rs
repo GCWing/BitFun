@@ -16,20 +16,22 @@ use bitfun_agent_tools::{
     get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
     get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
     is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
-    normalize_runtime_relative_path, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
-    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
-    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
-    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
+    normalize_runtime_relative_path, parse_bitfun_current_session_uri, parse_bitfun_runtime_uri,
+    posix_resolve_path_with_workspace, posix_style_path_is_absolute,
+    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
+    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
+    resolve_get_tool_spec_detail_from_provider,
     resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
     resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
-    resolve_workspace_tool_path, sort_tool_manifest_definitions,
-    summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
-    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_mcp_tool_bridge_input,
-    validate_tool_allowed_by_list, validate_tool_execution_admission, DynamicMcpToolInfo,
-    DynamicToolInfo, GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError,
-    GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
-    McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput, PromptVisibleToolManifestItem,
-    ToolContextFacts, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
+    resolve_tool_path_with_context_roots, resolve_workspace_tool_path,
+    sort_tool_manifest_definitions, summarize_get_tool_spec_collapsed_tools,
+    tool_path_is_effectively_absolute, validate_collapsed_tool_usage, validate_get_tool_spec_input,
+    validate_mcp_tool_bridge_input, validate_tool_allowed_by_list,
+    validate_tool_execution_admission, DynamicMcpToolInfo, DynamicToolInfo,
+    GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GetToolSpecExecutionPlan,
+    GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator, McpToolBridgeBehaviorHints,
+    McpToolBridgeDefinitionInput, PromptVisibleToolManifestItem, ToolContextFacts,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
     ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
     ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
     ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
@@ -517,10 +519,9 @@ fn truncation_recovery_notice_preserves_write_like_guidance() {
     let notice = build_tool_call_truncation_recovery_notice("Write");
 
     assert!(notice.contains("latest Read result"));
-    assert!(notice.contains("ONE Write call"));
-    assert!(notice.contains("`mode`: \"a\""));
-    assert!(notice.contains("missing continuation"));
-    assert!(notice.contains("Do NOT rewrite the whole file with overwrite mode"));
+    assert!(notice.contains("use Edit to add only the missing continuation"));
+    assert!(notice.contains("stop tool-calling and tell the user"));
+    assert!(!notice.contains("`mode`"));
     assert!(notice.ends_with("Original tool result follows.\n\n"));
 }
 
@@ -792,25 +793,25 @@ fn tool_result_preview_prefers_line_boundary_when_possible() {
 }
 
 #[test]
-fn round_budget_candidate_selection_persists_largest_until_under_limit() {
+fn round_budget_candidate_selection_is_descending_and_stable_for_ties() {
     let candidates = vec![
         ToolResultPersistenceCandidate {
-            index: 0,
-            visible_chars: 170_000,
+            index: 9,
+            visible_chars: 50_000,
         },
         ToolResultPersistenceCandidate {
-            index: 1,
-            visible_chars: 60_000,
+            index: 7,
+            visible_chars: 100_000,
         },
         ToolResultPersistenceCandidate {
-            index: 2,
-            visible_chars: 30_000,
+            index: 3,
+            visible_chars: 100_000,
         },
     ];
 
-    let selected = select_tool_result_indices_for_persistence(&candidates, 260_000, 200_000);
+    let selected = select_tool_result_indices_for_persistence(&candidates, 250_000, 50_000);
 
-    assert_eq!(selected, vec![0]);
+    assert_eq!(selected, vec![7, 3]);
 }
 
 #[test]
@@ -1012,6 +1013,75 @@ fn tool_path_resolution_owner_preserves_runtime_uri_scope_and_backend() {
         resolution.runtime_root.as_deref(),
         Some(runtime_root.as_path())
     );
+}
+
+#[test]
+fn tool_path_resolution_owner_resolves_current_session_uri() {
+    let session_root = PathBuf::from("/runtime/workspace/sessions/session-123");
+    let resolution = resolve_tool_path_with_context_roots(
+        "bitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt",
+        Some("/home/project"),
+        true,
+        Some("workspace-123"),
+        Some(PathBuf::from("/runtime/workspace")),
+        Some(session_root.clone()),
+    )
+    .expect("current-session URI should resolve locally");
+
+    assert_eq!(
+        PathBuf::from(&resolution.resolved_path),
+        session_root
+            .join("artifacts")
+            .join("compression-transcripts")
+            .join("12-a3f9.txt")
+    );
+    assert_eq!(resolution.backend, ToolPathBackend::Local);
+    assert!(resolution.is_runtime_artifact());
+    assert_eq!(
+        resolution.logical_child_path(
+            &session_root
+                .join("artifacts")
+                .join("compression-transcripts")
+                .join("child.txt")
+        ),
+        Some("bitfun://current-session/artifacts/compression-transcripts/child.txt".to_string())
+    );
+}
+
+#[test]
+fn current_session_uri_contract_rejects_missing_context_escape_and_unknown_authority() {
+    let missing = resolve_tool_path_with_context_roots(
+        "bitfun://current-session/artifacts/file.txt",
+        None,
+        false,
+        None,
+        None,
+        None,
+    )
+    .expect_err("session context is required");
+    assert_eq!(
+        missing.to_string(),
+        "A current session is required to resolve session artifacts"
+    );
+
+    let escape =
+        parse_bitfun_current_session_uri("bitfun://current-session/artifacts/../secret.txt")
+            .expect_err("parent escape should be rejected");
+    assert_eq!(
+        escape.to_string(),
+        "Runtime artifact path cannot escape its root"
+    );
+
+    let unknown = resolve_tool_path_with_context_roots(
+        "bitfun://other/artifacts/file.txt",
+        Some("/repo"),
+        false,
+        None,
+        None,
+        Some(PathBuf::from("/session")),
+    )
+    .expect_err("unknown authority should not become a workspace path");
+    assert!(unknown.to_string().contains("Unsupported runtime URI"));
 }
 
 #[test]

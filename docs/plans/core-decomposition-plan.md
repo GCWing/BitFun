@@ -1,151 +1,124 @@
 # BitFun Core 拆解与运行时迁移计划
 
-本文件维护后续执行计划。稳定目标以
-[`product-architecture.md`](../architecture/product-architecture.md) 为准；
-[`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md) 补充运行时和 crate 约束；
-[`plugin-runtime-host-design.md`](../architecture/plugin-runtime-host-design.md) 定义插件主机内部 ABI。
-已完成事实归档在 [`core-decomposition-completed.md`](core-decomposition-completed.md)。
+本文件只维护 Core 边界债务、迁移顺序和退出条件。稳定架构以
+[产品运行时架构](../architecture/product-architecture.md)为准；Agent Runtime、产品定制和 OpenCode 扩展分别由
+[运行时设计](../architecture/agent-runtime-services-design.md)、
+[产品定制设计](../architecture/product-customization-blueprint.md)和
+[OpenCode 扩展兼容设计](../architecture/extensions/opencode-extension-compatibility.md)负责；OpenCode 交付阶段与
+退出条件见[扩展兼容计划](opencode-extension-compatibility-plan.md)。已完成事实归档在
+[core-decomposition-completed.md](core-decomposition-completed.md)。
 
 ## 1. 执行原则
 
-- 插件生态和扩展能力仍是第一优先级，但优先级不等于无限扩接口。当前重点是最小稳定接口、受控主机边界和 OpenCode-compatible 关键场景。
-- 产品组装是组装根；普通层级只能依赖稳定接口、端口、描述符或注入的类型化部件。
-- 新抽象必须同步删除、迁移或显著简化旧路径；纯门面、空注册表、无消费方描述符或仅文档化的接口不得作为完成条件。
-- 稳定接口优先保护实现频繁变更，不以机械缩短依赖路径为目标。
-- 工具、事件和权限优先复用已有归属子接口，不在插件层重复建模。
-- OpenCode 配置导入和 ACP 外部智能体/工具桥接只能作为兼容或互操作路径，不能替代 BitFun 插件来源主路径。
-- 全量生态兼容、全入口 UI 扩展矩阵、任意可写转换、无约束 JS/TS runtime、无约束 localhost 接口和对外稳定 SDK 发布不进入当前阶段。
+- 依赖方向固定为产品入口 / interfaces → assembly → adapters / services / execution → contracts。
+- DTO 或端口抽取不等于运行时 owner 已迁移；只有生产入口切换、行为等价成立且旧写入方退出后才算完成。
+- 每次只迁移一条真实纵向调用链，不按目录或类型数量拆 PR。
+- 新接口必须有当前生产消费方、版本边界、验证方式和退场条件；空 profile、re-export、测试桩或未来矩阵不算消费方。
+- 入口、Remote 和 SDK 的不支持状态必须类型化且可解释，不得静默回到 `product-full` 或本机执行。
+- Core 拆解与生态兼容并行演进。任何一条路线不得为了等待另一条路线而预建通用接口。
 
-## 2. 当前输入假设
+## 2. 已核实基线
 
-- workspace 已按 `interfaces -> assembly -> adapters -> services -> execution -> contracts` 物理目录展开，但概念归属仍需继续收敛。
-- Desktop、CLI、ACP 仍有路径通过 `bitfun-core/product-full` 获取完整产品能力；后续插件主线不能把该状态固化为新入口依赖。
-- 工具 ABI、事件清单、运行时服务、智能体运行时、产品能力和插件 `disabled` / `projection-only` 基础边界已存在。
-- `runtime-ports` 的插件主机 ABI 已有公开接口预算脚本；后续不能绕过预算新增插件、hook、event、UI 或生态兼容对象。
-- `opencode-adapter` 当前提供来源发现、诊断只读视图和受信任 custom tool 候选映射。
-- 信任输入复用既有 `PluginSourceRef` 来源快照，并由产品来源/策略侧提供统一信任 epoch；只有该 epoch 与本次 read/dispatch epoch 一致时才能进入受信任候选链路。
-- 本阶段只验证适配器到 Plugin Runtime Host 的候选链路，不包含生产组装入口，不执行 JS/TS 或外部 OpenCode CLI。
-
-## 3. 当前差距
-
-| 差距 | 影响 | 收敛要求 |
+| 事实 | 当前状态 | 结论 |
 |---|---|---|
-| 接口切面仍易混用 | 前后端线缆、插件扩展、host ABI 和生态适配容易互相穿透 | 以主架构文档的四个接口切面作为唯一口径，详细设计只补充归属和验证 |
-| 公开接口预算只覆盖部分源码 | 可以继续在文档或代码中声明无消费方对象 | 扩展公开接口预算元数据，要求每个插件公开符号声明接口切面、消费方和退场条件 |
-| 插件主机只完成受控边界 | 还不能证明 OpenCode-compatible 产品体验 | P0-B 只算主机边界；P0-C 才做来源发现、启用和最小候选项消费 |
-| OpenCode 适配容易反向定义 BitFun | 可能形成 OpenCode 专用产品入口或内部模型 | OpenCode 只作为兼容适配输入，输出 BitFun 来源、诊断、候选项或 unsupported |
-| 部分 core / product-full 路径仍偏宽 | 新入口可能继续依赖旧大门面 | 只迁移与插件主线或关键产品路径直接相关的归属模块，并同步删除或显著简化旧路径 |
+| 产品能力组装 | `DeliveryProfile`、`ProductAssembler`、能力计划、服务可用性和测试已存在 | 这些是可测试的 assembly facts，不代表产品入口已接入 |
+| CLI / Desktop / ACP | Cargo 仍直接启用 `bitfun-core/product-full`；生产代码没有提交对应 `DeliveryProfile` | 三个入口仍处于兼容组装路径 |
+| Server | 当前生产路由只形成 health/info/ping 基线 | 没有插件状态或独立产品组装闭环 |
+| Server / Remote / Web / Mobile Web / SDK profile | 当前为空计划、未接入入口或仅有 preview 测试 | 不得据枚举值宣称产品能力已交付 |
+| Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v1 preview 门面和 smoke test | 发布边界仍需真实嵌入方证明 |
+| 插件运行时 | 现有路径只覆盖 BitFun 原生包和 OpenCode custom tool 静态名称预览 | 不能据通用 envelope 或静态候选扩张稳定 ABI |
+| Relay | `assembly/core` 直接依赖 `apps/relay-server` 以复用嵌入式 relay | 依赖方向反转，且当前边界检查未阻止该问题 |
+| CLI CI | 通用 Rust job 排除 `bitfun-cli`；发布工作流只负责打包 | CLI 缺少常规 PR 的独立 check/test 门禁 |
 
-## 4. 后续 PR 阶段
+## 3. 目标依赖与归属
 
-### 阶段 A：接口切面和公开接口预算收口
-
-目标：先确保架构文档和边界脚本不再鼓励新增无消费方接口。
-
-范围：
-
-- 收敛 `product-architecture.md`、`plugin-runtime-host-design.md`、`opencode-plugin-surface-audit.md` 的接口切面口径。
-- 更新公开接口预算规则，使插件公开符号必须声明接口切面。
-- 删除或降级文档中没有 OpenCode 对应、没有当前消费方或不能复用工具/事件/权限子接口的接口承诺。
-
-验收：
-
-- 没有新增稳定 Rust 符号；既有公开入口签名变更必须同步公开接口预算和主机路径测试。
-- `node --test scripts/check-core-boundaries.test.mjs` 和 `node scripts/check-core-boundaries.mjs` 通过。
-- 文档中 OpenCode-compatible P0 只保留配置导入、custom tool 候选、权限候选、事件清单受控订阅和明确 unsupported 的最小路径。
-
-### 阶段 B：插件运行时主机最小边界
-
-目标：保持 P0-B 主机 ABI 安全、窄化、可测试。
-
-范围：
-
-- `PluginRuntimeClient` 只保留 availability、read_plugins、dispatch。
-- 主机公开方法只保留 `new`、`restart`、`dispose_project`。
-- Adapter trait 只保留 adapter_id、read_plugins、dispatch。
-- read/dispatch 响应只能返回候选项、诊断、隔离和状态只读视图。
-- `HostRestarted` 是 P0-B 唯一清除条件。
-
-验收：
-
-- `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`
-- `cargo test -p bitfun-runtime-ports --test plugin_runtime_host_contracts`
-- `cargo test -p bitfun-plugin-runtime-host`
-- 边界脚本阻止 host ABI 泄漏到产品入口、前端和 interface crate。
-
-### 阶段 P0-C.1：OpenCode-compatible 最小来源与诊断
-
-目标：只做 BitFun 主导的来源、信任和诊断闭环，不执行插件。
-
-范围：
-
-- 支持 BitFun 插件安装包、随产品携带包、项目/组织来源、受控外部包源作为权威来源。
-- OpenCode 的 `opencode.json`、`.opencode/plugins` 和全局插件目录只作为可选导入输入。
-- 导入输出为 BitFun 来源、manifest、hash、信任状态、诊断和 unsupported / projection-only 状态。
-
-验收：
-
-- `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
-- 不要求用户安装 OpenCode CLI。
-- 不继承 OpenCode 启用顺序、权限语义或运行时状态。
-
-### 阶段 P0-C.2：OpenCode custom tool 最小候选链路
-
-目标：证明一个 OpenCode-compatible custom tool 可以映射为 BitFun 工具候选；是否进入最终工具链路，仍由工具 ABI、权限门禁和归属模块决定。
-
-范围：
-
-- custom tool 只映射为提供方候选（`ProviderCandidate`）。
-- 权限提示展示插件 id、来源、hash、能力、副作用、目标、风险、归属模块和审计/关联 id。
-- 拒绝、超时、policy-denied 或主机失败不得写内核状态、审计成功或工具结果。
-
-验收：
-
-- 可信 OpenCode custom tool 在 `PluginRuntimeHost` dispatch 路径映射为 `ProviderCandidate`，带来源、hash、能力、目标、风险、归属和审计信息。
-- 未建立信任的来源只返回信任诊断和只读状态，不进入 custom tool 候选链路。
-- 生成最终工具或执行任何工具前，必须继续经过工具快照、权限门禁和归属模块；OpenCode adapter 内不得执行工具。
-- 不新增插件专用工具 ABI。
-- Desktop / CLI 产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词，不直接依赖 OpenCode adapter。
-- 后续生产接入必须通过 `PluginRuntimeBinding` 注册插件运行时主机，并同步边界脚本、主机路径测试和启用/降级策略。
-
-## 5. 后端复杂度整改清单
-
-| 优先级 | 问题 | 方向 |
+| 层 | 负责 | 禁止 |
 |---|---|---|
-| P0 | 插件公开接口容易继续膨胀 | 公开接口预算必须声明接口切面、消费方、P0 场景、wire impact、退场条件 |
-| P0 | OpenCode 适配可能成为内部模型 | 保持 `opencode-adapter` 只做来源、诊断和候选映射；产品侧接入必须消费 Plugin Runtime Host / 扩展贡献接口，不直接依赖适配器内部类型 |
-| P1 | `runtime-ports` 单文件仍宽 | 先按模块分组和预算护栏收口；只有真实迁移收益明确时再拆 crate |
-| P1 | `bitfun-core` 门面仍是事实大入口 | 新调用方不得依赖 `bitfun_core::agentic::*` / `service::*` 作为主路径 |
-| P1 | Product capability 与 tool provider group 存在双重建模 | 短期以 provider group id 作为组装边界；长期收敛到单一能力事实 |
-| P2 | 接口 handler 中仍有具体 IO | 后续按服务端口下沉到 services / adapters 归属模块 |
+| apps / interfaces | 选择唯一入口形态，提交 profile，投影协议或界面 | 成为共享运行时 owner，复制会话/工具/权限逻辑 |
+| assembly | 选择能力、提供方和兼容门面，输出类型化 runtime parts | 依赖 app crate，持有平台进程/协议实现，重新解释动态配置 |
+| adapters / services | 协议转换、平台 I/O、可复用具体实现 | 反向依赖 assembly 或产品入口 |
+| execution | Agent、Tool、Harness、Plugin Host 的可移植执行语义 | 读取交付形态，依赖 app/adapter 具体实现 |
+| contracts | 稳定 DTO、事实和端口 | 依赖上层或持有运行时行为 |
+
+需要同时被独立应用和嵌入式模式复用的能力，先下沉为 services/adapters owner，再由 app 与 assembly 同向消费。
+Relay 是该规则的首个修复对象；不能把 `apps/relay-server` 改名后继续作为下层库。
+
+## 4. 迁移顺序
+
+### 4.1 先修边界保护
+
+1. 抽取 relay router、room 与 asset-store 的可复用 owner。
+2. 让 standalone relay app 和嵌入式入口都依赖该 owner，删除 `assembly/core -> apps/relay-server`。
+3. 为 crate 层级依赖增加通用边界检查和反向用例，避免只保护已知 crate 名称。
+
+退出条件：生产行为与 standalone/embedded relay 测试等价，Cargo 图不再包含 assembly → apps。
+
+### 4.2 切换 CLI 纵向路径
+
+CLI 是首个入口迁移对象，因为它已有独立产品诉求、显式设计和最小 CI 命令。
+
+1. 入口提交 `DeliveryProfile::Cli`，通过现有 `ProductAssembler` 获得计划、服务可用性、Harness 和插件 binding。
+2. 先迁移一条有用户结果的能力链；推荐从只读能力/诊断或一次最小 Agent 会话开始，不一次替换全部 manager。
+3. 新旧路径并行期间只有一个权威写入方；兼容门面只转发，不重新计算状态。
+4. 补 CLI PR check/test 和入口级 smoke；等价后删除该切片对具体 `bitfun-core` manager 的直接读取。
+
+退出条件：CLI 生产入口实际消费组装结果与统一可用性；目标切片没有第二套状态；常规 PR 有独立门禁。
+
+### 4.3 依次切换 ACP 与 Desktop
+
+- ACP 在 CLI 之后迁移，优先收敛协议投影和权限/会话桥接，不把 ACP 生命周期下沉到 Agent Runtime。
+- Desktop 最后迁移，因为当前 `product-full` 覆盖最广；按服务簇逐步切换，保留 Tauri 与窗口行为在 app/adapter。
+- 每个入口独立提交自己的 profile；禁止 assembly 根据调用栈、feature 或全局状态再次猜测交付形态。
+
+退出条件与 CLI 相同：生产消费、行为等价、单一 owner、旧路径退出和入口级验证缺一不可。
+
+### 4.4 最后晋级 Server、Remote 与 SDK
+
+- Server 先从现有 health/info/ping 基线选择一个真实 API 消费方，不预建完整产品 surface。
+- Remote 必须在实际工作区执行域完成能力协商，不以本地 provider 代替。
+- SDK 只有在外部或仓库内独立嵌入方无需 `bitfun-core/product-full` 即可完成最小 session/turn/event 流程后，才从 preview 晋级。
+- 空 capability plan、disabled stub 和单元测试用于保护降级，不构成产品完成证据。
+
+## 5. 与插件兼容的交叉点
+
+Core 只为插件兼容提供已有 owner 的窄接口：真实工具、类型化 Hook 变换、公开事件、权限请求和诊断。OpenCode
+来源发现、执行准备与兼容语义由对应架构设计和适配器 owner 负责；计划只维护交付顺序与退出条件。
+
+首个可执行切片应只闭环一种 standalone custom tool：真实来源 → worker → 原始校验 → Tool Runtime → 调用结果。
+在该切片完成前：
+
+- 不扩张 `PluginDispatchEnvelope` / `PluginEffectCandidate` 去承载 Hook、Client 或 TUI；
+- 不为未来生态新增公共注册表或多用途 DTO；
+- 不把静态名称、`ready` 或 adapter fixture 当作工具可调用；
+- 不让 SDLC Harness 定义第二套插件接口。
 
 ## 6. 固定执行流程
 
-1. 同步最新 `gcwing/main`。
-2. 对照 `product-architecture.md` 明确本次归属接口切面。
-3. 先补边界保护，再迁移或新增实现。
-4. 新增公开接口前更新预算规则；没有预算的公开符号视为失败。
-5. 运行聚焦验证。
-6. 从独立第三方角度审查是否存在接口膨胀、依赖回流、产品形态遗漏和安全绕过。
-7. PR 说明必须列出变更范围、验证命令、未新增的能力边界和风险。
+1. 同步最新 `gcwing/main`，记录入口、依赖图和生产消费方。
+2. 选择一个用户可见纵向切片，写清当前 owner、目标 owner、唯一写入方和删除条件。
+3. 先补行为等价与边界失败用例，再切换生产调用方。
+4. 删除或冻结被替代路径，复核 Remote、错误、取消和恢复语义。
+5. 运行最小可信验证，再由独立审查者检查过度设计、旧路径残留和能力过度声明。
+6. PR 明确当前能力、变更后的能力、未覆盖项、用户影响和回退方式。
 
 ## 7. 验证矩阵
 
-| 触达范围 | 最小验证 |
+| 范围 | 最小验证 |
 |---|---|
-| docs / boundary / layout | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
-| 插件公开接口预算 | `node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
-| 插件运行时主机 ABI | `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`，`cargo test -p bitfun-runtime-ports --test plugin_runtime_host_contracts`，`cargo test -p bitfun-plugin-runtime-host` |
-| OpenCode P0-C.1 主机路径来源发现 | `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter` |
-| OpenCode P0-C.2 custom tool 候选映射 | `cargo test -p bitfun-opencode-adapter p0_c2_fixture`，`cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt` |
-| 产品形态 / SDK 最小可用性 | `cargo test -p bitfun-product-capabilities --test plugin_product_shape`，`cargo test -p bitfun-product-capabilities --test product_sdk_assembly`，`cargo metadata --no-deps --format-version 1` |
-| 大范围归属迁移 | `cargo check --workspace`，必要时补 focused test |
+| 文档与仓库边界 | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
+| 入口 profile 迁移 | 对应 app 的 check/test、入口级 smoke、profile/服务可用性断言、旧路径等价用例 |
+| Relay owner 迁移 | standalone 与 embedded focused tests、Cargo 依赖方向失败用例 |
+| Agent Runtime / SDK | `cargo test -p bitfun-agent-runtime`，最小 no-`bitfun-core` 嵌入测试 |
+| 插件首个执行切片 | runtime ports、Host、adapter、Tool Runtime 与真实冻结 fixture 的端到端调用 |
+| CLI | `cargo check -p bitfun-cli`，`cargo test -p bitfun-cli`，结构化协议和 package smoke |
 
 ## 8. 暂停条件
 
-- 新增公开插件、hook、event、UI、host 或可用性接口，但没有公开接口预算。
-- 新增接口无当前消费方，或只服务未来完整兼容。
-- OpenCode 配置、CLI 可用性、加载顺序或权限语义成为 BitFun 权威状态。
-- 插件运行时主机直接写权限、审计、内核状态、工具结果或界面状态。
-- 产品入口、前端或 interface crate 直接消费 `PluginRuntimeClient`、host 快照、生态原始载荷或插件执行单元句柄。
-- ACP 外部智能体/工具桥接被当成 P0 插件体验替代方案。
+出现以下任一情况时，不继续扩接口：
+
+- 只有枚举、空计划、re-export、测试桩或未来矩阵，没有生产消费方；
+- assembly 新增 app 依赖，或下层读取 profile/产品入口状态；
+- 同一事实在兼容门面与目标 owner 中同时计算或写入；
+- 泛 envelope、候选效果或描述符开始承载工具、Hook、Client、TUI 等不同语义；
+- Remote 不支持时静默回本机，或 SDK 仍需要 `product-full` 却被描述为独立可用；
+- 为迁移一次性重写全部 CLI、Desktop 或 Core，而没有可单独验收的纵向切片。

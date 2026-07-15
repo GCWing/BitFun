@@ -85,10 +85,11 @@ pub struct PendingToolCalls {
     pending: BTreeMap<ToolCallStreamKey, PendingToolCall>,
 }
 
-/// Tools where executing a truncated tool call is **safe and meaningful** —
-/// the model intended to write content and a partial file is strictly more
-/// useful than a hard failure. For everything else (Bash, Edit, Task, ...) we
-/// surface the truncation as an error: a partial shell command or a partial
+/// Tools where a repaired truncation can be passed to schema validation.
+/// Write requires its path/content separator before execution, so a truncation
+/// inside the path is rejected while a truncation in the content can still
+/// write the safe prefix. For everything else (Bash, Edit, Task, ...) we surface
+/// the truncation as an error: a partial shell command or a partial
 /// `old_string`/`new_string` for Edit can change semantics destructively.
 pub fn is_write_like_tool_name(tool_name: &str) -> bool {
     matches!(tool_name, "Write" | "file_write" | "write_notebook")
@@ -933,10 +934,9 @@ mod tests {
 
     #[test]
     fn write_truncated_mid_content_string_is_recovered() {
-        // Reproduces the deep-research dump: the model hit max_tokens while
-        // streaming `content`, so the JSON ends inside the string literal
-        // with no closing `"` and no closing `}`.
-        let raw = "{\"file_path\": \"/tmp/report.md\", \"content\": \"# Report\\n\\nA long body that was cut";
+        // The path and its separating newline have already been emitted, so
+        // truncation can only remove a suffix of the file content.
+        let raw = r#"{"payload":"+++ /tmp/report.md\n# Report\n\nA long body that was cut"#;
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Write".to_string()));
         pending.append_arguments(raw);
@@ -950,8 +950,7 @@ mod tests {
         assert_eq!(
             finalized.arguments,
             json!({
-                "file_path": "/tmp/report.md",
-                "content": "# Report\n\nA long body that was cut"
+                "payload": "+++ /tmp/report.md\n# Report\n\nA long body that was cut"
             })
         );
     }
@@ -977,7 +976,7 @@ mod tests {
 
     #[test]
     fn write_truncated_with_chinese_multibyte_is_recovered() {
-        let raw = "{\"file_path\": \"/tmp/r.md\", \"content\": \"深度研究报告：未完";
+        let raw = r#"{"payload":"+++ /tmp/r.md\n深度研究报告：未完"#;
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Write".to_string()));
         pending.append_arguments(raw);
@@ -989,8 +988,8 @@ mod tests {
         assert!(!finalized.is_error);
         assert!(finalized.recovered_from_truncation);
         assert_eq!(
-            finalized.arguments["content"].as_str(),
-            Some("深度研究报告：未完")
+            finalized.arguments["payload"].as_str(),
+            Some("+++ /tmp/r.md\n深度研究报告：未完")
         );
     }
 

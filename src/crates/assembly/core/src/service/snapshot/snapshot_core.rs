@@ -404,7 +404,7 @@ impl SnapshotCore {
         let ops: Vec<FileOperation> = self
             .get_session_operations(session_id)
             .into_iter()
-            .filter(|op| operation_is_completed_for_session_file(op))
+            .filter(operation_is_completed_for_session_file)
             .collect();
         let total_changes = ops.len();
         let total_files = unique_paths(ops.iter().map(|op| op.file_path.clone())).len();

@@ -27,6 +27,7 @@ const TIMEOUT_PER_FILE_SECONDS: u64 = 15;
 const TIMEOUT_PER_100_LINES_SECONDS: u64 = 30;
 const MAX_SAME_ROLE_INSTANCES: usize = 8;
 const MAX_RETRIES_PER_ROLE: usize = 3;
+const MAX_STRICT_SPECIALIST_CALLS: usize = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeepReviewSubagentRole {
@@ -34,17 +35,12 @@ pub enum DeepReviewSubagentRole {
     Judge,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DeepReviewStrategyLevel {
     Quick,
+    #[default]
     Normal,
     Deep,
-}
-
-impl Default for DeepReviewStrategyLevel {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl DeepReviewStrategyLevel {
@@ -59,25 +55,13 @@ impl DeepReviewStrategyLevel {
 }
 
 /// Risk factors used for automatic strategy selection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ChangeRiskFactors {
     pub file_count: usize,
     pub total_lines_changed: usize,
     pub files_in_security_paths: usize,
     pub max_cyclomatic_complexity_delta: usize,
     pub cross_crate_changes: usize,
-}
-
-impl Default for ChangeRiskFactors {
-    fn default() -> Self {
-        Self {
-            file_count: 0,
-            total_lines_changed: 0,
-            files_in_security_paths: 0,
-            max_cyclomatic_complexity_delta: 0,
-            cross_crate_changes: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,6 +82,9 @@ pub struct DeepReviewExecutionPolicy {
     /// Maximum retry launches allowed per reviewer role in one DeepReview turn.
     /// Set to 0 to disable automatic reviewer retries.
     pub max_retries_per_role: usize,
+    /// Maximum initial specialist launches in one DeepReview turn. New strict
+    /// manifests set this to one; legacy policy keeps its historical budget.
+    pub max_reviewer_calls: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,6 +121,7 @@ impl Default for DeepReviewExecutionPolicy {
             reviewer_file_split_threshold: DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD,
             max_same_role_instances: DEFAULT_MAX_SAME_ROLE_INSTANCES,
             max_retries_per_role: DEFAULT_MAX_RETRIES_PER_ROLE,
+            max_reviewer_calls: DEFAULT_MAX_SAME_ROLE_INSTANCES * reviewer_agent_type_count(),
         }
     }
 }
@@ -144,8 +132,18 @@ impl DeepReviewExecutionPolicy {
             return Self::default();
         };
 
+        let extra_subagent_ids = normalize_extra_subagent_ids(config.get("extra_subagent_ids"));
+        let max_same_role_instances = clamp_usize(
+            config.get("max_same_role_instances"),
+            1,
+            usize::MAX,
+            DEFAULT_MAX_SAME_ROLE_INSTANCES,
+        );
+        let legacy_max_reviewer_calls = max_same_role_instances
+            .saturating_mul(reviewer_agent_type_count().saturating_add(extra_subagent_ids.len()));
+
         Self {
-            extra_subagent_ids: normalize_extra_subagent_ids(config.get("extra_subagent_ids")),
+            extra_subagent_ids,
             strategy_level: DeepReviewStrategyLevel::from_value(config.get("strategy_level"))
                 .unwrap_or_default(),
             member_strategy_overrides: normalize_member_strategy_overrides(
@@ -169,17 +167,18 @@ impl DeepReviewExecutionPolicy {
                 usize::MAX,
                 DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD,
             ),
-            max_same_role_instances: clamp_usize(
-                config.get("max_same_role_instances"),
-                1,
-                usize::MAX,
-                DEFAULT_MAX_SAME_ROLE_INSTANCES,
-            ),
+            max_same_role_instances,
             max_retries_per_role: clamp_usize(
                 config.get("max_retries_per_role"),
                 0,
                 MAX_RETRIES_PER_ROLE,
                 DEFAULT_MAX_RETRIES_PER_ROLE,
+            ),
+            max_reviewer_calls: clamp_usize(
+                config.get("max_reviewer_calls"),
+                1,
+                usize::MAX,
+                legacy_max_reviewer_calls,
             ),
         }
     }
@@ -281,6 +280,7 @@ impl DeepReviewExecutionPolicy {
         }
 
         let mut policy = self.clone();
+        let mut has_explicit_specialist_ceiling = false;
         if let Some(strategy_level) =
             DeepReviewStrategyLevel::from_value(manifest.get("strategyLevel"))
         {
@@ -318,9 +318,29 @@ impl DeepReviewExecutionPolicy {
                 MAX_RETRIES_PER_ROLE,
                 policy.max_retries_per_role,
             );
+            policy.max_reviewer_calls = if execution_policy.contains_key("maxReviewerCalls") {
+                has_explicit_specialist_ceiling = true;
+                clamp_usize(
+                    execution_policy.get("maxReviewerCalls"),
+                    1,
+                    MAX_STRICT_SPECIALIST_CALLS,
+                    MAX_STRICT_SPECIALIST_CALLS,
+                )
+            } else {
+                policy.max_reviewer_calls
+            };
         }
 
         policy.apply_strategy_runtime_budget();
+
+        if !has_explicit_specialist_ceiling {
+            // Historical manifests predate the explicit specialist-call
+            // ceiling. Preserve their effective same-role/extra-member budget
+            // after all manifest and strategy bounds have been applied.
+            policy.max_reviewer_calls = policy.max_same_role_instances.saturating_mul(
+                reviewer_agent_type_count().saturating_add(policy.extra_subagent_ids.len()),
+            );
+        }
 
         policy
     }
@@ -360,8 +380,7 @@ impl DeepReviewExecutionPolicy {
         }
         // Split into chunks of roughly `reviewer_file_split_threshold` files
         // each, but never exceed `max_same_role_instances`.
-        let needed = (file_count + self.reviewer_file_split_threshold - 1)
-            / self.reviewer_file_split_threshold;
+        let needed = file_count.div_ceil(self.reviewer_file_split_threshold);
         needed.clamp(1, self.max_same_role_instances)
     }
 
@@ -545,8 +564,42 @@ fn number_as_i64(value: &Value) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DeepReviewExecutionPolicy, DeepReviewStrategyLevel};
+    use super::{
+        reviewer_agent_type_count, ChangeRiskFactors, DeepReviewExecutionPolicy,
+        DeepReviewStrategyLevel,
+    };
     use serde_json::json;
+
+    #[test]
+    fn derivable_defaults_preserve_strategy_and_zero_risk_factors() {
+        assert_eq!(
+            DeepReviewStrategyLevel::default(),
+            DeepReviewStrategyLevel::Normal
+        );
+        assert_eq!(
+            ChangeRiskFactors::default(),
+            ChangeRiskFactors {
+                file_count: 0,
+                total_lines_changed: 0,
+                files_in_security_paths: 0,
+                max_cyclomatic_complexity_delta: 0,
+                cross_crate_changes: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn legacy_config_derives_reviewer_budget_from_roles_and_extra_reviewers() {
+        let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
+            "extra_subagent_ids": ["ReviewDatabase", "ReviewApi"],
+            "max_same_role_instances": 2
+        })));
+
+        assert_eq!(
+            policy.max_reviewer_calls,
+            2 * (reviewer_agent_type_count() + 2)
+        );
+    }
 
     #[test]
     fn run_manifest_strategy_applies_builtin_quick_budget_without_execution_policy() {
@@ -584,8 +637,10 @@ mod tests {
 
     #[test]
     fn run_manifest_strategy_preserves_deep_budget_and_respects_lower_threshold_override() {
-        let mut policy = DeepReviewExecutionPolicy::default();
-        policy.reviewer_file_split_threshold = 10;
+        let policy = DeepReviewExecutionPolicy {
+            reviewer_file_split_threshold: 10,
+            ..Default::default()
+        };
         let manifest = json!({
             "reviewMode": "deep",
             "strategyLevel": "deep"
@@ -598,5 +653,78 @@ mod tests {
         assert_eq!(effective.judge_timeout_seconds, 2400);
         assert_eq!(effective.reviewer_file_split_threshold, 10);
         assert_eq!(effective.max_same_role_instances, 3);
+    }
+
+    #[test]
+    fn strict_manifest_hard_caps_explicit_specialist_budget_to_one() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "deep",
+            "executionPolicy": {
+                "maxReviewerCalls": 999
+            }
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.max_reviewer_calls, 1);
+    }
+
+    #[test]
+    fn historical_manifest_rederives_budget_after_same_role_override() {
+        let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
+            "extra_subagent_ids": ["ReviewDatabase", "ReviewApi"]
+        })));
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "deep",
+            "executionPolicy": {
+                "maxSameRoleInstances": 2
+            }
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(
+            effective.max_reviewer_calls,
+            2 * (reviewer_agent_type_count() + 2)
+        );
+    }
+
+    fn split_policy(threshold: usize) -> DeepReviewExecutionPolicy {
+        DeepReviewExecutionPolicy {
+            reviewer_file_split_threshold: threshold,
+            max_same_role_instances: usize::MAX,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn same_role_instance_count_handles_zero_files() {
+        assert_eq!(split_policy(3).same_role_instance_count(0), 1);
+    }
+
+    #[test]
+    fn same_role_instance_count_avoids_division_for_zero_threshold() {
+        assert_eq!(split_policy(0).same_role_instance_count(usize::MAX), 1);
+    }
+
+    #[test]
+    fn same_role_instance_count_preserves_exact_multiples() {
+        assert_eq!(split_policy(3).same_role_instance_count(6), 2);
+    }
+
+    #[test]
+    fn same_role_instance_count_rounds_up_remainders() {
+        assert_eq!(split_policy(3).same_role_instance_count(7), 3);
+    }
+
+    #[test]
+    fn same_role_instance_count_supports_maximum_file_count() {
+        assert_eq!(
+            split_policy(3).same_role_instance_count(usize::MAX),
+            usize::MAX / 3
+        );
     }
 }

@@ -232,19 +232,19 @@ pub fn setup_tray(
                 });
             }
         })
-        .on_tray_icon_event(|tray, event| match event {
-            TrayIconEvent::Click {
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 ..
-            } => {
+            } = event
+            {
                 let app = tray.app_handle().clone();
                 toggle_main_window(&app);
                 tauri::async_runtime::spawn(async move {
                     rebuild_tray_menu(&app).await;
                 });
             }
-            _ => {}
         })
         .build(app)?;
     startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.build", step_started);

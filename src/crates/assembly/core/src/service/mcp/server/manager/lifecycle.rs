@@ -172,9 +172,8 @@ impl MCPServerManager {
         let config = self
             .runtime_server_config(server_id)
             .await
-            .map_err(|error| {
+            .inspect_err(|_| {
                 error!("MCP server config not found: id={}", server_id);
-                error
             })?;
 
         if !config.enabled {

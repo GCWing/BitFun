@@ -57,6 +57,19 @@ pub enum RelayMessage {
         nonce: String,
     },
     Heartbeat,
+    /// Account-authenticated connect (parallel to CreateRoom for device
+    /// routing). Validates the token and registers this device.
+    AuthConnect {
+        token: String,
+        device_name: String,
+    },
+    /// Route an encrypted payload to another device in the same account.
+    DeviceMessage {
+        target_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
 
     // ── Inbound (relay → desktop) ───────────────────────────────────
     RoomCreated {
@@ -79,6 +92,31 @@ pub enum RelayMessage {
     Error {
         message: String,
     },
+    /// Account connect succeeded — relay validated the token.
+    AuthOk {
+        user_id: String,
+        device_id: String,
+    },
+    AuthError {
+        message: String,
+    },
+    /// A device-to-device message routed from another device in the account.
+    IncomingDeviceMessage {
+        source_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    /// Current online devices in the account (presence broadcast).
+    DevicePresence {
+        devices: Vec<DevicePresenceEntry>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevicePresenceEntry {
+    pub device_id: String,
+    pub device_name: String,
 }
 
 /// Events emitted by the relay client to the upper layers.
@@ -106,6 +144,25 @@ pub enum RelayEvent {
     Error {
         message: String,
     },
+    /// Account auth-connect succeeded.
+    AuthOk {
+        user_id: String,
+        device_id: String,
+    },
+    AuthError {
+        message: String,
+    },
+    /// Encrypted device-to-device message from another device in the account.
+    DeviceMessageReceived {
+        source_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    /// Online device list for the account.
+    DevicePresence {
+        devices: Vec<DevicePresenceEntry>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +179,10 @@ struct ReconnectCtx {
     device_id: String,
     room_id: String,
     public_key: String,
+    /// Account token for device-routing re-auth after reconnect.
+    token: String,
+    /// Device name for re-auth after reconnect.
+    device_name: String,
 }
 
 pub struct RelayClient {
@@ -274,6 +335,16 @@ impl RelayClient {
                                 info!("Room '{}' recreated after reconnect", &ctx.room_id);
                             }
 
+                            // Re-authenticate device routing after reconnect.
+                            if !ctx.token.is_empty() {
+                                let reauth = RelayMessage::AuthConnect {
+                                    token: ctx.token.clone(),
+                                    device_name: ctx.device_name.clone(),
+                                };
+                                let _ = new_cmd_tx.send(reauth);
+                                info!("Re-sent AuthConnect after reconnect");
+                            }
+
                             let _ = event_tx.send(RelayEvent::Reconnected);
                             ws_read = new_read;
                             continue 'outer;
@@ -354,6 +425,32 @@ impl RelayClient {
                 error!("Relay error: {message}");
                 let _ = event_tx.send(RelayEvent::Error { message });
             }
+            RelayMessage::AuthOk { user_id, device_id } => {
+                info!("Account auth-connect ok: user_id={user_id}");
+                let _ = event_tx.send(RelayEvent::AuthOk { user_id, device_id });
+            }
+            RelayMessage::AuthError { message } => {
+                warn!("Account auth-connect failed: {message}");
+                let _ = event_tx.send(RelayEvent::AuthError { message });
+            }
+            RelayMessage::IncomingDeviceMessage {
+                source_device_id,
+                correlation_id,
+                encrypted_data,
+                nonce,
+            } => {
+                debug!("DeviceMessage from {source_device_id} corr={correlation_id}");
+                let _ = event_tx.send(RelayEvent::DeviceMessageReceived {
+                    source_device_id,
+                    correlation_id,
+                    encrypted_data,
+                    nonce,
+                });
+            }
+            RelayMessage::DevicePresence { devices } => {
+                debug!("DevicePresence: {} online", devices.len());
+                let _ = event_tx.send(RelayEvent::DevicePresence { devices });
+            }
             _ => {}
         }
     }
@@ -404,6 +501,50 @@ impl RelayClient {
         .await
     }
 
+    /// Authenticate this connection with an account token (parallel to
+    /// `create_room` for the device-routing pathway). The relay validates the
+    /// token and registers the device; success arrives as `RelayEvent::AuthOk`.
+    pub async fn connect_authenticated(&self, token: &str, device_name: &str) -> Result<()> {
+        // Store credentials in reconnect context so the WS read task can
+        // re-send AuthConnect after a reconnect.
+        let mut guard = self.reconnect_ctx.write().await;
+        if let Some(ref mut ctx) = *guard {
+            ctx.token = token.to_string();
+            ctx.device_name = device_name.to_string();
+        } else {
+            *guard = Some(ReconnectCtx {
+                token: token.to_string(),
+                device_name: device_name.to_string(),
+                ..Default::default()
+            });
+        }
+        drop(guard);
+
+        self.send(RelayMessage::AuthConnect {
+            token: token.to_string(),
+            device_name: device_name.to_string(),
+        })
+        .await
+    }
+
+    /// Send an encrypted payload to another device in the same account. The
+    /// relay routes by `target_device_id` without decrypting.
+    pub async fn send_device_message(
+        &self,
+        target_device_id: &str,
+        correlation_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+    ) -> Result<()> {
+        self.send(RelayMessage::DeviceMessage {
+            target_device_id: target_device_id.to_string(),
+            correlation_id: correlation_id.to_string(),
+            encrypted_data: encrypted_data.to_string(),
+            nonce: nonce.to_string(),
+        })
+        .await
+    }
+
     pub async fn disconnect(&self) {
         *self.state.write().await = ConnectionState::Disconnected;
         *self.reconnect_ctx.write().await = None;
@@ -445,7 +586,7 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
         )
         .await
         .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
-        return Ok(stream);
+        Ok(stream)
     }
 
     #[cfg(not(windows))]

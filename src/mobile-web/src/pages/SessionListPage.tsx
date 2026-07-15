@@ -15,6 +15,7 @@ interface SessionListPageProps {
   onSelectSession: (sessionId: string, sessionName?: string, isNew?: boolean) => void;
   onOpenWorkspace: () => void;
   onDisconnect: () => void;
+  onOpenDevices?: () => void;
 }
 
 function formatTime(
@@ -142,7 +143,7 @@ const ThemeToggleIcon: React.FC<{ isDark: boolean }> = ({ isDark }) => (
   </svg>
 );
 
-const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace, onDisconnect }) => {
+const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace, onDisconnect, onOpenDevices }) => {
   const { t, formatDate } = useI18n();
   const {
     sessions,
@@ -597,6 +598,16 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           </div>
         </div>
         <div className="session-list__header-actions">
+          {onOpenDevices && (
+            <button className="session-list__devices-btn" onClick={onOpenDevices}
+              title="Devices" aria-label="Devices">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+            </button>
+          )}
           <LanguageToggleButton />
           <button className="session-list__theme-btn" onClick={toggleTheme} aria-label={t('common.toggleTheme')}>
             <ThemeToggleIcon isDark={isDark} />

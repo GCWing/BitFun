@@ -1,5 +1,50 @@
 use super::*;
 
+fn build_deep_review_subagent_context(
+    role: DeepReviewSubagentRole,
+    subagent_type: Option<&str>,
+    run_manifest: Option<&Value>,
+) -> HashMap<String, String> {
+    let mut values = HashMap::new();
+    values.insert(
+        "deep_review_subagent_role".to_string(),
+        match role {
+            DeepReviewSubagentRole::Reviewer => "reviewer",
+            DeepReviewSubagentRole::Judge => "judge",
+        }
+        .to_string(),
+    );
+    if let Some(subagent_type) = subagent_type {
+        values.insert(
+            "deep_review_subagent_type".to_string(),
+            subagent_type.to_string(),
+        );
+    }
+    if let Some(run_manifest) = run_manifest {
+        values.insert(
+            "deep_review_run_manifest".to_string(),
+            run_manifest.to_string(),
+        );
+    }
+    values
+}
+
+struct BackgroundTaskStartRequest<'a> {
+    coordinator: &'a std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
+    context: &'a ToolUseContext,
+    context_mode: SubagentContextMode,
+    target_session_id: Option<String>,
+    subagent_type: Option<String>,
+    effective_workspace_path: Option<String>,
+    model_id: Option<String>,
+    subagent_context: Option<HashMap<String, String>>,
+    prepared_prompt: String,
+    timeout_seconds: Option<u64>,
+    tool_call_id: String,
+    session_id: String,
+    dialog_turn_id: String,
+}
+
 impl TaskTool {
     pub(super) async fn load_configured_tool_execution_timeout() -> Option<u64> {
         let service = GlobalConfigManager::get_service().await.ok()?;
@@ -177,6 +222,7 @@ impl TaskTool {
         let mut deep_review_launch_batch_info: Option<DeepReviewLaunchBatchInfo> = None;
         let mut deep_review_retry_scope_files: Option<Vec<String>> = None;
         let mut deep_review_subagent_role: Option<DeepReviewSubagentRole> = None;
+        let mut deep_review_run_manifest: Option<Value> = None;
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
 
@@ -190,7 +236,7 @@ impl TaskTool {
                     error
                 ))
             })?;
-            let mut run_manifest = context.custom_data.get("deep_review_run_manifest").cloned();
+            deep_review_run_manifest = context.custom_data.get("deep_review_run_manifest").cloned();
             if let Some(workspace) = context.workspace.as_ref() {
                 let session_storage_dir = workspace.session_storage_dir();
                 match coordinator
@@ -199,10 +245,10 @@ impl TaskTool {
                     .await
                 {
                     Ok(Some(metadata)) => {
-                        if run_manifest.is_none() {
-                            run_manifest = metadata.deep_review_run_manifest;
+                        if deep_review_run_manifest.is_none() {
+                            deep_review_run_manifest = metadata.deep_review_run_manifest;
                         }
-                        if let Some(run_manifest) = run_manifest.as_mut() {
+                        if let Some(run_manifest) = deep_review_run_manifest.as_mut() {
                             LaunchReviewAgentTool::attach_deep_review_cache(
                                 run_manifest,
                                 metadata.deep_review_cache,
@@ -218,7 +264,7 @@ impl TaskTool {
                     }
                 }
             }
-            let policy = if let Some(manifest) = run_manifest.as_ref() {
+            let policy = if let Some(manifest) = deep_review_run_manifest.as_ref() {
                 base_policy.with_run_manifest_execution_policy(manifest)
             } else {
                 base_policy
@@ -238,7 +284,7 @@ impl TaskTool {
                     "auto_retry requires retry=true for DeepReview Task calls".to_string(),
                 ));
             }
-            if let Some(gate) = run_manifest
+            if let Some(gate) = deep_review_run_manifest
                 .as_ref()
                 .and_then(DeepReviewRunManifestGate::from_value)
             {
@@ -249,15 +295,16 @@ impl TaskTool {
                     ))
                 })?;
             }
-            let conc_policy = policy
-                .concurrency_policy_from_manifest(run_manifest.as_ref().unwrap_or(&Value::Null));
+            let conc_policy = policy.concurrency_policy_from_manifest(
+                deep_review_run_manifest.as_ref().unwrap_or(&Value::Null),
+            );
             deep_review_concurrency_policy = Some(conc_policy.clone());
             if is_retry && role == DeepReviewSubagentRole::Reviewer {
                 deep_review_retry_scope_files = Some(
                     match LaunchReviewAgentTool::ensure_deep_review_retry_coverage(
                         input,
                         subagent_type,
-                        run_manifest.as_ref(),
+                        deep_review_run_manifest.as_ref(),
                     ) {
                         Ok(retry_scope_files) => retry_scope_files,
                         Err(violation) => {
@@ -330,7 +377,7 @@ impl TaskTool {
                     deep_review_task_adapter::deep_review_incremental_cache_hit_for_task(
                         subagent_type,
                         description.as_deref(),
-                        run_manifest.as_ref(),
+                        deep_review_run_manifest.as_ref(),
                     )
                 {
                     let (data, cached_result) =
@@ -359,7 +406,7 @@ impl TaskTool {
                         LaunchReviewAgentTool::deep_review_launch_batch_for_task(
                             subagent_type,
                             description.as_deref(),
-                            run_manifest.as_ref(),
+                            deep_review_run_manifest.as_ref(),
                         );
                     match LaunchReviewAgentTool::try_begin_deep_review_reviewer_admission(
                         &dialog_turn_id,
@@ -462,27 +509,16 @@ impl TaskTool {
         }
 
         let subagent_context = deep_review_subagent_role.map(|role| {
-            let mut values = HashMap::new();
-            values.insert(
-                "deep_review_subagent_role".to_string(),
-                match role {
-                    DeepReviewSubagentRole::Reviewer => "reviewer",
-                    DeepReviewSubagentRole::Judge => "judge",
-                }
-                .to_string(),
-            );
-            if let Some(subagent_type) = subagent_type.as_ref() {
-                values.insert(
-                    "deep_review_subagent_type".to_string(),
-                    subagent_type.clone(),
-                );
-            }
-            values
+            build_deep_review_subagent_context(
+                role,
+                subagent_type.as_deref(),
+                deep_review_run_manifest.as_ref(),
+            )
         });
         let prepared_prompt = prompt;
         if run_in_background {
-            return Self::start_background_task(
-                &coordinator,
+            return Self::start_background_task(BackgroundTaskStartRequest {
+                coordinator: &coordinator,
                 context,
                 context_mode,
                 target_session_id,
@@ -495,7 +531,7 @@ impl TaskTool {
                 tool_call_id,
                 session_id,
                 dialog_turn_id,
-            )
+            })
             .await;
         }
 
@@ -528,20 +564,23 @@ impl TaskTool {
     }
 
     async fn start_background_task(
-        coordinator: &std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
-        context: &ToolUseContext,
-        context_mode: SubagentContextMode,
-        target_session_id: Option<String>,
-        subagent_type: Option<String>,
-        effective_workspace_path: Option<String>,
-        model_id: Option<String>,
-        subagent_context: Option<HashMap<String, String>>,
-        prepared_prompt: String,
-        timeout_seconds: Option<u64>,
-        tool_call_id: String,
-        session_id: String,
-        dialog_turn_id: String,
+        request: BackgroundTaskStartRequest<'_>,
     ) -> BitFunResult<Vec<ToolResult>> {
+        let BackgroundTaskStartRequest {
+            coordinator,
+            context,
+            context_mode,
+            target_session_id,
+            subagent_type,
+            effective_workspace_path,
+            model_id,
+            subagent_context,
+            prepared_prompt,
+            timeout_seconds,
+            tool_call_id,
+            session_id,
+            dialog_turn_id,
+        } = request;
         let parent_info = SubagentParentInfo {
             tool_call_id,
             session_id,
@@ -924,5 +963,48 @@ impl TaskTool {
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod target_context_tests {
+    use super::*;
+    use bitfun_agent_runtime::deep_review::{append_tool_use_context_data, ReviewTargetEvidence};
+
+    #[test]
+    fn deep_review_child_context_preserves_target_evidence_for_tools() {
+        let manifest = json!({
+            "reviewTargetEvidence": {
+                "version": 1,
+                "source": "git_range",
+                "fingerprint": "0123456789abcdef",
+                "baseRevision": "1111111111111111111111111111111111111111",
+                "headRevision": "2222222222222222222222222222222222222222",
+                "completeness": "complete",
+                "workspaceBinding": "matching_clean",
+                "files": [{
+                    "path": "src/lib.rs",
+                    "status": "modified",
+                    "completeness": "complete"
+                }],
+                "limitations": []
+            }
+        });
+        let context_vars = build_deep_review_subagent_context(
+            DeepReviewSubagentRole::Reviewer,
+            Some("ReviewSecurity"),
+            Some(&manifest),
+        );
+        let mut custom_data = HashMap::new();
+        append_tool_use_context_data(&context_vars, None, &mut custom_data);
+
+        let evidence = ReviewTargetEvidence::from_context_value(
+            custom_data
+                .get("deep_review_run_manifest")
+                .expect("child tool context should carry the Review manifest"),
+        )
+        .expect("target evidence should validate")
+        .expect("target evidence should exist");
+        assert!(evidence.allows_live_repository_context());
     }
 }

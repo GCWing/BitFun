@@ -63,32 +63,22 @@ impl CanvasWorkspaceId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CanvasScope {
+    #[default]
     Session,
 }
 
-impl Default for CanvasScope {
-    fn default() -> Self {
-        Self::Session
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CanvasStatus {
+    #[default]
     SourceSaved,
     Compiled,
     CompileFailed,
     RuntimeFailed,
     Unsupported,
-}
-
-impl Default for CanvasStatus {
-    fn default() -> Self {
-        Self::SourceSaved
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -5,7 +5,7 @@ use bitfun_ai_adapters::types::{resolve_request_url, AIConfig, ReasoningMode};
 use log::warn;
 
 /// Build `AIConfig` for the shared AI client.
-pub fn ai_config_from_installer_model(m: &ModelConfig) -> Result<AIConfig, String> {
+pub(super) fn ai_config_from_installer_model(m: &ModelConfig) -> Result<AIConfig, String> {
     let custom_request_body = if let Some(body_str) = &m.custom_request_body {
         let t = body_str.trim();
         if t.is_empty() {
@@ -60,7 +60,7 @@ pub fn ai_config_from_installer_model(m: &ModelConfig) -> Result<AIConfig, Strin
 }
 
 /// Whether to run the image-input check (same rules as desktop `test_ai_config_connection`).
-pub fn supports_image_input(m: &ModelConfig) -> bool {
+pub(super) fn supports_image_input(m: &ModelConfig) -> bool {
     m.capabilities
         .as_ref()
         .map(|c| {

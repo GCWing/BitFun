@@ -13,6 +13,10 @@ pub mod infrastructure; // AI clients, storage, logging, events
 #[cfg(feature = "product-domains")]
 pub mod miniapp; // AI-generated instant apps (Zero-Dialect Runtime)
 #[cfg(feature = "product-full")]
+pub mod plugin_runtime;
+#[cfg(any(feature = "plugin-source", feature = "product-domains"))]
+pub mod plugin_source;
+#[cfg(feature = "product-full")]
 pub mod product_assembly;
 #[cfg(feature = "product-domains")]
 pub(crate) mod product_domain_runtime;

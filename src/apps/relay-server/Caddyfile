@@ -1,24 +1,59 @@
 # Caddyfile for BitFun Relay Server
 # Replace YOUR_DOMAIN with your actual domain, or use :443 with self-signed cert.
 #
+# Body size: account sync POSTs full encrypted session bundles. Axum allows
+# up to 64 MiB on /api/sync/* (see README). If you terminate TLS here, raise
+# the proxy body limit to at least that size, e.g.:
+#   request_body {
+#       max_size 100MB
+#   }
+#
+# Device RPC (/api/devices/*/rpc) waits up to 120s for the peer HostInvoke
+# response. Keep reverse-proxy read/response timeouts above that, or the
+# proxy returns HTTP 504 before Axum can.
+#
 # Option A: With a domain (Let's Encrypt auto-HTTPS)
 #   relay.yourdomain.com {
-#       reverse_proxy relay-server:9700
+#       reverse_proxy relay-server:9700 {
+#           transport http {
+#               response_header_timeout 130s
+#               read_timeout 130s
+#               write_timeout 130s
+#           }
+#       }
 #   }
 #
 # Option A2: With a /relay path prefix
 #   relay.yourdomain.com {
 #       handle_path /relay/* {
-#           reverse_proxy relay-server:9700
+#           reverse_proxy relay-server:9700 {
+#               transport http {
+#                   response_header_timeout 130s
+#                   read_timeout 130s
+#                   write_timeout 130s
+#               }
+#           }
 #       }
 #   }
 #
 # Option B: IP-only with self-signed cert
 :443 {
     tls internal
-    reverse_proxy relay-server:9700
+    reverse_proxy relay-server:9700 {
+        transport http {
+            response_header_timeout 130s
+            read_timeout 130s
+            write_timeout 130s
+        }
+    }
 }
 
 :80 {
-    reverse_proxy relay-server:9700
+    reverse_proxy relay-server:9700 {
+        transport http {
+            response_header_timeout 130s
+            read_timeout 130s
+            write_timeout 130s
+        }
+    }
 }

@@ -1,11 +1,10 @@
 //! OpenCode-compatible plugin adapter.
 //!
 //! The production surface is intentionally small: load OpenCode-compatible
-//! workspace sources plus existing `PluginSourceRef` trust snapshots as a Plugin
-//! Runtime Host adapter that exposes source facts, diagnostics, and trust-gated
-//! provider candidates. It does not execute JavaScript, install npm packages,
-//! or depend on a user-local `opencode` CLI.
+//! managed package content and optional activation authority as a Plugin Runtime
+//! Host adapter plus typed dispatch targets. The adapter does not execute
+//! JavaScript, install npm packages, or depend on a user-local `opencode` CLI.
 
 mod source_adapter;
 
-pub use source_adapter::load_opencode_workspace_adapter;
+pub use source_adapter::load_opencode_package_adapter;

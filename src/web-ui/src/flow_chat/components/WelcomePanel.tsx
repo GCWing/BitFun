@@ -161,15 +161,19 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     try {
       setWorkspaceDropdownOpen(false);
       setIsSelectingWorkspace(true);
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({ directory: true, multiple: false });
-      if (selected && typeof selected === 'string') await openWorkspace(selected);
+      const { pickWorkspaceDirectory } = await import(
+        '@/infrastructure/peer-device/pickWorkspaceDirectory'
+      );
+      const selected = await pickWorkspaceDirectory({
+        title: tCommon('header.selectProjectDirectory'),
+      });
+      if (selected) await openWorkspace(selected);
     } catch (err) {
       log.warn('Failed to open workspace folder', err);
     } finally {
       setIsSelectingWorkspace(false);
     }
-  }, [openWorkspace]);
+  }, [openWorkspace, tCommon]);
 
   const handleCreateWorkspace = useCallback(() => {
     setWorkspaceDropdownOpen(false);

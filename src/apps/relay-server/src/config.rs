@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct RelayConfig {
+pub(super) struct RelayConfig {
     pub listen_addr: SocketAddr,
     pub room_ttl_secs: u64,
     pub heartbeat_interval_secs: u64,
@@ -13,6 +13,9 @@ pub struct RelayConfig {
     /// Directory where per-room uploaded mobile-web files are stored.
     pub room_web_dir: String,
     pub cors_allow_origins: Vec<String>,
+    /// Path to the SQLite database file used for account storage.
+    /// When None, account features are disabled (relay acts as pure relay only).
+    pub db_path: Option<String>,
 }
 
 impl Default for RelayConfig {
@@ -25,12 +28,13 @@ impl Default for RelayConfig {
             static_dir: None,
             room_web_dir: "/tmp/bitfun-room-web".to_string(),
             cors_allow_origins: vec!["*".to_string()],
+            db_path: None,
         }
     }
 }
 
 impl RelayConfig {
-    pub fn from_env() -> Self {
+    pub(super) fn from_env() -> Self {
         let mut cfg = Self::default();
         if let Ok(port) = std::env::var("RELAY_PORT") {
             if let Ok(p) = port.parse::<u16>() {
@@ -46,6 +50,13 @@ impl RelayConfig {
         if let Ok(ttl) = std::env::var("RELAY_ROOM_TTL") {
             if let Ok(t) = ttl.parse() {
                 cfg.room_ttl_secs = t;
+            }
+        }
+        if let Ok(path) = std::env::var("RELAY_DB_PATH") {
+            if path.is_empty() {
+                cfg.db_path = None;
+            } else {
+                cfg.db_path = Some(path);
             }
         }
         cfg

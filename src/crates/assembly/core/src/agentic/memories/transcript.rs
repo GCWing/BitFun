@@ -205,12 +205,14 @@ fn memory_tool_result_content(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(|value| truncate_middle_tokens(value, TOOL_ERROR_TOKEN_LIMIT));
-    if success || error.is_none() {
+    if success {
         content
-    } else if content.trim().is_empty() {
-        format!("Tool failed: {}", error.unwrap())
     } else {
-        format!("Tool failed: {}\n\n{}", error.unwrap(), content)
+        match error {
+            None => content,
+            Some(error) if content.trim().is_empty() => format!("Tool failed: {}", error),
+            Some(error) => format!("Tool failed: {}\n\n{}", error, content),
+        }
     }
 }
 

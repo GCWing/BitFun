@@ -21,6 +21,40 @@ permissions:
   contents: read
 
 jobs:
+  # ── CLI: independent tests ─────────────────────────────────────────
+  cli-test:
+    name: CLI Tests (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "cli-ci-v2-ubuntu"
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Run CLI tests
+        run: cargo test --locked -p bitfun-cli
+
   # ── Rust: build check ─────────────────────────────────────────────
   rust-build-check:
     name: Rust Build Check (${{ matrix.os }})
@@ -84,6 +118,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
       - uses: swatinem/rust-cache@v2
         with:
           shared-key: "ci-check-v2-${{ runner.os }}-no-cargo-bin-v1"
@@ -92,7 +129,7 @@ jobs:
           save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Check compilation
-        run: cargo check --workspace --exclude bitfun-cli
+        run: cargo check --locked --workspace
 
       - name: Run core and desktop Rust tests
         run: cargo test --locked -p bitfun-core -p bitfun-desktop
@@ -118,6 +155,9 @@ jobs:
 
       - name: Check repository hygiene
         run: pnpm run check:repo-hygiene
+
+      - name: Check core boundaries
+        run: node --test scripts/check-core-boundaries.test.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

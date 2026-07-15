@@ -21,6 +21,11 @@ export class RelayHttpClient {
   private roomId: string;
   private sharedKey: Uint8Array | null = null;
   private keyPair: MobileKeyPair | null = null;
+  /** Delegated account identity (token + master_key) from the paired desktop. */
+  public delegatedToken: string | null = null;
+  public delegatedMasterKey: Uint8Array | null = null;
+  /** The paired desktop's device_id (for sendDeviceRpc when in relay mode). */
+  public pairedDeviceId: string | null = null;
 
   constructor(relayUrl: string, roomId: string) {
     this.relayUrl = relayUrl.replace(/\/$/, '');
@@ -110,6 +115,22 @@ export class RelayHttpClient {
     if (parsed?.resp === 'error') {
       throw new Error(parsed?.message || 'Pairing rejected');
     }
+    // Intercept delegated account identity from the paired desktop.
+    // The desktop sends this when the user is logged into their account —
+    // it allows the mobile-web to call /api/devices and /api/devices/:id/rpc
+    // directly, without needing Argon2id key derivation.
+    if (parsed?.resp === 'delegate_identity' && parsed.token && parsed.master_key) {
+      this.delegatedToken = parsed.token;
+      this.delegatedMasterKey = fromB64(parsed.master_key);
+      if (parsed.device_id) {
+        this.pairedDeviceId = parsed.device_id;
+      }
+      // Return a minimal initial_sync so the UI continues normally
+      return {
+        authenticated_user_id: parsed.user_id,
+        has_workspace: false,
+      } as any;
+    }
     return parsed;
   }
 
@@ -151,6 +172,66 @@ export class RelayHttpClient {
 
   get isPaired(): boolean {
     return this.sharedKey !== null;
+  }
+
+  get hasDelegatedIdentity(): boolean {
+    return this.delegatedToken !== null && this.delegatedMasterKey !== null;
+  }
+
+  /**
+   * List all same-account devices via the relay HTTP API.
+   * Requires a delegated identity (token + master_key from the paired desktop).
+   */
+  async listDevices(): Promise<Array<{ device_id: string; device_name: string; online: boolean }>> {
+    if (!this.delegatedToken) throw new Error('No delegated identity');
+    const resp = await fetch(`${this.relayUrl}/api/devices`, {
+      headers: { 'Authorization': `Bearer ${this.delegatedToken}` },
+    });
+    if (!resp.ok) throw new Error(`List devices failed: HTTP ${resp.status}`);
+    return resp.json();
+  }
+
+  /**
+   * Send a RemoteCommand to a target device via the relay HTTP RPC endpoint.
+   * The command is encrypted with the delegated master_key (same key the
+   * desktop uses, shared via the room channel at pairing time).
+   */
+  async sendDeviceRpc<T = any>(targetDeviceId: string, command: object): Promise<T> {
+    if (!this.delegatedToken || !this.delegatedMasterKey) {
+      throw new Error('No delegated identity');
+    }
+
+    // Encrypt the command with the master_key
+    const plaintext = JSON.stringify(command);
+    const { data: encData, nonce: encNonce } = await encrypt(
+      this.delegatedMasterKey,
+      plaintext,
+    );
+
+    const resp = await fetch(
+      `${this.relayUrl}/api/devices/${targetDeviceId}/rpc`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.delegatedToken}`,
+        },
+        body: JSON.stringify({ encrypted_data: encData, nonce: encNonce }),
+      },
+    );
+
+    if (!resp.ok) throw new Error(`Device RPC failed: HTTP ${resp.status}`);
+    const data = await resp.json();
+    const decrypted = await decrypt(
+      this.delegatedMasterKey,
+      data.encrypted_data,
+      data.nonce,
+    );
+    const parsed = JSON.parse(decrypted);
+    if (parsed?.resp === 'error') {
+      throw new Error(parsed.message || 'Remote error');
+    }
+    return parsed as T;
   }
 
   private getMobileDeviceName(): string {

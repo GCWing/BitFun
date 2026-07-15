@@ -84,6 +84,45 @@ export interface DeepReviewEvidencePackPrivacyBoundary {
   ];
 }
 
+export type ReviewTargetEvidenceSource = 'workspace' | 'git_range' | 'pull_request';
+export type ReviewTargetEvidenceCompleteness = 'complete' | 'partial' | 'unknown' | 'stale';
+export type ReviewTargetWorkspaceBinding =
+  | 'matching_clean'
+  | 'matching_dirty'
+  | 'mismatched'
+  | 'unavailable';
+
+export interface ReviewTargetEvidenceFile {
+  path: string;
+  previousPath?: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unknown';
+  completeness: 'complete' | 'partial' | 'unavailable';
+}
+
+export interface ReviewTargetPullRequestIdentity {
+  remoteId: string;
+  platform: 'github' | 'gitlab' | 'gitcode';
+  host: string;
+  projectPath: string;
+  pullRequestId: string;
+  number: number;
+  webUrl: string;
+}
+
+export interface ReviewTargetEvidence {
+  version: 1;
+  source: ReviewTargetEvidenceSource;
+  fingerprint: string;
+  baseRevision?: string;
+  headRevision?: string;
+  completeness: ReviewTargetEvidenceCompleteness;
+  workspaceBinding: ReviewTargetWorkspaceBinding;
+  pullRequest?: ReviewTargetPullRequestIdentity;
+  files: ReviewTargetEvidenceFile[];
+  limitations: string[];
+  omittedFileCount?: number;
+}
+
 export interface DeepReviewEvidencePack {
   version: 1;
   source: DeepReviewEvidencePackSource;
@@ -96,6 +135,7 @@ export interface DeepReviewEvidencePack {
   contractHints: DeepReviewEvidencePackContractHint[];
   budget: DeepReviewEvidencePackBudget;
   privacy: DeepReviewEvidencePackPrivacyBoundary;
+  reviewTarget?: ReviewTargetEvidence;
 }
 
 export interface ReviewStrategyCommonRules {
@@ -108,8 +148,6 @@ export interface ReviewStrategyProfile {
   level: ReviewStrategyLevel;
   label: string;
   summary: string;
-  tokenImpact: string;
-  runtimeImpact: string;
   defaultModelSlot: 'fast' | 'primary';
   promptDirective: string;
   /** Per-role strategy directives. When a role key is present, its directive
@@ -167,6 +205,8 @@ export interface ReviewTeamExecutionPolicy {
   reviewerFileSplitThreshold: number;
   maxSameRoleInstances: number;
   maxRetriesPerRole: number;
+  /** Maximum optional specialist launches for a new strict-review turn. */
+  maxReviewerCalls?: number;
 }
 
 export interface ReviewTeamConcurrencyPolicy {
@@ -191,6 +231,7 @@ export type ReviewTeamManifestMemberReason =
   | 'invalid_tooling';
 
 export type ReviewTokenBudgetMode = 'economy' | 'balanced' | 'thorough';
+/** Legacy prompt-size estimate marker retained for historical manifests only. */
 export type ReviewPromptByteEstimateSource = 'manifest_heuristic';
 export type ReviewTeamTokenBudgetDecisionKind =
   | 'summary_first_full_scope'
@@ -212,8 +253,10 @@ export interface ReviewTeamTokenBudgetPlan {
   maxReviewerCalls: number;
   maxExtraReviewers: number;
   maxFilesPerReviewer?: number;
+  /** Legacy advisory fields. New manifests do not estimate prompt bytes. */
   maxPromptBytesPerReviewer?: number;
   estimatedPromptBytesPerReviewer?: number;
+  estimatedPromptBytesTotal?: number;
   promptByteEstimateSource?: ReviewPromptByteEstimateSource;
   promptByteLimitExceeded?: boolean;
   largeDiffSummaryFirst: boolean;
@@ -276,6 +319,11 @@ export interface ReviewTeamStrategyDecision {
   rationale: string;
 }
 
+/** Runtime marker that enables strict L3 manifest invariant validation. */
+export interface ReviewQualityDecisionMetadata {
+  level: 'l3';
+}
+
 export interface ReviewTeamPreReviewSummaryArea {
   key: string;
   fileCount: number;
@@ -317,7 +365,10 @@ export type ReviewTeamIncrementalReviewCacheInvalidation =
   | 'target_tag_changed'
   | 'target_warning_changed'
   | 'reviewer_roster_changed'
-  | 'strategy_changed';
+  | 'strategy_changed'
+  | 'target_revision_changed'
+  | 'target_completeness_changed'
+  | 'workspace_binding_changed';
 
 export interface ReviewTeamIncrementalReviewCachePlan {
   source: 'target_manifest';
@@ -428,14 +479,17 @@ export interface ReviewTeamRunManifest {
   strategyLevel: ReviewStrategyLevel;
   scopeProfile?: DeepReviewScopeProfile;
   strategyRecommendation?: ReviewTeamStrategyRecommendation;
+  qualityDecision?: ReviewQualityDecisionMetadata;
   strategyDecision: ReviewTeamStrategyDecision;
   executionPolicy: ReviewTeamExecutionPolicy;
   concurrencyPolicy: ReviewTeamConcurrencyPolicy;
   changeStats?: ReviewTeamChangeStats;
   preReviewSummary: ReviewTeamPreReviewSummary;
   evidencePack?: DeepReviewEvidencePack;
-  sharedContextCache: ReviewTeamSharedContextCachePlan;
-  incrementalReviewCache: ReviewTeamIncrementalReviewCachePlan;
+  /** Legacy launch metadata; no longer written by new Review runs. */
+  sharedContextCache?: ReviewTeamSharedContextCachePlan;
+  /** Legacy speculative cache plan; retained only for old-session recovery. */
+  incrementalReviewCache?: ReviewTeamIncrementalReviewCachePlan;
   tokenBudget: ReviewTeamTokenBudgetPlan;
   coreReviewers: ReviewTeamManifestMember[];
   qualityGateReviewer?: ReviewTeamManifestMember;

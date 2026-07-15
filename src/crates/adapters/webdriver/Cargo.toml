@@ -39,3 +39,6 @@ glib = { workspace = true }
 gtk = { workspace = true }
 tempfile = { workspace = true }
 webkit2gtk = { workspace = true }
+
+[lints]
+workspace = true

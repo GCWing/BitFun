@@ -21,7 +21,7 @@ use crate::agentic::tools::restrictions::{
     is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
 };
 use crate::agentic::tools::workspace_paths::{
-    build_bitfun_runtime_uri, is_bitfun_runtime_uri, normalize_runtime_relative_path,
+    build_bitfun_runtime_uri, is_bitfun_tool_uri, normalize_runtime_relative_path,
 };
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
@@ -643,19 +643,25 @@ impl ToolUseContext {
     }
 
     pub fn resolve_tool_path(&self, path: &str) -> BitFunResult<ToolPathResolution> {
-        if is_bitfun_runtime_uri(path) {
+        if is_bitfun_tool_uri(path) {
             let workspace_scope = self.current_workspace_scope();
             let runtime_root = if self.workspace.is_some() {
                 Some(self.current_workspace_runtime_root()?)
             } else {
                 None
             };
-            return resolve_tool_path_with_context(
+            let current_session_root = self
+                .session_id
+                .as_deref()
+                .map(|session_id| self.current_workspace_session_dir(session_id))
+                .transpose()?;
+            return crate::agentic::tools::framework::resolve_tool_path_with_context_roots(
                 path,
                 None,
                 self.is_remote(),
                 workspace_scope.as_deref(),
                 runtime_root,
+                current_session_root,
             )
             .map_err(|error| BitFunError::tool(error.to_string()));
         }
@@ -688,7 +694,7 @@ impl ToolUseContext {
 }
 
 fn git_relative_path(workspace_root: &Path, path: &str) -> Option<String> {
-    if is_bitfun_runtime_uri(path) {
+    if is_bitfun_tool_uri(path) {
         return None;
     }
 
@@ -1002,6 +1008,78 @@ mod path_resolution_tests {
             PathBuf::from(resolved),
             PathBuf::from("/repo/project/src/main.rs")
         );
+    }
+
+    #[test]
+    fn current_session_uri_resolves_against_local_session_runtime_root() {
+        let runtime_root = PathBuf::from("/runtime/project");
+        let mut context = local_context("/repo/project");
+        context.session_id = Some("session-1".to_string());
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            serde_json::Value::String(runtime_root.to_string_lossy().to_string()),
+        );
+
+        let resolved = context
+            .resolve_tool_path(
+                "bitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt",
+            )
+            .expect("current-session URI should resolve");
+
+        let expected_session_root = runtime_root.join("sessions").join("session-1");
+        assert_eq!(
+            PathBuf::from(&resolved.resolved_path),
+            expected_session_root
+                .join("artifacts")
+                .join("compression-transcripts")
+                .join("12-a3f9.txt")
+        );
+        assert_eq!(
+            resolved.logical_child_path(&expected_session_root.join("artifacts/other.txt")),
+            Some("bitfun://current-session/artifacts/other.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn current_session_uri_resolves_against_remote_mirror_session_root() {
+        let runtime_root = PathBuf::from("/runtime/remote-mirror");
+        let mut context =
+            remote_context("/home/wsp/projects/test", Some("workspace-123".to_string()));
+        context.session_id = Some("session-remote".to_string());
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            serde_json::Value::String(runtime_root.to_string_lossy().to_string()),
+        );
+
+        let resolved = context
+            .resolve_tool_path("bitfun://current-session/artifacts/transcript.txt")
+            .expect("remote current-session URI should resolve to the local mirror");
+
+        assert!(!resolved.uses_remote_workspace_backend());
+        assert_eq!(
+            PathBuf::from(resolved.resolved_path),
+            runtime_root
+                .join("sessions")
+                .join("session-remote")
+                .join("artifacts")
+                .join("transcript.txt")
+        );
+    }
+
+    #[test]
+    fn current_session_uri_requires_session_context() {
+        let runtime_root = PathBuf::from("/runtime/project");
+        let mut context = local_context("/repo/project");
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            serde_json::Value::String(runtime_root.to_string_lossy().to_string()),
+        );
+
+        let err = context
+            .resolve_tool_path("bitfun://current-session/artifacts/transcript.txt")
+            .expect_err("current-session URI should require a session id");
+
+        assert!(err.to_string().contains("current session"));
     }
 
     #[test]

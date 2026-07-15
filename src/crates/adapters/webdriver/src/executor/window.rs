@@ -7,7 +7,7 @@ use crate::platform::WindowRect;
 use crate::server::response::WebDriverErrorResponse;
 
 impl BridgeExecutor {
-    pub async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+    pub(crate) async fn get_window_rect(&self) -> Result<WindowRect, WebDriverErrorResponse> {
         let window = self.webview_window()?;
         let position = window.outer_position().map_err(|error| {
             WebDriverErrorResponse::unknown_error(format!(
@@ -26,7 +26,7 @@ impl BridgeExecutor {
         })
     }
 
-    pub async fn set_window_rect(
+    pub(crate) async fn set_window_rect(
         &self,
         rect: WindowRect,
     ) -> Result<WindowRect, WebDriverErrorResponse> {
@@ -70,7 +70,7 @@ impl BridgeExecutor {
         self.get_window_rect().await
     }
 
-    pub async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+    pub(crate) async fn maximize_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
         self.webview_window()?.maximize().map_err(|error| {
             WebDriverErrorResponse::unknown_error(format!("Failed to maximize window: {error}"))
         })?;
@@ -78,14 +78,14 @@ impl BridgeExecutor {
         self.get_window_rect().await
     }
 
-    pub async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn minimize_window(&self) -> Result<(), WebDriverErrorResponse> {
         self.webview_window()?.minimize().map_err(|error| {
             WebDriverErrorResponse::unknown_error(format!("Failed to minimize window: {error}"))
         })?;
         Ok(())
     }
 
-    pub async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
+    pub(crate) async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
         self.webview_window()?
             .set_fullscreen(true)
             .map_err(|error| {

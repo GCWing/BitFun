@@ -1,0 +1,30 @@
+/node_modules
+/oh_modules
+/local.properties
+/.idea
+.DS_Store
+**/build
+/.hvigor
+**/.hvigor
+.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/.appanalyzer
+
+# Local emulator verification artifacts
+/bitfun_*.jpeg
+/bitfun_*_layout.json
+/bitfun_layout*.json
+.bitfun/
+/.bitfun/search/flashgrep-index/
+
+# Signing credentials and installable artifacts
+*.cer
+*.key
+*.p12
+*.p7b
+*.pem
+*.hap
+*.app

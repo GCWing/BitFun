@@ -726,6 +726,7 @@ pub async fn run() {
             // paired bots start listening immediately on app startup.
             let step_started = Instant::now();
             api::remote_connect_api::init_on_startup();
+            api::remote_connect_api::init_auto_sync();
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "remote_connect_init_on_startup",
@@ -760,6 +761,7 @@ pub async fn run() {
 
             let step_started = Instant::now();
             init_services(app_handle.clone(), startup_log_level);
+            api::remote_connect_api::set_account_app_handle(app_handle.clone());
             startup_trace.record_elapsed_step("native_setup", "init_services", step_started);
 
             let step_started = Instant::now();
@@ -1001,9 +1003,13 @@ pub async fn run() {
             delete_skill,
             git_is_repository,
             git_get_repository_basic,
+            git_resolve_revision,
             git_get_repository,
             review_platform_get_workspace_snapshot,
             review_platform_get_pull_request_detail,
+            review_platform_get_pull_request_review_target,
+            review_platform_get_issue,
+            review_platform_get_pull_request_review_target_by_identity,
             review_platform_get_pull_request_detail_page,
             review_platform_get_pull_request_ci_log,
             review_platform_update_auth_token,
@@ -1247,6 +1253,35 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_weixin_qr_poll,
             api::remote_connect_api::remote_connect_get_bot_verbose_mode,
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
+            // Account API
+            api::remote_connect_api::account_login,
+            api::remote_connect_api::account_status,
+            api::remote_connect_api::account_logout,
+            api::remote_connect_api::account_connect_devices,
+            api::remote_connect_api::account_online_devices,
+            api::remote_connect_api::account_send_session_to_device,
+            api::remote_connect_api::account_sync_session,
+            api::remote_connect_api::account_fetch_synced_sessions,
+            api::remote_connect_api::account_delete_synced_session,
+            api::remote_connect_api::account_sync_settings,
+            api::remote_connect_api::account_fetch_settings,
+            api::remote_connect_api::account_export_local_session,
+            api::remote_connect_api::account_export_all_sessions,
+            api::remote_connect_api::account_import_remote_sessions,
+            api::remote_connect_api::account_fetch_session_turns,
+            api::remote_connect_api::account_execute_on_device,
+            api::remote_connect_api::account_auto_sync,
+            api::remote_connect_api::account_get_credential_hint,
+            api::remote_connect_api::account_token_expired,
+            api::remote_connect_api::account_list_devices,
+            api::remote_connect_api::account_delete_device,
+            api::remote_connect_api::account_device_rpc,
+            api::remote_connect_api::account_delegate_to_paired,
+            api::peer_host_invoke::peer_host_invoke_complete,
+            api::peer_host_invoke::peer_control_attach,
+            api::peer_host_invoke::peer_control_detach,
+            api::peer_host_invoke::peer_mode_ping,
+            api::peer_host_invoke::peer_controller_set_active,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,
@@ -1493,6 +1528,7 @@ async fn init_agentic_system() -> anyhow::Result<(
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
+    api::remote_connect_api::set_dialog_scheduler(scheduler.clone());
 
     let cron_service = bitfun_core::service::cron::CronService::new(
         path_manager.clone(),
@@ -1684,8 +1720,20 @@ fn start_event_loop_with_transport(
                         log::warn!("Internal event routing failed: {:?}", e);
                     }
 
+                    let event_for_fanout = envelope.event.clone();
                     if let Err(e) = transport.emit_event("", envelope.event).await {
                         log::error!("Failed to emit event: {:?}", e);
+                    }
+
+                    if !api::peer_host_invoke::attached_controllers().is_empty() {
+                        if let Some(projected) =
+                            bitfun_events::project_agentic_frontend_event(event_for_fanout)
+                        {
+                            api::remote_connect_api::fanout_peer_device_event(
+                                projected.event_name,
+                                projected.payload,
+                            );
+                        }
                     }
                 }
             }
@@ -1794,7 +1842,9 @@ fn create_event_emitter(
     transport: Arc<TauriTransportAdapter>,
 ) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
     use bitfun_core::infrastructure::events::TransportEmitter;
-    Arc::new(TransportEmitter::new(transport))
+    let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
+        Arc::new(TransportEmitter::new(transport));
+    api::remote_connect_api::wrap_peer_aware_emitter(inner)
 }
 
 fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {

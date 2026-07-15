@@ -4,7 +4,7 @@ use std::collections::HashMap;
 /// Installation options passed from the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InstallOptions {
+pub(crate) struct InstallOptions {
     /// Target installation directory
     pub install_path: String,
     /// Create a desktop shortcut
@@ -24,7 +24,7 @@ pub struct InstallOptions {
 /// Optional model configuration (from installer model step).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ModelConfig {
+pub(crate) struct ModelConfig {
     pub provider: String,
     pub api_key: String,
     pub base_url: String,
@@ -50,7 +50,7 @@ pub struct ModelConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RemoteModelInfo {
+pub(crate) struct RemoteModelInfo {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
@@ -67,7 +67,7 @@ impl From<bitfun_ai_adapters::types::RemoteModelInfo> for RemoteModelInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum ConnectionTestMessageCode {
+pub(crate) enum ConnectionTestMessageCode {
     ToolCallsNotDetected,
     ImageInputCheckFailed,
     TlsOrCertificateIssue,
@@ -97,7 +97,7 @@ impl From<bitfun_ai_adapters::types::ConnectionTestMessageCode> for ConnectionTe
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConnectionTestResult {
+pub(crate) struct ConnectionTestResult {
     pub success: bool,
     pub response_time_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -123,7 +123,7 @@ impl From<bitfun_ai_adapters::types::ConnectionTestResult> for ConnectionTestRes
 /// Progress update sent to the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InstallProgress {
+pub(super) struct InstallProgress {
     /// Current step name
     pub step: String,
     /// Progress percentage (0-100)
@@ -135,7 +135,7 @@ pub struct InstallProgress {
 /// Disk space information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DiskSpaceInfo {
+pub(crate) struct DiskSpaceInfo {
     /// Total disk space in bytes
     pub total: u64,
     /// Available disk space in bytes

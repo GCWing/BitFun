@@ -268,12 +268,10 @@ impl InsightsCollector {
                 }
                 MessageContent::ToolResult {
                     tool_name,
-                    is_error,
+                    is_error: true,
                     ..
                 } => {
-                    if *is_error {
-                        *base_stats.tool_errors.entry(tool_name.clone()).or_insert(0) += 1;
-                    }
+                    *base_stats.tool_errors.entry(tool_name.clone()).or_insert(0) += 1;
                 }
                 _ => {}
             }
@@ -361,12 +359,12 @@ impl InsightsCollector {
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
-        top_tools.sort_by(|a, b| b.1.cmp(&a.1));
+        top_tools.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         top_tools.truncate(15);
 
         let mut top_goals: Vec<(String, u32)> =
             goals.iter().map(|(k, v)| (k.clone(), *v)).collect();
-        top_goals.sort_by(|a, b| b.1.cmp(&a.1));
+        top_goals.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         top_goals.truncate(10);
 
         let hours = base_stats.total_duration_minutes as f32 / 60.0;

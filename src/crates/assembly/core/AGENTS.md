@@ -60,6 +60,14 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   coverage, but filesystem writes, worker/host side effects, Git/AI concrete
   calls, marker IO, and path-manager integration stay in core unless a reviewed
   owner design says otherwise.
+- `plugin_source` may inject product-owned paths and keep compatibility exports;
+  concrete managed-package discovery and trust persistence stay in
+  `services-integrations`, while ecosystem parsing and Plugin Runtime Host
+  behavior remain in their adapter and execution owners.
+- `plugin_runtime` is the only product-full composition file allowed to select
+  an ecosystem adapter and inject it into Plugin Runtime Host. Product surfaces
+  consume its product-level activation view and must not import adapter or Host
+  ABI types.
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.
@@ -85,8 +93,8 @@ Use these files for ownership details instead of expanding this guide:
 Narrower local guides already exist for some subtrees:
 
 - `src/crates/adapters/ai-adapters/AGENTS.md`
-- `src/agentic/execution/AGENTS.md`
-- `src/agentic/deep_review/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/execution/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/deep_review/AGENTS.md`
 
 ## Verification
 

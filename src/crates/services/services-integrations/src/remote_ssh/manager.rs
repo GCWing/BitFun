@@ -66,9 +66,9 @@ fn ssh_cfg_has(settings: &std::collections::HashMap<&str, &str>, canonical_key: 
 /// quoted value or the first whitespace-delimited token for unquoted values.
 fn parse_ssh_config_value(value: &str) -> Option<&str> {
     let value = value.trim();
-    if value.starts_with('"') {
-        if let Some(end) = value[1..].find('"') {
-            let inner = &value[1..1 + end];
+    if let Some(quoted) = value.strip_prefix('"') {
+        if let Some(end) = quoted.find('"') {
+            let inner = &quoted[..end];
             return if inner.is_empty() { None } else { Some(inner) };
         }
     }
@@ -1661,15 +1661,12 @@ impl SSHConnectionManager {
         let result = SSHCommandResult {
             stdout,
             stderr,
-            exit_code: exit_status.unwrap_or_else(|| {
-                if timed_out {
-                    124
-                } else if interrupted {
-                    130
-                } else {
-                    -1
-                }
-            }),
+            exit_code: match exit_status {
+                Some(exit_code) => exit_code,
+                None if timed_out => 124,
+                None if interrupted => 130,
+                None => -1,
+            },
             interrupted,
             timed_out,
         };
@@ -2390,9 +2387,8 @@ impl SSHConnectionManager {
         }
 
         for dir in sftp_mkdir_all_prefixes(&path) {
-            match sftp.as_ref().try_exists(&dir).await {
-                Ok(true) => continue,
-                Ok(false) | Err(_) => {}
+            if let Ok(true) = sftp.as_ref().try_exists(&dir).await {
+                continue;
             }
 
             if let Err(error) = sftp.as_ref().create_dir(&dir).await {

@@ -6,6 +6,24 @@ import {
 import { DEFAULT_CODE_REVIEW_MARKDOWN_LABELS } from './codeReviewReport';
 
 describe('reliabilityNotices', () => {
+  it('turns a non-complete evidence status into a localized notice without runtime prose', () => {
+    const notices = buildCodeReviewReliabilityNotices({
+      evidence_status: 'limited',
+      reliability_signals: [{
+        kind: 'target_evidence_limited',
+        severity: 'warning',
+        source: 'runtime',
+        detail: 'Backend-only English diagnostic.',
+      }],
+    });
+
+    expect(notices).toEqual([{
+      kind: 'target_evidence_limited',
+      severity: 'warning',
+      source: 'runtime',
+    }]);
+  });
+
   it('normalizes structured notices and keeps markdown label fallback stable', () => {
     const notices = buildCodeReviewReliabilityNotices({
       review_mode: 'deep',

@@ -396,6 +396,7 @@ describe('CodeReviewToolCard', () => {
           },
           issues: [],
           reviewers: [],
+          evidence_status: 'limited',
           reliability_signals: [
             {
               kind: 'reduced_scope',
@@ -433,6 +434,9 @@ describe('CodeReviewToolCard', () => {
 
     expect(container.textContent).toContain('Focused review scope');
     expect(container.textContent).toContain('High-risk-only pass; changed files remain visible.');
+    expect(container.textContent).toContain('Evidence status');
+    expect(container.textContent).toContain('limited');
+    expect(container.textContent).toContain('Target evidence limited');
   });
 
   it('maps internal reviewer source ids before rendering issues', () => {
@@ -501,5 +505,51 @@ describe('CodeReviewToolCard', () => {
 
     expect(container.textContent).toContain('Security coverage');
     expect(container.textContent).not.toContain('ReviewSecurity');
+  });
+
+  it('does not invent risk or recommendation for an incomplete historical summary', () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-incomplete-summary',
+      type: 'tool',
+      timestamp: Date.now(),
+      toolName: 'submit_code_review',
+      status: 'completed',
+      toolCall: { id: 'call-incomplete-summary', input: {} },
+      toolResult: {
+        success: true,
+        result: {
+          review_mode: 'standard',
+          summary: { overall_assessment: 'Historical report' },
+          issues: [],
+          reviewers: [],
+        },
+      },
+    };
+    const config: ToolCardConfig = {
+      toolName: 'submit_code_review',
+      displayName: 'Code Review',
+      icon: 'REVIEW',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+    };
+
+    act(() => {
+      root.render(
+        <CodeReviewToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="review-session"
+        />,
+      );
+    });
+    act(() => {
+      container.querySelector('.preview-toggle-btn')?.dispatchEvent(
+        new window.Event('click', { bubbles: true }),
+      );
+    });
+
+    expect(container.textContent).not.toContain('Risk Level');
+    expect(container.textContent).not.toContain('Recommended Action');
+    expect(container.textContent).not.toContain('Request Changes');
   });
 });

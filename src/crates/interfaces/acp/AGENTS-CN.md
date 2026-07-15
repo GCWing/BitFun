@@ -6,6 +6,9 @@
 
 `bitfun-acp` 负责基于已组装产品 runtime 的 Agent Client Protocol 入口与 ACP client 行为。ACP protocol / client 细节留在这里或应用入口 adapter 中；跨层只共享稳定 capability facts。
 
+当前生产代码仍直接依赖 `bitfun-core` 的 `product-full`，尚未消费 `DeliveryProfile::Acp` 或
+`ProductAssembler`。“基于已组装 runtime”是目标边界；迁移入口时必须保持现有 ACP 行为等价。
+
 ## 护栏
 
 - Remote ACP workspace 复用本地 ACP client 配置。修改 ACP client 行为时，必须保持 manager、remote shell probing、remote capability store 和 workspace menu availability 语义。

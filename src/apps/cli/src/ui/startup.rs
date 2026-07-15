@@ -1,6 +1,7 @@
 use super::agent_selector::{AgentItem, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::login_form::{LoginFormAction, LoginFormState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
 use super::model_selector::{ModelItem, ModelSelectorState};
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
@@ -27,7 +28,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use ratatui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
     Frame, Terminal,
@@ -51,7 +52,7 @@ use bitfun_core::service::config::GlobalConfigManager;
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
-pub enum PopupType {
+enum PopupType {
     CommandPalette,
     ModelSelector,
     AgentSelector,
@@ -61,21 +62,22 @@ pub enum PopupType {
     ThemeSelector,
     ProviderSelector,
     ModelConfigForm,
+    LoginForm,
 }
 
 /// Navigation stack for managing popup hierarchy
 #[derive(Debug, Default)]
-pub struct PopupStack {
+struct PopupStack {
     stack: Vec<PopupType>,
 }
 
 impl PopupStack {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self { stack: Vec::new() }
     }
 
     /// Push a popup onto the stack
-    pub fn push(&mut self, popup: PopupType) {
+    fn push(&mut self, popup: PopupType) {
         // Avoid duplicates at the top
         if self.stack.last() != Some(&popup) {
             self.stack.push(popup);
@@ -83,31 +85,19 @@ impl PopupStack {
     }
 
     /// Pop the top popup from the stack
-    pub fn pop(&mut self) -> Option<PopupType> {
+    fn pop(&mut self) -> Option<PopupType> {
         self.stack.pop()
     }
 
-    /// Peek at the top popup without removing it
-    #[allow(dead_code)]
-    pub fn peek(&self) -> Option<&PopupType> {
-        self.stack.last()
-    }
-
-    /// Check if the stack is empty
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.stack.is_empty()
-    }
-
     /// Clear all popups from the stack
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.stack.clear();
     }
 }
 
 /// Startup menu result
 #[derive(Debug, Clone)]
-pub enum StartupResult {
+pub(crate) enum StartupResult {
     /// Start a new session with an optional initial prompt
     NewSession { prompt: Option<String> },
     /// Continue last session (session ID)
@@ -128,8 +118,9 @@ Ctrl+C            Exit";
 
 /// Random tips shown on the startup page
 const TIPS: &[&str] = &[
-    "Type / for slash commands (e.g. /help, /models, /agents)",
+    "Type / for slash commands (e.g. /help, /login, /models)",
     "Press Tab to cycle between agents",
+    "Use /login to sign in for Peer Device Mode / multi-device sync",
     "Use /init to explore your repo and generate AGENTS.md",
     "Press Ctrl+E to toggle browse mode for scrolling history",
     "Use /sessions to list and continue previous conversations",
@@ -142,8 +133,40 @@ const TIPS: &[&str] = &[
     "Use /new to start a fresh conversation session",
 ];
 
+const FANCY_LOGO: [&str; 6] = [
+    "  ██████╗ ██╗████████╗███████╗██╗   ██╗███╗   ██╗",
+    "  ██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║████╗  ██║",
+    "  ██████╔╝██║   ██║   █████╗  ██║   ██║██╔██╗ ██║",
+    "  ██╔══██╗██║   ██║   ██╔══╝  ██║   ██║██║╚██╗██║",
+    "  ██████╔╝██║   ██║   ██║     ╚██████╔╝██║ ╚████║",
+    "  ╚═════╝ ╚═╝   ╚═╝   ╚═╝      ╚═════╝ ╚═╝  ╚═══╝",
+];
+
+const COMPACT_LOGO: [&str; 5] = [
+    "  ____  _ _   _____            ",
+    " | __ )(_) |_|  ___|   _ _ __  ",
+    " |  _ \\| | __| |_ | | | | '_ \\ ",
+    " | |_) | | |_|  _|| |_| | | | |",
+    " |____/|_|\\__|_|   \\__,_|_| |_|",
+];
+
+fn append_styled_logo_lines(
+    lines: &mut Vec<Line<'static>>,
+    logo: &'static [&'static str],
+    colors: &[Color],
+) {
+    for (index, line) in logo.iter().enumerate() {
+        lines.push(Line::from(Span::styled(
+            *line,
+            Style::default()
+                .fg(colors[index % colors.len()])
+                .add_modifier(Modifier::BOLD),
+        )));
+    }
+}
+
 /// Startup page
-pub struct StartupPage {
+pub(crate) struct StartupPage {
     /// Multiline text input component
     text_input: TextInput,
     /// Theme
@@ -168,6 +191,7 @@ pub struct StartupPage {
     theme_selector: ThemeSelectorState,
     provider_selector: ProviderSelectorState,
     model_config_form: ModelConfigFormState,
+    login_form: LoginFormState,
     theme_preview_original: Option<Theme>,
 
     // ── System context ──
@@ -190,7 +214,7 @@ pub struct StartupPage {
 }
 
 impl StartupPage {
-    pub fn new(
+    pub(crate) fn new(
         coordinator: Arc<ConversationCoordinator>,
         default_agent: String,
         workspace: Option<String>,
@@ -242,6 +266,7 @@ impl StartupPage {
             theme_selector: ThemeSelectorState::new(),
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
+            login_form: LoginFormState::new(),
             theme_preview_original: None,
             coordinator,
             agent_type: default_agent,
@@ -264,12 +289,12 @@ impl StartupPage {
     }
 
     /// Get the currently selected agent type
-    pub fn agent_type(&self) -> &str {
+    pub(crate) fn agent_type(&self) -> &str {
         &self.agent_type
     }
 
     /// Get the current workspace path for this CLI process.
-    pub fn workspace(&self) -> Option<String> {
+    pub(crate) fn workspace(&self) -> Option<String> {
         if self.workspace_display.is_empty() {
             None
         } else {
@@ -278,7 +303,7 @@ impl StartupPage {
     }
 
     /// Get the current CLI config after startup-page edits.
-    pub fn config(&self) -> &CliConfig {
+    pub(crate) fn config(&self) -> &CliConfig {
         &self.config
     }
 
@@ -300,12 +325,16 @@ impl StartupPage {
             || self.theme_selector.is_visible()
             || self.provider_selector.is_visible()
             || self.model_config_form.is_visible()
+            || self.login_form.is_visible()
     }
 
-    pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
+    pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
         terminal.clear()?;
 
         loop {
+            if self.login_form.is_visible() {
+                self.refresh_account_panel_live();
+            }
             terminal.draw(|f| self.render(f))?;
 
             if event::poll(Duration::from_millis(50))? {
@@ -353,8 +382,12 @@ impl StartupPage {
                             }
                         }
                         if !paste_buf.is_empty() {
-                            self.text_input.insert_paste(&paste_buf);
-                            self.refresh_command_menu();
+                            if self.login_form.is_visible() {
+                                self.login_form.insert_paste(&paste_buf);
+                            } else {
+                                self.text_input.insert_paste(&paste_buf);
+                                self.refresh_command_menu();
+                            }
                         }
                         for ev in non_key_events {
                             self.handle_non_key_event(ev, terminal)?;
@@ -405,8 +438,12 @@ impl StartupPage {
                 }
             }
             Event::Paste(text) => {
-                self.text_input.insert_paste(&text);
-                self.refresh_command_menu();
+                if self.login_form.is_visible() {
+                    self.login_form.insert_paste(&text);
+                } else {
+                    self.text_input.insert_paste(&text);
+                    self.refresh_command_menu();
+                }
             }
             Event::Resize(_, _) => {
                 // Avoid full-screen clear on every resize event to reduce flicker.
@@ -462,6 +499,9 @@ impl StartupPage {
         // Overlay: command palette (Ctrl+P)
         self.command_palette.render(frame, size, &self.theme);
 
+        // Dedicated login page (full viewport takeover)
+        self.login_form.render(frame, size, &self.theme);
+
         // Overlay: info popup (highest priority)
         if let Some(ref msg) = self.info_popup {
             super::widgets::render_info_popup(frame, size, msg, self.theme.primary);
@@ -477,7 +517,7 @@ impl StartupPage {
         let visual_lines =
             self.text_input
                 .visual_line_count_with_prefix(input_content_width, 0) as u16;
-        let content_lines = visual_lines.max(1).min(6);
+        let content_lines = visual_lines.clamp(1, 6);
         let input_box_height = content_lines + 3; // +1 top padding, +1 gap, +1 agent label
 
         let v_chunks = Layout::default()
@@ -660,15 +700,6 @@ impl StartupPage {
         lines.push(Line::from(""));
 
         if use_fancy_logo {
-            let logo = vec![
-                "  ██████╗ ██╗████████╗███████╗██╗   ██╗███╗   ██╗",
-                "  ██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║████╗  ██║",
-                "  ██████╔╝██║   ██║   █████╗  ██║   ██║██╔██╗ ██║",
-                "  ██╔══██╗██║   ██║   ██╔══╝  ██║   ██║██║╚██╗██║",
-                "  ██████╔╝██║   ██║   ██║     ╚██████╔╝██║ ╚████║",
-                "  ╚═════╝ ╚═╝   ╚═╝   ╚═╝      ╚═════╝ ╚═╝  ╚═══╝",
-            ];
-
             let colors = [
                 self.theme.primary,
                 self.theme.info,
@@ -678,23 +709,8 @@ impl StartupPage {
                 self.theme.muted,
             ];
 
-            for (i, line) in logo.iter().enumerate() {
-                lines.push(Line::from(Span::styled(
-                    *line,
-                    Style::default()
-                        .fg(colors[i % colors.len()])
-                        .add_modifier(Modifier::BOLD),
-                )));
-            }
+            append_styled_logo_lines(&mut lines, &FANCY_LOGO, &colors);
         } else {
-            let logo = vec![
-                "  ____  _ _   _____            ",
-                " | __ )(_) |_|  ___|   _ _ __  ",
-                " |  _ \\| | __| |_ | | | | '_ \\ ",
-                " | |_) | | |_|  _|| |_| | | | |",
-                " |____/|_|\\__|_|   \\__,_|_| |_|",
-            ];
-
             let colors = [
                 self.theme.primary,
                 self.theme.info,
@@ -703,14 +719,7 @@ impl StartupPage {
                 self.theme.error,
             ];
 
-            for (i, line) in logo.iter().enumerate() {
-                lines.push(Line::from(Span::styled(
-                    *line,
-                    Style::default()
-                        .fg(colors[i % colors.len()])
-                        .add_modifier(Modifier::BOLD),
-                )));
-            }
+            append_styled_logo_lines(&mut lines, &COMPACT_LOGO, &colors);
         }
 
         lines.push(Line::from(""));
@@ -749,12 +758,9 @@ impl StartupPage {
 
         // ── Global popup navigation: Ctrl+W closes all popups ──
         if self.any_popup_visible() {
-            match (key.code, key.modifiers) {
-                (KeyCode::Char('w'), KeyModifiers::CONTROL) => {
-                    self.close_all_popups();
-                    return None;
-                }
-                _ => {}
+            if let (KeyCode::Char('w'), KeyModifiers::CONTROL) = (key.code, key.modifiers) {
+                self.close_all_popups();
+                return None;
             }
         }
 
@@ -895,6 +901,12 @@ impl StartupPage {
                 ModelFormAction::None => {}
             }
             return None;
+        }
+
+        if self.login_form.is_visible() {
+            self.refresh_account_panel_live();
+            let action = self.login_form.handle_key_event(key);
+            return self.handle_login_form_action(action);
         }
 
         // ── Command palette intercepts all keys when visible ──
@@ -1081,6 +1093,13 @@ impl StartupPage {
                     prompt: Some("/mcps".to_string()),
                 });
             }
+            // Account group
+            "login" => {
+                self.show_login_form();
+            }
+            "logout" => {
+                return self.handle_command("/logout");
+            }
             // System group
             "help" => {
                 self.info_popup = Some(KEYBOARD_SHORTCUTS_HELP.to_string());
@@ -1143,6 +1162,24 @@ impl StartupPage {
                     prompt: Some("/acp".to_string()),
                 });
             }
+            "/login" => {
+                self.show_login_form();
+            }
+            "/logout" => {
+                let logged_in = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
+                });
+                if !logged_in {
+                    self.status = Some("Not logged in.".to_string());
+                } else {
+                    match tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    }) {
+                        Ok(()) => self.status = Some("Logged out.".to_string()),
+                        Err(e) => self.status = Some(format!("Logout failed: {e}")),
+                    }
+                }
+            }
             "/usage" => {
                 self.status = Some("No active session for /usage.".to_string());
             }
@@ -1198,7 +1235,139 @@ impl StartupPage {
         } else if self.model_config_form.is_visible() {
             self.popup_stack.push(PopupType::ModelConfigForm);
             self.model_config_form.hide();
+        } else if self.login_form.is_visible() {
+            self.popup_stack.push(PopupType::LoginForm);
+            self.login_form.hide();
         }
+    }
+
+    fn show_login_form(&mut self) {
+        self.close_all_popups();
+        let logged_in = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
+        });
+        if logged_in {
+            self.open_account_panel();
+        } else {
+            self.login_form.show();
+        }
+    }
+
+    fn workspace_path_for_sync(&self) -> std::path::PathBuf {
+        self.workspace_path_buf()
+    }
+
+    fn open_account_panel(&mut self) {
+        let (info, devices, progress) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let info = crate::account::account_info().await;
+                let devices = crate::account::list_devices().await.unwrap_or_default();
+                let progress = crate::account_sync::current_sync_progress().await;
+                (info, devices, progress)
+            })
+        });
+        match info {
+            Ok(info) => self.login_form.show_account(info, devices, progress),
+            Err(e) => {
+                self.status = Some(format!("Failed to load account: {e}"));
+                self.login_form.show();
+            }
+        }
+    }
+
+    fn refresh_account_panel_live(&mut self) {
+        if !self.login_form.is_visible() {
+            return;
+        }
+        let progress = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(crate::account_sync::current_sync_progress())
+        });
+        // Refresh devices occasionally while syncing / after done.
+        let devices = if matches!(
+            progress.status,
+            crate::account_sync::SyncStatus::Syncing | crate::account_sync::SyncStatus::Done
+        ) {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(crate::account::list_devices())
+                    .ok()
+            })
+        } else {
+            None
+        };
+        self.login_form.update_account_progress(devices, progress);
+    }
+
+    fn start_sync_and_show_account(&mut self, is_first_login: bool) {
+        let workspace = self.workspace_path_for_sync();
+        crate::account_sync::start_auto_sync_background(is_first_login, workspace);
+        self.open_account_panel();
+        self.status = Some(if is_first_login {
+            "Sync started (use local / upload settings).".to_string()
+        } else {
+            "Sync started (use cloud / download settings).".to_string()
+        });
+    }
+
+    fn handle_login_form_action(&mut self, action: LoginFormAction) -> Option<StartupResult> {
+        match action {
+            LoginFormAction::Submit(creds) => {
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(
+                        crate::account::login_with_credentials(
+                            &creds.relay_url,
+                            &creds.username,
+                            &creds.password,
+                        ),
+                    )
+                });
+                match result {
+                    Ok(login) => {
+                        self.status = Some(login.status_message.clone());
+                        if login.has_cloud_settings {
+                            self.login_form
+                                .show_sync_choice(&login.user_id, &login.relay_url);
+                        } else {
+                            self.start_sync_and_show_account(true);
+                        }
+                    }
+                    Err(e) => {
+                        self.login_form.set_error(format!("Login failed: {e}"));
+                    }
+                }
+            }
+            LoginFormAction::SyncUseLocal => {
+                self.start_sync_and_show_account(true);
+            }
+            LoginFormAction::SyncUseCloud => {
+                self.start_sync_and_show_account(false);
+            }
+            LoginFormAction::SyncCancel => {
+                let _ = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                });
+                self.login_form.show();
+                self.status = Some("Sync cancelled; logged out.".to_string());
+            }
+            LoginFormAction::Logout => {
+                match tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(crate::account::logout())
+                }) {
+                    Ok(()) => {
+                        self.login_form.show();
+                        self.status = Some("Logged out.".to_string());
+                    }
+                    Err(e) => {
+                        self.login_form.set_error(format!("Logout failed: {e}"));
+                    }
+                }
+            }
+            LoginFormAction::Cancel => {
+                self.status = Some("Account panel closed".to_string());
+            }
+            LoginFormAction::None => {}
+        }
+        None
     }
 
     fn show_session_selector(&mut self) {
@@ -1651,7 +1820,7 @@ impl StartupPage {
             .map(|id| ThemeItem { id })
             .collect();
 
-        themes.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
+        themes.sort_by_cached_key(|theme| theme.id.to_ascii_lowercase());
         themes.dedup_by(|a, b| a.id == b.id);
         themes
     }
@@ -2025,7 +2194,6 @@ impl StartupPage {
             description: info.description,
             source,
             enabled: info.effective_enabled,
-            default_enabled: info.default_enabled,
         }
     }
 
@@ -2053,6 +2221,8 @@ impl StartupPage {
             self.provider_selector.hide();
         } else if self.model_config_form.is_visible() {
             self.model_config_form.hide();
+        } else if self.login_form.is_visible() {
+            self.login_form.hide();
         }
 
         // If there's a previous popup in the stack, re-show it
@@ -2067,6 +2237,7 @@ impl StartupPage {
                 PopupType::ThemeSelector => self.theme_selector.reshow(),
                 PopupType::ProviderSelector => self.provider_selector.reshow(),
                 PopupType::ModelConfigForm => self.model_config_form.reshow(),
+                PopupType::LoginForm => self.login_form.show(),
             }
         }
     }
@@ -2083,6 +2254,7 @@ impl StartupPage {
         self.cancel_theme_preview();
         self.provider_selector.hide();
         self.model_config_form.hide();
+        self.login_form.hide();
         self.popup_stack.clear();
     }
 
@@ -2188,5 +2360,75 @@ impl StartupPage {
             self.text_input.cursor,
             STARTUP_COMMAND_SPECS,
         );
+    }
+}
+
+#[cfg(test)]
+mod logo_contract_tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn fancy_logo_keeps_line_order_and_color_style_mapping() {
+        let expected = [
+            "  ██████╗ ██╗████████╗███████╗██╗   ██╗███╗   ██╗",
+            "  ██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║████╗  ██║",
+            "  ██████╔╝██║   ██║   █████╗  ██║   ██║██╔██╗ ██║",
+            "  ██╔══██╗██║   ██║   ██╔══╝  ██║   ██║██║╚██╗██║",
+            "  ██████╔╝██║   ██║   ██║     ╚██████╔╝██║ ╚████║",
+            "  ╚═════╝ ╚═╝   ╚═╝   ╚═╝      ╚═════╝ ╚═╝  ╚═══╝",
+        ];
+        let colors = [
+            Color::Red,
+            Color::Green,
+            Color::Blue,
+            Color::Yellow,
+            Color::Magenta,
+            Color::Cyan,
+        ];
+        let mut rendered = Vec::new();
+
+        append_styled_logo_lines(&mut rendered, &FANCY_LOGO, &colors);
+
+        assert_logo_contract(&rendered, &expected, &colors);
+    }
+
+    #[test]
+    fn compact_logo_keeps_line_order_and_color_style_mapping() {
+        let expected = [
+            "  ____  _ _   _____            ",
+            " | __ )(_) |_|  ___|   _ _ __  ",
+            " |  _ \\| | __| |_ | | | | '_ \\ ",
+            " | |_) | | |_|  _|| |_| | | | |",
+            " |____/|_|\\__|_|   \\__,_|_| |_|",
+        ];
+        let colors = [
+            Color::Red,
+            Color::Green,
+            Color::Blue,
+            Color::Yellow,
+            Color::Magenta,
+        ];
+        let mut rendered = Vec::new();
+
+        append_styled_logo_lines(&mut rendered, &COMPACT_LOGO, &colors);
+
+        assert_logo_contract(&rendered, &expected, &colors);
+    }
+
+    fn assert_logo_contract(lines: &[Line<'_>], expected: &[&str], colors: &[Color]) {
+        assert_eq!(lines.len(), expected.len());
+        for (index, ((line, expected_text), expected_color)) in
+            lines.iter().zip(expected).zip(colors).enumerate()
+        {
+            assert_eq!(line.spans.len(), 1, "logo line {index} span count");
+            let span = &line.spans[0];
+            assert_eq!(span.content.as_ref(), *expected_text, "logo line {index}");
+            assert_eq!(span.style.fg, Some(*expected_color), "logo line {index}");
+            assert!(
+                span.style.add_modifier.contains(Modifier::BOLD),
+                "logo line {index} must stay bold"
+            );
+        }
     }
 }

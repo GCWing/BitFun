@@ -8,8 +8,6 @@ use bitfun_agent_runtime::agents::{
     ResolvedSubagentAvailability, SubagentOverrideLayers as ResolvedOverrideLayers,
     SubagentOverrideState,
 };
-use std::collections::HashMap;
-
 fn to_runtime_override_state(state: AgentSubagentOverrideState) -> SubagentOverrideState {
     match state {
         AgentSubagentOverrideState::Enabled => SubagentOverrideState::Enabled,
@@ -17,14 +15,14 @@ fn to_runtime_override_state(state: AgentSubagentOverrideState) -> SubagentOverr
     }
 }
 
-pub fn normalize_parent_agent_id(parent_agent_type: Option<&str>) -> Option<String> {
+fn normalize_parent_agent_id(parent_agent_type: Option<&str>) -> Option<String> {
     parent_agent_type
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(|value| resolve_mode_config_profile_id(value).into_owned())
 }
 
-pub fn override_for_parent<'a>(
+fn override_for_parent<'a>(
     overrides: &'a AgentSubagentOverrideConfig,
     parent_agent_type: Option<&str>,
 ) -> Option<&'a ParentSubagentOverrideConfig> {
@@ -32,7 +30,7 @@ pub fn override_for_parent<'a>(
     overrides.get(&parent_agent_type)
 }
 
-pub fn subagent_override_for_parent(
+fn subagent_override_for_parent(
     overrides: &AgentSubagentOverrideConfig,
     parent_agent_type: Option<&str>,
     subagent_key: &str,
@@ -41,7 +39,7 @@ pub fn subagent_override_for_parent(
         .and_then(|parent| parent.get(subagent_key).copied())
 }
 
-pub fn resolve_default_enabled(entry: &AgentEntry, parent_agent_type: Option<&str>) -> bool {
+pub(super) fn resolve_default_enabled(entry: &AgentEntry, parent_agent_type: Option<&str>) -> bool {
     resolve_subagent_default_enabled(
         subagent_source_kind(entry.subagent_source),
         &entry.visibility_policy,
@@ -49,7 +47,7 @@ pub fn resolve_default_enabled(entry: &AgentEntry, parent_agent_type: Option<&st
     )
 }
 
-pub fn resolve_override_layers(
+fn resolve_override_layers(
     entry: &AgentEntry,
     parent_agent_type: Option<&str>,
     project_overrides: Option<&AgentSubagentOverrideConfig>,
@@ -81,7 +79,7 @@ pub fn resolve_override_layers(
     }
 }
 
-pub fn resolve_availability(
+pub(super) fn resolve_availability(
     entry: &AgentEntry,
     parent_agent_type: Option<&str>,
     project_overrides: Option<&AgentSubagentOverrideConfig>,
@@ -97,7 +95,7 @@ pub fn resolve_availability(
     )
 }
 
-pub fn prune_override_config(
+pub(super) fn prune_override_config(
     overrides: &mut AgentSubagentOverrideConfig,
     parent_agent_type: &str,
     subagent_key: &str,
@@ -111,7 +109,7 @@ pub fn prune_override_config(
     }
 }
 
-pub fn set_override_state(
+pub(super) fn set_override_state(
     overrides: &mut AgentSubagentOverrideConfig,
     parent_agent_type: &str,
     subagent_key: &str,
@@ -120,7 +118,7 @@ pub fn set_override_state(
     let profile_id = resolve_mode_config_profile_id(parent_agent_type).into_owned();
     overrides
         .entry(profile_id)
-        .or_insert_with(HashMap::new)
+        .or_default()
         .insert(subagent_key.to_string(), state);
 }
 
@@ -131,6 +129,7 @@ mod tests {
     use crate::agentic::agents::registry::types::{AgentCategory, AgentSource};
     use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
     use crate::service::config::types::AgentSubagentOverrideState;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     fn make_entry(source: SubAgentSource, id: &str) -> AgentEntry {

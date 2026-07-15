@@ -1,7 +1,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
+use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
 use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -50,7 +50,7 @@ Usage guidelines:
    - Be careful with recursive deletion as it will remove all contents
 
 3. **Path Requirements**:
-   - You can use either relative paths (e.g., "temp/data.txt"), absolute paths inside the current workspace, or exact `bitfun://runtime/...` URIs returned by another tool
+   - You can use either relative paths (e.g., "temp/data.txt"), absolute paths inside the current workspace, or exact `bitfun://...` URIs returned by another tool
    - Relative paths will be automatically resolved relative to the workspace directory
    - The path must exist in the filesystem
 
@@ -96,7 +96,7 @@ Important notes:
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "The file or directory to delete. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
+                    "description": "The file or directory to delete. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI returned by another tool."
                 },
                 "recursive": {
                     "type": "boolean",
@@ -156,11 +156,11 @@ Important notes:
                 };
             }
             None => {
-                if is_bitfun_runtime_uri(path_str) {
+                if is_bitfun_tool_uri(path_str) {
                     return ValidationResult {
                         result: false,
                         message: Some(
-                            "Tool context is required to resolve bitfun runtime URIs".to_string(),
+                            "Tool context is required to resolve BitFun URIs".to_string(),
                         ),
                         error_code: Some(400),
                         meta: None,

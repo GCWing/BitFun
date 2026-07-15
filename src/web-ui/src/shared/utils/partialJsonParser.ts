@@ -59,6 +59,34 @@ export function getFirstAvailableField<T = any>(
   return defaultValue;
 }
 
+export interface FilePathAndContentParts {
+  filePath: string;
+  content: string;
+}
+
+export function splitFilePathAndContent(value: unknown): FilePathAndContentParts | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const separatorIndex = value.indexOf('\n');
+  const firstLine = separatorIndex < 0 ? value : value.slice(0, separatorIndex);
+  const normalizedFirstLine = firstLine.endsWith('\r') ? firstLine.slice(0, -1) : firstLine;
+  if (!normalizedFirstLine.startsWith('+++ ')) {
+    return null;
+  }
+
+  const filePath = normalizedFirstLine.slice(4);
+  if (!filePath.trim()) {
+    return null;
+  }
+
+  return {
+    filePath,
+    content: separatorIndex < 0 ? '' : value.slice(separatorIndex + 1),
+  };
+}
+
 const DEFAULT_FILE_PATH_FIELD_NAMES = [
   'file_path',
   'filePath',
@@ -105,14 +133,25 @@ function extractQuotedFieldFromRegion(
 /**
  * Best-effort file_path extraction from a streaming Write tool JSON buffer.
  *
- * Scans only the prefix before `"content":` so we do not false-match paths
- * embedded inside the file body string when content is streamed first.
+ * For the current Write payload, parse the path-first `payload` value before
+ * falling back to legacy fields. The fallback scans only the prefix before
+ * `"content":` so we do not false-match paths embedded in a streamed body.
  */
 export function extractFilePathFromJsonBuffer(
   jsonStr: unknown,
   fieldNames: readonly string[] = DEFAULT_FILE_PATH_FIELD_NAMES,
 ): string {
   if (typeof jsonStr !== 'string' || jsonStr.trim() === '') {
+    return '';
+  }
+
+  const parsed = parsePartialJson(jsonStr);
+  const combined = parsed.payload;
+  if (typeof combined === 'string') {
+    const parts = splitFilePathAndContent(combined);
+    if (parts) {
+      return parts.filePath;
+    }
     return '';
   }
 

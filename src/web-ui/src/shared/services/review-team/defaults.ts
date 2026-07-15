@@ -12,8 +12,6 @@ export const DEFAULT_REVIEW_TEAM_ID = 'default-review-team';
 export const DEFAULT_REVIEW_TEAM_CONFIG_PATH = 'ai.review_teams.default';
 export const DEFAULT_REVIEW_TEAM_RATE_LIMIT_STATUS_CONFIG_PATH =
   'ai.review_team_rate_limit_status';
-export const DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH =
-  'ai.review_team_project_strategy_overrides';
 export const DEFAULT_REVIEW_TEAM_MODEL = 'fast';
 export const DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL = 'normal' as const;
 export const DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL = 'inherit' as const;
@@ -90,16 +88,6 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
   normal: 300,
   deep: 600,
 };
-export const TOKEN_BUDGET_PROMPT_BYTE_LIMIT_BY_MODE: Record<ReviewTokenBudgetMode, number> = {
-  economy: 64_000,
-  balanced: 96_000,
-  thorough: 192_000,
-};
-export const PROMPT_BYTE_ESTIMATE_BASE_BYTES = 12_000;
-export const PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES = 1_800;
-export const PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES = 120;
-export const PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE = 80;
-
 export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
@@ -120,24 +108,6 @@ export const REVIEW_WORK_PACKET_ALLOWED_TOOLS = [
   'Grep',
   'Glob',
   'LS',
-  'Git',
-] as const;
-
-export const REVIEWER_WORK_PACKET_REQUIRED_OUTPUT_FIELDS = [
-  'packet_id',
-  'status',
-  'verdict',
-  'findings',
-  'reviewer_summary',
-] as const;
-
-export const JUDGE_WORK_PACKET_REQUIRED_OUTPUT_FIELDS = [
-  'packet_id',
-  'status',
-  'decision_summary',
-  'validated_findings',
-  'rejected_or_downgraded_notes',
-  'coverage_notes',
 ] as const;
 
 export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
@@ -242,7 +212,7 @@ export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
   name: 'Strict Review Coverage',
   description:
-    'A multi-reviewer coverage plan for strict code review with mandatory logic, performance, security, architecture, conditional frontend, and quality-gate roles.',
+    'A strict code-review policy where the primary reviewer works directly and may request one focused specialist or a conditional quality check.',
   warning:
     'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,

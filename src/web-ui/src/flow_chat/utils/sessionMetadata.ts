@@ -364,6 +364,7 @@ export function buildSessionMetadata(
     | 'hasUnreadCompletion'
     | 'needsUserAttention'
     | 'deepReviewRunManifest'
+    | 'reviewTargetEvidence'
   >,
   existingMetadata?: SessionMetadata | null
 ): SessionMetadata {
@@ -432,5 +433,7 @@ export function buildSessionMetadata(
     needsUserAttention: session.needsUserAttention,
     deepReviewRunManifest:
       session.deepReviewRunManifest ?? existingMetadata?.deepReviewRunManifest,
+    reviewTargetEvidence:
+      session.reviewTargetEvidence ?? existingMetadata?.reviewTargetEvidence,
   };
 }

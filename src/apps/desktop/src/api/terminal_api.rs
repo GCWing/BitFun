@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use bitfun_core::service::runtime::RuntimeManager;
 use bitfun_core::service::terminal::TerminalEvent;
@@ -46,6 +47,19 @@ impl TerminalState {
             // Set scripts directory to app data dir: {config_dir}/bitfun/temp/scripts
             let scripts_dir = Self::get_scripts_dir();
             config.shell_integration.scripts_dir = Some(scripts_dir);
+
+            match try_get_path_manager_arc() {
+                Ok(path_manager) => {
+                    config.transcript.root_dir =
+                        Some(path_manager.user_data_dir().join("terminals"));
+                }
+                Err(error) => {
+                    warn!(
+                        "Failed to configure terminal transcript storage; recording is disabled: {}",
+                        error
+                    );
+                }
+            }
 
             // Prepend BitFun-managed runtime dirs to PATH so Bash/Skill commands can
             // run on machines without preinstalled dev tools.
@@ -92,6 +106,7 @@ pub struct CreateSessionRequest {
     pub session_id: Option<String>,
     pub name: Option<String>,
     pub shell_type: Option<String>,
+    pub shell_id: Option<String>,
     pub working_directory: Option<String>,
     pub env: Option<std::collections::HashMap<String, String>>,
     pub cols: Option<u16>,
@@ -427,6 +442,7 @@ pub async fn terminal_create(
         session_id: request.session_id,
         name: request.name,
         shell_type: parsed_shell_type,
+        shell_id: request.shell_id,
         working_directory: request.working_directory,
         env: request.env,
         cols: request.cols,
@@ -843,6 +859,9 @@ pub fn start_terminal_event_loop(terminal_state: TerminalState, app_handle: AppH
             let event_name = "terminal_event";
             if let Err(e) = app_handle.emit(event_name, &event) {
                 warn!("Failed to emit terminal event: {}", e);
+            }
+            if let Ok(payload) = serde_json::to_value(&event) {
+                crate::api::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
             }
         }
     });

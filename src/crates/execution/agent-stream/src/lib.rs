@@ -468,6 +468,16 @@ pub struct StreamProcessor {
     event_sink: Arc<dyn StreamEventSink>,
 }
 
+struct GracefulShutdownInput {
+    session_id: String,
+    turn_id: String,
+    round_id: String,
+    attempt_id: String,
+    attempt_index: u32,
+    tool_calls: Vec<ToolCall>,
+    reason: String,
+}
+
 impl StreamProcessor {
     const WATCHDOG_GRACE_SECS: u64 = 2;
 
@@ -553,29 +563,29 @@ impl StreamProcessor {
     /// Execute graceful shutdown from context
     async fn graceful_shutdown_from_ctx(&self, ctx: &mut StreamContext, reason: String) {
         ctx.force_finish_pending_tool_calls();
-        self.graceful_shutdown(
-            ctx.session_id.clone(),
-            ctx.dialog_turn_id.clone(),
-            ctx.round_id.clone(),
-            ctx.attempt_id.clone(),
-            ctx.attempt_index,
-            ctx.tool_calls.clone(),
+        self.graceful_shutdown(GracefulShutdownInput {
+            session_id: ctx.session_id.clone(),
+            turn_id: ctx.dialog_turn_id.clone(),
+            round_id: ctx.round_id.clone(),
+            attempt_id: ctx.attempt_id.clone(),
+            attempt_index: ctx.attempt_index,
+            tool_calls: ctx.tool_calls.clone(),
             reason,
-        )
+        })
         .await;
     }
 
     /// Graceful shutdown: cleanup all unfinished tool states and notify frontend
-    async fn graceful_shutdown(
-        &self,
-        session_id: String,
-        turn_id: String,
-        round_id: String,
-        attempt_id: String,
-        attempt_index: u32,
-        tool_calls: Vec<ToolCall>,
-        reason: String,
-    ) {
+    async fn graceful_shutdown(&self, input: GracefulShutdownInput) {
+        let GracefulShutdownInput {
+            session_id,
+            turn_id,
+            round_id,
+            attempt_id,
+            attempt_index,
+            tool_calls,
+            reason,
+        } = input;
         debug!(
             "Starting graceful shutdown: session_id={}, reason={}",
             session_id, reason
@@ -1162,11 +1172,11 @@ impl StreamProcessor {
 #[cfg(test)]
 mod tests {
     use super::{
-        HiddenTextTag, SseLogCollector, SseLogConfig, StreamEventSink, StreamProcessOptions,
-        StreamProcessor,
+        GracefulShutdownInput, HiddenTextTag, SseLogCollector, SseLogConfig, StreamEventSink,
+        StreamProcessOptions, StreamProcessor, ToolCall,
     };
     use super::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
-    use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority};
+    use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
     use futures::StreamExt;
     use serde_json::json;
     use std::sync::Arc;
@@ -1195,6 +1205,46 @@ mod tests {
 
     fn build_processor() -> StreamProcessor {
         StreamProcessor::new(Arc::new(NoopEventSink))
+    }
+
+    #[tokio::test]
+    async fn graceful_shutdown_emits_tool_cleanup_before_turn_cancellation() {
+        let sink = Arc::new(RecordingEventSink::default());
+        let processor = StreamProcessor::new(sink.clone());
+
+        processor
+            .graceful_shutdown(GracefulShutdownInput {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                round_id: "round_1".to_string(),
+                attempt_id: "attempt_1".to_string(),
+                attempt_index: 1,
+                tool_calls: vec![ToolCall {
+                    tool_id: "tool_1".to_string(),
+                    tool_name: "Read".to_string(),
+                    arguments: json!({}),
+                    raw_arguments: None,
+                    is_error: false,
+                    recovered_from_truncation: false,
+                }],
+                reason: "User cancelled stream processing".to_string(),
+            })
+            .await;
+
+        let events = sink.events.lock().await;
+        assert_eq!(events.len(), 2);
+        assert!(matches!(
+            &events[0],
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::Cancelled { tool_id, .. },
+                ..
+            } if tool_id == "tool_1"
+        ));
+        assert!(matches!(
+            &events[1],
+            AgenticEvent::DialogTurnCancelled { session_id, turn_id }
+                if session_id == "session_1" && turn_id == "turn_1"
+        ));
     }
 
     #[test]

@@ -32,7 +32,7 @@ pub(crate) struct BridgeError {
     pub(crate) stack: Option<String>,
 }
 
-pub fn register_listener(app: AppHandle, state: Arc<AppState>) {
+pub(crate) fn register_listener(app: AppHandle, state: Arc<AppState>) {
     let _ = BRIDGE_STATE.set(state.clone());
     app.listen_any(BRIDGE_EVENT, move |event| {
         let Ok(payload) = serde_json::from_str::<BridgeResponse>(event.payload()) else {
@@ -47,7 +47,7 @@ pub fn register_listener(app: AppHandle, state: Arc<AppState>) {
     });
 }
 
-pub fn handle_invoke_payload(payload: Value) -> Result<(), String> {
+pub(crate) fn handle_invoke_payload(payload: Value) -> Result<(), String> {
     let state = BRIDGE_STATE
         .get()
         .ok_or_else(|| "Embedded WebDriver bridge state is not initialized".to_string())?;
@@ -74,7 +74,7 @@ fn dispatch_bridge_response(state: &Arc<AppState>, payload: BridgeResponse) {
     }
 }
 
-pub async fn run_script(
+pub(crate) async fn run_script(
     state: Arc<AppState>,
     session_id: &str,
     script_source: &str,

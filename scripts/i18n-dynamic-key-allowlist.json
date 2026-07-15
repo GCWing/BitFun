@@ -125,16 +125,12 @@
       "surface": "web-ui",
       "namespace": "flow-chat",
       "owner": "src/web-ui/src/flow_chat/utils/deepReviewExperience.ts",
-      "description": "Deep Review degradation descriptors store labelKey and descriptionKey metadata resolved with the flow-chat namespace.",
+      "description": "Deep Review partial-result recovery stores labelKey and descriptionKey metadata resolved with the flow-chat namespace.",
       "sourceReferences": [
-        "labelKey: 'deepReviewActionBar.degradation.reduceReviewers'",
-        "descriptionKey: 'deepReviewActionBar.degradation.reduceReviewersDesc'"
+        "labelKey: 'deepReviewActionBar.degradation.viewPartial'",
+        "descriptionKey: 'deepReviewActionBar.degradation.viewPartialDesc'"
       ],
       "keys": [
-        "deepReviewActionBar.degradation.reduceReviewers",
-        "deepReviewActionBar.degradation.reduceReviewersDesc",
-        "deepReviewActionBar.degradation.compressContext",
-        "deepReviewActionBar.degradation.compressContextDesc",
         "deepReviewActionBar.degradation.viewPartial",
         "deepReviewActionBar.degradation.viewPartialDesc"
       ]

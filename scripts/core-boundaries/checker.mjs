@@ -30,6 +30,11 @@ import {
   requiredContentRules,
 } from './rules/source-rules.mjs';
 import { runManifestParserSelfTest } from './self-test.mjs';
+import {
+  featureReferencesDependency,
+  featureReferencesFeature,
+  unexpectedDependencyOwnerFeatures,
+} from './manifest-feature-helpers.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -523,20 +528,6 @@ function checkForbiddenManifestDependencyRule(rule) {
   }
 }
 
-function featureReferencesDependency(feature, depName) {
-  if (!feature) {
-    return false;
-  }
-  return feature.refs.includes(`dep:${depName}`) || feature.refs.includes(depName);
-}
-
-function featureReferencesFeature(feature, featureName) {
-  if (!feature) {
-    return false;
-  }
-  return feature.refs.includes(featureName);
-}
-
 function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const manifestPath = join(crateDir, 'Cargo.toml');
   const lines = readText(manifestPath).split(/\r?\n/);
@@ -579,6 +570,13 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
           message: `${rule.reason}; ${featureName} must explicitly enable ${dependency.depName}`,
         });
       }
+    }
+    for (const [featureName, feature] of unexpectedDependencyOwnerFeatures(features, dependency)) {
+      failures.push({
+        path: manifestPath,
+        line: feature.line,
+        message: `${rule.reason}; ${featureName} enables ${dependency.depName} but is missing from its owner feature coverage`,
+      });
     }
   }
 

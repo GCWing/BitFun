@@ -5,6 +5,7 @@ use crate::agentic::tools::implementations::ExecCommandTool;
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
+use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::{get_app_language_code, get_global_config_service};
@@ -33,6 +34,7 @@ const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
 const PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK: &str = "{DEEP_RESEARCH_REPORT_LINK}";
 const PLACEHOLDER_MEMORY_ROOT: &str = "{MEMORY_ROOT}";
+const PLACEHOLDER_READ_TERMINAL: &str = "{READ_TERMINAL}";
 
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
@@ -52,6 +54,8 @@ pub struct PromptBuilderContext {
     pub runtime_context_needs: RuntimeContextNeeds,
     /// Remote mobile/bot turns need `computer://` links for file delivery.
     pub remote_file_delivery_channel: bool,
+    /// The active response surface can render Markdown image syntax inline.
+    pub inline_markdown_image_display: bool,
 }
 
 impl PromptBuilderContext {
@@ -71,6 +75,7 @@ impl PromptBuilderContext {
             tool_listing_sections: ToolListingSections::default(),
             runtime_context_needs: RuntimeContextNeeds::default(),
             remote_file_delivery_channel: false,
+            inline_markdown_image_display: false,
         }
     }
 
@@ -106,6 +111,11 @@ impl PromptBuilderContext {
 
     pub fn with_remote_file_delivery_channel(mut self, enabled: bool) -> Self {
         self.remote_file_delivery_channel = enabled;
+        self
+    }
+
+    pub fn with_inline_markdown_image_display(mut self, enabled: bool) -> Self {
+        self.inline_markdown_image_display = enabled;
         self
     }
 }
@@ -242,6 +252,7 @@ impl PromptBuilder {
             remote_execution: self.context.remote_execution.clone(),
             local_shell,
             supports_image_understanding: self.context.supports_image_understanding,
+            inline_markdown_image_display: self.context.inline_markdown_image_display,
         })
     }
 
@@ -414,6 +425,42 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
         }
     }
 
+    fn build_terminal_transcript_prompt_guidance(&self) -> String {
+        if self.context.remote_execution.is_some() {
+            return String::new();
+        }
+
+        match try_get_path_manager_arc() {
+            Ok(path_manager) => {
+                let agents_path = path_manager
+                    .user_data_dir()
+                    .join("terminals")
+                    .join("AGENTS.md");
+                format!(
+                    "## User terminal history
+
+The user's terminal history may contain execution evidence that is missing from the conversation. Consult it when that evidence could materially affect the task, especially when:
+
+- The user refers to a command, terminal operation, or result they previously ran or observed.
+- The user reports a command-line, build, test, script, or process problem without providing the exact command or enough output to diagnose it.
+
+Use the terminal history to recover relevant evidence before guessing or asking the user to repeat information that may already be recorded. Do not inspect it routinely when the request is unrelated to terminal activity or the conversation already contains sufficient command and output context.
+
+For instructions on locating and reading the transcripts, read: `{}`
+",
+                    agents_path.to_string_lossy().replace('\\', "/"),
+                )
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to build terminal transcript prompt guidance; omitting it: {}",
+                    error
+                );
+                String::new()
+            }
+        }
+    }
+
     /// Get user language preference instruction
     ///
     /// Read app.language from global config, generate simple language instruction
@@ -454,6 +501,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
     /// - `{MEMORY_ROOT}` - BitFun memory workspace root, used by internal memory agents
+    /// - `{READ_TERMINAL}` - Local user terminal transcript guidance
     ///
     /// If a placeholder is not in the template, corresponding content will not be added
     pub async fn build_prompt_from_template(&self, template: &str) -> BitFunResult<String> {
@@ -497,6 +545,11 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if result.contains(PLACEHOLDER_VISUAL_MODE) {
             let visual_mode = self.get_visual_mode_instruction().await;
             result = result.replace(PLACEHOLDER_VISUAL_MODE, &visual_mode);
+        }
+
+        if result.contains(PLACEHOLDER_READ_TERMINAL) {
+            let read_terminal = self.build_terminal_transcript_prompt_guidance();
+            result = result.replace(PLACEHOLDER_READ_TERMINAL, &read_terminal);
         }
 
         // Replace {SESSION_ID} — used by deep-research Pro mode to anchor a per-session
@@ -801,6 +854,62 @@ mod tests {
         assert!(runtime_context.contains("## ExecCommand Shell"));
         assert!(!runtime_context.contains("## Local Client"));
         assert!(!runtime_context.contains("Local BitFun client OS:"));
+    }
+
+    #[tokio::test]
+    async fn local_terminal_transcript_placeholder_includes_the_agents_path() {
+        let context = PromptBuilderContext::new("workspace/root", None, None);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("{READ_TERMINAL}")
+            .await
+            .expect("prompt should build");
+        let expected_path = crate::infrastructure::try_get_path_manager_arc()
+            .expect("path manager should initialize")
+            .user_data_dir()
+            .join("terminals")
+            .join("AGENTS.md")
+            .to_string_lossy()
+            .replace('\\', "/");
+
+        assert!(prompt.contains(&expected_path));
+        assert!(prompt.contains(
+            "The user refers to a command, terminal operation, or result they previously ran or observed."
+        ));
+        assert!(prompt
+            .contains("The user reports a command-line, build, test, script, or process problem"));
+        assert!(prompt.contains("Do not inspect it routinely"));
+    }
+
+    #[tokio::test]
+    async fn remote_terminal_transcript_placeholder_is_omitted() {
+        let context = PromptBuilderContext::new("/workspace/project", None, None)
+            .with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name: "dev-server".to_string(),
+                    kernel_name: "Linux".to_string(),
+                    hostname: "devbox".to_string(),
+                },
+                None,
+            );
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("before\n{READ_TERMINAL}\nafter")
+            .await
+            .expect("prompt should build");
+
+        assert!(!prompt.contains("User terminal transcript"));
+        assert!(!prompt.contains("{READ_TERMINAL}"));
+        assert_eq!(prompt, "before\n\nafter");
+    }
+
+    #[tokio::test]
+    async fn template_without_terminal_transcript_placeholder_is_unchanged() {
+        let context = PromptBuilderContext::new("workspace/root", None, None);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("plain template")
+            .await
+            .expect("prompt should build");
+
+        assert_eq!(prompt, "plain template");
     }
 
     #[tokio::test]

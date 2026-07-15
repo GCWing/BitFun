@@ -6,6 +6,7 @@
 
 use crate::bootstrap::ServerAppState;
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use bitfun_core::agentic::agents::SubAgentSource;
 use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
 use bitfun_core::agentic::core::SessionConfig;
@@ -95,12 +96,20 @@ pub async fn dispatch(
         "read_file_content" => {
             let request = extract_request(&params)?;
             let file_path = get_string(&request, "filePath")?;
+            let encoding = request.get("encoding").and_then(|value| value.as_str());
             let result = state
                 .filesystem_service
                 .read_file(&file_path)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
-            Ok(serde_json::json!(result.content))
+            let content = if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64"))
+                && !result.encoding.eq_ignore_ascii_case("base64")
+            {
+                BASE64.encode(result.content.as_bytes())
+            } else {
+                result.content
+            };
+            Ok(serde_json::json!(content))
         }
         "write_file_content" => {
             let request = extract_request(&params)?;

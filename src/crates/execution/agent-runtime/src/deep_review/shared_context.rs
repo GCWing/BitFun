@@ -66,13 +66,12 @@ pub(crate) fn shared_context_measurement_snapshot_from_uses(
         .sum();
     let mut repeated_contexts: Vec<DeepReviewSharedContextDuplicate> = uses
         .iter()
-        .filter_map(|(key, record)| {
-            (record.call_count > 1).then(|| DeepReviewSharedContextDuplicate {
-                tool_name: key.tool_name.clone(),
-                file_path: key.file_path.clone(),
-                call_count: record.call_count,
-                reviewer_count: record.reviewer_types.len(),
-            })
+        .filter(|(_, record)| record.call_count > 1)
+        .map(|(key, record)| DeepReviewSharedContextDuplicate {
+            tool_name: key.tool_name.clone(),
+            file_path: key.file_path.clone(),
+            call_count: record.call_count,
+            reviewer_count: record.reviewer_types.len(),
         })
         .collect();
     repeated_contexts.sort_by(|left, right| {

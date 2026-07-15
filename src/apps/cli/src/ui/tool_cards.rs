@@ -38,13 +38,25 @@ thread_local! {
 }
 
 #[derive(Clone)]
-pub struct ToolCardRenderOutput {
-    pub items: Vec<ListItem<'static>>,
-    pub plain_lines: Vec<String>,
+pub(super) struct ToolCardRenderOutput {
+    pub(super) items: Vec<ListItem<'static>>,
+    pub(super) plain_lines: Vec<String>,
+}
+
+struct BlockAssembly<'a> {
+    title: &'a str,
+    content_lines: Vec<Line<'static>>,
+    theme: &'a Theme,
+    is_running: bool,
+    error: Option<&'a str>,
+    focused: bool,
+    tool_state: &'a ToolDisplayState,
+    spinner_frame: &'a str,
+    available_width: u16,
 }
 
 /// Clear the tool card render cache (call on session switch or /clear)
-pub fn clear_tool_card_cache() {
+pub(super) fn clear_tool_card_cache() {
     TOOL_CARD_CACHE.with(|cache| cache.borrow_mut().clear());
 }
 
@@ -158,7 +170,7 @@ fn normalize_tool_name(name: &str) -> &str {
 /// - `focused`: whether this tool card is currently focused (for border highlight)
 /// - `spinner_frame`: current spinner animation frame (for running tools)
 /// - `available_width`: terminal width available for rendering (for split diff)
-pub fn render_tool_card(
+pub(super) fn render_tool_card(
     tool_state: &ToolDisplayState,
     theme: &Theme,
     expanded: bool,
@@ -1004,8 +1016,8 @@ fn render_hmos_compilation_block(
         None
     };
 
-    assemble_block(
-        &title,
+    assemble_block(BlockAssembly {
+        title: &title,
         content_lines,
         theme,
         is_running,
@@ -1014,7 +1026,7 @@ fn render_hmos_compilation_block(
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render a Bash tool as a block (command + output + expand/collapse)
@@ -1104,8 +1116,8 @@ fn render_bash_block(
         None
     };
 
-    assemble_block(
-        &title,
+    assemble_block(BlockAssembly {
+        title: &title,
         content_lines,
         theme,
         is_running,
@@ -1114,7 +1126,7 @@ fn render_bash_block(
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render an Edit tool as a block (file path + diff preview)
@@ -1167,7 +1179,7 @@ fn render_edit_block(
         let total_changes = additions + deletions;
         if total_changes > max && !expanded {
             content_lines.push(Line::from(Span::styled(
-                format!("\u{2026} (more changes, Ctrl+O to expand)"),
+                "\u{2026} (more changes, Ctrl+O to expand)".to_string(),
                 theme.style(StyleKind::Muted),
             )));
         } else if expanded && total_changes > 8 {
@@ -1197,17 +1209,17 @@ fn render_edit_block(
         None
     };
 
-    assemble_block(
-        &title,
+    assemble_block(BlockAssembly {
+        title: &title,
         content_lines,
         theme,
-        false,
+        is_running: false,
         error,
         focused,
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render a Write tool as a block (file path + syntax-highlighted content preview)
@@ -1219,19 +1231,43 @@ fn render_write_block(
     spinner_frame: &str,
     available_width: u16,
 ) -> ToolCardRenderOutput {
-    let file_path = param_str(
-        &tool_state.parameters,
-        &["file_path", "target_file", "path"],
-    );
+    let payload = tool_state
+        .parameters
+        .get("payload")
+        .and_then(|value| value.as_str());
+    let combined = payload.and_then(|value| {
+        let (first_line, content) = value.split_once('\n').unwrap_or((value, ""));
+        let first_line = first_line.strip_suffix('\r').unwrap_or(first_line);
+        let file_path = first_line.strip_prefix("+++ ")?;
+        (!file_path.trim().is_empty()).then_some((file_path, content))
+    });
+    let file_path = combined
+        .map(|(file_path, _)| file_path.to_string())
+        .unwrap_or_else(|| {
+            let legacy_path = param_str(
+                &tool_state.parameters,
+                &["file_path", "target_file", "path"],
+            );
+            if legacy_path.is_empty() && payload.is_some() {
+                "workspace temporary file".to_string()
+            } else {
+                legacy_path
+            }
+        });
 
     let mut content_lines = Vec::new();
 
     // Show content preview with syntax highlighting and line numbers
-    if let Some(content) = tool_state
-        .parameters
-        .get("contents")
-        .or_else(|| tool_state.parameters.get("content"))
-        .and_then(|v| v.as_str())
+    if let Some(content) = combined
+        .map(|(_, content)| content)
+        .or(payload.filter(|_| combined.is_none()))
+        .or_else(|| {
+            tool_state
+                .parameters
+                .get("contents")
+                .or_else(|| tool_state.parameters.get("content"))
+                .and_then(|value| value.as_str())
+        })
     {
         let total_lines = content.lines().count();
         let max = if expanded { usize::MAX } else { 8 };
@@ -1287,17 +1323,17 @@ fn render_write_block(
             None
         };
 
-        return assemble_block(
-            &title,
+        return assemble_block(BlockAssembly {
+            title: &title,
             content_lines,
             theme,
-            false,
+            is_running: false,
             error,
             focused,
             tool_state,
             spinner_frame,
             available_width,
-        );
+        });
     }
 
     // Fallback: no content available
@@ -1321,17 +1357,17 @@ fn render_write_block(
         None
     };
 
-    assemble_block(
-        &title,
+    assemble_block(BlockAssembly {
+        title: &title,
         content_lines,
         theme,
-        false,
+        is_running: false,
         error,
         focused,
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render a Delete tool as a block
@@ -1367,17 +1403,17 @@ fn render_delete_block(
         None
     };
 
-    assemble_block(
-        &title,
+    assemble_block(BlockAssembly {
+        title: &title,
         content_lines,
         theme,
-        false,
+        is_running: false,
         error,
         focused,
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render a Task tool as a block (sub-agent type + description + real-time progress)
@@ -1446,17 +1482,17 @@ fn render_task_block(
         }
     }
 
-    assemble_block(
-        &title,
+    assemble_block(BlockAssembly {
+        title: &title,
         content_lines,
         theme,
         is_running,
-        None,
+        error: None,
         focused,
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render a TodoWrite tool as a block (todo list with upgraded icons)
@@ -1522,17 +1558,17 @@ fn render_todo_block(
         )));
     }
 
-    assemble_block(
-        "Todos",
+    assemble_block(BlockAssembly {
+        title: "Todos",
         content_lines,
         theme,
-        false,
-        None,
+        is_running: false,
+        error: None,
         focused,
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render an AskUserQuestion tool as a block
@@ -1662,17 +1698,17 @@ fn render_question_block(
         }
     }
 
-    assemble_block(
-        "Questions",
+    assemble_block(BlockAssembly {
+        title: "Questions",
         content_lines,
         theme,
-        false,
-        None,
+        is_running: false,
+        error: None,
         focused,
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render a CreatePlan tool as a block
@@ -1722,17 +1758,17 @@ fn render_plan_block(
         )));
     }
 
-    assemble_block(
-        &title_text,
+    assemble_block(BlockAssembly {
+        title: &title_text,
         content_lines,
         theme,
-        false,
-        None,
+        is_running: false,
+        error: None,
         focused,
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 /// Render a generic block tool (fallback for unknown block tools)
@@ -1791,8 +1827,8 @@ fn render_generic_block(
         None
     };
 
-    assemble_block(
-        &title,
+    assemble_block(BlockAssembly {
+        title: &title,
         content_lines,
         theme,
         is_running,
@@ -1801,7 +1837,7 @@ fn render_generic_block(
         tool_state,
         spinner_frame,
         available_width,
-    )
+    })
 }
 
 // ============ Block Assembly ============
@@ -1818,17 +1854,18 @@ fn render_generic_block(
 ///   │    error message (if any)                     │
 ///   ╰──────────────────────────────────────────────╯
 /// ```
-fn assemble_block(
-    title: &str,
-    content_lines: Vec<Line<'static>>,
-    theme: &Theme,
-    is_running: bool,
-    error: Option<&str>,
-    focused: bool,
-    tool_state: &ToolDisplayState,
-    spinner_frame: &str,
-    available_width: u16,
-) -> ToolCardRenderOutput {
+fn assemble_block(assembly: BlockAssembly<'_>) -> ToolCardRenderOutput {
+    let BlockAssembly {
+        title,
+        content_lines,
+        theme,
+        is_running,
+        error,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    } = assembly;
     let mut items = Vec::new();
     let mut plain_lines = Vec::new();
 

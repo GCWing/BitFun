@@ -149,7 +149,16 @@ export class RemoteSessionManager {
   private async request<T>(cmd: object): Promise<T> {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const cmdWithId = { ...cmd, _request_id: requestId };
-    const resp = await this.client.sendCommand<T>(cmdWithId);
+    // When we have a delegated identity (desktop is logged into an account),
+    // route all commands through the relay HTTP RPC API directly to the
+    // paired desktop's device_id. This bypasses the room channel and allows
+    // the mobile to control any same-account device, not just the paired one.
+    let resp: T;
+    if (this.client.hasDelegatedIdentity && this.client.pairedDeviceId) {
+      resp = await this.client.sendDeviceRpc<T>(this.client.pairedDeviceId, cmdWithId);
+    } else {
+      resp = await this.client.sendCommand<T>(cmdWithId);
+    }
     const respAny = resp as any;
     if (respAny.resp === 'error') {
       throw new Error(respAny.message || 'Unknown error');

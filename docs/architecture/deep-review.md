@@ -2,28 +2,33 @@
 
 ## Scope
 
-DeepReview is the compatibility runtime for `Review: Strict`, the highest-strength mode of the unified Review experience. It remains implemented as a child-session workflow that runs a configurable read-only reviewer set against a review target, but it should not be presented as a second ordinary product entry next to Review.
+DeepReview is the compatibility runtime for `Review: Strict`, the highest-strength mode of the unified Review experience. It remains a read-only child session, but the child is now the primary strict reviewer rather than a dispatcher for a fixed reviewer committee. It should not be presented as a second ordinary product entry next to Review.
 
-Product-facing guardrails live in [review-verify-implementation-guardrails.md](../sdlc-harness/review-verify-implementation-guardrails.md):
+Product-facing guardrails are summarized here:
 
 - `Review` is the primary user-facing entry.
 - `/review` is the intended long-term command entry; `/DeepReview` is only a transitional typed compatibility command for historical strict-review launches.
 - `ReviewTeam` is an internal strict-review reviewer-set configuration, not a separate product concept users must learn.
-- PR Review consumes review/verify results and readiness projections; it must not own another reviewer executor.
+- PR Review consumes Review results and future readiness projections; it must not own another reviewer executor.
 
-The current implementation has three layers:
+The current implementation has four layers:
 
 - Frontend launch and UI orchestration in `src/web-ui`.
 - Platform adapter commands in `src/apps/desktop/src/api/agentic_api.rs`.
-- Platform-agnostic runtime policy, task admission, queue state, retry metadata, and report enrichment in `src/crates/assembly/core/src/agentic`.
+- Provider-neutral policy, admission, queue, retry, diagnostics, and report transforms in `src/crates/execution/agent-runtime/src/deep_review`.
+- Agent definitions, tool integration, event emission, diagnostics logging, and session-metadata IO in `src/crates/assembly/core/src/agentic`.
 
-The backend does not choose the review target or build the launch manifest. The frontend builds the effective `ReviewTeamRunManifest`, persists it on the DeepReview child session, and sends it with the first user message. The manifest, session kind, agent type, storage keys, and queue event names stay compatible with historical DeepReview sessions.
+The launch adapter is currently desktop-only. Browser/server surfaces hide every Review launch action, including fix follow-up retry, and reject typed Review commands with a clear unsupported-state message until the server owns the same session, Git-target, and policy command contracts; existing review attempts remain viewable. Adding only one RPC method to the current ping-only server would not make the workflow functional. The Review settings route remains visible for navigation compatibility on those surfaces, but renders a read-only desktop-only state and never loads or saves desktop capacity settings.
+
+Review strength follows explicit intent instead of a target-size or risk-score threshold table. Ordinary `Review` always launches one read-only `CodeReview` child. Only an explicit strict intent—initial `/review strict`, the historical `/DeepReview` alias, or a strict fix follow-up—builds a `ReviewTeamRunManifest` and enters the DeepReview runtime. L0 completion checks and Verify evidence remain outside this production contract until the separate Verify exploration defines a trustworthy evidence source.
+
+The backend does not resolve the review target or build the launch manifest. The frontend resolves and validates bounded target evidence before either launch path. Strict Review builds one deep L3 manifest and reuses it unchanged for consent and execution. The manifest, session kind, agent type, storage keys, and queue event names stay compatible with historical DeepReview sessions.
 
 ## Runtime Roles
 
-`src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs` defines the writable `DeepReview` orchestrator. It can call `Task`, read/search/git tools, `submit_code_review`, `AskUserQuestion`, and write/edit/bash tools for user-approved remediation.
+`CodeReview` and `DeepReview` are read-only adversarial review identities. `CodeReview` handles ordinary Review as one isolated child and cannot silently expand into multiple reviewers. `DeepReview` is reserved for an explicit strict request, reviews the prepared target directly, may ask one manifest-approved specialist for a focused second perspective, and submits the report; it has no edit, command, Git-mutation, or remediation tools.
 
-`src/crates/assembly/core/src/agentic/agents/review_specialist_agents.rs` defines read-only reviewer agents:
+`src/crates/assembly/core/src/agentic/agents/definitions/review/review_specialists.rs` defines read-only reviewer agents:
 
 - `ReviewBusinessLogic`
 - `ReviewPerformance`
@@ -32,21 +37,23 @@ The backend does not choose the review target or build the launch manifest. The 
 - `ReviewFrontend`
 - `ReviewJudge`
 
-The reviewer agents use instruction-only context and read/search/git/diff tools. `ReviewFrontend` is a conditional role. `ReviewJudge` validates reviewer evidence and consistency instead of performing a full independent review pass.
+These agents form an optional specialist pool, not mandatory coverage lanes. A new strict run may launch at most one specialist for a concrete uncertainty. The existing generic Git exposure remains for legacy compatibility, but it is not authorized as prepared changed-code evidence. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is a conditional quality check used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a full independent review pass.
 
-`ReviewFixer` exists as a separate remediation agent, but DeepReview runtime policy rejects it during review execution. Remediation is launched later only from the frontend action surface after user approval.
+`ReviewFixer` is the separate writable remediation identity. DeepReview runtime policy rejects it during review execution. The frontend action surface invokes it only after user approval, and a new read-only Review run checks the fix when requested.
 
 ## Launch Flow
 
-Strict Review can currently be launched from session-file review controls or the canonical typed `/review strict` command. Historical `/DeepReview` and `/deepreview` inputs remain compatibility aliases that route into the same strict Review path, but new product entry points should route through unified Review and `/review`, then select strict review only when task scope, difficulty, risk, explicit quality intent, and budget justify L3.
+Review can be launched from session-file controls or `/review`. Session-file controls and ordinary `/review` launch one standard read-only reviewer regardless of target size or heuristic risk tags. `/review strict` explicitly requests the deep L3 path. Historical `/DeepReview` and `/deepreview` inputs remain compatibility aliases, and a fix follow-up from an existing strict review preserves that explicit strict intent.
 
 Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 
 - `commandParser.ts` identifies canonical `/review strict` commands, transitional `/DeepReview` compatibility aliases, and optional file or git targets.
-- `targetResolver.ts` resolves slash-command targets from git status, changed files, and diffs when a workspace is available.
+- `targetResolver.ts` resolves slash-command target file lists, immutable base/head revisions, change statistics, and target evidence from git status, explicit ranges, and diffs when a workspace is available. Explicit file and directory targets remain exact instead of widening to the whole worktree. File-scoped evidence reads untracked content through the registered, remote-aware workspace API.
 - `launchPrompt.ts` formats the user-facing launch prompt.
-- `DeepReviewService.ts` builds the review-team manifest, creates a child session, sends the launch prompt, and inserts the parent-session summary marker. Launch does not automatically open the auxiliary pane; the summary-card detail action is the normal user-facing way to inspect the background review run.
+- `DeepReviewService.ts` builds the review-team manifest, creates a child session, sends the launch prompt, and inserts the parent-session summary marker. The unified `ReviewService.ts` opens the child in the existing auxiliary pane.
 - `src/web-ui/src/flow_chat/services/DeepReviewService.ts` is a compatibility re-export.
+- `src/web-ui/src/flow_chat/services/ReviewService.ts` owns the unified prepared plan and launches either one read-only CodeReview child or the existing DeepReview child runtime.
+- Fix follow-up uses the same service to re-evaluate the union of the original review files and files directly changed by `ReviewFixer`. If command, Git, or stdin tools can produce changes that cannot be attributed safely, the UI explicitly falls back to the current workspace diff instead of claiming a narrower scope. It remeasures the selected diff, preserves the original standard-or-strict intent, and opens one fresh isolated reviewer child in the existing auxiliary pane. The fixer baseline and exact selected remediation ids are persisted before remediation starts, so restart restores only unfinished items from the original selection. The follow-up reservation stores the same request id later written to the existing child relationship metadata and used to derive the backend session id. A launch acknowledgement failure preserves the stable local turn and created child, returns `uncertain`, and does not automatically or after restart resubmit the launch message. Backend creation returns an existing session only when the immutable identity (`agent_type`, relationship kind, parent session, and parent request) matches; mutable parent turn location does not break an explicit user retry. This early-return path is restricted to Review/DeepReview child relationships with a parent request, so ordinary explicit-id session restoration keeps its existing coordinator rebuild behavior. The action bar distinguishes retry, in-progress, completed, failed, cancelled, and view states instead of leaving a permanently disabled button. A metadata-only historical child is opened and hydrated before terminal state is inferred; lack of loaded turns is not treated as permission to launch a duplicate. Scope, changed-file records, and the final child id stay in session metadata so restart does not widen scope or duplicate a known run. Older sessions without recoverable scope explicitly notify the user before falling back to the current workspace diff.
 
 `launchDeepReviewSession` creates a child session with:
 
@@ -58,138 +65,93 @@ Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 - context compression enabled
 - `deepReviewRunManifest` stored on the child session metadata
 
-If launch fails after the child session is created, the frontend runs idempotent UI/session cleanup, deletes the backend session when possible, discards local session state, and reports cleanup issues with the launch error.
+If the first launch message has an uncertain outcome after the child session is created, the frontend preserves the local turn with a request-derived stable turn id, opens the child session, records an interruption marker, and returns an explicit `uncertain` launch status. It does not automatically resubmit the message or delete a possibly running backend session.
 
-## Strict Reviewer Configuration
+## Target Evidence
 
-The default strict reviewer configuration contract is mirrored in Rust and TypeScript.
+Review target evidence is session-scoped and covers current workspace changes, an explicit local Git range, or a provider pull request. It carries:
 
-Rust source:
+- source kind and opaque target fingerprint
+- base and head revisions
+- changed file path, previous path, and add/modify/delete/rename status
+- completeness and limitation facts for truncation, binary files, or unavailable content
+- a deterministic workspace binding that says whether the local repository head matches the target head and whether any staged, unstaged, untracked, or conflicted worktree state could contaminate repository context
+- final report evidence status (`complete`, `limited`, `stale`, or `failed`) separately from the model's risk and recommendation
 
-- `src/crates/assembly/core/src/agentic/deep_review/team_definition.rs`
-- `src/crates/assembly/core/src/agentic/deep_review_policy.rs`
-- `src/apps/desktop/src/api/agentic_api.rs`
+An explicit, complete Git range with a matching clean workspace or a provider PR with immutable base/head and complete per-file diff availability may report `complete`. Workspace evidence remains `limited` because it is mutable, even when its prepared diff coverage is complete. Limited or stale evidence does not rewrite the model's risk or recommendation; the report and UI display reliability separately. Invalid evidence fails closed, while historical manifests with no target evidence keep legacy behavior.
 
-Frontend source:
+Prepared Review target evidence uses bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance and admits at most 128 provider diff acquisitions before provider I/O; one acquisition normally performs one file-page request and one detail request. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
 
-- `src/web-ui/src/shared/services/review-team/defaults.ts`
-- `src/web-ui/src/shared/services/review-team/types.ts`
-- `src/web-ui/src/shared/services/review-team/index.ts`
+Deleted, renamed, binary, oversized, conflicted, or unavailable files remain visible as coverage facts. The PR panel is the only built-in PR Review entry and associates progress/results by provider repository, PR id, and immutable revisions. Cached overview data is display-only until the selected PR is revalidated; revision or runtime-evidence changes make prior results stale, and failed or unavailable results remain distinct from limited coverage. The implementation does not add automatic checkout, reviewer command execution, speculative cache plans, automatic Review, inline comments, approval, merge, or automatic publishing.
 
-The desktop command `get_default_review_team_definition` returns the backend default definition. The frontend normalizes that response and falls back to its TypeScript default if the command is unavailable.
+## Strict Review Delegation Policy
 
-The persisted config path is `ai.review_teams.default`. The frontend config shape includes:
+The default strict-review contract is mirrored in Rust and TypeScript. New strict launches use the following fixed boundary:
 
-- extra subagent ids
-- review strategy level
-- per-reviewer strategy overrides
-- reviewer and judge timeouts
-- reviewer file-split threshold
-- max same-role instances
-- max retries per role
-- max parallel reviewers
-- max queue wait seconds
-- provider capacity queue enablement
-- bounded auto-retry enablement and elapsed guard
+- the `DeepReview` child performs the primary full review itself;
+- applicable core and explicitly configured extra reviewers form an allowed specialist pool;
+- at most one specialist may be launched for a concrete unresolved question;
+- `ReviewJudge` is available only as a conditional quality check;
+- automatic file splitting, same-role fan-out, and reviewer retry are disabled;
+- the run uses one primary review-agent execution, with at most one specialist execution and one quality-inspector execution.
 
-Extra reviewers must be enabled subagents with read-only review tooling. Core reviewers, `DeepReview`, and `ReviewFixer` are disallowed as extra reviewers.
+The runtime enforces the one-specialist budget even if a weak model ignores the prompt. This is a resource ceiling, not a keyword or risk-score workflow rule. The model decides whether delegation is useful from the actual evidence and task, while the manifest limits which read-only agents it may call.
+
+Historical configuration fields for reviewer timeouts, file-split thresholds, same-role instances, retries, concurrency, and queue behavior remain readable so stored sessions can recover honestly. New strict manifests override split, same-role, retry, and specialist-call values to the bounded policy above. Extra reviewers must still be enabled subagents with read-only review tooling. `DeepReview` and `ReviewFixer` remain disallowed.
 
 ## Manifest Shape
 
-`buildEffectiveReviewTeamManifest` in `src/web-ui/src/shared/services/review-team/index.ts` builds the launch manifest. The manifest has `reviewMode: 'deep'` and may include:
+`buildEffectiveReviewTeamManifest` in `src/web-ui/src/shared/services/review-team/index.ts` builds the launch manifest. The manifest keeps `reviewMode: 'deep'`, resolved target evidence, strategy/scope metadata, execution policy, specialist pool, optional quality-inspector identity, skipped members, and token/call budget facts.
 
-- workspace path
-- policy source
-- target classification
-- final strategy level
-- scope profile
-- frontend and backend strategy recommendations
-- strategy decision
-- execution policy
-- concurrency policy
-- change stats
-- pre-review summary
-- evidence pack
-- shared-context cache plan
-- incremental-review cache plan
-- token-budget plan
-- active core reviewers
-- quality-gate reviewer
-- enabled extra reviewers
-- skipped reviewers
-- work packets
+For new strict launches:
 
-The target classifier drives conditional reviewer selection. `ReviewFrontend` is included only when the target matches frontend-oriented files.
+- `coreReviewers` and `enabledExtraReviewers` describe agents the primary reviewer may choose from; they are not scheduled calls;
+- `qualityGateReviewer` identifies the available conditional inspector and does not require it to run;
+- `workPackets` is empty;
+- `executionPolicy.maxReviewerCalls` is `1`;
+- file splitting and retries are disabled;
+- the launch preview reports one planned primary review-agent execution and a maximum of three review-agent executions; it does not claim a bound on underlying model requests.
 
-The evidence pack is metadata-only. It lists changed file paths, aggregate diff stats, domain/risk tags, packet ids, hunk hints, contract hints, and budget counts. It explicitly excludes source text, full diff text, model output, provider raw bodies, and full file contents.
+The evidence pack remains metadata-only. It lists changed file paths, aggregate diff stats, domain/risk tags, hunk hints, contract hints, budget counts, and workspace/Git-range target facts. It excludes embedded source text, full diff text, model output, provider raw bodies, speculative cache plans, and full file contents.
 
 ## Strategies and Scope
 
-The frontend owns strategy profile text and manifest planning in `src/web-ui/src/shared/services/review-team/strategy.ts` and `scopeProfile.ts`.
+Ordinary Review remains one `CodeReview` child. A new explicit strict request always selects the deep profile, but “deep” now means deeper evidence inspection by the primary reviewer, not maximum fan-out. Security, performance, architecture, frontend, and test concerns are investigation dimensions for that model.
 
-Supported strategy levels are `quick`, `normal`, and `deep`.
+`quick` and `normal` strategy values, legacy work packets, and older L2 manifests remain readable for stored-session recovery. They do not create new production Review launches. New L3 validation requires the deep strategy but no longer requires every core reviewer or a Judge call. If a quality-gate member is present, it must be `ReviewJudge`.
 
-- `quick` uses high-risk-only scope, zero dependency hops, risk-matched optional reviewers, and no broad tool exploration.
-- `normal` uses risk-expanded scope, one dependency hop, configured optional reviewers, and no broad tool exploration.
-- `deep` uses full-depth scope, policy-limited dependency context, full optional reviewer policy, and broad tool exploration.
+Launch consent shows the exact target, one planned primary review-agent execution, the maximum bounded review-agent execution count, runtime tendency, and read-only boundary. It does not estimate underlying model requests or tokens.
 
-The backend parses the strategy from the manifest/config and uses it for runtime guardrails such as timeouts, policy classification, and retry limits. Backend strategy scoring is advisory and does not replace the frontend manifest decision.
+## Historical Work Packet Compatibility
 
-## Work Packets
+New strict reviews do not generate work packets or module-aware reviewer shards. Stored manifests may still contain reviewer/judge packets, launch batches, packet ids, assigned scopes, and retry metadata. Runtime parsing, report enrichment, recovery UI, and target-evidence validation continue to read those fields so historical sessions are not rewritten as complete or successful.
 
-`src/web-ui/src/shared/services/review-team/workPackets.ts` creates pure launch-plan metadata. Work packets do not inspect file contents and do not make runtime retry or queue decisions.
-
-Each work packet includes:
-
-- packet id
-- phase (`reviewer` or `judge`)
-- launch batch
-- subagent id and labels
-- assigned scope
-- allowed tools
-- timeout seconds
-- required output fields
-- strategy level and directive
-- model slot
-
-If the included file count exceeds the reviewer file-split threshold and same-role instances are allowed, reviewer scopes are split into module-aware groups. Reviewer packets are then assigned launch batches using the concurrency policy. The judge packet, when present, runs in the batch after the final reviewer batch.
+Compatibility code must not turn historical packet support back into a new-launch requirement. Packet-specific queue and retry behavior applies only when an existing manifest actually contains those packets.
 
 ## Backend Policy and Admission
 
-`DeepReviewExecutionPolicy` in `src/crates/assembly/core/src/agentic/deep_review/execution_policy.rs` parses runtime policy from config and classifies subagent launches.
+`DeepReviewExecutionPolicy` in `src/crates/execution/agent-runtime/src/deep_review/execution_policy.rs` parses runtime policy and the new per-turn specialist-call ceiling. `DeepReviewRunManifestGate` admits only specialist-pool members and the optional `ReviewJudge`, rejects `ReviewFixer`, nested `DeepReview`, skipped members, and unconfigured agents, and preserves legacy manifest parsing and membership validation.
 
-Allowed DeepReview runtime launches are:
-
-- core reviewer roles
-- conditional reviewer roles when active in the manifest
-- configured extra reviewer roles
-- `ReviewJudge`
-
-Rejected launches include:
-
-- `ReviewFixer` during review execution
-- nested `DeepReview`
-- any subagent not configured for the review team
-- subagents skipped or absent from the run manifest
-
-`DeepReviewRunManifestGate` in `manifest.rs` reads active subagent ids from `workPackets`, `coreReviewers`, `enabledExtraReviewers`, and `qualityGateReviewer`. It also records skipped reviewer reasons so policy failures can explain why a reviewer is inactive.
+`DeepReviewBudgetTracker` separately permits at most one initial specialist and one Judge call for a new strict turn. This keeps the safety boundary deterministic without hard-coding which domain deserves delegation.
 
 ## Task Execution and Queue State
 
-The generic `Task` tool is adapted for DeepReview in:
+The generic `Task` tool is adapted for DeepReview across:
 
-- `src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs`
+- `src/crates/assembly/core/src/agentic/tools/implementations/task/mod.rs`
+- `src/crates/assembly/core/src/agentic/tools/implementations/task/deep_review.rs`
 - `src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs`
-- `src/crates/assembly/core/src/agentic/deep_review/queue.rs`
-- `src/crates/assembly/core/src/agentic/deep_review/budget.rs`
+- `src/crates/execution/agent-runtime/src/deep_review/task_execution.rs`
+- `src/crates/execution/agent-runtime/src/deep_review/queue.rs`
+- `src/crates/execution/agent-runtime/src/deep_review/budget.rs`
 
 DeepReview task execution uses the manifest and tool context to:
 
-- identify reviewer role and packet id
-- attach incremental review cache data
-- enforce policy and retry coverage
-- cap active reviewers
-- preserve launch-batch ordering
+- identify an optional specialist or quality-inspector role and any historical packet id
+- read historical incremental-cache metadata when present, without creating cache plans for new runs
+- enforce the new specialist-call ceiling and historical retry coverage
+- cap active optional reviewers
+- preserve launch-batch ordering only for historical packet manifests
 - wait for transient capacity when allowed
 - emit queue state events
 - record runtime diagnostics and capacity skips
@@ -252,7 +214,7 @@ In DeepReview context, the tool requires the deep-review fields in addition to t
 - `reviewers`
 - `remediation_plan`
 
-DeepReview report enrichment lives in `src/crates/assembly/core/src/agentic/deep_review/report.rs`. It fills missing reviewer packet metadata when a unique packet can be inferred, adds runtime diagnostics, updates incremental cache data, and adds reliability signals for cache hits, cache misses, partial coverage, capacity skips, retry guidance, queue waits, reduced scope, and evidence-pack metadata.
+Provider-neutral report transforms live in `src/crates/execution/agent-runtime/src/deep_review/report.rs`; `src/crates/assembly/core/src/agentic/deep_review/report.rs` bridges tool context, diagnostics logging, and session-metadata IO. Together they fill unambiguous historical packet metadata, add runtime diagnostics and reliability signals, and preserve read compatibility for historical incremental-cache data. Missing or invalid report summaries fail closed instead of defaulting to approval.
 
 Report enrichment is guarded by the tool context. Standard Code Review output should not receive DeepReview-only metadata unless the active tool context proves `agent_type == 'DeepReview'`.
 
@@ -275,7 +237,7 @@ The action bar can show:
 - recovery plan preview
 - remediation item selection
 - needs-decision gate
-- fix, fix-and-review, resume, and retry controls
+- fix, independently review fixes, resume, and retry controls
 
 The action bar dispatches queue controls through `agentAPI.controlDeepReviewQueue` when backend queue-control identifiers are available. Otherwise it falls back to local/session-stop-only behavior exposed by the store.
 
@@ -289,10 +251,12 @@ The review action bar persists UI state separately through `ReviewActionBarPersi
 
 - Frontend components do not call Tauri directly; they use infrastructure APIs such as `agentAPI`.
 - Shared core stays platform-agnostic and uses event/config/tool abstractions instead of Tauri handles.
-- The frontend owns target resolution, team manifest construction, strategy profile wording, prompt-block construction, consent, and action UI.
+- The frontend owns the explicit standard-or-strict launch boundary, target resolution, strict team manifest construction, strategy profile wording, prompt-block construction, consent, and action UI. No product-domain risk policy or desktop decision RPC upgrades ordinary Review.
+- Project integration adapters own raw workspace/Git target acquisition. The artifact/evidence layer owns the fixed session target manifest and its completeness. Mutable workspace targets may have complete prepared diff coverage, but their final evidence status remains `limited`. Reviewers may not mutate or silently widen that target.
 - The backend owns policy validation, runtime admission, queue/retry state, event emission, and report enrichment.
-- Reviewer subagents stay read-only. Remediation runs after user approval through the action surface, not during the reviewer pass.
-- Work packets and evidence packs are planning metadata; they must not embed file contents or full diffs.
+- Reviewer subagents and review orchestrators stay read-only. Remediation runs under `ReviewFixer` after user approval, not during the reviewer pass.
+- Historical work packets and current evidence packs are metadata only; they must not embed file contents or full diffs.
+- Existing reviewer Git exposure remains unchanged for legacy compatibility, but prepared target evidence does not authorize it as changed-code evidence and no dedicated multi-operation Git tool is added. Prepared `GetFileDiff` must be bounded and disable external diff/text conversion; live repository reads are supplemental and require a deterministic clean local binding.
 
 ## Change Checklist
 
@@ -302,3 +266,4 @@ When changing DeepReview behavior, update all affected contracts together:
 - Frontend strict-review defaults/types, manifest builder, prompt block, launch service, action-bar store, event mapping, report rendering, and locales.
 - Desktop Tauri command DTOs when capacity controls or default review definition contracts change.
 - Tests near the touched module, especially policy tests, strict-review manifest tests, queue event tests, launch tests, action-bar tests, and locale completeness tests.
+- For target-evidence changes, add contract coverage for workspace changes, exact file/directory scopes, explicit ranges, provider PR identity/base/head, provider diff availability, head invalidation, clean checkout, deleted/renamed/binary/oversized files, dirty-workspace isolation, exact-diff bounds, fail-closed reports, uncertain launch preservation, and unchanged ordinary Agent behavior.

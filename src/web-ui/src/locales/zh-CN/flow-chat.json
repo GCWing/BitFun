@@ -510,7 +510,7 @@
     "select": "选择智能体",
     "default": "默认助手",
     "coding": "编程助手",
-    "review": "代码审核",
+    "review": "审核",
     "architect": "架构师",
     "custom": "自定义智能体"
   },
@@ -604,6 +604,14 @@
     "initBusy": "请等待当前会话空闲后再使用 /init。",
     "initUsage": "请直接使用 /init，不要附加额外参数。",
     "initFailed": "初始化 AGENTS.md 失败",
+    "reviewAction": "审核",
+    "reviewUnavailableSurface": "当前界面暂不支持审核，请在桌面应用中打开此工作区。",
+    "reviewNoSession": "当前没有可用于审核的会话。",
+    "reviewUsage": "使用 /review，可附加提交、文件范围或风险领域等聚焦说明。只有明确需要最广审核时才使用 /review strict。",
+    "reviewFailed": "审核失败",
+    "reviewBusy": "当前会话已有审核正在进行，请停止或等待完成后再开始新的审核。",
+    "reviewNestedDisabled": "审核只能从主会话启动。",
+    "reviewThreadTitle": "审核",
     "deepreviewNoSession": "当前没有可用于严格审核的会话。",
     "deepreviewUsage": "历史严格审核兼容命令支持附加聚焦说明，例如提交、文件范围或风险领域。",
     "deepreviewFailed": "严格审核失败",
@@ -742,7 +750,7 @@
       },
       "review": {
         "short": "审核",
-        "title": "代码审核",
+        "title": "审核",
         "origin": "审核来源"
       },
       "deep_review": {
@@ -770,9 +778,9 @@
     "fixCompleted": "修复完成",
     "fixFailed": "修复失败",
     "fixTimeout": "修复超时",
-    "fixInterrupted": "修复已中断，还剩 {{count}} 项。",
+    "fixInterrupted": "修复已中断，最多有 {{count}} 个已选项目可能仍需处理。",
     "reviewWaitingCapacity": "审核正在等待容量",
-    "continueFix": "继续修复 {{count}} 项",
+    "continueFix": "重新检查并继续（{{count}}）",
     "skipRemaining": "跳过剩余项",
     "reviewError": "审核出错",
     "dismiss": "关闭",
@@ -780,9 +788,9 @@
     "minimize": "收起",
     "restore": "打开 {{label}}",
     "fixAndReviewRunning": "正在修复&准备重审...",
-    "minimizedStandard": "代码审核",
+    "minimizedStandard": "审核",
     "minimizedReviewRunningDeep": "严格审核进行中",
-    "minimizedReviewRunningStandard": "代码审核进行中",
+    "minimizedReviewRunningStandard": "审核进行中",
     "minimizedFix": "正在修复",
     "minimizedFixReview": "修复并重审中",
     "minimizedFixCompleted": "修复完成",
@@ -804,7 +812,6 @@
       "missingSelection": "开始前需要先为每个待决策项选择一个方案。",
       "noOptionsHint": "该项没有结构化选项。只有在确认按当前计划执行时再继续。",
       "confirmFix": "确认并开始",
-      "confirmFixAndReview": "确认并重审",
       "cancel": "返回选择"
     },
     "fillBackInput": "填入输入框",
@@ -812,7 +819,21 @@
     "retryIncompleteSlices": "重试未完成审核工作（{{count}}）",
     "retryIncompleteRequestDisplay": "重试 {{count}} 个未完成的严格审核项",
     "retryIncompleteFailed": "无法重试未完成的严格审核工作。",
-    "fixCompletedMessage": "所有修复已成功应用。",
+    "fixCompletedMessage": "选中的修复已完成，可再次审核以进行独立确认。",
+    "reviewFixes": "审核修复",
+    "reviewFixesInProgress": "审核进行中",
+    "openFollowUpReview": "打开审核",
+    "viewFollowUpReview": "查看审核",
+    "viewFailedFollowUpReview": "查看失败的审核",
+    "viewCancelledFollowUpReview": "查看已取消的审核",
+    "retryFollowUpReview": "重试审核",
+    "reviewFixesRequest": "审核本次修复变更",
+    "reviewFixesThreadTitle": "审核修复",
+    "reviewFixesUnavailable": "无法确定修复审核目标，请从当前工作区重新启动审核。",
+    "reviewFixesScopeFallback": "无法恢复原审核范围，将审核当前工作区变更。",
+    "reviewFixesCommandScopeFallback": "命令可能修改了其他文件，将审核当前工作区全部变更以避免遗漏。",
+    "reviewCancelledWithoutReport": "审核已取消，尚未生成报告。",
+    "reviewEndedWithoutReport": "审核已结束，但未生成结构化报告。",
     "replaceInputConfirmTitle": "替换当前输入？",
     "replaceInputConfirmMessage": "输入框中已有文本，填入计划将替换当前草稿内容。",
     "replaceInputConfirmAction": "替换输入",
@@ -863,7 +884,7 @@
       "title": "严格审核需要补全结果",
       "missingSubmitCodeReview": "审核已结束，但 BitFun 没有收到可确认的结构化结果。继续会保留已完成的审核工作，并要求 agent 补交缺失的审核报告。",
       "invalidSubmitCodeReview": "审核返回了 BitFun 无法读取的结果。继续会保留已完成的审核工作，并要求 agent 修复报告。",
-      "wrongReviewMode": "审核返回了标准代码审核结果。继续会保留已完成的审核工作，并要求 agent 提交严格审核报告。"
+      "wrongReviewMode": "审核返回了标准审核结果。继续会保留已完成的审核工作，并要求 agent 提交严格审核报告。"
     },
     "capacityQueue": {
       "title": "审核正在等待容量",
@@ -910,60 +931,67 @@
       "controlPartiallyFailedWithReason": "容量控制已部分应用；{{total}} 个审核项中有 {{failed}} 个失败：{{reason}}。请等待容量状态刷新后重试，或在卡住时使用停止。"
     },
     "degradation": {
-      "reduceReviewers": "保留核心检查",
-      "reduceReviewersDesc": "继续执行本次 Review 最相关的检查",
-      "reduceReviewersPending": "聚焦检查模式将在后续版本中支持",
-      "compressContext": "压缩上下文后重试",
-      "compressContextDesc": "压缩已完成的审核结果以释放上下文空间",
-      "compressContextPending": "上下文压缩将在后续版本中支持",
       "viewPartial": "查看部分结果",
       "viewPartialDesc": "查看已完成的审核结果"
     },
     "launchError": {
       "modelConfig": "无法创建审核会话，请检查模型配置",
       "network": "网络连接中断，审核未能启动",
+      "target": "无法安全准备请求的审核范围，请检查目标后重试",
+      "fileLimit": "审核目标过大，请缩小文件或目录范围后重试",
+      "outsideWorkspace": "审核文件必须位于当前工作区内",
+      "remoteGitRange": "暂不支持远程 Git 范围，请使用本地检出",
+      "remoteWorkspace": "远程工作区审核需要有界的精确差异证据，暂不支持，请使用本地检出",
+      "threeDotRange": "暂不支持三点 Git 范围，请使用明确的 merge-base..head 范围",
+      "combinedScope": "不能同时指定 Git 范围和文件过滤，请分别审核",
+      "emptyGitRange": "请求的 Git 范围没有变更文件",
+      "unresolvedGitRange": "无法解析请求的 Git 范围，请检查引用或范围后重试",
+      "emptyWorkspace": "当前工作区没有可审核的变更",
+      "emptyExplicitScope": "请求的文件或目录没有工作区变更",
+      "unresolvedTarget": "无法将审核目标准备为有界证据，请打开对应工作区或缩小目标后重试",
+      "uncertain": "审核请求可能已经在运行。会话已保留，可安全检查或重试",
       "unknown": "审核启动失败，请重试"
     }
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "审核已完成",
     "reviewCompletedDeep": "严格审核已完成",
-    "fixRequestDisplayStandard": "开始修复代码审核问题",
-    "fixAndReviewRequestDisplayStandard": "修复代码审核问题并重新审核",
+    "fixRequestDisplayStandard": "开始修复审核问题",
+    "fixAndReviewRequestDisplayStandard": "修复审核问题并重新审核",
     "fixRequestDisplayDeep": "开始修复严格审核问题",
     "fixAndReviewRequestDisplayDeep": "修复严格审核问题并重新审核",
     "needsDecisionTag": "需决策",
     "noIssuesFound": "未发现问题，做得不错！"
   },
   "deepReviewConsent": {
-    "windowTitle": "严格审核",
-    "eyebrow": "严格审核",
-    "title": "开始严格审核？",
-    "body": "严格审核会增加更广的独立覆盖，预计会消耗更多 Token，耗时也更久。",
+    "windowTitle": "审核方案",
+    "eyebrow": "审核方案",
+    "title": "增加更广的审核覆盖？",
+    "body": "BitFun 为本次变更选择了额外的独立检查。继续前可确认目标范围、计划检查、耗时倾向和只读边界。",
     "readonlyLabel": "只读",
-    "readonly": "修复需确认。",
+    "readonly": "审核者不会修改文件。",
     "sessionConcurrencyTitle": "当前会话较忙",
-    "sessionConcurrencyBody": "目标会话已有 {{count}} 个 Review 工作在运行。可选择更轻量策略、暂时取消，或在容量空闲后手动继续。",
-    "costLabel": "Token",
-    "cost": "更广覆盖 + 最终质检。",
+    "sessionConcurrencyBody": "目标会话已有 {{count}} 个审核工作在运行，继续后将共享当前可用的审核容量。",
+    "costLabel": "覆盖",
+    "cost": "计划的审查代理执行；此处不估算底层模型请求或 Token。",
     "timeLabel": "耗时",
     "time": "后台运行，可能需要更久。",
     "cancel": "取消",
-    "confirm": "开始严格审核",
-    "estimatedTokens": "预计输入：{{min}} - {{max}} tokens",
-    "estimatedTokensNote": "仅为 prompt 输入估算；最终输出和供应商计费可能不同。",
+    "confirm": "开始审核",
+    "initialCalls": "独立检查：计划 {{planned}} 次审查代理执行",
+    "parallelCalls": "无需再次确认时，最多可能执行 {{count}} 次审查代理。",
     "runStrategy": "运行策略：{{strategy}}",
     "strategyLabels": {
-      "quick": "快速",
+      "quick": "聚焦",
       "normal": "标准",
-      "deep": "严格"
+      "deep": "全面"
     },
     "strategySummaries": {
-      "quick": "快速会保留与目标匹配的检查，聚焦最可能的问题。",
-      "normal": "标准适合慢速模型下的日常审核；限制可选扩张，大范围改动优先使用摘要式覆盖。",
-      "deep": "严格审核会为高风险改动使用更广覆盖，耗时更长但能提高结论可信度。"
+      "quick": "聚焦审核会检查当前目标最相关的风险。",
+      "normal": "标准审核会增加独立覆盖，同时保持成本合理。",
+      "deep": "全面审核会为高风险变更增加适用范围内最广的覆盖。"
     },
-    "summaryTitle": "启动摘要",
+    "summaryTitle": "审核方案",
     "targetFiles": "{{count}} 个文件",
     "targetFiles_one": "{{count}} 个文件",
     "targetFiles_other": "{{count}} 个文件",
@@ -1075,7 +1103,7 @@
     "actionsMenuHint": "快捷动作",
     "actionsButton": "动作",
     "actionsButtonRunning": "进行中…",
-    "reviewModeStandard": "普通审核",
+    "reviewModeStandard": "审核",
     "reviewModeDeep": "严格审核",
     "reviewRunningStandard": "审核中",
     "reviewRunningDeep": "审核中",
@@ -1089,9 +1117,10 @@
       "displayMessageFiltered": "审核过滤后的文件：\n{{files}}\n\n已跳过 {{skipped}} 个命中排除规则的文件。",
       "filteredNotice": "本次将分析 {{included}} 个文件，并跳过 {{skipped}} 个命中排除规则的文件，例如锁文件、生成物或二进制资源。",
       "noEligibleFiles": "排除命中规则的文件后，本次会话里没有可审核文件。",
+      "launchFailed": "无法启动审核",
       "prompt": "请审核本次会话中修改的以下文件：\n\n{{files}}",
       "promptFiltered": "请审核本次会话中修改的以下文件：\n\n{{files}}\n\n请不要审核另外 {{skipped}} 个已跳过的文件，因为它们命中了锁文件、生成物或二进制文件的排除规则。",
-      "threadTitle": "代码审核"
+      "threadTitle": "审核"
     },
     "deepReview": {
       "info": "严格审核会运行更广的审核覆盖，可能更耗时并消耗更多 Token。",
@@ -1775,8 +1804,8 @@
     "codeReview": {
       "reviewResult": "审核结果",
       "reviewingCode": "正在审核代码...",
-      "preparingReview": "准备代码审核",
-      "reviewFailed": "代码审核失败：{{error}}",
+      "preparingReview": "准备审核",
+      "reviewFailed": "审核失败：{{error}}",
       "unknownError": "未知错误",
       "noIssues": "无问题",
       "collapseDetails": "收起详情",
@@ -1784,6 +1813,12 @@
       "overallAssessment": "总体评估",
       "riskLevel": "风险等级",
       "recommendedAction": "建议操作",
+      "evidenceStatus": "证据状态",
+      "evidenceStatuses": {
+        "complete": "完整",
+        "limited": "受限",
+        "stale": "已过期"
+      },
       "deepReviewResult": "严格审核结果",
       "reviewScope": "范围",
       "contextLimitations": "上下文限制",
@@ -1847,6 +1882,10 @@
           "label": "聚焦 Review 范围",
           "detail": "本次 Review 使用了聚焦范围配置。"
         },
+        "target_evidence_limited": {
+          "label": "目标证据受限",
+          "detail": "准备好的目标证据无法安全覆盖所有请求的变更。"
+        },
         "retry_guidance": {
           "label": "已给出重试指引",
           "detail": "{{count}} 条重试指引用于补足部分审核覆盖。"
@@ -1894,7 +1933,7 @@
         "qualityGate": "质量检查"
       },
       "report": {
-        "titleStandard": "代码审核报告",
+        "titleStandard": "审核报告",
         "titleDeep": "严格审核报告",
         "reviewDecision": "审核结论",
         "noIssues": "没有已验证问题。",
@@ -1917,7 +1956,7 @@
         "saveSuccess": "审核报告已导出。",
         "saveFailed": "导出审核报告失败。",
         "saveDialogTitle": "导出审核报告",
-        "fileNamePrefix": "BitFun-代码审核",
+        "fileNamePrefix": "BitFun-审核",
         "editorTitle": "审核报告"
       },
       "reviewModes": {
@@ -1939,7 +1978,6 @@
         "noSelectionHint": "至少选择一项修复计划后才能开始修复。",
         "ungrouped": "其他",
         "startFix": "开始修复",
-        "fixAndReview": "修复&重审",
         "cancel": "取消",
         "fixUnavailable": "无法开始修复：审核会话不可用。",
         "fixRequestDisplay": "开始修复严格审核问题",

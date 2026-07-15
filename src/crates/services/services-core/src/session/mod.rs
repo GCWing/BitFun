@@ -21,7 +21,7 @@ pub use memory_workspace::{
 pub use metadata::{
     build_session_index_snapshot, build_session_metadata, merge_session_custom_metadata,
     refresh_session_metadata_from_turns, remove_session_index_entry, set_deep_review_cache,
-    set_deep_review_run_manifest, set_session_relationship,
+    set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
     try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry,
     SessionMetadataBuildFacts,
 };

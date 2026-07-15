@@ -14,6 +14,7 @@ export interface CodeReviewIssueData {
 
 export interface CodeReviewResultData {
   schemaVersion?: number;
+  evidence_status?: 'complete' | 'limited' | 'stale' | 'failed';
   summary?: CodeReviewSummaryData;
   issues?: CodeReviewIssueData[];
   positive_points?: string[];

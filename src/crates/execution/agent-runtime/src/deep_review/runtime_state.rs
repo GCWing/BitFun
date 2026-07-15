@@ -1,4 +1,6 @@
-use super::budget::{DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker};
+use super::budget::{
+    DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, ReviewDiffBudgetAdmission,
+};
 use super::concurrency_policy::DeepReviewEffectiveConcurrencySnapshot;
 use super::constants::DEFAULT_MAX_RETRIES_PER_ROLE;
 use super::diagnostics::DeepReviewRuntimeDiagnostics;
@@ -113,6 +115,56 @@ pub fn record_deep_review_shared_context_tool_use(
         subagent_type,
         tool_name,
         file_path,
+    )
+}
+
+pub fn record_review_diff_page(
+    parent_dialog_turn_id: &str,
+    reviewer_id: &str,
+    page_key: &str,
+    returned_chars: usize,
+) -> ReviewDiffBudgetAdmission {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_review_diff_page(
+        parent_dialog_turn_id,
+        reviewer_id,
+        page_key,
+        returned_chars,
+    )
+}
+
+pub fn review_diff_budget_exhausted(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_budget_exhausted(parent_dialog_turn_id)
+}
+
+pub fn admit_review_provider_diff_acquisition(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.admit_review_provider_diff_acquisition(parent_dialog_turn_id)
+}
+
+pub fn record_review_diff_limitation(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_review_diff_limitation(parent_dialog_turn_id)
+}
+
+pub fn review_diff_limited(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_limited(parent_dialog_turn_id)
+}
+
+pub fn record_review_target_stale(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_review_target_stale(parent_dialog_turn_id)
+}
+
+pub fn review_target_stale(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_target_stale(parent_dialog_turn_id)
+}
+
+pub fn review_diff_page_was_returned(
+    parent_dialog_turn_id: &str,
+    reviewer_id: &str,
+    page_key: &str,
+) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_page_was_returned(
+        parent_dialog_turn_id,
+        reviewer_id,
+        page_key,
     )
 }
 

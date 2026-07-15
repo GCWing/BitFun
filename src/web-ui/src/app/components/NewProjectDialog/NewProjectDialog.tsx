@@ -48,15 +48,15 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   // Open directory picker dialog
   const handleSelectParentPath = useCallback(async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({
-        directory: true,
-        multiple: false,
+      const { pickWorkspaceDirectory } = await import(
+        '@/infrastructure/peer-device/pickWorkspaceDirectory'
+      );
+      const selected = await pickWorkspaceDirectory({
         title: t('newProject.selectParentDirectory'),
-        defaultPath: parentPath || defaultParentPath
-      }) as string;
+        defaultPath: parentPath || defaultParentPath,
+      });
 
-      if (selected && typeof selected === 'string') {
+      if (selected) {
         setParentPath(selected);
         setError('');
       }

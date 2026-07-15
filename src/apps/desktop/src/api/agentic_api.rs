@@ -34,7 +34,10 @@ use bitfun_core::agentic::tools::implementations::exec_command::{
     ReadBackgroundCommandOutputRequest as CoreReadBackgroundCommandOutputRequest,
     ReadBackgroundCommandOutputResponse,
 };
-use bitfun_core::service::session::{DialogTurnData, SessionMemoryMode, SessionRelationship};
+use bitfun_core::service::session::{
+    DialogTurnData, SessionMemoryMode, SessionMetadata, SessionRelationship,
+    SessionRelationshipKind,
+};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -60,6 +63,8 @@ pub struct CreateSessionRequest {
     pub relationship: Option<SessionRelationship>,
     #[serde(default)]
     pub deep_review_run_manifest: Option<serde_json::Value>,
+    #[serde(default)]
+    pub review_target_evidence: Option<serde_json::Value>,
     pub config: Option<SessionConfigDTO>,
 }
 
@@ -85,6 +90,69 @@ pub struct CreateSessionResponse {
     pub session_id: String,
     pub session_name: String,
     pub agent_type: String,
+}
+
+fn existing_session_create_response(
+    request: &CreateSessionRequest,
+    metadata: &SessionMetadata,
+) -> Result<CreateSessionResponse, String> {
+    let relationship_matches = match (
+        metadata.relationship.as_ref(),
+        request.relationship.as_ref(),
+    ) {
+        (None, None) | (None, Some(_)) => true,
+        (Some(existing), Some(requested)) => {
+            existing.kind == requested.kind
+                && existing.parent_session_id == requested.parent_session_id
+                && existing.parent_request_id == requested.parent_request_id
+        }
+        _ => false,
+    };
+    let deep_manifest_matches = match (
+        metadata.deep_review_run_manifest.as_ref(),
+        request.deep_review_run_manifest.as_ref(),
+    ) {
+        (Some(existing), Some(requested)) => existing == requested,
+        (None, Some(_)) | (None, None) => true,
+        (Some(_), None) => false,
+    };
+    let target_evidence_matches = match (
+        metadata.review_target_evidence.as_ref(),
+        request.review_target_evidence.as_ref(),
+    ) {
+        (Some(existing), Some(requested)) => existing == requested,
+        (None, Some(_)) | (None, None) => true,
+        (Some(_), None) => false,
+    };
+    if metadata.agent_type != request.agent_type
+        || !relationship_matches
+        || !deep_manifest_matches
+        || !target_evidence_matches
+    {
+        return Err(format!(
+            "Session ID {} already exists with different identity",
+            metadata.session_id
+        ));
+    }
+
+    Ok(CreateSessionResponse {
+        session_id: metadata.session_id.clone(),
+        session_name: metadata.session_name.clone(),
+        agent_type: metadata.agent_type.clone(),
+    })
+}
+
+fn is_idempotent_review_create(request: &CreateSessionRequest) -> bool {
+    let Some(relationship) = request.relationship.as_ref() else {
+        return false;
+    };
+    matches!(
+        relationship.kind,
+        Some(SessionRelationshipKind::Review | SessionRelationshipKind::DeepReview)
+    ) && relationship
+        .parent_request_id
+        .as_deref()
+        .is_some_and(|request_id| !request_id.trim().is_empty())
 }
 
 #[derive(Debug, Deserialize)]
@@ -661,11 +729,13 @@ pub struct GenerateSessionTitleRequest {
 #[tauri::command]
 pub async fn create_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
     fn norm_conn(s: Option<String>) -> Option<String> {
         s.map(|x| x.trim().to_string()).filter(|x| !x.is_empty())
     }
+    let wp = request.workspace_path.clone();
     let remote_conn = norm_conn(request.remote_connection_id.clone()).or_else(|| {
         request
             .config
@@ -678,6 +748,54 @@ pub async fn create_session(
             .as_ref()
             .and_then(|c| norm_conn(c.remote_ssh_host.clone()))
     });
+
+    if is_idempotent_review_create(&request) {
+        let session_id = request
+            .session_id
+            .as_deref()
+            .ok_or_else(|| "Idempotent Review session requires a session ID".to_string())?;
+        let effective_path = desktop_effective_session_storage_path(
+            &app_state,
+            &request.workspace_path,
+            remote_conn.as_deref(),
+            remote_ssh_host.as_deref(),
+        )
+        .await;
+        let existing = coordinator
+            .get_session_manager()
+            .load_session_metadata(&effective_path, session_id)
+            .await
+            .map_err(|error| format!("Failed to check existing session: {error}"))?;
+        if let Some(mut metadata) = existing {
+            let response = existing_session_create_response(&request, &metadata)?;
+            let mut repaired = false;
+            if metadata.relationship.is_none() && request.relationship.is_some() {
+                metadata.relationship = request.relationship.clone();
+                repaired = true;
+            }
+            if metadata.deep_review_run_manifest.is_none()
+                && request.deep_review_run_manifest.is_some()
+            {
+                metadata.deep_review_run_manifest = request.deep_review_run_manifest.clone();
+                repaired = true;
+            }
+            if metadata.review_target_evidence.is_none() && request.review_target_evidence.is_some()
+            {
+                metadata.review_target_evidence = request.review_target_evidence.clone();
+                repaired = true;
+            }
+            if repaired {
+                coordinator
+                    .get_session_manager()
+                    .save_session_metadata(&effective_path, &metadata)
+                    .await
+                    .map_err(|error| {
+                        format!("Failed to repair Review session metadata: {error}")
+                    })?;
+            }
+            return Ok(response);
+        }
+    }
 
     let config = request
         .config
@@ -743,6 +861,18 @@ pub async fn create_session(
             .map_err(|e| format!("Failed to persist Deep Review run manifest: {}", e))?;
     }
 
+    let session_id = session.session_id.clone();
+    // Notify auto-sync: new session created
+    crate::api::remote_connect_api::notify_session_changed(&session_id, &wp);
+
+    if let Some(target_evidence) = request.review_target_evidence {
+        coordinator
+            .get_session_manager()
+            .set_session_review_target_evidence(&session.session_id, Some(target_evidence))
+            .await
+            .map_err(|e| format!("Failed to persist Review target evidence: {}", e))?;
+    }
+
     Ok(CreateSessionResponse {
         session_id: session.session_id,
         session_name: session.session_name,
@@ -800,10 +930,16 @@ pub async fn update_session_title(
             .map_err(|e| format!("Failed to restore session before renaming: {}", e))?;
     }
 
-    coordinator
+    let result = coordinator
         .update_session_title(session_id, &request.title)
         .await
-        .map_err(|e| format!("Failed to update session title: {}", e))
+        .map_err(|e| format!("Failed to update session title: {}", e));
+
+    // Notify auto-sync: metadata changed (title)
+    let wp = request.workspace_path.as_deref().unwrap_or("");
+    crate::api::remote_connect_api::notify_session_changed(session_id, wp);
+
+    result
 }
 
 /// Load the session into the coordinator process when it exists on disk but is not in memory.
@@ -1828,7 +1964,11 @@ pub async fn delete_session(
     coordinator
         .delete_session(&effective_path, &request.session_id)
         .await
-        .map_err(|e| format!("Failed to delete session: {}", e))
+        .map_err(|e| format!("Failed to delete session: {}", e))?;
+
+    // Notify auto-sync: tombstone this session on the relay
+    crate::api::remote_connect_api::notify_session_deleted(&request.session_id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -2292,6 +2432,123 @@ mod tests {
         ModelRoundData, ToolCallData, ToolItemData, ToolResultData, TurnStatus, UserMessageData,
     };
     use serde_json::json;
+
+    fn idempotent_create_request() -> CreateSessionRequest {
+        CreateSessionRequest {
+            session_id: Some("review_child_request-1".to_string()),
+            session_name: "Review fixes".to_string(),
+            agent_type: "CodeReview".to_string(),
+            workspace_path: "/workspace".to_string(),
+            workspace_id: None,
+            session_kind: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            relationship: Some(SessionRelationship {
+                kind: Some(SessionRelationshipKind::Review),
+                parent_session_id: Some("parent-1".to_string()),
+                parent_request_id: Some("request-1".to_string()),
+                parent_dialog_turn_id: Some("turn-1".to_string()),
+                parent_turn_index: Some(1),
+                ..Default::default()
+            }),
+            deep_review_run_manifest: None,
+            review_target_evidence: None,
+            config: None,
+        }
+    }
+
+    #[test]
+    fn existing_create_session_retry_returns_the_matching_session() {
+        let request = idempotent_create_request();
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+        let relationship = metadata.relationship.as_mut().expect("relationship");
+        relationship.parent_dialog_turn_id = Some("turn-2".to_string());
+        relationship.parent_turn_index = Some(2);
+
+        let response = existing_session_create_response(&request, &metadata)
+            .expect("matching retry should reuse the session");
+
+        assert_eq!(response.session_id, "review_child_request-1");
+        assert_eq!(response.agent_type, "CodeReview");
+    }
+
+    #[test]
+    fn existing_create_session_retry_rejects_identity_mismatch() {
+        let request = idempotent_create_request();
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Other session".to_string(),
+            "DeepReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+
+        let error = existing_session_create_response(&request, &metadata)
+            .expect_err("a conflicting session id must not be reused");
+
+        assert!(error.contains("different identity"));
+    }
+
+    #[test]
+    fn existing_create_session_retry_rejects_a_different_parent_request() {
+        let request = idempotent_create_request();
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        let mut relationship = request.relationship.clone().expect("relationship");
+        relationship.parent_request_id = Some("request-2".to_string());
+        metadata.relationship = Some(relationship);
+
+        assert!(existing_session_create_response(&request, &metadata).is_err());
+    }
+
+    #[test]
+    fn existing_create_session_retry_rejects_different_target_evidence() {
+        let mut request = idempotent_create_request();
+        request.review_target_evidence = Some(json!({ "fingerprint": "requested" }));
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+        metadata.review_target_evidence = Some(json!({ "fingerprint": "existing" }));
+
+        assert!(existing_session_create_response(&request, &metadata).is_err());
+    }
+
+    #[test]
+    fn existing_create_session_retry_allows_missing_target_evidence_repair() {
+        let mut request = idempotent_create_request();
+        request.review_target_evidence = Some(json!({ "fingerprint": "requested" }));
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+
+        assert!(existing_session_create_response(&request, &metadata).is_ok());
+    }
+
+    #[test]
+    fn ordinary_explicit_session_ids_do_not_use_review_idempotency() {
+        let mut request = idempotent_create_request();
+        request.relationship = None;
+
+        assert!(!is_idempotent_review_create(&request));
+    }
 
     fn tool_item(
         tool_name: &str,

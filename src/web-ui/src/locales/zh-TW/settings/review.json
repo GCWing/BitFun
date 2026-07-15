@@ -1,74 +1,25 @@
 {
   "title": "審核",
-  "subtitle": "設定嚴格 Review 的預設覆蓋、成本和容量策略。",
+  "subtitle": "控制 Review 需要擴展覆蓋時使用的成本和容量上限。",
   "loading": "正在載入審核設定...",
-  "overview": {
-    "title": "審核工作流",
-    "description": "Review 可以把複雜或高風險變更提升為嚴格唯讀審核，並在最後合併和校驗報告。",
-    "command": {
-      "title": "嚴格審核路由",
-      "description": "當 Review 針對大範圍、高風險或使用者明確要求嚴格審核的請求選擇嚴格路徑時，會使用這些設定。"
-    },
-    "reviewers": {
-      "title": "審核覆蓋",
-      "description": "BitFun 會根據目前任務選擇合適的獨立覆蓋，不暴露底層審核編排。"
-    },
-    "qualityGate": {
-      "title": "品質檢查",
-      "description": "審核深度、模型選擇和容量控制會決定本次審核在彙總前需要多廣的覆蓋。"
-    }
+  "desktopOnly": {
+    "title": "僅桌面端可用",
+    "description": "Review 容量設定僅在 BitFun 桌面應用中可用；目前介面不支援啟動 Review。"
   },
-  "strategy": {
-    "title": "審核策略",
-    "description": "選擇嚴格審核的預設深度。每種策略都帶有內建範圍、耗時和 Token 行為。",
-    "quick": {
-      "label": "快速",
-      "summary": "面向範圍清晰的變更，聚焦篩查高置信問題。"
-    },
-    "normal": {
-      "label": "標準",
-      "summary": "適合慢速模型的日常審核，保持耗時有界。"
-    },
-    "deep": {
-      "label": "嚴格",
-      "summary": "適合高風險、大範圍或發布前變更的更廣審核覆蓋。"
-    },
-    "inherit": "繼承審核（{{level}}）"
-  },
-  "execution": {
-    "title": "執行策略",
-    "description": "為大範圍或較慢的嚴格 Review 設定安全上限。",
-    "reviewerTimeout": "覆蓋逾時",
-    "reviewerTimeoutDesc": "單個覆蓋方向的最長時間，單位秒。設為 0 表示不限制。",
-    "judgeTimeout": "品質檢查逾時",
-    "judgeTimeoutDesc": "品質檢查員的逾時時間，單位秒。設為 0 表示不限制。",
-    "fileSplitThreshold": "大範圍目標閾值",
-    "fileSplitThresholdDesc": "目標檔案數超過該值時，系統會擴大覆蓋。",
-    "maxSameRoleInstances": "最大並行覆蓋方向",
-    "maxSameRoleInstancesDesc": "同一嚴格 Review 方向允許並行執行的最大覆蓋數量。"
+  "error": {
+    "title": "審核設定暫不可用",
+    "retry": "重試"
   },
   "capacity": {
-    "title": "容量與重試",
-    "description": "控制嚴格 Review 如何等待可用容量，以及在你同意後是否允許對未完成覆蓋重試。",
+    "title": "容量",
+    "description": "限制 Review 的並行工作數量以及等待供應商容量的時長。",
     "maxParallelReviewers": {
       "label": "最大並行審核工作",
       "description": "嚴格 Review 同時執行的審核工作上限。調高後可能並行啟動更多模型請求，更早觸發供應商限流，並增加 Token 消耗。"
     },
     "maxQueueWaitSeconds": {
-      "label": "最大容量等待",
-      "description": "嚴格 Review 等待可用容量的最長時間，超過後會繼續執行核心檢查。"
-    },
-    "allowProviderCapacityQueue": {
-      "label": "等待供應商容量",
-      "description": "遇到模型容量問題時先短暫等待，而不是立即只執行核心檢查；等待可以隨時取消。"
-    },
-    "allowBoundedAutoRetry": {
-      "label": "允許有界自動重試",
-      "description": "你在重試提示中同意後，後續嚴格審核可以在嚴格限制內自動重試更小的未完成覆蓋。"
-    },
-    "autoRetryElapsedGuardSeconds": {
-      "label": "自動重試耗時上限",
-      "description": "單次嚴格審核中自動重試最多可額外使用的時間。"
+      "label": "容量等待視窗",
+      "description": "可選審核工作等待供應商容量的時長；已經執行的檢查可能讓審核總耗時更長。"
     }
   },
   "messages": {

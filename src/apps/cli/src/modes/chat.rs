@@ -23,6 +23,7 @@ use crate::config::CliConfig;
 use crate::ui::agent_selector::AgentItem;
 use crate::ui::chat::{ChatView, MouseGestureOutcome};
 use crate::ui::command_palette::PaletteAction;
+use crate::ui::login_form::LoginFormAction;
 use crate::ui::mcp_add_dialog::McpAddAction;
 use crate::ui::mcp_selector::McpItem;
 use crate::ui::model_config_form::{ModelFormAction, ModelFormResult};
@@ -81,7 +82,7 @@ const RESIZE_REDRAW_DEBOUNCE_MS: u64 = 75;
 
 /// Chat mode exit reason
 #[derive(Debug, Clone, PartialEq)]
-pub enum ChatExitReason {
+pub(crate) enum ChatExitReason {
     /// User exits program
     Quit,
     /// Switch to a different session
@@ -118,7 +119,17 @@ struct NonKeyEventOutcome {
     resize_seen: bool,
 }
 
-pub struct ChatMode {
+struct ChatEventContext<'a> {
+    this: &'a mut ChatMode,
+    chat_view: &'a mut ChatView,
+    chat_state: &'a mut ChatState,
+    session_id: &'a mut String,
+    rt_handle: &'a tokio::runtime::Handle,
+    should_quit: &'a mut bool,
+    exit_reason: &'a mut ChatExitReason,
+}
+
+pub(crate) struct ChatMode {
     config: CliConfig,
     /// Current agent type (e.g. "agentic", "plan", "debug")
     agent_type: String,
@@ -144,7 +155,7 @@ fn agent_display_name(agent_type: &str) -> &'static str {
 }
 
 impl ChatMode {
-    pub fn new(
+    pub(crate) fn new(
         config: CliConfig,
         agent_type: String,
         workspace: Option<String>,
@@ -170,15 +181,161 @@ impl ChatMode {
     }
 
     /// Set a session ID to restore (for "Continue Last Session")
-    pub fn with_restore_session(mut self, session_id: String) -> Self {
+    pub(crate) fn with_restore_session(mut self, session_id: String) -> Self {
         self.restore_session_id = Some(session_id);
         self
     }
 
     /// Set an initial prompt to send automatically when the session starts
-    pub fn with_initial_prompt(mut self, prompt: String) -> Self {
+    pub(crate) fn with_initial_prompt(mut self, prompt: String) -> Self {
         self.initial_prompt = Some(prompt);
         self
+    }
+
+    fn workspace_path_for_sync(&self, chat_state: &ChatState) -> std::path::PathBuf {
+        chat_state
+            .workspace
+            .as_ref()
+            .map(std::path::PathBuf::from)
+            .or_else(|| self.workspace.clone().map(std::path::PathBuf::from))
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+    }
+
+    fn open_login_or_account_panel(
+        &self,
+        chat_view: &mut ChatView,
+        chat_state: &ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let logged_in =
+            tokio::task::block_in_place(|| rt_handle.block_on(crate::account::is_logged_in()));
+        if logged_in {
+            self.open_account_panel(chat_view, rt_handle);
+        } else {
+            chat_view.show_login_form();
+        }
+        let _ = chat_state;
+    }
+
+    fn open_account_panel(&self, chat_view: &mut ChatView, rt_handle: &tokio::runtime::Handle) {
+        let (info, devices, progress) = tokio::task::block_in_place(|| {
+            rt_handle.block_on(async {
+                let info = crate::account::account_info().await;
+                let devices = crate::account::list_devices().await.unwrap_or_default();
+                let progress = crate::account_sync::current_sync_progress().await;
+                (info, devices, progress)
+            })
+        });
+        match info {
+            Ok(info) => chat_view.show_account_panel(info, devices, progress),
+            Err(e) => {
+                chat_view.set_status(Some(format!("Failed to load account: {e}")));
+                chat_view.show_login_form();
+            }
+        }
+    }
+
+    fn refresh_account_panel_live(&self, chat_view: &mut ChatView) {
+        if !chat_view.login_form_visible() {
+            return;
+        }
+        let progress = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(crate::account_sync::current_sync_progress())
+        });
+        let devices = if matches!(
+            progress.status,
+            crate::account_sync::SyncStatus::Syncing | crate::account_sync::SyncStatus::Done
+        ) {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(crate::account::list_devices())
+                    .ok()
+            })
+        } else {
+            None
+        };
+        chat_view.update_account_panel_progress(devices, progress);
+    }
+
+    fn start_sync_and_show_account(
+        &self,
+        is_first_login: bool,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let workspace = self.workspace_path_for_sync(chat_state);
+        crate::account_sync::start_auto_sync_background(is_first_login, workspace);
+        self.open_account_panel(chat_view, rt_handle);
+        chat_state.add_system_message(if is_first_login {
+            "Sync started (use local / upload settings).".to_string()
+        } else {
+            "Sync started (use cloud / download settings).".to_string()
+        });
+    }
+
+    fn handle_login_form_action(
+        &self,
+        action: LoginFormAction,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        match action {
+            LoginFormAction::Submit(creds) => {
+                let result = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(crate::account::login_with_credentials(
+                        &creds.relay_url,
+                        &creds.username,
+                        &creds.password,
+                    ))
+                });
+                match result {
+                    Ok(login) => {
+                        chat_state.add_system_message(login.status_message.clone());
+                        if login.has_cloud_settings {
+                            chat_view.show_sync_choice_panel(&login.user_id, &login.relay_url);
+                        } else {
+                            self.start_sync_and_show_account(
+                                true, chat_view, chat_state, rt_handle,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        chat_view.login_form_set_error(format!("Login failed: {e}"));
+                    }
+                }
+            }
+            LoginFormAction::SyncUseLocal => {
+                self.start_sync_and_show_account(true, chat_view, chat_state, rt_handle);
+            }
+            LoginFormAction::SyncUseCloud => {
+                self.start_sync_and_show_account(false, chat_view, chat_state, rt_handle);
+            }
+            LoginFormAction::SyncCancel => {
+                let _ =
+                    tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout()));
+                chat_view.show_login_form();
+                chat_state.add_system_message("Sync cancelled; logged out.".to_string());
+            }
+            LoginFormAction::Logout => {
+                match tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout())) {
+                    Ok(()) => {
+                        chat_view.show_login_form();
+                        chat_state.add_system_message("Logged out.".to_string());
+                    }
+                    Err(e) => {
+                        chat_view.login_form_set_error(format!("Logout failed: {e}"));
+                    }
+                }
+            }
+            LoginFormAction::Cancel => {
+                chat_view.set_status(Some("Account panel closed".to_string()));
+            }
+            LoginFormAction::None => {}
+        }
+        Ok(None)
     }
 
     /// Check if any popup is currently visible
@@ -193,6 +350,7 @@ impl ChatMode {
             || chat_view.mcp_add_dialog_visible()
             || chat_view.provider_selector_visible()
             || chat_view.model_config_form_visible()
+            || chat_view.login_form_visible()
             || chat_view.theme_selector_visible()
             || chat_view.info_popup_visible()
     }
@@ -213,6 +371,7 @@ impl ChatMode {
         chat_view.hide_mcp_add_dialog();
         chat_view.hide_provider_selector();
         chat_view.hide_model_config_form();
+        chat_view.hide_login_form();
         chat_view.hide_theme_selector();
         chat_view.dismiss_info_popup();
         chat_view.popup_stack.clear();
@@ -234,6 +393,7 @@ impl ChatMode {
                 crate::ui::chat::PopupType::McpAddDialog => chat_view.hide_mcp_add_dialog(),
                 crate::ui::chat::PopupType::ProviderSelector => chat_view.hide_provider_selector(),
                 crate::ui::chat::PopupType::ModelConfigForm => chat_view.hide_model_config_form(),
+                crate::ui::chat::PopupType::LoginForm => chat_view.hide_login_form(),
                 crate::ui::chat::PopupType::ThemeSelector => {
                     chat_view.hide_theme_selector();
                     chat_view.cancel_theme_preview();
@@ -264,6 +424,7 @@ impl ChatMode {
                     crate::ui::chat::PopupType::ModelConfigForm => {
                         chat_view.reshow_model_config_form()
                     }
+                    crate::ui::chat::PopupType::LoginForm => chat_view.reshow_login_form(),
                     crate::ui::chat::PopupType::ThemeSelector => chat_view.reshow_theme_selector(),
                     crate::ui::chat::PopupType::InfoPopup => {}
                 }
@@ -271,7 +432,7 @@ impl ChatMode {
         }
     }
 
-    pub fn run(
+    pub(crate) fn run(
         &mut self,
         existing_terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
     ) -> Result<ChatExitReason> {
@@ -332,7 +493,7 @@ impl ChatMode {
 
                     let state = ChatState::from_core_messages(
                         rid.clone(),
-                        format!("Restored Session"),
+                        "Restored Session".to_string(),
                         agent_type,
                         effective_workspace,
                         &messages,
@@ -356,7 +517,7 @@ impl ChatMode {
 
             let state = ChatState::new(
                 session_id.clone(),
-                format!("CLI Session"),
+                "CLI Session".to_string(),
                 self.agent_type.clone(),
                 self.workspace.clone(),
             );
@@ -446,6 +607,13 @@ impl ChatMode {
             // Poll completion of non-blocking MCP operations before rendering.
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
+            }
+
+            if chat_view.login_form_visible() {
+                self.refresh_account_panel_live(&mut chat_view);
+                if crate::account_sync::sync_in_flight() {
+                    needs_redraw = true;
+                }
             }
 
             let mut did_render_this_loop = false;
@@ -727,8 +895,12 @@ impl ChatMode {
                         }
                         if !paste_buf.is_empty() {
                             let normalized = paste_buf.replace("\r\n", "\n").replace('\r', "\n");
-                            for c in normalized.chars() {
-                                chat_view.handle_char(c);
+                            if chat_view.login_form_visible() {
+                                chat_view.login_form_insert_paste(&normalized);
+                            } else {
+                                for c in normalized.chars() {
+                                    chat_view.handle_char(c);
+                                }
                             }
                             needs_redraw = true;
                         }
@@ -736,13 +908,15 @@ impl ChatMode {
                         for ev in non_key_events {
                             let outcome = Self::handle_non_key_event(
                                 ev,
-                                self,
-                                &mut chat_view,
-                                &mut chat_state,
-                                &mut session_id,
-                                &rt_handle,
-                                &mut should_quit,
-                                &mut exit_reason,
+                                ChatEventContext {
+                                    this: self,
+                                    chat_view: &mut chat_view,
+                                    chat_state: &mut chat_state,
+                                    session_id: &mut session_id,
+                                    rt_handle: &rt_handle,
+                                    should_quit: &mut should_quit,
+                                    exit_reason: &mut exit_reason,
+                                },
                             )?;
                             if outcome.request_redraw {
                                 needs_redraw = true;
@@ -764,13 +938,15 @@ impl ChatMode {
                                     )? {
                                         Self::apply_exit_reason(
                                             reason,
-                                            self,
-                                            &mut chat_view,
-                                            &mut chat_state,
-                                            &mut session_id,
-                                            &rt_handle,
-                                            &mut should_quit,
-                                            &mut exit_reason,
+                                            ChatEventContext {
+                                                this: self,
+                                                chat_view: &mut chat_view,
+                                                chat_state: &mut chat_state,
+                                                session_id: &mut session_id,
+                                                rt_handle: &rt_handle,
+                                                should_quit: &mut should_quit,
+                                                exit_reason: &mut exit_reason,
+                                            },
                                         );
                                     }
                                     if key.kind == KeyEventKind::Press
@@ -782,13 +958,15 @@ impl ChatMode {
                                 other => {
                                     let outcome = Self::handle_non_key_event(
                                         other,
-                                        self,
-                                        &mut chat_view,
-                                        &mut chat_state,
-                                        &mut session_id,
-                                        &rt_handle,
-                                        &mut should_quit,
-                                        &mut exit_reason,
+                                        ChatEventContext {
+                                            this: self,
+                                            chat_view: &mut chat_view,
+                                            chat_state: &mut chat_state,
+                                            session_id: &mut session_id,
+                                            rt_handle: &rt_handle,
+                                            should_quit: &mut should_quit,
+                                            exit_reason: &mut exit_reason,
+                                        },
                                     )?;
                                     if outcome.request_redraw {
                                         needs_redraw = true;
@@ -1141,6 +1319,12 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.login_form_visible() {
+            self.refresh_account_panel_live(chat_view);
+            let action = chat_view.login_form_handle_key(key);
+            return self.handle_login_form_action(action, chat_view, chat_state, rt_handle);
+        }
+
         match (key.code, key.modifiers) {
             // Ctrl+V: read clipboard directly (reliable paste on Windows where
             // bracketed paste is broken — crossterm issue #962)
@@ -1354,10 +1538,10 @@ impl ChatMode {
                 }
             }
 
-            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
-                if !c.is_control() && c != '\u{0}' {
-                    chat_view.handle_char(c);
-                }
+            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT)
+                if !c.is_control() && c != '\u{0}' =>
+            {
+                chat_view.handle_char(c);
             }
 
             _ => {}
@@ -1367,16 +1551,16 @@ impl ChatMode {
     }
 
     /// Apply an exit reason from handle_key_event (shared by normal and batch paths).
-    fn apply_exit_reason(
-        reason: ChatExitReason,
-        this: &mut Self,
-        chat_view: &mut ChatView,
-        chat_state: &mut ChatState,
-        session_id: &mut String,
-        rt_handle: &tokio::runtime::Handle,
-        should_quit: &mut bool,
-        exit_reason: &mut ChatExitReason,
-    ) {
+    fn apply_exit_reason(reason: ChatExitReason, context: ChatEventContext<'_>) {
+        let ChatEventContext {
+            this,
+            chat_view,
+            chat_state,
+            session_id,
+            rt_handle,
+            should_quit,
+            exit_reason,
+        } = context;
         match reason {
             ChatExitReason::SwitchSession(new_session_id) => {
                 match this.switch_to_session(
@@ -1413,124 +1597,154 @@ impl ChatMode {
     /// Handle non-key events (Mouse, Paste, Resize, etc.).
     fn handle_non_key_event(
         event: Event,
-        this: &mut Self,
-        chat_view: &mut ChatView,
-        chat_state: &mut ChatState,
-        session_id: &mut String,
-        rt_handle: &tokio::runtime::Handle,
-        should_quit: &mut bool,
-        exit_reason: &mut ChatExitReason,
+        context: ChatEventContext<'_>,
     ) -> Result<NonKeyEventOutcome> {
         let mut outcome = NonKeyEventOutcome::default();
         match event {
             Event::Mouse(mouse) => {
-                if chat_view.command_palette_captures_mouse(&mouse) {
-                    let action = chat_view.command_palette_handle_mouse(&mouse);
+                if context.chat_view.command_palette_captures_mouse(&mouse) {
+                    let action = context.chat_view.command_palette_handle_mouse(&mouse);
                     match action {
                         PaletteAction::Execute(id) => {
-                            if let Some(reason) =
-                                this.handle_palette_action(&id, chat_view, chat_state, rt_handle)?
-                            {
+                            if let Some(reason) = context.this.handle_palette_action(
+                                &id,
+                                context.chat_view,
+                                context.chat_state,
+                                context.rt_handle,
+                            )? {
                                 Self::apply_exit_reason(
                                     reason,
-                                    this,
-                                    chat_view,
-                                    chat_state,
-                                    session_id,
-                                    rt_handle,
-                                    should_quit,
-                                    exit_reason,
+                                    ChatEventContext {
+                                        this: &mut *context.this,
+                                        chat_view: &mut *context.chat_view,
+                                        chat_state: &mut *context.chat_state,
+                                        session_id: &mut *context.session_id,
+                                        rt_handle: context.rt_handle,
+                                        should_quit: &mut *context.should_quit,
+                                        exit_reason: &mut *context.exit_reason,
+                                    },
                                 );
                             }
                         }
                         PaletteAction::Dismiss | PaletteAction::None => {}
                     }
-                } else if chat_view.provider_selector_captures_mouse(&mouse) {
-                    if let Some(selection) = chat_view.provider_selector_handle_mouse(&mouse) {
-                        this.handle_provider_selection(selection, chat_view);
+                } else if context.chat_view.provider_selector_captures_mouse(&mouse) {
+                    if let Some(selection) =
+                        context.chat_view.provider_selector_handle_mouse(&mouse)
+                    {
+                        context
+                            .this
+                            .handle_provider_selection(selection, context.chat_view);
                     }
-                } else if chat_view.handle_mouse_event(&mouse) {
-                    if let Some(action) = chat_view.take_pending_skill_action() {
-                        this.handle_skill_selector_action(action, chat_view, chat_state, rt_handle);
+                } else if context.chat_view.handle_mouse_event(&mouse) {
+                    if let Some(action) = context.chat_view.take_pending_skill_action() {
+                        context.this.handle_skill_selector_action(
+                            action,
+                            context.chat_view,
+                            context.chat_state,
+                            context.rt_handle,
+                        );
                     }
-                    if let Some(action) = chat_view.take_pending_subagent_action() {
-                        this.handle_subagent_selector_action(
-                            action, chat_view, chat_state, rt_handle,
+                    if let Some(action) = context.chat_view.take_pending_subagent_action() {
+                        context.this.handle_subagent_selector_action(
+                            action,
+                            context.chat_view,
+                            context.chat_state,
+                            context.rt_handle,
                         );
                     }
                 } else {
                     match mouse.kind {
                         MouseEventKind::ScrollUp => {
-                            let total = chat_view.count_message_lines(chat_state);
-                            chat_view.scroll_up(3, total);
+                            let total = context.chat_view.count_message_lines(context.chat_state);
+                            context.chat_view.scroll_up(3, total);
                         }
                         MouseEventKind::ScrollDown => {
-                            chat_view.scroll_down(3);
+                            context.chat_view.scroll_down(3);
                         }
                         MouseEventKind::Down(MouseButton::Left) => {
-                            let _ = chat_view.begin_mouse_selection(mouse.column, mouse.row);
+                            let _ = context
+                                .chat_view
+                                .begin_mouse_selection(mouse.column, mouse.row);
                         }
                         MouseEventKind::Drag(MouseButton::Left) => {
-                            let _ = chat_view.update_mouse_selection(mouse.column, mouse.row);
+                            let _ = context
+                                .chat_view
+                                .update_mouse_selection(mouse.column, mouse.row);
                         }
                         MouseEventKind::Up(MouseButton::Left) => {
-                            match chat_view
+                            match context
+                                .chat_view
                                 .complete_mouse_selection_or_click(mouse.column, mouse.row)
                             {
                                 MouseGestureOutcome::CopyText(text) => {
                                     match Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
-                                        Ok(()) => chat_view
+                                        Ok(()) => context
+                                            .chat_view
                                             .set_status(Some("Copied to clipboard".to_string())),
-                                        Err(_) => chat_view.set_status(Some(
+                                        Err(_) => context.chat_view.set_status(Some(
                                             "Failed to copy selection".to_string(),
                                         )),
                                     }
                                 }
                                 MouseGestureOutcome::Click(col, row) => {
-                                    chat_view.handle_mouse_click(col, row);
+                                    context.chat_view.handle_mouse_click(col, row);
                                 }
                                 MouseGestureOutcome::None => {}
                             }
                         }
-                        MouseEventKind::Moved => {
-                            if !chat_view.update_mouse_selection(mouse.column, mouse.row) {
-                                chat_view.handle_mouse_move(mouse.column, mouse.row);
-                            }
+                        MouseEventKind::Moved
+                            if !context
+                                .chat_view
+                                .update_mouse_selection(mouse.column, mouse.row) =>
+                        {
+                            context.chat_view.handle_mouse_move(mouse.column, mouse.row);
                         }
                         _ => {}
                     }
                 }
-                if let Some(cmd) = chat_view.take_pending_command() {
-                    if let Some(reason) =
-                        this.handle_command(&cmd, chat_view, chat_state, rt_handle)?
-                    {
+                if let Some(cmd) = context.chat_view.take_pending_command() {
+                    if let Some(reason) = context.this.handle_command(
+                        &cmd,
+                        context.chat_view,
+                        context.chat_state,
+                        context.rt_handle,
+                    )? {
                         Self::apply_exit_reason(
                             reason,
-                            this,
-                            chat_view,
-                            chat_state,
-                            session_id,
-                            rt_handle,
-                            should_quit,
-                            exit_reason,
+                            ChatEventContext {
+                                this: &mut *context.this,
+                                chat_view: &mut *context.chat_view,
+                                chat_state: &mut *context.chat_state,
+                                session_id: &mut *context.session_id,
+                                rt_handle: context.rt_handle,
+                                should_quit: &mut *context.should_quit,
+                                exit_reason: &mut *context.exit_reason,
+                            },
                         );
                     }
                 }
-                if let Some(theme) = chat_view.take_pending_theme_preview() {
-                    this.preview_theme_selection(&theme, chat_view);
+                if let Some(theme) = context.chat_view.take_pending_theme_preview() {
+                    context
+                        .this
+                        .preview_theme_selection(&theme, context.chat_view);
                 }
-                if let Some(server_id) = chat_view.take_pending_mcp_toggle() {
-                    this.toggle_mcp_server(&server_id, chat_view);
+                if let Some(server_id) = context.chat_view.take_pending_mcp_toggle() {
+                    context
+                        .this
+                        .toggle_mcp_server(&server_id, context.chat_view);
                 }
                 outcome.request_redraw = true;
             }
             Event::Paste(text) => {
-                if chat_view.mcp_add_dialog_visible() {
-                    chat_view.mcp_add_dialog_handle_paste(&text);
+                if context.chat_view.mcp_add_dialog_visible() {
+                    context.chat_view.mcp_add_dialog_handle_paste(&text);
+                } else if context.chat_view.login_form_visible() {
+                    context.chat_view.login_form_insert_paste(&text);
                 } else {
                     let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
                     for c in normalized.chars() {
-                        chat_view.handle_char(c);
+                        context.chat_view.handle_char(c);
                     }
                 }
                 outcome.request_redraw = true;
@@ -1604,6 +1818,13 @@ impl ChatMode {
             // MCP group
             "mcp_servers" => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);
+            }
+            // Account group
+            "login" => {
+                return self.handle_command("/login", chat_view, chat_state, rt_handle);
+            }
+            "logout" => {
+                return self.handle_command("/logout", chat_view, chat_state, rt_handle);
             }
             // System group
             "help" => {
@@ -1762,6 +1983,35 @@ impl ChatMode {
                 }
                 return Ok(Some(ChatExitReason::Quit));
             }
+            "/login" => {
+                if chat_state.is_processing {
+                    chat_view.set_status(Some(
+                        "Wait until the session is idle before using /login.".to_string(),
+                    ));
+                    return Ok(None);
+                }
+                self.close_all_popups(chat_view);
+                self.open_login_or_account_panel(chat_view, chat_state, rt_handle);
+            }
+            "/logout" => {
+                let logged_in = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(crate::account::is_logged_in())
+                });
+                if !logged_in {
+                    chat_state.add_system_message("Not logged in.".to_string());
+                } else {
+                    match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(crate::account::logout())
+                    }) {
+                        Ok(()) => {
+                            chat_state.add_system_message("Logged out.".to_string());
+                        }
+                        Err(e) => {
+                            chat_state.add_system_message(format!("Logout failed: {e}"));
+                        }
+                    }
+                }
+            }
             _ => {
                 chat_state.add_system_message(format!(
                     "Unknown command: {}\nUse /help to see available commands",
@@ -1873,7 +2123,7 @@ impl ChatMode {
             themes.push(ThemeItem { id });
         }
 
-        themes.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
+        themes.sort_by_cached_key(|theme| theme.id.to_ascii_lowercase());
         themes.dedup_by(|a, b| a.id == b.id);
         themes
     }
@@ -2316,7 +2566,6 @@ impl ChatMode {
                         name: config.name.clone(),
                         server_type,
                         status,
-                        enabled: config.enabled,
                         tool_count,
                     });
                 }
@@ -2411,9 +2660,7 @@ impl ChatMode {
             changed = true;
             match task {
                 PendingMcpTask::Toggle { server_id, handle } => {
-                    let join_result = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move { handle.await })
-                    });
+                    let join_result = tokio::task::block_in_place(|| rt_handle.block_on(handle));
 
                     match join_result {
                         Ok(Ok(())) => {}
@@ -2438,9 +2685,7 @@ impl ChatMode {
                     chat_view.mcp_selector_update_items(updated_items);
                 }
                 PendingMcpTask::Add { name, handle } => {
-                    let join_result = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move { handle.await })
-                    });
+                    let join_result = tokio::task::block_in_place(|| rt_handle.block_on(handle));
 
                     match join_result {
                         Ok(Ok(())) => {
@@ -2464,9 +2709,7 @@ impl ChatMode {
                     chat_view.set_status(None);
                 }
                 PendingMcpTask::Delete { server_id, handle } => {
-                    let join_result = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move { handle.await })
-                    });
+                    let join_result = tokio::task::block_in_place(|| rt_handle.block_on(handle));
 
                     match join_result {
                         Ok(Ok(())) => {
@@ -3271,7 +3514,6 @@ impl ChatMode {
             description: info.description,
             source,
             enabled: info.effective_enabled,
-            default_enabled: info.default_enabled,
         }
     }
 

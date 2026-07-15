@@ -18,11 +18,26 @@ use crate::shell::{
     CommandState, ScriptsManager, ShellDetector, ShellIntegration, ShellIntegrationEvent,
     ShellIntegrationManager, ShellType,
 };
+use crate::transcript::TranscriptRecorder;
 use crate::{TerminalError, TerminalResult};
 
 use super::{SessionSource, SessionStatus, TerminalSession};
 
 const COMMAND_TIMEOUT_INTERRUPT_GRACE_MS: Duration = Duration::from_millis(500);
+
+async fn prepare_shell_integration_input(
+    session_integrations: &Arc<RwLock<HashMap<String, ShellIntegration>>>,
+    session_id: &str,
+    clear_output: bool,
+) {
+    let mut integrations = session_integrations.write().await;
+    if let Some(integration) = integrations.get_mut(session_id) {
+        integration.notify_input_written();
+        if clear_output {
+            integration.clear_output();
+        }
+    }
+}
 
 /// Why a command stream reached completion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,6 +185,9 @@ pub struct SessionManager {
 
     /// Per-session output taps for real-time output streaming
     output_taps: Arc<DashMap<String, Vec<mpsc::Sender<String>>>>,
+
+    /// Persistent plain-text transcripts for manually created terminal sessions.
+    transcript_recorder: Option<TranscriptRecorder>,
 }
 
 impl SessionManager {
@@ -186,6 +204,7 @@ impl SessionManager {
         let integration_manager = Arc::new(ShellIntegrationManager::new());
         let binding = Arc::new(super::TerminalSessionBinding::new());
         let output_taps = Arc::new(DashMap::new());
+        let transcript_recorder = TranscriptRecorder::from_config(&config.transcript);
 
         let manager = Self {
             config,
@@ -198,6 +217,7 @@ impl SessionManager {
             binding,
             scripts_manager,
             output_taps,
+            transcript_recorder,
         };
 
         // Start event forwarding
@@ -222,6 +242,7 @@ impl SessionManager {
         let pty_to_session = self.pty_to_session.clone();
         let session_integrations = self.session_integrations.clone();
         let output_taps = self.output_taps.clone();
+        let transcript_recorder = self.transcript_recorder.clone();
 
         tokio::spawn(async move {
             loop {
@@ -234,15 +255,15 @@ impl SessionManager {
                         PtyServiceEvent::ResizeCompleted { id, .. } => *id,
                     };
 
-                    // Retry the pty_to_session lookup a few times for
-                    // non-Data events.  create_session sets the mapping
-                    // AFTER create_process returns, but event forwarding
-                    // can deliver ProcessReady before the mapping exists.
+                    // `create_session` can receive PTY output before it has stored the
+                    // PTY-to-session mapping. Retry every event type so initial shell output
+                    // reaches both terminal consumers and the durable transcript. The mapping is
+                    // inserted only after transcript setup has completed.
                     let session_id = {
                         let mapping = pty_to_session.read().await;
                         match mapping.get(&pty_id).cloned() {
                             Some(sid) => Some(sid),
-                            None if !matches!(event, PtyServiceEvent::ProcessData { .. }) => {
+                            None => {
                                 drop(mapping);
                                 let mut found = None;
                                 for _ in 0..50 {
@@ -255,7 +276,6 @@ impl SessionManager {
                                 }
                                 found
                             }
-                            None => None,
                         }
                     };
 
@@ -264,22 +284,74 @@ impl SessionManager {
                             PtyServiceEvent::ProcessData { data, .. } => {
                                 let data_str = String::from_utf8_lossy(&data).to_string();
 
-                                // Update last activity and record to history
-                                if let Some(session) = sessions.write().await.get_mut(&session_id) {
+                                // Update last activity and record to history.
+                                let is_manual_session = if let Some(session) =
+                                    sessions.write().await.get_mut(&session_id)
+                                {
                                     session.touch();
                                     // Record output to history for frontend recovery
                                     session.add_output(&data_str);
-                                }
+                                    session.source == SessionSource::Manual
+                                } else {
+                                    false
+                                };
 
-                                // Process through shell integration
-                                let si_events = {
+                                // Process through shell integration.
+                                let (has_shell_integration, si_events) = {
                                     let mut integrations = session_integrations.write().await;
                                     if let Some(integration) = integrations.get_mut(&session_id) {
-                                        integration.process_data(&data_str)
+                                        (true, integration.process_data(&data_str))
                                     } else {
-                                        Vec::new()
+                                        (false, Vec::new())
                                     }
                                 };
+
+                                if is_manual_session {
+                                    if let Some(recorder) = &transcript_recorder {
+                                        if has_shell_integration {
+                                            for event in &si_events {
+                                                match event {
+                                                    ShellIntegrationEvent::CommandStarted {
+                                                        command,
+                                                        ..
+                                                    } => match recorder
+                                                        .record_command(&session_id, command)
+                                                    {
+                                                        Ok(()) => {}
+                                                        Err(error) => {
+                                                            warn!(
+                                                                "Failed to record terminal transcript command: session_id={} error={}",
+                                                                session_id, error
+                                                            );
+                                                        }
+                                                    },
+                                                    ShellIntegrationEvent::OutputData {
+                                                        data,
+                                                        ..
+                                                    } => match recorder
+                                                        .record_output(&session_id, data)
+                                                    {
+                                                        Ok(()) => {}
+                                                        Err(error) => {
+                                                            warn!(
+                                                                "Failed to record terminal transcript output: session_id={} error={}",
+                                                                session_id, error
+                                                            );
+                                                        }
+                                                    },
+                                                    _ => {}
+                                                }
+                                            }
+                                        } else if let Err(error) =
+                                            recorder.record_output(&session_id, &data_str)
+                                        {
+                                            warn!(
+                                                "Failed to record terminal transcript output: session_id={} error={}",
+                                                session_id, error
+                                            );
+                                        }
+                                    }
+                                }
 
                                 // Emit shell integration events as terminal events after
                                 // releasing the integration map lock.
@@ -301,6 +373,20 @@ impl SessionManager {
                                             command_id,
                                             exit_code,
                                         } => {
+                                            if is_manual_session {
+                                                if let (Some(recorder), Some(exit_code)) =
+                                                    (&transcript_recorder, exit_code)
+                                                {
+                                                    if let Err(error) = recorder
+                                                        .record_exit_code(&session_id, exit_code)
+                                                    {
+                                                        warn!(
+                                                            "Failed to record terminal transcript exit code: session_id={} error={}",
+                                                            session_id, error
+                                                        );
+                                                    }
+                                                }
+                                            }
                                             let _ = event_emitter
                                                 .emit(TerminalEvent::CommandFinished {
                                                     session_id: session_id.clone(),
@@ -310,6 +396,18 @@ impl SessionManager {
                                                 .await;
                                         }
                                         ShellIntegrationEvent::CwdChanged { cwd } => {
+                                            if is_manual_session {
+                                                if let Some(recorder) = &transcript_recorder {
+                                                    if let Err(error) = recorder
+                                                        .record_cwd_changed(&session_id, &cwd)
+                                                    {
+                                                        warn!(
+                                                            "Failed to record terminal transcript cwd change: session_id={} error={}",
+                                                            session_id, error
+                                                        );
+                                                    }
+                                                }
+                                            }
                                             if let Some(session) =
                                                 sessions.write().await.get_mut(&session_id)
                                             {
@@ -352,9 +450,27 @@ impl SessionManager {
                                 }
                             }
                             PtyServiceEvent::ProcessExit { exit_code, .. } => {
-                                // Update session
-                                if let Some(session) = sessions.write().await.get_mut(&session_id) {
-                                    session.set_exited(exit_code.map(|c| c as i32));
+                                // Update session.
+                                let is_manual_session = if let Some(session) =
+                                    sessions.write().await.get_mut(&session_id)
+                                {
+                                    session.set_exited(exit_code.map(|code| code as i32));
+                                    session.source == SessionSource::Manual
+                                } else {
+                                    false
+                                };
+                                if is_manual_session {
+                                    if let Some(recorder) = &transcript_recorder {
+                                        if let Err(error) = recorder.finish_session(
+                                            &session_id,
+                                            exit_code.map(|code| code as i32),
+                                        ) {
+                                            warn!(
+                                                "Failed to finish terminal transcript: session_id={} error={}",
+                                                session_id, error
+                                            );
+                                        }
+                                    }
                                 }
 
                                 TerminalEvent::Exit {
@@ -422,13 +538,63 @@ impl SessionManager {
         .await
     }
 
-    /// Create a new terminal session with optional shell integration
+    /// Create a session with shell integration using a stable discovered shell ID.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_session_with_shell_id(
+        &self,
+        session_id: Option<String>,
+        name: Option<String>,
+        shell_type: Option<ShellType>,
+        shell_id: Option<String>,
+        cwd: Option<String>,
+        env: Option<HashMap<String, String>>,
+        cols: Option<u16>,
+        rows: Option<u16>,
+        source: Option<SessionSource>,
+    ) -> TerminalResult<TerminalSession> {
+        self.create_session_with_options_and_shell_id(
+            session_id, name, shell_type, shell_id, cwd, env, cols, rows, true, source,
+        )
+        .await
+    }
+
+    /// Create a new terminal session with optional shell integration.
     #[allow(clippy::too_many_arguments)]
     pub async fn create_session_with_options(
         &self,
         session_id: Option<String>,
         name: Option<String>,
         shell_type: Option<ShellType>,
+        cwd: Option<String>,
+        env: Option<HashMap<String, String>>,
+        cols: Option<u16>,
+        rows: Option<u16>,
+        enable_integration: bool,
+        source: Option<SessionSource>,
+    ) -> TerminalResult<TerminalSession> {
+        self.create_session_with_options_and_shell_id(
+            session_id,
+            name,
+            shell_type,
+            None,
+            cwd,
+            env,
+            cols,
+            rows,
+            enable_integration,
+            source,
+        )
+        .await
+    }
+
+    /// Create a session using an exact discovered shell when `shell_id` is supplied.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_session_with_options_and_shell_id(
+        &self,
+        session_id: Option<String>,
+        name: Option<String>,
+        shell_type: Option<ShellType>,
+        shell_id: Option<String>,
         cwd: Option<String>,
         env: Option<HashMap<String, String>>,
         cols: Option<u16>,
@@ -450,10 +616,51 @@ impl SessionManager {
             }
         }
 
-        // Determine shell type
-        let shell_type = shell_type.unwrap_or_else(|| {
-            let detected = ShellDetector::get_default_shell();
-            detected.shell_type
+        // Resolve the executable before deriving the session shell type. This
+        // preserves user PATH ordering and lets callers select a specific
+        // discovered version by stable ID instead of falling back to a bare
+        // command name such as `pwsh`.
+        let requested_shell_type = shell_type.clone();
+        let shell_from_id = match shell_id.as_deref() {
+            Some(id) => Some(ShellDetector::find_shell_by_id(id).ok_or_else(|| {
+                TerminalError::InvalidConfig(format!("Configured shell ID '{id}' is unavailable"))
+            })?),
+            None => None,
+        };
+
+        if let (Some(requested), Some(selected)) = (&requested_shell_type, &shell_from_id) {
+            if requested != &selected.shell_type {
+                return Err(TerminalError::InvalidConfig(format!(
+                    "Configured shell ID '{}' does not match requested shell type '{}'",
+                    selected.id, requested
+                )));
+            }
+        }
+
+        let configured_default = if requested_shell_type.is_none() && shell_from_id.is_none() {
+            self.config
+                .default_shell
+                .as_deref()
+                .and_then(ShellDetector::resolve_configured_shell)
+        } else {
+            None
+        };
+        let detected_for_type = requested_shell_type
+            .as_ref()
+            .and_then(ShellDetector::find_shell);
+        let selected_shell = shell_from_id
+            .or(configured_default)
+            .or(detected_for_type)
+            .or_else(|| {
+                requested_shell_type
+                    .is_none()
+                    .then(ShellDetector::get_default_shell)
+            });
+        let shell_type = requested_shell_type.unwrap_or_else(|| {
+            selected_shell
+                .as_ref()
+                .map(|shell| shell.shell_type.clone())
+                .unwrap_or_else(|| ShellDetector::get_default_shell().shell_type)
         });
 
         // Determine working directory
@@ -471,42 +678,19 @@ impl SessionManager {
         // Generate nonce for shell integration
         let nonce = uuid::Uuid::new_v4().to_string();
 
-        // Create shell config
-        // On Windows, when shell_type is Bash, we need to use the detected Git Bash path
-        // instead of just "bash" which might resolve to WSL bash in System32
-        #[cfg(windows)]
-        let shell_config_base = if matches!(shell_type, ShellType::Bash) {
-            // Try to get Git Bash path from detection
-            if let Some(detected) = ShellDetector::detect_git_bash() {
-                detected.to_config()
-            } else {
-                // Fallback to default if Git Bash not found
-                ShellConfig {
-                    executable: shell_type.default_executable().to_string(),
-                    args: Vec::new(),
-                    env: HashMap::new(),
-                    cwd: None,
-                    login: false,
-                }
-            }
-        } else {
-            ShellConfig {
+        // Launch the verified discovery result whenever one is available. This
+        // avoids resolving a second, potentially different executable at PTY
+        // spawn time and also keeps Git Bash away from the WSL compatibility
+        // bash.exe.
+        let shell_config_base = selected_shell
+            .map(|shell| shell.to_config())
+            .unwrap_or_else(|| ShellConfig {
                 executable: shell_type.default_executable().to_string(),
                 args: Vec::new(),
                 env: HashMap::new(),
                 cwd: None,
                 login: false,
-            }
-        };
-
-        #[cfg(not(windows))]
-        let shell_config_base = ShellConfig {
-            executable: shell_type.default_executable().to_string(),
-            args: Vec::new(),
-            env: HashMap::new(),
-            cwd: None,
-            login: false,
-        };
+            });
 
         let mut shell_config = ShellConfig {
             executable: shell_config_base.executable,
@@ -574,7 +758,19 @@ impl SessionManager {
             }
         }
 
-        // Store PTY to session mapping
+        // Initialize durable capture before exposing this PTY to event forwarding, so a
+        // fast shell's initial prompt cannot be recorded before its transcript exists.
+        if let Some(recorder) = &self.transcript_recorder {
+            if let Err(error) = recorder.start_session(&session) {
+                warn!(
+                    "Failed to start terminal transcript: session_id={} error={}",
+                    session_id, error
+                );
+            }
+        }
+
+        // Store PTY to session mapping after transcript setup. Event forwarding retries early
+        // PTY events until this mapping is available.
         {
             let mut mapping = self.pty_to_session.write().await;
             mapping.insert(pty_id, session_id.clone());
@@ -911,14 +1107,6 @@ impl SessionManager {
             // Generate command ID
             let command_id = uuid::Uuid::new_v4().to_string();
 
-            // Clear any previous output
-            {
-                let mut integrations = session_integrations.write().await;
-                if let Some(integration) = integrations.get_mut(&session_id) {
-                    integration.clear_output();
-                }
-            }
-
             // Send started event
             send(CommandStreamEvent::Started {
                 command_id: command_id.clone(),
@@ -931,6 +1119,10 @@ impl SessionManager {
             } else {
                 format!("{}\r", command)
             };
+
+            // End any previous command's late-output attribution before the PTY can
+            // echo or render this new input.
+            prepare_shell_integration_input(&session_integrations, &session_id, true).await;
 
             // Send the command
             if let Err(e) = pty_service.write(pty_id, cmd_to_send.as_bytes()).await {
@@ -1227,6 +1419,12 @@ impl SessionManager {
                 .ok_or_else(|| TerminalError::SessionNotFound(session_id.to_string()))?
         };
 
+        if !data.is_empty() {
+            // Clear post-command attribution before the PTY can emit input echo,
+            // PSReadLine predictions, or other rendering caused by this input.
+            prepare_shell_integration_input(&self.session_integrations, session_id, false).await;
+        }
+
         self.pty_service.write(pty_id, data).await
     }
 
@@ -1278,14 +1476,14 @@ impl SessionManager {
 
     /// Close a session
     pub async fn close_session(&self, session_id: &str, immediate: bool) -> TerminalResult<()> {
-        let pty_id = {
+        let (pty_id, is_manual_session) = {
             let mut sessions = self.sessions.write().await;
             let session = sessions
                 .get_mut(session_id)
                 .ok_or_else(|| TerminalError::SessionNotFound(session_id.to_string()))?;
 
             session.status = SessionStatus::Terminating;
-            session.pty_id
+            (session.pty_id, session.source == SessionSource::Manual)
         };
 
         // Shutdown PTY if exists
@@ -1297,6 +1495,17 @@ impl SessionManager {
             }
 
             self.pty_service.shutdown(pty_id, immediate).await?;
+        }
+
+        if is_manual_session {
+            if let Some(recorder) = &self.transcript_recorder {
+                if let Err(error) = recorder.finish_session(session_id, None) {
+                    warn!(
+                        "Failed to finish terminal transcript: session_id={} error={}",
+                        session_id, error
+                    );
+                }
+            }
         }
 
         // Remove shell integration

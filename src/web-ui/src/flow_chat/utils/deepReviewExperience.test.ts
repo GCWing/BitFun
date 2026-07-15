@@ -4,6 +4,7 @@ import {
   buildReviewerProgressSummary,
   buildErrorAttribution,
   buildRecoveryPlan,
+  evaluateDegradationOptions,
   extractPartialReviewData,
 } from './deepReviewExperience';
 
@@ -189,5 +190,25 @@ describe('deepReviewExperience', () => {
         'Security reviewer found likely token logging before the dialog failed.',
       ],
     });
+  });
+
+  it('offers only implemented recovery actions for context overflow', () => {
+    const options = evaluateDegradationOptions({
+      phase: 'review_interrupted',
+      childSessionId: 'deep-review-session',
+      originalTarget: '/review strict',
+      errorDetail: { category: 'context_overflow' },
+      canResume: true,
+      recommendedActions: [],
+      reviewers: [
+        { reviewer: 'ReviewSecurity', status: 'completed' },
+        { reviewer: 'ReviewArchitecture', status: 'failed' },
+      ],
+    });
+
+    expect(options).toEqual([expect.objectContaining({
+      type: 'view_partial',
+      enabled: true,
+    })]);
   });
 });

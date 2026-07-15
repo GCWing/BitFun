@@ -5,6 +5,9 @@
 
 pub mod canvas;
 
+#[cfg(feature = "plugin-source")]
+pub mod plugin_source;
+
 #[cfg(feature = "miniapp")]
 pub mod miniapp;
 

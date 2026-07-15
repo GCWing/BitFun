@@ -32,7 +32,7 @@ use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
     SessionRelationship, TextItemData, ThinkingItemData, ToolCallData, ToolItemData,
-    ToolResultData, TurnStatus, UserMessageData,
+    ToolResultData, TranscriptLineRange, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo, WorkspaceKind};
@@ -44,7 +44,8 @@ use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
-    set_deep_review_run_manifest, set_session_relationship, SessionStorageLayout,
+    set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
+    SessionStorageLayout,
 };
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
@@ -76,6 +77,12 @@ impl Default for SessionManagerConfig {
             prompt_cache_policy: PromptCachePolicy::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompressionTranscriptReference {
+    pub uri: String,
+    pub index_range: TranscriptLineRange,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -523,6 +530,57 @@ impl SessionManager {
         self.effective_storage_path_for_config(&config).await
     }
 
+    pub async fn create_compression_transcript_reference(
+        &self,
+        session_id: &str,
+        boundary_turn_index: usize,
+        compression_id: &str,
+        trigger: &str,
+    ) -> BitFunResult<Option<CompressionTranscriptReference>> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(None);
+        }
+        let storage_path = self
+            .effective_session_storage_path(session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(session_id)
+                    .map(|entry| entry.value().clone())
+            })
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session storage path is unavailable: {}",
+                    session_id
+                ))
+            })?;
+        let artifact = self
+            .persistence_manager
+            .create_compression_transcript(
+                &storage_path,
+                session_id,
+                boundary_turn_index,
+                compression_id,
+                trigger,
+            )
+            .await?;
+        if let Some(artifact) = artifact {
+            debug!(
+                "Created compression transcript: session_id={}, boundary_turn_index={}, transcript_path={}, meta_path={}",
+                session_id,
+                boundary_turn_index,
+                artifact.transcript_path.display(),
+                artifact.meta_path.display()
+            );
+            Ok(Some(CompressionTranscriptReference {
+                uri: artifact.uri,
+                index_range: artifact.index_range,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn persistent_model_exchange_trace_dir(&self, session_id: &str) -> Option<PathBuf> {
         if !self.should_persist_session_id(session_id) {
             return None;
@@ -673,9 +731,7 @@ impl SessionManager {
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
                     .map(str::to_string);
-                if config.remote_connection_id.is_none() {
-                    return None;
-                }
+                config.remote_connection_id.as_ref()?;
             }
         } else if remote_hostname.is_some() {
             return None;
@@ -689,9 +745,7 @@ impl SessionManager {
         workspace_path: &str,
         ssh_host: Option<&str>,
     ) -> Option<WorkspaceInfo> {
-        let Some(ssh_host) = ssh_host.map(str::trim).filter(|value| !value.is_empty()) else {
-            return None;
-        };
+        let ssh_host = ssh_host.map(str::trim).filter(|value| !value.is_empty())?;
 
         let normalized_workspace_path =
             crate::service::remote_ssh::normalize_remote_workspace_path(workspace_path);
@@ -725,7 +779,7 @@ impl SessionManager {
     async fn tracked_workspace_candidates(&self) -> Option<Vec<WorkspaceInfo>> {
         let workspace_service = get_global_workspace_service()?;
         let mut workspaces = workspace_service.list_workspace_infos().await;
-        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        workspaces.sort_by_key(|workspace| std::cmp::Reverse(workspace.last_accessed));
         Some(workspaces)
     }
 
@@ -1863,20 +1917,17 @@ impl SessionManager {
             return;
         };
 
-        match self
+        if let Err(error) = self
             .persistence_manager
             .save_skill_agent_baseline_override_snapshot(&workspace_path, session_id, &snapshot)
             .await
         {
-            Err(error) => {
-                warn!(
-                    "Failed to persist listing reminder baseline override snapshot: session_id={}, workspace_path={}, error={}",
-                    session_id,
-                    workspace_path.display(),
-                    error
-                );
-            }
-            Ok(()) => {}
+            warn!(
+                "Failed to persist listing reminder baseline override snapshot: session_id={}, workspace_path={}, error={}",
+                session_id,
+                workspace_path.display(),
+                error
+            );
         }
     }
 
@@ -2222,8 +2273,7 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            let persist = self.config.enable_persistence && Self::should_persist_session(&session);
-            persist
+            self.config.enable_persistence && Self::should_persist_session(&session)
         } else {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
@@ -3171,7 +3221,7 @@ impl SessionManager {
         let metadata_started_at = Instant::now();
         if self
             .persistence_manager
-            .load_session_metadata(&session_storage_path, session_id)
+            .load_session_metadata(session_storage_path, session_id)
             .await?
             .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
@@ -3191,7 +3241,7 @@ impl SessionManager {
             if let Some(tail_turn_count) = tail_turn_count {
                 self.persistence_manager
                     .load_session_with_tail_turns_timed(
-                        &session_storage_path,
+                        session_storage_path,
                         session_id,
                         tail_turn_count,
                     )
@@ -3199,7 +3249,7 @@ impl SessionManager {
             } else {
                 let (session, turns, timing) = self
                     .persistence_manager
-                    .load_session_with_turns_timed(&session_storage_path, session_id)
+                    .load_session_with_turns_timed(session_storage_path, session_id)
                     .await?;
                 let total_turn_count = turns.len();
                 (session, turns, total_turn_count, timing)
@@ -3359,7 +3409,7 @@ impl SessionManager {
         let metadata_started_at = Instant::now();
         let session_metadata = self
             .persistence_manager
-            .load_session_metadata(&session_storage_path, session_id)
+            .load_session_metadata(session_storage_path, session_id)
             .await?;
         if session_metadata
             .as_ref()
@@ -3382,7 +3432,7 @@ impl SessionManager {
         let session_started_at = Instant::now();
         let (mut session, persisted_turns) = self
             .persistence_manager
-            .load_session_with_turns(&session_storage_path, session_id)
+            .load_session_with_turns(session_storage_path, session_id)
             .await?;
         debug!(
             "Session restore phase completed: session_id={}, phase=load_session_with_turns, turn_count={}, duration_ms={}",
@@ -3475,13 +3525,13 @@ impl SessionManager {
         let context_snapshot_started_at = Instant::now();
         let mut messages = match self
             .persistence_manager
-            .load_latest_turn_context_snapshot(&session_storage_path, session_id)
+            .load_latest_turn_context_snapshot(session_storage_path, session_id)
             .await?
         {
             Some((turn_index, msgs)) => {
                 latest_turn_index = Some(turn_index);
                 self.sanitize_listing_diff_context_snapshot_if_needed(
-                    &session_storage_path,
+                    session_storage_path,
                     session_id,
                     turn_index,
                     msgs,
@@ -3604,7 +3654,7 @@ impl SessionManager {
 
         if should_persist_restored_session && self.should_persist_session_id(session_id) {
             self.persistence_manager
-                .save_session(&session_storage_path, &session)
+                .save_session(session_storage_path, &session)
                 .await?;
         }
 
@@ -3733,6 +3783,9 @@ impl SessionManager {
                 .await?;
             self.persistence_manager
                 .delete_turn_context_snapshots_from(workspace_path, session_id, target_turn)
+                .await?;
+            self.persistence_manager
+                .delete_compression_transcripts_from(workspace_path, session_id, target_turn)
                 .await?;
             self.truncate_listing_baseline_rebuild_turn_index_after_rollback(
                 workspace_path,
@@ -3989,6 +4042,17 @@ impl SessionManager {
     ) -> BitFunResult<()> {
         self.update_persisted_session_metadata(session_id, |metadata| {
             set_deep_review_run_manifest(metadata, deep_review_run_manifest)
+        })
+        .await
+    }
+
+    pub async fn set_session_review_target_evidence(
+        &self,
+        session_id: &str,
+        review_target_evidence: Option<serde_json::Value>,
+    ) -> BitFunResult<()> {
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            set_review_target_evidence(metadata, review_target_evidence)
         })
         .await
     }
@@ -4427,15 +4491,13 @@ impl SessionManager {
                                 order_index += 1;
                             }
                         }
-                        MessageContent::Multimodal { text, .. } => {
-                            if !text.trim().is_empty() {
-                                text_items.push(Self::make_text_item(
-                                    &format!("{}-text-{}", round_id, order_index),
-                                    text,
-                                    timestamp,
-                                    order_index,
-                                ));
-                            }
+                        MessageContent::Multimodal { text, .. } if !text.trim().is_empty() => {
+                            text_items.push(Self::make_text_item(
+                                &format!("{}-text-{}", round_id, order_index),
+                                text,
+                                timestamp,
+                                order_index,
+                            ));
                         }
                         _ => {}
                     }
@@ -5450,8 +5512,10 @@ mod tests {
 
     #[test]
     fn sync_session_context_window_refreshes_stale_explicit_model_window() {
-        let mut ai_config = ServiceAIConfig::default();
-        ai_config.models = vec![test_model("deepseek-v4-pro", 1_000_000)];
+        let ai_config = ServiceAIConfig {
+            models: vec![test_model("deepseek-v4-pro", 1_000_000)],
+            ..Default::default()
+        };
 
         let mut session = Session::new_with_id(
             "session-804".to_string(),
@@ -5473,11 +5537,13 @@ mod tests {
 
     #[test]
     fn sync_session_context_window_resolves_auto_through_agent_model_then_primary() {
-        let mut ai_config = ServiceAIConfig::default();
-        ai_config.models = vec![
-            test_model("primary-model", 512_000),
-            test_model("agent-model", 1_000_000),
-        ];
+        let mut ai_config = ServiceAIConfig {
+            models: vec![
+                test_model("primary-model", 512_000),
+                test_model("agent-model", 1_000_000),
+            ],
+            ..Default::default()
+        };
         ai_config.default_models.primary = Some("primary-model".to_string());
         ai_config
             .agent_models

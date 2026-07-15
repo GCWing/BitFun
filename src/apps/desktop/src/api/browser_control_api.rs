@@ -112,7 +112,7 @@ pub async fn browser_control_get_status(
         // Identify the actual browser from CDP version response.
         let kind = ver
             .as_deref()
-            .and_then(|v| BrowserLauncher::browser_kind_from_cdp_version(v))
+            .and_then(BrowserLauncher::browser_kind_from_cdp_version)
             .unwrap_or_else(|| configured_kind.clone());
         // Only count targets of type "page" (real browser tabs),
         // not service workers, browser targets, etc.

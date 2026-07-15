@@ -4,6 +4,8 @@
 /// - Interactive TUI
 /// - Single command execution
 /// - Batch task processing
+mod account;
+mod account_sync;
 mod acp_cli;
 mod agent;
 #[allow(dead_code)]
@@ -14,11 +16,15 @@ mod diagnostics;
 mod logging;
 mod management;
 mod modes;
+mod peer_host;
+mod plugin_diagnostics;
+mod product_assembly;
 mod prompts;
 mod root_handlers;
 mod ui;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use bitfun_core::service::remote_connect::DeviceIdentity;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -145,6 +151,14 @@ enum Commands {
         action: Option<McpAction>,
     },
 
+    /// Inspect and review BitFun-managed plugin packages
+    ///
+    /// Package layout: <package-root>/<package-id>/bitfun.plugin.json
+    Plugins {
+        #[command(subcommand)]
+        action: Option<PluginAction>,
+    },
+
     /// Usage reporting
     Usage {
         /// Session ID to inspect; defaults to the most recent session in the current workspace
@@ -185,7 +199,7 @@ enum ModelAction {
 enum McpAction {
     /// List configured MCP servers
     List,
-    /// Check MCP readiness
+    /// Show the configured MCP entries without probing readiness
     Doctor,
     /// Enable an MCP server by id
     Enable {
@@ -199,6 +213,27 @@ enum McpAction {
     },
     /// Print the stored MCP JSON config
     Config,
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+    /// List discovered packages and trust status
+    List,
+    /// Approve the current manifest and declared files without enabling execution
+    ApproveSource { package_id: String },
+    /// Deny the current manifest and declared files for this workspace
+    Deny { package_id: String },
+    /// Revoke the current package approval for this workspace
+    Revoke { package_id: String },
+    /// Preview or confirm activation of one source-approved package
+    Activate {
+        package_id: String,
+        /// Confirm the exact content hash displayed by the activation preview
+        #[arg(long, value_name = "CONTENT_HASH")]
+        confirm: Option<String>,
+    },
+    /// Deactivate one package for this workspace
+    Deactivate { package_id: String },
 }
 
 #[derive(Subcommand)]
@@ -339,11 +374,24 @@ fn terminal_scripts_dir() -> std::path::PathBuf {
 }
 
 async fn initialize_terminal_service() {
+    use bitfun_core::infrastructure::try_get_path_manager_arc;
     use bitfun_core::service::runtime::RuntimeManager;
     use bitfun_core::service::terminal::{TerminalApi, TerminalConfig};
 
     let mut terminal_config = TerminalConfig::default();
     terminal_config.shell_integration.scripts_dir = Some(terminal_scripts_dir());
+    match try_get_path_manager_arc() {
+        Ok(path_manager) => {
+            terminal_config.transcript.root_dir =
+                Some(path_manager.user_data_dir().join("terminals"));
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Failed to configure terminal transcript storage; recording is disabled: {}",
+                error
+            );
+        }
+    }
 
     if let Ok(runtime_manager) = RuntimeManager::new() {
         let current_path = std::env::var("PATH").ok();
@@ -404,6 +452,12 @@ async fn initialize_core_services(
         .await
         .expect("Failed to initialize agentic system");
     tracing::info!("Agentic system initialized");
+
+    if let Err(e) = peer_host::ensure_peer_host_ready(&agentic_system).await {
+        tracing::warn!("Failed to initialize CLI peer host services: {e}");
+    } else {
+        tracing::info!("CLI peer host services initialized");
+    }
 
     // Initialize MCP service in background (non-blocking)
     if let Some(ref cfg_svc) = config_service {
@@ -478,6 +532,17 @@ async fn run_interactive(
     // 3. Initialize core services
     let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
 
+    // 3.5 Restore persisted account session (if any)
+    if let Some(user_id) = account::try_restore_session().await {
+        tracing::info!("Restored account session for user {user_id}");
+        // Re-establish device routing so the CLI becomes RPC-controllable.
+        let device =
+            DeviceIdentity::from_current_machine().map_err(|e| anyhow!("detect device: {e}"))?;
+        if let Err(e) = account::restore_device_routing(&device.device_name).await {
+            tracing::warn!("Failed to restore device routing: {e}");
+        }
+    }
+
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
         agentic_system.coordinator.clone(),
@@ -486,15 +551,12 @@ async fn run_interactive(
     );
     let startup_result = startup_page.run(&mut terminal)?;
 
-    match startup_result {
-        StartupResult::Exit => {
-            shutdown_mcp_servers().await;
-            restore_tool_confirmation(original_skip_confirmation).await;
-            ui::restore_terminal(terminal)?;
-            println!("Goodbye!");
-            return Ok(());
-        }
-        _ => {}
+    if let StartupResult::Exit = startup_result {
+        shutdown_mcp_servers().await;
+        restore_tool_confirmation(original_skip_confirmation).await;
+        ui::restore_terminal(terminal)?;
+        println!("Goodbye!");
+        return Ok(());
     }
 
     // 5. Parse startup result and enter chat
@@ -614,11 +676,7 @@ async fn run_cli() -> Result<()> {
 
         Some(Commands::Mcp { action }) => match action {
             None | Some(McpAction::List) => management::print_mcp_servers().await?,
-            Some(McpAction::Doctor) => {
-                if !management::print_doctor().await? {
-                    std::process::exit(1);
-                }
-            }
+            Some(McpAction::Doctor) => management::print_mcp_config_summary().await?,
             Some(McpAction::Enable { server_id }) => {
                 management::set_mcp_server_enabled(&server_id, true).await?;
             }
@@ -630,12 +688,47 @@ async fn run_cli() -> Result<()> {
             }
         },
 
+        Some(Commands::Plugins { action }) => match action {
+            None | Some(PluginAction::List) => management::print_plugins().await?,
+            Some(PluginAction::ApproveSource { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::ApproveSource,
+                )
+                .await?;
+            }
+            Some(PluginAction::Deny { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::Denied,
+                )
+                .await?;
+            }
+            Some(PluginAction::Revoke { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::Revoked,
+                )
+                .await?;
+            }
+            Some(PluginAction::Activate {
+                package_id,
+                confirm,
+            }) => {
+                management::activate_plugin(&package_id, confirm.as_deref()).await?;
+            }
+            Some(PluginAction::Deactivate { package_id }) => {
+                management::deactivate_plugin(&package_id).await?;
+            }
+        },
+
         Some(Commands::Usage { session_id }) => {
             management::print_usage_report(session_id.as_deref()).await?;
         }
 
         Some(Commands::Doctor) => {
-            if !management::print_doctor().await? {
+            let product_plan = product_assembly::cli_product_assembly_plan();
+            if !management::print_doctor(&product_plan).await? {
                 std::process::exit(1);
             }
         }
@@ -767,5 +860,88 @@ fn main() {
             eprintln!("Error: bitfun-cli worker thread panicked");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod plugin_command_tests {
+    use super::{Cli, Commands, PluginAction};
+    use clap::Parser;
+
+    #[test]
+    fn plugin_commands_parse_list_and_source_review_actions() {
+        let list = Cli::try_parse_from(["bitfun-cli", "plugins"]).expect("parse plugin list");
+        assert!(matches!(
+            list.command,
+            Some(Commands::Plugins { action: None })
+        ));
+
+        let approval =
+            Cli::try_parse_from(["bitfun-cli", "plugins", "approve-source", "acme.demo"])
+                .expect("parse plugin source approval");
+        assert!(matches!(
+            approval.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::ApproveSource { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let deny = Cli::try_parse_from(["bitfun-cli", "plugins", "deny", "acme.demo"])
+            .expect("parse plugin deny");
+        assert!(matches!(
+            deny.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Deny { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let revoke = Cli::try_parse_from(["bitfun-cli", "plugins", "revoke", "acme.demo"])
+            .expect("parse plugin revoke");
+        assert!(matches!(
+            revoke.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Revoke { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let preview = Cli::try_parse_from(["bitfun-cli", "plugins", "activate", "acme.demo"])
+            .expect("parse plugin activation preview");
+        assert!(matches!(
+            preview.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: None,
+                })
+            }) if package_id == "acme.demo"
+        ));
+
+        let confirm = Cli::try_parse_from([
+            "bitfun-cli",
+            "plugins",
+            "activate",
+            "acme.demo",
+            "--confirm",
+            "sha256:previewed",
+        ])
+        .expect("parse confirmed plugin activation");
+        assert!(matches!(
+            confirm.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: Some(content_hash),
+                })
+            }) if package_id == "acme.demo" && content_hash == "sha256:previewed"
+        ));
+
+        let deactivate = Cli::try_parse_from(["bitfun-cli", "plugins", "deactivate", "acme.demo"])
+            .expect("parse plugin deactivation");
+        assert!(matches!(
+            deactivate.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Deactivate { package_id })
+            }) if package_id == "acme.demo"
+        ));
     }
 }

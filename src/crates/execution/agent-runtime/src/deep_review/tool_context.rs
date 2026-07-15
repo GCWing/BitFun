@@ -49,7 +49,7 @@ pub fn append_tool_use_context_data(
     if custom_data
         .get("deep_review_subagent_role")
         .and_then(Value::as_str)
-        .is_some_and(|role| role == "reviewer")
+        .is_some_and(|role| matches!(role, "reviewer" | "judge"))
     {
         if let Some(parent_context) = parent_context {
             custom_data.insert(
@@ -65,5 +65,36 @@ pub fn append_tool_use_context_data(
                 serde_json::json!(parent_context.dialog_turn_id),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn judge_receives_the_parent_turn_identity() {
+        let context_vars =
+            HashMap::from([("deep_review_subagent_role".to_string(), "judge".to_string())]);
+        let mut custom_data = HashMap::new();
+
+        append_tool_use_context_data(
+            &context_vars,
+            Some(DeepReviewToolParentContext {
+                tool_call_id: "judge-launch",
+                session_id: "session",
+                dialog_turn_id: "parent-turn",
+            }),
+            &mut custom_data,
+        );
+
+        assert_eq!(
+            custom_data["deep_review_parent_dialog_turn_id"],
+            serde_json::json!("parent-turn")
+        );
+        assert_eq!(
+            custom_data["deep_review_parent_tool_call_id"],
+            serde_json::json!("judge-launch")
+        );
     }
 }

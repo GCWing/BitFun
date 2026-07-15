@@ -5,7 +5,7 @@ use crate::platform::Cookie;
 use crate::server::response::WebDriverErrorResponse;
 
 impl BridgeExecutor {
-    pub async fn get_all_cookies(&self) -> Result<Vec<Cookie>, WebDriverErrorResponse> {
+    pub(crate) async fn get_all_cookies(&self) -> Result<Vec<Cookie>, WebDriverErrorResponse> {
         let window = self.webview_window()?;
         let cookies = window.cookies().map_err(|error| {
             WebDriverErrorResponse::unknown_error(format!("Failed to read cookies: {error}"))
@@ -13,12 +13,18 @@ impl BridgeExecutor {
         Ok(cookies.iter().map(to_webdriver_cookie).collect())
     }
 
-    pub async fn get_cookie(&self, name: &str) -> Result<Option<Cookie>, WebDriverErrorResponse> {
+    pub(crate) async fn get_cookie(
+        &self,
+        name: &str,
+    ) -> Result<Option<Cookie>, WebDriverErrorResponse> {
         let cookies = self.get_all_cookies().await?;
         Ok(cookies.into_iter().find(|cookie| cookie.name == name))
     }
 
-    pub async fn add_cookie(&self, mut cookie: Cookie) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn add_cookie(
+        &self,
+        mut cookie: Cookie,
+    ) -> Result<(), WebDriverErrorResponse> {
         let window = self.webview_window()?;
 
         if cookie.domain.is_none() {
@@ -37,7 +43,7 @@ impl BridgeExecutor {
         Ok(())
     }
 
-    pub async fn delete_cookie(&self, name: &str) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn delete_cookie(&self, name: &str) -> Result<(), WebDriverErrorResponse> {
         let window = self.webview_window()?;
         let cookies = window.cookies().map_err(|error| {
             WebDriverErrorResponse::unknown_error(format!("Failed to read cookies: {error}"))
@@ -52,7 +58,7 @@ impl BridgeExecutor {
         Ok(())
     }
 
-    pub async fn delete_all_cookies(&self) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn delete_all_cookies(&self) -> Result<(), WebDriverErrorResponse> {
         let window = self.webview_window()?;
         let cookies = window.cookies().map_err(|error| {
             WebDriverErrorResponse::unknown_error(format!("Failed to read cookies: {error}"))

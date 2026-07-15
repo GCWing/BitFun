@@ -161,7 +161,7 @@ function opencodeAdapterEntry(symbol, consumer) {
     contractSlice: contractSlices.opencodeAdapterBoundary,
     wireImpact: false,
     rationale:
-      'P0-C needs one adapter factory for host-readable OpenCode-compatible sources; trust input reuses existing PluginSourceRef snapshots plus trust epoch instead of adding an ecosystem DTO',
+      'P0-C needs one adapter factory that consumes fixed BitFun-managed package content and returns the existing PluginHostAdapter boundary',
     exit:
       'remove only if source discovery moves behind a reviewed product source registry with equivalent host tests',
   };
@@ -169,10 +169,100 @@ function opencodeAdapterEntry(symbol, consumer) {
 
 export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
-    'load_opencode_workspace_adapter',
-    'PluginRuntimeHost::new integration tests with PluginSourceRef trust snapshots; production Product Assembly binding is out of scope for this PR',
+    'load_opencode_package_adapter',
+    'bitfun-core managed plugin composition root and PluginRuntimeHost integration tests',
   ),
 ];
+
+function pluginSourceEntry(symbol, owner, consumer, verification, wireImpact) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification,
+    p0: 'P0-C managed package discovery, workspace review state, fixed adapter input, and CLI diagnostics',
+    contractSlice: contractSlices.bitfunPluginExtension,
+    wireImpact,
+    rationale:
+      'P0-C needs one ecosystem-neutral package identity, review, and fixed-content boundary without exposing adapter or Host ABI types',
+    exit:
+      'remove only after a reviewed package-source owner migration with equivalent CLI and trust-state tests',
+  };
+}
+
+export const pluginSourceContractPublicApiEntries = [
+  'PluginPackageFile',
+  'PluginPackageManifest',
+  'PluginPackageSourceIdentity',
+  'PluginPackageInput',
+  'PluginPackageTrustLevel',
+  'PluginTrustDecision',
+  'PluginTrustStore',
+  'PluginSourceContractError',
+  'PluginActivationAuthority',
+].map((symbol) =>
+  pluginSourceEntry(
+    symbol,
+    'product-domains plugin-source contract owner',
+    'services-integrations managed package source owner, bitfun-core compatibility facade, and plugin-source contract tests',
+    'product-domains plugin_source_contracts tests and services-integrations managed package discovery tests',
+    true,
+  ),
+);
+
+export const managedPluginSourcePublicApiEntries = [
+  'ManagedPluginTrustLevel',
+  'ManagedPluginTrustDecision',
+  'ManagedPluginPackageView',
+  'ManagedPluginSourceIssue',
+  'ManagedPluginSourceSnapshot',
+  'ManagedPluginSourceError',
+  'refresh_managed_plugin_sources',
+  'set_managed_plugin_trust',
+].map((symbol) =>
+  pluginSourceEntry(
+    symbol,
+    'bitfun-core managed plugin source compatibility facade',
+    'bitfun-cli plugins and doctor commands',
+    'services-integrations plugin_source tests, core boundary checks, and bitfun-cli plugin command tests',
+    false,
+  ),
+);
+
+export const managedPluginActivationPublicApiEntries = [
+  'ManagedPluginCandidateView',
+  'ManagedPluginActivationView',
+  'ManagedPluginDeactivationResult',
+  'preview_managed_plugin_activation',
+  'activate_managed_plugin',
+  'deactivate_managed_plugin',
+].map((symbol) =>
+  pluginSourceEntry(
+    symbol,
+    'bitfun-core managed plugin composition root',
+    'bitfun-cli plugin activation commands',
+    'bitfun-core plugin_runtime tests, bitfun-cli plugin source tests, and core boundary checks',
+    false,
+  ),
+);
+
+export const managedPluginSourceServicePublicApiEntries = [
+  'ManagedPluginTrustLevel',
+  'ManagedPluginTrustDecision',
+  'ManagedPluginPackageView',
+  'ManagedPluginSourceIssue',
+  'ManagedPluginSourceSnapshot',
+  'ManagedPluginSourceError',
+  'ManagedPluginSourceService',
+].map((symbol) =>
+  pluginSourceEntry(
+    symbol,
+    'services-integrations managed plugin source owner',
+    'bitfun-core managed plugin source compatibility facade',
+    'services-integrations plugin_source tests and core boundary checks',
+    false,
+  ),
+);
 
 export const publicApiAllowlistRules = [
   {
@@ -198,5 +288,29 @@ export const publicApiAllowlistRules = [
     reason:
       'Plugin Runtime Host public API must stay limited to the injected adapter trait and host boundary type',
     allowedSymbolEntries: pluginRuntimeHostPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/plugin_source.rs',
+    reason:
+      'managed plugin package and trust contracts must stay explicitly budgeted and ecosystem-neutral',
+    allowedSymbolEntries: pluginSourceContractPublicApiEntries,
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/plugin_source.rs',
+    reason:
+      'managed plugin source service API must stay limited to one injected service and its result types',
+    allowedSymbolEntries: managedPluginSourceServicePublicApiEntries,
+  },
+  {
+    path: 'src/crates/assembly/core/src/plugin_source.rs',
+    reason:
+      'core managed plugin source compatibility API must stay limited to the current CLI consumer surface',
+    allowedSymbolEntries: managedPluginSourcePublicApiEntries,
+  },
+  {
+    path: 'src/crates/assembly/core/src/plugin_runtime.rs',
+    reason:
+      'core managed plugin activation API must stay limited to product status projection and explicit activation or deactivation transitions',
+    allowedSymbolEntries: managedPluginActivationPublicApiEntries,
   },
 ];

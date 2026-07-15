@@ -7,6 +7,7 @@
 //! assembly, concrete runtime hosts, and IM bot command routing that still needs
 //! session/runtime hosts stay in `bitfun-core` until their ports are explicit.
 
+pub mod account;
 pub mod bot;
 mod chat_projection;
 pub mod device;
@@ -17,6 +18,8 @@ mod ngrok;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
+pub mod session_store;
+pub mod sync_state;
 
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
@@ -1196,11 +1199,12 @@ where
 
             let Some(workspace_path) = workspace_path
                 .as_deref()
-                .filter(|path| !path.is_empty())
+                .map(str::trim)
+                .filter(|path| !path.is_empty() && *path != "/")
                 .map(PathBuf::from)
             else {
                 return RemoteResponse::Error {
-                    message: "workspace_path is required for ListSessions".to_string(),
+                    message: "No workspace is open on the remote device; select a recent workspace or create one first".to_string(),
                 };
             };
 
@@ -1269,7 +1273,8 @@ where
             } else {
                 workspace_path
                     .as_deref()
-                    .filter(|path| !path.is_empty())
+                    .map(str::trim)
+                    .filter(|path| !path.is_empty() && *path != "/")
                     .map(ToOwned::to_owned)
             };
 
@@ -1278,7 +1283,7 @@ where
                     message: if is_claw {
                         "Failed to get or create assistant workspace".to_string()
                     } else {
-                        "workspace_path is required for CreateSession".to_string()
+                        "No workspace is open on the remote device; select a recent workspace or create one first".to_string()
                     },
                 };
             };
@@ -2112,6 +2117,50 @@ pub enum RemoteCommand {
         session_id: Option<String>,
     },
     Ping,
+
+    // ── Device-to-device distributed control ──────────────────────────────
+    //
+    // These variants are carried *inside* an encrypted device-to-device
+    // payload (see `RelayMessage::DeviceMessage`). The relay never sees them
+    // in cleartext; the receiving device decrypts the outer envelope with the
+    // account master_key, then deserializes the inner JSON into `RemoteCommand`.
+    //
+    // Currently sent over the HTTP /api/sync/* path (encrypted with master_key)
+    // or the WS device-messaging path. The relay routes by device_id only.
+    /// Push a serialized chat session to a peer device so it can import it.
+    SendSessionToDevice {
+        /// The opaque session blob (exported session JSON, encrypted by the
+        /// caller before it reaches this layer if sent over WS).
+        session_data: String,
+        session_id: String,
+        session_name: Option<String>,
+    },
+    /// Ask a peer device to execute a prompt in an existing or new session.
+    ExecuteOnDevice {
+        session_id: Option<String>,
+        content: String,
+        agent_type: Option<String>,
+        workspace_path: Option<String>,
+    },
+    /// Query a peer device for workspace / session info (read-only).
+    DeviceQueryInfo,
+    /// Create a new workspace directory on the peer device.
+    CreateWorkspace {
+        path: String,
+    },
+    /// Proxy a desktop product Tauri command onto the peer host.
+    /// Used by Peer Device Mode so the controller UI can reuse the same invoke surface.
+    HostInvoke {
+        command: String,
+        #[serde(default)]
+        args: serde_json::Value,
+    },
+    /// Push a UI event from peer to controller (same event name as local Tauri emit).
+    DeviceEvent {
+        event: String,
+        #[serde(default)]
+        payload: serde_json::Value,
+    },
 }
 
 /// Responses sent from desktop back to remote clients.
@@ -2245,6 +2294,30 @@ pub enum RemoteResponse {
         mime_type: String,
     },
     Pong,
+    /// Device-to-device: a session was received and imported.
+    SessionReceived {
+        session_id: String,
+    },
+    /// Device-to-device: a command was accepted by the peer device.
+    DeviceAccepted {
+        message: String,
+    },
+    /// Device-to-device: info response from a peer device.
+    DeviceInfo {
+        device_name: Option<String>,
+        workspace_path: Option<String>,
+        session_count: Option<usize>,
+    },
+    /// Result of a HostInvoke proxy call (JSON-compatible with local invoke).
+    HostInvokeResult {
+        ok: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    /// Event already delivered out-of-band; ack only.
+    DeviceEventAccepted,
     Error {
         message: String,
     },
@@ -2263,6 +2336,15 @@ pub trait RemoteCommandRuntimeHost: Send + Sync {
     async fn handle_poll_command(&self, command: &RemoteCommand) -> RemoteResponse;
     async fn handle_workspace_file_command(&self, command: &RemoteCommand) -> RemoteResponse;
     async fn handle_interaction_command(&self, command: &RemoteCommand) -> RemoteResponse;
+
+    /// Handle a device-to-device command arriving from a peer in the same
+    /// account.  Default implementation returns an error so existing
+    /// implementors don't break.
+    async fn handle_device_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        RemoteResponse::Error {
+            message: "Device-to-device commands are not supported on this device".to_string(),
+        }
+    }
 
     async fn submit_dialog(
         &self,
@@ -2356,6 +2438,13 @@ where
             })
             .await,
         ),
+
+        RemoteCommand::SendSessionToDevice { .. }
+        | RemoteCommand::ExecuteOnDevice { .. }
+        | RemoteCommand::DeviceQueryInfo
+        | RemoteCommand::CreateWorkspace { .. }
+        | RemoteCommand::HostInvoke { .. }
+        | RemoteCommand::DeviceEvent { .. } => host.handle_device_command(command).await,
     }
 }
 
@@ -3428,16 +3517,17 @@ mod tests {
             sessions[0].workspace_path.as_deref(),
             Some("/workspace/project")
         );
-        let list_identities = host.list_identities.lock().unwrap();
-        assert_eq!(
-            list_identities[0].remote_connection_id.as_deref(),
-            Some("conn-1")
-        );
-        assert_eq!(
-            list_identities[0].remote_ssh_host.as_deref(),
-            Some("host-1")
-        );
-        drop(list_identities);
+        {
+            let list_identities = host.list_identities.lock().unwrap();
+            assert_eq!(
+                list_identities[0].remote_connection_id.as_deref(),
+                Some("conn-1")
+            );
+            assert_eq!(
+                list_identities[0].remote_ssh_host.as_deref(),
+                Some("host-1")
+            );
+        }
 
         let created = handle_remote_session_command(
             &host,

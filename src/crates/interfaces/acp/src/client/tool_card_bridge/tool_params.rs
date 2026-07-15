@@ -74,17 +74,19 @@ pub(super) fn normalize_tool_params(
             }
         }
         "Glob" => {
-            if !normalized.contains_key("pattern") {
-                if let Some(value) = normalized
+            let pattern = if !normalized.contains_key("pattern") {
+                normalized
                     .get("glob")
                     .or_else(|| normalized.get("glob_pattern"))
                     .or_else(|| normalized.get("globPattern"))
                     .or_else(|| normalized.get("file_pattern"))
                     .or_else(|| normalized.get("filePattern"))
                     .cloned()
-                {
-                    normalized.insert("pattern".to_string(), value);
-                }
+            } else {
+                None
+            };
+            if let Some(value) = pattern {
+                normalized.insert("pattern".to_string(), value);
             }
         }
         _ => {}

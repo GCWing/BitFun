@@ -1,3 +1,3 @@
 /// Different interaction modes
-pub mod chat;
-pub mod exec;
+pub(crate) mod chat;
+pub(crate) mod exec;

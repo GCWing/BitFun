@@ -20,7 +20,6 @@ type ConfigMigration = (&'static str, &'static str, ConfigMigrationFn);
 fn canonical_config_path(path: &str) -> &str {
     match path {
         "ai.review_teams.rate_limit_status" => "ai.review_team_rate_limit_status",
-        "ai.review_teams.project_strategy_overrides" => "ai.review_team_project_strategy_overrides",
         "theme.id" => "themes.current",
         _ => path,
     }
@@ -731,110 +730,6 @@ pub struct ConfigStatistics {
     pub last_modified: chrono::DateTime<chrono::Utc>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        canonical_config_path, config_value_for_persistence, normalize_legacy_theme_config_value,
-    };
-    use crate::service::config::types::GlobalConfig;
-
-    #[test]
-    fn canonicalizes_legacy_review_team_auxiliary_paths() {
-        assert_eq!(
-            canonical_config_path("ai.review_teams.rate_limit_status"),
-            "ai.review_team_rate_limit_status"
-        );
-        assert_eq!(
-            canonical_config_path("ai.review_teams.project_strategy_overrides"),
-            "ai.review_team_project_strategy_overrides"
-        );
-        assert_eq!(
-            canonical_config_path("ai.review_teams.default"),
-            "ai.review_teams.default"
-        );
-        assert_eq!(canonical_config_path("theme.id"), "themes.current");
-    }
-
-    #[test]
-    fn legacy_theme_id_moves_to_themes_current_when_missing() {
-        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
-            "theme": {
-                "id": "dark",
-                "colors": {
-                    "background": "#1e1e1e"
-                }
-            }
-        }));
-
-        assert_eq!(normalized["themes"]["current"], "bitfun-dark");
-        assert!(
-            normalized.get("theme").is_none(),
-            "legacy GUI theme payload should not survive normalization"
-        );
-    }
-
-    #[test]
-    fn legacy_theme_id_does_not_override_existing_theme_selection() {
-        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
-            "theme": {
-                "id": "bitfun-dark"
-            },
-            "themes": {
-                "current": "bitfun-cyber"
-            }
-        }));
-
-        assert_eq!(normalized["themes"]["current"], "bitfun-cyber");
-        assert!(normalized.get("theme").is_none());
-    }
-
-    #[test]
-    fn legacy_theme_id_fills_empty_existing_theme_selection() {
-        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
-            "theme": {
-                "id": "light"
-            },
-            "themes": {
-                "current": ""
-            }
-        }));
-
-        assert_eq!(normalized["themes"]["current"], "bitfun-light");
-        assert!(normalized.get("theme").is_none());
-    }
-
-    #[test]
-    fn persistence_omits_default_memories_config() {
-        let config = GlobalConfig::default();
-        let value =
-            config_value_for_persistence(&config).expect("config should serialize for persistence");
-
-        assert!(value.get("memories").is_none());
-    }
-
-    #[test]
-    fn persistence_keeps_only_non_default_memories_fields() {
-        let mut config = GlobalConfig::default();
-        config.memories.generate_memories = false;
-        config.memories.max_rollouts_per_startup = 12;
-
-        let value =
-            config_value_for_persistence(&config).expect("config should serialize for persistence");
-
-        let memories = value
-            .get("memories")
-            .and_then(|value| value.as_object())
-            .expect("memories config should persist as an object");
-        assert!(!memories.contains_key("generate_memories"));
-        assert_eq!(
-            value.get("memories"),
-            Some(&serde_json::json!({
-                "max_rollouts_per_startup": 12
-            }))
-        );
-    }
-}
-
 /// Deeply merges JSON values.
 ///
 /// Merges values from `overlay` into `base`:
@@ -930,4 +825,104 @@ pub(crate) fn migrate_0_0_0_to_1_0_0(mut config: Value) -> BitFunResult<Value> {
 
     debug!("Migration 0.0.0 -> 1.0.0 completed");
     Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        canonical_config_path, config_value_for_persistence, normalize_legacy_theme_config_value,
+    };
+    use crate::service::config::types::GlobalConfig;
+
+    #[test]
+    fn canonicalizes_legacy_review_team_auxiliary_paths() {
+        assert_eq!(
+            canonical_config_path("ai.review_teams.rate_limit_status"),
+            "ai.review_team_rate_limit_status"
+        );
+        assert_eq!(
+            canonical_config_path("ai.review_teams.default"),
+            "ai.review_teams.default"
+        );
+        assert_eq!(canonical_config_path("theme.id"), "themes.current");
+    }
+
+    #[test]
+    fn legacy_theme_id_moves_to_themes_current_when_missing() {
+        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
+            "theme": {
+                "id": "dark",
+                "colors": {
+                    "background": "#1e1e1e"
+                }
+            }
+        }));
+
+        assert_eq!(normalized["themes"]["current"], "bitfun-dark");
+        assert!(
+            normalized.get("theme").is_none(),
+            "legacy GUI theme payload should not survive normalization"
+        );
+    }
+
+    #[test]
+    fn legacy_theme_id_does_not_override_existing_theme_selection() {
+        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
+            "theme": {
+                "id": "bitfun-dark"
+            },
+            "themes": {
+                "current": "bitfun-cyber"
+            }
+        }));
+
+        assert_eq!(normalized["themes"]["current"], "bitfun-cyber");
+        assert!(normalized.get("theme").is_none());
+    }
+
+    #[test]
+    fn legacy_theme_id_fills_empty_existing_theme_selection() {
+        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
+            "theme": {
+                "id": "light"
+            },
+            "themes": {
+                "current": ""
+            }
+        }));
+
+        assert_eq!(normalized["themes"]["current"], "bitfun-light");
+        assert!(normalized.get("theme").is_none());
+    }
+
+    #[test]
+    fn persistence_omits_default_memories_config() {
+        let config = GlobalConfig::default();
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        assert!(value.get("memories").is_none());
+    }
+
+    #[test]
+    fn persistence_keeps_only_non_default_memories_fields() {
+        let mut config = GlobalConfig::default();
+        config.memories.generate_memories = false;
+        config.memories.max_rollouts_per_startup = 12;
+
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        let memories = value
+            .get("memories")
+            .and_then(|value| value.as_object())
+            .expect("memories config should persist as an object");
+        assert!(!memories.contains_key("generate_memories"));
+        assert_eq!(
+            value.get("memories"),
+            Some(&serde_json::json!({
+                "max_rollouts_per_startup": 12
+            }))
+        );
+    }
 }

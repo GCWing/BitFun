@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 import {
   Settings,
   Info,
@@ -22,6 +22,7 @@ import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
+import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import {
   RemoteConnectDisclaimerContent,
@@ -55,6 +56,20 @@ const PersistentFooterActions: React.FC = () => {
   const { hasWorkspace } = useCurrentWorkspace();
   const { warning } = useNotification();
 
+  useEffect(() => {
+    const onAutoExit = (event: Event) => {
+      const detail = (event as CustomEvent<{ deviceName?: string; reason?: string }>).detail;
+      const name = detail?.deviceName || 'peer';
+      if (detail?.reason === 'peer_offline') {
+        warning(t('accountLogin.peerAutoExitOffline', { name }));
+      } else if (detail?.reason === 'rpc_failures') {
+        warning(t('accountLogin.peerAutoExitRpc', { name }));
+      }
+    };
+    window.addEventListener('peer-mode:auto-exit', onAutoExit);
+    return () => window.removeEventListener('peer-mode:auto-exit', onAutoExit);
+  }, [t, warning]);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -62,6 +77,19 @@ const PersistentFooterActions: React.FC = () => {
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
+
+  // Periodic token-expiry check. Only auto-open the login dialog if the
+  // token has actually expired while the app is running — not on startup.
+  useEffect(() => {
+    const expiryCheck = setInterval(() => {
+      remoteConnectAPI.accountTokenExpired().then((expired) => {
+        if (expired) {
+          setShowAccountLogin(true);
+        }
+      });
+    }, 60000);
+    return () => clearInterval(expiryCheck);
+  }, []);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);

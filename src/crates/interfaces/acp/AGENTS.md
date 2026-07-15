@@ -8,6 +8,11 @@ Scope: this guide applies to `src/crates/interfaces/acp`.
 runtime. Keep ACP protocol/client details here or in app-surface adapters;
 share only stable capability facts through contract crates.
 
+Current production code still depends directly on `bitfun-core` with
+`product-full`; it does not yet consume `DeliveryProfile::Acp` or
+`ProductAssembler`. Treat the assembled-runtime wording as the target boundary,
+and preserve existing ACP behavior while migrating that entry explicitly.
+
 ## Guardrails
 
 - Remote ACP workspaces reuse local ACP client configuration. Preserve the

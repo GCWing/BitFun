@@ -9,6 +9,10 @@ import type {
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { notificationService } from '@/shared/notification-system';
+import {
+  isPeerDeviceModeActive,
+  PEER_MODE_BACKGROUND_COMMAND_POLL_MS,
+} from '@/infrastructure/peer-device/peerModeFlag';
 import './BackgroundCommandOutputPanel.scss';
 
 const BACKGROUND_COMMAND_OUTPUT_POLL_INTERVAL_MS = 1000;
@@ -175,7 +179,9 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
         return;
       }
       void readOutput(false);
-    }, BACKGROUND_COMMAND_OUTPUT_POLL_INTERVAL_MS);
+    }, isPeerDeviceModeActive()
+      ? PEER_MODE_BACKGROUND_COMMAND_POLL_MS
+      : BACKGROUND_COMMAND_OUTPUT_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;

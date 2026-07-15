@@ -20,14 +20,14 @@ struct VaultFile {
     entries: HashMap<String, String>,
 }
 
-pub struct SSHPasswordVault {
+pub(super) struct SSHPasswordVault {
     key_path: PathBuf,
     vault_path: PathBuf,
     lock: Mutex<()>,
 }
 
 impl SSHPasswordVault {
-    pub fn new(data_dir: PathBuf) -> Self {
+    pub(super) fn new(data_dir: PathBuf) -> Self {
         Self {
             key_path: data_dir.join(".ssh_password_vault.key"),
             vault_path: data_dir.join("ssh_password_vault.json"),
@@ -92,7 +92,7 @@ impl SSHPasswordVault {
         String::from_utf8(pt).context("utf8 decode ssh vault password")
     }
 
-    pub async fn store(&self, connection_id: &str, password: &str) -> Result<()> {
+    pub(super) async fn store(&self, connection_id: &str, password: &str) -> Result<()> {
         let _g = self.lock.lock().await;
         let key = self.ensure_key().await?;
         let mut file: VaultFile = if self.vault_path.exists() {
@@ -121,7 +121,7 @@ impl SSHPasswordVault {
         Ok(())
     }
 
-    pub async fn load(&self, connection_id: &str) -> Result<Option<String>> {
+    pub(super) async fn load(&self, connection_id: &str) -> Result<Option<String>> {
         let _g = self.lock.lock().await;
         if !self.vault_path.exists() || !self.key_path.exists() {
             return Ok(None);
@@ -155,7 +155,7 @@ impl SSHPasswordVault {
         }
     }
 
-    pub async fn remove(&self, connection_id: &str) -> Result<()> {
+    pub(super) async fn remove(&self, connection_id: &str) -> Result<()> {
         let _g = self.lock.lock().await;
         if !self.vault_path.exists() {
             return Ok(());
@@ -173,7 +173,7 @@ impl SSHPasswordVault {
         Ok(())
     }
 
-    pub async fn migrate_entry(
+    pub(super) async fn migrate_entry(
         &self,
         old_connection_id: &str,
         new_connection_id: &str,

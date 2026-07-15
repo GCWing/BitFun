@@ -50,6 +50,7 @@ import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepRevi
 import { useBackgroundCommandActivityStore } from '../../store/backgroundCommandActivityStore';
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
 import { createTab } from '@/shared/utils/tabUtils';
+import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -773,23 +774,23 @@ export async function initializeEventListeners(
   context: FlowChatContext,
   onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): Promise<() => void> {
-  const { listen } = await import('@tauri-apps/api/event');
-  const unlistenProgress = await listen('backend-event-toolexecutionprogress', (event: any) => {
-    handleToolExecutionProgress(event.payload);
+  const { api } = await import('@/infrastructure/api/service-api/ApiClient');
+  const unlistenProgress = api.listen('backend-event-toolexecutionprogress', (payload: any) => {
+    handleToolExecutionProgress(payload);
   });
-  const unlistenTerminalReady = await listen('backend-event-toolterminalready', (event: any) => {
-    const eventData = (event.payload as any)?.value || event.payload;
+  const unlistenTerminalReady = api.listen('backend-event-toolterminalready', (payload: any) => {
+    const eventData = (payload as any)?.value || payload;
     handleToolTerminalReady(eventData);
   });
-  const unlistenBackgroundCommandLifecycle = await listen('backend-event-backgroundcommandlifecycle', (event: any) => {
-    const eventData = (event.payload as any)?.value || event.payload;
+  const unlistenBackgroundCommandLifecycle = api.listen('backend-event-backgroundcommandlifecycle', (payload: any) => {
+    const eventData = (payload as any)?.value || payload;
     useBackgroundCommandActivityStore.getState().applyLifecycleEvent(eventData);
   });
-  const unlistenMcpInteractionRequest = await listen('backend-event-mcpinteractionrequest', (event: any) => {
-    void handleMcpInteractionRequest((event.payload as any)?.value || event.payload);
+  const unlistenMcpInteractionRequest = api.listen('backend-event-mcpinteractionrequest', (payload: any) => {
+    void handleMcpInteractionRequest((payload as any)?.value || payload);
   });
-  const unlistenAcpPermissionRequest = await listen('backend-event-acppermissionrequest', (event: any) => {
-    void handleAcpPermissionRequest((event.payload as any)?.value || event.payload);
+  const unlistenAcpPermissionRequest = api.listen('backend-event-acppermissionrequest', (payload: any) => {
+    void handleAcpPermissionRequest((payload as any)?.value || payload);
   });
 
   const callbacks: AgenticEventCallbacks = {
@@ -2659,7 +2660,10 @@ function detectModifiedPlanFiles(dialogTurn: DialogTurn): string[] {
       
       if (['Edit', 'Write'].includes(toolItem.toolName) && toolItem.toolResult?.success) {
         const input = toolItem.toolCall?.input;
-        const filePath = input?.file_path || input?.target_file || '';
+        const filePath = splitFilePathAndContent(input?.payload)?.filePath
+          || input?.file_path
+          || input?.target_file
+          || '';
         if (filePath.endsWith('.plan.md')) {
           planFiles.push(filePath);
         }

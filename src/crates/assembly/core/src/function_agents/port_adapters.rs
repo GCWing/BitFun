@@ -172,10 +172,10 @@ impl CoreWorkStateAiAnalysisService {
     }
 
     fn parse_complete_analysis(&self, response: &str) -> AgentResult<AIGeneratedAnalysis> {
-        let parsed_analysis = parse_work_state_analysis_response(response).map_err(|error| {
-            error!("{}, response: {}", error.message, response);
-            error
-        })?;
+        let parsed_analysis =
+            parse_work_state_analysis_response(response).inspect_err(|error| {
+                error!("{}, response: {}", error.message, response);
+            })?;
 
         if parsed_analysis.predicted_actions_count < 3 {
             warn!(
@@ -456,7 +456,7 @@ not json
         fs::write(repo.path().join("src/lib.rs"), "pub fn demo() {}\n").unwrap();
         git(repo.path(), &["add", "Cargo.toml", "src/lib.rs"]);
 
-        let adapter = CoreFunctionAgentGitAdapter::default();
+        let adapter = CoreFunctionAgentGitAdapter;
         let snapshot = adapter
             .git_commit_snapshot(repo.path().to_path_buf())
             .await
@@ -482,7 +482,7 @@ not json
         fs::write(repo.path().join("staged.txt"), "staged only\n").unwrap();
         git(repo.path(), &["add", "staged.txt"]);
 
-        let adapter = CoreFunctionAgentGitAdapter::default();
+        let adapter = CoreFunctionAgentGitAdapter;
         let snapshot = adapter
             .git_commit_snapshot(repo.path().to_path_buf())
             .await
@@ -507,7 +507,7 @@ not json
         fs::write(repo.path().join("staged.txt"), "staged\n").unwrap();
         git(repo.path(), &["add", "staged.txt"]);
 
-        let adapter = CoreFunctionAgentGitAdapter::default();
+        let adapter = CoreFunctionAgentGitAdapter;
         let snapshot = adapter
             .startchat_git_snapshot(repo.path().to_path_buf())
             .await
@@ -529,7 +529,7 @@ not json
         init_git_repo(repo.path());
         fs::write(repo.path().join("new.txt"), "new\n").unwrap();
 
-        let adapter = CoreFunctionAgentGitAdapter::default();
+        let adapter = CoreFunctionAgentGitAdapter;
         let snapshot = adapter
             .startchat_git_snapshot(repo.path().to_path_buf())
             .await
@@ -548,7 +548,7 @@ not json
     async fn git_adapter_startchat_snapshot_matches_legacy_empty_state_when_not_git_repo() {
         let repo = TestTempDir::new("not-a-git-repo");
 
-        let adapter = CoreFunctionAgentGitAdapter::default();
+        let adapter = CoreFunctionAgentGitAdapter;
         let snapshot = adapter
             .startchat_git_snapshot(repo.path().to_path_buf())
             .await

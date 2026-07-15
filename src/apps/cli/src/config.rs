@@ -3,15 +3,16 @@
 /// CLI uses core's GlobalConfig system directly.
 /// Only CLI-specific configuration is kept here (UI, shortcuts, etc.)
 use anyhow::Result;
+use bitfun_core::infrastructure::try_get_path_manager_arc;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
 /// CLI configuration (contains only CLI-specific config)
 /// AI model configuration uses core's GlobalConfig
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
-pub struct CliConfig {
+pub(crate) struct CliConfig {
     /// UI configuration
     pub ui: UiConfig,
     /// Behavior configuration
@@ -24,7 +25,7 @@ pub struct CliConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct UiConfig {
+pub(crate) struct UiConfig {
     /// Theme (dark, light, auto)
     pub theme: String,
     /// Theme ID (built-in preset name; custom: filename in themes dir without ".json")
@@ -39,7 +40,7 @@ pub struct UiConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct BehaviorConfig {
+pub(crate) struct BehaviorConfig {
     /// Auto save sessions
     pub auto_save: bool,
     /// Confirm dangerous operations
@@ -50,7 +51,7 @@ pub struct BehaviorConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct WorkspaceConfig {
+pub(crate) struct WorkspaceConfig {
     /// Default workspace path
     pub default_path: String,
     /// Excluded file patterns
@@ -59,7 +60,7 @@ pub struct WorkspaceConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ShortcutsConfig {
+pub(crate) struct ShortcutsConfig {
     /// Send message
     pub send_message: String,
     /// Interrupt
@@ -114,36 +115,36 @@ impl Default for ShortcutsConfig {
     }
 }
 
-impl Default for CliConfig {
-    fn default() -> Self {
-        Self {
-            ui: UiConfig::default(),
-            behavior: BehaviorConfig::default(),
-            workspace: WorkspaceConfig::default(),
-            shortcuts: ShortcutsConfig::default(),
-        }
-    }
-}
-
 impl CliConfig {
-    /// Get configuration file path
-    pub fn config_path() -> Result<PathBuf> {
-        let config_dir = if cfg!(target_os = "windows") {
+    fn resolve_config_dir() -> Result<PathBuf> {
+        let e2e_storage_guard = matches!(
+            std::env::var("BITFUN_E2E_STORAGE_GUARD").ok().as_deref(),
+            Some("1") | Some("true") | Some("TRUE")
+        );
+        if e2e_storage_guard {
+            let path_manager =
+                try_get_path_manager_arc().map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            return Ok(path_manager.user_root_dir().to_path_buf());
+        }
+
+        if cfg!(target_os = "windows") {
             dirs::config_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))?
-                .join("bitfun")
+                .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))
+                .map(|path| path.join("bitfun"))
         } else {
             dirs::home_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
-                .join(".config")
-                .join("bitfun")
-        };
+                .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))
+                .map(|path| path.join(".config").join("bitfun"))
+        }
+    }
 
-        Ok(config_dir.join("config.toml"))
+    /// Get configuration file path
+    pub(crate) fn config_path() -> Result<PathBuf> {
+        Ok(Self::resolve_config_dir()?.join("config.toml"))
     }
 
     /// Load configuration
-    pub fn load() -> Result<Self> {
+    pub(crate) fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
 
         if !config_path.exists() {
@@ -160,7 +161,7 @@ impl CliConfig {
     }
 
     /// Save configuration
-    pub fn save(&self) -> Result<()> {
+    pub(crate) fn save(&self) -> Result<()> {
         let config_path = Self::config_path()?;
 
         if let Some(parent) = config_path.parent() {
@@ -174,27 +175,37 @@ impl CliConfig {
     }
 
     /// Get configuration directory
-    pub fn config_dir() -> Result<PathBuf> {
-        let config_dir = if cfg!(target_os = "windows") {
-            dirs::config_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))?
-                .join("bitfun")
-        } else {
-            dirs::home_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
-                .join(".config")
-                .join("bitfun")
-        };
+    pub(crate) fn config_dir() -> Result<PathBuf> {
+        let config_dir = Self::resolve_config_dir()?;
 
         fs::create_dir_all(&config_dir)?;
         Ok(config_dir)
     }
+}
 
-    /// Get sessions directory
-    #[allow(dead_code)]
-    pub fn sessions_dir() -> Result<PathBuf> {
-        let sessions_dir = Self::config_dir()?.join("sessions");
-        fs::create_dir_all(&sessions_dir)?;
-        Ok(sessions_dir)
+#[cfg(test)]
+mod tests {
+    use super::CliConfig;
+
+    #[test]
+    fn cli_config_default_composes_owner_defaults() {
+        let config = CliConfig::default();
+
+        assert_eq!(config.ui.theme, "dark");
+        assert_eq!(config.ui.theme_id, "bitfun-dark");
+        assert!(config.ui.show_tips);
+        assert!(config.ui.animation);
+        assert_eq!(config.ui.color_scheme, "default");
+        assert!(config.behavior.auto_save);
+        assert!(config.behavior.confirm_dangerous);
+        assert_eq!(config.behavior.default_agent, "agentic");
+        assert_eq!(config.workspace.default_path, ".");
+        assert_eq!(
+            config.workspace.exclude_patterns,
+            ["node_modules", ".git", "target", "dist"]
+        );
+        assert_eq!(config.shortcuts.send_message, "Ctrl+D");
+        assert_eq!(config.shortcuts.interrupt, "Ctrl+C");
+        assert_eq!(config.shortcuts.menu, "Esc");
     }
 }

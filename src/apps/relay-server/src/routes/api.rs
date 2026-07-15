@@ -34,6 +34,13 @@ pub struct AppState {
     pub room_manager: Arc<RoomManager>,
     pub start_time: std::time::Instant,
     pub asset_store: Arc<dyn WebAssetStore>,
+    /// Optional account database. When `None`, the relay runs in pure-relay
+    /// mode (no account features); the embedded relay passes `None`.
+    pub db: Option<Arc<crate::db::DbPool>>,
+    /// Per-IP rate limiter for auth endpoints (brute-force protection).
+    pub login_rate_limiter: Arc<crate::routes::auth::LoginRateLimiter>,
+    /// Per-user online device registry for account-based device routing.
+    pub device_manager: Arc<crate::relay::DeviceManager>,
 }
 
 // ── Health & Info ──────────────────────────────────────────────────────────
@@ -514,6 +521,9 @@ mod tests {
             room_manager,
             start_time: std::time::Instant::now(),
             asset_store: Arc::new(MemoryAssetStore::new()),
+            db: None,
+            login_rate_limiter: Arc::new(crate::routes::auth::LoginRateLimiter::new()),
+            device_manager: crate::relay::DeviceManager::new(),
         }
     }
 

@@ -8,7 +8,7 @@
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { WorkspaceLspManager } from './WorkspaceLspManager';
 import { lspConfigService } from './LspConfigService';
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('WorkspaceLspInitializer');
@@ -101,7 +101,7 @@ class WorkspaceLspInitializer {
   /** Detect project languages and pre-start corresponding servers (best-effort). */
   private async detectAndPreStartServers(workspacePath: string): Promise<void> {
     try {
-      const projectInfo = await invoke<ProjectInfo>('lsp_detect_project', {
+      const projectInfo = await api.invoke<ProjectInfo>('lsp_detect_project', {
         request: { workspacePath }
       });
 
@@ -125,7 +125,7 @@ class WorkspaceLspInitializer {
   /** Pre-start a server for a given language (best-effort). */
   private async preStartServer(workspacePath: string, language: string): Promise<void> {
     try {
-      await invoke('lsp_prestart_server', {
+      await api.invoke('lsp_prestart_server', {
         request: {
           workspacePath,
           language

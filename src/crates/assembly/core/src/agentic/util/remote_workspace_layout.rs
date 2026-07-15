@@ -37,7 +37,7 @@ fn append_tree_lines(
 }
 
 /// Single SFTP `read_dir` at workspace root, formatted as a shallow tree (no subtree walk).
-pub async fn build_remote_workspace_layout_preview(
+pub(in crate::agentic) async fn build_remote_workspace_layout_preview(
     file_service: &RemoteFileService,
     connection_id: &str,
     root: &str,

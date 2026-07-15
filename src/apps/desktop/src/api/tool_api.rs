@@ -232,11 +232,25 @@ fn is_relative_path(value: Option<&serde_json::Value>) -> bool {
         .is_some_and(|path| !path.is_empty() && !PathBuf::from(path).is_absolute())
 }
 
+fn write_file_path(input: &serde_json::Value) -> Option<&str> {
+    let value = input.get("payload")?.as_str()?;
+    let first_line = value
+        .split_once('\n')
+        .map_or(value, |(file_path, _)| file_path);
+    let first_line = first_line.strip_suffix('\r').unwrap_or(first_line);
+    let file_path = first_line.strip_prefix("+++ ")?;
+    (!file_path.trim().is_empty()).then_some(file_path)
+}
+
 fn tool_requires_workspace_path(tool_name: &str, input: &serde_json::Value) -> bool {
     match tool_name {
         "Bash" => true,
         "Glob" | "Grep" => input.get("path").is_none() || is_relative_path(input.get("path")),
-        "Read" | "Write" | "Edit" | "GetFileDiff" => is_relative_path(input.get("file_path")),
+        "Write" => write_file_path(input).map_or_else(
+            || input.get("payload").is_some(),
+            |path| !PathBuf::from(path).is_absolute(),
+        ),
+        "Read" | "Edit" | "GetFileDiff" => is_relative_path(input.get("file_path")),
         _ => false,
     }
 }

@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Modal } from '@/component-library';
-import { i18nService } from '@/infrastructure/i18n';
 import type {
   ReviewStrategyLevel,
   ReviewTeamRunManifest,
@@ -10,8 +9,6 @@ import type {
 import { getReviewStrategyProfile } from '@/shared/services/reviewTeamService';
 import type { DeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import './DeepReviewConsentDialog.scss';
-
-const APPROXIMATE_TOKENS_PER_PROMPT_BYTE = 0.25;
 
 interface PendingConsent {
   resolve: (confirmed: boolean) => void;
@@ -31,26 +28,14 @@ export interface DeepReviewConsentControls {
   deepReviewConsentDialog: React.ReactNode;
 }
 
-function estimatePromptTokenCount(promptBytes: number | undefined): number | null {
-  if (!Number.isFinite(promptBytes) || !promptBytes || promptBytes <= 0) {
-    return null;
-  }
-  return Math.max(1, Math.ceil(promptBytes * APPROXIMATE_TOKENS_PER_PROMPT_BYTE));
-}
-
-function getReviewPromptTokenRange(preview: ReviewTeamRunManifest): { min: number; max: number } | null {
-  const perCallEstimate = estimatePromptTokenCount(
-    preview.tokenBudget.estimatedPromptBytesPerReviewer,
-  );
-  if (!perCallEstimate) {
-    return null;
-  }
-
-  const estimatedCalls = Math.max(1, preview.tokenBudget.estimatedReviewerCalls || 1);
-  const maxCalls = Math.max(estimatedCalls, preview.tokenBudget.maxReviewerCalls || estimatedCalls);
+function getInitialReviewCallFacts(preview: ReviewTeamRunManifest): {
+  planned: number;
+  maximum: number;
+} {
+  const planned = Math.max(1, preview.tokenBudget.estimatedReviewerCalls || 1);
   return {
-    min: perCallEstimate * estimatedCalls,
-    max: perCallEstimate * maxCalls,
+    planned,
+    maximum: Math.max(planned, preview.tokenBudget.maxReviewerCalls || planned),
   };
 }
 
@@ -138,7 +123,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     const skippedCount = skippedReviewers.length;
     const selectedStrategyLabel = getStrategyLabel(preview.strategyLevel, t);
     const targetSummary = getReviewTargetSummary(preview, t);
-    const tokenRange = getReviewPromptTokenRange(preview);
+    const callFacts = getInitialReviewCallFacts(preview);
     return (
       <div className="deep-review-consent__summary">
         <div className="deep-review-consent__summary-header">
@@ -172,17 +157,18 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
           </div>
         </div>
 
-        {tokenRange && (
-          <div className="deep-review-consent__token-estimate">
-            <strong>
-              {t('deepReviewConsent.estimatedTokens', {
-                min: i18nService.formatNumber(tokenRange.min),
-                max: i18nService.formatNumber(tokenRange.max),
-              })}
-            </strong>
-            <span>{t('deepReviewConsent.estimatedTokensNote')}</span>
-          </div>
-        )}
+        <div className="deep-review-consent__token-estimate">
+          <strong>
+            {t('deepReviewConsent.initialCalls', {
+              planned: callFacts.planned,
+            })}
+          </strong>
+          <span>
+            {t('deepReviewConsent.parallelCalls', {
+              count: callFacts.maximum,
+            })}
+          </span>
+        </div>
 
         {preview.workspacePath && (
           <div className="deep-review-consent__strategy-control">
@@ -222,6 +208,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
       closeOnOverlayClick={false}
       showCloseButton={false}
       contentClassName="deep-review-consent-modal"
+      ariaLabel={t('deepReviewConsent.windowTitle')}
     >
       <div className="deep-review-consent">
         <div className="deep-review-consent__header">

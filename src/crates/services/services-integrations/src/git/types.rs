@@ -18,6 +18,8 @@ pub struct GitStatus {
     pub staged: Vec<GitFileStatus>,
     pub unstaged: Vec<GitFileStatus>,
     pub untracked: Vec<String>,
+    #[serde(default)]
+    pub conflicts: Vec<String>,
     pub current_branch: String,
     pub ahead: i32,
     pub behind: i32,
@@ -161,6 +163,8 @@ pub struct GitDiffParams {
     pub files: Option<Vec<String>>,
     pub staged: Option<bool>,
     pub stat: Option<bool>,
+    #[serde(default, alias = "reviewSafe")]
+    pub review_safe: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -168,6 +172,8 @@ pub struct GitChangedFilesParams {
     pub source: Option<String>,
     pub target: Option<String>,
     pub staged: Option<bool>,
+    #[serde(default, alias = "reviewSafe")]
+    pub review_safe: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

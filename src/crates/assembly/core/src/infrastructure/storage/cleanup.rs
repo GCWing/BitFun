@@ -3,9 +3,7 @@
 use crate::infrastructure::PathManager;
 use crate::util::errors::*;
 
-pub use bitfun_services_core::storage_cleanup::{
-    CleanupCategory, CleanupPolicy, CleanupResult,
-};
+pub use bitfun_services_core::storage_cleanup::{CleanupCategory, CleanupPolicy, CleanupResult};
 
 pub struct CleanupService {
     inner: bitfun_services_core::storage_cleanup::CleanupService,

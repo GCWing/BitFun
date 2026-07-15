@@ -36,7 +36,7 @@ mod imp {
     use objc2_web_kit::{WKPDFConfiguration, WKSnapshotConfiguration, WKWebView};
     use tokio::sync::oneshot;
 
-    pub async fn take_screenshot<R: Runtime>(
+    pub(super) async fn take_screenshot<R: Runtime>(
         webview: Webview<R>,
         timeout_ms: u64,
     ) -> Result<String, WebDriverErrorResponse> {
@@ -77,7 +77,7 @@ mod imp {
         await_base64_response(rx, timeout_ms, "Screenshot").await
     }
 
-    pub async fn print_page<R: Runtime>(
+    pub(super) async fn print_page<R: Runtime>(
         webview: Webview<R>,
         timeout_ms: u64,
         options: &PrintOptions,
@@ -184,9 +184,10 @@ mod imp {
 
         let empty_dict: objc2::rc::Retained<NSDictionary<NSBitmapImageRepPropertyKey, AnyObject>> =
             NSDictionary::new();
-        let png_data = bitmap_rep
-            .representationUsingType_properties(NSBitmapImageFileType::PNG, &empty_dict)
-            .ok_or("Failed to convert image to PNG")?;
+        let png_data = unsafe {
+            bitmap_rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &empty_dict)
+        }
+        .ok_or("Failed to convert image to PNG")?;
 
         Ok(BASE64_STANDARD.encode(png_data.to_vec()))
     }
@@ -219,7 +220,7 @@ mod imp {
     type CaptureSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<String, String>>>>>;
     type PrintSender = Arc<std::sync::Mutex<Option<oneshot::Sender<Result<(), String>>>>>;
 
-    pub async fn take_screenshot<R: Runtime>(
+    pub(super) async fn take_screenshot<R: Runtime>(
         webview: Webview<R>,
         timeout_ms: u64,
     ) -> Result<String, WebDriverErrorResponse> {
@@ -268,7 +269,7 @@ mod imp {
         await_base64_response(rx, timeout_ms, "Screenshot").await
     }
 
-    pub async fn print_page<R: Runtime>(
+    pub(super) async fn print_page<R: Runtime>(
         webview: Webview<R>,
         timeout_ms: u64,
         options: &PrintOptions,
@@ -555,7 +556,7 @@ mod imp {
 mod imp {
     use super::*;
 
-    pub async fn take_screenshot<R: Runtime>(
+    pub(super) async fn take_screenshot<R: Runtime>(
         _webview: Webview<R>,
         _timeout_ms: u64,
     ) -> Result<String, WebDriverErrorResponse> {
@@ -564,7 +565,7 @@ mod imp {
         ))
     }
 
-    pub async fn print_page<R: Runtime>(
+    pub(super) async fn print_page<R: Runtime>(
         _webview: Webview<R>,
         _timeout_ms: u64,
         _options: &PrintOptions,
@@ -579,7 +580,7 @@ mod imp {
 mod imp {
     use super::*;
 
-    pub async fn take_screenshot<R: Runtime>(
+    pub(super) async fn take_screenshot<R: Runtime>(
         _webview: Webview<R>,
         _timeout_ms: u64,
     ) -> Result<String, WebDriverErrorResponse> {
@@ -588,7 +589,7 @@ mod imp {
         ))
     }
 
-    pub async fn print_page<R: Runtime>(
+    pub(super) async fn print_page<R: Runtime>(
         _webview: Webview<R>,
         _timeout_ms: u64,
         _options: &PrintOptions,

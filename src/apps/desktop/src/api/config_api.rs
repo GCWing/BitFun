@@ -161,7 +161,7 @@ mod tests {
         ));
         assert!(!is_expected_config_path_not_found(
             &error,
-            Some("ai.review_team_project_strategy_overrides"),
+            Some("ai.review_teams.default"),
         ));
         assert!(!is_expected_config_path_not_found(&error, None));
         assert!(!is_expected_config_path_not_found(
@@ -199,6 +199,9 @@ pub async fn set_config(
                     request.path
                 );
             }
+
+            // Notify auto-sync to upload the updated config to the relay
+            crate::api::remote_connect_api::notify_settings_changed();
 
             Ok("Configuration set successfully".to_string())
         }
@@ -242,6 +245,9 @@ pub async fn reset_config(
                 );
             }
 
+            // Notify auto-sync: config reset, upload to relay
+            crate::api::remote_connect_api::notify_settings_changed();
+
             Ok(message)
         }
         Err(e) => {
@@ -283,6 +289,8 @@ pub async fn import_config(
         Ok(result) => {
             state.ai_client_factory.invalidate_cache();
             info!("Config imported, AI client cache invalidated");
+            // Notify auto-sync: config changed, upload to relay
+            crate::api::remote_connect_api::notify_settings_changed();
             Ok(to_json_value(result, "import config result")?)
         }
         Err(e) => {

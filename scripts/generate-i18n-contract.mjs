@@ -492,13 +492,12 @@ pub fn generated_locale_entry_from_code(
             for entry in GENERATED_LOCALE_CONTRACT {
                 for alias in entry.aliases {
                     let alias = alias.to_ascii_lowercase();
-                    if normalized == alias || normalized.starts_with(&format!("{alias}-")) {
-                        if best_match
+                    if (normalized == alias || normalized.starts_with(&format!("{alias}-")))
+                        && best_match
                             .map(|(_, current_len)| alias.len() > current_len)
                             .unwrap_or(true)
-                        {
-                            best_match = Some((entry, alias.len()));
-                        }
+                    {
+                        best_match = Some((entry, alias.len()));
                     }
                 }
             }
@@ -561,12 +560,12 @@ function generateInstallerRustLocaleContract(contract) {
   const locales = orderedLocales(contract, 'installer');
 
   return `${generatedHeader('rust')}#[derive(Debug, Clone, Copy)]
-pub struct InstallerGeneratedLocaleEntry {
+pub(super) struct InstallerGeneratedLocaleEntry {
     pub code: &'static str,
     pub aliases: &'static [&'static str],
 }
 
-pub const INSTALLER_GENERATED_LOCALES: &[InstallerGeneratedLocaleEntry] = &[
+pub(super) const INSTALLER_GENERATED_LOCALES: &[InstallerGeneratedLocaleEntry] = &[
 ${locales.map((locale) => `    InstallerGeneratedLocaleEntry {
         code: ${rustString(locale.id)},
         aliases: ${rustStringArray(locale.aliases)},

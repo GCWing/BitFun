@@ -1,4 +1,4 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { workspaceAPI } from '@/infrastructure/api';
 import type { ExplorerNodeDto } from '@/infrastructure/api/service-api/tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
@@ -257,7 +257,7 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
     callback: (event: FileSystemChangeEvent) => void,
     options: ExplorerWatchOptions = {}
   ): () => void {
-    let unlisten: UnlistenFn | null = null;
+    let unlisten: (() => void) | null = null;
     let active = true;
     const recursive = options.recursive ?? true;
     const normalizedRoot = normalizeForCompare(rootPath);
@@ -265,12 +265,12 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
 
     const start = async () => {
       try {
-        unlisten = await listen<FileWatchEvent[]>('file-system-changed', (event) => {
+        unlisten = api.listen<FileWatchEvent[]>('file-system-changed', (events) => {
           if (!active) {
             return;
           }
 
-          for (const fileEvent of event.payload) {
+          for (const fileEvent of events) {
             const normalizedPath = normalizeForCompare(fileEvent.path);
             const normalizedFrom = fileEvent.from ? normalizeForCompare(fileEvent.from) : '';
             const relevant =

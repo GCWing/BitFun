@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalSessionStorageRoot {
+pub(super) struct LocalSessionStorageRoot {
     pub workspace_path: PathBuf,
     pub session_storage_path: PathBuf,
 }
@@ -17,7 +17,7 @@ pub struct LocalSessionStorageRoot {
 /// Memory generation currently uses a local-only global memory workspace, so
 /// remote SSH mirror roots are intentionally excluded before session metadata is
 /// read.
-pub async fn collect_local_session_storage_roots() -> Vec<LocalSessionStorageRoot> {
+pub(super) async fn collect_local_session_storage_roots() -> Vec<LocalSessionStorageRoot> {
     let mut paths = Vec::new();
     let mut seen = HashSet::new();
 

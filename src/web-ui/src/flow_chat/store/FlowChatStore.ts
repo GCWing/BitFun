@@ -529,6 +529,24 @@ function isUnsupportedTauriCommandError(error: unknown, command: string): boolea
     normalizedMessage.includes('is not a function');
 }
 
+/** Transport / gateway failures must fail hydrate instead of falling through to more RPCs. */
+function isSessionRestoreTransportError(error: unknown): boolean {
+  const anyError = error as { message?: unknown; context?: { originalError?: unknown } };
+  const originalError = anyError?.context?.originalError;
+  const messageParts = [
+    anyError?.message,
+    typeof originalError === 'string' ? originalError : (originalError as { message?: unknown })?.message,
+  ].filter((part): part is string => typeof part === 'string');
+  const normalizedMessage = messageParts.join(' ').toLowerCase();
+  return (
+    normalizedMessage.includes('504') ||
+    normalizedMessage.includes('gateway timeout') ||
+    normalizedMessage.includes('peer hostinvoke transport') ||
+    normalizedMessage.includes('timed out') ||
+    normalizedMessage.includes('timeout')
+  );
+}
+
 function restoreCommandSupportKey(
   command: string,
   remoteConnectionId?: string,
@@ -561,6 +579,8 @@ export class FlowChatStore {
   private silentMode = false;
   private metadataListRequests = new Map<string, MetadataListRequest>();
   private metadataPageRequests = new Map<string, MetadataPageRequest>();
+  /** Bumped on peer mode surface reset; stale metadata loads must not write. */
+  private surfaceGeneration = 0;
   private fullHistoryHydrationRequests = new Map<string, FullHistoryHydrationRequest>();
   private deferredFullHistoryProjections = new Map<string, DeferredFullHistoryProjection>();
   private fullHistoryProjectionApplyRequests = new Set<string>();
@@ -1496,6 +1516,8 @@ export class FlowChatStore {
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
+      reviewTargetEvidence?: Session['reviewTargetEvidence'];
+      reviewTargetFilePaths?: Session['reviewTargetFilePaths'];
     },
     remoteConnectionId?: string,
     remoteSshHost?: string
@@ -1540,6 +1562,8 @@ export class FlowChatStore {
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
+        reviewTargetEvidence: meta?.reviewTargetEvidence,
+        reviewTargetFilePaths: meta?.reviewTargetFilePaths,
         isTransient: meta?.isTransient ?? false,
         agentBackedTransient: meta?.agentBackedTransient ?? false,
       };
@@ -2160,6 +2184,31 @@ export class FlowChatStore {
     });
 
     return removedSessionIds;
+  }
+
+  /**
+   * Drop all in-memory sessions and metadata request caches before switching
+   * Peer Device Mode data plane. Prevents local sessionIds from blocking peer
+   * metadata import (existingSession skip).
+   */
+  public clearAllSessionsForPeerSwitch(): string[] {
+    this.surfaceGeneration += 1;
+    const removedSessionIds = Array.from(this.state.sessions.keys());
+    this.metadataListRequests.clear();
+    this.metadataPageRequests.clear();
+    if (removedSessionIds.length === 0) {
+      this.setState(prev => ({
+        ...prev,
+        sessions: new Map(),
+        activeSessionId: null,
+      }));
+      return [];
+    }
+    return this.removeSessionsByIds(removedSessionIds);
+  }
+
+  public getSurfaceGeneration(): number {
+    return this.surfaceGeneration;
   }
 
   public getActiveSession(): Session | null {
@@ -3323,6 +3372,7 @@ export class FlowChatStore {
       defaultModels: Record<string, string>;
     }>,
   ): Promise<void> {
+    const surfaceGeneration = this.surfaceGeneration;
     const [
       { stateMachineManager },
       { models, defaultModels },
@@ -3330,9 +3380,15 @@ export class FlowChatStore {
       import('../state-machine'),
       modelConfigPromise ?? this.loadSessionMetadataModelConfig(),
     ]);
+    if (surfaceGeneration !== this.surfaceGeneration) {
+      return;
+    }
 
     const processSession = async (metadata: any) => {
       try {
+        if (surfaceGeneration !== this.surfaceGeneration) {
+          return;
+        }
         const existingSession = this.state.sessions.get(metadata.sessionId);
         if (existingSession) {
           return;
@@ -3372,6 +3428,9 @@ export class FlowChatStore {
         const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
 
         this.setState(prev => {
+          if (surfaceGeneration !== this.surfaceGeneration) {
+            return prev;
+          }
           if (prev.sessions.has(metadata.sessionId)) {
             return prev;
           }
@@ -3392,6 +3451,7 @@ export class FlowChatStore {
             titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
             dialogTurns: [],
             status: 'idle',
+            persistedStatus: metadata.status,
             config: {
               agentType: validatedAgentType,
               modelName: metadata.modelName,
@@ -3420,6 +3480,7 @@ export class FlowChatStore {
             hasUnreadCompletion: metadata.unreadCompletion,
             needsUserAttention: metadata.needsUserAttention,
             deepReviewRunManifest: metadata.deepReviewRunManifest,
+            reviewTargetEvidence: metadata.reviewTargetEvidence,
             isTransient: false,
           };
 
@@ -3758,6 +3819,7 @@ export class FlowChatStore {
               titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
               dialogTurns: [],
               status: 'idle',
+              persistedStatus: metadata.status,
               config: {
                 agentType: validatedAgentType,
                 modelName: metadata.modelName,
@@ -3786,6 +3848,7 @@ export class FlowChatStore {
               hasUnreadCompletion: metadata.unreadCompletion,
               needsUserAttention: metadata.needsUserAttention,
               deepReviewRunManifest: metadata.deepReviewRunManifest,
+              reviewTargetEvidence: metadata.reviewTargetEvidence,
               isTransient: false,
             };
 
@@ -4045,6 +4108,9 @@ export class FlowChatStore {
             durationMs: elapsedMs(restoreStartedAt),
           });
         } catch (error) {
+          if (isSessionRestoreTransportError(error)) {
+            throw error;
+          }
           contextRestoreState = 'pending';
           startupTrace.markPhase('historical_session_restore_failed', {
             remote,
@@ -4072,6 +4138,36 @@ export class FlowChatStore {
           remoteConnectionId,
           remoteSshHost
         );
+        // Cloud-imported sessions may only have metadata locally; lazy-fetch turns.
+        if (
+          !remote &&
+          (!Array.isArray(turns) || turns.length === 0) &&
+          workspacePath
+        ) {
+          try {
+            const { remoteConnectAPI } = await import(
+              '@/infrastructure/api/service-api/RemoteConnectAPI'
+            );
+            const fetched = await remoteConnectAPI.accountFetchSessionTurns(
+              sessionId,
+              workspacePath
+            );
+            if (fetched) {
+              turns = await sessionAPI.loadSessionTurns(
+                sessionId,
+                workspacePath,
+                limit,
+                remoteConnectionId,
+                remoteSshHost
+              );
+            }
+          } catch (fetchErr) {
+            log.warn('accountFetchSessionTurns failed during hydrate', {
+              sessionId,
+              error: fetchErr,
+            });
+          }
+        }
         startupTrace.markPhase('historical_session_turns_load_end', {
           remote,
           sessionId,

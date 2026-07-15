@@ -161,7 +161,7 @@ impl SessionMetadataStore {
             }
         }
 
-        metadata_list.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+        metadata_list.sort_by_key(|metadata| std::cmp::Reverse(metadata.last_active_at));
         Ok(metadata_list)
     }
 

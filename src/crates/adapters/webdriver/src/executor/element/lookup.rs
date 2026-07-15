@@ -9,7 +9,7 @@ use crate::server::response::WebDriverErrorResponse;
 use crate::webdriver::LocatorStrategy;
 
 impl BridgeExecutor {
-    pub async fn find_elements(
+    pub(crate) async fn find_elements(
         &self,
         root_element_id: Option<String>,
         using: &str,
@@ -41,7 +41,7 @@ impl BridgeExecutor {
         }
     }
 
-    pub async fn get_active_element(&self) -> Result<Value, WebDriverErrorResponse> {
+    pub(crate) async fn get_active_element(&self) -> Result<Value, WebDriverErrorResponse> {
         api::element::exec_active_element(self.state.clone(), &self.session.id).await
     }
 }

@@ -247,8 +247,33 @@ describe('Markdown file links', () => {
 
     const image = container.querySelector<HTMLImageElement>('img[alt="ReLU 图像"]');
     expect(image).not.toBeNull();
-    expect(mocks.readFileContent).toHaveBeenCalledWith(`${EXAMPLE_WORKSPACE}/relu.png`);
+    expect(mocks.readFileContent).toHaveBeenCalledWith(
+      `${EXAMPLE_WORKSPACE}/relu.png`,
+      'base64',
+      undefined,
+    );
     expect(image?.src).toBe('data:image/png;base64,cmVsdS1wbmc=');
     expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
+  });
+
+  it('routes remote markdown image reads through the session connection', async () => {
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={'![Remote chart](artifacts/chart.png)'}
+          basePath={'/srv/project'}
+          remoteConnectionId={'remote-connection-1'}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.readFileContent).toHaveBeenCalledWith(
+      '/srv/project/artifacts/chart.png',
+      'base64',
+      'remote-connection-1',
+    );
   });
 });

@@ -1,8 +1,10 @@
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
+use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
 pub struct DeepReviewAgent {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for DeepReviewAgent {
@@ -13,6 +15,9 @@ impl Default for DeepReviewAgent {
 
 impl DeepReviewAgent {
     pub fn new() -> Self {
+        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
+        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
+
         Self {
             default_tools: vec![
                 "LaunchReviewAgent".to_string(),
@@ -21,16 +26,9 @@ impl DeepReviewAgent {
                 "Glob".to_string(),
                 "LS".to_string(),
                 "GetFileDiff".to_string(),
-                "Git".to_string(),
                 "submit_code_review".to_string(),
-                "AskUserQuestion".to_string(),
-                "Edit".to_string(),
-                "Write".to_string(),
-                "ExecCommand".to_string(),
-                "WriteStdin".to_string(),
-                "ExecControl".to_string(),
-                "TodoWrite".to_string(),
             ],
+            tool_exposure_overrides,
         }
     }
 }
@@ -50,7 +48,7 @@ impl Agent for DeepReviewAgent {
     }
 
     fn description(&self) -> &str {
-        r#"Local deep-review orchestrator that builds a parallel Code Review Team for substantial changes. It dispatches independent specialist reviewers for business logic, performance, and security, can perform user-approved remediation plus incremental re-review, and then runs a quality-inspector pass before producing a consolidated report."#
+        r#"Read-only strict reviewer for substantial changes. It reviews the prepared target directly, may request one focused specialist or conditional quality check, and submits an evidence-backed report. A separate ReviewFixer owns approved remediation."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -61,6 +59,10 @@ impl Agent for DeepReviewAgent {
         self.default_tools.clone()
     }
 
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
+    }
+
     fn user_context_policy(&self) -> UserContextPolicy {
         UserContextPolicy::empty()
             .with_workspace_context()
@@ -69,28 +71,33 @@ impl Agent for DeepReviewAgent {
     }
 
     fn is_readonly(&self) -> bool {
-        false
+        true
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Agent, DeepReviewAgent};
+    use crate::agentic::tools::framework::ToolExposure;
 
     #[test]
-    fn deep_review_agent_has_team_orchestration_tools() {
+    fn deep_review_agent_has_optional_validation_tools() {
         let agent = DeepReviewAgent::new();
         let tools = agent.default_tools();
 
         assert!(tools.contains(&"LaunchReviewAgent".to_string()));
         assert!(!tools.contains(&"Task".to_string()));
+        assert_eq!(
+            agent.tool_exposure_overrides().get("GetFileDiff"),
+            Some(&ToolExposure::Expanded),
+        );
         assert!(tools.contains(&"submit_code_review".to_string()));
-        assert!(tools.contains(&"AskUserQuestion".to_string()));
-        assert!(tools.contains(&"Edit".to_string()));
-        assert!(tools.contains(&"Write".to_string()));
-        assert!(tools.contains(&"ExecCommand".to_string()));
-        assert!(tools.contains(&"WriteStdin".to_string()));
-        assert!(tools.contains(&"ExecControl".to_string()));
-        assert!(!agent.is_readonly());
+        assert!(!tools.contains(&"AskUserQuestion".to_string()));
+        assert!(!tools.contains(&"Edit".to_string()));
+        assert!(!tools.contains(&"Write".to_string()));
+        assert!(!tools.contains(&"ExecCommand".to_string()));
+        assert!(!tools.contains(&"WriteStdin".to_string()));
+        assert!(!tools.contains(&"ExecControl".to_string()));
+        assert!(agent.is_readonly());
     }
 }

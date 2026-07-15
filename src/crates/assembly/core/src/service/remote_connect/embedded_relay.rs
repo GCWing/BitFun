@@ -28,7 +28,7 @@ pub async fn start_embedded_relay(
         }
     });
 
-    let mut app = build_relay_router(room_manager, asset_store, start_time);
+    let mut app = build_relay_router(room_manager, asset_store, start_time, None);
 
     if let Some(dir) = static_dir {
         info!("Embedded relay: serving static files from {dir}");

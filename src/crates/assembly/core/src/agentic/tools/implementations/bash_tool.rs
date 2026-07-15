@@ -50,7 +50,7 @@ fn json_object_metadata(value: Value) -> serde_json::Map<String, Value> {
     }
 }
 
-async fn deliver_background_bash_result(
+struct BackgroundBashResultDelivery {
     parent_session_id: String,
     parent_agent_type: String,
     parent_workspace_path: Option<String>,
@@ -61,7 +61,21 @@ async fn deliver_background_bash_result(
     metadata: serde_json::Map<String, Value>,
     terminal_session_id: String,
     failure_context: &'static str,
-) {
+}
+
+async fn deliver_background_bash_result(delivery: BackgroundBashResultDelivery) {
+    let BackgroundBashResultDelivery {
+        parent_session_id,
+        parent_agent_type,
+        parent_workspace_path,
+        parent_remote_connection_id,
+        parent_remote_ssh_host,
+        delivery_text,
+        display_text,
+        metadata,
+        terminal_session_id,
+        failure_context,
+    } = delivery;
     let runtime = match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -1240,18 +1254,18 @@ impl BashTool {
                             "outputFile": output_file_reference_for_task.clone(),
                         });
 
-                        deliver_background_bash_result(
-                            parent_session_id.clone(),
-                            parent_agent_type.clone(),
-                            parent_workspace_path.clone(),
-                            parent_remote_connection_id.clone(),
-                            parent_remote_ssh_host.clone(),
+                        deliver_background_bash_result(BackgroundBashResultDelivery {
+                            parent_session_id: parent_session_id.clone(),
+                            parent_agent_type: parent_agent_type.clone(),
+                            parent_workspace_path: parent_workspace_path.clone(),
+                            parent_remote_connection_id: parent_remote_connection_id.clone(),
+                            parent_remote_ssh_host: parent_remote_ssh_host.clone(),
                             delivery_text,
                             display_text,
-                            json_object_metadata(metadata),
-                            terminal_session_id.clone(),
-                            "result",
-                        )
+                            metadata: json_object_metadata(metadata),
+                            terminal_session_id: terminal_session_id.clone(),
+                            failure_context: "result",
+                        })
                         .await;
                         delivery_sent = true;
                         break;
@@ -1280,18 +1294,18 @@ impl BashTool {
                             "error": message.clone(),
                         });
 
-                        deliver_background_bash_result(
-                            parent_session_id.clone(),
-                            parent_agent_type.clone(),
-                            parent_workspace_path.clone(),
-                            parent_remote_connection_id.clone(),
-                            parent_remote_ssh_host.clone(),
+                        deliver_background_bash_result(BackgroundBashResultDelivery {
+                            parent_session_id: parent_session_id.clone(),
+                            parent_agent_type: parent_agent_type.clone(),
+                            parent_workspace_path: parent_workspace_path.clone(),
+                            parent_remote_connection_id: parent_remote_connection_id.clone(),
+                            parent_remote_ssh_host: parent_remote_ssh_host.clone(),
                             delivery_text,
                             display_text,
-                            json_object_metadata(metadata),
-                            terminal_session_id.clone(),
-                            "error result",
-                        )
+                            metadata: json_object_metadata(metadata),
+                            terminal_session_id: terminal_session_id.clone(),
+                            failure_context: "error result",
+                        })
                         .await;
                         delivery_sent = true;
                         break;
@@ -1322,18 +1336,18 @@ impl BashTool {
                     "error": "stream_ended_without_completion",
                 });
 
-                deliver_background_bash_result(
-                    parent_session_id.clone(),
-                    parent_agent_type.clone(),
-                    parent_workspace_path.clone(),
-                    parent_remote_connection_id.clone(),
-                    parent_remote_ssh_host.clone(),
+                deliver_background_bash_result(BackgroundBashResultDelivery {
+                    parent_session_id: parent_session_id.clone(),
+                    parent_agent_type: parent_agent_type.clone(),
+                    parent_workspace_path: parent_workspace_path.clone(),
+                    parent_remote_connection_id: parent_remote_connection_id.clone(),
+                    parent_remote_ssh_host: parent_remote_ssh_host.clone(),
                     delivery_text,
                     display_text,
-                    json_object_metadata(metadata),
-                    terminal_session_id.clone(),
-                    "stream-end result",
-                )
+                    metadata: json_object_metadata(metadata),
+                    terminal_session_id: terminal_session_id.clone(),
+                    failure_context: "stream-end result",
+                })
                 .await;
             }
         });

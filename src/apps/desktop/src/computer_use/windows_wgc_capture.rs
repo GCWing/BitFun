@@ -25,7 +25,7 @@ use windows::Win32::System::WinRT::Direct3D11::IDirect3DDxgiInterfaceAccess;
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 
 /// Capture one frame from `hwnd` via WGC, returning top-down BGRA bytes.
-pub fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
+pub(super) fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service(
             "WGC capture: invalid HWND".to_string(),

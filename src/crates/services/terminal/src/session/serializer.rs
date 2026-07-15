@@ -13,15 +13,15 @@ const SERIALIZATION_VERSION: u32 = 1;
 
 /// Serialized terminal state for cross-version compatibility
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SerializedTerminalState {
+struct SerializedTerminalState {
     /// Serialization format version
-    pub version: u32,
+    version: u32,
 
     /// Serialized sessions
-    pub sessions: Vec<SerializedSession>,
+    sessions: Vec<SerializedSession>,
 
     /// Serialization timestamp
-    pub timestamp: i64,
+    timestamp: i64,
 }
 
 /// Serialized session data

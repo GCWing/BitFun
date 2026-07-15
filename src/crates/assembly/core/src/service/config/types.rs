@@ -508,10 +508,6 @@ pub struct AIConfig {
     #[serde(default = "default_review_team_rate_limit_status")]
     pub review_team_rate_limit_status: serde_json::Value,
 
-    /// Workspace path -> Review Team strategy override.
-    #[serde(default)]
-    pub review_team_project_strategy_overrides: HashMap<String, String>,
-
     /// Maximum number of subagents that may execute concurrently.
     #[serde(default = "default_subagent_max_concurrency")]
     pub subagent_max_concurrency: usize,
@@ -698,7 +694,7 @@ impl AIConfig {
 /// Shared agent-profile configuration.
 ///
 /// Model mapping has moved to `AIConfig.agent_models`, keyed by agent id.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AgentProfileConfig {
     /// Shared profile ID (e.g. agentic, coding_shared, requirement, ui-design).
@@ -726,7 +722,7 @@ pub struct AgentProfileConfig {
 }
 
 /// API view of a mode configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AgentProfileView {
     pub profile_id: String,
@@ -826,31 +822,6 @@ pub const DEFAULT_MAX_ROUNDS: usize = 200;
 
 fn default_max_rounds() -> usize {
     DEFAULT_MAX_ROUNDS
-}
-
-impl Default for AgentProfileConfig {
-    fn default() -> Self {
-        Self {
-            profile_id: String::new(),
-            added_tools: Vec::new(),
-            removed_tools: Vec::new(),
-            disabled_user_skills: Vec::new(),
-            enabled_user_skills: Vec::new(),
-            subagent_overrides: HashMap::new(),
-        }
-    }
-}
-
-impl Default for AgentProfileView {
-    fn default() -> Self {
-        Self {
-            profile_id: String::new(),
-            enabled_tools: Vec::new(),
-            default_tools: Vec::new(),
-            disabled_user_skills: Vec::new(),
-            enabled_user_skills: Vec::new(),
-        }
-    }
 }
 
 /// Debug-mode configuration.
@@ -1534,7 +1505,6 @@ impl Default for AIConfig {
             agent_profiles: std::collections::HashMap::new(),
             review_teams: default_review_team_configs(),
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
-            review_team_project_strategy_overrides: std::collections::HashMap::new(),
             subagent_max_concurrency: default_subagent_max_concurrency(),
             subagent_batch_execution_policy: default_subagent_batch_execution_policy(),
             proxy: ProxyConfig::default(),
@@ -1783,10 +1753,28 @@ impl AIModelConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig,
-        MemoryExternalContextPolicy, ModelExchangeTracingMode, ReasoningMode,
-        SubagentBatchExecutionPolicy,
+        AIConfig, AIExperienceConfig, AIModelConfig, AgentProfileConfig, AgentProfileView,
+        AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy, ModelExchangeTracingMode,
+        ReasoningMode, SubagentBatchExecutionPolicy,
     };
+
+    #[test]
+    fn agent_profile_defaults_keep_all_collections_empty() {
+        let config = AgentProfileConfig::default();
+        assert!(config.profile_id.is_empty());
+        assert!(config.added_tools.is_empty());
+        assert!(config.removed_tools.is_empty());
+        assert!(config.disabled_user_skills.is_empty());
+        assert!(config.enabled_user_skills.is_empty());
+        assert!(config.subagent_overrides.is_empty());
+
+        let view = AgentProfileView::default();
+        assert!(view.profile_id.is_empty());
+        assert!(view.enabled_tools.is_empty());
+        assert!(view.default_tools.is_empty());
+        assert!(view.disabled_user_skills.is_empty());
+        assert!(view.enabled_user_skills.is_empty());
+    }
 
     #[test]
     fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {
@@ -2099,7 +2087,6 @@ mod tests {
         assert_eq!(review_team.strategy_level, "normal");
         assert!(review_team.member_strategy_overrides.is_empty());
         assert_eq!(config.review_team_rate_limit_status, serde_json::json!({}));
-        assert!(config.review_team_project_strategy_overrides.is_empty());
     }
 
     #[test]
@@ -2380,9 +2367,6 @@ mod tests {
             "review_team_rate_limit_status": {
                 "remaining": 2
             },
-            "review_team_project_strategy_overrides": {
-                "workspace/repo": "quick"
-            }
         }))
         .expect("review team auxiliary config should deserialize");
 
@@ -2392,19 +2376,8 @@ mod tests {
             config.review_team_rate_limit_status["remaining"],
             serde_json::json!(2)
         );
-        assert_eq!(
-            config
-                .review_team_project_strategy_overrides
-                .get("workspace/repo"),
-            Some(&"quick".to_string())
-        );
-
         let serialized =
             serde_json::to_value(&config).expect("review team auxiliary config should serialize");
         assert!(serialized["review_teams"]["rate_limit_status"].is_null());
-        assert_eq!(
-            serialized["review_team_project_strategy_overrides"]["workspace/repo"],
-            "quick"
-        );
     }
 }

@@ -6,7 +6,7 @@ use super::resource::ResourceAdapter;
 use crate::service::mcp::protocol::{MCPResource, MCPResourceContent};
 use crate::service::mcp::server::MCPServerManager;
 use crate::util::errors::{BitFunError, BitFunResult};
-pub use bitfun_services_integrations::mcp::adapter::{
+use bitfun_services_integrations::mcp::adapter::{
     MCPContextEnhancer as ContextEnhancer, MCPContextEnhancerConfig as ContextEnhancerConfig,
 };
 use log::{debug, info, warn};

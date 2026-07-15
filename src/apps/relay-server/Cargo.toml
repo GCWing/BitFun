@@ -1,6 +1,6 @@
 [package]
 name = "bitfun-relay-server"
-version = "0.2.12"
+version = "0.2.13"
 authors = ["BitFun Team"]
 edition = "2021"
 description = "BitFun Relay Server - WebSocket relay for Remote Connect"
@@ -12,6 +12,10 @@ path = "src/lib.rs"
 [[bin]]
 name = "bitfun-relay-server"
 path = "src/main.rs"
+
+[[bin]]
+name = "relay-admin"
+path = "src/bin/relay_admin.rs"
 
 [dependencies]
 # NOTE: Dependencies are intentionally inlined rather than inherited from the
@@ -43,3 +47,40 @@ dashmap = "6"
 rand = "0.8"
 base64 = "0.22"
 sha2 = "0.10"
+
+# Account storage (SQLite). The relay stays zero-knowledge: it only stores
+# encrypted blobs and password-derived hashes; it never holds a master key.
+# libsqlite3-sys is pinned to 0.30 to match the workspace's rusqlite 0.32 and
+# avoid duplicate native `sqlite3` links; `bundled` keeps the Docker build
+# self-contained (no system libsqlite3 needed).
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+
+# Crypto — used only by the `relay-admin` provisioning tool to derive KEK /
+# password hashes and wrap the master key *before* writing to the DB.
+# The relay server runtime itself never touches these crates.
+argon2 = "0.5"
+aes-gcm = "0.10"
+
+# CLI parsing for the admin tool
+clap = { version = "4", features = ["derive", "env"] }
+rpassword = "7"
+
+# Lints are inlined (not workspace=true) so the crate still builds inside the
+# standalone Docker context under src/apps/relay-server/.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unexpected_cfgs = "warn"
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"

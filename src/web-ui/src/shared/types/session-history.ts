@@ -4,7 +4,7 @@
  * Used by session lists and persistence metadata in the frontend.
  */
 
-import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
 export type PersistedSessionKind = 'standard' | 'subagent';
@@ -101,14 +101,21 @@ export interface SessionMetadata {
    * Continuation and later backend gates use this as the source of truth.
    */
   deepReviewRunManifest?: ReviewTeamRunManifest;
+  reviewTargetEvidence?: ReviewTargetEvidence;
 }
 
 export interface ReviewActionPersistedState {
   version: number;
   phase: string;
   completedRemediationIds: string[];
+  fixingRemediationIds?: string[];
   minimized: boolean;
   customInstructions: string;
+  followUpReviewSessionId?: string;
+  reviewTargetFilePaths?: string[];
+  remediationModifiedFilePaths?: string[];
+  remediationScopeRequiresWorkspaceFallback?: boolean;
+  fixingBaselineTurnId?: string;
   persistedAt: number;
 }
 

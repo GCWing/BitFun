@@ -451,37 +451,57 @@ function getMimeType(filePath: string): string {
   return mimeTypes[ext || ''] || 'image/jpeg';
 }
 
-async function getLocalImageDataUrl(localPath: string): Promise<string> {
-  const cachedDataUrl = localImageDataUrlCache.get(localPath);
+function getLocalImageCacheKey(localPath: string, remoteConnectionId?: string): string {
+  return JSON.stringify([remoteConnectionId || null, localPath]);
+}
+
+async function getLocalImageDataUrl(
+  localPath: string,
+  remoteConnectionId?: string,
+): Promise<string> {
+  const cacheKey = getLocalImageCacheKey(localPath, remoteConnectionId);
+  const cachedDataUrl = localImageDataUrlCache.get(cacheKey);
   if (cachedDataUrl) {
     return cachedDataUrl;
   }
 
-  const pendingRequest = localImageRequestCache.get(localPath);
+  const pendingRequest = localImageRequestCache.get(cacheKey);
   if (pendingRequest) {
     return pendingRequest;
   }
 
   const request = (async () => {
-    const base64Content = await workspaceAPI.readFileContent(localPath);
+    const base64Content = await workspaceAPI.readFileContent(
+      localPath,
+      'base64',
+      remoteConnectionId,
+    );
     const dataUrl = `data:${getMimeType(localPath)};base64,${base64Content}`;
-    localImageDataUrlCache.set(localPath, dataUrl);
-    localImageRequestCache.delete(localPath);
+    localImageDataUrlCache.set(cacheKey, dataUrl);
+    localImageRequestCache.delete(cacheKey);
     return dataUrl;
   })().catch((error) => {
-    localImageRequestCache.delete(localPath);
+    localImageRequestCache.delete(cacheKey);
     throw error;
   });
 
-  localImageRequestCache.set(localPath, request);
+  localImageRequestCache.set(cacheKey, request);
   return request;
 }
 
 interface MarkdownImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   basePath?: string;
+  remoteConnectionId?: string;
 }
 
-const MarkdownImage: React.FC<MarkdownImageProps> = ({ src, alt, className, basePath, ...imgProps }) => {
+const MarkdownImage: React.FC<MarkdownImageProps> = ({
+  src,
+  alt,
+  className,
+  basePath,
+  remoteConnectionId,
+  ...imgProps
+}) => {
   const rawSrc = typeof src === 'string' ? normalizeExternalImageSrc(src) : '';
   const localPath = useMemo(() => {
     if (!rawSrc || !isLocalAssetPath(rawSrc)) {
@@ -490,29 +510,32 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ src, alt, className, base
 
     return resolveBaseRelativePath(rawSrc, basePath);
   }, [basePath, rawSrc]);
+  const cacheKey = localPath
+    ? getLocalImageCacheKey(localPath, remoteConnectionId)
+    : null;
   const [resolvedSrc, setResolvedSrc] = useState(() => {
-    if (!localPath) {
+    if (!localPath || !cacheKey) {
       return rawSrc;
     }
 
-    return localImageDataUrlCache.get(localPath) || LOCAL_IMAGE_PLACEHOLDER;
+    return localImageDataUrlCache.get(cacheKey) || LOCAL_IMAGE_PLACEHOLDER;
   });
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(() => {
-    if (!localPath) {
+    if (!localPath || !cacheKey) {
       return 'loaded';
     }
 
-    return localImageDataUrlCache.has(localPath) ? 'loaded' : 'idle';
+    return localImageDataUrlCache.has(cacheKey) ? 'loaded' : 'idle';
   });
 
   useEffect(() => {
-    if (!localPath) {
+    if (!localPath || !cacheKey) {
       setResolvedSrc(rawSrc);
       setLoadState('loaded');
       return;
     }
 
-    const cachedDataUrl = localImageDataUrlCache.get(localPath);
+    const cachedDataUrl = localImageDataUrlCache.get(cacheKey);
     if (cachedDataUrl) {
       setResolvedSrc(cachedDataUrl);
       setLoadState('loaded');
@@ -523,7 +546,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ src, alt, className, base
     setResolvedSrc(LOCAL_IMAGE_PLACEHOLDER);
     setLoadState('loading');
 
-    void getLocalImageDataUrl(localPath)
+    void getLocalImageDataUrl(localPath, remoteConnectionId)
       .then((dataUrl) => {
         if (cancelled) {
           return;
@@ -537,7 +560,11 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ src, alt, className, base
           return;
         }
 
-        log.error('Failed to load local markdown image', { path: localPath, error });
+        log.error('Failed to load local markdown image', {
+          path: localPath,
+          remoteConnectionId,
+          error,
+        });
         setResolvedSrc(rawSrc);
         setLoadState('error');
       });
@@ -545,7 +572,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ src, alt, className, base
     return () => {
       cancelled = true;
     };
-  }, [localPath, rawSrc]);
+  }, [cacheKey, localPath, rawSrc, remoteConnectionId]);
 
   return (
     <img
@@ -742,6 +769,7 @@ export interface LineRange {
 export interface MarkdownProps {
   content: string;
   basePath?: string;
+  remoteConnectionId?: string;
   className?: string;
   isStreaming?: boolean;
   expandDetailsByDefault?: boolean;
@@ -756,6 +784,7 @@ export interface MarkdownProps {
 export const Markdown = React.memo<MarkdownProps>(({ 
   content, 
   basePath,
+  remoteConnectionId,
   className = '',
   isStreaming = false,
   expandDetailsByDefault = false,
@@ -1319,7 +1348,13 @@ export const Markdown = React.memo<MarkdownProps>(({
     },
 
     img({ node: _node, ...props }: any) {
-      return <MarkdownImage {...props} basePath={basePath || currentWorkspacePath} />;
+      return (
+        <MarkdownImage
+          {...props}
+          basePath={basePath || currentWorkspacePath}
+          remoteConnectionId={remoteConnectionId}
+        />
+      );
     },
     
     blockquote({ children }: any) {
@@ -1350,6 +1385,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     }
   }), [
     basePath,
+    remoteConnectionId,
     expandDetailsByDefault,
     isStreaming,
     markdownContent,

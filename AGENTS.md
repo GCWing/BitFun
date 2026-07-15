@@ -26,7 +26,7 @@ Keep crate dependencies inside each layer to the smallest set needed.
 |---|---|---|---|---|---|
 | 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
 | 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, and adapter/service registration | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
-| 3 | Adapters | `src/crates/adapters` | AI/API/transport/WebDriver protocol adapters and external-provider translation | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 3 | Adapters | `src/crates/adapters` | AI/API/transport/WebDriver/OpenCode protocol adapters and external-provider translation | `ai-adapters`, `api-layer`, `opencode-adapter`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
 | 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, LSP plugin registry, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
 | 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, DeepReview policy/report, plugin host boundary, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-host`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | Stable contracts and product domains | `src/crates/contracts` | Shared DTOs, event shapes, runtime ports, LSP protocol/plugin DTOs, and product domain contracts/policies | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
@@ -58,6 +58,7 @@ pnpm run desktop:dev               # full hot-reload: Vite HMR + Rust auto-rebui
 pnpm run desktop:preview:debug     # reuse pre-built binary + Vite HMR; no Rust auto-rebuild
 pnpm run dev:web                   # browser-only frontend
 pnpm run cli:dev                   # CLI runtime
+pnpm run cli:install               # build release + install bitfun-cli to ~/.local/bin (bashrc/zshrc PATH)
 
 # Check
 pnpm run fmt:rs                     # format only changed / staged Rust files
@@ -181,6 +182,38 @@ Repository-level decomposition rules:
 - Moving runtime ownership requires a reviewed port/provider design, old-path
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
+
+### CLI product-line guardrails
+
+For CLI/TUI parity work, non-interactive output contracts, external config
+imports, plugin management UX, CLI Agent behavior, or branded CLI distributions,
+read [`docs/architecture/cli-product-line-design.md`](docs/architecture/cli-product-line-design.md)
+and [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md). Keep CLI/TUI presentation
+in the app; move reusable product behavior through Product Assembly, Agent
+Runtime, Tool/Harness, Runtime Services, or the existing extension boundaries.
+
+### Product customization guardrails
+
+For product definitions, branded distributions, GUI/TUI layout selection,
+bundled product extensions, or customization build tasks, read
+[`docs/architecture/product-customization-blueprint.md`](docs/architecture/product-customization-blueprint.md).
+Keep product customization separate from user runtime configuration and plugins.
+GUI and TUI may share stable product facts, but not layout, component, theme-key,
+keybinding, or renderer schemas. Product assembly results and layout selections
+may carry a small immutable list of product identity, data-isolation, recovery,
+upgrade-integrity, or legal protection IDs. They must not carry user/source-level
+plugin policy, installation, activation, update, permission, or dynamic health state.
+Product Profile, Brand Pack, GUI/TUI Surface Blueprint, and Resolved Product Manifest are retired
+design terms, not current production objects. Do not create compatibility formats
+for them; implement only the smallest product-definition and assembly-result fields
+used by a real build and runtime consumer.
+
+For OpenCode live configuration or plugin execution, also read
+[`docs/architecture/extensions/opencode-extension-compatibility.md`](docs/architecture/extensions/opencode-extension-compatibility.md).
+The current P0 adapter remains a managed-package/static-preview path until the matching
+OC-R phase is implemented and verified. Do not extend the legacy managed-package
+path as the target OpenCode runtime model, and do not treat a design target as an
+already available capability.
 
 ### SDLC quality guardrails
 

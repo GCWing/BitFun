@@ -6,6 +6,12 @@
 [`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md)
 为准。
 
+本文件保留完成当时的代码名和迁移术语，仅用于说明历史实现，不能作为当前扩展架构的需求或命名依据。历史的
+“受管包”“projection-only”“幂等代次”等路径只描述 BitFun 原生包的当时状态；OpenCode 的目标来源、执行、
+权限和更新语义以 [`opencode-extension-compatibility.md`](../architecture/extensions/opencode-extension-compatibility.md)
+及其细分架构设计为准，交付顺序与退出条件见
+[`opencode-extension-compatibility-plan.md`](opencode-extension-compatibility-plan.md)。
+
 ## 1. 基础边界
 
 - 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一事实源。
@@ -30,7 +36,9 @@
 - `product-domains` 已承接 MiniApp state/workflow planning、built-in seed orchestration / host adapter contract、compile / permission adaptation、import lifecycle、AI / Agent permission、rate-limit、model/message/session/workspace/turn-text bridge rules、AI / Agent 请求计划、stream / runtime event payload、worker restart / draft key / workspace input 规则、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
 - `bitfun-core` 的 function-agent AI concrete acquisition 已从旧 `runtime_services` 路径收拢到明确的 core port adapter；Git / AI compatibility re-export 仍保留旧 public path。
 - 产品组装已承接 `DeliveryProfile`、当前交付形态入口矩阵、`CapabilitySet`、feature group matrix、profile-scoped capability plan、product-full provider plan、service availability report、profile-scoped harness registry 入口与 legacy-route 行为保护，以及 `ProductAssembler` 对 explicit profile input、runtime services、harness registry 和 service requirement 的验证；core 只保留兼容 re-export。ProductFull / Desktop / CLI / ACP 保留完整能力；Server / Remote / Web / MobileWeb 不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
-- 插件运行时边界基础已建立：`runtime-ports` 持有 `PluginRuntimeClient`、binding、availability、dispatch / response envelope、disabled stub 和 projection-only stub；产品组装输出扩展可用性事实与插件运行时绑定，并通过 Agent Runtime 内部 builder 注入该 binding；Agent Runtime SDK 门面不导出插件运行时主机 ABI。默认产品形态仍不启动真实 plugin Host、生态 adapter、JS/TS runtime、worker、subprocess 或 package discovery。
+- 插件运行时边界基础已建立：`runtime-ports` 持有 `PluginRuntimeClient`、binding、availability、dispatch / response envelope、disabled stub 和 projection-only stub；产品组装输出扩展可用性事实与插件运行时绑定，并通过 Agent Runtime 内部 builder 注入该 binding；Agent Runtime SDK 门面不导出插件运行时主机 ABI。默认产品启动不运行 JS/TS、工作进程或子进程。
+- OpenCode-compatible P0-C.1/P0-C.2 已建立受管包发现、完整性校验、工作区来源审核、精确内容哈希激活、CLI 管理与诊断，以及按需创建 OpenCode 适配器、插件运行时主机和 `PluginRuntimeBinding` 的唯一生产组装点。当前组装只返回需要权限的 custom tool 静态候选，不注册工具或执行插件代码。
+- 插件停用已支持按工作区和包清理缺失或损坏包的残留激活记录；停用状态在扫描前提交，后续受限发现负责结果分类，并在稳定发现同 ID 不同来源时协调旧审核记录。包暂时缺失或损坏时保留来源审核记录，重复操作和旧激活代次请求保持幂等，持久化结果不确定时不报告成功。
 - LSP plugin runtime target 和命令占位符解析已从 `services-core` 收口到 `core-types`；`services-core` 保留兼容 re-export、registry、current-target detection 和 filesystem / runtime service 逻辑。
 
 - Agent session/workspace owner routing 已继续收敛：`AgentRuntime` 提供 port-backed session workspace resolution entrypoint；Cron、SessionControl、SessionMessage 和 SessionHistory 不再在工具实现中直接解析目标 session workspace，Cron 保留 target session 可见性验证，workspace identity 中的 `workspace_id` / remote connection / remote host 通过 runtime contract 传递。

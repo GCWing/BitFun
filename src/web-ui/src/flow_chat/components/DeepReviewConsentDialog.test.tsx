@@ -45,12 +45,14 @@ vi.mock('@/component-library', () => ({
     </label>
   ),
   Modal: ({
+    ariaLabel,
     children,
     isOpen,
   }: {
+    ariaLabel?: string;
     children: React.ReactNode;
     isOpen: boolean;
-  }) => (isOpen ? <div role="dialog">{children}</div> : null),
+  }) => (isOpen ? <div role="dialog" aria-modal="true" aria-label={ariaLabel}>{children}</div> : null),
 }));
 
 let JSDOMCtor: (new (
@@ -135,6 +137,15 @@ function buildPreview(): ReviewTeamRunManifest {
       reviewerFileSplitThreshold: 20,
       maxSameRoleInstances: 3,
     },
+    concurrencyPolicy: {
+      maxParallelInstances: 4,
+      staggerSeconds: 0,
+      maxQueueWaitSeconds: 300,
+      batchExtrasSeparately: false,
+      allowProviderCapacityQueue: true,
+      allowBoundedAutoRetry: false,
+      autoRetryElapsedGuardSeconds: 300,
+    },
     tokenBudget: {
       mode: 'balanced',
       estimatedReviewerCalls: 3,
@@ -142,6 +153,7 @@ function buildPreview(): ReviewTeamRunManifest {
       maxExtraReviewers: 1,
       maxPromptBytesPerReviewer: 96_000,
       estimatedPromptBytesPerReviewer: 16_000,
+      estimatedPromptBytesTotal: 24_000,
       promptByteEstimateSource: 'manifest_heuristic',
       largeDiffSummaryFirst: false,
       skippedReviewerIds: [],
@@ -279,16 +291,21 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
       container.querySelector('button')?.dispatchEvent(new window.Event('click', { bubbles: true }));
     });
 
-    expect(container.textContent).toContain('Launch summary');
+    expect(container.textContent).toContain('Review plan');
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true');
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Review plan');
     expect(container.textContent).toContain('1 file');
     expect(container.textContent).toContain('2 optional checks not needed');
     expect(container.textContent).toContain('BitFun selected the most relevant checks for this target.');
-    expect(container.textContent).toContain('Estimated input:');
-    expect(container.textContent).toContain('Approximate prompt input only');
+    expect(container.textContent).not.toContain('Estimated reviewer prompt input');
+    expect(container.textContent).not.toContain('Reviewer prompt input only');
+    expect(container.textContent).toContain('Independent checks: 3 planned review agent run');
+    expect(container.textContent).toContain('Up to 4 review agent runs may occur without another confirmation.');
+    expect(container.textContent).not.toContain('up to 4 initial calls');
     expect(container.textContent).toContain('Run strategy: Standard');
     expect(container.textContent).not.toContain('Do not show this again');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
-    expect(container.textContent).not.toContain('3 reviewer calls');
+    expect(container.textContent).toContain('Planned review agent runs; model requests and token use are not estimated here.');
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Review depth: Risk-expanded');
     expect(container.textContent).not.toContain('Frontend reviewer');
@@ -327,7 +344,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).toContain('Provided context');
     expect(container.textContent).not.toContain('0 files');
     expect(container.textContent).not.toContain('Risk areas:');
-    expect(container.textContent).not.toContain('reviewer calls');
+    expect(container.textContent).toContain('Planned review agent runs; model requests and token use are not estimated here.');
   });
 
   it('still opens when skip preference is set but reviewers are skipped', async () => {
@@ -369,7 +386,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
 
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
     expect(container.textContent).toContain('Active session is busy');
-    expect(container.textContent).toContain('2 Review tasks running');
+    expect(container.textContent).toContain('2 review tasks running');
     expect(result).not.toHaveBeenCalled();
   });
 
@@ -387,7 +404,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
 
     await act(async () => {
       Array.from(container.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Start Strict Review')
+        .find((button) => button.textContent === 'Start review')
         ?.dispatchEvent(new window.Event('click', { bubbles: true }));
     });
 
@@ -409,7 +426,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.querySelectorAll('.deep-review-consent__strategy-heading')).toHaveLength(0);
     expect(container.textContent).not.toContain('Quick is narrower');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
-    expect(container.textContent).not.toContain('3 reviewer calls');
+    expect(container.textContent).toContain('Planned review agent runs; model requests and token use are not estimated here.');
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Expected cost:');
     expect(container.querySelectorAll('.deep-review-consent__strategy-selected-summary')).toHaveLength(0);
@@ -417,7 +434,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.querySelectorAll('.deep-review-consent__strategy-option')).toHaveLength(0);
     expect(container.querySelectorAll('.deep-review-consent__strategy-option--active')).toHaveLength(0);
     expect(container.textContent).not.toContain('Team default');
-    expect(container.textContent).toContain('Standard balances review coverage with practical evidence');
+    expect(container.textContent).toContain('Standard adds independent coverage while keeping cost practical.');
     expect(container.querySelectorAll('.deep-review-consent__strategy-option-summary')).toHaveLength(0);
 
     const quickStrategyButton = Array.from(container.querySelectorAll('button'))

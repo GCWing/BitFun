@@ -33,3 +33,6 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
+
+[lints]
+workspace = true

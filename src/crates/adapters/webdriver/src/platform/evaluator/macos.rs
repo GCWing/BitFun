@@ -102,6 +102,6 @@ unsafe fn ns_object_to_string(obj: &AnyObject) -> Option<String> {
         return None;
     }
 
-    let ns_string: &NSString = &*std::ptr::from_ref::<AnyObject>(obj).cast::<NSString>();
+    let ns_string: &NSString = unsafe { &*std::ptr::from_ref::<AnyObject>(obj).cast::<NSString>() };
     Some(ns_string.to_string())
 }

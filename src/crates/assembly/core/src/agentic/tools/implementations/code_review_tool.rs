@@ -10,6 +10,9 @@ use crate::service::config::get_app_language_code;
 use crate::service::i18n::code_review_copy_for_language;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
+use bitfun_agent_runtime::deep_review::{
+    review_diff_budget_exhausted, review_diff_limited, review_target_stale,
+};
 use log::warn;
 use serde_json::{json, Value};
 
@@ -364,6 +367,7 @@ impl CodeReviewTool {
                                     "cache_miss",
                                     "concurrency_limited",
                                     "partial_reviewer",
+                                    "target_evidence_limited",
                                     "reduced_scope",
                                     "retry_guidance",
                                     "skipped_reviewers",
@@ -470,35 +474,43 @@ impl CodeReviewTool {
         run_manifest: Option<&Value>,
         compression_contract: Option<&CompressionContract>,
     ) {
-        // Fill summary default values
-        if input.get("summary").is_none() {
-            warn!("CodeReview tool missing summary field, using default values");
+        let summary_is_valid =
+            input
+                .get("summary")
+                .and_then(Value::as_object)
+                .is_some_and(|summary| {
+                    summary
+                        .get("overall_assessment")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| !value.trim().is_empty())
+                        && summary
+                            .get("risk_level")
+                            .and_then(Value::as_str)
+                            .is_some_and(|value| {
+                                matches!(value, "low" | "medium" | "high" | "critical")
+                            })
+                        && summary
+                            .get("recommended_action")
+                            .and_then(Value::as_str)
+                            .is_some_and(|value| {
+                                matches!(
+                                    value,
+                                    "approve"
+                                        | "approve_with_suggestions"
+                                        | "request_changes"
+                                        | "block"
+                                )
+                            })
+                });
+        if !summary_is_valid {
+            warn!("CodeReview tool received a missing or invalid summary, failing closed");
             input["summary"] = json!({
-                "overall_assessment": "None",
-                "risk_level": "low",
-                "recommended_action": "approve",
-                "confidence_note": "AI did not return complete review results"
+                "overall_assessment": "Review result is incomplete or invalid",
+                "risk_level": "high",
+                "recommended_action": "request_changes",
+                "confidence_note": "AI did not return a valid review summary"
             });
-        } else if let Some(summary) = input.get_mut("summary") {
-            if summary.get("overall_assessment").is_none() {
-                summary["overall_assessment"] = json!("None");
-            }
-            if summary.get("risk_level").is_none() {
-                summary["risk_level"] = json!("low");
-            }
-            if summary.get("recommended_action").is_none() {
-                summary["recommended_action"] = json!("approve");
-            }
-        } else {
-            warn!(
-                "CodeReview tool summary field exists but is not mutable object, using default values"
-            );
-            input["summary"] = json!({
-                "overall_assessment": "None",
-                "risk_level": "low",
-                "recommended_action": "approve",
-                "confidence_note": "AI returned invalid summary format"
-            });
+            input["evidence_status"] = json!("failed");
         }
 
         // Fill issues default values
@@ -527,7 +539,12 @@ impl CodeReviewTool {
         }
         if deep_review {
             Self::fill_deep_review_packet_metadata(input, run_manifest);
+        }
+        if deep_review || run_manifest.is_some() {
             Self::fill_deep_review_reliability_signals(input, run_manifest, compression_contract);
+        }
+        if run_manifest.is_some() || !summary_is_valid {
+            deep_review_report::apply_review_evidence_guardrail(input, run_manifest);
         }
 
         if input.get("remediation_plan").is_none() {
@@ -545,11 +562,12 @@ impl CodeReviewTool {
     pub fn create_default_result() -> Value {
         json!({
             "schema_version": 1,
+            "evidence_status": "failed",
             "summary": {
-                "overall_assessment": "None",
-                "risk_level": "low",
-                "recommended_action": "approve",
-                "confidence_note": "AI review failed, using default result"
+                "overall_assessment": "Review result is unavailable",
+                "risk_level": "high",
+                "recommended_action": "request_changes",
+                "confidence_note": "AI review failed; a clean result is not allowed"
             },
             "issues": [],
             "positive_points": ["None"],
@@ -661,6 +679,26 @@ impl Tool for CodeReviewTool {
             run_manifest.as_ref(),
             compression_contract.as_ref(),
         );
+        let review_parent_turn_id = context
+            .custom_data
+            .get("deep_review_parent_dialog_turn_id")
+            .and_then(Value::as_str)
+            .or(context.dialog_turn_id.as_deref());
+        if review_parent_turn_id.is_some_and(review_diff_budget_exhausted) {
+            deep_review_report::apply_review_runtime_limitation(
+                &mut filled_input,
+                "Review diff allowance was exhausted; uncovered files remain limited.",
+            );
+        }
+        if review_parent_turn_id.is_some_and(review_diff_limited) {
+            deep_review_report::apply_review_runtime_limitation(
+                &mut filled_input,
+                "One or more prepared Review diffs were unavailable or truncated; uncovered scope remains limited.",
+            );
+        }
+        if review_parent_turn_id.is_some_and(review_target_stale) {
+            deep_review_report::apply_review_runtime_stale(&mut filled_input);
+        }
         if deep_review {
             Self::fill_deep_review_runtime_tracker_signals(
                 &mut filled_input,
@@ -721,6 +759,47 @@ mod tests {
         }
     }
 
+    #[test]
+    fn missing_summary_fails_closed() {
+        let mut input = json!({
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, false, None, None);
+
+        assert_eq!(input["summary"]["risk_level"], "high");
+        assert_eq!(input["summary"]["recommended_action"], "request_changes");
+        assert_eq!(input["evidence_status"], "failed");
+    }
+
+    #[test]
+    fn partially_invalid_summary_is_replaced_as_a_unit() {
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "Looks good",
+                "risk_level": "unknown",
+                "recommended_action": "approve",
+                "confidence_note": "high confidence"
+            },
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, false, None, None);
+
+        assert_eq!(
+            input["summary"],
+            json!({
+                "overall_assessment": "Review result is incomplete or invalid",
+                "risk_level": "high",
+                "recommended_action": "request_changes",
+                "confidence_note": "AI did not return a valid review summary"
+            })
+        );
+        assert_eq!(input["evidence_status"], "failed");
+    }
+
     #[tokio::test]
     async fn deep_review_schema_requires_deep_review_fields() {
         let tool = CodeReviewTool::new();
@@ -753,6 +832,35 @@ mod tests {
         let reviewer_properties = &schema["properties"]["reviewers"]["items"]["properties"];
 
         assert_eq!(reviewer_properties["partial_output"]["type"], "string");
+    }
+
+    #[test]
+    fn standard_review_surfaces_prepared_target_evidence_limits() {
+        let manifest = json!({
+            "reviewTargetEvidence": {
+                "version": 1,
+                "source": "workspace",
+                "fingerprint": "0123456789abcdef",
+                "baseRevision": "1111111111111111111111111111111111111111",
+                "headRevision": "worktree:0123456789abcdef",
+                "completeness": "partial",
+                "workspaceBinding": "matching_dirty",
+                "files": [{
+                    "path": "src/lib.rs",
+                    "status": "modified",
+                    "completeness": "complete"
+                }],
+                "limitations": ["mutable_workspace_evidence"]
+            }
+        });
+        let mut input = json!({});
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, false, Some(&manifest), None);
+
+        assert_eq!(
+            input["reliability_signals"][0]["kind"],
+            "target_evidence_limited"
+        );
     }
 
     #[tokio::test]
@@ -790,6 +898,7 @@ mod tests {
                 "cache_miss",
                 "concurrency_limited",
                 "partial_reviewer",
+                "target_evidence_limited",
                 "reduced_scope",
                 "retry_guidance",
                 "skipped_reviewers",
@@ -1013,46 +1122,22 @@ mod tests {
         let ToolResult::Result { data, .. } = &result[0] else {
             panic!("expected tool result");
         };
+        let kinds = data["reliability_signals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|signal| signal["kind"].as_str())
+            .collect::<Vec<_>>();
         assert_eq!(
-            data["reliability_signals"],
-            json!([
-                {
-                    "kind": "context_pressure",
-                    "severity": "info",
-                    "count": 7,
-                    "source": "runtime"
-                },
-                {
-                    "kind": "skipped_reviewers",
-                    "severity": "info",
-                    "count": 2,
-                    "source": "manifest"
-                },
-                {
-                    "kind": "token_budget_limited",
-                    "severity": "warning",
-                    "count": 1,
-                    "source": "manifest"
-                },
-                {
-                    "kind": "partial_reviewer",
-                    "severity": "warning",
-                    "count": 1,
-                    "source": "runtime"
-                },
-                {
-                    "kind": "retry_guidance",
-                    "severity": "warning",
-                    "count": 1,
-                    "source": "runtime"
-                },
-                {
-                    "kind": "user_decision",
-                    "severity": "action",
-                    "count": 1,
-                    "source": "report"
-                }
-            ])
+            kinds,
+            vec![
+                "context_pressure",
+                "skipped_reviewers",
+                "token_budget_limited",
+                "partial_reviewer",
+                "retry_guidance",
+                "user_decision",
+            ]
         );
     }
 
@@ -1274,17 +1359,14 @@ mod tests {
 
         CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
 
-        assert_eq!(
-            input["reliability_signals"],
-            json!([
-                {
-                    "kind": "reduced_scope",
-                    "severity": "info",
-                    "source": "manifest",
-                    "detail": "High-risk-only pass; changed files stay visible."
-                }
-            ])
-        );
+        let kinds = input["reliability_signals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|signal| signal["kind"].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(kinds, vec!["reduced_scope"]);
+        assert!(input.get("evidence_status").is_none());
     }
 
     #[test]
@@ -1305,7 +1387,13 @@ mod tests {
 
         CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
 
-        assert!(input.get("reliability_signals").is_none());
+        assert!(input
+            .get("reliability_signals")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .all(|signal| signal["kind"] != "reduced_scope"));
+        assert!(input.get("evidence_status").is_none());
     }
 
     #[test]
@@ -1394,7 +1482,13 @@ mod tests {
 
         CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
 
-        assert!(input.get("reliability_signals").is_none());
+        assert!(input
+            .get("reliability_signals")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .all(|signal| signal["kind"] != "reduced_scope"));
+        assert!(input.get("evidence_status").is_none());
     }
 
     #[test]

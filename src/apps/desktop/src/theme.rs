@@ -425,7 +425,7 @@ impl ThemeConfig {
         let startup_locale = &bootstrap_config.locale;
         let startup_locale_json =
             serde_json::to_string(&startup_locale).unwrap_or_else(|_| "\"zh-CN\"".to_string());
-        let startup_messages_json = Self::startup_messages_json(&startup_locale);
+        let startup_messages_json = Self::startup_messages_json(startup_locale);
         let show_startup_window_controls = !cfg!(target_os = "macos");
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
@@ -583,7 +583,6 @@ pub fn create_main_window(
         .initialization_script(&init_script)
         .on_page_load({
             let startup_trace_id = startup_trace_id.to_string();
-            let total_started_at = total_started_at;
             move |_window, payload| {
                 let event = match payload.event() {
                     PageLoadEvent::Started => "started",
@@ -640,7 +639,7 @@ pub fn create_main_window(
                     .map(|v| v == "1")
                     .unwrap_or(false)
                 {
-                    let _ = window.open_devtools();
+                    window.open_devtools();
                 }
             }
 
@@ -923,7 +922,6 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         .accept_first_mouse(true)
         .background_color(tauri::window::Color(0, 0, 0, 0))
         .on_page_load({
-            let started_at = started_at;
             move |_window, payload| {
                 let event = match payload.event() {
                     PageLoadEvent::Started => "started",

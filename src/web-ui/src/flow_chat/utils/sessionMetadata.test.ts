@@ -415,6 +415,26 @@ describe('sessionMetadata', () => {
     expect(metadata.deepReviewRunManifest).toBe(runManifest);
   });
 
+  it('persists prepared Review target evidence from the runtime session', () => {
+    const reviewTargetEvidence = {
+      version: 1,
+      source: 'pull_request',
+      fingerprint: 'review-target-fingerprint',
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      completeness: 'complete',
+      workspaceBinding: 'unavailable',
+      files: [],
+      limitations: [],
+      omittedFileCount: 0,
+    } as Session['reviewTargetEvidence'];
+    const session = createSession({ reviewTargetEvidence });
+
+    const metadata = buildSessionMetadata(session);
+
+    expect(metadata.reviewTargetEvidence).toBe(reviewTargetEvidence);
+  });
+
   it('round-trips subagent identity with parent tool metadata', () => {
     const session = createSession({
       sessionId: 'subagent-child-1',

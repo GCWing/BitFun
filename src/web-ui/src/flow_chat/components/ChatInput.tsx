@@ -30,6 +30,10 @@ import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
 import { getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
+import {
+  resolveSlashActionInputValue,
+  type SlashActionId,
+} from '../utils/slashActionSelection';
 import { notificationService } from '@/shared/notification-system';
 import { inputReducer, initialInputState } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -50,12 +54,14 @@ import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import {
   getDeepReviewLaunchErrorMessage,
-  buildDeepReviewLaunchFromSlashCommand,
-  buildDeepReviewPreviewFromSlashCommand,
-  isDeepReviewSlashCommand,
-  launchDeepReviewSession,
 } from '../services/DeepReviewService';
+import {
+  launchPreparedReviewSession,
+  prepareReviewLaunchFromSlashCommand,
+} from '../services/ReviewService';
+import { isReviewSlashCommand } from '../deep-review/launch/commandParser';
 import { createLogger } from '@/shared/utils/logger';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip, IconButton, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
@@ -69,9 +75,11 @@ import {
   resolveChatInputCanUseSkills,
   resolveChatInputSendAgentType,
   resolveChatInputModePolicy,
+  isPrimarySlashActionVisible,
   resolveSessionAssistantWorkspace,
   resolveSwitchableChatInputModes,
 } from '../utils/chatInputMode';
+import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
@@ -90,7 +98,7 @@ import {
 } from '../utils/skillPromptReference';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
-import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
+import { shouldBlockReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import { acpAgentTypeFromSession } from '../utils/acpSession';
 import {
@@ -111,7 +119,7 @@ export interface ChatInputProps {
 
 type SlashActionItem = {
   kind: 'action';
-  id: string;
+  id: SlashActionId;
   command: string;
   label: string;
 };
@@ -259,6 +267,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage
 }) => {
   const { t } = useTranslation('flow-chat');
+  const canLaunchReview = isTauriRuntime();
   
   const [inputState, dispatchInput] = useReducer(inputReducer, initialInputState);
   const [modeState, dispatchMode] = useReducer(modeReducer, initialModeState);
@@ -270,6 +279,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
   const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
+  const reviewLaunchPendingRef = useRef(false);
   const largePasteCountersRef = useRef<Record<number, number>>({});
   const undoImageStackRef = useRef<string[]>([]);
   
@@ -1769,25 +1779,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
     
     if (lastTurn.status === 'completed') {
-      const modifiedFiles: string[] = [];
-      
-      for (const round of lastTurn.modelRounds) {
-        for (const item of round.items) {
-          if (item.type === 'tool') {
-            const toolItem = item as import('../types/flow-chat').FlowToolItem;
-            const fileModifyTools = ['write_file', 'edit_file', 'create_file', 'delete_file'];
-            if (fileModifyTools.includes(toolItem.toolName)) {
-              const toolInput = toolItem.toolCall?.input;
-              if (toolInput && typeof toolInput === 'object') {
-                const filePath = (toolInput as any).file_path || (toolInput as any).path || (toolInput as any).filePath;
-                if (filePath && typeof filePath === 'string') {
-                  modifiedFiles.push(filePath);
-                }
-              }
-            }
-          }
-        }
-      }
+      const modifiedFiles = collectModifiedFilePathsFromTurns(
+        [lastTurn],
+        undefined,
+        workspacePath,
+      );
 
       if (modifiedFiles.length > 0) {
         log.debug('File modifications detected, updating recommendation context', { modifiedFiles });
@@ -1795,7 +1791,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           workspacePath,
           sessionId: effectiveTargetSessionId,
           turnIndex: lastTurn.backendTurnIndex ?? session.dialogTurns.length - 1,
-          modifiedFiles: [...new Set(modifiedFiles)]
+          modifiedFiles,
         });
       }
     }
@@ -1807,30 +1803,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     const items: SlashActionItem[] = [
-      ...(isBtwSession
-        ? []
-        : [{
+      ...(isPrimarySlashActionVisible({ actionId: 'btw', isBtwSession, canLaunchReview })
+        ? [{
             kind: 'action' as const,
-            id: 'btw',
+            id: 'btw' as const,
             command: '/btw',
             label: t('btw.title'),
-          }]),
+          }]
+        : []),
+      ...(isPrimarySlashActionVisible({ actionId: 'review', isBtwSession, canLaunchReview })
+        ? [{
+            kind: 'action' as const,
+            id: 'review' as const,
+            command: '/review',
+            label: t('chatInput.reviewAction'),
+          }]
+        : []),
       {
         kind: 'action',
-        id: 'goal',
+        id: 'goal' as const,
         command: '/goal',
         label: t('chatInput.goalAction'),
       },
       {
         kind: 'action',
-        id: 'usage',
+        id: 'usage' as const,
         command: '/usage',
         label: t('chatInput.usageAction'),
       },
       ...(canUseSkillsForTarget
         ? [{
             kind: 'action' as const,
-            id: 'reload-skills',
+            id: 'reload-skills' as const,
             command: '/reload-skills',
             label: t('chatInput.reloadSkillsAction'),
           }]
@@ -1839,13 +1843,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         ? [
             {
               kind: 'action' as const,
-              id: 'compact',
+              id: 'compact' as const,
               command: '/compact',
               label: t('chatInput.compactAction'),
             },
             {
               kind: 'action' as const,
-              id: 'init',
+              id: 'init' as const,
               command: '/init',
               label: t('chatInput.initAction'),
             },
@@ -1863,7 +1867,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const cmd = i.command.slice(1).toLowerCase();
       return cmd.includes(q) || i.label.toLowerCase().includes(q);
     });
-  }, [canUseSkillsForTarget, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
+  }, [canLaunchReview, canUseSkillsForTarget, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
 
   const getFilteredMcpPromptCommands = useCallback((): SlashMcpPromptItem[] => {
     if (isAcpInputSession) {
@@ -2015,11 +2019,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const isCompactCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/compact');
     const isGoalCommand = localSlashCommandsEnabled && isGoalSlashCommand(text);
     const isUsageCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/usage');
-    const isDeepReviewCommand = localSlashCommandsEnabled && isDeepReviewSlashCommand(text);
+    const isReviewCommand = localSlashCommandsEnabled && isReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
     // Don't queue /btw or /goal while the main session is processing; they have dedicated flows.
-    if (derivedState?.isProcessing && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand) {
+    if (derivedState?.isProcessing && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isReviewCommand) {
       setQueuedInput(text);
     }
 
@@ -2051,7 +2055,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
         // so Enter can submit "/btw ..." or "/review strict ..." instead of selecting from the picker.
-        if (pickerQuery !== null && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
+        if (pickerQuery !== null && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('r') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
             kind: 'actions',
@@ -2065,7 +2069,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
-      if (pickerQuery !== null && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
+      if (pickerQuery !== null && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isReviewCommand && !matchedMcpPrompt) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -2459,51 +2463,64 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [inputState.value, setQueuedInput, t, workspacePath]);
 
-  const submitDeepreviewFromInput = useCallback(async () => {
+  const submitReviewFromInput = useCallback(async () => {
+    if (!canLaunchReview) {
+      notificationService.warning(t('chatInput.reviewUnavailableSurface'));
+      return;
+    }
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.deepreviewNoSession')
+        t('chatInput.reviewNoSession')
       );
       return;
     }
 
     const message = inputState.value.trim();
-    if (!isDeepReviewSlashCommand(message)) {
+    if (!isReviewSlashCommand(message)) {
       notificationService.warning(
-        t('chatInput.deepreviewUsage')
+        t('chatInput.reviewUsage')
       );
       return;
     }
 
     if (isBtwSession) {
       notificationService.warning(
-        t('chatInput.deepreviewNestedDisabled'),
+        t('chatInput.reviewNestedDisabled'),
       );
       return;
     }
 
-    if (shouldBlockDeepReviewCommand(message, currentReviewActivity)) {
+    if (shouldBlockReviewCommand(message, currentReviewActivity)) {
       notificationService.warning(
-        t('chatInput.deepreviewBusy'),
+        t('chatInput.reviewBusy'),
       );
       return;
     }
+
+    if (reviewLaunchPendingRef.current) {
+      notificationService.warning(t('chatInput.reviewBusy'));
+      return;
+    }
+    reviewLaunchPendingRef.current = true;
 
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
 
     try {
-      const preview = await buildDeepReviewPreviewFromSlashCommand(
+      const prepared = await prepareReviewLaunchFromSlashCommand(
         message,
         effectiveTargetSession.workspacePath,
+        effectiveTargetSession.remoteConnectionId,
       );
-      const confirmed = await confirmDeepReviewLaunch(preview, {
-        sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
-          flowChatState,
-          effectiveTargetSessionId,
-        ),
-      });
-      if (!confirmed) {
-        return;
+      if (prepared.mode === 'strict' && prepared.requiresConsent) {
+        const confirmed = await confirmDeepReviewLaunch(prepared.runManifest, {
+          sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+            flowChatState,
+            effectiveTargetSessionId,
+          ),
+        });
+        if (!confirmed) {
+          return;
+        }
       }
 
       if (effectiveTargetSessionId) {
@@ -2516,22 +2533,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setQueuedInput(null);
       setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
-      const { prompt, runManifest } = await buildDeepReviewLaunchFromSlashCommand(
-        message,
-        effectiveTargetSession.workspacePath,
-      );
-
-      await launchDeepReviewSession({
+      const launched = await launchPreparedReviewSession({
         parentSessionId: effectiveTargetSessionId,
         workspacePath: effectiveTargetSession.workspacePath,
-        prompt,
         displayMessage: message,
-        runManifest,
-        childSessionName: t('chatInput.deepreviewThreadTitle'),
+        prepared,
+        childSessionName: t('chatInput.reviewThreadTitle'),
       });
+      if (launched?.launchStatus === 'uncertain') {
+        notificationService.warning(t('deepReviewActionBar.launchError.uncertain'), {
+          duration: 8000,
+        });
+      }
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
-      log.error('Failed to trigger Review: Strict', {
+      log.error('Failed to trigger Review', {
         error,
         sessionId: effectiveTargetSessionId,
       });
@@ -2541,13 +2557,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(
         getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
         {
-          title: t('chatInput.deepreviewFailed'),
+          title: t('chatInput.reviewFailed'),
           duration: 5000,
         }
       );
+    } finally {
+      reviewLaunchPendingRef.current = false;
     }
   }, [
     addToHistory,
+    canLaunchReview,
     clearPendingLargePastes,
     confirmDeepReviewLaunch,
     currentReviewActivity,
@@ -2728,8 +2747,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && isDeepReviewSlashCommand(message)) {
-      await submitDeepreviewFromInput();
+    if (localSlashCommandsEnabled && isReviewSlashCommand(message)) {
+      await submitReviewFromInput();
       return;
     }
 
@@ -2834,7 +2853,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     submitCompactFromInput,
     submitUsageFromInput,
     submitInitFromInput,
-    submitDeepreviewFromInput,
+    submitReviewFromInput,
     submitMcpPromptFromInput,
     submitReloadSkillsFromInput,
     confirmPromptCacheGuardIfNeeded,
@@ -2938,58 +2957,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, [requestModeChange]);
 
-  const selectSlashCommandAction = useCallback((actionId: string) => {
+  const selectSlashCommandAction = useCallback((actionId: SlashActionId) => {
     const raw = inputState.value || '';
-    const lower = raw.trimStart().toLowerCase();
-
-    let next = raw;
-
-    if (actionId === 'btw') {
-      if (isBtwSession) {
-        return;
-      }
-      if (!isSlashCommand(lower, '/btw')) {
-        next = '/btw ';
-      } else {
-        // Normalize to "/btw " + rest, preserving any already typed question.
-        const m = raw.match(/^(\s*)\/btw\b/i);
-        if (m) {
-          const leadingWs = m[1] || '';
-          const rest = raw.slice(m[0].length);
-          next = `${leadingWs}/btw ${rest.trimStart()}`;
-        } else {
-          next = '/btw ';
-        }
-      }
-    } else if (actionId === 'compact') {
-      next = '/compact';
-    } else if (actionId === 'goal') {
-      if (!isSlashCommand(lower, '/goal')) {
-        next = '/goal ';
-      } else {
-        const m = raw.match(/^(\s*)\/goal\b/i);
-        if (m) {
-          const leadingWs = m[1] || '';
-          const rest = raw.slice(m[0].length);
-          next = `${leadingWs}/goal ${rest.trimStart()}`;
-        } else {
-          next = '/goal ';
-        }
-      }
-    } else if (actionId === 'usage') {
-      next = '/usage';
-    } else if (actionId === 'init') {
-      next = '/init';
-    } else if (actionId === 'reload-skills') {
-      // /reload-skills takes no arguments. Setting the value to the bare
-      // command lets the user immediately press Enter to dispatch it
-      // (which is the same path /usage and /init use).
-      next = '/reload-skills';
-    } else {
+    const next = resolveSlashActionInputValue(actionId, raw, isBtwSession);
+    if (next === null) {
       return;
     }
 
     dispatchInput({ type: 'SET_VALUE', payload: next });
+    inputValueRef.current = next;
     // Clear the machine's queued input so the queuedInput sync effect does not overwrite
     // the just-set "/btw ..." value back to the stale "/" that was queued while processing.
     setQueuedInput(null);

@@ -75,13 +75,14 @@ pub use lsp::LspManager;
 pub use mcp::MCPService;
 #[cfg(feature = "service-integrations")]
 pub use review_platform::{
-    ReviewAuthSource, ReviewAuthState, ReviewChecks, ReviewDecision, ReviewFileStatus,
-    ReviewItemState, ReviewPlatformAccount, ReviewPlatformAuthChallenge,
+    ReviewAuthSource, ReviewAuthState, ReviewChecks, ReviewDecision, ReviewEvidenceCompleteness,
+    ReviewFileStatus, ReviewItemState, ReviewPlatformAccount, ReviewPlatformAuthChallenge,
     ReviewPlatformAuthChallengeState, ReviewPlatformCapabilities, ReviewPlatformCiLog,
-    ReviewPlatformCommit, ReviewPlatformError, ReviewPlatformFile, ReviewPlatformKind,
-    ReviewPlatformPullRequest, ReviewPlatformPullRequestDetail, ReviewPlatformRemote,
-    ReviewPlatformRepositoryRef, ReviewPlatformService, ReviewPlatformThread,
-    ReviewPlatformWorkspaceSnapshot,
+    ReviewPlatformCommit, ReviewPlatformError, ReviewPlatformFile, ReviewPlatformIssueComment,
+    ReviewPlatformIssueEvidence, ReviewPlatformKind, ReviewPlatformPullRequest,
+    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestFileDiff,
+    ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote, ReviewPlatformRepositoryRef,
+    ReviewPlatformService, ReviewPlatformThread, ReviewPlatformWorkspaceSnapshot,
 };
 pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, RuntimeSource};
 #[cfg(feature = "product-full")]

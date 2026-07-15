@@ -22,7 +22,6 @@ import {
   DEFAULT_REVIEW_TEAM_CORE_ROLES,
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
   DEFAULT_REVIEW_TEAM_MODEL,
-  DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_RATE_LIMIT_STATUS_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   DISALLOWED_REVIEW_TEAM_MEMBER_IDS,
@@ -39,10 +38,6 @@ import {
   REVIEW_STRATEGY_PROFILES,
 } from './strategy';
 import { buildPreReviewSummary } from './preReviewSummary';
-import {
-  buildIncrementalReviewCachePlan,
-  buildSharedContextCachePlan,
-} from './cachePlan';
 import { buildDeepReviewEvidencePack } from './evidencePack';
 import {
   applyTeamStrategyOverrideToMember,
@@ -59,7 +54,6 @@ import {
   buildTokenBudgetPlan,
 } from './tokenBudget';
 import {
-  buildWorkPackets,
   resolveChangeStats,
   resolveMaxExtraReviewers,
 } from './workPackets';
@@ -71,6 +65,7 @@ import type {
   ReviewStrategyLevel,
   ReviewStrategyProfile,
   ReviewStrategySource,
+  ReviewTargetEvidence,
   ReviewTeam,
   ReviewTeamChangeStats,
   ReviewTeamConcurrencyPolicy,
@@ -83,17 +78,18 @@ import type {
   ReviewTeamRateLimitStatus,
   ReviewTeamRunManifest,
   ReviewTeamStoredConfig,
+  ReviewTeamWorkPacket,
   ReviewTokenBudgetMode,
 } from './types';
 
 export * from './types';
 export * from './strategy';
-export { recommendReviewStrategyForTarget } from './risk';
+export * from './targetEvidence';
+export { buildReviewRiskFactors, recommendReviewStrategyForTarget } from './risk';
 export {
   DEFAULT_REVIEW_TEAM_ID,
   DEFAULT_REVIEW_TEAM_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_RATE_LIMIT_STATUS_CONFIG_PATH,
-  DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_MODEL,
   DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL,
@@ -126,8 +122,6 @@ function isReviewStrategyProfile(value: unknown): value is ReviewStrategyProfile
     isReviewStrategyLevel(profile.level) &&
     typeof profile.label === 'string' &&
     typeof profile.summary === 'string' &&
-    typeof profile.tokenImpact === 'string' &&
-    typeof profile.runtimeImpact === 'string' &&
     (profile.defaultModelSlot === 'fast' || profile.defaultModelSlot === 'primary') &&
     typeof profile.promptDirective === 'string' &&
     Boolean(profile.roleDirectives) &&
@@ -285,42 +279,6 @@ function normalizeMemberStrategyOverrides(
     } else {
       console.warn(
         `[ReviewTeamService] Ignoring invalid strategy override for '${normalizedId}': expected one of ${REVIEW_STRATEGY_LEVELS.join(', ')}, got '${value}'`,
-      );
-    }
-    return result;
-  }, {});
-}
-
-function normalizeProjectStrategyOverrideKey(workspacePath?: string): string | undefined {
-  const normalized = workspacePath?.trim().replace(/\\/g, '/');
-  if (!normalized) {
-    return undefined;
-  }
-  if (normalized === '/' || /^[a-zA-Z]:\/$/.test(normalized)) {
-    return normalized.toLowerCase();
-  }
-  return normalized.replace(/\/+$/, '').toLowerCase();
-}
-
-function normalizeProjectStrategyOverrideStore(
-  raw: unknown,
-): Record<string, ReviewStrategyLevel> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {};
-  }
-
-  return Object.entries(raw as Record<string, unknown>).reduce<
-    Record<string, ReviewStrategyLevel>
-  >((result, [workspacePath, value]) => {
-    const key = normalizeProjectStrategyOverrideKey(workspacePath);
-    if (!key) {
-      return result;
-    }
-    if (isReviewStrategyLevel(value)) {
-      result[key] = value;
-    } else {
-      console.warn(
-        `[ReviewTeamService] Ignoring invalid project strategy override for '${key}': expected one of ${REVIEW_STRATEGY_LEVELS.join(', ')}, got '${value}'`,
       );
     }
     return result;
@@ -622,53 +580,6 @@ export async function loadReviewTeamRateLimitStatus(): Promise<ReviewTeamRateLim
   }
 }
 
-export async function loadReviewTeamProjectStrategyOverride(
-  workspacePath?: string,
-): Promise<ReviewStrategyLevel | undefined> {
-  const key = normalizeProjectStrategyOverrideKey(workspacePath);
-  if (!key) {
-    return undefined;
-  }
-
-  try {
-    const raw = await configAPI.getConfig(
-      DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
-      { skipRetryOnNotFound: true },
-    );
-    return normalizeProjectStrategyOverrideStore(raw)[key];
-  } catch (error) {
-    console.warn('[ReviewTeamService] Failed to load project review strategy override', error);
-    return undefined;
-  }
-}
-
-export async function saveReviewTeamProjectStrategyOverride(
-  workspacePath: string | undefined,
-  strategyLevel?: ReviewStrategyLevel,
-): Promise<void> {
-  const key = normalizeProjectStrategyOverrideKey(workspacePath);
-  if (!key) {
-    return;
-  }
-
-  const raw = await configAPI.getConfig(
-    DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
-    { skipRetryOnNotFound: true },
-  ).catch(() => undefined);
-  const nextOverrides = normalizeProjectStrategyOverrideStore(raw);
-
-  if (strategyLevel) {
-    nextOverrides[key] = normalizeTeamStrategyLevel(strategyLevel);
-  } else {
-    delete nextOverrides[key];
-  }
-
-  await configAPI.setConfig(
-    DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
-    nextOverrides,
-  );
-}
-
 export async function addDefaultReviewTeamMember(subagentId: string): Promise<void> {
   const current = await loadDefaultReviewTeamConfig();
   await saveDefaultReviewTeamConfig({
@@ -870,7 +781,7 @@ function buildCoreMember(
     source: 'core',
     subagentSource: info?.subagentSource ?? 'builtin',
     accentColor: definition.accentColor,
-    allowedTools: [...REVIEW_WORK_PACKET_ALLOWED_TOOLS],
+    allowedTools: resolveReviewWorkPacketAllowedTools(info?.defaultTools),
     defaultModelSlot: strategyProfile.defaultModelSlot,
     strategyDirective:
       strategyProfile.roleDirectives[definition.subagentId] ||
@@ -917,10 +828,7 @@ function buildExtraMember(
     source: 'extra',
     subagentSource: info.subagentSource ?? 'builtin',
     accentColor: EXTRA_MEMBER_DEFAULTS.accentColor,
-    allowedTools:
-      info.defaultTools && info.defaultTools.length > 0
-        ? [...info.defaultTools]
-        : [...REVIEW_WORK_PACKET_ALLOWED_TOOLS],
+    allowedTools: resolveReviewWorkPacketAllowedTools(info.defaultTools),
     defaultModelSlot: strategyProfile.defaultModelSlot,
     strategyDirective: strategyProfile.promptDirective,
     ...(options.skipReason ? { skipReason: options.skipReason } : {}),
@@ -1130,7 +1038,54 @@ interface ReviewTeamManifestOptions {
   concurrencyPolicy?: Partial<ReviewTeamConcurrencyPolicy>;
   rateLimitStatus?: ReviewTeamRateLimitStatus | null;
   strategyOverride?: ReviewStrategyLevel;
+  qualityDecision?: ReviewTeamRunManifest['qualityDecision'];
   reviewTargetFilePaths?: string[];
+  maxCoreReviewers?: number;
+  maxExtraReviewers?: number;
+  includeQualityGate?: boolean;
+  targetEvidence?: ReviewTargetEvidence;
+}
+
+const REVIEW_WORK_PACKET_ALLOWED_TOOL_SET = new Set<string>(
+  REVIEW_WORK_PACKET_ALLOWED_TOOLS,
+);
+
+function resolveReviewWorkPacketAllowedTools(defaultTools?: string[]): string[] {
+  const registeredTools = defaultTools?.length
+    ? defaultTools
+    : REVIEW_WORK_PACKET_ALLOWED_TOOLS;
+  return registeredTools.filter((tool) => REVIEW_WORK_PACKET_ALLOWED_TOOL_SET.has(tool));
+}
+
+function coreReviewerPriority(
+  member: ReviewTeamMember,
+  target: ReviewTargetClassification,
+): number {
+  const hasSecuritySensitiveFile = target.files.some((file) =>
+    !file.excluded && isSecuritySensitiveReviewPath(file.normalizedPath)
+  );
+  const hasContractSurface = target.tags.some((tag) => [
+    'frontend_contract',
+    'desktop_contract',
+    'web_server_contract',
+    'api_layer',
+    'transport',
+  ].includes(tag));
+
+  switch (member.definitionKey) {
+    case 'businessLogic':
+      return 100;
+    case 'frontend':
+      return 90;
+    case 'security':
+      return hasSecuritySensitiveFile ? 95 : 55;
+    case 'architecture':
+      return hasContractSurface ? 85 : 60;
+    case 'performance':
+      return 70;
+    default:
+      return 0;
+  }
 }
 
 function hasExplicitReviewTarget(filePaths?: string[]): boolean {
@@ -1342,58 +1297,69 @@ export function buildEffectiveReviewTeamManifest(
       member.definitionKey !== 'judge' &&
       !shouldRunCoreReviewerForStrategy(member, target, strategyLevel),
   );
-  const coreReviewerMembers = availableCoreMembers
+  const applicableCoreReviewerMembers = availableCoreMembers
     .filter((member) => member.definitionKey !== 'judge')
     .filter((member) =>
       shouldRunCoreReviewerForStrategy(member, target, strategyLevel)
     );
+  const prioritizedCoreReviewerMembers = options.maxCoreReviewers === undefined
+    ? applicableCoreReviewerMembers
+    : [...applicableCoreReviewerMembers].sort((left, right) =>
+      coreReviewerPriority(right, target) - coreReviewerPriority(left, target)
+    );
+  const maxCoreReviewers = options.maxCoreReviewers ?? Number.MAX_SAFE_INTEGER;
+  const coreReviewerMembers = prioritizedCoreReviewerMembers.slice(0, maxCoreReviewers);
+  const budgetLimitedCoreMembers = prioritizedCoreReviewerMembers.slice(maxCoreReviewers);
   const coreReviewers = coreReviewerMembers.map((member) => toManifestMember(member));
-  const qualityGateReviewerMember = availableCoreMembers.find(
-    (member) => member.definitionKey === 'judge',
-  );
+  const qualityGateReviewerMember = options.includeQualityGate === false
+    ? undefined
+    : availableCoreMembers.find((member) => member.definitionKey === 'judge');
   const qualityGateReviewer = qualityGateReviewerMember
     ? toManifestMember(qualityGateReviewerMember)
     : undefined;
   const eligibleExtraMembers = extraMembers
     .filter((member) => member.available && member.enabled);
-  const maxExtraReviewers = resolveMaxExtraReviewers(
+  const strategyMaxExtraReviewers = resolveMaxExtraReviewers(
     tokenBudgetMode,
     eligibleExtraMembers.length,
     strategyBudget.maxExtraReviewers,
+  );
+  const maxExtraReviewers = Math.min(
+    strategyMaxExtraReviewers,
+    options.maxExtraReviewers ?? Number.MAX_SAFE_INTEGER,
   );
   const enabledExtraMembers = eligibleExtraMembers.slice(0, maxExtraReviewers);
   const budgetLimitedExtraMembers = eligibleExtraMembers.slice(maxExtraReviewers);
   const enabledExtraReviewers = enabledExtraMembers
     .map((member) => toManifestMember(member));
-  const executionPolicy = buildEffectiveExecutionPolicy({
-    basePolicy: team.executionPolicy,
-    strategyLevel,
-    target,
-    changeStats,
-  });
-  const workPackets = buildWorkPackets({
-    reviewerMembers: [...coreReviewerMembers, ...enabledExtraMembers],
-    judgeMember: qualityGateReviewerMember,
-    target,
-    executionPolicy,
-    concurrencyPolicy,
-  });
+  const executionPolicy = {
+    ...buildEffectiveExecutionPolicy({
+      basePolicy: team.executionPolicy,
+      strategyLevel,
+      target,
+      changeStats,
+    }),
+    // A strict run is reviewed by the DeepReview agent itself. Specialist
+    // agents are optional fresh perspectives, not a pre-scheduled team.
+    reviewerFileSplitThreshold: 0,
+    maxSameRoleInstances: 1,
+    maxRetriesPerRole: 0,
+    maxReviewerCalls: 1,
+  };
+  const workPackets: ReviewTeamWorkPacket[] = [];
   const evidencePack = buildDeepReviewEvidencePack({
     target,
     changeStats,
     scopeProfile,
-    workPackets,
-  });
-  const sharedContextCache = buildSharedContextCachePlan(workPackets);
-  const incrementalReviewCache = buildIncrementalReviewCachePlan({
-    target,
-    changeStats,
-    strategyLevel,
+    targetEvidence: options.targetEvidence,
     workPackets,
   });
   const tokenBudget = buildTokenBudgetPlan({
     mode: tokenBudgetMode,
-    activeReviewerCalls: workPackets.length,
+    // One primary DeepReview agent execution is guaranteed. At most one
+    // specialist and one conditional quality-inspector execution may follow.
+    activeReviewerCalls: 1,
+    maxReviewerCalls: 3,
     eligibleExtraReviewerCount: eligibleExtraMembers.length,
     maxExtraReviewers,
     skippedReviewerIds: budgetLimitedExtraMembers.map((member) => member.subagentId),
@@ -1414,6 +1380,9 @@ export function buildEffectiveReviewTeamManifest(
     ...budgetLimitedExtraMembers.map((member) =>
       toManifestMember(member, 'budget_limited'),
     ),
+    ...budgetLimitedCoreMembers.map((member) =>
+      toManifestMember(member, 'budget_limited'),
+    ),
     ...unavailableCoreMembers.map((member) =>
       toManifestMember(member, 'unavailable'),
     ),
@@ -1430,14 +1399,13 @@ export function buildEffectiveReviewTeamManifest(
     strategyLevel,
     scopeProfile,
     strategyRecommendation,
+    ...(options.qualityDecision ? { qualityDecision: options.qualityDecision } : {}),
     strategyDecision,
     executionPolicy,
     concurrencyPolicy,
     changeStats,
     preReviewSummary,
     evidencePack,
-    sharedContextCache,
-    incrementalReviewCache,
     tokenBudget,
     coreReviewers,
     ...(qualityGateReviewer ? { qualityGateReviewer } : {}),

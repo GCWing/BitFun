@@ -37,9 +37,26 @@ resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "0.2.12" # x-release-please-version
+version = "0.2.13" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unexpected_cfgs = "warn"
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+
+[workspace.lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"
 
 # Shared dependency versions to keep all crates aligned
 [workspace.dependencies]
@@ -195,6 +212,7 @@ x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 aes-gcm = "0.10"
 sha2 = "0.10"
 sha1 = "0.10"
+argon2 = "0.5"
 rand = "0.8"
 
 # Device/Network info (Remote Connect)

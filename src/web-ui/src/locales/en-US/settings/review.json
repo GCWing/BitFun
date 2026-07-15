@@ -1,74 +1,25 @@
 {
   "title": "Review",
-  "subtitle": "Configure the default coverage, cost, and capacity behavior for strict Review.",
+  "subtitle": "Control the cost and capacity limits used when Review needs broader coverage.",
   "loading": "Loading review settings...",
-  "overview": {
-    "title": "Review workflow",
-    "description": "Review can raise difficult or risky changes into a strict read-only review pass, then merge and validate the final report.",
-    "command": {
-      "title": "Strict review routing",
-      "description": "These settings apply when Review selects the strict path for broad, risky, or explicitly strict review requests."
-    },
-    "reviewers": {
-      "title": "Review coverage",
-      "description": "BitFun selects the right independent coverage for the current task without exposing reviewer orchestration."
-    },
-    "qualityGate": {
-      "title": "Final quality check",
-      "description": "Strategy depth, model choices, and capacity controls decide how broad the review should be before the result is summarized."
-    }
+  "desktopOnly": {
+    "title": "Desktop only",
+    "description": "Review capacity settings are available in the BitFun desktop app. Review is not available on this surface."
   },
-  "strategy": {
-    "title": "Review strategy",
-    "description": "Choose the default depth for strict review. Each strategy carries built-in scope, runtime, and token behavior.",
-    "quick": {
-      "label": "Quick",
-      "summary": "Focused screening for high-confidence issues on clearly scoped changes."
-    },
-    "normal": {
-      "label": "Standard",
-      "summary": "Balanced review coverage with practical evidence for day-to-day review."
-    },
-    "deep": {
-      "label": "Strict",
-      "summary": "Broader review coverage for risky, broad, or release-sensitive changes."
-    },
-    "inherit": "Inherit review ({{level}})"
-  },
-  "execution": {
-    "title": "Execution policy",
-    "description": "Set safety limits for strict Review coverage when a target is broad or slow.",
-    "reviewerTimeout": "Coverage timeout",
-    "reviewerTimeoutDesc": "Maximum seconds for one coverage path. Set 0 to disable the cap.",
-    "judgeTimeout": "Final check timeout",
-    "judgeTimeoutDesc": "Final quality-check timeout in seconds. Set 0 to disable the cap.",
-    "fileSplitThreshold": "Large target threshold",
-    "fileSplitThresholdDesc": "Broaden coverage when the target file count exceeds this value.",
-    "maxSameRoleInstances": "Max parallel coverage paths",
-    "maxSameRoleInstancesDesc": "Maximum parallel coverage paths for one strict Review direction."
+  "error": {
+    "title": "Review settings unavailable",
+    "retry": "Retry"
   },
   "capacity": {
-    "title": "Capacity and retry",
-    "description": "Control how strict Review waits for capacity and whether unresolved coverage may retry after you opt in.",
+    "title": "Capacity",
+    "description": "Limit parallel Review work and how long it may wait for provider capacity.",
     "maxParallelReviewers": {
       "label": "Max parallel review work",
       "description": "Maximum strict Review work to run at the same time. Higher values may start more model requests in parallel, hit provider rate limits sooner, and increase token spend."
     },
     "maxQueueWaitSeconds": {
-      "label": "Max capacity wait",
-      "description": "How long strict Review may wait for capacity before continuing with core checks."
-    },
-    "allowProviderCapacityQueue": {
-      "label": "Wait for provider capacity",
-      "description": "Wait through transient model capacity errors instead of immediately continuing with core checks. You can cancel waiting at any time."
-    },
-    "allowBoundedAutoRetry": {
-      "label": "Allow bounded automatic retry",
-      "description": "After you opt in from a retry prompt, future strict reviews may retry smaller unresolved coverage within strict limits."
-    },
-    "autoRetryElapsedGuardSeconds": {
-      "label": "Auto-retry elapsed guard",
-      "description": "Maximum extra elapsed time automatic retries may use in one strict review run."
+      "label": "Capacity wait window",
+      "description": "How long optional work may wait for provider capacity. Already running checks can make the total review take longer."
     }
   },
   "messages": {

@@ -210,7 +210,7 @@ impl AcpToolCallTracker {
                 .as_ref()
                 .and_then(|snapshot| snapshot.raw_input.clone())
         });
-        let kind = kind.or_else(|| previous.as_ref().and_then(|snapshot| snapshot.kind.clone()));
+        let kind = kind.or_else(|| previous.as_ref().and_then(|snapshot| snapshot.kind));
         let tool_name = acp_tool_name(&title, raw_input.as_ref(), kind.as_ref());
         let snapshot = AcpToolCallSnapshot {
             title,
@@ -232,7 +232,7 @@ fn acp_tool_call_events(
         tool_id.clone(),
         tool_call.title.clone(),
         tool_call.raw_input.clone(),
-        Some(tool_call.kind.clone()),
+        Some(tool_call.kind),
     );
     let tool_name = snapshot.tool_name;
     let params = normalize_tool_params(
@@ -298,7 +298,7 @@ fn acp_tool_call_update_events(
         &tool_id,
         update.fields.title.clone(),
         update.fields.raw_input.clone(),
-        update.fields.kind.clone(),
+        update.fields.kind,
     );
     let tool_name = snapshot.tool_name.clone();
 

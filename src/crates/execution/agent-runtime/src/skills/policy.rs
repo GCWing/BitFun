@@ -4,11 +4,7 @@ use crate::agents::{resolve_mode_config_profile_id, SHARED_CODING_MODE_CONFIG_PR
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SkillModeId {
     CodingShared,
-    Agentic,
-    Multitask,
     Cowork,
-    Plan,
-    Debug,
     Team,
     Claw,
     ComputerUse,
@@ -20,11 +16,7 @@ impl SkillModeId {
     fn parse(mode_id: &str) -> Self {
         match mode_id.trim() {
             SHARED_CODING_MODE_CONFIG_PROFILE_ID => Self::CodingShared,
-            "agentic" => Self::Agentic,
-            "Multitask" => Self::Multitask,
             "Cowork" => Self::Cowork,
-            "Plan" => Self::Plan,
-            "debug" => Self::Debug,
             "Team" => Self::Team,
             "Claw" => Self::Claw,
             "ComputerUse" => Self::ComputerUse,
@@ -93,13 +85,6 @@ const OPEN_META_ONLY_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     rules: &[ENABLE_META],
 };
 
-const PLAN_POLICY: ModeSkillPolicy = ModeSkillPolicy {
-    builtin_default: PolicyEffect::Disable,
-    rules: &[],
-};
-
-const DEBUG_POLICY: ModeSkillPolicy = PLAN_POLICY;
-
 const AGENTIC_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Enable,
     rules: &[DISABLE_OFFICE, DISABLE_GSTACK],
@@ -118,10 +103,7 @@ const TEAM_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
     let policy_scope = resolve_mode_config_profile_id(mode_id);
     match SkillModeId::parse(policy_scope.as_ref()) {
-        SkillModeId::CodingShared => AGENTIC_POLICY,
-        SkillModeId::Plan => PLAN_POLICY,
-        SkillModeId::Debug => DEBUG_POLICY,
-        SkillModeId::Agentic | SkillModeId::Multitask | SkillModeId::Claw => AGENTIC_POLICY,
+        SkillModeId::CodingShared | SkillModeId::Claw => AGENTIC_POLICY,
         SkillModeId::Cowork => COWORK_POLICY,
         SkillModeId::Team => TEAM_POLICY,
         SkillModeId::ComputerUse | SkillModeId::DeepResearch | SkillModeId::Other => {
@@ -152,4 +134,27 @@ fn resolve_builtin_default_effect(spec: &BuiltinSkillSpec, mode_id: &str) -> Pol
 pub fn resolve_builtin_default_enabled(dir_name: &str, mode_id: &str) -> Option<bool> {
     builtin_skill_spec(dir_name)
         .map(|spec| resolve_builtin_default_effect(spec, mode_id).is_enabled())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agents::SHARED_CODING_MODE_IDS;
+    use crate::skills::catalog::BUILTIN_SKILL_SPECS;
+
+    #[test]
+    fn shared_coding_modes_use_identical_builtin_skill_defaults() {
+        for spec in BUILTIN_SKILL_SPECS {
+            let expected = resolve_builtin_default_enabled(spec.dir_name, "agentic");
+            for mode_id in SHARED_CODING_MODE_IDS {
+                assert_eq!(
+                    resolve_builtin_default_enabled(spec.dir_name, mode_id),
+                    expected,
+                    "builtin skill {} differs for shared coding mode {}",
+                    spec.dir_name,
+                    mode_id
+                );
+            }
+        }
+    }
 }

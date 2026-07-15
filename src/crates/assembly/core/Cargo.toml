@@ -138,6 +138,10 @@ bitfun-events = { path = "../../contracts/events" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../../execution/runtime-services" }
 
+# Reviewed product-full plugin composition root.
+bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
+bitfun-plugin-runtime-host = { path = "../../execution/plugin-runtime-host", optional = true }
+
 # Transport layer dependency
 bitfun-transport = { path = "../../adapters/transport" }
 
@@ -171,6 +175,8 @@ product-full = [
     "dep:glob",
     "dep:globset",
     "dep:include_dir",
+    "dep:bitfun-opencode-adapter",
+    "dep:bitfun-plugin-runtime-host",
     "dep:indexmap",
     "dep:md5",
     "dep:similar",
@@ -188,9 +194,13 @@ ai-adapter-runtime = [
     "dep:reqwest",
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]
+plugin-source = [
+    "bitfun-services-integrations/plugin-source",
+]
 product-domains = [
     "ai-adapter-runtime",
     "dep:bitfun-product-domains",
+    "plugin-source",
     "bitfun-services-integrations/function-agents",
     "bitfun-services-integrations/miniapp-runtime",
     "bitfun-product-domains/product-full",
@@ -243,3 +253,6 @@ required-features = ["service-integrations"]
 
 [build-dependencies]
 sha2 = { workspace = true }
+
+[lints]
+workspace = true

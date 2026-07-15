@@ -132,9 +132,7 @@ impl CronService {
                 let target_matches = target_kind
                     .map(|target_kind| job.target_kind() == target_kind)
                     .unwrap_or(true);
-                let included = workspace_matches && session_matches && target_matches;
-
-                included
+                workspace_matches && session_matches && target_matches
             })
             .cloned()
             .collect::<Vec<_>>()

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isChatInputActionVisibleForTarget,
+  isPrimarySlashActionVisible,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
   resolveChatInputCanUseSkills,
@@ -341,7 +342,7 @@ describe('resolveChatInputCanUseSkills', () => {
 
 describe('isChatInputActionVisibleForTarget', () => {
   it('hides main-session slash actions for subagent targets', () => {
-    for (const actionId of ['goal', 'deepreview', 'init']) {
+    for (const actionId of ['goal', 'review', 'deepreview', 'init']) {
       expect(
         isChatInputActionVisibleForTarget({
           actionId,
@@ -363,7 +364,7 @@ describe('isChatInputActionVisibleForTarget', () => {
   });
 
   it('keeps main-session slash actions visible for normal targets', () => {
-    for (const actionId of ['goal', 'deepreview', 'init']) {
+    for (const actionId of ['goal', 'review', 'deepreview', 'init']) {
       expect(
         isChatInputActionVisibleForTarget({
           actionId,
@@ -371,6 +372,21 @@ describe('isChatInputActionVisibleForTarget', () => {
         }),
       ).toBe(true);
     }
+  });
+});
+
+describe('isPrimarySlashActionVisible', () => {
+  it('keeps BTW discoverable when Review is unavailable on the current surface', () => {
+    expect(isPrimarySlashActionVisible({
+      actionId: 'btw',
+      isBtwSession: false,
+      canLaunchReview: false,
+    })).toBe(true);
+    expect(isPrimarySlashActionVisible({
+      actionId: 'review',
+      isBtwSession: false,
+      canLaunchReview: false,
+    })).toBe(false);
   });
 });
 

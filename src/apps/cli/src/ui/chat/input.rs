@@ -1,7 +1,7 @@
 impl ChatView {
     // ============ Input handling methods (delegate to TextInput) ============
 
-    pub fn input_text(&self) -> &str {
+    pub(crate) fn input_text(&self) -> &str {
         self.text_input.text()
     }
 
@@ -10,7 +10,7 @@ impl ChatView {
     }
 
     /// Send user input, returns the input text if non-empty
-    pub fn send_input(&mut self) -> Option<String> {
+    pub(crate) fn send_input(&mut self) -> Option<String> {
         let text = self.text_input.take_input()?;
 
         self.input_history.push_front(text.clone());
@@ -23,72 +23,72 @@ impl ChatView {
         Some(text)
     }
 
-    pub fn handle_char(&mut self, c: char) {
+    pub(crate) fn handle_char(&mut self, c: char) {
         self.text_input.handle_char(c);
         self.refresh_command_menu();
     }
 
-    pub fn handle_newline(&mut self) {
+    pub(crate) fn handle_newline(&mut self) {
         self.text_input.handle_newline();
         self.refresh_command_menu();
     }
 
-    pub fn handle_backspace(&mut self) {
+    pub(crate) fn handle_backspace(&mut self) {
         self.text_input.handle_backspace();
         self.refresh_command_menu();
     }
 
-    pub fn move_cursor_left(&mut self) {
+    pub(crate) fn move_cursor_left(&mut self) {
         self.text_input.move_cursor_left();
         self.refresh_command_menu();
     }
 
-    pub fn move_cursor_right(&mut self) {
+    pub(crate) fn move_cursor_right(&mut self) {
         self.text_input.move_cursor_right();
         self.refresh_command_menu();
     }
 
-    pub fn set_cursor_home(&mut self) {
+    pub(crate) fn set_cursor_home(&mut self) {
         self.text_input.set_cursor_home();
         self.refresh_command_menu();
     }
 
-    pub fn set_cursor_end(&mut self) {
+    pub(crate) fn set_cursor_end(&mut self) {
         self.text_input.set_cursor_end();
         self.refresh_command_menu();
     }
 
-    pub fn clear_input(&mut self) {
+    pub(crate) fn clear_input(&mut self) {
         self.text_input.clear();
         self.refresh_command_menu();
     }
 
     /// Set input text programmatically (e.g. from skill selection)
-    pub fn set_input(&mut self, text: &str) {
+    pub(crate) fn set_input(&mut self, text: &str) {
         self.text_input.set_text(text);
         self.refresh_command_menu();
     }
 
-    pub fn command_menu_visible(&self) -> bool {
+    pub(crate) fn command_menu_visible(&self) -> bool {
         self.command_menu.is_visible()
     }
 
-    pub fn command_menu_up(&mut self) {
+    pub(crate) fn command_menu_up(&mut self) {
         self.command_menu.move_up();
     }
 
-    pub fn command_menu_down(&mut self) {
+    pub(crate) fn command_menu_down(&mut self) {
         self.command_menu.move_down();
     }
 
-    pub fn apply_command_menu_selection(&mut self) -> Option<String> {
+    pub(crate) fn apply_command_menu_selection(&mut self) -> Option<String> {
         let cmd = self.command_menu.apply_selection()?;
         self.text_input.clear();
         self.refresh_command_menu();
         Some(cmd)
     }
 
-    pub fn history_prev(&mut self) {
+    pub(crate) fn history_prev(&mut self) {
         if self.input_history.is_empty() {
             return;
         }
@@ -106,7 +106,7 @@ impl ChatView {
         }
     }
 
-    pub fn history_next(&mut self) {
+    pub(crate) fn history_next(&mut self) {
         match self.history_index {
             None => {}
             Some(0) => {

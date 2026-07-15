@@ -32,7 +32,8 @@
 - 规则、模型提示、路径矩阵和团队配置都必须版本化。
 - 校准依赖合入后缺陷、审查阻塞项、CI 失败、覆盖和误升级。
 - 项目画像中 `unknown/conflicting/stale` 的规则进入未知或降级路径。
-- 主动配置变化，例如 hook、plugin、自定义工具、MCP server 或智能体规则，必须进入安全敏感风险路径。
+- Harness 将直接执行的项目脚本、自定义工具或工作流配置发生变化时，必须进入安全敏感风险路径。OpenCode
+  plugin/Hook、MCP 等外部能力只消费其 owner 提供的来源、有效策略、可用性和诊断事实；分类器不改写其激活状态。
 - 默认规则保持技术栈无关；BitFun 自身验证路径只作为内部样本。
 
 ## 3. 风险维度
@@ -42,7 +43,7 @@
 | 任务风险 | 一次性脚本、PR、发布、迁移、事故修复 | 决定默认模式 |
 | 动作风险 | shell、网络、凭据、跨目录写、删除、发布凭据 | 传递给安全边界 |
 | 变更风险 | 核心逻辑、API/schema、适配器、界面行为、生成 diff | 生成验证和审查建议 |
-| 环境信任度 | 本地项目、远程工作区、未信任主动配置、私有 CI | 决定提示和证据需求 |
+| 环境信任度 | 本地项目、远程工作区、未审核的 Harness 主动配置、私有 CI | 决定提示和证据需求 |
 | 项目策略 | 仓库/路径/团队规则、CODEOWNERS、强制检查 | 决定强制要求或建议投影 |
 | 历史风险 | 高频热点文件、不稳定测试、事故、审查阻塞项 | 校准风险等级 |
 
@@ -56,7 +57,8 @@
 | 项目画像 | 语言、框架、模块、负责人、规则来源、验证能力、发布模型 |
 | Diff 元数据 | 文件路径、hunk、重命名/删除、生成文件、行数 |
 | 项目策略 | 智能体规则、贡献指南、模块文档、CODEOWNERS、验证模式 |
-| 主动配置状态 | hook、plugin、自定义工具、MCP server 的 discovered/trusted/changed/disabled 状态 |
+| Harness 主动配置审核 | Harness 项目脚本、自定义工具和工作流配置的 discovered/trusted/changed/disabled 状态 |
+| 外部能力 owner 事实 | OpenCode plugin/Hook、MCP 等的规范化来源、有效策略、可用性和诊断 |
 | 交付物链接 | issue、spec、验收标准、设计决策 |
 | 历史信号 | 不稳定测试、历史事故、审查问题、高频热点文件 |
 | 验证状态 | 已运行/缺失/失败/过期的推荐/强制检查 |
@@ -95,7 +97,7 @@ interface RiskPolicyHint {
 | `integration_adapter` | 外部服务、provider、协议、schema、stream、cache |
 | `security_sensitive` | auth、凭据、filesystem、shell、网络、权限 |
 | `prompt_injection_sensitive` | 外部文档、issue、网页、MCP 输出可能影响智能体指令 |
-| `active_config_sensitive` | hook、plugin、custom 工具、MCP server、智能体规则或自动化配置变化 |
+| `active_config_sensitive` | Harness 主动配置变化，或外部能力 owner 报告来源、策略、可用性或高风险诊断变化；该标签不决定激活 |
 | `deployment_sensitive` | 发布、migration、infra、remote 工作区、运行时 boundary |
 | `ui_behavior` | 用户可见状态、交互流程、前端适配器、审查 surface |
 | `docs_only` | 文档或注释变更，无行为影响 |
@@ -124,7 +126,7 @@ interface RiskPolicyHint {
 | high | 列出按策略强制的检查、负责人/审查人、审查强度和覆盖条件 |
 | unknown | 不降级为 low；保持摘要或建议投影，必要时进入降级状态并等待确认 |
 
-主动配置策略：
+Harness 主动配置策略：
 
 | 状态 | 默认策略 |
 |---|---|
@@ -132,6 +134,9 @@ interface RiskPolicyHint {
 | trusted | 按声明权限和影响范围参与分类 |
 | changed | 至少中风险；涉及 shell、网络、凭据或文件系统时为高风险 |
 | disabled | 记录未关闭风险，确认不影响验证后可降级 |
+
+外部能力只按 owner 事实生成风险建议：`policy-limited`、`denied`、`unavailable`、来源或执行域变化可以提高风险或
+使证据过期，但分类器不得把它们转换成 Harness 的 discovered/trusted 状态，也不得要求二次激活。
 
 ## 6. 分阶段落地
 
@@ -150,7 +155,7 @@ interface RiskPolicyHint {
 | 风险等级被当成事实 | 界面和 PR 文本必须展示证据、信心和覆盖范围 |
 | 低风险误判 | 关键路径小 diff 必须触发规则，不得只按行数判断 |
 | 普通任务被误升级 | 误升级率必须进入 P0/P1 指标 |
-| 主动配置被当成纯文档变更 | hook、plugin、自定义工具、MCP、智能体规则变化必须触发 active_config_sensitive |
+| 可执行配置被当成纯文档变更 | Harness 主动配置变化或外部 owner 的执行风险事实变化必须触发 `active_config_sensitive`，但只由各 owner 决定准入与授权 |
 | 强制检查过多 | 每个强制检查必须有触发原因和取消条件 |
 | 严格审查成本被放大 | 只有高风险或证据薄弱的中风险才默认触发定向/完整审查 |
 | 规则长期失准 | 合入后缺陷、审查阻塞项、覆盖和跳过原因必须回流校准 |

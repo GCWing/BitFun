@@ -1,9 +1,6 @@
-use bitfun_core::agentic::tools::computer_use_host::{
-    ComputerScreenshot, ComputerUseImageContentRect, OcrRegionNative,
-};
+use bitfun_core::agentic::tools::computer_use_host::ComputerScreenshot;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
-use image::codecs::jpeg::JpegEncoder;
 use log::{info, warn};
 use std::fs;
 use std::io::Write;
@@ -12,7 +9,7 @@ use std::path::PathBuf;
 use chrono::Utc;
 
 #[derive(Debug, Clone)]
-pub struct OcrTextMatch {
+pub(super) struct OcrTextMatch {
     pub text: String,
     pub confidence: f32,
     pub center_x: f64,
@@ -23,7 +20,7 @@ pub struct OcrTextMatch {
     pub bounds_height: f64,
 }
 
-pub fn find_text_matches(
+pub(super) fn find_text_matches(
     shot: &ComputerScreenshot,
     text_query: &str,
 ) -> BitFunResult<Vec<OcrTextMatch>> {
@@ -285,7 +282,7 @@ fn image_content_rect_or_full(shot: &ComputerScreenshot) -> (u32, u32, u32, u32)
 
 /// Map a rectangle in **full JPEG pixel space** (top-left origin) to global pointer coordinates.
 /// Uses `image_content_rect`: only the inner content area maps linearly to `native_width` × `native_height`.
-pub fn image_box_to_global_match(
+fn image_box_to_global_match(
     shot: &ComputerScreenshot,
     text: String,
     confidence: f32,
@@ -321,148 +318,6 @@ pub fn image_box_to_global_match(
     }
 }
 
-/// Crop the peek JPEG to a **global native** rectangle intersected with the capture, then rebuild
-/// [`ComputerScreenshot`] so OCR and coordinate mapping stay consistent (full frame = content).
-/// Unused while OCR uses raw capture only; kept for experiments against cropped JPEG workflows.
-#[allow(dead_code)]
-pub fn crop_shot_to_ocr_region(
-    shot: ComputerScreenshot,
-    region: &OcrRegionNative,
-) -> BitFunResult<ComputerScreenshot> {
-    if region.width == 0 || region.height == 0 {
-        return Err(BitFunError::tool(
-            "ocr_region_native width and height must be non-zero.".to_string(),
-        ));
-    }
-    let (cl, ct, cw, ch) = image_content_rect_or_full(&shot);
-    if cw == 0 || ch == 0 {
-        return Err(BitFunError::tool(
-            "Screenshot content rect is empty; cannot crop for OCR.".to_string(),
-        ));
-    }
-
-    let ox = shot.display_origin_x as i64;
-    let oy = shot.display_origin_y as i64;
-    let nw = shot.native_width as i64;
-    let nh = shot.native_height as i64;
-
-    let rx0 = region.x0 as i64;
-    let ry0 = region.y0 as i64;
-    let rw = region.width as i64;
-    let rh = region.height as i64;
-
-    let ix0 = rx0.max(ox);
-    let iy0 = ry0.max(oy);
-    let ix1 = (rx0 + rw).min(ox + nw);
-    let iy1 = (ry0 + rh).min(oy + nh);
-    if ix1 <= ix0 || iy1 <= iy0 {
-        return Err(BitFunError::tool(
-            "ocr_region_native does not intersect the captured display. Check coordinates (global native pixels).".to_string(),
-        ));
-    }
-
-    let jx0 = cl as f64 + ((ix0 - ox) as f64 / nw as f64) * cw as f64;
-    let jy0 = ct as f64 + ((iy0 - oy) as f64 / nh as f64) * ch as f64;
-    let jx1 = cl as f64 + ((ix1 - ox) as f64 / nw as f64) * cw as f64;
-    let jy1 = ct as f64 + ((iy1 - oy) as f64 / nh as f64) * ch as f64;
-
-    let px0 = jx0.floor().max(0.0) as u32;
-    let py0 = jy0.floor().max(0.0) as u32;
-    let px1 = jx1.ceil().min(shot.image_width as f64) as u32;
-    let py1 = jy1.ceil().min(shot.image_height as f64) as u32;
-    if px1 <= px0 || py1 <= py0 {
-        return Err(BitFunError::tool(
-            "OCR crop region is empty after mapping to image pixels.".to_string(),
-        ));
-    }
-
-    let dyn_img = image::load_from_memory(&shot.bytes)
-        .map_err(|e| BitFunError::tool(format!("OCR crop: decode JPEG: {}", e)))?;
-    let rgb = dyn_img.to_rgb8();
-    let img_w = rgb.width();
-    let img_h = rgb.height();
-    // Clamp to decoded dimensions (must match Vision / mapping; may differ from metadata by 1px).
-    let px1 = px1.min(img_w);
-    let py1 = py1.min(img_h);
-    if px1 <= px0 || py1 <= py0 {
-        return Err(BitFunError::tool(
-            "OCR crop region is empty after clamping to decoded JPEG size.".to_string(),
-        ));
-    }
-    let crop_w = px1 - px0;
-    let crop_h = py1 - py0;
-    if px0.saturating_add(crop_w) > img_w || py0.saturating_add(crop_h) > img_h {
-        return Err(BitFunError::tool(
-            "OCR crop rectangle is out of image bounds.".to_string(),
-        ));
-    }
-    let cropped_view = image::imageops::crop_imm(&rgb, px0, py0, crop_w, crop_h);
-    let cropped = cropped_view.to_image();
-
-    const OCR_CROP_JPEG_QUALITY: u8 = 85;
-    let mut buf = Vec::new();
-    let mut enc = JpegEncoder::new_with_quality(&mut buf, OCR_CROP_JPEG_QUALITY);
-    enc.encode(
-        cropped.as_raw(),
-        cropped.width(),
-        cropped.height(),
-        image::ColorType::Rgb8,
-    )
-    .map_err(|e| BitFunError::tool(format!("OCR crop: encode JPEG: {}", e)))?;
-
-    // Affine mapping must match `image_box_to_global_match`: global = origin + (jpeg_px - content_left) / content_w * native_capture.
-    // Do **not** use ix0/ix1 (intersection clip) as display_origin/native size — they disagree with floor/ceil JPEG bounds px0..px1.
-    let cl_f = cl as f64;
-    let ct_f = ct as f64;
-    let cw_f = cw as f64;
-    let ch_f = ch as f64;
-    let ox_f = shot.display_origin_x as f64;
-    let oy_f = shot.display_origin_y as f64;
-    let nw_f = shot.native_width as f64;
-    let nh_f = shot.native_height as f64;
-    let native_left = ox_f + (px0 as f64 - cl_f) / cw_f.max(1e-9) * nw_f;
-    let native_top = oy_f + (py0 as f64 - ct_f) / ch_f.max(1e-9) * nh_f;
-    let native_right = ox_f + (px1 as f64 - cl_f) / cw_f.max(1e-9) * nw_f;
-    let native_bottom = oy_f + (py1 as f64 - ct_f) / ch_f.max(1e-9) * nh_f;
-    let native_w = (native_right - native_left).round().max(1.0) as u32;
-    let native_h = (native_bottom - native_top).round().max(1.0) as u32;
-
-    Ok(ComputerScreenshot {
-        screenshot_id: None,
-        bytes: buf,
-        mime_type: "image/jpeg".to_string(),
-        image_width: cropped.width(),
-        image_height: cropped.height(),
-        native_width: native_w,
-        native_height: native_h,
-        display_origin_x: native_left.round() as i32,
-        display_origin_y: native_top.round() as i32,
-        vision_scale: shot.vision_scale,
-        pointer_image_x: None,
-        pointer_image_y: None,
-        screenshot_crop_center: None,
-        point_crop_half_extent_native: None,
-        navigation_native_rect: None,
-        quadrant_navigation_click_ready: false,
-        image_content_rect: Some(ComputerUseImageContentRect {
-            left: 0,
-            top: 0,
-            width: cropped.width(),
-            height: cropped.height(),
-        }),
-        image_global_bounds: Some(
-            bitfun_core::agentic::tools::computer_use_host::ComputerUseImageGlobalBounds {
-                left: native_left,
-                top: native_top,
-                width: native_w as f64,
-                height: native_h as f64,
-            },
-        ),
-        implicit_confirmation_crop_applied: false,
-        ui_tree_text: None,
-    })
-}
-
 // ---------------------------------------------------------------------------
 // macOS: Vision framework OCR via objc2-vision
 // ---------------------------------------------------------------------------
@@ -487,7 +342,7 @@ mod macos {
     /// Top-N candidates per observation; Chinese matches often appear below rank 1.
     const TOP_CANDIDATES_MAX: usize = 10;
 
-    pub fn find_text_matches(
+    pub(super) fn find_text_matches(
         shot: &ComputerScreenshot,
         text_query: &str,
     ) -> BitFunResult<Vec<OcrTextMatch>> {
@@ -684,7 +539,7 @@ mod windows_backend {
         r.map_err(|e| BitFunError::tool(format!("Windows OCR: {}", e)))
     }
 
-    pub fn find_text_matches(
+    pub(super) fn find_text_matches(
         shot: &ComputerScreenshot,
         text_query: &str,
     ) -> BitFunResult<Vec<OcrTextMatch>> {
@@ -828,7 +683,7 @@ mod linux_backend {
     use leptess::capi::TessPageIteratorLevel_RIL_WORD;
     use leptess::{leptonica, tesseract::TessApi};
 
-    pub fn find_text_matches(
+    pub(super) fn find_text_matches(
         shot: &ComputerScreenshot,
         text_query: &str,
     ) -> BitFunResult<Vec<OcrTextMatch>> {

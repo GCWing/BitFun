@@ -17,6 +17,7 @@ pub mod event_router;
 pub mod events;
 pub mod evidence_ledger;
 pub mod file_read_state;
+pub mod output_surface;
 pub mod post_call_hooks;
 pub mod prompt;
 pub mod prompt_cache;

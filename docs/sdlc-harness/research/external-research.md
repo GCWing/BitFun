@@ -8,7 +8,7 @@
 | 产品/方向 | 核心能力 | 对 BitFun 的启发 |
 |---|---|---|
 | [OpenAI Codex](https://openai.com/index/introducing-codex/) / [Codex Cloud](https://developers.openai.com/codex/cloud) / [Codex CLI](https://developers.openai.com/codex/cli) | 云端任务、CLI、本地/云端执行、AGENTS.md、沙箱、审批、日志/测试证据 | 用户体验应先围绕任务、计划、diff 和批准展开；执行安全与质量治理需要拆开 |
-| [Codex approvals/security](https://developers.openai.com/codex/agent-approvals-security) / [Codex hooks](https://developers.openai.com/codex/hooks) | 审批模式、沙箱、可信命令、hook 生命周期、信任审查 | 安全边界独立常驻；hook 按主动执行面管理信任状态 |
+| [Codex approvals/security](https://developers.openai.com/codex/agent-approvals-security) / [Codex hooks](https://developers.openai.com/codex/hooks) | 审批模式、沙箱、可信命令、hook 生命周期、信任审查 | 安全边界独立常驻；Hook 由实际执行 owner 处理来源准入和调用授权，Harness 只审核自己直接执行的配置 |
 | [GitHub Copilot 编码智能体](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent) | issue 到 PR、Actions 后台执行、PR 审查、智能体会话 | 异步智能体的核心体验围绕任务、计划、变更和审查组织 |
 | [GitHub Copilot 仓库指令](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions) | 支持仓库指令、路径指令、AGENTS.md | 项目规则应优先读取现有资产，并按路径和上下文渐进加载 |
 | [GitHub Copilot 代码审查](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) | AI 审查提供评论和建议 | AI 审查默认应是低摩擦建议态，不天然等同阻断审批 |
@@ -56,7 +56,8 @@
 外部趋势共同指向六点：
 
 1. 默认体验正在走向快速执行、计划、diff、批准和轻量审查。
-2. 项目知识正在产品化为仓库/路径/团队指令、steering、AGENTS.md、hook 和 plugin，但这些主动配置必须经过信任和权限边界。
+2. 项目知识正在产品化为仓库/路径/团队指令、steering、AGENTS.md、Hook 和 plugin。Harness 将直接执行的项目
+   配置需要独立审核；外部扩展沿用其 owner 的来源准入和调用时权限，不建立通用信任状态。
 3. AI 审查和门禁有价值，但先进产品普遍提供审查强度、评论/建议态、警告模式或强制要求/阻断分级。
 4. 安全与质量必须分层：prompt 注入、网络、凭据、MCP、hook、shell、跨目录写和删除风险在快速路径中也需要明确授权和可审计记录。
 5. 复杂项目能力仍然重要，但图谱、证据包、需求影响和发布就绪度应作为按需显露的后台能力。

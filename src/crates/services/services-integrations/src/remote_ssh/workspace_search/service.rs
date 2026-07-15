@@ -760,8 +760,12 @@ impl RemoteWorkspaceSearchService {
                 context.binary_path.clone(),
             )
             .await?;
-            let mut repo_config = RepoConfig::default();
-            repo_config.max_file_size = self.provider.repo_max_file_size().await;
+            let default_repo_config = RepoConfig::default();
+            let max_file_size = self.provider.repo_max_file_size().await;
+            let repo_config = RepoConfig {
+                max_file_size,
+                ..default_repo_config
+            };
             let session = match client
                 .open_repo(OpenRepoParams {
                     repo_path: PathBuf::from(&context.repo_root),

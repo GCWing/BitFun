@@ -162,61 +162,6 @@ impl Default for GenerativeUITool {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashSet;
-
-    #[test]
-    fn generated_theme_prompt_manifest_covers_default_themes() {
-        let manifest = GenerativeUITool::theme_prompt_snapshot_manifest();
-
-        assert_eq!(manifest.version, THEME_PROMPT_SNAPSHOT_VERSION);
-        assert!(manifest.themes.len() >= 2);
-
-        let unique_ids = manifest
-            .themes
-            .iter()
-            .map(|theme| theme.id.as_str())
-            .collect::<HashSet<_>>();
-        assert_eq!(unique_ids.len(), manifest.themes.len());
-        assert!(unique_ids.contains(manifest.default_light_theme_id.as_str()));
-        assert!(unique_ids.contains(manifest.default_dark_theme_id.as_str()));
-    }
-
-    #[test]
-    fn generated_theme_prompt_snapshots_have_required_prompt_fields() {
-        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
-            assert!(!snapshot.id.trim().is_empty());
-            assert!(!snapshot.theme_type.trim().is_empty());
-            assert!(!snapshot.bg_primary.trim().is_empty());
-            assert!(!snapshot.bg_secondary.trim().is_empty());
-            assert!(!snapshot.bg_scene.trim().is_empty());
-            assert!(!snapshot.text_primary.trim().is_empty());
-            assert!(!snapshot.text_muted.trim().is_empty());
-            assert!(!snapshot.accent_500.trim().is_empty());
-            assert!(!snapshot.accent_600.trim().is_empty());
-            assert!(!snapshot.border_base.trim().is_empty());
-            assert!(!snapshot.element_base.trim().is_empty());
-            assert!(!snapshot.shadow_base.trim().is_empty());
-            assert!(!snapshot.style_notes.trim().is_empty());
-        }
-    }
-
-    #[test]
-    fn theme_prompt_snapshot_does_not_surface_iframe_fallback_dimensions() {
-        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
-            let formatted = GenerativeUITool::format_theme_snapshot(snapshot);
-            assert!(!formatted.contains("radius.base="));
-            assert!(!formatted.contains("spacing.4="));
-        }
-
-        let context = GenerativeUITool::baseline_theme_context();
-        assert!(!context.contains("radius.base="));
-        assert!(!context.contains("spacing.4="));
-    }
-}
-
 #[async_trait]
 impl Tool for GenerativeUITool {
     fn name(&self) -> &str {
@@ -521,5 +466,60 @@ Input rules:
             )),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn generated_theme_prompt_manifest_covers_default_themes() {
+        let manifest = GenerativeUITool::theme_prompt_snapshot_manifest();
+
+        assert_eq!(manifest.version, THEME_PROMPT_SNAPSHOT_VERSION);
+        assert!(manifest.themes.len() >= 2);
+
+        let unique_ids = manifest
+            .themes
+            .iter()
+            .map(|theme| theme.id.as_str())
+            .collect::<HashSet<_>>();
+        assert_eq!(unique_ids.len(), manifest.themes.len());
+        assert!(unique_ids.contains(manifest.default_light_theme_id.as_str()));
+        assert!(unique_ids.contains(manifest.default_dark_theme_id.as_str()));
+    }
+
+    #[test]
+    fn generated_theme_prompt_snapshots_have_required_prompt_fields() {
+        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
+            assert!(!snapshot.id.trim().is_empty());
+            assert!(!snapshot.theme_type.trim().is_empty());
+            assert!(!snapshot.bg_primary.trim().is_empty());
+            assert!(!snapshot.bg_secondary.trim().is_empty());
+            assert!(!snapshot.bg_scene.trim().is_empty());
+            assert!(!snapshot.text_primary.trim().is_empty());
+            assert!(!snapshot.text_muted.trim().is_empty());
+            assert!(!snapshot.accent_500.trim().is_empty());
+            assert!(!snapshot.accent_600.trim().is_empty());
+            assert!(!snapshot.border_base.trim().is_empty());
+            assert!(!snapshot.element_base.trim().is_empty());
+            assert!(!snapshot.shadow_base.trim().is_empty());
+            assert!(!snapshot.style_notes.trim().is_empty());
+        }
+    }
+
+    #[test]
+    fn theme_prompt_snapshot_does_not_surface_iframe_fallback_dimensions() {
+        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
+            let formatted = GenerativeUITool::format_theme_snapshot(snapshot);
+            assert!(!formatted.contains("radius.base="));
+            assert!(!formatted.contains("spacing.4="));
+        }
+
+        let context = GenerativeUITool::baseline_theme_context();
+        assert!(!context.contains("radius.base="));
+        assert!(!context.contains("spacing.4="));
     }
 }

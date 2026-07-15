@@ -1059,6 +1059,7 @@ export async function ensureBackendSession(
       remoteSshHost: effectiveSshHost,
       relationship: buildCreateSessionRelationship(latestSession),
       deepReviewRunManifest: latestSession.deepReviewRunManifest,
+      reviewTargetEvidence: latestSession.reviewTargetEvidence,
       config: {
         modelName: latestSession.config.modelName || 'auto',
         enableTools: true,
@@ -1100,6 +1101,7 @@ export async function retryCreateBackendSession(
     remoteSshHost: session.remoteSshHost,
     relationship: buildCreateSessionRelationship(session),
     deepReviewRunManifest: session.deepReviewRunManifest,
+    reviewTargetEvidence: session.reviewTargetEvidence,
     config: {
       modelName: session.config.modelName || 'auto',
       enableTools: true,

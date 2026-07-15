@@ -3,7 +3,7 @@
  * Manages tool execution events from backend and integrates with frontend
  */
 
-import { listen } from '@tauri-apps/api/event';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { 
   ToolExecutionInfo, 
   ToolResult, 
@@ -100,23 +100,23 @@ export class ToolExecutionService {
     try {
       
       // Listen for tool execution started events
-      await listen<ToolExecutionStartedEvent>('backend-event-toolexecutionstarted', (event) => {
-        this.handleToolExecutionStarted(event.payload);
+      api.listen<ToolExecutionStartedEvent>('backend-event-toolexecutionstarted', (payload) => {
+        this.handleToolExecutionStarted(payload);
       });
 
       // Listen for tool execution progress events
-      await listen<ToolExecutionProgressEvent>('backend-event-toolexecutionprogress', (event) => {
-        this.handleToolExecutionProgress(event.payload);
+      api.listen<ToolExecutionProgressEvent>('backend-event-toolexecutionprogress', (payload) => {
+        this.handleToolExecutionProgress(payload);
       });
 
       // Listen for tool execution completed events
-      await listen<ToolExecutionCompletedEvent>('backend-event-toolexecutioncompleted', (event) => {
-        this.handleToolExecutionCompleted(event.payload);
+      api.listen<ToolExecutionCompletedEvent>('backend-event-toolexecutioncompleted', (payload) => {
+        this.handleToolExecutionCompleted(payload);
       });
 
       // Listen for tool execution error events
-      await listen<ToolExecutionErrorEvent>('backend-event-toolexecutionerror', (event) => {
-        this.handleToolExecutionError(event.payload);
+      api.listen<ToolExecutionErrorEvent>('backend-event-toolexecutionerror', (payload) => {
+        this.handleToolExecutionError(payload);
       });
 
       this.listenersSetup = true;

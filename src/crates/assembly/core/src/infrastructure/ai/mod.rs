@@ -41,8 +41,10 @@ mod tests {
     #[test]
     fn model_reasoning_mode_does_not_override_stream_timeouts() {
         let config = AIConfig::default();
-        let mut model = AIModelConfig::default();
-        model.reasoning_mode = Some(crate::service::config::types::ReasoningMode::Enabled);
+        let model = AIModelConfig {
+            reasoning_mode: Some(crate::service::config::types::ReasoningMode::Enabled),
+            ..Default::default()
+        };
 
         let options = build_stream_options_for_model(&config, Some(&model));
 
@@ -52,9 +54,11 @@ mod tests {
 
     #[test]
     fn explicit_none_stream_timeouts_mean_wait_indefinitely() {
-        let mut config = AIConfig::default();
-        config.stream_idle_timeout_secs = None;
-        config.stream_ttft_timeout_secs = None;
+        let config = AIConfig {
+            stream_idle_timeout_secs: None,
+            stream_ttft_timeout_secs: None,
+            ..Default::default()
+        };
 
         let options = build_stream_options_for_model(&config, None);
 

@@ -4,7 +4,7 @@
 //! Two complementary paths, ported from cua-driver-rs v0.6.8
 //! (`platform-windows/src/input/{mouse,keyboard,inject,mod}.rs`):
 //!
-//! 1. **`PostMessageW` path** (`post_click` / `post_right_click` / `post_key` /
+//! 1. **`PostMessageW` path** (`post_click` / `post_key` /
 //!    `post_char`): posts `WM_*BUTTON` / `WM_KEYDOWN` / `WM_KEYUP` / `WM_CHAR`
 //!    to the **deepest child** HWND at the click point. Invisible and never
 //!    raises the target — no `SetForegroundWindow`, no cursor movement. Works
@@ -108,12 +108,12 @@ const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 /// Windows mandatory integrity-level RIDs (the last sub-authority of the
 /// integrity SID). Higher = more privileged.
 mod il {
-    pub const UNTRUSTED: u32 = 0x0000;
-    pub const LOW: u32 = 0x1000;
-    pub const MEDIUM: u32 = 0x2000;
-    pub const MEDIUM_PLUS: u32 = 0x2100;
-    pub const HIGH: u32 = 0x3000;
-    pub const SYSTEM: u32 = 0x4000;
+    pub(super) const UNTRUSTED: u32 = 0x0000;
+    pub(super) const LOW: u32 = 0x1000;
+    pub(super) const MEDIUM: u32 = 0x2000;
+    pub(super) const MEDIUM_PLUS: u32 = 0x2100;
+    pub(super) const HIGH: u32 = 0x3000;
+    pub(super) const SYSTEM: u32 = 0x4000;
 }
 
 fn il_name(rid: u32) -> &'static str {
@@ -132,7 +132,7 @@ fn il_name(rid: u32) -> &'static str {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct KEYBDINPUT {
+struct KeybdInput {
     wVk: u16,
     wScan: u16,
     dwFlags: u32,
@@ -142,7 +142,7 @@ struct KEYBDINPUT {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct MOUSEINPUT {
+struct MouseInput {
     dx: i32,
     dy: i32,
     mouseData: u32,
@@ -153,7 +153,7 @@ struct MOUSEINPUT {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct HARDWAREINPUT {
+struct HardwareInput {
     uMsg: u32,
     wParamL: u16,
     wParamH: u16,
@@ -164,14 +164,14 @@ struct HARDWAREINPUT {
 #[repr(C)]
 #[derive(Clone, Copy)]
 union INPUT_0 {
-    ki: KEYBDINPUT,
-    mi: MOUSEINPUT,
-    hi: HARDWAREINPUT,
+    ki: KeybdInput,
+    mi: MouseInput,
+    hi: HardwareInput,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct INPUT {
+struct Input {
     r#type: u32,
     Anonymous: INPUT_0,
 }
@@ -190,7 +190,7 @@ struct TOKEN_MANDATORY_LABEL {
 
 #[link(name = "user32")]
 extern "system" {
-    fn SendInput(c_inputs: u32, p_inputs: *const INPUT, cb_size: i32) -> u32;
+    fn SendInput(c_inputs: u32, p_inputs: *const Input, cb_size: i32) -> u32;
     fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: i32) -> i32;
     fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
     /// `VkKeyScanW` — translate a Unicode char to a virtual-key code + shift
@@ -301,7 +301,7 @@ const DEEPEST_CHILD_MAX_DEPTH: usize = 16;
 /// (focus-steal).
 ///
 /// Returns `root` itself if no deeper child is found (or if `root` is invalid).
-pub fn deepest_child(root: HWND, sx: i32, sy: i32) -> HWND {
+fn deepest_child(root: HWND, sx: i32, sy: i32) -> HWND {
     if root.is_invalid() {
         return root;
     }
@@ -346,13 +346,7 @@ pub fn deepest_child(root: HWND, sx: i32, sy: i32) -> HWND {
 /// between clicks. `button` is `"left"`, `"right"`, or `"middle"` (any other
 /// value defaults to left). Surfaces a `BitFunError::Service` on
 /// `PostMessageW` failure or a UIPI block.
-pub fn post_click(
-    root: HWND,
-    x: i32,
-    y: i32,
-    button: &str,
-    click_count: usize,
-) -> BitFunResult<()> {
+fn post_click(root: HWND, x: i32, y: i32, button: &str, click_count: usize) -> BitFunResult<()> {
     if root.is_invalid() {
         return Err(BitFunError::service("post_click: invalid HWND"));
     }
@@ -401,12 +395,6 @@ pub fn post_click(
     Ok(())
 }
 
-/// Post a single right-button click at **client-area** coordinates `(x, y)` of
-/// `root`. Thin wrapper over [`post_click`] for the common right-click case.
-pub fn post_right_click(root: HWND, x: i32, y: i32) -> BitFunResult<()> {
-    post_click(root, x, y, "right", 1)
-}
-
 /// Post a key event to `hwnd` via `PostMessageW`.
 ///
 /// When `down` is `true` a `WM_KEYDOWN` is posted; when `false` a `WM_KEYUP`.
@@ -414,7 +402,7 @@ pub fn post_right_click(root: HWND, x: i32, y: i32) -> BitFunResult<()> {
 /// `MapVirtualKeyW(vk, MAPVK_VK_TO_VSC)`). The LPARAM encodes the repeat count,
 /// scan code, previous key state, and transition state per the Win32
 /// `WM_KEYDOWN` / `WM_KEYUP` specification.
-pub fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> {
+fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("post_key: invalid HWND"));
     }
@@ -433,7 +421,7 @@ pub fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> 
 /// controls; richer XAML / WinUI3 / UWP targets may reject posted `WM_CHAR`
 /// (their CoreInput dispatcher only consumes system-queue events) — use
 /// [`inject_text_cloaked`] for those.
-pub fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
+fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("post_char: invalid HWND"));
     }
@@ -498,7 +486,7 @@ unsafe fn force_foreground_attached(target: HWND) -> bool {
 /// (best-effort; may miss GetKeyState-gated handlers, but never drops the
 /// action). The caller should focus the field first (a prior background click)
 /// so the keystrokes land in the right control.
-pub fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
+pub(super) fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("inject_text_cloaked: invalid HWND"));
     }
@@ -547,7 +535,7 @@ pub fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
 /// Modifiers are pressed before the key and released (in reverse order) after.
 /// Falls back to `PostMessage(WM_KEYDOWN/WM_KEYUP)` if foreground can't be
 /// obtained. See [`inject_text_cloaked`] for the cloaking rationale.
-pub fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
+pub(super) fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("inject_key_cloaked: invalid HWND"));
     }
@@ -650,7 +638,7 @@ unsafe fn process_integrity_rid(process: Handle) -> Option<u32> {
 ///
 /// Messages at or above `WM_USER` are app-defined and not UIPI-filtered, so the
 /// (relatively expensive) integrity comparison is skipped for them.
-pub fn post_message_blocked_by_uipi(hwnd: HWND, msg: u32) -> Option<String> {
+fn post_message_blocked_by_uipi(hwnd: HWND, msg: u32) -> Option<String> {
     // Only messages below WM_USER are subject to UIPI filtering.
     if msg >= WM_USER_CUTOFF {
         return None;
@@ -730,7 +718,7 @@ const XAML_HOST_EXES: &[&str] = &[
 /// pair: cross-session `GetClassNameW` can return nothing, and modern apps
 /// like Win 11 Notepad keep the legacy `"Notepad"` class even though they
 /// render XAML underneath.
-pub fn is_probably_uwp_or_directcomposition(hwnd: HWND) -> bool {
+fn is_probably_uwp_or_directcomposition(hwnd: HWND) -> bool {
     if hwnd.is_invalid() {
         return false;
     }
@@ -805,7 +793,7 @@ fn owning_exe_basename(hwnd: HWND) -> Option<String> {
     }
     let path = String::from_utf16_lossy(&buf[..len as usize]);
     let name = path
-        .rsplit(|c: char| c == '\\' || c == '/')
+        .rsplit(['\\', '/'])
         .next()
         .unwrap_or(&path)
         .to_ascii_lowercase();
@@ -858,15 +846,15 @@ fn make_key_lparam(scan: u32, down: bool) -> LPARAM {
 
 /// One `SendInput` keyboard event carrying a Unicode code unit (`KEYEVENTF_
 /// UNICODE`). `up` adds `KEYEVENTF_KEYUP`.
-fn unicode_event(unit: u16, up: bool) -> INPUT {
+fn unicode_event(unit: u16, up: bool) -> Input {
     let mut flags = KEYEVENTF_UNICODE;
     if up {
         flags |= KEYEVENTF_KEYUP;
     }
-    INPUT {
+    Input {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
+            ki: KeybdInput {
                 wVk: 0,
                 wScan: unit,
                 dwFlags: flags,
@@ -879,12 +867,12 @@ fn unicode_event(unit: u16, up: bool) -> INPUT {
 
 /// One `SendInput` keyboard event for a virtual-key code. `up` adds
 /// `KEYEVENTF_KEYUP`.
-fn vk_event(vk: u16, scan: u32, up: bool) -> INPUT {
+fn vk_event(vk: u16, scan: u32, up: bool) -> Input {
     let flags = if up { KEYEVENTF_KEYUP } else { 0 };
-    INPUT {
+    Input {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
+            ki: KeybdInput {
                 wVk: vk,
                 wScan: scan as u16,
                 dwFlags: flags,
@@ -901,7 +889,7 @@ fn vk_event(vk: u16, scan: u32, up: bool) -> INPUT {
 /// `SendInput` reads `ev.len()` `INPUT` records from `ev.as_ptr()`; every
 /// record is fully initialized above. `cbSize` is the true `size_of::<INPUT>`.
 unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
-    let mut ev: Vec<INPUT> = Vec::with_capacity(text.len() * 2);
+    let mut ev: Vec<Input> = Vec::with_capacity(text.len() * 2);
     for u in text.encode_utf16() {
         ev.push(unicode_event(u, false));
         ev.push(unicode_event(u, true));
@@ -912,7 +900,7 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
     let sent = SendInput(
         ev.len() as u32,
         ev.as_ptr(),
-        std::mem::size_of::<INPUT>() as i32,
+        std::mem::size_of::<Input>() as i32,
     );
     if sent as usize != ev.len() {
         return Err(BitFunError::service(format!(
@@ -929,7 +917,7 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
 /// # Safety
 /// `SendInput` reads a fully-initialized `INPUT` array; `cbSize` is correct.
 unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
-    let mut ev: Vec<INPUT> = Vec::with_capacity(modifiers.len() * 2 + 2);
+    let mut ev: Vec<Input> = Vec::with_capacity(modifiers.len() * 2 + 2);
     for &m in modifiers {
         let m_scan = MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC);
         ev.push(vk_event(m, m_scan, false));
@@ -947,7 +935,7 @@ unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
     let sent = SendInput(
         ev.len() as u32,
         ev.as_ptr(),
-        std::mem::size_of::<INPUT>() as i32,
+        std::mem::size_of::<Input>() as i32,
     );
     if sent as usize != ev.len() {
         return Err(BitFunError::service(format!(
@@ -1003,7 +991,7 @@ fn message_name(msg: u32) -> &'static str {
 /// resolved targets (a node's `frame_global` center, an absolute `ScreenXy`,
 /// an image-pixel point mapped to global) are all **screen** coordinates, so
 /// this variant is the one the host wires up.
-pub fn post_click_screen(
+pub(super) fn post_click_screen(
     root: HWND,
     sx: i32,
     sy: i32,
@@ -1075,7 +1063,13 @@ fn delta_to_line_count(delta: i32) -> usize {
 /// `dy` scrolls the content **down** (further into the document), positive
 /// `dx` scrolls **right**. Mirrors cua-driver-rs `ScrollTool`'s
 /// `WM_VSCROLL`/`WM_HSCROLL` transport.
-pub fn post_scroll_screen(root: HWND, sx: i32, sy: i32, dx: i32, dy: i32) -> BitFunResult<()> {
+pub(super) fn post_scroll_screen(
+    root: HWND,
+    sx: i32,
+    sy: i32,
+    dx: i32,
+    dy: i32,
+) -> BitFunResult<()> {
     if root.is_invalid() {
         return Err(BitFunError::service("post_scroll_screen: invalid HWND"));
     }
@@ -1112,7 +1106,7 @@ const DRAG_ENDPOINT_DELAY_MS: u64 = 35;
 /// resolved target's client space so a drag stays within one control (a
 /// WinForms panel, a Win32 child canvas, …) rather than leaking to the frame.
 #[allow(clippy::too_many_arguments)]
-pub fn post_drag_screen(
+pub(super) fn post_drag_screen(
     root: HWND,
     sx_from: i32,
     sy_from: i32,
@@ -1180,7 +1174,7 @@ pub fn post_drag_screen(
 /// Map a modifier name (`ctrl`/`control`, `shift`, `alt`/`option`/`menu`,
 /// `win`/`meta`/`cmd`/`command`/`super`) to its virtual-key code. Mirrors
 /// cua-driver-rs `modifier_vk`. Returns `None` for non-modifier names.
-pub fn vk_for_modifier(name: &str) -> Option<u16> {
+fn vk_for_modifier(name: &str) -> Option<u16> {
     match name.to_lowercase().as_str() {
         "ctrl" | "control" => Some(0x11),        // VK_CONTROL
         "shift" => Some(0x10),                   // VK_SHIFT
@@ -1193,7 +1187,7 @@ pub fn vk_for_modifier(name: &str) -> Option<u16> {
 /// Map a key name (named keys like `enter`, `tab`, arrows, `f1..f12`, or a
 /// single printable character) to a virtual-key code. Mirrors cua-driver-rs
 /// `key_name_to_vk`; single characters go through `VkKeyScanW`.
-pub fn vk_for_key(key: &str) -> BitFunResult<u16> {
+fn vk_for_key(key: &str) -> BitFunResult<u16> {
     let vk: u16 = match key.to_lowercase().as_str() {
         "enter" | "return" => 0x0D,
         "tab" => 0x09,
@@ -1249,7 +1243,7 @@ pub fn vk_for_key(key: &str) -> BitFunResult<u16> {
 /// names are collected as modifiers; the first non-modifier (or, if every entry
 /// is a modifier, the last one) becomes the main key. Mirrors the macOS
 /// `parse_key_sequence` contract.
-pub fn parse_key_chord(keys: &[String]) -> BitFunResult<(Vec<u16>, u16)> {
+pub(super) fn parse_key_chord(keys: &[String]) -> BitFunResult<(Vec<u16>, u16)> {
     if keys.is_empty() {
         return Err(BitFunError::tool("empty key chord".to_string()));
     }
@@ -1273,4 +1267,56 @@ pub fn parse_key_chord(keys: &[String]) -> BitFunResult<(Vec<u16>, u16)> {
         }
     };
     Ok((modifiers, keycode))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HardwareInput, Input, KeybdInput, MouseInput, INPUT_0};
+    use std::mem::{align_of, offset_of, size_of};
+
+    #[test]
+    fn send_input_ffi_layout_matches_winuser() {
+        assert_eq!(size_of::<HardwareInput>(), 8);
+        assert_eq!(align_of::<HardwareInput>(), 4);
+        assert_eq!(offset_of!(HardwareInput, uMsg), 0);
+        assert_eq!(offset_of!(HardwareInput, wParamL), 4);
+        assert_eq!(offset_of!(HardwareInput, wParamH), 6);
+
+        if cfg!(target_pointer_width = "64") {
+            assert_eq!(size_of::<KeybdInput>(), 24);
+            assert_eq!(align_of::<KeybdInput>(), 8);
+            assert_eq!(offset_of!(KeybdInput, dwExtraInfo), 16);
+            assert_eq!(size_of::<MouseInput>(), 32);
+            assert_eq!(align_of::<MouseInput>(), 8);
+            assert_eq!(offset_of!(MouseInput, dwExtraInfo), 24);
+            assert_eq!(size_of::<INPUT_0>(), 32);
+            assert_eq!(align_of::<INPUT_0>(), 8);
+            assert_eq!(size_of::<Input>(), 40);
+            assert_eq!(align_of::<Input>(), 8);
+            assert_eq!(offset_of!(Input, Anonymous), 8);
+        } else {
+            assert_eq!(size_of::<KeybdInput>(), 16);
+            assert_eq!(align_of::<KeybdInput>(), 4);
+            assert_eq!(offset_of!(KeybdInput, dwExtraInfo), 12);
+            assert_eq!(size_of::<MouseInput>(), 24);
+            assert_eq!(align_of::<MouseInput>(), 4);
+            assert_eq!(offset_of!(MouseInput, dwExtraInfo), 20);
+            assert_eq!(size_of::<INPUT_0>(), 24);
+            assert_eq!(align_of::<INPUT_0>(), 4);
+            assert_eq!(size_of::<Input>(), 28);
+            assert_eq!(align_of::<Input>(), 4);
+            assert_eq!(offset_of!(Input, Anonymous), 4);
+        }
+
+        assert_eq!(offset_of!(KeybdInput, wVk), 0);
+        assert_eq!(offset_of!(KeybdInput, wScan), 2);
+        assert_eq!(offset_of!(KeybdInput, dwFlags), 4);
+        assert_eq!(offset_of!(KeybdInput, time), 8);
+        assert_eq!(offset_of!(MouseInput, dx), 0);
+        assert_eq!(offset_of!(MouseInput, dy), 4);
+        assert_eq!(offset_of!(MouseInput, mouseData), 8);
+        assert_eq!(offset_of!(MouseInput, dwFlags), 12);
+        assert_eq!(offset_of!(MouseInput, time), 16);
+        assert_eq!(offset_of!(Input, r#type), 0);
+    }
 }

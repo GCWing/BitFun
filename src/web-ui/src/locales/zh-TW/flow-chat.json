@@ -510,7 +510,7 @@
     "select": "選擇智能體",
     "default": "默認助手",
     "coding": "編程助手",
-    "review": "代碼審核",
+    "review": "審核",
     "architect": "架構師",
     "custom": "自定義智能體"
   },
@@ -604,6 +604,14 @@
     "initBusy": "請等待目前會話空閒後再使用 /init。",
     "initUsage": "請直接使用 /init，不要附加額外參數。",
     "initFailed": "初始化 AGENTS.md 失敗",
+    "reviewAction": "審核",
+    "reviewUnavailableSurface": "目前介面暫不支援審核，請在桌面應用程式中開啟此工作區。",
+    "reviewNoSession": "目前沒有可用於審核的會話。",
+    "reviewUsage": "使用 /review，可附加提交、檔案範圍或風險領域等聚焦說明。只有明確需要最廣審核時才使用 /review strict。",
+    "reviewFailed": "審核失敗",
+    "reviewBusy": "目前會話已有審核正在進行，請停止或等待完成後再開始新的審核。",
+    "reviewNestedDisabled": "審核只能從主會話啟動。",
+    "reviewThreadTitle": "審核",
     "deepreviewNoSession": "目前沒有可用於嚴格審核的會話。",
     "deepreviewUsage": "歷史嚴格審核相容命令支援附加聚焦說明，例如提交、檔案範圍或風險領域。",
     "deepreviewFailed": "嚴格審核失敗",
@@ -742,7 +750,7 @@
       },
       "review": {
         "short": "審核",
-        "title": "代碼審核",
+        "title": "審核",
         "origin": "審核來源"
       },
       "deep_review": {
@@ -770,9 +778,9 @@
     "fixCompleted": "修復完成",
     "fixFailed": "修復失敗",
     "fixTimeout": "修復超時",
-    "fixInterrupted": "修復已中斷，還剩 {{count}} 項。",
+    "fixInterrupted": "修復已中斷，最多有 {{count}} 個已選項目可能仍需處理。",
     "reviewWaitingCapacity": "審核正在等待容量",
-    "continueFix": "繼續修復 {{count}} 項",
+    "continueFix": "重新檢查並繼續（{{count}}）",
     "skipRemaining": "跳過剩餘項",
     "reviewError": "審核出錯",
     "dismiss": "關閉",
@@ -780,9 +788,9 @@
     "minimize": "收起",
     "restore": "開啟 {{label}}",
     "fixAndReviewRunning": "正在修復&準備重審...",
-    "minimizedStandard": "程式碼審核",
+    "minimizedStandard": "審核",
     "minimizedReviewRunningDeep": "嚴格審核進行中",
-    "minimizedReviewRunningStandard": "程式碼審核進行中",
+    "minimizedReviewRunningStandard": "審核進行中",
     "minimizedFix": "正在修復",
     "minimizedFixReview": "修復並重審中",
     "minimizedFixCompleted": "修復完成",
@@ -804,7 +812,6 @@
       "missingSelection": "開始前需要先為每個待決策項選擇一個方案。",
       "noOptionsHint": "該項沒有結構化選項。只有在確認依目前計畫執行時再繼續。",
       "confirmFix": "確認並開始",
-      "confirmFixAndReview": "確認並重審",
       "cancel": "返回選擇"
     },
     "fillBackInput": "填入輸入框",
@@ -812,7 +819,21 @@
     "retryIncompleteSlices": "重試未完成審核工作（{{count}}）",
     "retryIncompleteRequestDisplay": "重試 {{count}} 個未完成的嚴格審核項",
     "retryIncompleteFailed": "無法重試未完成的嚴格審核工作。",
-    "fixCompletedMessage": "所有修復已成功應用。",
+    "fixCompletedMessage": "選取的修復已完成，可再次審核以進行獨立確認。",
+    "reviewFixes": "審核修復",
+    "reviewFixesInProgress": "審核進行中",
+    "openFollowUpReview": "開啟審核",
+    "viewFollowUpReview": "查看審核",
+    "viewFailedFollowUpReview": "查看失敗的審核",
+    "viewCancelledFollowUpReview": "查看已取消的審核",
+    "retryFollowUpReview": "重試審核",
+    "reviewFixesRequest": "審核本次修復變更",
+    "reviewFixesThreadTitle": "審核修復",
+    "reviewFixesUnavailable": "無法確定修復審核目標，請從目前工作區重新啟動審核。",
+    "reviewFixesScopeFallback": "無法還原原審核範圍，將審核目前工作區變更。",
+    "reviewFixesCommandScopeFallback": "命令可能修改了其他檔案，將審核目前工作區全部變更以避免遺漏。",
+    "reviewCancelledWithoutReport": "審核已取消，尚未產生報告。",
+    "reviewEndedWithoutReport": "審核已結束，但未產生結構化報告。",
     "replaceInputConfirmTitle": "替換目前輸入？",
     "replaceInputConfirmMessage": "輸入框中已有文字，填入計劃將替換目前草稿內容。",
     "replaceInputConfirmAction": "替換輸入",
@@ -863,7 +884,7 @@
       "title": "嚴格審核需要補全結果",
       "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並要求 agent 補交缺失的審核報告。",
       "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並要求 agent 修復報告。",
-      "wrongReviewMode": "審核回傳了標準程式碼審核結果。繼續會保留已完成的審核工作，並要求 agent 提交嚴格審核報告。"
+      "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並要求 agent 提交嚴格審核報告。"
     },
     "capacityQueue": {
       "title": "審核正在等待容量",
@@ -910,60 +931,67 @@
       "controlPartiallyFailedWithReason": "容量控制已部分套用；{{total}} 個審核項中有 {{failed}} 個失敗：{{reason}}。請等待容量狀態刷新後重試，或在卡住時使用停止。"
     },
     "degradation": {
-      "reduceReviewers": "保留核心檢查",
-      "reduceReviewersDesc": "繼續執行本次 Review 最相關的檢查",
-      "reduceReviewersPending": "聚焦檢查模式將在後續版本中支援",
-      "compressContext": "壓縮上下文後重試",
-      "compressContextDesc": "壓縮已完成的審核結果以釋放上下文空間",
-      "compressContextPending": "上下文壓縮將在後續版本中支持",
       "viewPartial": "查看部分結果",
       "viewPartialDesc": "查看已完成的審核結果"
     },
     "launchError": {
       "modelConfig": "無法建立審核會話，請檢查模型設定",
       "network": "網絡連接中斷，審核未能啟動",
+      "target": "無法安全準備要求的審核範圍，請檢查目標後重試",
+      "fileLimit": "審核目標過大，請縮小檔案或目錄範圍後重試",
+      "outsideWorkspace": "審核檔案必須位於目前工作區內",
+      "remoteGitRange": "暫不支援遠端 Git 範圍，請使用本機檢出",
+      "remoteWorkspace": "遠端工作區審核需要有界的精確差異證據，暫不支援，請使用本機檢出",
+      "threeDotRange": "暫不支援三點 Git 範圍，請使用明確的 merge-base..head 範圍",
+      "combinedScope": "不能同時指定 Git 範圍和檔案篩選，請分別審核",
+      "emptyGitRange": "要求的 Git 範圍沒有變更檔案",
+      "unresolvedGitRange": "無法解析要求的 Git 範圍，請檢查引用或範圍後重試",
+      "emptyWorkspace": "目前工作區沒有可審核的變更",
+      "emptyExplicitScope": "要求的檔案或目錄沒有工作區變更",
+      "unresolvedTarget": "無法將審核目標準備為有界證據，請開啟對應工作區或縮小目標後重試",
+      "uncertain": "審核要求可能已在執行。工作階段已保留，可安全檢查或重試",
       "unknown": "審核啟動失敗，請重試"
     }
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "審核已完成",
     "reviewCompletedDeep": "嚴格審核已完成",
-    "fixRequestDisplayStandard": "開始修復程式碼審核問題",
-    "fixAndReviewRequestDisplayStandard": "修復程式碼審核問題並重新審核",
+    "fixRequestDisplayStandard": "開始修復審核問題",
+    "fixAndReviewRequestDisplayStandard": "修復審核問題並重新審核",
     "fixRequestDisplayDeep": "開始修復嚴格審核問題",
     "fixAndReviewRequestDisplayDeep": "修復嚴格審核問題並重新審核",
     "needsDecisionTag": "需決策",
     "noIssuesFound": "未發現問題，做得不錯！"
   },
   "deepReviewConsent": {
-    "windowTitle": "嚴格審核",
-    "eyebrow": "嚴格審核",
-    "title": "開始嚴格審核？",
-    "body": "嚴格審核會增加更廣的獨立覆蓋，預計會消耗更多 Token，耗時也更久。",
+    "windowTitle": "審核方案",
+    "eyebrow": "審核方案",
+    "title": "增加更廣的審核覆蓋？",
+    "body": "BitFun 為本次變更選擇了額外的獨立檢查。繼續前可確認目標範圍、計畫檢查、耗時傾向和唯讀邊界。",
     "readonlyLabel": "唯讀",
-    "readonly": "修復需確認。",
+    "readonly": "審核者不會修改檔案。",
     "sessionConcurrencyTitle": "目前會話較忙",
-    "sessionConcurrencyBody": "目標會話已有 {{count}} 個 Review 工作在執行。可選擇更輕量策略、暫時取消，或在容量空閒後手動繼續。",
-    "costLabel": "Token",
-    "cost": "更廣覆蓋 + 最終質檢。",
+    "sessionConcurrencyBody": "目標會話已有 {{count}} 個審核工作在執行，繼續後將共享目前可用的審核容量。",
+    "costLabel": "覆蓋",
+    "cost": "計畫的審查代理執行；此處不估算底層模型請求或 Token。",
     "timeLabel": "耗時",
     "time": "背景執行，可能需要更久。",
     "cancel": "取消",
-    "confirm": "開始嚴格審核",
-    "estimatedTokens": "預計輸入：{{min}} - {{max}} tokens",
-    "estimatedTokensNote": "僅為 prompt 輸入估算；最終輸出和供應商計費可能不同。",
+    "confirm": "開始審核",
+    "initialCalls": "獨立檢查：計畫 {{planned}} 次審查代理執行",
+    "parallelCalls": "無需再次確認時，最多可能執行 {{count}} 次審查代理。",
     "runStrategy": "運行策略：{{strategy}}",
     "strategyLabels": {
-      "quick": "快速",
+      "quick": "聚焦",
       "normal": "標準",
-      "deep": "嚴格"
+      "deep": "全面"
     },
     "strategySummaries": {
-      "quick": "快速會保留與目標匹配的檢查，聚焦最可能的問題。",
-      "normal": "標準適合慢速模型下的日常審核；限制可選擴張，大範圍改動優先使用摘要式覆蓋。",
-      "deep": "嚴格審核會為高風險改動使用更廣覆蓋，耗時更長但能提高結論可信度。"
+      "quick": "聚焦審核會檢查目前目標最相關的風險。",
+      "normal": "標準審核會增加獨立覆蓋，同時保持成本合理。",
+      "deep": "全面審核會為高風險變更增加適用範圍內最廣的覆蓋。"
     },
-    "summaryTitle": "啟動摘要",
+    "summaryTitle": "審核方案",
     "targetFiles": "{{count}} 個檔案",
     "targetFiles_one": "{{count}} 個檔案",
     "targetFiles_other": "{{count}} 個檔案",
@@ -1075,7 +1103,7 @@
     "actionsMenuHint": "快捷動作",
     "actionsButton": "動作",
     "actionsButtonRunning": "進行中…",
-    "reviewModeStandard": "普通審核",
+    "reviewModeStandard": "審核",
     "reviewModeDeep": "嚴格審核",
     "reviewRunningStandard": "審核中",
     "reviewRunningDeep": "審核中",
@@ -1089,9 +1117,10 @@
       "displayMessageFiltered": "審核過濾後的檔案：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的檔案。",
       "filteredNotice": "本次將分析 {{included}} 個檔案，並跳過 {{skipped}} 個命中排除規則的檔案，例如鎖檔案、生成物或二進制資源。",
       "noEligibleFiles": "排除命中規則的檔案後，本次會話裡沒有可審核檔案。",
+      "launchFailed": "無法啟動審核",
       "prompt": "請審核本次會話中修改的以下檔案：\n\n{{files}}",
       "promptFiltered": "請審核本次會話中修改的以下檔案：\n\n{{files}}\n\n請不要審核另外 {{skipped}} 個已跳過的檔案，因為它們命中了鎖檔案、生成物或二進制檔案的排除規則。",
-      "threadTitle": "代碼審核"
+      "threadTitle": "審核"
     },
     "deepReview": {
       "info": "嚴格審核會執行更廣的審核覆蓋，可能更耗時並消耗更多 Token。",
@@ -1775,8 +1804,8 @@
     "codeReview": {
       "reviewResult": "審核結果",
       "reviewingCode": "正在審核代碼...",
-      "preparingReview": "準備代碼審核",
-      "reviewFailed": "代碼審核失敗：{{error}}",
+      "preparingReview": "準備審核",
+      "reviewFailed": "審核失敗：{{error}}",
       "unknownError": "未知錯誤",
       "noIssues": "無問題",
       "collapseDetails": "收起詳情",
@@ -1784,6 +1813,12 @@
       "overallAssessment": "總體評估",
       "riskLevel": "風險等級",
       "recommendedAction": "建議操作",
+      "evidenceStatus": "證據狀態",
+      "evidenceStatuses": {
+        "complete": "完整",
+        "limited": "受限",
+        "stale": "已過期"
+      },
       "deepReviewResult": "嚴格審核結果",
       "reviewScope": "範圍",
       "contextLimitations": "上下文限制",
@@ -1847,6 +1882,10 @@
           "label": "聚焦 Review 範圍",
           "detail": "本次 Review 使用了聚焦範圍設定。"
         },
+        "target_evidence_limited": {
+          "label": "目標證據受限",
+          "detail": "準備好的目標證據無法安全涵蓋所有要求的變更。"
+        },
         "retry_guidance": {
           "label": "已給出重試指引",
           "detail": "{{count}} 條重試指引用於補足部分審核覆蓋。"
@@ -1894,7 +1933,7 @@
         "qualityGate": "品質檢查"
       },
       "report": {
-        "titleStandard": "程式碼審核報告",
+        "titleStandard": "審核報告",
         "titleDeep": "嚴格審核報告",
         "reviewDecision": "審核結論",
         "noIssues": "沒有已驗證問題。",
@@ -1917,7 +1956,7 @@
         "saveSuccess": "審核報告已匯出。",
         "saveFailed": "匯出審核報告失敗。",
         "saveDialogTitle": "匯出審核報告",
-        "fileNamePrefix": "BitFun-程式碼審核",
+        "fileNamePrefix": "BitFun-審核",
         "editorTitle": "審核報告"
       },
       "reviewModes": {
@@ -1939,7 +1978,6 @@
         "noSelectionHint": "至少選擇一項修復計劃後才能開始修復。",
         "ungrouped": "其他",
         "startFix": "開始修復",
-        "fixAndReview": "修復&重審",
         "cancel": "取消",
         "fixUnavailable": "無法開始修復：審核會話不可用。",
         "fixRequestDisplay": "開始修復嚴格審核問題",

@@ -1443,6 +1443,7 @@ async fn kill_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
     child.wait().await.ok().and_then(|status| status.code())
 }
 
+#[cfg(not(unix))]
 fn spawn_pipe_reader<R>(mut reader: R, output: Arc<OutputState>) -> JoinHandle<()>
 where
     R: AsyncRead + Unpin + Send + 'static,

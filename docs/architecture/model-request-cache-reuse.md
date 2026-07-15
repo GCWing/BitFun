@@ -1,5 +1,10 @@
 # Model Request Cache Reuse In BitFun
 
+This document owns session cache identity, persistence, cloning, invalidation,
+and cache-use observability. The exact model-visible request ordering is owned
+by [`cache-friendly-message-structure.md`](cache-friendly-message-structure.md);
+this document references that order but does not redefine it.
+
 This note summarizes the mechanisms BitFun uses to improve model-side prompt
 cache reuse and to avoid unnecessary cache invalidation across long-running
 agent sessions.
@@ -141,7 +146,7 @@ Relevant code:
 - snapshot model:
   `src/crates/assembly/core/src/agentic/fork_agent/mod.rs`
 - request validation and tool contract:
-  `src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs`
+  `src/crates/assembly/core/src/agentic/tools/implementations/task/mod.rs`
 - execution and prompt-cache cloning:
   `src/crates/assembly/core/src/agentic/coordination/coordinator.rs`
 
