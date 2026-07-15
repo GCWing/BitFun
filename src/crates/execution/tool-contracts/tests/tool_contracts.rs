@@ -12,7 +12,7 @@ use bitfun_agent_tools::{
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
     build_tool_execution_timeout_presentation, build_tool_path_policy_denial_message,
     build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
-    call_deferred_tool_input_schema, collect_loaded_deferred_tool_specs,
+    call_deferred_tool_input_schema, collect_loaded_deferred_tool_specs, effective_tool_invocation,
     get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
     get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
     is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
@@ -116,6 +116,20 @@ fn call_deferred_tool_contract_uses_nested_object_arguments() {
         invocation.effective_arguments,
         json!({ "city": "Shanghai" })
     );
+}
+
+#[test]
+fn effective_tool_invocation_borrows_deferred_identity_from_wire_call() {
+    let arguments = json!({
+        "tool_name": "get_weather",
+        "args": { "city": "Shanghai" }
+    });
+
+    let (tool_name, effective_arguments) =
+        effective_tool_invocation(CALL_DEFERRED_TOOL_NAME, &arguments);
+
+    assert_eq!(tool_name, "get_weather");
+    assert_eq!(effective_arguments, &json!({ "city": "Shanghai" }));
 }
 
 #[test]

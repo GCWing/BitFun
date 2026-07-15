@@ -82,6 +82,7 @@ mod tests {
         let visible_get_tool_spec_result = Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
             tool_name: "GetToolSpec".to_string(),
+            effective_tool_name: None,
             result: json!({
                 "tool_name": "WebFetch",
                 "catalog_generation": 42,
@@ -94,6 +95,7 @@ mod tests {
         let hidden_get_tool_spec_result = Message::tool_result(ToolResult {
             tool_id: "tool-2".to_string(),
             tool_name: "GetToolSpec".to_string(),
+            effective_tool_name: None,
             result: json!({
                 "tool_name": "Read",
                 "catalog_generation": 42,
@@ -106,6 +108,7 @@ mod tests {
         let failed_get_tool_spec_result = Message::tool_result(ToolResult {
             tool_id: "tool-3".to_string(),
             tool_name: "GetToolSpec".to_string(),
+            effective_tool_name: None,
             result: json!({
                 "tool_name": "GetFileDiff",
                 "catalog_generation": 42,
@@ -135,6 +138,7 @@ mod tests {
                 Message::tool_result(ToolResult {
                     tool_id: "tool-1".to_string(),
                     tool_name: "GetToolSpec".to_string(),
+                    effective_tool_name: None,
                     result: json!({
                             "tool_name": "WebFetch",
                     "catalog_generation": 42,
@@ -147,6 +151,7 @@ mod tests {
                 Message::tool_result(ToolResult {
                     tool_id: "tool-2".to_string(),
                     tool_name: "GetToolSpec".to_string(),
+                    effective_tool_name: None,
                     result: json!({
                             "tool_name": "WebFetch",
                     "catalog_generation": 42,
@@ -159,6 +164,7 @@ mod tests {
                 Message::tool_result(ToolResult {
                     tool_id: "tool-3".to_string(),
                     tool_name: "GetToolSpec".to_string(),
+                    effective_tool_name: None,
                     result: json!({
                             "tool_name": "Git",
                     "catalog_generation": 42,
@@ -171,6 +177,7 @@ mod tests {
                 Message::tool_result(ToolResult {
                     tool_id: "tool-4".to_string(),
                     tool_name: "GetToolSpec".to_string(),
+                    effective_tool_name: None,
                     result: json!({
                             "tool_name": "Read",
                     "catalog_generation": 42,
@@ -183,6 +190,7 @@ mod tests {
                 Message::tool_result(ToolResult {
                     tool_id: "tool-5".to_string(),
                     tool_name: "GetToolSpec".to_string(),
+                    effective_tool_name: None,
                     result: json!({
                             "tool_name": "GetFileDiff",
                     "catalog_generation": 42,
@@ -195,6 +203,7 @@ mod tests {
                 Message::tool_result(ToolResult {
                     tool_id: "tool-6".to_string(),
                     tool_name: "GetToolSpec".to_string(),
+                    effective_tool_name: None,
                     result: json!({
                         "tool_name": 42,
                     }),
@@ -206,6 +215,7 @@ mod tests {
                 Message::tool_result(ToolResult {
                     tool_id: "tool-7".to_string(),
                     tool_name: "Read".to_string(),
+                    effective_tool_name: None,
                     result: json!({
                             "tool_name": "GetFileDiff",
                     "catalog_generation": 42,
@@ -235,6 +245,7 @@ mod tests {
             &[Message::tool_result(ToolResult {
                 tool_id: "tool-1".to_string(),
                 tool_name: "GetToolSpec".to_string(),
+                effective_tool_name: None,
                 result: json!({
                     "tool_name": "Git",
                 "catalog_generation": 42,

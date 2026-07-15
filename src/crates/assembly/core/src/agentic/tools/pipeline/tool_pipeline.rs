@@ -44,6 +44,13 @@ use tool_runtime::pipeline::{
     ToolCancellationTokenStore, ToolExecutionErrorClass, ToolRetryAttemptFacts,
 };
 
+fn persisted_effective_tool_name(
+    wire_tool_name: &str,
+    effective_tool_name: &str,
+) -> Option<String> {
+    (wire_tool_name != effective_tool_name).then(|| effective_tool_name.to_string())
+}
+
 /// Convert framework::ToolResult to core::ToolResult
 ///
 /// Ensure always has result_for_assistant, avoid tool message content being empty
@@ -69,6 +76,10 @@ fn convert_tool_result(
             ModelToolResult {
                 tool_id: tool_id.to_string(),
                 tool_name: wire_tool_name.to_string(),
+                effective_tool_name: persisted_effective_tool_name(
+                    wire_tool_name,
+                    effective_tool_name,
+                ),
                 result: data,
                 result_for_assistant: assistant_text,
                 is_error: false,
@@ -85,6 +96,10 @@ fn convert_tool_result(
             ModelToolResult {
                 tool_id: tool_id.to_string(),
                 tool_name: wire_tool_name.to_string(),
+                effective_tool_name: persisted_effective_tool_name(
+                    wire_tool_name,
+                    effective_tool_name,
+                ),
                 result: content,
                 result_for_assistant: assistant_text,
                 is_error: false,
@@ -98,6 +113,10 @@ fn convert_tool_result(
             ModelToolResult {
                 tool_id: tool_id.to_string(),
                 tool_name: wire_tool_name.to_string(),
+                effective_tool_name: persisted_effective_tool_name(
+                    wire_tool_name,
+                    effective_tool_name,
+                ),
                 result: data,
                 result_for_assistant: assistant_text,
                 is_error: false,
@@ -212,6 +231,8 @@ fn build_error_execution_result(
         &error_message,
         provided_arguments,
     );
+    let persisted_effective_tool_name =
+        persisted_effective_tool_name(&wire_tool_name, &effective_tool_name);
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
@@ -220,6 +241,7 @@ fn build_error_execution_result(
         result: ModelToolResult {
             tool_id,
             tool_name: wire_tool_name,
+            effective_tool_name: persisted_effective_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
@@ -256,6 +278,8 @@ fn build_user_steering_interrupted_result(
     };
 
     let presentation = build_user_steering_interrupted_presentation(&effective_tool_name);
+    let persisted_effective_tool_name =
+        persisted_effective_tool_name(&wire_tool_name, &effective_tool_name);
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
@@ -264,6 +288,7 @@ fn build_user_steering_interrupted_result(
         result: ModelToolResult {
             tool_id,
             tool_name: wire_tool_name,
+            effective_tool_name: persisted_effective_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
@@ -302,6 +327,8 @@ fn build_user_rejected_tool_result(
 
     let presentation =
         build_user_rejected_tool_presentation_with_instruction(&effective_tool_name, instruction);
+    let persisted_effective_tool_name =
+        persisted_effective_tool_name(&wire_tool_name, &effective_tool_name);
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
@@ -310,6 +337,7 @@ fn build_user_rejected_tool_result(
         result: ModelToolResult {
             tool_id,
             tool_name: wire_tool_name,
+            effective_tool_name: persisted_effective_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
             is_error: false,
@@ -791,51 +819,28 @@ impl ToolPipeline {
         // Repetition alone is not execution failure: polling and status checks
         // may legitimately reuse identical arguments. The execution engine
         // evaluates repeated patterns only after observing actual tool results.
-        if task.invocation.is_deferred() {
-            if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+        let (admission, tool) = {
+            let registry = self.tool_registry.read().await;
+            let admission = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
                 tool_name: &tool_name,
                 allowed_tools: &task.context.allowed_tools,
                 runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-                invocation_is_deferred: true,
+                invocation_is_deferred: task.invocation.is_deferred(),
                 deferred_tools: &task.context.deferred_tools,
                 loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
-                current_catalog_generation: task.context.catalog_generation,
+                current_catalog_generation: registry.current_snapshot_generation(),
                 get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
-            }) {
-                let error_msg = err.to_string();
-                warn!("Deferred tool gateway admission rejected: {}", error_msg);
+            });
+            (admission, registry.get_tool(&tool_name))
+        };
 
-                self.state_manager
-                    .update_state(
-                        &tool_id,
-                        ToolExecutionState::Failed {
-                            error: error_msg,
-                            is_retryable: false,
-                            duration_ms: None,
-                            queue_wait_ms: None,
-                            preflight_ms: None,
-                            confirmation_wait_ms: None,
-                            execution_ms: None,
-                        },
-                    )
-                    .await;
-
-                return Err(map_tool_execution_admission_rejection(err));
-            }
-        }
-
-        if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
-            tool_name: &tool_name,
-            allowed_tools: &task.context.allowed_tools,
-            runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-            invocation_is_deferred: task.invocation.is_deferred(),
-            deferred_tools: &task.context.deferred_tools,
-            loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
-            current_catalog_generation: task.context.catalog_generation,
-            get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
-        }) {
+        if let Err(err) = admission {
             let error_msg = err.to_string();
-            warn!("Tool execution admission rejected: {}", error_msg);
+            if task.invocation.is_deferred() {
+                warn!("Deferred tool gateway admission rejected: {}", error_msg);
+            } else {
+                warn!("Tool execution admission rejected: {}", error_msg);
+            }
 
             self.state_manager
                 .update_state(
@@ -855,14 +860,11 @@ impl ToolPipeline {
             return Err(map_tool_execution_admission_rejection(err));
         }
 
-        let tool = {
-            let registry = self.tool_registry.read().await;
-            registry.get_tool(&tool_name).ok_or_else(|| {
-                let error_msg = format!("Tool '{}' is not registered or enabled.", tool_name);
-                error!("{}", error_msg);
-                BitFunError::tool(error_msg)
-            })?
-        };
+        let tool = tool.ok_or_else(|| {
+            let error_msg = format!("Tool '{}' is not registered or enabled.", tool_name);
+            error!("{}", error_msg);
+            BitFunError::tool(error_msg)
+        })?;
 
         let cancellation_token = CancellationToken::new();
         let tool_context = self.build_tool_use_context(&task, cancellation_token.clone());
@@ -1024,6 +1026,10 @@ impl ToolPipeline {
                             effective_tool_name: tool_name.clone(),
                             result: ModelToolResult {
                                 tool_id,
+                                effective_tool_name: persisted_effective_tool_name(
+                                    &wire_tool_name,
+                                    &tool_name,
+                                ),
                                 tool_name: wire_tool_name,
                                 result: presentation.result_json,
                                 result_for_assistant: Some(presentation.result_for_assistant),
@@ -1225,6 +1231,10 @@ impl ToolPipeline {
                         effective_tool_name: timed_out_tool_name.clone(),
                         result: ModelToolResult {
                             tool_id: timed_out_tool_id,
+                            effective_tool_name: persisted_effective_tool_name(
+                                &wire_tool_name,
+                                &timed_out_tool_name,
+                            ),
                             tool_name: wire_tool_name,
                             result: presentation.result_json,
                             result_for_assistant: Some(presentation.result_for_assistant),
@@ -1840,7 +1850,6 @@ mod tests {
             delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
-            catalog_generation: 0,
             allowed_tools: Vec::new(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             steering_interrupt: None,
@@ -1909,6 +1918,14 @@ mod tests {
             }));
     }
 
+    async fn current_registry_generation(pipeline: &ToolPipeline) -> u64 {
+        pipeline
+            .tool_registry
+            .read()
+            .await
+            .current_snapshot_generation()
+    }
+
     #[tokio::test]
     async fn deferred_gateway_executes_effective_target_and_preserves_wire_identity() {
         let pipeline = test_tool_pipeline();
@@ -1922,7 +1939,10 @@ mod tests {
             "get_weather".to_string(),
         ];
         context.deferred_tools = vec!["get_weather".to_string()];
-        context.loaded_deferred_tool_specs = vec![loaded_spec("get_weather", 0)];
+        context.loaded_deferred_tool_specs = vec![loaded_spec(
+            "get_weather",
+            current_registry_generation(&pipeline).await,
+        )];
 
         let mut call = test_tool_call("deferred_1", CALL_DEFERRED_TOOL_NAME);
         call.arguments = json!({
@@ -1961,6 +1981,71 @@ mod tests {
         assert_eq!(task.tool_call.tool_name, CALL_DEFERRED_TOOL_NAME);
         assert_eq!(task.effective_tool_name(), "get_weather");
         assert_eq!(task.effective_arguments(), &json!({ "city": "Shanghai" }));
+    }
+
+    #[tokio::test]
+    async fn deferred_gateway_rejects_registry_refresh_before_execution() {
+        let pipeline = test_tool_pipeline();
+        let old_received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(
+            &pipeline,
+            "get_weather",
+            Arc::clone(&old_received_arguments),
+        )
+        .await;
+        let loaded_generation = current_registry_generation(&pipeline).await;
+
+        let new_received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(
+            &pipeline,
+            "get_weather",
+            Arc::clone(&new_received_arguments),
+        )
+        .await;
+
+        let mut context = test_tool_execution_context();
+        context.allowed_tools = vec![
+            CALL_DEFERRED_TOOL_NAME.to_string(),
+            "get_weather".to_string(),
+        ];
+        context.deferred_tools = vec!["get_weather".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec("get_weather", loaded_generation)];
+
+        let mut call = test_tool_call("deferred_stale", CALL_DEFERRED_TOOL_NAME);
+        call.arguments = json!({
+            "tool_name": "get_weather",
+            "args": { "city": "Shanghai" }
+        });
+
+        let results = pipeline
+            .execute_tools(vec![call], context, ToolExecutionOptions::default())
+            .await
+            .expect("stale deferred call should become a per-tool error result");
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_error);
+        assert_eq!(
+            results[0].result.effective_tool_name.as_deref(),
+            Some("get_weather")
+        );
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("is stale"));
+        assert_eq!(
+            *old_received_arguments
+                .lock()
+                .expect("old capturing tool argument lock"),
+            None
+        );
+        assert_eq!(
+            *new_received_arguments
+                .lock()
+                .expect("new capturing tool argument lock"),
+            None
+        );
     }
 
     #[tokio::test]
@@ -2055,7 +2140,10 @@ mod tests {
             "write_weather".to_string(),
         ];
         context.deferred_tools = vec!["write_weather".to_string()];
-        context.loaded_deferred_tool_specs = vec![loaded_spec("write_weather", 0)];
+        context.loaded_deferred_tool_specs = vec![loaded_spec(
+            "write_weather",
+            current_registry_generation(&pipeline).await,
+        )];
 
         let mut call = test_tool_call("deferred_permission", CALL_DEFERRED_TOOL_NAME);
         call.arguments = json!({
@@ -2597,7 +2685,7 @@ mod tests {
             invocation_is_deferred: true,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
-            current_catalog_generation: task.context.catalog_generation,
+            current_catalog_generation: 0,
             get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
         })
         .expect_err("deferred tool should require a loaded GetToolSpec result");
@@ -2620,7 +2708,7 @@ mod tests {
             invocation_is_deferred: false,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
-            current_catalog_generation: task.context.catalog_generation,
+            current_catalog_generation: 0,
             get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
         });
 

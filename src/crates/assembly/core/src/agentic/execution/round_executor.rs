@@ -16,7 +16,7 @@ use crate::agentic::tools::pipeline::{
     SubagentBatchExecutionPolicy as PipelineSubagentBatchExecutionPolicy, ToolExecutionContext,
     ToolExecutionOptions, ToolPipeline,
 };
-use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::tools::registry::{get_global_tool_registry, ToolRegistry};
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_result_storage;
 use crate::agentic::MessageContent;
@@ -32,6 +32,7 @@ use bitfun_agent_runtime::tool_confirmation::{
     ToolConfirmationPolicyGateFacts,
 };
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
+use bitfun_agent_tools::ResolvedToolInvocation;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
@@ -39,6 +40,21 @@ use log::{debug, error, warn};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
+
+fn tool_call_needs_permission(registry: &ToolRegistry, tool_call: &ToolCall) -> bool {
+    let invocation = ResolvedToolInvocation::from_wire_call(
+        tool_call.tool_name.clone(),
+        tool_call.arguments.clone(),
+    )
+    .unwrap_or_else(|_| {
+        ResolvedToolInvocation::direct(tool_call.tool_name.clone(), tool_call.arguments.clone())
+    });
+
+    registry
+        .get_tool(&invocation.effective_tool_name)
+        .map(|tool| tool.needs_permissions(Some(&invocation.effective_arguments)))
+        .unwrap_or(false)
+}
 
 /// Round executor
 pub struct RoundExecutor {
@@ -728,7 +744,6 @@ impl RoundExecutor {
                 delegation_policy: context.delegation_policy,
                 deferred_tools: context.deferred_tools.clone(),
                 loaded_deferred_tool_specs: context.loaded_deferred_tool_specs.clone(),
-                catalog_generation: context.catalog_generation,
                 allowed_tools,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
@@ -802,12 +817,10 @@ impl RoundExecutor {
                     let registry = get_global_tool_registry();
                     let tool_registry = registry.read().await;
 
-                    stream_result.tool_calls.iter().any(|tool_call| {
-                        tool_registry
-                            .get_tool(&tool_call.tool_name)
-                            .map(|tool| tool.needs_permissions(Some(&tool_call.arguments)))
-                            .unwrap_or(false)
-                    })
+                    stream_result
+                        .tool_calls
+                        .iter()
+                        .any(|tool_call| tool_call_needs_permission(&tool_registry, tool_call))
                 };
                 let needs_confirm =
                     resolve_tool_confirmation_policy_gate(ToolConfirmationPolicyGateFacts {
@@ -859,6 +872,7 @@ impl RoundExecutor {
                             result: crate::agentic::core::ToolResult {
                                 tool_id: tc.tool_id.clone(),
                                 tool_name: tc.tool_name.clone(),
+                                effective_tool_name: None,
                                 result: serde_json::json!({
                                     "error": e.to_string(),
                                     "message": format!("Tool pipeline execution failed: {}", e)
@@ -875,7 +889,15 @@ impl RoundExecutor {
             };
 
             // Convert to ToolResult, then enforce the aggregate budget for this model round.
-            let tool_results = execution_results.into_iter().map(|r| r.result).collect();
+            let tool_results = execution_results
+                .into_iter()
+                .map(|mut execution_result| {
+                    execution_result.result.effective_tool_name = (execution_result.tool_name
+                        != execution_result.effective_tool_name)
+                        .then_some(execution_result.effective_tool_name);
+                    execution_result.result
+                })
+                .collect();
             tool_result_storage::apply_round_tool_result_budget(tool_results, &storage_context)
                 .await
         } else {
@@ -1330,11 +1352,12 @@ fn token_details_from_usage(
 
 #[cfg(test)]
 mod tests {
-    use super::{RoundExecutor, StreamProcessor};
+    use super::{tool_call_needs_permission, RoundExecutor, StreamProcessor};
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::stream_processor::StreamResult;
     use crate::agentic::execution::types::RoundContext;
+    use crate::agentic::tools::registry::create_tool_registry;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::BitFunError;
     use crate::util::types::ai::GeminiUsage;
@@ -1356,6 +1379,24 @@ mod tests {
         }
     }
 
+    #[test]
+    fn deferred_permission_gate_uses_effective_target() {
+        let registry = create_tool_registry();
+        let call = ToolCall {
+            tool_id: "tool-1".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            arguments: json!({
+                "tool_name": "Write",
+                "args": { "payload": "+++ file.txt\ncontent" }
+            }),
+            raw_arguments: None,
+            is_error: false,
+            recovered_from_truncation: false,
+        };
+
+        assert!(tool_call_needs_permission(&registry, &call));
+    }
+
     fn test_round_context() -> RoundContext {
         RoundContext {
             session_id: "session-1".to_string(),
@@ -1369,7 +1410,6 @@ mod tests {
             available_tools: Vec::new(),
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
-            catalog_generation: 0,
             model_name: "model-1".to_string(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::new(
                 "model-1", "model-1", "openai", true,

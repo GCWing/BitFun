@@ -32,7 +32,6 @@ use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
     collect_product_loaded_deferred_tool_specs, GetToolSpecTool,
 };
-use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::tools::{
     resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, ToolRuntimeRestrictions,
 };
@@ -1380,7 +1379,6 @@ impl ExecutionEngine {
             available_tools: finalize_tool_names,
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
-            catalog_generation: 0,
             model_name: input.ai_client.config.model.clone(),
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
@@ -3098,11 +3096,6 @@ impl ExecutionEngine {
             }
             let loaded_deferred_tool_specs =
                 collect_product_loaded_deferred_tool_specs(&messages, &deferred_tools);
-            let catalog_generation = {
-                let registry = get_global_tool_registry();
-                let generation = registry.read().await.current_snapshot_generation();
-                generation
-            };
 
             let model_exchange_trace_dir = self
                 .session_manager
@@ -3120,7 +3113,6 @@ impl ExecutionEngine {
                 available_tools: available_tools.clone(),
                 deferred_tools: deferred_tools.clone(),
                 loaded_deferred_tool_specs,
-                catalog_generation,
                 model_name: ai_client.config.model.clone(),
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
@@ -4355,6 +4347,7 @@ mod tests {
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
             tool_name: "PollStatus".to_string(),
+            effective_tool_name: None,
             result: json!({ "status": "pending", "success": true }),
             result_for_assistant: Some("The job is still pending.".to_string()),
             is_error: false,
@@ -4381,6 +4374,7 @@ mod tests {
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
             tool_name: "Read".to_string(),
+            effective_tool_name: None,
             result: json!({ "success": false, "error": "not found" }),
             result_for_assistant: Some("File not found.".to_string()),
             is_error: true,
@@ -4530,6 +4524,7 @@ mod tests {
         Message::tool_result(ToolResult {
             tool_id: format!("{}-tool", tool_name),
             tool_name: tool_name.to_string(),
+            effective_tool_name: None,
             result: json!({
                 "success": success,
                 "exit_code": exit_code,

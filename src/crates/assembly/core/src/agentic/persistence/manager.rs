@@ -3470,6 +3470,7 @@ mod tests {
             Message::tool_result(ToolResult {
                 tool_id: "tool-1".to_string(),
                 tool_name: "Bash".to_string(),
+                effective_tool_name: None,
                 result: serde_json::json!({ "output": "x".repeat(40) }),
                 result_for_assistant: Some("assistant summary".to_string()),
                 is_error: false,

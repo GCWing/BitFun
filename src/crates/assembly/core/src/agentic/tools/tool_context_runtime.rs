@@ -1466,7 +1466,6 @@ mod task_context_tests {
                 delegation_policy: DelegationPolicy::top_level().spawn_child(),
                 deferred_tools: vec!["WebFetch".to_string()],
                 loaded_deferred_tool_specs: vec![loaded_spec("WebFetch")],
-                catalog_generation: 0,
                 allowed_tools: vec!["WebFetch".to_string()],
                 runtime_tool_restrictions: ToolRuntimeRestrictions {
                     allowed_tool_names: BTreeSet::from(["WebFetch".to_string()]),

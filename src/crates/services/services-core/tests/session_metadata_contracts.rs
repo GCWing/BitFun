@@ -133,6 +133,22 @@ fn finished_turn(
 }
 
 #[test]
+fn deferred_tool_item_serializes_only_its_wire_invocation() {
+    let mut item = tool_item("deferred");
+    item.tool_name = "CallDeferredTool".to_string();
+    item.tool_call.input = serde_json::json!({
+        "tool_name": "WebFetch",
+        "args": { "url": "https://example.test" }
+    });
+
+    let value = serde_json::to_value(&item).expect("serialize tool item");
+    assert_eq!(value["toolName"], "CallDeferredTool");
+    assert_eq!(value["toolCall"]["input"], item.tool_call.input);
+    assert!(value.get("effectiveToolName").is_none());
+    assert!(value.get("effectiveToolInput").is_none());
+}
+
+#[test]
 fn full_refresh_recomputes_metadata_counters_from_turns() {
     let mut metadata = metadata("session-1");
 

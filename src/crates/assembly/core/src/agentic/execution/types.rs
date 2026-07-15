@@ -59,7 +59,6 @@ pub struct RoundContext {
     pub available_tools: Vec<String>,
     pub deferred_tools: Vec<String>,
     pub loaded_deferred_tool_specs: Vec<LoadedDeferredToolSpec>,
-    pub catalog_generation: u64,
     pub model_name: String,
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,

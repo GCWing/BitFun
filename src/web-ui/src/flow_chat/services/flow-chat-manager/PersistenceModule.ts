@@ -424,9 +424,9 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
             const toolItem = item as any;
             return {
               id: item.id,
-              toolName: toolItem.toolName || '',
+              toolName: toolItem.wireToolName || toolItem.toolName || '',
               interruptionReason: toolItem.interruptionReason,
-              toolCall: toolItem.toolCall || { input: {}, id: item.id },
+              toolCall: toolItem.wireToolCall || toolItem.toolCall || { input: {}, id: item.id },
               toolResult: toolItem.toolResult,
               aiIntent: toolItem.aiIntent,
               requiresConfirmation: toolItem.requiresConfirmation,

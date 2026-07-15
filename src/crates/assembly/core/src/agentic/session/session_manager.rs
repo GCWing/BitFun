@@ -5845,7 +5845,8 @@ impl SessionManager {
 mod tests {
     use super::{CoreSessionStorePort, SessionManager, SessionManagerConfig};
     use crate::agentic::core::{
-        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig, SessionState,
+        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig,
+        SessionState, ToolCall, ToolResult,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
@@ -5892,6 +5893,67 @@ mod tests {
                 self.path.join("user-root"),
             ))
         }
+    }
+
+    #[test]
+    fn persisted_round_preserves_deferred_wire_call_and_effective_identity() {
+        let assistant = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: json!({
+                    "tool_name": "WebFetch",
+                    "args": { "url": "https://example.test" }
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            }],
+        )
+        .with_turn_id("turn-1".to_string())
+        .with_round_id("round-1".to_string());
+        let result = Message::tool_result(ToolResult {
+            tool_id: "tool-1".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            effective_tool_name: Some("WebFetch".to_string()),
+            result: json!({ "content": "external content" }),
+            result_for_assistant: Some("external content".to_string()),
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        })
+        .with_turn_id("turn-1".to_string())
+        .with_round_id("round-1".to_string());
+
+        let persisted_messages: Vec<Message> = serde_json::from_value(
+            serde_json::to_value(vec![assistant, result]).expect("serialize messages"),
+        )
+        .expect("deserialize messages");
+        let provider_result: crate::util::types::Message = (&persisted_messages[1]).into();
+        assert_eq!(
+            provider_result.name.as_deref(),
+            Some(bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME)
+        );
+
+        let rounds =
+            SessionManager::build_model_rounds_from_messages(&persisted_messages, "turn-1", 1);
+
+        assert_eq!(rounds.len(), 1);
+        assert_eq!(rounds[0].tool_items.len(), 1);
+        let tool = &rounds[0].tool_items[0];
+        assert_eq!(tool.tool_name, bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(
+            tool.tool_call.input,
+            json!({
+                "tool_name": "WebFetch",
+                "args": { "url": "https://example.test" }
+            })
+        );
+        let (effective_name, effective_input) =
+            crate::service::session::effective_tool_identity(tool);
+        assert_eq!(effective_name, "WebFetch");
+        assert_eq!(effective_input, &json!({ "url": "https://example.test" }));
     }
 
     impl Drop for TestWorkspace {

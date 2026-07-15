@@ -48,7 +48,7 @@ use crate::agentic::workspace::WorkspaceBinding;
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
 use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability, ReasoningMode};
-use crate::service::session::{DialogTurnData, TurnStatus};
+use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
@@ -264,10 +264,10 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
                 .iter()
                 .map(|item| RemoteChatHistoryToolItem {
                     id: item.id.clone(),
-                    name: item.tool_name.clone(),
+                    name: item.effective_name().to_string(),
                     call: RemoteChatHistoryToolCall {
                         id: item.tool_call.id.clone(),
-                        input: item.tool_call.input.clone(),
+                        input: item.effective_input().clone(),
                     },
                     has_result: item.tool_result.is_some(),
                     status: item.status.clone(),

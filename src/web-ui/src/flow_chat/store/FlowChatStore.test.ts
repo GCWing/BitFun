@@ -486,6 +486,59 @@ describe('FlowChatStore round attempts', () => {
       attemptIndex: 1,
     });
   });
+
+  it('projects a persisted deferred call for display while retaining its wire identity', () => {
+    const [restoredTurn] = (flowChatStore as any).convertToDialogTurns([{
+      turnId: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'fetch docs',
+        timestamp: 1000,
+        metadata: {},
+      },
+      modelRounds: [{
+        id: 'round-1',
+        index: 0,
+        status: 'completed',
+        timestamp: 1000,
+        textItems: [],
+        thinkingItems: [],
+        toolItems: [{
+          id: 'tool-1',
+          toolName: 'CallDeferredTool',
+          toolCall: {
+            id: 'tool-1',
+            input: {
+              tool_name: 'WebFetch',
+              args: { url: 'https://example.test' },
+            },
+          },
+          toolResult: { result: { content: 'docs' }, success: true },
+          startTime: 1100,
+          endTime: 1200,
+          status: 'completed',
+        }],
+      }],
+      status: 'completed',
+      timestamp: 1000,
+    }]);
+
+    const tool = restoredTurn.modelRounds[0].items[0];
+    expect(tool).toMatchObject({
+      type: 'tool',
+      toolName: 'WebFetch',
+      toolCall: { id: 'tool-1', input: { url: 'https://example.test' } },
+      wireToolName: 'CallDeferredTool',
+      wireToolCall: {
+        id: 'tool-1',
+        input: {
+          tool_name: 'WebFetch',
+          args: { url: 'https://example.test' },
+        },
+      },
+    });
+  });
 });
 
 describe('FlowChatStore local usage reports', () => {

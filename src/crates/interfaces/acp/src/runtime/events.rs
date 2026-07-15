@@ -7,7 +7,7 @@ use agent_client_protocol::schema::{
     ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{Client, ConnectionTo, Result};
-use bitfun_core::service::session::ToolItemData;
+use bitfun_core::service::session::{ToolItemData, ToolItemIdentityExt};
 use bitfun_events::ToolEventData;
 
 pub(super) const PERMISSION_ALLOW_ONCE: &str = "allow_once";
@@ -61,8 +61,8 @@ pub(super) fn tool_event_updates(
 /// "in progress", leaving a stuck tool card in the client transcript.
 pub(super) fn tool_call_replay_updates(tool_item: &ToolItemData) -> Vec<SessionUpdate> {
     let tool_id = tool_item.id.clone();
-    let tool_name = tool_item.tool_name.as_str();
-    let raw_input = sanitize_tool_input(tool_name, tool_item.tool_call.input.clone());
+    let tool_name = tool_item.effective_name();
+    let raw_input = sanitize_tool_input(tool_name, tool_item.effective_input().clone());
 
     let initial = ToolCall::new(tool_id.clone(), tool_title(tool_name))
         .kind(tool_kind(tool_name))
@@ -986,6 +986,24 @@ mod tests {
             panic!("expected tool call update");
         };
         update
+    }
+
+    #[test]
+    fn replay_projects_deferred_wire_call_to_effective_tool() {
+        let mut item = replay_tool_item("tool-1", "CallDeferredTool", Some("completed"), None);
+        item.tool_call.input = serde_json::json!({
+            "tool_name": "WebFetch",
+            "args": { "url": "https://example.test" }
+        });
+        let updates = tool_call_replay_updates(&item);
+        let SessionUpdate::ToolCall(tool_call) = &updates[0] else {
+            panic!("expected initial tool call");
+        };
+        assert_eq!(tool_call.title, tool_title("WebFetch"));
+        assert_eq!(
+            tool_call.raw_input,
+            Some(serde_json::json!({ "url": "https://example.test" }))
+        );
     }
 
     #[test]

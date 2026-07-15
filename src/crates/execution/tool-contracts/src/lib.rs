@@ -32,9 +32,9 @@ pub use bitfun_runtime_ports::{
 };
 pub use deferred_tool::{
     call_deferred_tool_description, call_deferred_tool_input_schema,
-    call_deferred_tool_short_description, parse_call_deferred_tool_input, CallDeferredToolInput,
-    CallDeferredToolInputError, ResolvedToolInvocation, ToolInvocationKind,
-    CALL_DEFERRED_TOOL_NAME,
+    call_deferred_tool_short_description, effective_tool_invocation,
+    parse_call_deferred_tool_input, CallDeferredToolInput, CallDeferredToolInputError,
+    ResolvedToolInvocation, ToolInvocationKind, CALL_DEFERRED_TOOL_NAME,
 };
 pub use execution_gate::{
     validate_tool_execution_admission, ToolExecutionAdmissionRejection,

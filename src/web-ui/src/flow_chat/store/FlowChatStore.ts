@@ -221,6 +221,41 @@ function normalizePersistedToolInterruptionReason(
   return isTransientToolStatus(status) ? 'app_restart' : undefined;
 }
 
+const DEFERRED_TOOL_GATEWAY_NAME = 'CallDeferredTool';
+
+function projectPersistedToolIdentity(tool: any): {
+  toolName: string;
+  toolCall: any;
+  wireToolName?: string;
+  wireToolCall?: any;
+} {
+  const wireToolName = tool?.toolName;
+  const wireToolCall = tool?.toolCall;
+  const wireInput = tool?.toolCall?.input;
+  if (
+    wireToolName !== DEFERRED_TOOL_GATEWAY_NAME
+    || wireInput === null
+    || typeof wireInput !== 'object'
+    || Array.isArray(wireInput)
+    || typeof wireInput.tool_name !== 'string'
+    || wireInput.tool_name.trim().length === 0
+    || wireInput.args === null
+    || typeof wireInput.args !== 'object'
+    || Array.isArray(wireInput.args)
+    || Object.keys(wireInput).some(key => key !== 'tool_name' && key !== 'args')
+    || !Object.prototype.hasOwnProperty.call(wireInput, 'args')
+  ) {
+    return { toolName: wireToolName, toolCall: wireToolCall };
+  }
+
+  return {
+    toolName: wireInput.tool_name,
+    toolCall: { ...wireToolCall, input: wireInput.args },
+    wireToolName,
+    wireToolCall,
+  };
+}
+
 function flattenRoundAttemptItems(round: ModelRound): AnyFlowItem[] {
   const attempts = sortAttemptEntries(round.attempts ?? []);
   return attempts.flatMap(attempt => attempt.items);
@@ -4457,42 +4492,44 @@ export class FlowChatStore {
             attemptId: text.attemptId,
             attemptIndex: text.attemptIndex,
           })),
-          ...round.toolItems.map((tool: any) => ({
-            id: tool.id,
-            type: 'tool' as const,
-            toolName: tool.toolName,
-            interruptionReason: normalizePersistedToolInterruptionReason(
-              tool.interruptionReason,
-              tool.status,
-            ),
-            toolCall: tool.toolCall,
-            toolResult: tool.toolResult,
-            aiIntent: tool.aiIntent,
-            requiresConfirmation: tool.requiresConfirmation,
-            userConfirmed: tool.userConfirmed,
-            acpPermission: tool.acpPermission,
-            startTime: tool.startTime,
-            confirmationTimeoutAt: tool.confirmationTimeoutAt,
-            endTime: tool.endTime,
-            durationMs: tool.durationMs,
-            queueWaitMs: tool.queueWaitMs,
-            preflightMs: tool.preflightMs,
-            confirmationWaitMs: tool.confirmationWaitMs,
-            executionMs: tool.executionMs,
-            timestamp: tool.startTime,
-            status: normalizeRecoveredToolStatus(
-              tool.status,
-              normalizedTurnStatus,
-              tool.toolResult,
-            ),
-            orderIndex: tool.orderIndex,
-            subagentSessionId: tool.subagentSessionId,
-            subagentDialogTurnId: tool.subagentDialogTurnId,
-            subagentModelId: tool.subagentModelId,
-            subagentModelDisplayName: tool.subagentModelDisplayName,
-            attemptId: tool.attemptId,
-            attemptIndex: tool.attemptIndex,
-          })),
+          ...round.toolItems.map((tool: any) => {
+            const identity = projectPersistedToolIdentity(tool);
+            return {
+              id: tool.id,
+              type: 'tool' as const,
+              ...identity,
+              interruptionReason: normalizePersistedToolInterruptionReason(
+                tool.interruptionReason,
+                tool.status,
+              ),
+              toolResult: tool.toolResult,
+              aiIntent: tool.aiIntent,
+              requiresConfirmation: tool.requiresConfirmation,
+              userConfirmed: tool.userConfirmed,
+              acpPermission: tool.acpPermission,
+              startTime: tool.startTime,
+              confirmationTimeoutAt: tool.confirmationTimeoutAt,
+              endTime: tool.endTime,
+              durationMs: tool.durationMs,
+              queueWaitMs: tool.queueWaitMs,
+              preflightMs: tool.preflightMs,
+              confirmationWaitMs: tool.confirmationWaitMs,
+              executionMs: tool.executionMs,
+              timestamp: tool.startTime,
+              status: normalizeRecoveredToolStatus(
+                tool.status,
+                normalizedTurnStatus,
+                tool.toolResult,
+              ),
+              orderIndex: tool.orderIndex,
+              subagentSessionId: tool.subagentSessionId,
+              subagentDialogTurnId: tool.subagentDialogTurnId,
+              subagentModelId: tool.subagentModelId,
+              subagentModelDisplayName: tool.subagentModelDisplayName,
+              attemptId: tool.attemptId,
+              attemptIndex: tool.attemptIndex,
+            };
+          }),
           ...(round.thinkingItems || []).map((thinking: any) => ({
             id: thinking.id,
             type: 'thinking' as const,

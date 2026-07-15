@@ -321,7 +321,6 @@ mod tests {
                 delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
                 deferred_tools: Vec::new(),
                 loaded_deferred_tool_specs: Vec::new(),
-                catalog_generation: 0,
                 allowed_tools: Vec::new(),
                 runtime_tool_restrictions: Default::default(),
                 steering_interrupt: None,

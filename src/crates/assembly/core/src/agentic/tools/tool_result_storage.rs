@@ -26,12 +26,19 @@ const READ_TOOL_NAME: &str = "Read";
 const BASH_TOOL_NAME: &str = "Bash";
 const SHELL_MAX_TOOL_RESULT_CHARS: usize = 30_000;
 
+fn effective_tool_name(result: &ToolResult) -> &str {
+    result
+        .effective_tool_name
+        .as_deref()
+        .unwrap_or(&result.tool_name)
+}
+
 #[cfg(test)]
 pub(crate) async fn maybe_persist_large_tool_result(
     result: ToolResult,
     context: &ToolUseContext,
 ) -> ToolResult {
-    let effective_tool_name = result.tool_name.clone();
+    let effective_tool_name = effective_tool_name(&result).to_string();
     maybe_persist_large_tool_result_for_tool(result, &effective_tool_name, context).await
 }
 
@@ -112,7 +119,7 @@ pub(crate) async fn apply_round_tool_result_budget(
             Err(error) => {
                 warn!(
                     "Failed to persist round-budget tool result: tool_name={}, tool_id={}, error={}",
-                    result.tool_name, result.tool_id, error
+                    effective_tool_name(result), result.tool_id, error
                 );
             }
         }
@@ -140,7 +147,7 @@ fn collect_round_budget_candidates(results: &[ToolResult]) -> Vec<ToolResultPers
     results
         .iter()
         .enumerate()
-        .filter(|(_, result)| !should_skip_tool_result(result, &result.tool_name))
+        .filter(|(_, result)| !should_skip_tool_result(result, effective_tool_name(result)))
         .filter(|(_, result)| !visible_content_is_compacted(result))
         .map(|(index, result)| ToolResultPersistenceCandidate {
             index,
@@ -203,7 +210,7 @@ async fn persist_tool_result(
 
     debug!(
         "Persisted oversized tool result: tool_name={}, tool_id={}, chars={}, path={}",
-        result.tool_name,
+        effective_tool_name(result),
         result.tool_id,
         serialized.chars().count(),
         path.display()
@@ -400,6 +407,7 @@ mod tests {
         ToolResult {
             tool_id: tool_id.to_string(),
             tool_name: tool_name.to_string(),
+            effective_tool_name: None,
             result: json!({ "content": text }),
             result_for_assistant: Some(text),
             is_error: false,
@@ -412,6 +420,7 @@ mod tests {
         ToolResult {
             tool_id: tool_id.to_string(),
             tool_name: "Bash".to_string(),
+            effective_tool_name: None,
             result: json!({
                 "success": false,
                 "output": output,

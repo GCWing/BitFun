@@ -71,6 +71,17 @@ Pass the exact deferred tool name in tool_name and put only that tool's argument
 pub fn parse_call_deferred_tool_input(
     input: &Value,
 ) -> Result<CallDeferredToolInput, CallDeferredToolInputError> {
+    let (tool_name, args) = parse_call_deferred_tool_input_ref(input)?;
+
+    Ok(CallDeferredToolInput {
+        tool_name: tool_name.to_string(),
+        args: args.clone(),
+    })
+}
+
+fn parse_call_deferred_tool_input_ref(
+    input: &Value,
+) -> Result<(&str, &Value), CallDeferredToolInputError> {
     let object = input
         .as_object()
         .ok_or(CallDeferredToolInputError::InputMustBeObject)?;
@@ -97,10 +108,21 @@ pub fn parse_call_deferred_tool_input(
         return Err(CallDeferredToolInputError::ArgsMustBeObject);
     }
 
-    Ok(CallDeferredToolInput {
-        tool_name: tool_name.to_string(),
-        args: args.clone(),
-    })
+    Ok((tool_name, args))
+}
+
+/// Project a provider-facing invocation to the runtime tool identity without
+/// allocating or duplicating persisted arguments. Invalid gateway payloads
+/// fall back to their wire identity so historical data remains renderable.
+pub fn effective_tool_invocation<'a>(
+    wire_tool_name: &'a str,
+    wire_arguments: &'a Value,
+) -> (&'a str, &'a Value) {
+    if wire_tool_name != CALL_DEFERRED_TOOL_NAME {
+        return (wire_tool_name, wire_arguments);
+    }
+
+    parse_call_deferred_tool_input_ref(wire_arguments).unwrap_or((wire_tool_name, wire_arguments))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

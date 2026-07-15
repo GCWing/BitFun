@@ -1,7 +1,7 @@
 use crate::agentic::persistence::PersistenceManager;
 use crate::service::session::{
     collect_hidden_subagent_cascade, DialogTurnData, DialogTurnKind, ModelRoundData,
-    SessionMetadata, ToolItemData, TurnStatus,
+    SessionMetadata, ToolItemData, ToolItemIdentityExt, TurnStatus,
 };
 use crate::service::session_usage::classifier::classify_tool_usage;
 use crate::service::session_usage::redaction::{
@@ -836,12 +836,14 @@ fn build_tool_breakdown(turns: &[DialogTurnData]) -> Vec<UsageToolBreakdown> {
 
     for turn in turns {
         for tool in iter_turn_tools(turn) {
-            let label = redact_usage_label(&tool.tool_name, 80);
+            let tool_name = tool.effective_name();
+            let tool_input = tool.effective_input();
+            let label = redact_usage_label(tool_name, 80);
             let row = by_tool
                 .entry(label.value.clone())
                 .or_insert_with(|| UsageToolBreakdown {
                     tool_name: label.value.clone(),
-                    category: classify_tool_usage(&tool.tool_name, Some(&tool.tool_call.input)),
+                    category: classify_tool_usage(tool_name, Some(tool_input)),
                     call_count: 0,
                     success_count: 0,
                     error_count: 0,
@@ -1003,7 +1005,7 @@ fn build_file_breakdown_from_tool_inputs(
 
     for turn in turns {
         for tool in iter_turn_tools(turn) {
-            if !is_file_modification_tool(&tool.tool_name) {
+            if !is_file_modification_tool(tool.effective_name()) {
                 continue;
             }
 
@@ -1075,7 +1077,7 @@ fn build_compression_breakdown(turns: &[DialogTurnData]) -> UsageCompressionBrea
         .filter(|turn| turn.kind == DialogTurnKind::ManualCompaction)
         .count() as u64;
     let automatic_compaction_count = iter_tools(turns)
-        .filter(|tool| tool.tool_name.to_lowercase().contains("compaction"))
+        .filter(|tool| tool.effective_name().to_lowercase().contains("compaction"))
         .count() as u64;
 
     UsageCompressionBreakdown {
@@ -1119,7 +1121,7 @@ fn build_error_breakdown(turns: &[DialogTurnData]) -> UsageErrorBreakdown {
                 .as_ref()
                 .is_some_and(|result| !result.success)
         }) {
-            let label = redact_usage_label(&tool.tool_name, 80);
+            let label = redact_usage_label(tool.effective_name(), 80);
             let row = tool_error_counts
                 .entry(label.value.clone())
                 .or_insert_with(|| UsageErrorExample {
@@ -1212,7 +1214,7 @@ fn build_slowest_spans(
         }
 
         for tool in iter_turn_tools(turn) {
-            let label = redact_usage_label(&tool.tool_name, 80);
+            let label = redact_usage_label(tool.effective_name(), 80);
             if let Some(duration_ms) = tool_duration_ms(tool) {
                 spans.push(UsageSlowSpan {
                     label: label.value,
@@ -1321,7 +1323,7 @@ fn tool_duration_ms(tool: &ToolItemData) -> Option<u64> {
 }
 
 fn tool_input_summary(tool: &ToolItemData) -> Option<String> {
-    let input = tool.tool_call.input.as_object()?;
+    let input = tool.effective_input().as_object()?;
     let command = input
         .get("command")
         .and_then(|value| value.as_str())
@@ -1348,7 +1350,7 @@ fn tool_input_summary(tool: &ToolItemData) -> Option<String> {
 }
 
 fn tool_timeout_seconds(tool: &ToolItemData) -> Option<u64> {
-    let input = tool.tool_call.input.as_object()?;
+    let input = tool.effective_input().as_object()?;
     input
         .get("timeout_seconds")
         .and_then(|value| value.as_u64())
@@ -1474,7 +1476,7 @@ fn is_file_modification_tool(tool_name: &str) -> bool {
 }
 
 fn extract_file_path(tool: &ToolItemData) -> Option<String> {
-    let input = tool.tool_call.input.as_object()?;
+    let input = tool.effective_input().as_object()?;
     ["file_path", "path", "filePath", "target_file", "filename"]
         .into_iter()
         .find_map(|key| input.get(key).and_then(|value| value.as_str()))
@@ -1886,6 +1888,30 @@ mod tests {
         assert_eq!(report.models[0].duration_ms, Some(200));
         assert_eq!(report.tools[0].call_count, 1);
         assert_eq!(report.files.files[0].operation_count, 1);
+    }
+
+    #[test]
+    fn report_classifies_deferred_calls_by_effective_identity_and_nested_args() {
+        let request = test_request(None);
+        let tool = test_tool_item_with_input(
+            "tool-deferred",
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            Some(true),
+            120,
+            serde_json::json!({
+                "tool_name": "write_file",
+                "args": { "path": "D:/workspace/bitfun/src/main.rs" }
+            }),
+        );
+        let turn = test_turn_with_tools("turn-1", 0, DialogTurnKind::UserDialog, vec![tool]);
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(report.tools.len(), 1);
+        assert_eq!(report.tools[0].tool_name, "write_file");
+        assert_eq!(report.files.files.len(), 1);
+        assert_eq!(report.files.files[0].path_label, "src/main.rs");
     }
 
     #[test]
