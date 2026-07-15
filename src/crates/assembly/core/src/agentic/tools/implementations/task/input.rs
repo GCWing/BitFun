@@ -74,6 +74,7 @@ pub(super) struct TaskInvocation {
     pub(super) model_id: Option<String>,
     pub(super) timeout_seconds: Option<u64>,
     pub(super) run_in_background: bool,
+    pub(super) allow_review_follow_up: bool,
     pub(super) is_retry: bool,
     pub(super) requested_auto_retry: bool,
 }
@@ -96,7 +97,12 @@ impl TaskTool {
                     "action is not supported for DeepReview Task calls".to_string(),
                 ));
             }
-            for field in ["fork_context", "session_id", "run_in_background"] {
+            for field in [
+                "fork_context",
+                "session_id",
+                "run_in_background",
+                "allow_review_follow_up",
+            ] {
                 if input.get(field).is_some() {
                     return Err(BitFunError::tool(format!(
                         "{field} is not allowed for DeepReview Task calls"
@@ -114,6 +120,7 @@ impl TaskTool {
                 model_id: Self::optional_trimmed_string(input, "model_id")?,
                 timeout_seconds: Self::optional_timeout_seconds(input)?,
                 run_in_background: false,
+                allow_review_follow_up: false,
                 is_retry: input.get("retry").and_then(Value::as_bool).unwrap_or(false),
                 requested_auto_retry: input
                     .get("auto_retry")
@@ -134,6 +141,13 @@ impl TaskTool {
             ));
         }
         let run_in_background = Self::optional_bool(input, "run_in_background")?.unwrap_or(false);
+        let allow_review_follow_up =
+            Self::optional_bool(input, "allow_review_follow_up")?.unwrap_or(false);
+        if action != TaskAction::Cancel && allow_review_follow_up && !run_in_background {
+            return Err(BitFunError::tool(
+                "allow_review_follow_up=true requires run_in_background=true".to_string(),
+            ));
+        }
 
         match action {
             TaskAction::Spawn => {
@@ -179,6 +193,7 @@ impl TaskTool {
                     model_id: Self::optional_trimmed_string(input, "model_id")?,
                     timeout_seconds: None,
                     run_in_background,
+                    allow_review_follow_up,
                     is_retry: false,
                     requested_auto_retry: false,
                 })
@@ -210,6 +225,7 @@ impl TaskTool {
                     model_id: Self::optional_trimmed_string(input, "model_id")?,
                     timeout_seconds: None,
                     run_in_background,
+                    allow_review_follow_up,
                     is_retry: false,
                     requested_auto_retry: false,
                 })
@@ -225,6 +241,7 @@ impl TaskTool {
                         "subagent_type",
                         "model_id",
                         "run_in_background",
+                        "allow_review_follow_up",
                         "retry",
                         "auto_retry",
                         "retry_coverage",
@@ -242,6 +259,7 @@ impl TaskTool {
                     model_id: None,
                     timeout_seconds: None,
                     run_in_background: false,
+                    allow_review_follow_up: false,
                     is_retry: false,
                     requested_auto_retry: false,
                 })
@@ -249,14 +267,28 @@ impl TaskTool {
         }
     }
 
-    pub(super) fn validate_invocation_input(
+    pub(super) async fn validate_invocation_input(
         input: &Value,
         is_deep_review_parent: bool,
+        workspace_root: Option<&std::path::Path>,
     ) -> ValidationResult {
         let invocation = match Self::parse_invocation(input, is_deep_review_parent) {
             Ok(invocation) => invocation,
             Err(error) => return Self::invalid_input(error.to_string()),
         };
+        if invocation.action == TaskAction::Spawn && invocation.run_in_background {
+            if let Some(subagent_type) = invocation.subagent_type.as_deref() {
+                if let Err(error) = validate_background_subagent_delivery(
+                    subagent_type,
+                    workspace_root,
+                    invocation.allow_review_follow_up,
+                )
+                .await
+                {
+                    return Self::invalid_input(error.to_string());
+                }
+            }
+        }
         if invocation.action != TaskAction::Cancel {
             if let Some(result) = Self::validate_prompt_size(input) {
                 return result;

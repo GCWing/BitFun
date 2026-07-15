@@ -128,6 +128,154 @@ fn task_schema_accepts_optional_model_id() {
 }
 
 #[test]
+fn task_schema_exposes_explicit_review_follow_up_control() {
+    let schema = TaskTool::new().input_schema();
+    let follow_up = &schema["properties"]["allow_review_follow_up"];
+
+    assert_eq!(follow_up["type"], "boolean");
+    let description = follow_up["description"]
+        .as_str()
+        .expect("allow_review_follow_up description should be a string");
+    assert!(description.contains("explicitly"));
+    assert!(description.contains("review"));
+    assert!(description.contains("run_in_background=true"));
+    assert!(schema["properties"].get("detach_from_parent").is_none());
+}
+
+#[tokio::test]
+async fn validate_input_rejects_review_background_without_explicit_follow_up_permission() {
+    let validation = TaskTool::new()
+        .validate_input(
+            &json!({
+                "action": "spawn",
+                "description": "Review changes",
+                "prompt": "Review the current diff",
+                "subagent_type": "CodeReview",
+                "run_in_background": true
+            }),
+            None,
+        )
+        .await;
+
+    assert!(!validation.result);
+    let message = validation
+        .message
+        .as_deref()
+        .expect("validation should explain how review delivery works");
+    assert!(message.contains("one final review"));
+    assert!(message.contains("allow_review_follow_up=true"));
+}
+
+#[tokio::test]
+async fn validate_input_accepts_explicit_review_follow_up() {
+    let validation = TaskTool::new()
+        .validate_input(
+            &json!({
+                "action": "spawn",
+                "description": "Review later",
+                "prompt": "Review the current diff",
+                "subagent_type": "CodeReview",
+                "run_in_background": true,
+                "allow_review_follow_up": true
+            }),
+            None,
+        )
+        .await;
+
+    assert!(validation.result, "{:?}", validation.message);
+}
+
+#[tokio::test]
+async fn validate_input_rejects_review_follow_up_without_background_execution() {
+    let validation = TaskTool::new()
+        .validate_input(
+            &json!({
+                "action": "spawn",
+                "description": "Review changes",
+                "prompt": "Review the current diff",
+                "subagent_type": "CodeReview",
+                "allow_review_follow_up": true
+            }),
+            None,
+        )
+        .await;
+
+    assert!(!validation.result);
+    assert!(validation.message.as_deref().is_some_and(|message| {
+        message.contains("allow_review_follow_up=true requires run_in_background=true")
+    }));
+}
+
+#[test]
+fn parse_input_preserves_review_follow_up_for_send_input() {
+    let invocation = TaskTool::parse_invocation(
+        &json!({
+            "action": "send_input",
+            "description": "Continue review later",
+            "prompt": "Continue the review and report when finished",
+            "session_id": "review-session-1",
+            "run_in_background": true,
+            "allow_review_follow_up": true
+        }),
+        false,
+    )
+    .expect("review follow-up send_input should parse");
+
+    assert!(invocation.run_in_background);
+    assert!(invocation.allow_review_follow_up);
+}
+
+#[tokio::test]
+async fn validate_input_preserves_non_review_background_tasks() {
+    let validation = TaskTool::new()
+        .validate_input(
+            &json!({
+                "action": "spawn",
+                "description": "Investigate logs",
+                "prompt": "Inspect the logs and report later",
+                "subagent_type": "GeneralPurpose",
+                "run_in_background": true
+            }),
+            None,
+        )
+        .await;
+
+    assert!(validation.result, "{:?}", validation.message);
+}
+
+#[tokio::test]
+async fn validate_input_rejects_review_follow_up_for_cancel() {
+    let validation = TaskTool::new()
+        .validate_input(
+            &json!({
+                "action": "cancel",
+                "session_id": "subagent-session-1",
+                "allow_review_follow_up": true
+            }),
+            None,
+        )
+        .await;
+
+    assert!(!validation.result);
+    assert!(validation
+        .message
+        .as_deref()
+        .is_some_and(|message| message.contains("allow_review_follow_up is not allowed")));
+}
+
+#[test]
+fn joined_review_tasks_remain_concurrency_safe() {
+    let input = json!({
+        "action": "spawn",
+        "description": "Review changes",
+        "prompt": "Review the current diff",
+        "subagent_type": "CodeReview"
+    });
+
+    assert!(TaskTool::new().is_concurrency_safe(Some(&input)));
+}
+
+#[test]
 fn task_schema_describes_spawn_context_modes_as_exclusive() {
     let description = TaskTool::new().render_description();
     assert!(description.contains("The two modes are mutually exclusive"));
@@ -457,7 +605,13 @@ async fn validate_input_rejects_timeout_for_regular_parent() {
 #[tokio::test]
 async fn launch_review_agent_rejects_task_context_controls() {
     let context = test_tool_context("DeepReview");
-    for field in ["action", "fork_context", "session_id", "run_in_background"] {
+    for field in [
+        "action",
+        "fork_context",
+        "session_id",
+        "run_in_background",
+        "allow_review_follow_up",
+    ] {
         let mut input = json!({
             "description": "delegate",
             "prompt": "Review security-sensitive files",

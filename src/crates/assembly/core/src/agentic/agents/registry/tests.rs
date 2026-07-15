@@ -69,12 +69,97 @@ fn test_project_entry(id: &str, model: &str) -> AgentEntry {
     }
 }
 
+fn test_project_custom_entry(id: &str, review: bool) -> AgentEntry {
+    let mut agent = CustomSubagent::new(
+        id.to_string(),
+        "Project custom subagent".to_string(),
+        vec!["Read".to_string()],
+        "prompt".to_string(),
+        review,
+        format!("{id}.md"),
+        CustomSubagentKind::Project,
+    );
+    agent.data.review = review;
+
+    AgentEntry {
+        category: AgentCategory::SubAgent,
+        source: AgentSource::Project,
+        subagent_source: Some(SubAgentSource::Project),
+        agent: Arc::new(agent),
+        visibility_policy: SubagentVisibilityPolicy::public(),
+        custom_config: Some(CustomSubagentConfig {
+            model: "fast".to_string(),
+        }),
+    }
+}
+
 fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str, model: &str) {
     let mut entries = HashMap::new();
     entries.insert(id.to_string(), test_project_entry(id, model));
     registry
         .write_project_subagents()
         .insert(workspace.to_path_buf(), entries);
+}
+
+#[tokio::test]
+async fn review_lookup_is_scoped_to_the_requested_workspace() {
+    let registry = AgentRegistry::new();
+    let review_workspace = PathBuf::from("review-workspace");
+    let ordinary_workspace = PathBuf::from("ordinary-workspace");
+    let agent_id = "SharedProjectAgent";
+
+    registry.write_project_subagents().insert(
+        review_workspace.clone(),
+        HashMap::from([(
+            agent_id.to_string(),
+            test_project_custom_entry(agent_id, true),
+        )]),
+    );
+    registry.write_project_subagents().insert(
+        ordinary_workspace.clone(),
+        HashMap::from([(
+            agent_id.to_string(),
+            test_project_custom_entry(agent_id, false),
+        )]),
+    );
+
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, Some(&review_workspace))
+            .await,
+        Some(true)
+    );
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, Some(&ordinary_workspace))
+            .await,
+        Some(false)
+    );
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, None)
+            .await,
+        None,
+        "a project agent must not leak into an unrelated workspace lookup"
+    );
+}
+
+#[tokio::test]
+async fn review_lookup_cold_loads_the_requested_project_registry() {
+    let env = CustomAgentTestEnv::new("bitfun-project-review-lookup");
+    let registry = AgentRegistry::new();
+    let agent_id = "ProjectReviewer";
+    write_project_custom_review_subagent(
+        &env.workspace_agents_dir.join("project-reviewer.md"),
+        agent_id,
+    );
+
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, Some(&env.workspace_root))
+            .await,
+        Some(true)
+    );
 }
 
 #[test]
@@ -940,6 +1025,25 @@ fn write_project_custom_subagent(path: &Path, id: &str) {
     subagent
         .save_to_file(None)
         .expect("project subagent markdown should save");
+}
+
+fn write_project_custom_review_subagent(path: &Path, id: &str) {
+    let mut subagent = CustomSubagent::new_with_id(
+        id.to_string(),
+        id.to_string(),
+        "Project review subagent".to_string(),
+        vec!["Read".to_string()],
+        "Review the relevant files.".to_string(),
+        true,
+        path.to_string_lossy().to_string(),
+        CustomSubagentKind::Project,
+        "fast".to_string(),
+        UserContextPolicy::empty().with_workspace_instructions(),
+    );
+    subagent.data.review = true;
+    subagent
+        .save_to_file(None)
+        .expect("project review subagent markdown should save");
 }
 
 fn unique_suffix() -> String {

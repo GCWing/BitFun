@@ -94,6 +94,25 @@ fn is_review_agent_type(agent_type: &str) -> bool {
     )
 }
 
+pub(crate) async fn validate_background_subagent_delivery(
+    agent_type: &str,
+    workspace_root: Option<&Path>,
+    allow_review_follow_up: bool,
+) -> BitFunResult<()> {
+    let is_review = get_agent_registry()
+        .get_subagent_is_review_for_workspace(agent_type, workspace_root)
+        .await
+        .unwrap_or(false);
+    if !is_review || allow_review_follow_up {
+        return Ok(());
+    }
+
+    Err(BitFunError::Validation(
+        "Reviews wait for results by default so one final review can be returned. Retry without run_in_background. Only when the user explicitly asked not to wait, retry with run_in_background=true and allow_review_follow_up=true."
+            .to_string(),
+    ))
+}
+
 fn turn_review_manifest_for_agent(
     metadata: Option<&serde_json::Value>,
     agent_type: &str,
@@ -5964,6 +5983,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         &self,
         target_session_id: &str,
         parent_session_id: &str,
+        background_allow_review_follow_up: Option<bool>,
     ) -> BitFunResult<Session> {
         let session = match self.session_manager.get_session(target_session_id) {
             Some(session) => session,
@@ -5978,6 +5998,83 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             parent_session_id
                         ))
                     })?;
+                if let Some(allow_review_follow_up) = background_allow_review_follow_up {
+                    let metadata = self
+                        .session_manager
+                        .load_session_metadata(&binding.session_storage_dir(), target_session_id)
+                        .await?
+                        .ok_or_else(|| {
+                            BitFunError::NotFound(format!(
+                                "Session metadata not found: {}",
+                                target_session_id
+                            ))
+                        })?;
+                    if !metadata.is_subagent() {
+                        return Err(BitFunError::Validation(format!(
+                            "Subagent execution target must be a subagent session: {}",
+                            target_session_id
+                        )));
+                    }
+                    let created_by_marker = format!("session-{parent_session_id}");
+                    let owned_subagent = session_lineage_matches_parent(
+                        metadata.relationship.as_ref(),
+                        parent_session_id,
+                    ) || metadata.created_by.as_deref()
+                        == Some(created_by_marker.as_str());
+                    if !owned_subagent {
+                        return Err(BitFunError::Validation(format!(
+                            "Subagent session '{}' was not created by parent session '{}'",
+                            target_session_id, parent_session_id
+                        )));
+                    }
+                    validate_background_subagent_delivery(
+                        &metadata.agent_type,
+                        metadata
+                            .workspace_path
+                            .as_deref()
+                            .map(Path::new)
+                            .or(Some(binding.root_path())),
+                        allow_review_follow_up,
+                    )
+                    .await?;
+
+                    let (session_view, _, _, _) = self
+                        .session_manager
+                        .restore_internal_session_view_from_storage_path_tail_timed(
+                            &binding.session_storage_dir(),
+                            target_session_id,
+                            0,
+                        )
+                        .await?;
+                    if session_view.kind != SessionKind::Subagent {
+                        return Err(BitFunError::Validation(format!(
+                            "Subagent execution target must be a subagent session: {}",
+                            target_session_id
+                        )));
+                    }
+                    if !session_created_by_parent(&session_view, parent_session_id)
+                        && !session_lineage_matches_parent(
+                            metadata.relationship.as_ref(),
+                            parent_session_id,
+                        )
+                    {
+                        return Err(BitFunError::Validation(format!(
+                            "Subagent session '{}' was not created by parent session '{}'",
+                            target_session_id, parent_session_id
+                        )));
+                    }
+                    validate_background_subagent_delivery(
+                        &session_view.agent_type,
+                        session_view
+                            .config
+                            .workspace_path
+                            .as_deref()
+                            .map(Path::new)
+                            .or(Some(binding.root_path())),
+                        allow_review_follow_up,
+                    )
+                    .await?;
+                }
                 self.session_manager
                     .restore_internal_session_from_storage_path(
                         &binding.session_storage_dir(),
@@ -6009,6 +6106,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Subagent session is in error state and cannot be reused: {}",
                 target_session_id
             )));
+        }
+
+        if let Some(allow_review_follow_up) = background_allow_review_follow_up {
+            validate_background_subagent_delivery(
+                &session.agent_type,
+                session.config.workspace_path.as_deref().map(Path::new),
+                allow_review_follow_up,
+            )
+            .await?;
         }
 
         Ok(session)
@@ -6089,6 +6195,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     async fn resolve_hidden_subagent_execution_request(
         &self,
         request: SubagentExecutionRequest,
+        background_allow_review_follow_up: Option<bool>,
     ) -> BitFunResult<HiddenSubagentExecutionRequest> {
         let task_description = request.task_description.trim().to_string();
         if task_description.is_empty() {
@@ -6129,6 +6236,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         .ensure_subagent_session_loaded_for_reuse(
                             target_session_id,
                             &parent_session_id,
+                            background_allow_review_follow_up,
                         )
                         .await?;
                     if let Some(model_id) = model_id.as_deref() {
@@ -6184,6 +6292,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             .to_string(),
                     )
                 })?;
+                if let Some(allow_review_follow_up) = background_allow_review_follow_up {
+                    validate_background_subagent_delivery(
+                        &agent_type,
+                        Some(Path::new(&workspace_path)),
+                        allow_review_follow_up,
+                    )
+                    .await?;
+                }
 
                 Ok(HiddenSubagentExecutionRequest {
                     target_session_id: None,
@@ -6229,6 +6345,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 let snapshot = self
                     .capture_fork_agent_context_snapshot(&request.subagent_parent_info.session_id)
                     .await?;
+                if let Some(allow_review_follow_up) = background_allow_review_follow_up {
+                    validate_background_subagent_delivery(
+                        &snapshot.parent_agent_type,
+                        Some(Path::new(&snapshot.workspace_path)),
+                        allow_review_follow_up,
+                    )
+                    .await?;
+                }
                 let mut session_config = snapshot.build_child_session_config(None);
                 if let Some(model_id) = model_id {
                     session_config.model_id = Some(model_id);
@@ -6358,7 +6482,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         request: SubagentExecutionRequest,
     ) -> BitFunResult<HiddenSubagentExecutionRequest> {
         let request = self
-            .resolve_hidden_subagent_execution_request(request)
+            .resolve_hidden_subagent_execution_request(request, None)
             .await?;
         self.prepare_hidden_subagent_execution_request(request)
             .await
@@ -6423,7 +6547,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         parent_session_id: &str,
         subagent_session_id: &str,
     ) -> BitFunResult<usize> {
-        self.ensure_subagent_session_loaded_for_reuse(subagent_session_id, parent_session_id)
+        self.ensure_subagent_session_loaded_for_reuse(subagent_session_id, parent_session_id, None)
             .await?;
 
         let controls: Vec<(String, BackgroundSubagentTaskControl)> = self
@@ -6557,9 +6681,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         &self,
         request: SubagentExecutionRequest,
         timeout_seconds: Option<u64>,
+        allow_review_follow_up: bool,
     ) -> BitFunResult<BackgroundSubagentStartResult> {
         let request = self
-            .resolve_hidden_subagent_execution_request(request)
+            .resolve_hidden_subagent_execution_request(request, Some(allow_review_follow_up))
             .await?;
         let request = self
             .prepare_hidden_subagent_execution_request(request)
@@ -7663,11 +7788,12 @@ mod tests {
     use super::{
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
-        should_require_tool_confirmation, turn_review_manifest_for_agent, ConversationCoordinator,
-        SubagentExecutionRequest,
+        should_require_tool_confirmation, turn_review_manifest_for_agent,
+        validate_background_subagent_delivery, ConversationCoordinator, SubagentExecutionRequest,
     };
+    use crate::agentic::agents::{CustomSubagent, CustomSubagentKind, UserContextPolicy};
     use crate::agentic::core::{
-        InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
+        InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind, Session,
         SessionConfig, SessionKind,
     };
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
@@ -7687,6 +7813,7 @@ mod tests {
     use crate::agentic::TurnSkillAgentSnapshot;
     use crate::infrastructure::PathManager;
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
+    use crate::service::session::SessionMetadata;
     use bitfun_runtime_ports::{
         AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionRequest,
         AgentSubmissionSource, DelegationPolicy, DialogQueuePriority, DialogSubmissionPolicy,
@@ -7783,6 +7910,426 @@ mod tests {
         assert_eq!(normalize_subagent_max_concurrency(0), 1);
         assert_eq!(normalize_subagent_max_concurrency(5), 5);
         assert_eq!(normalize_subagent_max_concurrency(usize::MAX), 64);
+    }
+
+    #[tokio::test]
+    async fn review_background_delivery_requires_explicit_follow_up_permission() {
+        let error = validate_background_subagent_delivery("CodeReview", None, false)
+            .await
+            .expect_err("review background delivery should require explicit follow-up permission");
+
+        assert!(error.to_string().contains("one final review"));
+        assert!(error.to_string().contains("allow_review_follow_up=true"));
+        assert!(
+            validate_background_subagent_delivery("CodeReview", None, true)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn explicit_review_follow_up_allows_fresh_background_resolution() {
+        let (coordinator, _) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-review-follow-up-fresh-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let request = SubagentExecutionRequest {
+            task_description: "Review the current diff later".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: None,
+            subagent_type: Some("CodeReview".to_string()),
+            workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+            model_id: None,
+            subagent_parent_info: SubagentParentInfo {
+                session_id: "parent-session".to_string(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let resolved = coordinator
+            .resolve_hidden_subagent_execution_request(request, Some(true))
+            .await
+            .expect("explicit review follow-up should resolve a fresh background request");
+
+        assert_eq!(resolved.agent_type, "CodeReview");
+        assert!(resolved.target_session_id.is_none());
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn explicit_review_follow_up_allows_reused_background_resolution() {
+        let (coordinator, _) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-review-follow-up-reuse-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let review_session = coordinator
+            .create_hidden_agent_session(
+                None,
+                "Reusable review".to_string(),
+                "CodeReview".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                Some("session-parent-session".to_string()),
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("review session should be created");
+        let request = SubagentExecutionRequest {
+            task_description: "Continue the review later".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: Some(review_session.session_id.clone()),
+            subagent_type: None,
+            workspace_path: None,
+            model_id: None,
+            subagent_parent_info: SubagentParentInfo {
+                session_id: "parent-session".to_string(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let resolved = coordinator
+            .resolve_hidden_subagent_execution_request(request, Some(true))
+            .await
+            .expect("explicit review follow-up should resolve a reused background request");
+
+        assert_eq!(
+            resolved.target_session_id.as_deref(),
+            Some(review_session.session_id.as_str())
+        );
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn non_review_background_delivery_preserves_existing_behavior() {
+        assert!(
+            validate_background_subagent_delivery("GeneralPurpose", None, false)
+                .await
+                .is_ok()
+        );
+        assert!(
+            validate_background_subagent_delivery("ReviewFixer", None, false)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn continued_review_session_cannot_run_in_background_implicitly() {
+        let (coordinator, session_manager) = test_coordinator();
+        let review_session = coordinator
+            .create_hidden_agent_session(
+                None,
+                "Reusable review".to_string(),
+                "CodeReview".to_string(),
+                SessionConfig {
+                    model_id: Some("primary".to_string()),
+                    workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                Some("session-parent-session".to_string()),
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("review session should be created");
+        let request = SubagentExecutionRequest {
+            task_description: "Continue reviewing the current diff".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: Some(review_session.session_id.clone()),
+            subagent_type: None,
+            workspace_path: None,
+            model_id: Some("fast".to_string()),
+            subagent_parent_info: SubagentParentInfo {
+                session_id: "parent-session".to_string(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let error = coordinator
+            .start_background_subagent(request, None, false)
+            .await
+            .expect_err(
+                "continued review should not run in the background without explicit intent",
+            );
+
+        assert!(error.to_string().contains("one final review"));
+        assert!(error.to_string().contains("allow_review_follow_up=true"));
+        assert_eq!(
+            session_manager
+                .get_session(&review_session.session_id)
+                .expect("review session should remain available")
+                .config
+                .model_id
+                .as_deref(),
+            Some("primary"),
+            "rejected delivery must not mutate the review session model"
+        );
+    }
+
+    #[tokio::test]
+    async fn cold_review_session_is_rejected_before_full_restore() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-cold-review-background-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+        let storage_binding = session_manager
+            .resolve_session_workspace_binding(&parent_session.session_id)
+            .await
+            .expect("parent workspace binding should resolve");
+        let review_session_id = format!("session-cold-review-{}", uuid::Uuid::new_v4());
+        let mut metadata = SessionMetadata::new(
+            review_session_id.clone(),
+            "Cold review".to_string(),
+            "CodeReview".to_string(),
+            "primary".to_string(),
+        );
+        metadata.session_kind = SessionKind::Subagent;
+        metadata.created_by = Some(format!("session-{}", parent_session.session_id));
+        metadata.workspace_path = Some(workspace_path.to_string_lossy().into_owned());
+        metadata.relationship = Some(super::build_subagent_session_relationship(
+            Some(&SubagentParentInfo {
+                session_id: parent_session.session_id.clone(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            }),
+            "CodeReview",
+        ));
+        session_manager
+            .save_session_metadata(&storage_binding.session_storage_dir(), &metadata)
+            .await
+            .expect("cold review metadata should be persisted");
+        assert!(session_manager.get_session(&review_session_id).is_none());
+
+        let request = SubagentExecutionRequest {
+            task_description: "Continue the cold review".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: Some(review_session_id.clone()),
+            subagent_type: None,
+            workspace_path: None,
+            model_id: Some("fast".to_string()),
+            subagent_parent_info: SubagentParentInfo {
+                session_id: parent_session.session_id.clone(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let error = coordinator
+            .resolve_hidden_subagent_execution_request(request, Some(false))
+            .await
+            .expect_err("cold review should reject background delivery before restore");
+
+        assert!(error.to_string().contains("one final review"));
+        assert!(session_manager.get_session(&review_session_id).is_none());
+        let persisted = session_manager
+            .load_session_metadata(&storage_binding.session_storage_dir(), &review_session_id)
+            .await
+            .expect("cold review metadata should remain readable")
+            .expect("cold review metadata should remain present");
+        assert_eq!(persisted.model_name, "primary");
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn cold_subagent_owned_by_another_parent_is_rejected_before_restore() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-cold-foreign-subagent-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+        let storage_binding = session_manager
+            .resolve_session_workspace_binding(&parent_session.session_id)
+            .await
+            .expect("parent workspace binding should resolve");
+        let review_session_id = format!("session-foreign-review-{}", uuid::Uuid::new_v4());
+        let mut metadata = SessionMetadata::new(
+            review_session_id.clone(),
+            "Foreign review".to_string(),
+            "CodeReview".to_string(),
+            "primary".to_string(),
+        );
+        metadata.session_kind = SessionKind::Subagent;
+        metadata.created_by = Some("session-another-parent".to_string());
+        metadata.workspace_path = Some(workspace_path.to_string_lossy().into_owned());
+        session_manager
+            .save_session_metadata(&storage_binding.session_storage_dir(), &metadata)
+            .await
+            .expect("foreign review metadata should be persisted");
+
+        let request = SubagentExecutionRequest {
+            task_description: "Continue a foreign review".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: Some(review_session_id.clone()),
+            subagent_type: None,
+            workspace_path: None,
+            model_id: None,
+            subagent_parent_info: SubagentParentInfo {
+                session_id: parent_session.session_id.clone(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let error = coordinator
+            .resolve_hidden_subagent_execution_request(request, Some(false))
+            .await
+            .expect_err("foreign subagent should fail ownership preflight");
+
+        assert!(error
+            .to_string()
+            .contains("was not created by parent session"));
+        assert!(session_manager.get_session(&review_session_id).is_none());
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn cold_review_uses_read_only_session_workspace_before_restore() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-cold-review-workspace-preflight-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let review_workspace = workspace_path.join("review-workspace");
+        let reviewer_path = review_workspace
+            .join(".bitfun")
+            .join("agents")
+            .join("cold-reviewer.md");
+        std::fs::create_dir_all(
+            reviewer_path
+                .parent()
+                .expect("reviewer path should have a parent"),
+        )
+        .expect("review agent directory should exist");
+        let mut reviewer = CustomSubagent::new_with_id(
+            "ColdWorkspaceReviewer".to_string(),
+            "ColdWorkspaceReviewer".to_string(),
+            "Project review subagent".to_string(),
+            vec!["Read".to_string()],
+            "Review the relevant files.".to_string(),
+            true,
+            reviewer_path.to_string_lossy().into_owned(),
+            CustomSubagentKind::Project,
+            "fast".to_string(),
+            UserContextPolicy::empty().with_workspace_instructions(),
+        );
+        reviewer.data.review = true;
+        reviewer
+            .save_to_file(None)
+            .expect("project review subagent should save");
+
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+        let storage_binding = session_manager
+            .resolve_session_workspace_binding(&parent_session.session_id)
+            .await
+            .expect("parent workspace binding should resolve");
+        let review_session_id = format!("session-workspace-review-{}", uuid::Uuid::new_v4());
+        let mut persisted_session = Session::new_with_id(
+            review_session_id.clone(),
+            "Workspace review".to_string(),
+            "ColdWorkspaceReviewer".to_string(),
+            SessionConfig {
+                workspace_path: Some(review_workspace.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+        );
+        persisted_session.kind = SessionKind::Subagent;
+        persisted_session.created_by = Some(format!("session-{}", parent_session.session_id));
+        let persistence_manager = PersistenceManager::new(Arc::new(
+            PathManager::new().expect("path manager should initialize"),
+        ))
+        .expect("persistence manager should initialize");
+        persistence_manager
+            .save_session(&storage_binding.session_storage_dir(), &persisted_session)
+            .await
+            .expect("cold review session should be persisted");
+        let mut metadata = session_manager
+            .load_session_metadata(&storage_binding.session_storage_dir(), &review_session_id)
+            .await
+            .expect("cold review metadata should load")
+            .expect("cold review metadata should exist");
+        metadata.workspace_path = Some(workspace_path.to_string_lossy().into_owned());
+        session_manager
+            .save_session_metadata(&storage_binding.session_storage_dir(), &metadata)
+            .await
+            .expect("metadata workspace should be overridden for the mismatch fixture");
+
+        let request = SubagentExecutionRequest {
+            task_description: "Continue the workspace review".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: Some(review_session_id.clone()),
+            subagent_type: None,
+            workspace_path: None,
+            model_id: None,
+            subagent_parent_info: SubagentParentInfo {
+                session_id: parent_session.session_id.clone(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let error = coordinator
+            .resolve_hidden_subagent_execution_request(request, Some(false))
+            .await
+            .expect_err("stored review workspace should be checked before full restore");
+
+        assert!(error.to_string().contains("one final review"));
+        assert!(session_manager.get_session(&review_session_id).is_none());
+        let _ = std::fs::remove_dir_all(workspace_path);
     }
 
     #[test]
