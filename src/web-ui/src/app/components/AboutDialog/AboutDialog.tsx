@@ -21,6 +21,7 @@ import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDi
 import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
 import './AboutDialog.scss';
+import './AboutDialogLinks.scss';
 
 const log = createLogger('AboutDialog');
 

@@ -1,0 +1,40 @@
+/**
+ * About dialog footer link styles.
+ * Isolated into its own stylesheet so merges that re-resolve AboutDialog.scss
+ * do not silently drop the footer link styling (which previously caused the
+ * open-source / user-agreement buttons to fall back to default button chrome).
+ */
+
+@use '../../../component-library/styles/tokens' as *;
+
+// ==================== Footer links ====================
+
+.bitfun-about-dialog__links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bitfun-about-dialog__link {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+
+  &:hover {
+    color: var(--color-accent-400);
+    text-decoration: underline;
+  }
+}
+
+.bitfun-about-dialog__link-sep {
+  font-size: 11px;
+  color: var(--border-subtle);
+}
