@@ -205,6 +205,7 @@ fn generate_doc_hidden_agent_defaults_to_fast() {
 fn deep_review_family_defaults_to_fast() {
     for agent_type in [
         "DeepReview",
+        "ReviewGeneral",
         "ReviewBusinessLogic",
         "ReviewPerformance",
         "ReviewSecurity",
@@ -239,6 +240,7 @@ fn built_in_readonly_reviewers_are_marked_as_review_agents() {
     let registry = AgentRegistry::new();
 
     for agent_type in [
+        "ReviewGeneral",
         "ReviewBusinessLogic",
         "ReviewPerformance",
         "ReviewSecurity",

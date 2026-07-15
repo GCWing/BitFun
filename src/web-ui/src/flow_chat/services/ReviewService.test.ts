@@ -226,6 +226,55 @@ describe('ReviewService', () => {
     expect(mocks.buildDeepReviewLaunchFromSessionFiles).not.toHaveBeenCalled();
   });
 
+  it('uses a managed foreground-waited review plan for a large target', async () => {
+    const files = Array.from({ length: 120 }, (_, index) => `src/file-${index}.ts`);
+    const manifest = runManifest('deep');
+    mocks.resolveCurrentFileReviewSnapshot.mockImplementationOnce(
+      async (_workspacePath, target) => ({
+        target,
+        changeStats: {
+          fileCount: files.length,
+          totalLinesChanged: 2_400,
+          lineCountSource: 'diff_stat' as const,
+        },
+        targetEvidence: {
+          ...targetEvidence(),
+          files: files.map((path) => ({
+            path,
+            status: 'modified' as const,
+            completeness: 'complete' as const,
+          })),
+        },
+      }),
+    );
+    mocks.buildDeepReviewLaunchFromSessionFiles.mockResolvedValue({
+      prompt: 'managed review prompt',
+      runManifest: manifest,
+    });
+
+    const prepared = await prepareReviewLaunchFromSessionFiles(files, {
+      workspacePath: 'D:/workspace/project',
+    });
+
+    expect(prepared).toMatchObject({
+      mode: 'managed',
+      level: 'l1',
+      strategyLevel: 'deep',
+      requiresConsent: false,
+      runManifest: manifest,
+    });
+    expect(mocks.buildDeepReviewLaunchFromSessionFiles).toHaveBeenCalledWith(
+      files,
+      undefined,
+      'D:/workspace/project',
+      expect.objectContaining({
+        strategyOverride: 'deep',
+        managedBatching: true,
+        includeQualityGate: false,
+      }),
+    );
+  });
+
   it('maps legacy DeepReview commands to the explicit L3 path', async () => {
     const manifest = runManifest('deep');
     mocks.resolveSlashCommandReviewTarget.mockResolvedValue({
@@ -252,6 +301,7 @@ describe('ReviewService', () => {
       level: 'l3',
       strategyLevel: 'deep',
       runManifest: manifest,
+      requiresConsent: false,
     });
     expect(mocks.buildDeepReviewLaunchFromSlashCommand).toHaveBeenCalledWith(
       '/DeepReview focus on auth',
@@ -292,7 +342,12 @@ describe('ReviewService', () => {
     );
   });
 
-  it('rejects targets that exceed the evidence file boundary before quality selection', async () => {
+  it('reviews partial evidence instead of rejecting an oversized target', async () => {
+    const manifest = runManifest('deep');
+    mocks.buildDeepReviewLaunchFromSessionFiles.mockResolvedValue({
+      prompt: 'managed partial review prompt',
+      runManifest: manifest,
+    });
     mocks.resolveCurrentFileReviewSnapshot.mockImplementationOnce(
       async (_workspacePath, target) => ({
         target,
@@ -309,7 +364,11 @@ describe('ReviewService', () => {
     await expect(prepareReviewLaunchFromSessionFiles(
       ['src/file.ts'],
       { workspacePath: 'D:/workspace/project' },
-    )).rejects.toThrow('exceeds the bounded evidence file limit');
+    )).resolves.toMatchObject({
+      mode: 'managed',
+      requiresConsent: false,
+      runManifest: manifest,
+    });
   });
 
   it('blocks remote Git ranges before spending reviewer capacity', async () => {
@@ -554,6 +613,46 @@ describe('ReviewService', () => {
     }));
     expect(mocks.buildDeepReviewLaunchFromSessionFiles).not.toHaveBeenCalled();
     expect(mocks.buildDeepReviewLaunchFromSlashCommand).not.toHaveBeenCalled();
+  });
+
+  it('presents a managed L1 runtime as ordinary Review', async () => {
+    const manifest = {
+      ...runManifest('deep'),
+      managedReviewPlan: {
+        version: 1,
+        totalFileCount: 120,
+        plannedFileCount: 120,
+        deferredFileCount: 0,
+        maxFilesPerBatch: 40,
+        maxBatches: 8,
+        maxParallelInstances: 2,
+        workerTimeoutSeconds: 120,
+      },
+    };
+    const prepared = {
+      mode: 'managed' as const,
+      level: 'l1' as const,
+      strategyLevel: 'deep' as const,
+      target: manifest.target,
+      targetEvidence: targetEvidence(),
+      requestedFiles: ['src/file.ts'],
+      prompt: 'managed prompt',
+      runManifest: manifest,
+      requiresConsent: false,
+    };
+
+    await launchPreparedReviewSession({
+      parentSessionId: 'parent',
+      workspacePath: 'D:/workspace/project',
+      displayMessage: '/review',
+      prepared,
+    });
+
+    expect(mocks.launchDeepReviewSession).toHaveBeenCalledWith(expect.objectContaining({
+      childSessionName: 'Review',
+      presentationKind: 'review',
+      runManifest: manifest,
+    }));
   });
 
   it('preserves a standard review child when first-message acceptance is uncertain', async () => {

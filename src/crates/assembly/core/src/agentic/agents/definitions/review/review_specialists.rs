@@ -14,6 +14,16 @@ fn reviewer_tool_exposure_overrides() -> AgentToolPolicyOverrides {
 }
 
 define_readonly_subagent_with_overrides!(
+    GeneralReviewerAgent,
+    "ReviewGeneral",
+    "General Review Worker",
+    r#"Read-only general review worker for one bounded managed-Review shard. It checks correctness, security, performance, architecture, frontend contracts, and tests within only the assigned files, then returns evidence and exact coverage to the owning Review agent."#,
+    "review_general_agent",
+    &["Read", "Grep", "Glob", "LS", "GetFileDiff"],
+    reviewer_tool_exposure_overrides()
+);
+
+define_readonly_subagent_with_overrides!(
     BusinessLogicReviewerAgent,
     REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
     "Business Logic Reviewer",
@@ -77,7 +87,7 @@ define_readonly_subagent_with_overrides!(
 mod tests {
     use super::{
         ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
-        PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
+        GeneralReviewerAgent, PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
     };
     use crate::agentic::agents::{Agent, UserContextPolicy};
 
@@ -85,6 +95,7 @@ mod tests {
     fn specialist_reviewers_use_workspace_context_and_instructions() {
         let agents: Vec<Box<dyn Agent>> = vec![
             Box::new(BusinessLogicReviewerAgent::new()),
+            Box::new(GeneralReviewerAgent::new()),
             Box::new(PerformanceReviewerAgent::new()),
             Box::new(SecurityReviewerAgent::new()),
             Box::new(ArchitectureReviewerAgent::new()),

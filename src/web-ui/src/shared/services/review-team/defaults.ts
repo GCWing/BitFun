@@ -205,6 +205,7 @@ export const CORE_ROLE_IDS = new Set(
 export const DISALLOWED_REVIEW_TEAM_MEMBER_IDS = new Set<string>([
   ...CORE_ROLE_IDS,
   'DeepReview',
+  'ReviewGeneral',
   'ReviewFixer',
 ]);
 
@@ -225,6 +226,7 @@ export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   disallowedExtraSubagentIds: [...DISALLOWED_REVIEW_TEAM_MEMBER_IDS],
   hiddenAgentIds: [
     'DeepReview',
+    'ReviewGeneral',
     ...DEFAULT_REVIEW_TEAM_CORE_ROLES.map((role) => role.subagentId),
   ],
 };

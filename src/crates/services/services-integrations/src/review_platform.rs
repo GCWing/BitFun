@@ -34,8 +34,8 @@ const MAX_PR_PAGE_SIZE: u32 = 50;
 const PROVIDER_ENRICH_CONCURRENCY: usize = 4;
 const MAX_CI_LOG_CHARS: usize = 80_000;
 const MAX_GITLAB_CI_TRACE_BYTES: usize = 512 * 1024;
-const MAX_REVIEW_TARGET_FILES: usize = 500;
 const MAX_REVIEW_TARGET_PAGES: usize = 10;
+const MAX_REVIEW_TARGET_LIST_ITEMS: usize = MAX_REVIEW_TARGET_PAGES * 100;
 const MAX_REVIEW_TARGET_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_REVIEW_FILE_DIFF_CHARS: usize = 80_000;
 const DEFAULT_ISSUE_PAGE: u32 = 1;
@@ -1519,7 +1519,7 @@ async fn github_review_target_parts(
                 .query(&[("per_page", "100"), ("page", &page)])
         },
         github_next_page,
-        MAX_REVIEW_TARGET_FILES.saturating_add(1),
+        MAX_REVIEW_TARGET_LIST_ITEMS,
     )
     .await?;
     let confirmed_detail =
@@ -1562,7 +1562,7 @@ async fn github_review_file_parts(
         if file_page_hint.is_some() {
             100
         } else {
-            MAX_REVIEW_TARGET_FILES
+            MAX_REVIEW_TARGET_LIST_ITEMS
         },
         file_path,
         github_file_from_value,
@@ -1597,7 +1597,7 @@ async fn gitlab_review_target_parts(
                 .query(&[("per_page", "100"), ("page", &page)])
         },
         gitlab_next_page,
-        MAX_REVIEW_TARGET_FILES.saturating_add(1),
+        MAX_REVIEW_TARGET_LIST_ITEMS,
     )
     .await?;
     let files = array_items(&diffs)
@@ -1639,7 +1639,7 @@ async fn gitlab_review_file_parts(
         if file_page_hint.is_some() {
             100
         } else {
-            MAX_REVIEW_TARGET_FILES
+            MAX_REVIEW_TARGET_LIST_ITEMS
         },
         file_path,
         gitlab_file_from_value,
@@ -1673,7 +1673,7 @@ async fn gitcode_review_target_parts(
                 .query(&[("per_page", "100"), ("page", &page)])
         },
         github_next_page,
-        MAX_REVIEW_TARGET_FILES.saturating_add(1),
+        MAX_REVIEW_TARGET_LIST_ITEMS,
     )
     .await?;
     let confirmed_detail =
@@ -1714,7 +1714,7 @@ async fn gitcode_review_file_parts(
         if file_page_hint.is_some() {
             100
         } else {
-            MAX_REVIEW_TARGET_FILES
+            MAX_REVIEW_TARGET_LIST_ITEMS
         },
         file_path,
         gitcode_file_from_value,
@@ -6373,10 +6373,7 @@ where
             break;
         };
         if request_count >= MAX_REVIEW_TARGET_PAGES {
-            return Err(ReviewPlatformError::EvidenceTooLarge {
-                resource: "provider pagination pages".to_string(),
-                limit: MAX_REVIEW_TARGET_PAGES,
-            });
+            break;
         }
         page = next;
     }
@@ -6418,10 +6415,7 @@ where
             break;
         };
         if request_count >= MAX_REVIEW_TARGET_PAGES {
-            return Err(ReviewPlatformError::EvidenceTooLarge {
-                resource: "provider pagination pages".to_string(),
-                limit: MAX_REVIEW_TARGET_PAGES,
-            });
+            break;
         }
         page = next;
     }
@@ -6435,19 +6429,16 @@ fn review_target_from_parts(
     let provider_file_count =
         usize::try_from(pull_request.changed_files.max(0)).unwrap_or_default();
     let known_file_count = provider_file_count.max(files.len());
-    let kept_file_count = files.len().min(MAX_REVIEW_TARGET_FILES);
-    let omitted_file_count = known_file_count.saturating_sub(kept_file_count);
+    let collection_budget_exhausted = files.len() >= MAX_REVIEW_TARGET_LIST_ITEMS;
+    let omitted_file_count = known_file_count
+        .saturating_sub(files.len())
+        .max(usize::from(collection_budget_exhausted));
     let mut limitations = Vec::new();
-    if provider_file_count > files.len() {
+    if provider_file_count > files.len() || collection_budget_exhausted {
         limitations.push("provider_file_list_incomplete".to_string());
     }
-    if omitted_file_count > 0 {
-        limitations.push("review_target_file_limit_exceeded".to_string());
-    }
-
     let files = files
         .into_iter()
-        .take(MAX_REVIEW_TARGET_FILES)
         .map(|file| {
             let diff_available = file_has_complete_patch(&file);
             ReviewPlatformReviewTargetFile {
@@ -6786,17 +6777,16 @@ mod tests {
                         .query(&[("page", &page)])
                 },
                 gitlab_next_page,
-                MAX_REVIEW_TARGET_FILES,
+                MAX_REVIEW_TARGET_LIST_ITEMS,
             ),
         )
         .await
         .expect("bounded pagination must terminate independently of item progress");
 
-        assert!(matches!(
-            result,
-            Err(ReviewPlatformError::EvidenceTooLarge { ref resource, .. })
-                if resource == "provider pagination pages"
-        ));
+        assert_eq!(
+            result.expect("page budget should return partial evidence"),
+            json!([])
+        );
         assert!(
             request_count
                 .recv_timeout(Duration::from_secs(3))
@@ -7252,6 +7242,68 @@ mod tests {
         assert!(target
             .limitations
             .contains(&"provider_file_diff_unavailable".to_string()));
+    }
+
+    #[test]
+    fn review_target_keeps_more_than_five_hundred_provider_files() {
+        let mut pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Large review target",
+            "state": "open",
+            "head": { "ref": "feature", "sha": "2222222222222222222222222222222222222222" },
+            "base": { "ref": "main", "sha": "1111111111111111111111111111111111111111" },
+            "changed_files": 501
+        }));
+        pull_request.changed_files = 501;
+        let files = (0..501)
+            .map(|index| ReviewPlatformFile {
+                path: format!("src/file-{index}.rs"),
+                old_path: None,
+                status: ReviewFileStatus::Modified,
+                additions: 1,
+                deletions: 1,
+                patch: Some("@@ -1 +1 @@\n-old\n+new".to_string()),
+            })
+            .collect();
+
+        let target = review_target_from_parts(pull_request, files);
+
+        assert_eq!(target.files.len(), 501);
+        assert_eq!(target.omitted_file_count, 0);
+        assert!(!target
+            .limitations
+            .contains(&"review_target_file_limit_exceeded".to_string()));
+    }
+
+    #[test]
+    fn review_target_marks_collection_budget_as_partial() {
+        let mut pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Budget-sized review target",
+            "state": "open",
+            "head": { "ref": "feature", "sha": "2222222222222222222222222222222222222222" },
+            "base": { "ref": "main", "sha": "1111111111111111111111111111111111111111" },
+            "changed_files": 1000
+        }));
+        pull_request.changed_files = 1000;
+        let files = (0..MAX_REVIEW_TARGET_LIST_ITEMS)
+            .map(|index| ReviewPlatformFile {
+                path: format!("src/file-{index}.rs"),
+                old_path: None,
+                status: ReviewFileStatus::Modified,
+                additions: 1,
+                deletions: 1,
+                patch: Some("@@ -1 +1 @@\n-old\n+new".to_string()),
+            })
+            .collect();
+
+        let target = review_target_from_parts(pull_request, files);
+
+        assert_eq!(target.files.len(), MAX_REVIEW_TARGET_LIST_ITEMS);
+        assert_eq!(target.omitted_file_count, 1);
+        assert!(target
+            .limitations
+            .contains(&"provider_file_list_incomplete".to_string()));
     }
 
     #[test]

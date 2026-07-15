@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::fmt;
 
-const TARGET_FILE_LIMIT: usize = 500;
+const TARGET_MANIFEST_FILE_LIMIT: usize = 4096;
 const TARGET_LIMITATION_LIMIT: usize = 32;
 const TARGET_STRING_LIMIT: usize = 4096;
 
@@ -237,7 +237,7 @@ impl ReviewTargetEvidence {
             evidence,
             &["files"],
             "reviewTarget.files",
-            TARGET_FILE_LIMIT,
+            TARGET_MANIFEST_FILE_LIMIT,
         )?;
         let mut files = Vec::with_capacity(file_values.len());
         for file in file_values {
@@ -867,6 +867,28 @@ mod tests {
                 "2222222222222222222222222222222222222222"
             ))
         );
+    }
+
+    #[test]
+    fn parses_more_than_five_hundred_target_files() {
+        let mut value = manifest();
+        value["evidencePack"]["reviewTarget"]["files"] = Value::Array(
+            (0..501)
+                .map(|index| {
+                    json!({
+                        "path": format!("src/file-{index}.rs"),
+                        "status": "modified",
+                        "completeness": "complete"
+                    })
+                })
+                .collect(),
+        );
+
+        let evidence = ReviewTargetEvidence::from_manifest(&value)
+            .expect("large target evidence should validate")
+            .expect("large target evidence should exist");
+
+        assert_eq!(evidence.files().len(), 501);
     }
 
     #[test]

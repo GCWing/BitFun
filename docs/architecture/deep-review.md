@@ -2,7 +2,7 @@
 
 ## Scope
 
-DeepReview is the compatibility runtime for `Review: Strict`, the highest-strength mode of the unified Review experience. It remains a read-only child session, but the child is now the primary strict reviewer rather than a dispatcher for a fixed reviewer committee. It should not be presented as a second ordinary product entry next to Review.
+DeepReview is the compatibility runtime for `Review: Strict` and the internal managed-batch executor for scale-limited ordinary Review targets. It remains a read-only child session and must not be presented as a second product entry next to Review. A strict run is reviewed directly by the child; a managed large run executes a deterministic bounded packet plan and returns one aggregate Review result.
 
 Product-facing guardrails are summarized here:
 
@@ -20,17 +20,18 @@ The current implementation has four layers:
 
 The launch adapter is currently desktop-only. Browser/server surfaces hide every Review launch action, including fix follow-up retry, and reject typed Review commands with a clear unsupported-state message until the server owns the same session, Git-target, and policy command contracts; existing review attempts remain viewable. Adding only one RPC method to the current ping-only server would not make the workflow functional. The Review settings route remains visible for navigation compatibility on those surfaces, but renders a read-only desktop-only state and never loads or saves desktop capacity settings.
 
-Review strength follows explicit intent instead of a target-size or risk-score threshold table. Ordinary `Review` always launches one read-only `CodeReview` child. Only an explicit strict intent—initial `/review strict`, the historical `/DeepReview` alias, or a strict fix follow-up—builds a `ReviewTeamRunManifest` and enters the DeepReview runtime. L0 completion checks and Verify evidence remain outside this production contract until the separate Verify exploration defines a trustworthy evidence source.
+Review strength follows explicit intent instead of a risk-score threshold table. An ordinary target of at most 80 prepared files launches one read-only `CodeReview` child. A larger or provider-truncated target remains ordinary L1 Review but uses an internal managed manifest so bounded workers can cover deterministic file batches without blocking launch. Only explicit strict intent changes review strength. L0 completion checks and Verify evidence remain outside this production contract until the separate Verify exploration defines a trustworthy evidence source.
 
-The backend does not resolve the review target or build the launch manifest. The frontend resolves and validates bounded target evidence before either launch path. Strict Review builds one deep L3 manifest and reuses it unchanged for consent and execution. The manifest, session kind, agent type, storage keys, and queue event names stay compatible with historical DeepReview sessions.
+The backend does not resolve the review target or build the launch manifest. The frontend resolves and validates bounded target evidence before launch. Strict Review builds one deep L3 manifest; managed large Review builds one bounded L1 execution manifest. Each manifest is reused unchanged for execution, and neither path requires routine consent.
 
 ## Runtime Roles
 
-`CodeReview` and `DeepReview` are read-only adversarial review identities. `CodeReview` handles ordinary Review as one isolated child and cannot silently expand into multiple reviewers. `DeepReview` is reserved for an explicit strict request, reviews the prepared target directly, may ask one manifest-approved specialist for a focused second perspective, and submits the report; it has no edit, command, Git-mutation, or remediation tools.
+`CodeReview` and `DeepReview` are read-only adversarial review identities. `CodeReview` handles bounded ordinary Review as one isolated child. `DeepReview` handles explicit strict requests and managed large Review plans; it has no edit, command, Git-mutation, or remediation tools.
 
 `src/crates/assembly/core/src/agentic/agents/definitions/review/review_specialists.rs` defines read-only reviewer agents:
 
 - `ReviewBusinessLogic`
+- `ReviewGeneral` (internal managed-batch worker)
 - `ReviewPerformance`
 - `ReviewSecurity`
 - `ReviewArchitecture`
@@ -43,7 +44,7 @@ These agents form an optional specialist pool, not mandatory coverage lanes. A n
 
 ## Launch Flow
 
-Review can be launched from session-file controls or `/review`. Session-file controls and ordinary `/review` launch one standard read-only reviewer regardless of target size or heuristic risk tags. `/review strict` explicitly requests the deep L3 path. Historical `/DeepReview` and `/deepreview` inputs remain compatibility aliases, and a fix follow-up from an existing strict review preserves that explicit strict intent.
+Review can be launched from session-file controls or `/review`. Targets up to 80 prepared files launch one standard read-only reviewer. Larger or provider-partial targets automatically enter the managed L1 path: at most eight module-aware packets of at most 40 files are prepared, at most two run concurrently, and every worker call is foreground-waited by the owning Review turn. Files beyond the run budget remain deferred coverage rather than causing launch rejection. `/review strict` explicitly requests the deep L3 path.
 
 Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 
@@ -55,9 +56,9 @@ Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 - `src/web-ui/src/flow_chat/services/ReviewService.ts` owns the unified prepared plan and launches either one read-only CodeReview child or the existing DeepReview child runtime.
 - Fix follow-up uses the same service to re-evaluate the union of the original review files and files directly changed by `ReviewFixer`. If command, Git, or stdin tools can produce changes that cannot be attributed safely, the UI explicitly falls back to the current workspace diff instead of claiming a narrower scope. It remeasures the selected diff, preserves the original standard-or-strict intent, and opens one fresh isolated reviewer child in the existing auxiliary pane. The fixer baseline and exact selected remediation ids are persisted before remediation starts, so restart restores only unfinished items from the original selection. The follow-up reservation stores the same request id later written to the existing child relationship metadata and used to derive the backend session id. A launch acknowledgement failure preserves the stable local turn and created child, returns `uncertain`, and does not automatically or after restart resubmit the launch message. Backend creation returns an existing session only when the immutable identity (`agent_type`, relationship kind, parent session, and parent request) matches; mutable parent turn location does not break an explicit user retry. This early-return path is restricted to Review/DeepReview child relationships with a parent request, so ordinary explicit-id session restoration keeps its existing coordinator rebuild behavior. The action bar distinguishes retry, in-progress, completed, failed, cancelled, and view states instead of leaving a permanently disabled button. A metadata-only historical child is opened and hydrated before terminal state is inferred; lack of loaded turns is not treated as permission to launch a duplicate. Scope, changed-file records, and the final child id stay in session metadata so restart does not widen scope or duplicate a known run. Older sessions without recoverable scope explicitly notify the user before falling back to the current workspace diff.
 
-`launchDeepReviewSession` creates a child session with:
+`launchDeepReviewSession` creates an internal child session with:
 
-- `sessionKind: 'deep_review'`
+- `sessionKind: 'deep_review'` for explicit Strict Review, or `sessionKind: 'review'` for managed L1 presentation
 - `agentType: 'DeepReview'`
 - tools enabled
 - safe mode enabled
@@ -112,25 +113,33 @@ For new strict launches:
 - file splitting and retries are disabled;
 - the launch preview reports one planned primary review-agent execution and a maximum of three review-agent executions; it does not claim a bound on underlying model requests.
 
+For managed large L1 launches:
+
+- `workPackets` contains only deterministic `ReviewGeneral` file batches;
+- packet calls are foreground-waited and may never be converted to background `Task` calls;
+- `managedReviewPlan` records total, planned, and deferred file counts plus batch, concurrency, and timeout bounds;
+- the final report must mark deferred, provider-omitted, timed-out, or unavailable scope as limited coverage;
+- no routine launch confirmation is shown.
+
 The evidence pack remains metadata-only. It lists changed file paths, aggregate diff stats, domain/risk tags, hunk hints, contract hints, budget counts, and workspace/Git-range target facts. It excludes embedded source text, full diff text, model output, provider raw bodies, speculative cache plans, and full file contents.
 
 ## Strategies and Scope
 
-Ordinary Review remains one `CodeReview` child. A new explicit strict request always selects the deep profile, but “deep” now means deeper evidence inspection by the primary reviewer, not maximum fan-out. Security, performance, architecture, frontend, and test concerns are investigation dimensions for that model.
+Small ordinary Review remains one `CodeReview` child. Managed large Review reuses the deep runtime profile only as an execution budget capable of bounded work packets; it remains user-facing L1 Review. A new explicit strict request selects the deep profile for evidence depth, not maximum fan-out.
 
 `quick` and `normal` strategy values, legacy work packets, and older L2 manifests remain readable for stored-session recovery. They do not create new production Review launches. New L3 validation requires the deep strategy but no longer requires every core reviewer or a Judge call. If a quality-gate member is present, it must be `ReviewJudge`.
 
-Launch consent shows the exact target, one planned primary review-agent execution, the maximum bounded review-agent execution count, runtime tendency, and read-only boundary. It does not estimate underlying model requests or tokens.
+Review launches start directly without routine confirmation. Exceptional states that require a user decision may still request confirmation, but target size and reviewer count are not such states.
 
-## Historical Work Packet Compatibility
+## Managed Work Packets and Historical Compatibility
 
-New strict reviews do not generate work packets or module-aware reviewer shards. Stored manifests may still contain reviewer/judge packets, launch batches, packet ids, assigned scopes, and retry metadata. Runtime parsing, report enrichment, recovery UI, and target-evidence validation continue to read those fields so historical sessions are not rewritten as complete or successful.
+New strict reviews do not generate work packets or module-aware reviewer shards. New managed large L1 reviews generate only bounded `ReviewGeneral` packets. Stored manifests may also contain historical reviewer/judge packets, launch batches, packet ids, assigned scopes, and retry metadata. Runtime parsing, report enrichment, recovery UI, and target-evidence validation distinguish the new managed plan from historical manifests.
 
-Compatibility code must not turn historical packet support back into a new-launch requirement. Packet-specific queue and retry behavior applies only when an existing manifest actually contains those packets.
+Packet support is not a general fan-out policy. New packets are admitted only when `managedReviewPlan` is present; strict specialist policy remains unchanged. Packet-specific queue and retry behavior applies only when the prepared manifest actually contains those packets.
 
 ## Backend Policy and Admission
 
-`DeepReviewExecutionPolicy` in `src/crates/execution/agent-runtime/src/deep_review/execution_policy.rs` parses runtime policy and the new per-turn specialist-call ceiling. `DeepReviewRunManifestGate` admits only specialist-pool members and the optional `ReviewJudge`, rejects `ReviewFixer`, nested `DeepReview`, skipped members, and unconfigured agents, and preserves legacy manifest parsing and membership validation.
+`DeepReviewExecutionPolicy` parses runtime policy and the per-turn specialist-call ceiling. `DeepReviewRunManifestGate` admits specialist-pool members, the optional `ReviewJudge`, and `ReviewGeneral` only when it is named by a prepared managed packet. It rejects `ReviewFixer`, nested `DeepReview`, skipped members, and unconfigured agents.
 
 `DeepReviewBudgetTracker` separately permits at most one initial specialist and one Judge call for a new strict turn. This keeps the safety boundary deterministic without hard-coding which domain deserves delegation.
 
@@ -147,11 +156,11 @@ The generic `Task` tool is adapted for DeepReview across:
 
 DeepReview task execution uses the manifest and tool context to:
 
-- identify an optional specialist or quality-inspector role and any historical packet id
+- identify an optional specialist, quality-inspector, managed packet, or historical packet id
 - read historical incremental-cache metadata when present, without creating cache plans for new runs
 - enforce the new specialist-call ceiling and historical retry coverage
 - cap active optional reviewers
-- preserve launch-batch ordering only for historical packet manifests
+- enforce the global concurrency ceiling for managed and historical packet manifests; `launch_batch` remains a preferred launch grouping, not a runtime completion barrier
 - wait for transient capacity when allowed
 - emit queue state events
 - record runtime diagnostics and capacity skips
@@ -228,7 +237,7 @@ The action surface is shared with standard Code Review but includes DeepReview-s
 - `src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.tsx`
 - `src/web-ui/src/flow_chat/deep-review/action-bar`
 
-`BtwSessionPanel` detects `sessionKind === 'deep_review'`, reads the latest code-review result, derives interrupted DeepReview state, restores persisted action-bar state, and renders `ReviewActionBar`.
+`BtwSessionPanel` projects explicit `deep_review` children as Strict Review and managed L1 children as ordinary `review`, reads the latest code-review result, restores the matching action-bar state, and renders `ReviewActionBar` without exposing the internal executor.
 
 The action bar can show:
 
@@ -251,11 +260,11 @@ The review action bar persists UI state separately through `ReviewActionBarPersi
 
 - Frontend components do not call Tauri directly; they use infrastructure APIs such as `agentAPI`.
 - Shared core stays platform-agnostic and uses event/config/tool abstractions instead of Tauri handles.
-- The frontend owns the explicit standard-or-strict launch boundary, target resolution, strict team manifest construction, strategy profile wording, prompt-block construction, consent, and action UI. No product-domain risk policy or desktop decision RPC upgrades ordinary Review.
+- The frontend owns the standard, managed, or strict launch boundary, target resolution, manifest construction, strategy wording, prompt-block construction, and action UI. Size selects only the bounded L1 executor; no risk heuristic upgrades Review strength.
 - Project integration adapters own raw workspace/Git target acquisition. The artifact/evidence layer owns the fixed session target manifest and its completeness. Mutable workspace targets may have complete prepared diff coverage, but their final evidence status remains `limited`. Reviewers may not mutate or silently widen that target.
 - The backend owns policy validation, runtime admission, queue/retry state, event emission, and report enrichment.
 - Reviewer subagents and review orchestrators stay read-only. Remediation runs under `ReviewFixer` after user approval, not during the reviewer pass.
-- Historical work packets and current evidence packs are metadata only; they must not embed file contents or full diffs.
+- Managed/historical work packets and current evidence packs are metadata only; they must not embed file contents or full diffs.
 - Existing reviewer Git exposure remains unchanged for legacy compatibility, but prepared target evidence does not authorize it as changed-code evidence and no dedicated multi-operation Git tool is added. Prepared `GetFileDiff` must be bounded and disable external diff/text conversion; live repository reads are supplemental and require a deterministic clean local binding.
 
 ## Change Checklist

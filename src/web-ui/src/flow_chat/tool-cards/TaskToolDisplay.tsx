@@ -2,7 +2,15 @@
  * TaskTool card display component.
  */
 
-import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  useSyncExternalStore,
+} from 'react';
 import {
   AlertTriangle,
   Split,
@@ -28,6 +36,7 @@ import type { ReviewerContext } from '@/shared/services/reviewTeamService';
 import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
 import { flowChatStore } from '../store/FlowChatStore';
 import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
+import { deriveSubagentExecutionStatus } from '../utils/subagentProjection';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system/services/NotificationService';
 import './TaskToolDisplay.scss';
@@ -137,6 +146,7 @@ const INTERNAL_READONLY_REVIEW_AGENT_IDS = new Set([
   'ReviewArchitecture',
   'ReviewFrontend',
   'ReviewJudge',
+  'ReviewGeneral',
 ]);
 
 function isInternalReadonlyReviewAgent(subagentType: string): boolean {
@@ -163,8 +173,31 @@ function readTaskWasCancelled(
   return Boolean(error && /\bcancell?ed\b/.test(error));
 }
 
+function subscribeToFlowChatStore(listener: () => void): () => void {
+  return flowChatStore.subscribe(() => listener());
+}
+
+function readLinkedSubagentSnapshot(sessionId: string): string {
+  if (!sessionId) {
+    return '';
+  }
+  const session = flowChatStore.getState().sessions.get(sessionId);
+  const turn = session?.dialogTurns?.[session.dialogTurns.length - 1];
+  return JSON.stringify([
+    session?.mode ?? '',
+    session?.config?.agentType ?? '',
+    session?.config?.modelName ?? '',
+    turn?.id ?? '',
+    turn?.status ?? '',
+    turn?.startTime ?? null,
+    turn?.endTime ?? null,
+    turn?.error ?? '',
+    turn?.modelRounds?.some((round) => round.isStreaming) ?? false,
+  ]);
+}
+
 function isDeepReviewReviewerTask(toolItem: FlowToolItem): boolean {
-  if (toolItem.toolName?.toLowerCase() !== 'task') {
+  if (!['task', 'launchreviewagent'].includes(toolItem.toolName?.toLowerCase() ?? '')) {
     return false;
   }
 
@@ -293,6 +326,15 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
 
   const taskSessionId = readTaskSessionId(toolCall?.input, toolResult);
   const linkedSubagentSessionId = toolItem.subagentSessionId || taskSessionId;
+  const readSubagentSnapshot = useCallback(
+    () => readLinkedSubagentSnapshot(linkedSubagentSessionId),
+    [linkedSubagentSessionId],
+  );
+  useSyncExternalStore(
+    subscribeToFlowChatStore,
+    readSubagentSnapshot,
+    readSubagentSnapshot,
+  );
   const linkedSubagentSession = linkedSubagentSessionId
     ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
     : undefined;
@@ -325,8 +367,10 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       readStringValue(toolCall.input.modelId);
 
     if (isReviewCoverageTask) {
+      const reviewDescription = readStringValue(description)
+        .replace(/^\[packet\s+[^\]]+\]\s*/i, '');
       return {
-        description: t('toolCards.taskTool.reviewCoverageDescription'),
+        description: reviewDescription || t('toolCards.taskTool.reviewCoverageDescription'),
         prompt: 'Not provided',
         agentType: t('toolCards.taskTool.reviewCoverageLabel'),
         modelName,
@@ -385,23 +429,42 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     return () => clearTimeout(timer);
   }, [displayIsExpanded, hasRealPrompt, taskInput?.prompt, checkPromptScrollState]);
 
+  const linkedSubagentTurn = linkedSubagentSession?.dialogTurns?.[
+    linkedSubagentSession.dialogTurns.length - 1
+  ];
+  const backgroundSubagentStatus = isBackgroundTask
+    ? deriveSubagentExecutionStatus(linkedSubagentTurn)
+    : null;
+  const backgroundSubagentIsRunning = backgroundSubagentStatus === 'running';
   const isCancelledResult = readTaskWasCancelled(status, toolResult);
-  const displayStatus = isCancelledResult ? 'cancelled' : status;
+  const displayStatus = isCancelledResult
+    ? 'cancelled'
+    : backgroundSubagentStatus ?? status;
   const isFailed =
+    displayStatus === 'error' || (
     !isCancelledResult &&
     (status === 'error' ||
     (toolResult != null &&
       'success' in toolResult &&
-      toolResult.success === false));
-  const taskDurationMs = readTaskDurationMs(toolResult);
-  const taskErrorMessage = readTaskErrorMessage(toolResult);
-  const completedDurationStatus = isCancelledResult
+      toolResult.success === false)));
+  const backgroundSubagentDurationMs = isBackgroundTask &&
+    linkedSubagentTurn?.endTime != null &&
+    linkedSubagentTurn.startTime != null
+    ? Math.max(0, linkedSubagentTurn.endTime - linkedSubagentTurn.startTime)
+    : undefined;
+  const taskDurationMs = isBackgroundTask
+    ? backgroundSubagentDurationMs
+    : readTaskDurationMs(toolResult);
+  const taskErrorMessage = displayStatus === 'error'
+    ? linkedSubagentTurn?.error || readTaskErrorMessage(toolResult)
+    : readTaskErrorMessage(toolResult);
+  const completedDurationStatus = isCancelledResult || displayStatus === 'cancelled'
     ? 'cancelled'
     : isFailed
       ? 'error'
       : status === 'cancelled' || status === 'rejected'
       ? 'cancelled'
-      : status === 'completed' && taskDurationMs != null
+      : displayStatus === 'completed' && taskDurationMs != null
         ? 'success'
         : undefined;
 
@@ -571,7 +634,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               <div className="task-header-meta">
                 <ToolTimeoutIndicator
                   startTime={toolItem.startTime}
-                  isRunning={isRunning}
+                  isRunning={isRunning || backgroundSubagentIsRunning}
                   timeoutMs={
                     typeof toolCall?.timeout_seconds === 'number' && toolCall.timeout_seconds > 0
                       ? toolCall.timeout_seconds * 1000
@@ -630,7 +693,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                 title={t('toolCards.taskTool.openInPanel')}
               />
               <div className="task-header-rail__visual" aria-hidden>
-                <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />{isRunning ? (
+                <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />{isRunning || backgroundSubagentIsRunning ? (
                   <ToolCardStatusIcon
                     icon={<CubeLoading size="small" />}
                     className="task-status-icon--rail"

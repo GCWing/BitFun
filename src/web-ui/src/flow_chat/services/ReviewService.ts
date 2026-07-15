@@ -66,8 +66,16 @@ export interface PreparedStrictReviewLaunch extends PreparedReviewBase {
   runManifest: ReviewTeamRunManifest;
 }
 
+export interface PreparedManagedReviewLaunch extends PreparedReviewBase {
+  mode: 'managed';
+  level: 'l1';
+  strategyLevel: 'deep';
+  runManifest: ReviewTeamRunManifest;
+}
+
 export type PreparedReviewLaunch =
   | PreparedStandardReviewLaunch
+  | PreparedManagedReviewLaunch
   | PreparedStrictReviewLaunch;
 
 export interface PrepareReviewLaunchOptions {
@@ -141,14 +149,6 @@ async function prepareFromResolvedTarget(params: {
   commandText?: string;
   intent: 'review' | 'strict';
 }): Promise<PreparedReviewLaunch> {
-  if ((params.targetEvidence.omittedFileCount ?? 0) > 0) {
-    throw reviewTargetError(
-      params.targetEvidence.source === 'pull_request'
-        ? 'This pull request exceeds the provider Review file limit. Review a narrower local Git range or inspect the remaining files on the provider.'
-        : 'This Review target exceeds the bounded evidence file limit. Narrow the target before starting Review.',
-      'deepReviewActionBar.launchError.fileLimit',
-    );
-  }
   if (params.targetEvidence.limitations.includes('target_path_outside_workspace')) {
     throw reviewTargetError(
       'Review files must be inside the current workspace.',
@@ -255,6 +255,57 @@ async function prepareFromResolvedTarget(params: {
     );
   }
   if (params.intent === 'review') {
+    const useManagedBatching =
+      params.changeStats.fileCount > 80 ||
+      params.targetEvidence.files.length > 80 ||
+      (params.targetEvidence.omittedFileCount ?? 0) > 0;
+    if (useManagedBatching) {
+      const launch = params.commandText
+        ? await buildDeepReviewLaunchFromSlashCommand(
+          params.commandText,
+          params.workspacePath,
+          {
+            strategyOverride: 'deep',
+            includeQualityGate: false,
+            managedBatching: true,
+            maxCoreReviewers: 0,
+            maxExtraReviewers: 0,
+            resolvedTarget: {
+              target: params.target,
+              changeStats: params.changeStats,
+              targetEvidence: params.targetEvidence,
+            },
+          },
+        )
+        : await buildDeepReviewLaunchFromSessionFiles(
+          params.requestedFiles,
+          params.extraContext,
+          params.workspacePath,
+          {
+            strategyOverride: 'deep',
+            includeQualityGate: false,
+            managedBatching: true,
+            maxCoreReviewers: 0,
+            maxExtraReviewers: 0,
+            resolvedTarget: {
+              target: params.target,
+              changeStats: params.changeStats,
+              targetEvidence: params.targetEvidence,
+            },
+          },
+        );
+      return {
+        mode: 'managed',
+        level: 'l1',
+        strategyLevel: 'deep',
+        target: params.target,
+        targetEvidence: params.targetEvidence,
+        requestedFiles: params.requestedFiles,
+        prompt: launch.prompt,
+        runManifest: launch.runManifest,
+        requiresConsent: false,
+      };
+    }
     return {
       mode: 'standard',
       level: 'l1',
@@ -307,7 +358,7 @@ async function prepareFromResolvedTarget(params: {
     requestedFiles: params.requestedFiles,
     prompt: launch.prompt,
     runManifest: launch.runManifest,
-    requiresConsent: true,
+    requiresConsent: false,
   };
 }
 
@@ -429,7 +480,10 @@ export async function launchPreparedReviewSession(params: {
   launchStatus: 'started' | 'uncertain';
 }> {
   const childSessionName = params.childSessionName ?? 'Review';
-  if (params.prepared.mode === 'strict') {
+  if (params.prepared.mode !== 'standard') {
+    const presentationKind = params.prepared.mode === 'managed'
+      ? 'review' as const
+      : 'deep_review' as const;
     const result = await launchDeepReviewSession({
       parentSessionId: params.parentSessionId,
       workspacePath: params.workspacePath,
@@ -439,13 +493,14 @@ export async function launchPreparedReviewSession(params: {
       requestedFiles: params.prepared.requestedFiles,
       runManifest: params.prepared.runManifest,
       requestId: params.requestId,
+      presentationKind,
     });
     openBtwSessionInAuxPane({
       childSessionId: result.childSessionId,
       parentSessionId: params.parentSessionId,
       workspacePath: params.workspacePath,
       expand: true,
-      sessionKind: 'deep_review',
+      sessionKind: presentationKind,
       sessionTitle: childSessionName,
       agentType: 'DeepReview',
     });

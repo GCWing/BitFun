@@ -27,16 +27,35 @@ const ACTIVE_TURN_STATUSES = new Set<DialogTurn['status']>([
   'cancelling',
 ]);
 
+export type SubagentExecutionStatus = 'running' | 'completed' | 'error' | 'cancelled';
+
+export function deriveSubagentExecutionStatus(
+  turn: DialogTurn | null | undefined,
+): SubagentExecutionStatus | null {
+  if (!turn) {
+    return null;
+  }
+  if (ACTIVE_TURN_STATUSES.has(turn.status) || turn.modelRounds?.some(round => round.isStreaming)) {
+    return 'running';
+  }
+  switch (turn.status) {
+    case 'completed':
+      return 'completed';
+    case 'error':
+      return 'error';
+    case 'cancelled':
+      return 'cancelled';
+    default:
+      return null;
+  }
+}
+
 function isActiveTurn(turn: DialogTurn | null | undefined): boolean {
   if (!turn) {
     return false;
   }
 
-  if (ACTIVE_TURN_STATUSES.has(turn.status)) {
-    return true;
-  }
-
-  return turn.modelRounds.some(round => round.isStreaming);
+  return deriveSubagentExecutionStatus(turn) === 'running';
 }
 
 function flattenTurnItems(turn: DialogTurn | null): FlowItem[] {

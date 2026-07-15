@@ -7,6 +7,7 @@ struct LaunchReviewAgentInvocation {
     description: String,
     prompt: String,
     subagent_type: String,
+    packet_id: Option<String>,
     model_id: Option<String>,
     timeout_seconds: Option<u64>,
     is_retry: bool,
@@ -39,6 +40,10 @@ impl LaunchReviewAgentTool {
                 "subagent_type": {
                     "type": "string",
                     "description": "Required DeepReview team member agent type."
+                },
+                "packet_id": {
+                    "type": "string",
+                    "description": "Exact packet_id from active_packets. Required for every managed Review packet so runtime batch ordering and packet identity can be enforced."
                 },
                 "model_id": {
                     "type": "string",
@@ -141,11 +146,22 @@ impl LaunchReviewAgentTool {
             }
             None => None,
         };
+        let packet_id = match input.get("packet_id") {
+            Some(value) => {
+                let value = value
+                    .as_str()
+                    .ok_or_else(|| BitFunError::tool("packet_id must be a string".to_string()))?
+                    .trim();
+                (!value.is_empty()).then(|| value.to_string())
+            }
+            None => None,
+        };
 
         Ok(LaunchReviewAgentInvocation {
             description: required_string("description")?,
             prompt: required_string("prompt")?,
             subagent_type: required_string("subagent_type")?,
+            packet_id,
             model_id,
             timeout_seconds,
             is_retry: input.get("retry").and_then(Value::as_bool).unwrap_or(false),
@@ -157,9 +173,11 @@ impl LaunchReviewAgentTool {
     }
 
     fn render_description() -> String {
-        r#"Launch one optional DeepReview specialist or conditional quality inspector.
+        r#"Launch one foreground-waited DeepReview worker.
 
-The DeepReview agent is the primary reviewer. Use this tool only when a concrete uncertainty needs one focused fresh perspective, or when a high-severity, conflicting, or low-confidence conclusion needs ReviewJudge validation. New strict runs allow at most one specialist and one ReviewJudge call.
+When the prepared manifest contains active work packets, launch only those packets in declared batch order. Manifest-declared managed Review packets may use bounded same-role file shards; every call blocks the owning Review turn until its result, timeout, or cancellation is recorded. Never convert a packet to a background Task.
+
+When active work packets are empty, the DeepReview agent is the primary reviewer. Use this tool only when a concrete uncertainty needs one focused fresh perspective, or when a high-severity, conflicting, or low-confidence conclusion needs ReviewJudge validation. New strict runs allow at most one specialist and one ReviewJudge call.
 
 Built-in review agent types:
 - `ReviewBusinessLogic`: product behavior, business logic, state transitions, and user-visible correctness.
@@ -169,9 +187,11 @@ Built-in review agent types:
 - `ReviewFrontend`: i18n, frontend performance, accessibility, state management, frontend-backend API contracts, and platform boundaries.
 - `ReviewJudge`: final quality-inspector pass after reviewer outputs are available.
 
-Extra active reviewers may be provided by the run manifest. Use only a `subagent_type` that belongs to the active DeepReview specialist pool for this run. Do not split files, launch routine parallel coverage, or repeat the primary review.
+Extra active reviewers may be provided by the run manifest. Use only a `subagent_type` active for this run. Outside a manifest-declared work-packet plan, do not split files, launch routine parallel coverage, or repeat the primary review.
 
-Do not put `subagent_type`, `description`, `model_id`, `timeout_seconds`, `retry`, `auto_retry`, or `retry_coverage` inside the prompt string.
+For a managed packet, pass its exact manifest `packet_id` in the top-level `packet_id` field. Runtime rejects missing or unknown managed packet ids.
+
+Do not put `subagent_type`, `packet_id`, `description`, `model_id`, `timeout_seconds`, `retry`, `auto_retry`, or `retry_coverage` inside the prompt string.
 
 Retry rules:
 - Set `retry=true` only when re-dispatching the same reviewer after `partial_timeout` or a transient capacity skip in the current turn.
@@ -205,8 +225,9 @@ Retry rules:
             ));
         }
         let invocation = Self::parse_invocation(input)?;
+        let description = Self::bound_packet_description(&invocation, context)?;
         let task_input = json!({
-            "description": invocation.description,
+            "description": description,
             "prompt": invocation.prompt,
             "subagent_type": invocation.subagent_type,
             "model_id": invocation.model_id,
@@ -239,6 +260,41 @@ Retry rules:
             .call_deep_review_task_impl(&task_input, context)
             .await
     }
+
+    fn bound_packet_description(
+        invocation: &LaunchReviewAgentInvocation,
+        context: &ToolUseContext,
+    ) -> BitFunResult<String> {
+        let run_manifest = context.custom_data.get("deep_review_run_manifest");
+        let managed_plan = run_manifest.and_then(|manifest| {
+            manifest
+                .get("managedReviewPlan")
+                .or_else(|| manifest.get("managed_review_plan"))
+        });
+        let Some(packet_id) = invocation.packet_id.as_deref() else {
+            if managed_plan.is_some() {
+                return Err(BitFunError::tool(
+                    "packet_id is required for managed Review packets".to_string(),
+                ));
+            }
+            return Ok(invocation.description.clone());
+        };
+        let description = format!("[packet {packet_id}] {}", invocation.description);
+        if managed_plan.is_some()
+            && Self::deep_review_launch_batch_for_task(
+                &invocation.subagent_type,
+                Some(&description),
+                run_manifest,
+            )
+            .is_none()
+        {
+            return Err(BitFunError::tool(format!(
+                "packet_id '{packet_id}' is not active for managed reviewer '{}'",
+                invocation.subagent_type
+            )));
+        }
+        Ok(description)
+    }
 }
 
 #[async_trait]
@@ -260,7 +316,7 @@ impl Tool for LaunchReviewAgentTool {
     }
 
     fn short_description(&self) -> String {
-        "Launch one optional DeepReview specialist or quality check.".to_string()
+        "Launch one foreground-waited Review worker.".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -290,10 +346,15 @@ impl Tool for LaunchReviewAgentTool {
     async fn validate_input(
         &self,
         input: &Value,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         match Self::parse_invocation(input) {
-            Ok(_) => {
+            Ok(invocation) => {
+                if let Some(context) = context {
+                    if let Err(error) = Self::bound_packet_description(&invocation, context) {
+                        return TaskTool::invalid_input(error.to_string());
+                    }
+                }
                 if let Some(result) = TaskTool::validate_prompt_size(input) {
                     return result;
                 }

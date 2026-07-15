@@ -8,6 +8,7 @@ import {
   REVIEW_TEAM_MEMBER_ACCENT_DEFAULT,
   REVIEW_STRATEGY_DEFINITIONS,
   buildEffectiveReviewTeamManifest,
+  canAddSubagentToReviewTeam,
   buildReviewTeamPromptBlock,
   canUseSubagentAsReviewTeamMember,
   loadDefaultReviewTeamDefinition,
@@ -1302,6 +1303,166 @@ describe('reviewTeamService', () => {
       maxSameRoleInstances: 1,
     });
     expect(manifest.workPackets).toEqual([]);
+  });
+
+  it('builds a bounded managed plan only when explicitly requested by Review', () => {
+    const team = resolveDefaultReviewTeam(coreSubagents(), storedConfigWithExtra([]));
+    const files = Array.from(
+      { length: 360 },
+      (_, index) => `src/crates/services/example-${index}.rs`,
+    );
+    const target = classifyReviewTargetFromFiles(files, 'workspace_diff');
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      target,
+      strategyOverride: 'deep',
+      managedBatching: true,
+      maxCoreReviewers: 0,
+      maxExtraReviewers: 0,
+      includeQualityGate: false,
+      targetEvidence: {
+        version: 1,
+        source: 'workspace',
+        fingerprint: 'managed-partial-target',
+        completeness: 'partial',
+        workspaceBinding: 'matching_clean',
+        files: files.map((path) => ({
+          path,
+          status: 'modified',
+          completeness: 'complete',
+        })),
+        omittedFileCount: 7,
+        limitations: ['provider_file_list_incomplete'],
+      },
+    });
+
+    expect(manifest.workPackets).toHaveLength(8);
+    expect(manifest.workPackets?.every((packet) =>
+      packet.subagentId === 'ReviewGeneral' && packet.launchBatch <= 4
+    )).toBe(true);
+    expect(manifest.managedReviewPlan).toMatchObject({
+      totalFileCount: 367,
+      plannedFileCount: 320,
+      deferredFileCount: 47,
+      maxParallelInstances: 2,
+      workerTimeoutSeconds: 120,
+    });
+    expect(manifest.concurrencyPolicy.maxParallelInstances).toBe(2);
+    expect(manifest.executionPolicy.maxReviewerCalls).toBe(8);
+    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
+    expect(promptBlock).toContain('"display_name": "Review batch 1"');
+    expect(promptBlock).toContain(
+      'Never convert managed packets to background Task calls.',
+    );
+    expect(promptBlock).toContain('Prepared packet execution:');
+    expect(promptBlock).toContain('capacity groups, not runtime completion barriers');
+    expect(promptBlock).not.toContain('in launch_batch order');
+    expect(promptBlock).not.toContain('Legacy packet compatibility:');
+    expect(promptBlock).not.toContain('historical packet plan');
+  });
+
+  it('aligns pull-request managed coverage with the provider diff acquisition ceiling', () => {
+    const team = resolveDefaultReviewTeam(coreSubagents(), storedConfigWithExtra([]));
+    const files = Array.from({ length: 500 }, (_, index) => `src/file-${index}.ts`);
+    const target = {
+      ...classifyReviewTargetFromFiles(files, 'workspace_diff'),
+      source: 'pull_request' as const,
+    };
+    const incompleteFiles = files.slice(0, 250);
+    const completeFiles = files.slice(250);
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      target,
+      strategyOverride: 'deep',
+      managedBatching: true,
+      maxCoreReviewers: 0,
+      maxExtraReviewers: 0,
+      includeQualityGate: false,
+      targetEvidence: {
+        version: 1,
+        source: 'pull_request',
+        fingerprint: 'provider-budget-target',
+        completeness: 'partial',
+        workspaceBinding: 'matching_clean',
+        files: [
+          ...incompleteFiles.map((path) => ({
+            path,
+            status: 'modified' as const,
+            completeness: 'unavailable' as const,
+          })),
+          ...completeFiles.map((path) => ({
+            path,
+            status: 'modified' as const,
+            completeness: 'complete' as const,
+          })),
+        ],
+        omittedFileCount: 0,
+        limitations: ['provider_file_diff_unavailable'],
+      },
+    });
+
+    const plannedFiles = manifest.workPackets?.flatMap(
+      (packet) => packet.assignedScope.files,
+    ) ?? [];
+    expect(manifest.managedReviewPlan).toMatchObject({
+      totalFileCount: 500,
+      plannedFileCount: 128,
+      deferredFileCount: 372,
+    });
+    expect(plannedFiles).toHaveLength(128);
+    expect(plannedFiles.every((path) => completeFiles.includes(path))).toBe(true);
+  });
+
+  it('keeps the internal managed worker out of configurable review-team members', () => {
+    const internalWorker = subagent('ReviewGeneral', true, 'project', 'fast', true, true);
+
+    expect(canAddSubagentToReviewTeam('ReviewGeneral')).toBe(false);
+    expect(canUseSubagentAsReviewTeamMember(internalWorker)).toBe(false);
+  });
+
+  it('does not double-count or schedule files beyond the evidence manifest budget', () => {
+    const team = resolveDefaultReviewTeam(coreSubagents(), storedConfigWithExtra([]));
+    const files = Array.from(
+      { length: 5_000 },
+      (_, index) => index < 4_500
+        ? `src/web-ui/src/feature-${index}.ts`
+        : `src/crates/services/example-${index}.rs`,
+    );
+    const target = classifyReviewTargetFromFiles(files, 'workspace_diff');
+    const evidenceFiles = files.slice(0, 4_096);
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      target,
+      strategyOverride: 'deep',
+      managedBatching: true,
+      maxCoreReviewers: 0,
+      maxExtraReviewers: 0,
+      includeQualityGate: false,
+      targetEvidence: {
+        version: 1,
+        source: 'workspace',
+        fingerprint: 'manifest-budget-target',
+        completeness: 'partial',
+        workspaceBinding: 'matching_clean',
+        files: evidenceFiles.map((path) => ({
+          path,
+          status: 'modified',
+          completeness: 'complete',
+        })),
+        omittedFileCount: 904,
+        limitations: ['target_manifest_file_budget_exhausted'],
+      },
+    });
+
+    expect(manifest.managedReviewPlan).toMatchObject({
+      totalFileCount: 5_000,
+      plannedFileCount: 320,
+      deferredFileCount: 4_680,
+    });
+    const plannedFiles = manifest.workPackets?.flatMap(
+      (packet) => packet.assignedScope.files,
+    ) ?? [];
+    expect(plannedFiles.every((file) => evidenceFiles.includes(file))).toBe(true);
   });
 
   it('keeps deep strategy thorough without automatic reviewer fan-out', () => {

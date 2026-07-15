@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { getSubagentProjectionState } from './subagentProjection';
+import {
+  deriveSubagentExecutionStatus,
+  getSubagentProjectionState,
+} from './subagentProjection';
 import type { FlowChatState, Session } from '../types/flow-chat';
 
 function createState(session: Session): FlowChatState {
@@ -11,6 +14,17 @@ function createState(session: Session): FlowChatState {
 }
 
 describe('getSubagentProjectionState', () => {
+  it('projects the complete child lifecycle for parent task displays', () => {
+    expect(deriveSubagentExecutionStatus({ status: 'processing', modelRounds: [] } as never))
+      .toBe('running');
+    expect(deriveSubagentExecutionStatus({ status: 'completed', modelRounds: [] } as never))
+      .toBe('completed');
+    expect(deriveSubagentExecutionStatus({ status: 'error', modelRounds: [] } as never))
+      .toBe('error');
+    expect(deriveSubagentExecutionStatus({ status: 'cancelled', modelRounds: [] } as never))
+      .toBe('cancelled');
+  });
+
   it('projects only the last round when requested, including a streaming round', () => {
     const session = {
       sessionId: 'subagent-1',

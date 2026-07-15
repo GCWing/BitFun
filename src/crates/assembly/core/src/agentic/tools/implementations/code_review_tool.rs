@@ -526,9 +526,17 @@ impl CodeReviewTool {
         }
 
         if deep_review {
-            input["review_mode"] = json!("deep");
+            let managed_review = run_manifest.is_some_and(|manifest| {
+                manifest.get("managedReviewPlan").is_some()
+                    || manifest.get("managed_review_plan").is_some()
+            });
+            input["review_mode"] = json!(if managed_review { "standard" } else { "deep" });
             if input.get("review_scope").is_none() {
-                input["review_scope"] = json!("Deep review scope was not provided");
+                input["review_scope"] = json!(if managed_review {
+                    "Managed Review scope was not provided"
+                } else {
+                    "Deep review scope was not provided"
+                });
             }
         } else if input.get("review_mode").is_none() {
             input["review_mode"] = json!("standard");
@@ -938,6 +946,45 @@ mod tests {
         assert_eq!(data["review_mode"], "deep");
         assert!(data["reviewers"].as_array().is_some());
         assert!(data["remediation_plan"].as_array().is_some());
+    }
+
+    #[tokio::test]
+    async fn managed_review_submission_uses_standard_product_mode() {
+        let tool = CodeReviewTool::new();
+        let mut context = tool_context(Some("DeepReview"));
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "reviewMode": "deep",
+                "managedReviewPlan": {
+                    "version": 1,
+                    "totalFileCount": 120,
+                    "plannedFileCount": 120,
+                    "deferredFileCount": 0
+                }
+            }),
+        );
+
+        let result = tool
+            .call_impl(
+                &json!({
+                    "summary": {
+                        "overall_assessment": "No blocking issues",
+                        "risk_level": "low",
+                        "recommended_action": "approve"
+                    },
+                    "issues": [],
+                    "positive_points": []
+                }),
+                &context,
+            )
+            .await
+            .expect("submit managed review result");
+
+        let ToolResult::Result { data, .. } = &result[0] else {
+            panic!("expected tool result");
+        };
+        assert_eq!(data["review_mode"], "standard");
     }
 
     #[tokio::test]

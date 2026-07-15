@@ -186,6 +186,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
             "GeneralPurpose",
             "ResearchSpecialist",
             "FileFinder",
+            "ReviewGeneral",
             "ReviewBusinessLogic",
             "ReviewPerformance",
             "ReviewSecurity",
@@ -202,11 +203,11 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
 
     assert_eq!(specs[0].category, BuiltinAgentCategory::Mode);
     assert_eq!(specs[8].category, BuiltinAgentCategory::SubAgent);
-    assert_eq!(specs[20].category, BuiltinAgentCategory::SubAgent);
-    assert!(specs[20]
+    assert_eq!(specs[21].category, BuiltinAgentCategory::SubAgent);
+    assert!(specs[21]
         .visibility_policy
         .can_access_from_parent(Some("agentic")));
-    assert!(!specs[20].visibility_policy.show_in_global_registry);
+    assert!(!specs[21].visibility_policy.show_in_global_registry);
     assert_eq!(default_model_id_for_builtin_agent("agentic"), "auto");
     assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
     assert_eq!(
@@ -226,6 +227,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
         default_model_id_for_builtin_agent("ReviewArchitecture"),
         "fast"
     );
+    assert_eq!(default_model_id_for_builtin_agent("ReviewGeneral"), "fast");
 
     let computer_use = specs
         .iter()

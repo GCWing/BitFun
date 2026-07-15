@@ -773,6 +773,8 @@
   "deepReviewActionBar": {
     "reviewRunningDeep": "Strict review in progress...",
     "reviewRunningStandard": "Review in progress...",
+    "managedCoverageProgress": "Reviewing in batches · planned coverage {{planned}}/{{total}} · up to {{parallel}} in parallel",
+    "managedCoverageDeferred": "{{count}} files will remain outside this run",
     "reviewCompleted": "Strict review completed",
     "fixRunning": "Fixing in progress...",
     "fixCompleted": "Fix completed",

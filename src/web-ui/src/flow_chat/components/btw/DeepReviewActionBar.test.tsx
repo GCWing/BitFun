@@ -256,6 +256,40 @@ describeWithJsdom('DeepReviewActionBar', () => {
     useReviewActionBarStore.getState().reset();
   });
 
+  it('shows a non-blocking managed coverage summary while Review is running', async () => {
+    flowChatSessionsMock.set('managed-review-session', {
+      sessionId: 'managed-review-session',
+      sessionKind: 'review',
+      dialogTurns: [],
+      deepReviewRunManifest: {
+        managedReviewPlan: {
+          version: 1,
+          totalFileCount: 500,
+          plannedFileCount: 128,
+          deferredFileCount: 372,
+          maxFilesPerBatch: 40,
+          maxBatches: 8,
+          maxParallelInstances: 2,
+          workerTimeoutSeconds: 120,
+        },
+      },
+    });
+    useReviewActionBarStore.getState().showRunningActionBar({
+      childSessionId: 'managed-review-session',
+      parentSessionId: 'parent-session',
+      reviewMode: 'standard',
+    });
+
+    await act(async () => {
+      root.render(<ReviewActionBar childSessionId="managed-review-session" />);
+    });
+
+    expect(container.textContent).toContain('128/500');
+    expect(container.textContent).toContain('2');
+    expect(container.textContent).toContain('372');
+    expect(container.querySelector('[role="status"]')).toBeTruthy();
+  });
+
   it('keeps remediation in progress after submitting a fix turn', async () => {
     flowChatSessionsMock.set('child-session', {
       sessionId: 'child-session',

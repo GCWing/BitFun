@@ -54,6 +54,7 @@ import {
   buildTokenBudgetPlan,
 } from './tokenBudget';
 import {
+  buildManagedReviewWorkPackets,
   resolveChangeStats,
   resolveMaxExtraReviewers,
 } from './workPackets';
@@ -1044,7 +1045,13 @@ interface ReviewTeamManifestOptions {
   maxExtraReviewers?: number;
   includeQualityGate?: boolean;
   targetEvidence?: ReviewTargetEvidence;
+  managedBatching?: boolean;
 }
+
+// Provider-backed PR diffs are acquired per file by the runtime. Keep this
+// aligned with REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN without adding a
+// second public budget contract to the manifest.
+const PROVIDER_REVIEW_MAX_PLANNED_FILES = 128;
 
 const REVIEW_WORK_PACKET_ALLOWED_TOOL_SET = new Set<string>(
   REVIEW_WORK_PACKET_ALLOWED_TOOLS,
@@ -1260,13 +1267,22 @@ export function buildEffectiveReviewTeamManifest(
   );
   const changeStats = resolveChangeStats(target, options.changeStats);
   const baseConcurrencyPolicy = normalizeConcurrencyPolicy(team.concurrencyPolicy);
-  const concurrencyPolicy = applyRateLimitToConcurrencyPolicy(
+  const resolvedConcurrencyPolicy = applyRateLimitToConcurrencyPolicy(
     normalizeConcurrencyPolicy({
       ...baseConcurrencyPolicy,
       ...options.concurrencyPolicy,
     }),
     options.rateLimitStatus,
   );
+  const managedMaxParallelInstances = options.managedBatching
+    ? Math.min(2, resolvedConcurrencyPolicy.maxParallelInstances)
+    : undefined;
+  const concurrencyPolicy = managedMaxParallelInstances === undefined
+    ? resolvedConcurrencyPolicy
+    : {
+      ...resolvedConcurrencyPolicy,
+      maxParallelInstances: managedMaxParallelInstances,
+    };
   const strategyLevel = options.strategyOverride ?? team.strategyLevel;
   const strategyBudget = REVIEW_STRATEGY_RUNTIME_BUDGETS[strategyLevel];
   const tokenBudgetMode = options.tokenBudgetMode ?? strategyBudget.tokenBudgetMode;
@@ -1332,7 +1348,7 @@ export function buildEffectiveReviewTeamManifest(
   const budgetLimitedExtraMembers = eligibleExtraMembers.slice(maxExtraReviewers);
   const enabledExtraReviewers = enabledExtraMembers
     .map((member) => toManifestMember(member));
-  const executionPolicy = {
+  const baseExecutionPolicy = {
     ...buildEffectiveExecutionPolicy({
       basePolicy: team.executionPolicy,
       strategyLevel,
@@ -1346,7 +1362,46 @@ export function buildEffectiveReviewTeamManifest(
     maxRetriesPerRole: 0,
     maxReviewerCalls: 1,
   };
-  const workPackets: ReviewTeamWorkPacket[] = [];
+  const prioritizedEvidenceFiles = options.targetEvidence
+    ? [
+      ...options.targetEvidence.files.filter((file) => file.completeness === 'complete'),
+      ...options.targetEvidence.files.filter((file) => file.completeness !== 'complete'),
+    ].map((file) => file.path)
+    : undefined;
+  const workPackets: ReviewTeamWorkPacket[] = options.managedBatching
+    ? buildManagedReviewWorkPackets({
+      target,
+      model: DEFAULT_REVIEW_TEAM_MODEL,
+      maxFilesPerBatch: 40,
+      maxBatches: 8,
+      maxParallelInstances: concurrencyPolicy.maxParallelInstances,
+      maxPlannedFiles: resolveManagedPlanFileLimit(options, target),
+      timeoutSeconds: 120,
+      eligibleFilePaths: prioritizedEvidenceFiles,
+    })
+    : [];
+  const plannedFileCount = workPackets.reduce(
+    (total, packet) => total + packet.assignedScope.files.length,
+    0,
+  );
+  const knownIncludedFileCount = target.files.filter((file) => !file.excluded).length;
+  const evidenceFileCount = options.targetEvidence?.files.length ?? 0;
+  const omittedFileCount = options.targetEvidence?.omittedFileCount ?? 0;
+  const totalReviewFileCount = Math.max(
+    knownIncludedFileCount,
+    evidenceFileCount + omittedFileCount,
+    changeStats.fileCount,
+  );
+  const executionPolicy: ReviewTeamExecutionPolicy = options.managedBatching
+    ? {
+      reviewerTimeoutSeconds: 120,
+      judgeTimeoutSeconds: baseExecutionPolicy.judgeTimeoutSeconds,
+      reviewerFileSplitThreshold: 40,
+      maxSameRoleInstances: Math.max(1, workPackets.length),
+      maxRetriesPerRole: 0,
+      maxReviewerCalls: Math.max(1, workPackets.length),
+    }
+    : baseExecutionPolicy;
   const evidencePack = buildDeepReviewEvidencePack({
     target,
     changeStats,
@@ -1356,10 +1411,8 @@ export function buildEffectiveReviewTeamManifest(
   });
   const tokenBudget = buildTokenBudgetPlan({
     mode: tokenBudgetMode,
-    // One primary DeepReview agent execution is guaranteed. At most one
-    // specialist and one conditional quality-inspector execution may follow.
-    activeReviewerCalls: 1,
-    maxReviewerCalls: 3,
+    activeReviewerCalls: options.managedBatching ? workPackets.length : 1,
+    maxReviewerCalls: options.managedBatching ? workPackets.length : 3,
     eligibleExtraReviewerCount: eligibleExtraMembers.length,
     maxExtraReviewers,
     skippedReviewerIds: budgetLimitedExtraMembers.map((member) => member.subagentId),
@@ -1412,7 +1465,30 @@ export function buildEffectiveReviewTeamManifest(
     enabledExtraReviewers,
     skippedReviewers,
     workPackets,
+    ...(options.managedBatching
+      ? {
+        managedReviewPlan: {
+          version: 1 as const,
+          totalFileCount: totalReviewFileCount,
+          plannedFileCount,
+          deferredFileCount: Math.max(0, totalReviewFileCount - plannedFileCount),
+          maxFilesPerBatch: 40,
+          maxBatches: 8,
+          maxParallelInstances: concurrencyPolicy.maxParallelInstances,
+          workerTimeoutSeconds: 120,
+        },
+      }
+      : {}),
   };
+}
+
+function resolveManagedPlanFileLimit(
+  options: ReviewTeamManifestOptions,
+  target: ReviewTargetClassification,
+): number | undefined {
+  return target.source === 'pull_request' || options.targetEvidence?.source === 'pull_request'
+    ? PROVIDER_REVIEW_MAX_PLANNED_FILES
+    : undefined;
 }
 
 export function buildReviewTeamPromptBlock(

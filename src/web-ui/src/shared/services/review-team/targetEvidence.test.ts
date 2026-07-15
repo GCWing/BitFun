@@ -306,4 +306,32 @@ describe('Review target evidence', () => {
     expect(evidence.pullRequest?.pullRequestId).toBe('42');
     expect(allowsReviewLiveRepositoryContext(evidence)).toBe(false);
   });
+
+  it('keeps more than five hundred prepared pull request files', () => {
+    const paths = Array.from({ length: 501 }, (_, index) => `src/file-${index}.rs`);
+    const target = classifyReviewTargetFromFiles(paths, 'pull_request');
+    const evidence = buildPullRequestReviewTargetEvidence({
+      target,
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      pullRequest: {
+        remoteId: 'origin|https://github.com/example/repo.git',
+        platform: 'github',
+        host: 'github.com',
+        projectPath: 'example/repo',
+        pullRequestId: '42',
+        number: 42,
+        webUrl: 'https://github.com/example/repo/pull/42',
+      },
+      files: paths.map((path) => ({
+        path,
+        status: 'modified',
+        diffAvailable: true,
+      })),
+    });
+
+    expect(evidence.files).toHaveLength(501);
+    expect(evidence.omittedFileCount).toBeUndefined();
+    expect(evidence.completeness).toBe('complete');
+  });
 });

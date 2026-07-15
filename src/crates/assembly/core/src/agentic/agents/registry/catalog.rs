@@ -3,9 +3,9 @@ use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
     Agent, AgenticMode, ArchitectureReviewerAgent, BusinessLogicReviewerAgent, ClawMode,
     CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent,
-    ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent, GenerateDocAgent,
-    MultitaskMode, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
-    ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
+    ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent,
+    GeneralReviewerAgent, GenerateDocAgent, MultitaskMode, PerformanceReviewerAgent, PlanMode,
+    ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
 use bitfun_agent_runtime::agents as runtime_agents;
@@ -45,6 +45,7 @@ fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
         "ResearchSpecialist" => || Arc::new(ResearchSpecialistAgent::new()),
         "FileFinder" => || Arc::new(FileFinderAgent::new()),
         "ReviewBusinessLogic" => || Arc::new(BusinessLogicReviewerAgent::new()),
+        "ReviewGeneral" => || Arc::new(GeneralReviewerAgent::new()),
         "ReviewPerformance" => || Arc::new(PerformanceReviewerAgent::new()),
         "ReviewSecurity" => || Arc::new(SecurityReviewerAgent::new()),
         "ReviewArchitecture" => || Arc::new(ArchitectureReviewerAgent::new()),

@@ -29,7 +29,8 @@ pub use definitions::modes::{
 };
 pub use definitions::review::{
     ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
-    PerformanceReviewerAgent, ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
+    GeneralReviewerAgent, PerformanceReviewerAgent, ReviewFixerAgent, ReviewJudgeAgent,
+    SecurityReviewerAgent,
 };
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{

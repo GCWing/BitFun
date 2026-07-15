@@ -1,7 +1,7 @@
 # BitFun 智能体工作流交互与边界补充设计
 
 > 范围：为 [../agent-workflow-staged-plan.md](../agent-workflow-staged-plan.md) 中的场景提供交互和边界补充。
-> 本文不定义新的 Agent Kernel、Harness、QDP 或 DeepReview 核心对象模型；实现时优先复用既有 session、task、Agent Kernel/Harness long-running queue、DeepReview manifest、runtime events 和质量数据面契约。历史 work packets 仅用于旧会话兼容。
+> 本文不定义新的 Agent Kernel、Harness、QDP 或 DeepReview 核心对象模型；实现时优先复用既有 session、task、Agent Kernel/Harness long-running queue、DeepReview manifest、runtime events 和质量数据面契约。新受管 work packets 仅服务大目标 L1 Review，历史 packet 继续兼容读取。
 
 ## 1. 设计定位
 
@@ -24,7 +24,7 @@
 |---|---|---|
 | 任务生命周期、取消、恢复、事件顺序 | Agent Kernel | 只消费状态，不新增并行生命周期 |
 | 工具执行、验证命令、subagent 调用 | Execution | 只返回工具/验证结果，不写产品结论 |
-| DeepReview 内部 capacity queue、只读 reviewer、report enrichment | 现有 DeepReview 架构 | 仅显式 L3 严格审查复用，不作为通用 workflow/task queue |
+| DeepReview 内部 capacity queue、只读 reviewer、report enrichment | 现有 DeepReview 架构 | 显式 L3 与大目标受管 L1 内部复用；L1 对外仍呈现普通 Review，不作为通用 workflow/task queue |
 | 权限、执行域、沙箱、凭据和网络 | Security Boundary | 成本或审查确认不能绕过安全确认 |
 | 证据、指标和回放 | Quality Data Plane | P0/P1 不新增默认事件；先用既有最小事件 |
 | GUI 展示和用户决策 | Product Surface | 展示状态、预算、风险和下一步，不拥有权威事实 |
@@ -34,7 +34,7 @@
 | 场景 | 默认投影 | 允许升级 |
 |---|---|---|
 | 低风险任务 | 任务完成摘要 | 用户显式要求更稳时可做本地 L1 |
-| 本地显式审查 | Review 面板 | 始终一个只读 reviewer；不进入 PR/团队流程 |
+| 本地显式审查 | Review 面板 | 小目标一个只读 reviewer；大目标使用有界受管批次；不进入 PR/团队流程 |
 | PR / 受保护分支 / 团队规则审查 | Review 面板 + 就绪度摘要 | 当前仅显式 strict 入口进入 L3；受管策略只能提示 |
 | CI/测试失败 | 长任务条 + 失败摘要 | 多独立失败且 oracle 可用时队列化 |
 | PR comments 批量修复 | 单一任务控制台 | 评论冲突或高风险路径由同一 reviewer 定向复核；不自动扩展 reviewer |
@@ -42,19 +42,19 @@
 
 ## 4. Review 交互
 
-Review 是用户唯一需要理解的审查入口。普通 Review 固定为一个只读 reviewer；显式 Strict Review 复用 L3 DeepReview，由主审直接完成更深检查并自行决定是否需要一次专家或条件质量检查。用户不需要理解 DeepReview、subagent 或历史 work packets。
+Review 是用户唯一需要理解的审查入口。普通小目标 Review 使用一个只读 reviewer；大目标 Review 在同一个 L1 结果内使用受管、前台等待的只读工作包；显式 Strict Review 复用 L3 DeepReview，由主审直接完成更深检查并自行决定是否需要一次专家或条件质量检查。用户不需要理解 DeepReview、subagent 或 work packets。
 
 入口兼容约束：
 
 - `/DeepReview` 只作为迁移窗口内的历史兼容输入，等价路由到 “Review: Strict”，不作为高级别名、调试入口或长期产品入口。
-- child session 和 auxiliary pane 默认后台化；历史 work packets 与 capacity queue 只服务旧会话兼容，普通用户只看到统一 Review 面板。
+- child session、auxiliary pane 和受管工作包都是内部实现；普通用户只看到统一 Review 面板，worker 不得在所属 Review 回合结束后延迟回传。
 - 如果辅助 pane 因排障需要暴露，必须折叠到高级详情，并同步更新 DeepReview 架构文档，避免形成第二套产品入口。
 
 | 强度 | 用户看到 | 默认限制 |
 |---|---|---|
 | L0 | 快速检查摘要 | 不创建 reviewer |
-| L1 | 独立审查结果 | 一个只读 reviewer，由模型决定检查深度 |
-| L3 | 严格审查结果和覆盖说明 | 仅 `/review strict`、`/DeepReview` 兼容输入或内部显式 strict follow-up，确认后启动 |
+| L1 | 独立审查结果 | 小目标一个只读 reviewer；大目标最多 8 个受管文件批次、2 路并发，统一聚合并明确 deferred coverage |
+| L3 | 严格审查结果和覆盖说明 | 仅 `/review strict`、`/DeepReview` 兼容输入或内部显式 strict follow-up；直接启动，无例行确认框 |
 
 Review 面板只按问题呈现：
 
@@ -72,7 +72,7 @@ Review 面板只按问题呈现：
 
 | 触发 | UI 行为 |
 |---|---|
-| 显式 Strict Review | 展示范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界；不估算底层模型请求或 token |
+| 显式 Strict Review | 直接启动；在运行状态和结果中展示范围、耗时倾向和只读边界，不估算底层模型请求或 token |
 | 主审决定请求专家或质量检查 | 只在具体不确定性、高严重度、冲突或低置信度时发生，不提前承诺固定覆盖角色 |
 | 需要并发 worker | 说明节省墙钟时间和冲突风险 |
 | 预算接近上限 | 暂停扩大执行，给出追加预算、保留核心检查、只收敛已完成 |
@@ -82,8 +82,8 @@ Review 面板只按问题呈现：
 
 成本确认最低契约：
 
-- 只有进入显式 L3 strict review、并发 worker、批量队列或长任务控制台时才弹出预算确认。
-- 当前 Strict Review 确认展示范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界。底层模型请求与 Token 估算、启动前范围调整和停止选项尚未实现，不写成当前能力。
+- Review、Strict Review 和受管 L1 工作包都不弹例行预算确认；范围、覆盖、耗时倾向和只读边界通过非阻塞状态与结果呈现。
+- 只有特殊异常、权限/安全边界或缺少必须由用户决定的信息时才请求确认；底层模型请求与 Token 估算、启动前范围调整和停止选项尚未实现，不写成当前能力。
 - 预算确认不能替代安全确认；执行位置、沙箱等级、写入范围、网络/凭据状态仍由安全边界提供。
 
 ## 6. 批量任务 GUI

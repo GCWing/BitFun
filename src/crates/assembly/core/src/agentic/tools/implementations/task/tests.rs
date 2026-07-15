@@ -158,6 +158,7 @@ async fn launch_review_agent_schema_exposes_retry_without_session_or_fork_contro
     assert_eq!(schema["properties"]["retry"]["type"], "boolean");
     assert_eq!(schema["properties"]["auto_retry"]["type"], "boolean");
     assert_eq!(schema["properties"]["retry_coverage"]["type"], "object");
+    assert_eq!(schema["properties"]["packet_id"]["type"], "string");
     assert!(schema["properties"].get("fork_context").is_none());
     assert!(schema["properties"].get("session_id").is_none());
     assert!(schema["properties"].get("run_in_background").is_none());
@@ -166,6 +167,65 @@ async fn launch_review_agent_schema_exposes_retry_without_session_or_fork_contro
         .unwrap()
         .iter()
         .any(|value| value.as_str() == Some("subagent_type")));
+}
+
+fn managed_review_tool_context() -> ToolUseContext {
+    let mut context = test_tool_context("DeepReview");
+    context.custom_data.insert(
+        "deep_review_run_manifest".to_string(),
+        json!({
+            "reviewMode": "deep",
+            "managedReviewPlan": { "version": 1 },
+            "workPackets": [{
+                "packetId": "managed-1",
+                "subagentId": "ReviewGeneral",
+                "launchBatch": 1
+            }]
+        }),
+    );
+    context
+}
+
+#[tokio::test]
+async fn managed_review_agent_requires_an_exact_packet_id() {
+    let context = managed_review_tool_context();
+    let tool = LaunchReviewAgentTool::new();
+    let without_packet = tool
+        .validate_input(
+            &json!({
+                "description": "Review managed batch",
+                "prompt": "Review the assigned files",
+                "subagent_type": "ReviewGeneral"
+            }),
+            Some(&context),
+        )
+        .await;
+    let unknown_packet = tool
+        .validate_input(
+            &json!({
+                "description": "Review managed batch",
+                "prompt": "Review the assigned files",
+                "subagent_type": "ReviewGeneral",
+                "packet_id": "missing"
+            }),
+            Some(&context),
+        )
+        .await;
+    let valid_packet = tool
+        .validate_input(
+            &json!({
+                "description": "Review managed batch",
+                "prompt": "Review the assigned files",
+                "subagent_type": "ReviewGeneral",
+                "packet_id": "managed-1"
+            }),
+            Some(&context),
+        )
+        .await;
+
+    assert!(!without_packet.result);
+    assert!(!unknown_packet.result);
+    assert!(valid_packet.result);
 }
 
 #[test]
@@ -603,6 +663,10 @@ fn deep_review_policy_allows_only_configured_team_members() {
 
     assert_eq!(
         policy.classify_subagent("ReviewBusinessLogic").unwrap(),
+        DeepReviewSubagentRole::Reviewer
+    );
+    assert_eq!(
+        policy.classify_subagent("ReviewGeneral").unwrap(),
         DeepReviewSubagentRole::Reviewer
     );
     assert_eq!(

@@ -331,6 +331,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       defaultValue: progressSummary.text,
     });
   }, [phase, progressSummary, t]);
+  const managedReviewPlan = childSession?.deepReviewRunManifest?.managedReviewPlan;
 
   const partialResults = useMemo(() => {
     if (!childSession || childSession.sessionKind !== 'deep_review') return null;
@@ -900,6 +901,25 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         minimizeLabel={t('deepReviewActionBar.minimize')}
         onMinimize={handleMinimize}
       />
+
+      {phase === 'review_running' && managedReviewPlan && (
+        <div className="deep-review-action-bar__progress" role="status" aria-live="polite">
+          <span className="deep-review-action-bar__progress-text">
+            {t('deepReviewActionBar.managedCoverageProgress', {
+              planned: managedReviewPlan.plannedFileCount,
+              total: managedReviewPlan.totalFileCount,
+              parallel: managedReviewPlan.maxParallelInstances,
+            })}
+          </span>
+          {managedReviewPlan.deferredFileCount > 0 && (
+            <span className="deep-review-action-bar__elapsed">
+              {t('deepReviewActionBar.managedCoverageDeferred', {
+                count: managedReviewPlan.deferredFileCount,
+              })}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Running progress */}
       {(['review_running', 'fix_running', 'resume_running'].includes(phase)) && progressSummary && (

@@ -519,6 +519,32 @@ describe('launchDeepReviewSession', () => {
     );
   });
 
+  it('keeps managed execution internal while presenting an ordinary Review child', async () => {
+    mockCreateBtwChildSession.mockResolvedValue({
+      childSessionId: 'child-managed',
+      parentDialogTurnId: 'turn-managed',
+    });
+    mockSendMessage.mockResolvedValue(undefined);
+
+    await launchDeepReviewSession({
+      parentSessionId: 'parent-123',
+      workspacePath: 'D:\\workspace\\repo',
+      prompt: 'Run managed packets',
+      displayMessage: 'Review started',
+      presentationKind: 'review',
+    });
+
+    expect(mockCreateBtwChildSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionKind: 'review',
+        agentType: 'DeepReview',
+      }),
+    );
+    expect(mockInsertReviewSessionSummaryMarker).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'review' }),
+    );
+  });
+
   it('passes the run manifest into child session creation', async () => {
     const runManifest = { reviewMode: 'deep', skippedReviewers: [] };
     mockCreateBtwChildSession.mockResolvedValue({
@@ -591,7 +617,7 @@ describe('launchDeepReviewSession', () => {
     }
 
     expect(caughtError).toBeInstanceOf(Error);
-    expect((caughtError as Error).message).toBe('Strict review failed to start. Please try again.');
+    expect((caughtError as Error).message).toBe('Review failed to start. Please try again.');
     expect((caughtError as { launchErrorMessageKey?: string }).launchErrorMessageKey).toBe(
       'deepReviewActionBar.launchError.unknown',
     );

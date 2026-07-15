@@ -29,7 +29,7 @@ import type { ContextItem, FileContext, DirectoryContext, ImageContext } from '@
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
-import { getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
+import { getInlineSlashCommandPickerQuery, getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
 import {
   resolveSlashActionInputValue,
   type SlashActionId,
@@ -1163,6 +1163,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ]);
 
   useEffect(() => {
+    const inlineCommandQuery = getInlineSlashCommandPickerQuery(inlineTriggerState);
+    if (inlineCommandQuery !== null) {
+      setSlashCommandState(prev => ({
+        isActive: true,
+        kind: derivedState?.isProcessing && !isAcpInputSession ? 'actions' : 'all',
+        query: inlineCommandQuery,
+        selectedIndex: prev.query === inlineCommandQuery ? prev.selectedIndex : 0,
+      }));
+      return;
+    }
+
     if (isAcpInputSession || !canUseSkillsForTarget) {
       if (slashCommandState.isActive && slashCommandState.kind === 'skills') {
         setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
@@ -1193,7 +1204,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (slashCommandState.isActive && slashCommandState.kind === 'skills') {
       setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     }
-  }, [canUseSkillsForTarget, inlineTriggerState, isAcpInputSession, slashCommandState.isActive, slashCommandState.kind]);
+  }, [canUseSkillsForTarget, derivedState?.isProcessing, inlineTriggerState, isAcpInputSession, slashCommandState.isActive, slashCommandState.kind]);
 
   const clearPendingLargePastes = useCallback(() => {
     pendingLargePastesRef.current = {};
@@ -2947,6 +2958,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const selectSlashCommandMode = useCallback((modeId: string) => {
     requestModeChange(modeId);
+
+    if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
+      const controller = richTextInputRef.current as (HTMLDivElement & {
+        replaceActiveInlineTrigger?: (replacementText: string) => void;
+      }) | null;
+      controller?.replaceActiveInlineTrigger?.('');
+      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      return;
+    }
     
     dispatchInput({ type: 'CLEAR_VALUE' });
     setSlashCommandState({
@@ -2955,12 +2975,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       query: '',
       selectedIndex: 0,
     });
-  }, [requestModeChange]);
+  }, [inlineTriggerState, requestModeChange]);
 
   const selectSlashCommandAction = useCallback((actionId: SlashActionId) => {
     const raw = inputState.value || '';
     const next = resolveSlashActionInputValue(actionId, raw, isBtwSession);
     if (next === null) {
+      return;
+    }
+
+    if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
+      const controller = richTextInputRef.current as (HTMLDivElement & {
+        replaceActiveInlineTrigger?: (replacementText: string) => void;
+      }) | null;
+      controller?.replaceActiveInlineTrigger?.(next.trimEnd());
+      setQueuedInput(null);
+      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
       return;
     }
 
@@ -2971,9 +3001,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
-  }, [inputState.value, isBtwSession, setQueuedInput]);
+  }, [inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
 
   const selectSlashPromptCommand = useCallback((item: SlashMcpPromptItem) => {
+    if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
+      const controller = richTextInputRef.current as (HTMLDivElement & {
+        replaceActiveInlineTrigger?: (replacementText: string) => void;
+      }) | null;
+      controller?.replaceActiveInlineTrigger?.(item.command);
+      setQueuedInput(null);
+      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      return;
+    }
     const hasArguments = item.arguments.length > 0;
     dispatchInput({
       type: 'SET_VALUE',
@@ -2982,14 +3021,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
-  }, [setQueuedInput]);
+  }, [inlineTriggerState, setQueuedInput]);
 
   const selectSlashAcpCommand = useCallback((item: SlashAcpCommandItem) => {
+    if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
+      const controller = richTextInputRef.current as (HTMLDivElement & {
+        replaceActiveInlineTrigger?: (replacementText: string) => void;
+      }) | null;
+      controller?.replaceActiveInlineTrigger?.(acpSlashCommandText(item.id));
+      setQueuedInput(null);
+      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      return;
+    }
     dispatchInput({ type: 'SET_VALUE', payload: acpSlashCommandText(item.id) });
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
-  }, [setQueuedInput]);
+  }, [inlineTriggerState, setQueuedInput]);
 
   const getRichTextInlineTriggerController = useCallback(() => {
     return richTextInputRef.current as (HTMLDivElement & {

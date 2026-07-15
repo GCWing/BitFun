@@ -8,7 +8,8 @@
 use super::constants::{
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
     DEFAULT_MAX_RETRIES_PER_ROLE, DEFAULT_MAX_SAME_ROLE_INSTANCES,
-    DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD, MANAGED_REVIEW_MAX_BATCHES, REVIEWER_GENERAL_AGENT_TYPE,
+    REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -189,6 +190,7 @@ impl DeepReviewExecutionPolicy {
     ) -> Result<DeepReviewSubagentRole, DeepReviewPolicyViolation> {
         if CORE_REVIEWER_AGENT_TYPES.contains(&subagent_type)
             || CONDITIONAL_REVIEWER_AGENT_TYPES.contains(&subagent_type)
+            || subagent_type == REVIEWER_GENERAL_AGENT_TYPE
             || self
                 .extra_subagent_ids
                 .iter()
@@ -281,6 +283,16 @@ impl DeepReviewExecutionPolicy {
 
         let mut policy = self.clone();
         let mut has_explicit_specialist_ceiling = false;
+        let managed_reviewer_call_ceiling = manifest
+            .get("managedReviewPlan")
+            .or_else(|| manifest.get("managed_review_plan"))
+            .and_then(|plan| {
+                plan.get("maxBatches")
+                    .or_else(|| plan.get("max_batches"))
+                    .and_then(Value::as_u64)
+            })
+            .and_then(|value| usize::try_from(value).ok())
+            .map(|value| value.clamp(1, MANAGED_REVIEW_MAX_BATCHES));
         if let Some(strategy_level) =
             DeepReviewStrategyLevel::from_value(manifest.get("strategyLevel"))
         {
@@ -323,8 +335,8 @@ impl DeepReviewExecutionPolicy {
                 clamp_usize(
                     execution_policy.get("maxReviewerCalls"),
                     1,
-                    MAX_STRICT_SPECIALIST_CALLS,
-                    MAX_STRICT_SPECIALIST_CALLS,
+                    managed_reviewer_call_ceiling.unwrap_or(MAX_STRICT_SPECIALIST_CALLS),
+                    managed_reviewer_call_ceiling.unwrap_or(MAX_STRICT_SPECIALIST_CALLS),
                 )
             } else {
                 policy.max_reviewer_calls
@@ -334,6 +346,14 @@ impl DeepReviewExecutionPolicy {
         policy.apply_strategy_runtime_budget();
 
         if !has_explicit_specialist_ceiling {
+            if let Some(managed_ceiling) = managed_reviewer_call_ceiling {
+                policy.max_reviewer_calls = manifest
+                    .get("workPackets")
+                    .or_else(|| manifest.get("work_packets"))
+                    .and_then(Value::as_array)
+                    .map_or(1, |packets| packets.len().clamp(1, managed_ceiling));
+                return policy;
+            }
             // Historical manifests predate the explicit specialist-call
             // ceiling. Preserve their effective same-role/extra-member budget
             // after all manifest and strategy bounds have been applied.
@@ -669,6 +689,30 @@ mod tests {
         let effective = policy.with_run_manifest_execution_policy(&manifest);
 
         assert_eq!(effective.max_reviewer_calls, 1);
+    }
+
+    #[test]
+    fn managed_manifest_caps_reviewer_calls_to_declared_packet_budget() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "deep",
+            "managedReviewPlan": {
+                "version": 1,
+                "maxBatches": 8
+            },
+            "executionPolicy": {
+                "maxReviewerCalls": 999
+            },
+            "workPackets": (0..8).map(|index| json!({
+                "packetId": format!("packet-{index}"),
+                "subagentId": "ReviewGeneral"
+            })).collect::<Vec<_>>()
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.max_reviewer_calls, 8);
     }
 
     #[test]

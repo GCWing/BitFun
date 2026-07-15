@@ -72,6 +72,7 @@ export const TOOL_CARD_COMPONENTS = {
   
   // Advanced tools
   'Task': TaskToolDisplay,
+  'LaunchReviewAgent': TaskToolDisplay,
   'TodoWrite': TodoWriteDisplay,
   
   'submit_code_review': CodeReviewToolCard,

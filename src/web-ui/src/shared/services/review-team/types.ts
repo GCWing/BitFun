@@ -496,6 +496,16 @@ export interface ReviewTeamRunManifest {
   enabledExtraReviewers: ReviewTeamManifestMember[];
   skippedReviewers: ReviewTeamManifestMember[];
   workPackets?: ReviewTeamWorkPacket[];
+  managedReviewPlan?: {
+    version: 1;
+    totalFileCount: number;
+    plannedFileCount: number;
+    deferredFileCount: number;
+    maxFilesPerBatch: number;
+    maxBatches: number;
+    maxParallelInstances: number;
+    workerTimeoutSeconds: number;
+  };
 }
 
 export function getActiveReviewTeamManifestMembers(

@@ -773,6 +773,8 @@
   "deepReviewActionBar": {
     "reviewRunningDeep": "严格审核进行中...",
     "reviewRunningStandard": "审核进行中...",
+    "managedCoverageProgress": "正在分批审核 · 计划覆盖 {{planned}}/{{total}} · 最多 {{parallel}} 路并行",
+    "managedCoverageDeferred": "本轮将有 {{count}} 个文件未覆盖",
     "reviewCompleted": "严格审核已完成",
     "fixRunning": "正在修复...",
     "fixCompleted": "修复完成",

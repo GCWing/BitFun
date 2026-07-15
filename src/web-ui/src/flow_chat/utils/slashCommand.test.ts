@@ -2,11 +2,38 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getSlashCommandPickerQuery,
+  getInlineSlashCommandPickerQuery,
   isSlashCommandPickerQuery,
   isSlashCommand,
   matchesSlashCommand,
   stripSlashCommand,
 } from './slashCommand';
+
+describe('getInlineSlashCommandPickerQuery', () => {
+  it('uses the active leading token even when text already follows the caret', () => {
+    expect(getInlineSlashCommandPickerQuery({
+      isActive: true,
+      trigger: '/',
+      query: 'Rev',
+      startOffset: 0,
+    })).toBe('rev');
+  });
+
+  it('leaves non-leading slash and skill triggers to inline skills', () => {
+    expect(getInlineSlashCommandPickerQuery({
+      isActive: true,
+      trigger: '/',
+      query: 'pdf',
+      startOffset: 12,
+    })).toBeNull();
+    expect(getInlineSlashCommandPickerQuery({
+      isActive: true,
+      trigger: '$',
+      query: 'pdf',
+      startOffset: 0,
+    })).toBeNull();
+  });
+});
 
 describe('matchesSlashCommand', () => {
   it('matches slash command tokens at a whitespace boundary', () => {

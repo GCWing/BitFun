@@ -12,7 +12,7 @@ import type {
   ReviewTargetWorkspaceBinding,
 } from './types';
 
-const REVIEW_TARGET_FILE_LIMIT = 500;
+const REVIEW_TARGET_MANIFEST_FILE_LIMIT = 4096;
 const REVIEW_TARGET_DIFF_TOTAL_CHARS = 80_000;
 
 function maximumUnifiedDiffSectionLength(diff: string | undefined): number {
@@ -121,8 +121,8 @@ function cappedFiles(
   files: ReviewTargetEvidenceFile[],
 ): { files: ReviewTargetEvidenceFile[]; omittedFileCount: number } {
   return {
-    files: files.slice(0, REVIEW_TARGET_FILE_LIMIT),
-    omittedFileCount: Math.max(0, files.length - REVIEW_TARGET_FILE_LIMIT),
+    files: files.slice(0, REVIEW_TARGET_MANIFEST_FILE_LIMIT),
+    omittedFileCount: Math.max(0, files.length - REVIEW_TARGET_MANIFEST_FILE_LIMIT),
   };
 }
 
@@ -158,8 +158,11 @@ function evidence(params: {
   const capped = cappedFiles(params.files);
   const omittedFileCount = capped.omittedFileCount + (params.omittedFileCount ?? 0);
   const limitations = [...(params.limitations ?? [])];
-  if (omittedFileCount > 0 && !limitations.includes('target_file_limit_exceeded')) {
-    limitations.push('target_file_limit_exceeded');
+  if (
+    capped.omittedFileCount > 0 &&
+    !limitations.includes('target_manifest_file_budget_exhausted')
+  ) {
+    limitations.push('target_manifest_file_budget_exhausted');
   }
   const completeness = finalCompleteness(
     params.completeness,

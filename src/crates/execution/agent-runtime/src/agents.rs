@@ -123,6 +123,12 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
             SubagentVisibilityPolicy::public(),
         ),
         builtin_agent_spec(
+            "ReviewGeneral",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
             "ReviewBusinessLogic",
             SubAgent,
             "fast",
@@ -207,6 +213,7 @@ pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
         | "ResearchSpecialist"
         | "DeepReview"
         | "ReviewBusinessLogic"
+        | "ReviewGeneral"
         | "ReviewPerformance"
         | "ReviewSecurity"
         | "ReviewArchitecture"

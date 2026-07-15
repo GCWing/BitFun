@@ -23,9 +23,9 @@ export interface DeepReviewLaunchError extends Error {
 }
 
 const LAUNCH_ERROR_DEFAULT_MESSAGES: Record<string, string> = {
-  'deepReviewActionBar.launchError.modelConfig': 'Strict review could not create a review session. Check the model configuration.',
-  'deepReviewActionBar.launchError.network': 'Network connection was interrupted before strict review could start.',
-  'deepReviewActionBar.launchError.unknown': 'Strict review failed to start. Please try again.',
+  'deepReviewActionBar.launchError.modelConfig': 'Review could not create a session. Check the model configuration.',
+  'deepReviewActionBar.launchError.network': 'Network connection was interrupted before Review could start.',
+  'deepReviewActionBar.launchError.unknown': 'Review failed to start. Please try again.',
 };
 
 export function normalizeErrorMessage(error: unknown): string {
@@ -37,7 +37,7 @@ export function normalizeErrorMessage(error: unknown): string {
     return error.trim();
   }
 
-  return 'Strict review failed to start';
+  return 'Review failed to start';
 }
 
 export function isSessionMissingError(error: unknown): boolean {
@@ -50,13 +50,13 @@ function describeLaunchStep(step: DeepReviewLaunchStep): string {
     case 'prepare_review_team':
       return 'checking review coverage';
     case 'create_child_session':
-      return 'creating the strict review session';
+      return 'creating the Review session';
     case 'open_aux_pane':
-      return 'preparing the strict review session';
+      return 'preparing the Review session';
     case 'send_start_message':
-      return 'starting the strict review run';
+      return 'starting the Review run';
     default:
-      return 'launching strict review';
+      return 'launching Review';
   }
 }
 
@@ -121,6 +121,6 @@ export function buildLaunchCleanupError(
   const cleanupSummary = cleanupResult.cleanupIssues.join(' ');
   return new Error(
     `${originalMessage} Cleanup was incomplete after failure while ${describeLaunchStep(launchStep)}. ` +
-      `The partially created strict review session (${childSessionId}) may need manual cleanup. ${cleanupSummary}`.trim(),
+      `The partially created Review session (${childSessionId}) may need manual cleanup. ${cleanupSummary}`.trim(),
   );
 }

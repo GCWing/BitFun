@@ -12,7 +12,7 @@ describe('Deep Review launch errors', () => {
   it('normalizes empty and string errors', () => {
     expect(normalizeErrorMessage(' network down ')).toBe('network down');
     expect(normalizeErrorMessage(new Error(' model missing '))).toBe('model missing');
-    expect(normalizeErrorMessage(null)).toBe('Strict review failed to start');
+    expect(normalizeErrorMessage(null)).toBe('Review failed to start');
   });
 
   it('recognizes missing-session cleanup failures as non-fatal', () => {
@@ -29,7 +29,7 @@ describe('Deep Review launch errors', () => {
       { cleanupCompleted: true, cleanupIssues: [] },
     );
 
-    expect(error.message).toBe('Network connection was interrupted before strict review could start.');
+    expect(error.message).toBe('Network connection was interrupted before Review could start.');
     expect(error.launchErrorMessageKey).toBe('deepReviewActionBar.launchError.network');
     expect(error.launchErrorCategory).toBe('network');
     expect(error.childSessionId).toBe('child-123');
@@ -64,6 +64,6 @@ describe('Deep Review launch errors', () => {
       'child-123',
       new Error('Session preparation failed'),
       cleanupResult,
-    ).message).toContain('The partially created strict review session (child-123) may need manual cleanup.');
+    ).message).toContain('The partially created Review session (child-123) may need manual cleanup.');
   });
 });
