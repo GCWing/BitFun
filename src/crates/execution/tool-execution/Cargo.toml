@@ -26,5 +26,5 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 vte = { workspace = true, features = ["ansi"] }
-[target.'cfg(not(target_env = ohos))'.dependencies]
+[target.'cfg(not(target_env = "ohos"))'.dependencies]
 readability-js = { version = "0.1.5", optional = true }
