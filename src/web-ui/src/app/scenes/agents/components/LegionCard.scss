@@ -5,12 +5,12 @@
   gap: 10px;
   padding: 16px;
   border-radius: 10px;
-  background: var(--color-surface-card);
-  border: 1px solid var(--color-border-subtle);
+  background: var(--element-bg-soft);
+  border: 1px solid var(--border-subtle);
   transition: border-color 0.15s, box-shadow 0.15s;
 
   &:hover {
-    border-color: var(--color-border-accent);
+    border-color: var(--border-accent);
     box-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
   }
 
@@ -28,8 +28,8 @@
     width: 36px;
     height: 36px;
     border-radius: 8px;
-    background: var(--color-surface-accent);
-    color: var(--color-text-accent);
+    background: var(--color-overlay-white-12);
+    color: var(--color-accent-500);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -94,6 +94,6 @@
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 }
