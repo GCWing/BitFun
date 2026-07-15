@@ -60,6 +60,11 @@ jobs:
     name: Rust Build Check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: frontend-build
+    env:
+      # Keep the workspace check plus desktop test profiles within hosted-runner disk limits.
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     strategy:
       fail-fast: false
       matrix:
@@ -123,7 +128,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          shared-key: "ci-check-v2-${{ runner.os }}-no-cargo-bin-v1"
+          shared-key: "ci-check-v3-${{ runner.os }}-no-cargo-bin-v1"
           cache-bin: false
           # PR caches are scoped to merge refs; main pushes own shared cache refreshes.
           save-if: ${{ github.event_name != 'pull_request' }}
