@@ -1,4 +1,5 @@
 import type { FlowChatState, FlowToolItem, Session } from '../types/flow-chat';
+import { getEffectiveToolName } from './toolInvocationIdentity';
 
 export const DEEP_REVIEW_SESSION_CONCURRENCY_WARNING_THRESHOLD = 2;
 
@@ -23,7 +24,7 @@ function isActiveSubagentTask(item: unknown): item is FlowToolItem {
   const toolItem = item as FlowToolItem;
   if (
     toolItem.type !== 'tool' ||
-    toolItem.toolName !== 'Task' ||
+    getEffectiveToolName(toolItem) !== 'Task' ||
     !ACTIVE_TOOL_STATUSES.has(toolItem.status)
   ) {
     return false;

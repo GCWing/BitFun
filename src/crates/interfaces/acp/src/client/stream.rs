@@ -246,8 +246,7 @@ fn acp_tool_call_events(
     );
 
     let mut events = vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-        tool_id: tool_id.clone(),
-        tool_name: tool_name.clone(),
+        identity: bitfun_events::ToolEventIdentity::direct(tool_id.clone(), tool_name.clone()),
         params,
         timeout_seconds: None,
     })];
@@ -255,8 +254,7 @@ fn acp_tool_call_events(
     match tool_call.status {
         ToolCallStatus::Completed => {
             events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Completed {
-                tool_id,
-                tool_name,
+                identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
                 result: acp_tool_result_value(
                     tool_call.raw_output,
                     Some(tool_call.content),
@@ -272,8 +270,7 @@ fn acp_tool_call_events(
         }
         ToolCallStatus::Failed => {
             events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Failed {
-                tool_id,
-                tool_name,
+                identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
                 error: acp_tool_error_text(tool_call.raw_output, tool_call.content),
                 duration_ms: None,
                 queue_wait_ms: None,
@@ -307,15 +304,16 @@ fn acp_tool_call_update_events(
             let mut events = Vec::new();
             if let Some(raw_input) = snapshot.raw_input {
                 events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-                    tool_id: tool_id.clone(),
-                    tool_name: tool_name.clone(),
+                    identity: bitfun_events::ToolEventIdentity::direct(
+                        tool_id.clone(),
+                        tool_name.clone(),
+                    ),
                     params: normalize_tool_params(&tool_name, raw_input),
                     timeout_seconds: None,
                 }));
             }
             events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Completed {
-                tool_id,
-                tool_name,
+                identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
                 result: acp_tool_result_value(
                     update.fields.raw_output,
                     update.fields.content,
@@ -334,15 +332,16 @@ fn acp_tool_call_update_events(
             let mut events = Vec::new();
             if let Some(raw_input) = snapshot.raw_input {
                 events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-                    tool_id: tool_id.clone(),
-                    tool_name: tool_name.clone(),
+                    identity: bitfun_events::ToolEventIdentity::direct(
+                        tool_id.clone(),
+                        tool_name.clone(),
+                    ),
                     params: normalize_tool_params(&tool_name, raw_input),
                     timeout_seconds: None,
                 }));
             }
             events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Failed {
-                tool_id,
-                tool_name,
+                identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
                 error: acp_tool_error_text(
                     update.fields.raw_output,
                     update.fields.content.unwrap_or_default(),
@@ -365,8 +364,7 @@ fn acp_tool_call_update_events(
                 }),
             );
             vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-                tool_id,
-                tool_name,
+                identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
                 params,
                 timeout_seconds: None,
             })]
@@ -376,8 +374,7 @@ fn acp_tool_call_update_events(
             .map(|params| {
                 let params = normalize_tool_params(&tool_name, params);
                 vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-                    tool_id,
-                    tool_name,
+                    identity: bitfun_events::ToolEventIdentity::direct(tool_id, tool_name),
                     params,
                     timeout_seconds: None,
                 })]
@@ -441,8 +438,7 @@ mod tests {
 
     fn tool_event(id: &str) -> AcpClientStreamEvent {
         AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-            tool_id: id.to_string(),
-            tool_name: "Bash".to_string(),
+            identity: bitfun_events::ToolEventIdentity::direct(id, "Bash"),
             params: json!({ "command": "echo ok" }),
             timeout_seconds: None,
         })
@@ -694,9 +690,9 @@ mod tests {
         assert_eq!(second.len(), 2);
         match &second[0] {
             AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-                tool_name, params, ..
+                identity, params, ..
             }) => {
-                assert_eq!(tool_name, "Edit");
+                assert_eq!(identity.effective_name(), "Edit");
                 assert_eq!(params["file_path"], "src/lib.rs");
                 assert_eq!(params["old_string"], "before");
                 assert_eq!(params["new_string"], "after");

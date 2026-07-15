@@ -8,6 +8,10 @@ import type { FlowChatContext, DialogTurn } from './types';
 import { buildSessionMetadata } from '../../utils/sessionMetadata';
 import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
 import { isRuntimeStatusItem } from './RuntimeStatusModule';
+import {
+  DEFERRED_TOOL_GATEWAY_NAME,
+  effectiveToolInvocation,
+} from '../../utils/toolInvocationIdentity';
 
 const log = createLogger('PersistenceModule');
 const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
@@ -422,11 +426,19 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
           .filter(({ item }) => item.type === 'tool')
           .map(({ item, index }) => {
             const toolItem = item as any;
+            const effective = effectiveToolInvocation(toolItem.toolName, toolItem.toolCall?.input);
+            if (
+              toolItem.toolName === DEFERRED_TOOL_GATEWAY_NAME
+              && toolItem.status === 'completed'
+              && !effective.isDeferred
+            ) {
+              throw new Error(`Completed deferred tool is missing its wire invocation: ${item.id}`);
+            }
             return {
               id: item.id,
-              toolName: toolItem.wireToolName || toolItem.toolName || '',
+              toolName: toolItem.toolName || '',
               interruptionReason: toolItem.interruptionReason,
-              toolCall: toolItem.wireToolCall || toolItem.toolCall || { input: {}, id: item.id },
+              toolCall: toolItem.toolCall || { input: {}, id: item.id },
               toolResult: toolItem.toolResult,
               aiIntent: toolItem.aiIntent,
               requiresConfirmation: toolItem.requiresConfirmation,

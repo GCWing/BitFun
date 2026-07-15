@@ -162,19 +162,18 @@ async fn wait_for_prompt_completion(
                 }
 
                 if let bitfun_events::ToolEventData::ConfirmationNeeded {
-                    tool_id,
-                    tool_name,
-                    params,
-                    ..
+                    identity, params, ..
                 } = tool_event
                 {
+                    let (effective_tool_name, effective_params) =
+                        bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, &params);
                     handle_permission_request(
                         runtime,
                         connection,
                         acp_session_id,
-                        &tool_id,
-                        &tool_name,
-                        &params,
+                        &identity.tool_id,
+                        effective_tool_name,
+                        effective_params,
                     )
                     .await?;
                 }

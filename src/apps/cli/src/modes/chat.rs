@@ -795,12 +795,16 @@ impl ChatMode {
                             continue;
                         }
                         if let ToolEventData::ConfirmationNeeded {
-                            tool_id, tool_name, ..
+                            identity, ..
                         } = tool_event
                         {
-                            if self.runtime.approval_controller().is_allowed(tool_name) {
+                            if self
+                                .runtime
+                                .approval_controller()
+                                .is_allowed(identity.effective_name())
+                            {
                                 let agent = self.agent.clone();
-                                let tool_id = tool_id.clone();
+                                let tool_id = identity.tool_id.clone();
                                 match tokio::task::block_in_place(|| {
                                     rt_handle.block_on(agent.confirm_tool(&tool_id, None))
                                 }) {

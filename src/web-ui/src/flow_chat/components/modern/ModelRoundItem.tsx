@@ -19,6 +19,7 @@ import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
+import { getEffectiveToolName, projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
 import {
@@ -449,7 +450,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             ));
 
           case 'critical': {
-            const projectedSubagent = group.item.type === 'tool' && (group.item as FlowToolItem).toolName === 'Task'
+            const projectedSubagent = group.item.type === 'tool' && getEffectiveToolName(group.item as FlowToolItem) === 'Task'
               ? group.item as FlowToolItem
               : undefined;
             if (projectedSubagent) {
@@ -519,13 +520,14 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           } else if (item.type === 'thinking' && item.content?.trim()) {
             roundContent.push(`[Thinking]\n${item.content.trim()}`);
           } else if (item.type === 'tool' && item.toolCall) {
-            const toolName = item.toolName || t('copyOutput.unknownTool');
+            const effectiveItem = projectEffectiveToolItem(item);
+            const toolName = effectiveItem.toolName || t('copyOutput.unknownTool');
             let toolContent = t('modelRound.toolCallLabel', { name: toolName }) + '\n';
             
-            if (item.toolCall.input) {
-              const inputStr = typeof item.toolCall.input === 'string'
-                ? item.toolCall.input
-                : JSON.stringify(item.toolCall.input, null, 2);
+            if (effectiveItem.toolCall.input) {
+              const inputStr = typeof effectiveItem.toolCall.input === 'string'
+                ? effectiveItem.toolCall.input
+                : JSON.stringify(effectiveItem.toolCall.input, null, 2);
               toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
             }
             
@@ -871,7 +873,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
     case 'tool': {
       const toolItem = item as FlowToolItem;
       const isCompletedTool = toolItem.status === 'completed';
-      const isCollapsible = isCollapsibleTool(toolItem.toolName);
+      const isCollapsible = isCollapsibleTool(getEffectiveToolName(toolItem));
       const shouldAnimateCompletedExit =
         allowCompletedToolExit &&
         isCollapsible &&

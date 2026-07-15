@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowChatStore } from './FlowChatStore';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
+import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 
 const apiMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
@@ -487,7 +488,7 @@ describe('FlowChatStore round attempts', () => {
     });
   });
 
-  it('projects a persisted deferred call for display while retaining its wire identity', () => {
+  it('restores a persisted deferred call as its canonical wire invocation', () => {
     const [restoredTurn] = (flowChatStore as any).convertToDialogTurns([{
       turnId: 'turn-1',
       sessionId: 'session-1',
@@ -527,16 +528,18 @@ describe('FlowChatStore round attempts', () => {
     const tool = restoredTurn.modelRounds[0].items[0];
     expect(tool).toMatchObject({
       type: 'tool',
-      toolName: 'WebFetch',
-      toolCall: { id: 'tool-1', input: { url: 'https://example.test' } },
-      wireToolName: 'CallDeferredTool',
-      wireToolCall: {
+      toolName: 'CallDeferredTool',
+      toolCall: {
         id: 'tool-1',
         input: {
           tool_name: 'WebFetch',
           args: { url: 'https://example.test' },
         },
       },
+    });
+    expect(projectEffectiveToolItem(tool as any)).toMatchObject({
+      toolName: 'WebFetch',
+      toolCall: { id: 'tool-1', input: { url: 'https://example.test' } },
     });
   });
 });

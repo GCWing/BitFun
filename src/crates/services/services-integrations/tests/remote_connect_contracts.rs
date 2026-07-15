@@ -2264,9 +2264,15 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         attempt_id: None,
         attempt_index: None,
         tool_event: ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "AskUserQuestion".to_string(),
-            params: serde_json::json!({ "questions": [] }),
+            identity: bitfun_events::ToolEventIdentity::resolved(
+                "tool-1",
+                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+                "AskUserQuestion",
+            ),
+            params: serde_json::json!({
+                "tool_name": "AskUserQuestion",
+                "args": { "questions": [] }
+            }),
             timeout_seconds: None,
         },
     });
@@ -2283,7 +2289,7 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         } => {
             assert_eq!(tool_id, "tool-1");
             assert_eq!(tool_name, "AskUserQuestion");
-            assert!(params.is_some());
+            assert_eq!(params, Some(serde_json::json!({ "questions": [] })));
         }
         other => panic!("unexpected event: {other:?}"),
     }

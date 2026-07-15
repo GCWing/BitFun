@@ -14,6 +14,7 @@ pub mod types;
 pub use agentic::{
     AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, DeepReviewQueueReason,
     DeepReviewQueueState, DeepReviewQueueStatus, SubagentParentInfo, ToolEventData,
+    ToolEventIdentity,
 };
 pub use agentic_projection_manifest::{
     agentic_event_projection_manifest_entry, is_legacy_websocket_agentic_event_type,

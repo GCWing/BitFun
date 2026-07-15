@@ -1,4 +1,5 @@
 import type { FlowItem, FlowToolItem } from '../../types/flow-chat';
+import { getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 
 export const COMPLETED_TOOL_TRANSIENT_MS = 1000;
 
@@ -88,7 +89,7 @@ export function buildModelRoundItemGroups({
         flushPendingAsCritical();
       }
     } else if (item.type === 'tool') {
-      const toolName = (item as FlowToolItem).toolName;
+      const toolName = getEffectiveToolName(item as FlowToolItem);
       const isExploreTool = isCollapsibleTool(toolName);
 
       if (isExploreTool) {

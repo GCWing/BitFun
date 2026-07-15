@@ -17,6 +17,7 @@ bitfun-acp = { path = "../../crates/interfaces/acp" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
+bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 
 # CLI framework
 clap = { workspace = true }

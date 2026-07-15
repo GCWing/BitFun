@@ -5,6 +5,7 @@ use std::sync::OnceLock;
 
 use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
 use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
+use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent, ToolEventData};
 use tokio::sync::{broadcast, mpsc};
 
@@ -240,14 +241,15 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
         turn_id,
         tool_event:
             ToolEventData::Started {
-                tool_id,
-                tool_name,
+                identity,
                 params,
                 ..
             },
         ..
     } = &event
     {
+        let (tool_name, params) = effective_tool_invocation(&identity.tool_name, params);
+        debug_assert_eq!(identity.effective_name(), tool_name);
         if tool_name == "Task"
             && params
                 .get("run_in_background")
@@ -256,7 +258,7 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
         {
             state.turns.record_background_task_call(
                 &PeerTurnKey::new(session_id, turn_id),
-                tool_id.clone(),
+                identity.tool_id.clone(),
             )?;
         } else if tool_name == "Task"
             && params.get("action").and_then(serde_json::Value::as_str) == Some("cancel")
@@ -266,7 +268,7 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
             {
                 state.turns.record_background_task_cancellation(
                     &PeerTurnKey::new(session_id, turn_id),
-                    tool_id.clone(),
+                    identity.tool_id.clone(),
                     target_session_id.to_string(),
                 )?;
             }
@@ -282,12 +284,11 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
     {
         let terminal_task_call = match tool_event {
             ToolEventData::Completed {
-                tool_id,
-                tool_name,
+                identity,
                 result,
                 ..
-            } if tool_name == "Task" => Some((
-                tool_id.as_str(),
+            } if identity.effective_name() == "Task" => Some((
+                identity.tool_id.as_str(),
                 result
                     .get("background_task_id")
                     .and_then(serde_json::Value::as_str),
@@ -296,11 +297,11 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
                     .and_then(serde_json::Value::as_u64),
             )),
             ToolEventData::Failed {
-                tool_id, tool_name, ..
+                identity, ..
             }
             | ToolEventData::Cancelled {
-                tool_id, tool_name, ..
-            } if tool_name == "Task" => Some((tool_id.as_str(), None, None)),
+                identity, ..
+            } if identity.effective_name() == "Task" => Some((identity.tool_id.as_str(), None, None)),
             _ => None,
         };
         if let Some((tool_id, background_task_id, cancelled_background_tasks)) = terminal_task_call
@@ -317,13 +318,13 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
     if let AgenticEvent::ToolEvent {
         session_id,
         turn_id,
-        tool_event: ToolEventData::ConfirmationNeeded { tool_id, .. },
+        tool_event: ToolEventData::ConfirmationNeeded { identity, .. },
         ..
     } = &event
     {
         state
             .turns
-            .record_confirmation(&PeerTurnKey::new(session_id, turn_id), tool_id.clone())?;
+            .record_confirmation(&PeerTurnKey::new(session_id, turn_id), identity.tool_id.clone())?;
     }
 
     let Some(projected) = project_agentic_frontend_event(event) else {

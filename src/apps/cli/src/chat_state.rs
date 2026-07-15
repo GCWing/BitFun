@@ -6,6 +6,7 @@ use std::collections::HashMap;
 /// This module only maintains transient state needed for TUI rendering.
 use std::time::SystemTime;
 
+use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_core::agentic::core::message::{
     Message as CoreMessage, MessageContent, MessageRole as CoreMessageRole,
 };
@@ -174,11 +175,13 @@ impl ChatMessage {
 
                 // Add tool call blocks
                 for tc in tool_calls {
+                    let (tool_name, parameters) =
+                        effective_tool_invocation(&tc.tool_name, &tc.arguments);
                     flow_items.push(FlowItem::Tool {
                         tool_state: ToolDisplayState {
                             tool_id: tc.tool_id.clone(),
-                            tool_name: tc.tool_name.clone(),
-                            parameters: tc.arguments.clone(),
+                            tool_name: tool_name.to_string(),
+                            parameters: parameters.clone(),
                             status: ToolDisplayStatus::Success, // Historical messages are completed
                             result: None,
                             progress_message: None,
@@ -200,6 +203,7 @@ impl ChatMessage {
             MessageContent::ToolResult {
                 tool_id,
                 tool_name,
+                effective_tool_name,
                 result,
                 is_error,
                 ..
@@ -208,7 +212,10 @@ impl ChatMessage {
                 flow_items.push(FlowItem::Tool {
                     tool_state: ToolDisplayState {
                         tool_id: tool_id.clone(),
-                        tool_name: tool_name.clone(),
+                        tool_name: effective_tool_name
+                            .as_deref()
+                            .unwrap_or(tool_name)
+                            .to_string(),
                         parameters: serde_json::Value::Null,
                         status: if *is_error {
                             ToolDisplayStatus::Failed
@@ -465,15 +472,15 @@ impl ChatState {
     /// Existing tools are updated in-place via tool_index for O(1) lookup.
     pub(crate) fn handle_tool_event(&mut self, tool_event: &ToolEventData) {
         match tool_event {
-            ToolEventData::EarlyDetected { tool_id, tool_name } => {
+            ToolEventData::EarlyDetected { identity } => {
                 self.insert_or_update_tool(
-                    tool_id,
+                    &identity.tool_id,
                     |_existing| {
                         // Should not exist yet, but handle gracefully
                     },
                     || ToolDisplayState {
-                        tool_id: tool_id.clone(),
-                        tool_name: tool_name.clone(),
+                        tool_id: identity.tool_id.clone(),
+                        tool_name: identity.effective_name().to_string(),
                         parameters: serde_json::Value::Null,
                         status: ToolDisplayStatus::EarlyDetected,
                         result: None,
@@ -487,9 +494,9 @@ impl ChatState {
             }
 
             ToolEventData::ParamsPartial {
-                tool_id, params, ..
+                identity, params, ..
             } => {
-                self.update_tool(tool_id, |tool| {
+                self.update_tool(&identity.tool_id, |tool| {
                     // Only update status if not yet in an advanced execution state.
                     // Due to priority queue ordering, ParamsPartial (Normal priority) may
                     // arrive after Started (High priority), which would incorrectly
@@ -503,9 +510,9 @@ impl ChatState {
             }
 
             ToolEventData::Queued {
-                tool_id, position, ..
+                identity, position, ..
             } => {
-                self.update_tool(tool_id, |tool| {
+                self.update_tool(&identity.tool_id, |tool| {
                     if !tool.status.is_execution_phase() {
                         tool.status = ToolDisplayStatus::Queued;
                     }
@@ -515,11 +522,11 @@ impl ChatState {
             }
 
             ToolEventData::Waiting {
-                tool_id,
+                identity,
                 dependencies,
                 ..
             } => {
-                self.update_tool(tool_id, |tool| {
+                self.update_tool(&identity.tool_id, |tool| {
                     if !tool.status.is_execution_phase() {
                         tool.status = ToolDisplayStatus::Waiting;
                     }
@@ -529,23 +536,27 @@ impl ChatState {
             }
 
             ToolEventData::Started {
-                tool_id,
-                tool_name,
+                identity,
                 params,
                 timeout_seconds: _,
             } => {
-                let params_for_update = params.clone();
-                let params_for_create = params.clone();
-                let tool_name_clone = tool_name.clone();
+                let (tool_name, effective_params) =
+                    effective_tool_invocation(&identity.tool_name, params);
+                debug_assert_eq!(identity.effective_name(), tool_name);
+                let params_for_update = effective_params.clone();
+                let params_for_create = effective_params.clone();
+                let tool_name_for_update = tool_name.to_string();
+                let tool_name_for_create = tool_name.to_string();
                 self.insert_or_update_tool(
-                    tool_id,
+                    &identity.tool_id,
                     |tool| {
                         tool.status = ToolDisplayStatus::Running;
+                        tool.tool_name = tool_name_for_update;
                         tool.parameters = params_for_update;
                     },
                     || ToolDisplayState {
-                        tool_id: tool_id.clone(),
-                        tool_name: tool_name_clone,
+                        tool_id: identity.tool_id.clone(),
+                        tool_name: tool_name_for_create,
                         parameters: params_for_create,
                         status: ToolDisplayStatus::Running,
                         result: None,
@@ -559,7 +570,9 @@ impl ChatState {
 
                 // Auto-create question prompt for AskUserQuestion tool
                 if tool_name == "AskUserQuestion" {
-                    if let Some(prompt) = QuestionPrompt::from_params(tool_id.clone(), params) {
+                    if let Some(prompt) =
+                        QuestionPrompt::from_params(identity.tool_id.clone(), effective_params)
+                    {
                         self.question_prompt = Some(prompt);
                     }
                 }
@@ -568,20 +581,20 @@ impl ChatState {
             }
 
             ToolEventData::Progress {
-                tool_id, message, ..
+                identity, message, ..
             } => {
-                self.update_tool(tool_id, |tool| {
+                self.update_tool(&identity.tool_id, |tool| {
                     tool.progress_message = Some(message.clone());
                 });
                 self.rebuild_streaming_message();
             }
 
             ToolEventData::Streaming {
-                tool_id,
+                identity,
                 chunks_received,
                 ..
             } => {
-                self.update_tool(tool_id, |tool| {
+                self.update_tool(&identity.tool_id, |tool| {
                     tool.status = ToolDisplayStatus::Streaming;
                     tool.progress_message = Some(format!("Received {} chunks", chunks_received));
                 });
@@ -589,50 +602,51 @@ impl ChatState {
             }
 
             ToolEventData::ConfirmationNeeded {
-                tool_id,
-                tool_name,
-                params,
-                ..
+                identity, params, ..
             } => {
-                self.update_tool(tool_id, |tool| {
+                let (tool_name, effective_params) =
+                    effective_tool_invocation(&identity.tool_name, params);
+                debug_assert_eq!(identity.effective_name(), tool_name);
+                self.update_tool(&identity.tool_id, |tool| {
                     tool.status = ToolDisplayStatus::ConfirmationNeeded;
+                    tool.tool_name = tool_name.to_string();
+                    tool.parameters = effective_params.clone();
                     tool.progress_message = Some("Waiting for user confirmation".to_string());
                 });
                 // Auto-create permission prompt for user interaction
                 self.permission_prompt = Some(PermissionPrompt::new(
-                    tool_id.clone(),
-                    tool_name.clone(),
-                    params.clone(),
+                    identity.tool_id.clone(),
+                    tool_name.to_string(),
+                    effective_params.clone(),
                 ));
                 self.rebuild_streaming_message();
             }
 
-            ToolEventData::Confirmed { tool_id, .. } => {
-                self.update_tool(tool_id, |tool| {
+            ToolEventData::Confirmed { identity } => {
+                self.update_tool(&identity.tool_id, |tool| {
                     tool.status = ToolDisplayStatus::Confirmed;
                 });
                 // Clear permission prompt if it matches this tool
-                if self.permission_prompt.as_ref().map(|p| &p.tool_id) == Some(tool_id) {
+                if self.permission_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
                     self.permission_prompt = None;
                 }
                 self.rebuild_streaming_message();
             }
 
-            ToolEventData::Rejected { tool_id, .. } => {
-                self.update_tool(tool_id, |tool| {
+            ToolEventData::Rejected { identity } => {
+                self.update_tool(&identity.tool_id, |tool| {
                     tool.status = ToolDisplayStatus::Rejected;
                     tool.result = Some("User rejected execution".to_string());
                 });
                 // Clear permission prompt if it matches this tool
-                if self.permission_prompt.as_ref().map(|p| &p.tool_id) == Some(tool_id) {
+                if self.permission_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
                     self.permission_prompt = None;
                 }
                 self.rebuild_streaming_message();
             }
 
             ToolEventData::Completed {
-                tool_id,
-                tool_name,
+                identity,
                 result,
                 result_for_assistant,
                 duration_ms,
@@ -644,8 +658,9 @@ impl ChatState {
                     .unwrap_or_else(|| extract_fallback_summary(result));
                 let metadata = result.clone();
                 let dur = *duration_ms;
-                self.update_tool(tool_id, |tool| {
-                    let is_hmos_failed = tool_name == "HmosCompilation"
+                self.update_tool(&identity.tool_id, |tool| {
+                    tool.tool_name = identity.effective_name().to_string();
+                    let is_hmos_failed = identity.effective_name() == "HmosCompilation"
                         && result.get("success").and_then(|v| v.as_bool()) == Some(false);
                     tool.status = if is_hmos_failed {
                         ToolDisplayStatus::Failed
@@ -657,35 +672,39 @@ impl ChatState {
                     tool.duration_ms = Some(dur);
                 });
                 // Clear question prompt if this tool completed
-                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(tool_id) {
+                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
                     self.question_prompt = None;
                 }
                 self.rebuild_streaming_message();
             }
 
-            ToolEventData::Failed { tool_id, error, .. } => {
+            ToolEventData::Failed {
+                identity, error, ..
+            } => {
                 let err = error.clone();
-                self.update_tool(tool_id, |tool| {
+                self.update_tool(&identity.tool_id, |tool| {
+                    tool.tool_name = identity.effective_name().to_string();
                     tool.status = ToolDisplayStatus::Failed;
                     tool.result = Some(err);
                 });
                 // Clear question prompt if this tool failed
-                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(tool_id) {
+                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
                     self.question_prompt = None;
                 }
                 self.rebuild_streaming_message();
             }
 
             ToolEventData::Cancelled {
-                tool_id, reason, ..
+                identity, reason, ..
             } => {
                 let rsn = reason.clone();
-                self.update_tool(tool_id, |tool| {
+                self.update_tool(&identity.tool_id, |tool| {
+                    tool.tool_name = identity.effective_name().to_string();
                     tool.status = ToolDisplayStatus::Cancelled;
                     tool.result = Some(rsn);
                 });
                 // Clear question prompt if this tool was cancelled
-                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(tool_id) {
+                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
                     self.question_prompt = None;
                 }
                 self.rebuild_streaming_message();
@@ -710,45 +729,50 @@ impl ChatState {
         match event {
             AgenticEvent::ToolEvent { tool_event, .. } => match tool_event {
                 ToolEventData::Started {
-                    tool_name, params, ..
+                    identity, params, ..
                 } => {
-                    let title = extract_tool_title(tool_name, params);
+                    let (tool_name, effective_params) =
+                        effective_tool_invocation(&identity.tool_name, params);
+                    debug_assert_eq!(identity.effective_name(), tool_name);
+                    let title = extract_tool_title(tool_name, effective_params);
                     self.update_tool(parent_tool_id, |tool| {
                         let progress = tool
                             .subagent_progress
                             .get_or_insert_with(SubagentProgress::default);
                         progress.tool_count += 1;
-                        progress.current_tool_name = Some(tool_name.clone());
+                        progress.current_tool_name = Some(tool_name.to_string());
                         progress.current_tool_title = title;
                     });
                     self.rebuild_streaming_message();
                 }
                 ToolEventData::Completed {
-                    tool_name,
+                    identity,
                     result_for_assistant,
                     result: _,
                     ..
                 } => {
+                    let tool_name = identity.effective_name();
                     let summary = result_for_assistant
                         .clone()
-                        .unwrap_or_else(|| tool_name.clone());
+                        .unwrap_or_else(|| tool_name.to_string());
                     self.update_tool(parent_tool_id, |tool| {
                         let progress = tool
                             .subagent_progress
                             .get_or_insert_with(SubagentProgress::default);
-                        progress.current_tool_name = Some(tool_name.clone());
+                        progress.current_tool_name = Some(tool_name.to_string());
                         progress.current_tool_title = Some(summary);
                     });
                     self.rebuild_streaming_message();
                 }
                 ToolEventData::Failed {
-                    tool_name, error, ..
+                    identity, error, ..
                 } => {
+                    let tool_name = identity.effective_name();
                     self.update_tool(parent_tool_id, |tool| {
                         let progress = tool
                             .subagent_progress
                             .get_or_insert_with(SubagentProgress::default);
-                        progress.current_tool_name = Some(tool_name.clone());
+                        progress.current_tool_name = Some(tool_name.to_string());
                         progress.current_tool_title =
                             Some(format!("Error: {}", truncate_string(error, 60)));
                     });
@@ -1062,5 +1086,101 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     } else {
         let truncated: String = s.chars().take(max_len).collect();
         format!("{}...", truncated)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChatState, FlowItem};
+    use bitfun_core::agentic::core::message::{Message, ToolCall};
+    use bitfun_events::{ToolEventData, ToolEventIdentity};
+    use serde_json::json;
+
+    fn deferred_input() -> serde_json::Value {
+        json!({
+            "tool_name": "CreatePlan",
+            "args": {
+                "title": "Deferred tool plan",
+                "steps": ["Inspect", "Implement"]
+            }
+        })
+    }
+
+    fn assert_create_plan_item(item: &FlowItem) {
+        let FlowItem::Tool { tool_state } = item else {
+            panic!("expected tool item");
+        };
+        assert_eq!(tool_state.tool_name, "CreatePlan");
+        assert_eq!(
+            tool_state.parameters,
+            json!({
+                "title": "Deferred tool plan",
+                "steps": ["Inspect", "Implement"]
+            })
+        );
+    }
+
+    #[test]
+    fn deferred_started_event_replaces_early_wire_display_with_effective_view() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        state.handle_turn_started("turn-1", "Create a plan");
+        state.handle_tool_event(&ToolEventData::EarlyDetected {
+            identity: ToolEventIdentity::direct(
+                "tool-1",
+                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            ),
+        });
+        state.handle_tool_event(&ToolEventData::Started {
+            identity: ToolEventIdentity::resolved(
+                "tool-1",
+                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+                "CreatePlan",
+            ),
+            params: deferred_input(),
+            timeout_seconds: None,
+        });
+
+        assert_create_plan_item(&state.current_flow_items[0]);
+    }
+
+    #[test]
+    fn deferred_history_projects_effective_view_without_mutating_wire_message() {
+        let wire_input = deferred_input();
+        let messages = vec![Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: wire_input.clone(),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            }],
+        )];
+
+        let state = ChatState::from_core_messages(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+            &messages,
+        );
+
+        assert_create_plan_item(&state.messages[0].flow_items[0]);
+        let bitfun_core::agentic::core::message::MessageContent::Mixed { tool_calls, .. } =
+            &messages[0].content
+        else {
+            panic!("expected mixed message");
+        };
+        assert_eq!(
+            tool_calls[0].tool_name,
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME
+        );
+        assert_eq!(tool_calls[0].arguments, wire_input);
     }
 }

@@ -1086,8 +1086,10 @@ impl RoundExecutor {
                     attempt_id: None,
                     attempt_index: None,
                     tool_event: ToolEventData::Failed {
-                        tool_id: tool_call.tool_id.clone(),
-                        tool_name: tool_call.tool_name.clone(),
+                        identity: bitfun_events::ToolEventIdentity::direct(
+                            tool_call.tool_id.clone(),
+                            tool_call.tool_name.clone(),
+                        ),
                         error: format!("Tool arguments stream interrupted: {}", error),
                         duration_ms: None,
                         queue_wait_ms: None,

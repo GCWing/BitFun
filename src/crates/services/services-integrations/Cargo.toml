@@ -133,6 +133,7 @@ remote-connect = [
     "argon2",
     "async-trait",
     "base64",
+    "bitfun-agent-tools",
     "bitfun-services-core",
     "bitfun-runtime-ports",
     "chrono",

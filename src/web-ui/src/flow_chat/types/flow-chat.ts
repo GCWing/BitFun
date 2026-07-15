@@ -51,19 +51,11 @@ export interface FlowThinkingItem extends FlowItem {
 
 export interface FlowToolItem extends FlowItem {
   type: 'tool';
-  /** Effective tool identity used for display and tool-specific UI behavior. */
+  /** Provider-facing identity. Deferred calls remain `CallDeferredTool`. */
   toolName: string;
-  /** Original provider-facing identity retained for lossless persistence. */
-  wireToolName?: string;
   terminalSessionId?: string;
   interruptionReason?: 'app_restart' | 'retry_superseded';
   toolCall: {
-    input: any;
-    id: string;
-    timeout_seconds?: number;
-  };
-  /** Original provider-facing call retained when `toolCall` is an effective projection. */
-  wireToolCall?: {
     input: any;
     id: string;
     timeout_seconds?: number;

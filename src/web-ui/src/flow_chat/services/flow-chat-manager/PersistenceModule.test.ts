@@ -223,13 +223,8 @@ describe('PersistenceModule', () => {
     turn.modelRounds[0].items = [{
       id: 'tool-1',
       type: 'tool',
-      toolName: 'WebFetch',
-      wireToolName: 'CallDeferredTool',
+      toolName: 'CallDeferredTool',
       toolCall: {
-        id: 'tool-1',
-        input: { url: 'https://example.test' },
-      },
-      wireToolCall: {
         id: 'tool-1',
         input: {
           tool_name: 'WebFetch',
@@ -256,6 +251,26 @@ describe('PersistenceModule', () => {
     });
     expect(toolItem).not.toHaveProperty('effectiveToolName');
     expect(toolItem).not.toHaveProperty('effectiveToolInput');
+  });
+
+  it('refuses to overwrite persistence with a completed mixed deferred identity', () => {
+    const turn = createDialogTurn('completed');
+    turn.modelRounds[0].items = [{
+      id: 'tool-broken',
+      type: 'tool',
+      toolName: 'CallDeferredTool',
+      toolCall: {
+        id: 'tool-broken',
+        input: { name: 'Plan', overview: 'Overview', plan: '# Plan' },
+      },
+      status: 'completed',
+      timestamp: 1001,
+      startTime: 1001,
+    }];
+
+    expect(() => convertDialogTurnToBackendFormat(turn, 0)).toThrow(
+      'Completed deferred tool is missing its wire invocation: tool-broken',
+    );
   });
 
   it('coalesces non-terminal immediate saves into a short latest-state window', async () => {

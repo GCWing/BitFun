@@ -25,8 +25,9 @@ import {
 import { useToolbarModeContext } from './ToolbarModeContext';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { activateMainSession } from '../../services/sessionActivation';
-import { FlowChatState } from '../../types/flow-chat';
+import { FlowChatState, type FlowToolItem } from '../../types/flow-chat';
 import { compareSessionsForDisplay } from '../../utils/sessionOrdering';
+import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { i18nService } from '@/infrastructure/i18n';
@@ -139,9 +140,10 @@ export const ToolbarMode: React.FC = () => {
       const item = lastRound.items[i];
       
       if (item.type === 'tool' && 'toolName' in item) {
-        toolName = (item as any).toolName;
-        if ('input' in item && typeof (item as any).input === 'object') {
-          const input = (item as any).input;
+        const effectiveItem = projectEffectiveToolItem(item as FlowToolItem);
+        toolName = effectiveItem.toolName;
+        if (effectiveItem.toolCall?.input && typeof effectiveItem.toolCall.input === 'object') {
+          const input = effectiveItem.toolCall.input;
           content = input.path || input.command || input.query || input.content?.slice(0, 50) || t('toolCards.toolbar.executing');
         } else {
           content = t('toolCards.toolbar.executing');

@@ -1432,8 +1432,11 @@ impl ToolPipeline {
 
                 // Send StreamChunk event
                 let _event_data = ToolEventData::StreamChunk {
-                    tool_id: task.tool_call.tool_id.clone(),
-                    tool_name: task.effective_tool_name().to_string(),
+                    identity: bitfun_events::ToolEventIdentity::resolved(
+                        task.tool_call.tool_id.clone(),
+                        task.invocation.wire_tool_name.clone(),
+                        task.effective_tool_name().to_string(),
+                    ),
                     data: data.clone(),
                 };
             }
