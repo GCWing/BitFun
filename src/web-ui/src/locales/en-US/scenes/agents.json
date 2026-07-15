@@ -273,5 +273,33 @@
     "Debug": "Debug mode: systematically diagnose and fix errors in code",
     "Claw": "Claw mode: extract and integrate information from external sources",
     "Team": "Team mode: coordinate multiple agents to collaboratively complete complex tasks"
+  },
+  "legionPattern": {
+    "back": "Back",
+    "choosePattern": "Choose a Pattern",
+    "orchestrationPatterns": "Orchestration Patterns",
+    "overview": "Overview",
+    "complexity": "Complexity: L{{level}}",
+    "nodesCount": "{{count}} nodes",
+    "edgesCount": "{{count}} edges",
+    "noEdges": "No edges (self-contained agent)",
+    "usePattern": "Use Pattern",
+    "gate": "GATE",
+    "nodes": "Nodes ({{count}})",
+    "edges": "Edges ({{count}})",
+    "meta": {
+      "nodes": "nodes",
+      "edges": "edges",
+      "gate": "gate"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2l3": "L2-L3",
+      "l3": "L3",
+      "l4": "L4",
+      "l5l6": "L5-L6",
+      "l6": "L6",
+      "l7": "L7"
+    }
   }
 }

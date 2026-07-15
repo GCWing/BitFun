@@ -273,5 +273,33 @@
     "Debug": "调试模式：系统性地诊断和修复代码中的错误",
     "Claw": "抓取模式：从外部源提取和整合信息",
     "Team": "团队模式：协调多个智能体协同完成复杂任务"
+  },
+  "legionPattern": {
+    "back": "返回",
+    "choosePattern": "选择模式",
+    "orchestrationPatterns": "编排模式",
+    "overview": "概览",
+    "complexity": "复杂度：L{{level}}",
+    "nodesCount": "{{count}} 个节点",
+    "edgesCount": "{{count}} 条边",
+    "noEdges": "无边关系（独立智能体）",
+    "usePattern": "使用此模式",
+    "gate": "关卡",
+    "nodes": "节点（{{count}}）",
+    "edges": "边（{{count}}）",
+    "meta": {
+      "nodes": "节点",
+      "edges": "边",
+      "gate": "关卡"
+    },
+    "complexityLabel": {
+      "l1": "L1",
+      "l2l3": "L2-L3",
+      "l3": "L3",
+      "l4": "L4",
+      "l5l6": "L5-L6",
+      "l6": "L6",
+      "l7": "L7"
+    }
   }
 }

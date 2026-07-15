@@ -1,5 +1,6 @@
 import React from 'react';
 import { GitBranch, Users, Network } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/component-library';
 import type { LegionPattern } from '../data/orchestration-patterns';
 import './LegionCard.scss';
@@ -10,23 +11,19 @@ interface LegionCardProps {
   onOpenDetails: (pattern: LegionPattern) => void;
 }
 
-const COMPLEXITY_LABELS: Record<number, string> = {
-  1: 'L1',
-  2: 'L2-L3',
-  3: 'L3',
-  4: 'L4',
-  5: 'L5-L6',
-  6: 'L6',
-  7: 'L7',
-};
-
 const LegionCard: React.FC<LegionCardProps> = ({
   pattern,
   index = 0,
   onOpenDetails,
 }) => {
+  const { t } = useTranslation('scenes/agents');
   const gateNodes = pattern.nodes.filter((n) => n.gate).length;
   const openDetails = () => onOpenDetails(pattern);
+
+  const complexityLabel =
+    t(`legionPattern.complexityLabel.l${pattern.complexityLevel}`, {
+      defaultValue: `L${pattern.complexityLevel}`,
+    });
 
   return (
     <div
@@ -51,7 +48,7 @@ const LegionCard: React.FC<LegionCardProps> = ({
             <span className="legion-card__name">{pattern.name}</span>
             <div className="legion-card__badges">
               <Badge variant="neutral">
-                {COMPLEXITY_LABELS[pattern.complexityLevel] ?? `L${pattern.complexityLevel}`}
+                {complexityLabel}
               </Badge>
             </div>
           </div>
@@ -66,15 +63,15 @@ const LegionCard: React.FC<LegionCardProps> = ({
         <div className="legion-card__meta">
           <span className="legion-card__meta-item">
             <Users size={12} />
-            {pattern.nodes.length} nodes
+            {t('legionPattern.nodesCount', { count: pattern.nodes.length })}
           </span>
           <span className="legion-card__meta-item">
             <GitBranch size={12} />
-            {pattern.edges.length} edges
+            {t('legionPattern.edgesCount', { count: pattern.edges.length })}
           </span>
           {gateNodes > 0 ? (
             <span className="legion-card__meta-item">
-              {gateNodes} gate
+              {gateNodes} {t('legionPattern.meta.gate')}
             </span>
           ) : null}
         </div>
