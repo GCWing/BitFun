@@ -174,10 +174,12 @@ pub trait SuccessfulToolPostCallHookExecutor<C> {
 
     fn behavior_guard(
         &mut self,
-        tool_name: &str,
-        input: &Value,
-        context: &C,
-    ) -> HookResult;
+        _tool_name: &str,
+        _input: &Value,
+        _context: &C,
+    ) -> HookResult {
+        HookResult::Continue
+    }
 }
 
 pub fn run_successful_tool_post_call_hooks<C, E>(
