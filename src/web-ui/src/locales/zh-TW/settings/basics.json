@@ -161,6 +161,35 @@
       "panelPositionUpdated": "終端顯示位置已更新",
       "saveFailed": "儲存設定失敗",
       "refreshed": "已重新整理可用終端列表"
+    },
+    "envVars": {
+      "title": "環境變數",
+      "hint": "自訂環境變數,將套用於每個新終端工作階段及 Agent 命令執行。變更新對新開終端生效;已開啟的工作階段不受影響。設定 PATH 會覆寫託管執行時期的 PATH。",
+      "save": "儲存",
+      "empty": "尚未設定環境變數。可新增一列或從檔案匯入。",
+      "importFile": {
+        "button": "從檔案匯入",
+        "filterName": "環境變數檔案"
+      },
+      "columns": {
+        "key": "變數名稱",
+        "value": "變數值",
+        "keyPlaceholder": "VAR_NAME",
+        "valuePlaceholder": "value"
+      },
+      "actions": {
+        "addRow": "新增一列",
+        "delete": "刪除"
+      },
+      "messages": {
+        "loading": "載入中...",
+        "loadFailed": "載入環境變數失敗",
+        "saved": "環境變數已儲存",
+        "saveFailed": "儲存環境變數失敗",
+        "imported": "已匯入 {{count}} 個變數",
+        "importedWithSkipped": "已匯入 {{count}} 個變數,跳過 {{skipped}} 行無效內容",
+        "importFailed": "匯入環境變數失敗"
+      }
     }
   },
   "windowBehavior": {

@@ -321,6 +321,10 @@ pub struct TerminalConfig {
     /// Terminal ANSI palette/defaults. This keeps the historical
     /// `terminal.theme` config key but is not the GUI theme contract.
     pub theme: TerminalThemeConfig,
+
+    /// User-defined environment variables applied to every new terminal
+    /// session and to agent/tool one-shot command execution.
+    pub env_vars: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1468,6 +1472,7 @@ impl Default for TerminalConfig {
             cursor_style: "block".to_string(),
             scrollback: 1000,
             theme: TerminalThemeConfig::default(),
+            env_vars: HashMap::new(),
         }
     }
 }

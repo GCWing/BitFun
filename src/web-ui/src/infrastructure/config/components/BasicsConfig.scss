@@ -98,3 +98,65 @@
     font-size: var(--font-size-sm);
   }
 }
+
+.bitfun-env-vars-config {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-4;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 40px;
+    align-items: center;
+    gap: 8px;
+
+    &--header {
+      .bitfun-env-vars-config__cell {
+        color: var(--color-text-muted);
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+    }
+  }
+
+  &__cell {
+    min-width: 0;
+
+    &--action {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  &__empty {
+    padding: 12px 16px;
+    border: 1px dashed var(--border-base);
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+}

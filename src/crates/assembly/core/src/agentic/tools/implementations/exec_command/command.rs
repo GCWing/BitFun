@@ -11,6 +11,7 @@ use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, Validat
 use crate::infrastructure::events::event_system::{
     get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
 };
+use crate::service::config::load_terminal_env_vars;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::event::BackgroundCommandLifecycleInfo;
 use async_trait::async_trait;
@@ -661,10 +662,12 @@ Output:
             None
         };
 
+        let mut command_env = Self::command_env();
+        command_env.extend(load_terminal_env_vars().await);
         let request = TerminalExecCommandRequest {
             argv: Self::argv_for_shell(&shell.path, &shell.shell_type, cmd),
             cwd: workdir.clone(),
-            env: Self::command_env(),
+            env: command_env,
             tty,
             yield_time_ms: Some(yield_time_ms),
             max_output_chars: None,
