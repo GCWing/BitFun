@@ -138,8 +138,9 @@
     position: absolute;
     bottom: calc(100% + 6px);
     left: 0;
-    min-width: 220px;
-    max-width: 280px;
+    width: 220px;
+    min-width: 0;
+    max-width: calc(100vw - 16px);
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-overlay-white-12);
     border-radius: 6px;
@@ -158,6 +159,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
     padding: 8px 12px;
     border-bottom: 1px solid var(--color-overlay-white-08);
     font-size: var(--flowchat-font-size-xxs);
@@ -168,6 +171,10 @@
   }
   
   &__dropdown-hint {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-muted);
     font-weight: 400;
@@ -212,6 +219,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    min-width: 0;
     padding: 7px 12px;
     cursor: pointer;
     transition: all 0.15s ease;
