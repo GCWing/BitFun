@@ -29,7 +29,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 
 - 共享 core 必须保持平台无关。避免引入 `tauri::AppHandle` 等宿主 API；优先使用
   `bitfun_events::EventEmitter` 等共享抽象。
-- 桌面端专属集成应放在 `src/apps/desktop`，再通过 transport / API layer 连接回来。
+- 桌面端专属集成应放在 `src/apps/desktop`，再通过类型化能力接口连接回来；需要事件投递时使用已有生产 transport adapter。
 - 不要在没有窄 port/interface 边界的情况下新增 `service` 到 `agentic` 的跨层引用。
 - 不要把平台专属逻辑、构建脚本行为、产品能力选择或 provider-specific AI 序列化写进 shared core。
 - owner 从 core 外移时，在下游调用点被有意迁移前，用 facade 或 re-export 保持旧 import path。

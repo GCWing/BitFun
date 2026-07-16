@@ -7,7 +7,7 @@ use bitfun_events::EventEmitter;
 use std::sync::Arc;
 
 /// TransportEmitter - Implements EventEmitter using TransportAdapter
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TransportEmitter {
     adapter: Arc<dyn TransportAdapter>,
 }
@@ -22,13 +22,5 @@ impl TransportEmitter {
 impl EventEmitter for TransportEmitter {
     async fn emit(&self, event_name: &str, payload: serde_json::Value) -> anyhow::Result<()> {
         self.adapter.emit_generic(event_name, payload).await
-    }
-}
-
-impl std::fmt::Debug for TransportEmitter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TransportEmitter")
-            .field("adapter_type", &self.adapter.adapter_type())
-            .finish()
     }
 }

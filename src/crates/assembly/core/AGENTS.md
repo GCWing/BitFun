@@ -33,7 +33,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   `tauri::AppHandle`; use shared abstractions such as
   `bitfun_events::EventEmitter`.
 - Desktop-only host adapters belong in `src/apps/desktop`, then flow through
-  transport/API layers.
+  typed capability interfaces; use the production transport adapter when event
+  delivery is needed.
 - Do not add new cross-layer references from `service` to `agentic` without a
   narrow port/interface boundary.
 - Do not move platform-specific logic, build-script behavior, product capability

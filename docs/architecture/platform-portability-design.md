@@ -23,7 +23,8 @@ HarmonyOS PC 真实系统终端中安装并本地执行的原生 `bitfun-cli`：
 - 把现有 `src/apps/mobile/harmonyos` 手机 Remote App 改称为 PC 本地产品；
 - 在其他设备运行 Runtime，再由 HarmonyOS PC 远程控制。
 
-HarmonyOS PC GUI 和移动端本地适配都是独立产品专题。现有 HarmonyOS 手机 Remote App 保持当前能力和演进路径，
+完整的 HarmonyOS PC 支持同时包含本地 CLI/TUI 与 GUI。GUI 是另一项必需交付形态，但由独立产品专题设计和
+验收，不在本规约中借用 TUI 路线提前决定技术实现。现有 HarmonyOS 手机 Remote App 保持当前能力和演进路径，
 本规约不修改其产品定位、架构或发布节奏。
 
 ## 2. 对旧设计的闭环
@@ -43,8 +44,8 @@ HarmonyOS PC GUI 和移动端本地适配都是独立产品专题。现有 Harmo
 - 不从手机 Remote App 推导 PC 本地 Agent、TTY、工作区或进程能力；
 - 不保留旧路线的兼容对象、阶段或实施任务。
 
-后续如果启动 HarmonyOS PC GUI 或移动端本地适配，必须分别重新立项和设计，不能恢复旧路线后继续沿用“本地
-CLI/TUI”名称。
+后续启动 HarmonyOS PC GUI 时，以及评估移动端本地适配时，必须分别建立独立专题，不能恢复旧路线后继续沿用
+“本地 CLI/TUI”名称。
 
 ## 3. 已确认事实与未知前提
 

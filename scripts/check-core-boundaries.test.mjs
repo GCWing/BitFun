@@ -50,19 +50,19 @@ function pathDependency(repoCratePath, options = {}) {
 test('cargo layer checker rejects reverse edges across dependency kinds', () => {
   const packages = [
     packageAt('entry', 'src/apps/example/Cargo.toml'),
-    packageAt('adapter', 'src/crates/adapters/api-layer/Cargo.toml'),
+    packageAt('adapter', 'src/crates/adapters/transport/Cargo.toml'),
     packageAt('assembly', 'src/crates/assembly/core/Cargo.toml', [
       pathDependency('src/apps/example', { optional: true }),
     ]),
     packageAt('service', 'src/crates/services/services-core/Cargo.toml', [
-      pathDependency('src/crates/adapters/api-layer'),
+      pathDependency('src/crates/adapters/transport'),
       pathDependency('src/crates/assembly/core', {
         kind: 'dev',
         target: 'cfg(windows)',
       }),
     ]),
     packageAt('runtime', 'src/crates/execution/agent-runtime/Cargo.toml', [
-      pathDependency('src/crates/adapters/api-layer'),
+      pathDependency('src/crates/adapters/transport'),
       pathDependency('src/crates/services/services-core'),
     ]),
     packageAt('contract', 'src/crates/contracts/core-types/Cargo.toml', [
@@ -342,6 +342,54 @@ test('core boundary check is split into focused modules', async () => {
   assert.ok(
     sourceRuleEntry.split(/\r?\n/).length <= 40,
     'source rule entrypoint should delegate to focused source-rule modules',
+  );
+});
+
+test('transport contract stays limited to current delivery needs', async () => {
+  const [workspaceManifest, transportTrait] = await Promise.all([
+      readFile(new URL('../Cargo.toml', import.meta.url), 'utf8'),
+      readFile(
+        new URL('../src/crates/adapters/transport/src/traits.rs', import.meta.url),
+        'utf8',
+      ),
+    ]);
+
+  assert.doesNotMatch(workspaceManifest, /src\/crates\/adapters\/api-layer/);
+  assert.doesNotMatch(
+    transportTrait,
+    /\b(?:emit_text_chunk|emit_tool_event|emit_stream_start|emit_stream_end|adapter_type|TextChunk|ToolEventPayload|ToolEventType|StreamEvent)\b/,
+  );
+  assert.doesNotMatch(
+    transportTrait,
+    /emit_event\s*\(\s*&self,\s*session_id:\s*&str/,
+  );
+});
+
+test('public event projection stays limited to current host needs', async () => {
+  const frontendProjection = await readFile(
+    new URL(
+      '../src/crates/contracts/events/src/frontend_projection.rs',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  assert.doesNotMatch(
+    frontendProjection,
+    /\b(?:into_)?legacy_flat_message\b|\bpub event_type\b/,
+  );
+});
+
+test('desktop preview rebuild inputs use the current crate layout', async () => {
+  const devScript = await readFile(new URL('./dev.cjs', import.meta.url), 'utf8');
+
+  assert.match(
+    devScript,
+    /path\.join\(ROOT_DIR, 'src', 'crates'\)/,
+  );
+  assert.doesNotMatch(
+    devScript,
+    /'src', 'crates', '(?:core|transport|events|ai-adapters|webdriver|api-layer|assembly|adapters|contracts|execution|interfaces|services)'/,
   );
 });
 

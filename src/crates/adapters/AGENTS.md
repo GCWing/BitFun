@@ -12,7 +12,6 @@ services.
 | Crate | Responsibility | Local doc |
 |---|---|---|
 | `ai-adapters` | AI provider request/response adapters and stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
-| `api-layer` | Backend API adapter surface shared by product hosts | [AGENTS.md](api-layer/AGENTS.md) |
 | `opencode-adapter` | Current static OpenCode source inspection/diagnostics; target source coordinator and ecosystem adapter | [AGENTS.md](opencode-adapter/AGENTS.md) |
 | `transport` | Event transport emitters and host transport adapters | [AGENTS.md](transport/AGENTS.md) |
 | `webdriver` | Embedded WebDriver protocol and browser automation adapter | [AGENTS.md](webdriver/AGENTS.md) |
@@ -24,6 +23,9 @@ services.
 - Keep OS, filesystem, terminal, MCP, remote, git, and watch implementations in
   `services` unless the code is purely protocol translation.
 - Keep delivery-profile selection and adapter registration in `assembly`.
+- Do not create a shared API crate for a single host or a future protocol. Keep
+  host-local wire DTOs at the entrypoint until current production consumers
+  prove a shared, versioned boundary.
 
 ## Dependency Boundaries
 

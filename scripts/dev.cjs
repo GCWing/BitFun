@@ -27,12 +27,7 @@ const DEV_SERVER_HOSTS = ['localhost', '127.0.0.1', '::1'];
 const DESKTOP_PREVIEW_REBUILD_INPUTS = [
   path.join(ROOT_DIR, 'Cargo.toml'),
   path.join(ROOT_DIR, 'src', 'apps', 'desktop'),
-  path.join(ROOT_DIR, 'src', 'crates', 'core'),
-  path.join(ROOT_DIR, 'src', 'crates', 'transport'),
-  path.join(ROOT_DIR, 'src', 'crates', 'api-layer'),
-  path.join(ROOT_DIR, 'src', 'crates', 'events'),
-  path.join(ROOT_DIR, 'src', 'crates', 'ai-adapters'),
-  path.join(ROOT_DIR, 'src', 'crates', 'webdriver'),
+  path.join(ROOT_DIR, 'src', 'crates'),
 ];
 const DESKTOP_PREVIEW_REBUILD_IGNORED_DIRS = new Set([
   '.bitfun',

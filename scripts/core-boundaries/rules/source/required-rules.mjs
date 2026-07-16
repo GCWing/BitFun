@@ -240,7 +240,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/events/src/frontend_projection.rs',
     reason:
-      'events contract must own framework-neutral agentic frontend event projection for Tauri, WebSocket, and future extension hosts',
+      'events contract must own the framework-neutral agentic frontend event projection used by current hosts',
     patterns: [
       {
         regex: /\bpub struct AgenticFrontendEvent\b/,
@@ -251,43 +251,8 @@ export const requiredContentRules = [
         message: 'missing shared agentic frontend event projection function',
       },
       {
-        regex: /\bpub fn legacy_flat_message\b/,
-        message: 'missing legacy flat payload projection helper',
-      },
-      {
         regex: /\bdeep_review_queue_projection_preserves_camel_case_contract\b/,
         message: 'missing camelCase queue projection regression test',
-      },
-      {
-        regex: /\blegacy_flat_message_keeps_projection_type_authoritative\b/,
-        message: 'missing WebSocket type precedence regression test',
-      },
-      {
-        regex: /\blegacy_flat_dialog_turn_started_preserves_existing_shape\b/,
-        message: 'missing WebSocket dialog-turn-started shape regression test',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
-    reason:
-      'events contract must own the public AgenticEvent projection manifest, event versions, aggregate classification, and legacy transport allowlist',
-    patterns: [
-      {
-        regex: /\bpub const AGENTIC_EVENT_PROJECTION_MANIFEST\b/,
-        message: 'missing public AgenticEvent projection manifest',
-      },
-      {
-        regex: /\bpub fn public_agentic_event_projection_manifest\b/,
-        message: 'missing public AgenticEvent projection manifest accessor',
-      },
-      {
-        regex: /\bpub fn is_legacy_websocket_agentic_event_type\b/,
-        message: 'missing manifest-owned legacy WebSocket event allowlist helper',
-      },
-      {
-        regex: /\bpublic_event_projection_manifest_describes_projected_events_and_websocket_allowlist\b/,
-        message: 'missing public projection manifest regression test',
       },
     ],
   },
@@ -303,25 +268,6 @@ export const requiredContentRules = [
       {
         regex: /\.emit\(projected\.event_name\.as_str\(\), projected\.payload\)/,
         message: 'Tauri transport must emit projected event name and payload',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
-    reason:
-      'WebSocket transport adapter must consume shared event projection while preserving the legacy WebSocket event allowlist',
-    patterns: [
-      {
-        regex: /\bproject_agentic_frontend_event\b/,
-        message: 'missing shared frontend projection usage in WebSocket transport',
-      },
-      {
-        regex: /\bis_legacy_websocket_agentic_event_type\b/,
-        message: 'missing legacy WebSocket agentic event allowlist',
-      },
-      {
-        regex: /\bwebsocket_keeps_legacy_agentic_event_allowlist\b/,
-        message: 'missing WebSocket legacy event allowlist regression',
       },
     ],
   },

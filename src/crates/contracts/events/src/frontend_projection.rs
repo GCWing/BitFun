@@ -5,65 +5,20 @@
 //! envelope.
 
 use crate::AgenticEvent;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AgenticFrontendEvent {
     pub event_name: String,
-    pub event_type: String,
     pub payload: Value,
 }
 
 impl AgenticFrontendEvent {
-    pub fn new(
-        event_name: impl Into<String>,
-        event_type: impl Into<String>,
-        payload: Value,
-    ) -> Self {
+    fn new(event_name: impl Into<String>, payload: Value) -> Self {
         Self {
             event_name: event_name.into(),
-            event_type: event_type.into(),
             payload,
         }
-    }
-
-    pub fn legacy_flat_message(&self) -> Value {
-        let mut message = Map::new();
-        match &self.payload {
-            Value::Object(payload) => {
-                for (key, value) in payload {
-                    message.insert(key.clone(), value.clone());
-                }
-            }
-            payload => {
-                message.insert("payload".to_string(), payload.clone());
-            }
-        }
-        if self.event_type == "dialog-turn-started" {
-            message.remove("userInput");
-        }
-        message.insert("type".to_string(), Value::String(self.event_type.clone()));
-        Value::Object(message)
-    }
-
-    pub fn into_legacy_flat_message(self) -> Value {
-        let mut message = Map::new();
-        match self.payload {
-            Value::Object(payload) => {
-                for (key, value) in payload {
-                    message.insert(key, value);
-                }
-            }
-            payload => {
-                message.insert("payload".to_string(), payload);
-            }
-        }
-        if self.event_type == "dialog-turn-started" {
-            message.remove("userInput");
-        }
-        message.insert("type".to_string(), Value::String(self.event_type));
-        Value::Object(message)
     }
 }
 
@@ -78,7 +33,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             remote_ssh_host,
         } => Some(AgenticFrontendEvent::new(
             "agentic://session-created",
-            "session-created",
             json!({
                 "sessionId": session_id,
                 "sessionName": session_name,
@@ -90,7 +44,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
         )),
         AgenticEvent::SessionDeleted { session_id } => Some(AgenticFrontendEvent::new(
             "agentic://session-deleted",
-            "session-deleted",
             json!({ "sessionId": session_id }),
         )),
         AgenticEvent::ImageAnalysisStarted {
@@ -100,7 +53,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             image_metadata,
         } => Some(AgenticFrontendEvent::new(
             "agentic://image-analysis-started",
-            "image-analysis-started",
             json!({
                 "sessionId": session_id,
                 "imageCount": image_count,
@@ -114,7 +66,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             duration_ms,
         } => Some(AgenticFrontendEvent::new(
             "agentic://image-analysis-completed",
-            "image-analysis-completed",
             json!({
                 "sessionId": session_id,
                 "success": success,
@@ -130,7 +81,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             user_message_metadata,
         } => Some(AgenticFrontendEvent::new(
             "agentic://dialog-turn-started",
-            "dialog-turn-started",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -149,7 +99,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             agent_type,
         } => Some(AgenticFrontendEvent::new(
             "agentic://subagent-session-linked",
-            "subagent-session-linked",
             json!({
                 "sessionId": session_id,
                 "subagentDialogTurnId": subagent_dialog_turn_id,
@@ -168,7 +117,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             model_id,
         } => Some(AgenticFrontendEvent::new(
             "agentic://model-round-started",
-            "model-round-started",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -187,7 +135,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             text,
         } => Some(AgenticFrontendEvent::new(
             "agentic://text-chunk",
-            "text-chunk",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -207,7 +154,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             is_end,
         } => Some(AgenticFrontendEvent::new(
             "agentic://text-chunk",
-            "text-chunk",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -228,7 +174,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             tool_event,
         } => Some(AgenticFrontendEvent::new(
             "agentic://tool-event",
-            "tool-event",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -248,7 +193,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             ..
         } => Some(AgenticFrontendEvent::new(
             "agentic://dialog-turn-completed",
-            "dialog-turn-completed",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -264,7 +208,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             method,
         } => Some(AgenticFrontendEvent::new(
             "session_title_generated",
-            "session_title_generated",
             json!({
                 "sessionId": session_id,
                 "title": title,
@@ -277,7 +220,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             turn_id,
         } => Some(AgenticFrontendEvent::new(
             "agentic://dialog-turn-cancelled",
-            "dialog-turn-cancelled",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -291,7 +233,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             error_detail,
         } => Some(AgenticFrontendEvent::new(
             "agentic://dialog-turn-failed",
-            "dialog-turn-failed",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -313,7 +254,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             token_details,
         } => Some(AgenticFrontendEvent::new(
             "agentic://token-usage-updated",
-            "token-usage-updated",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -336,7 +276,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             context_window,
         } => Some(AgenticFrontendEvent::new(
             "agentic://context-compression-started",
-            "context-compression-started",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -359,7 +298,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             summary_source,
         } => Some(AgenticFrontendEvent::new(
             "agentic://context-compression-completed",
-            "context-compression-completed",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -380,7 +318,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             error,
         } => Some(AgenticFrontendEvent::new(
             "agentic://context-compression-failed",
-            "context-compression-failed",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -390,7 +327,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
         )),
         AgenticEvent::ThreadGoalUpdated { session_id, goal } => Some(AgenticFrontendEvent::new(
             "agentic://thread-goal-updated",
-            "thread-goal-updated",
             json!({
                 "sessionId": session_id,
                 "goal": goal,
@@ -401,7 +337,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             new_state,
         } => Some(AgenticFrontendEvent::new(
             "agentic://session-state-changed",
-            "session-state-changed",
             json!({
                 "sessionId": session_id,
                 "newState": new_state,
@@ -414,7 +349,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             reason,
         } => Some(AgenticFrontendEvent::new(
             "agentic://session-model-auto-migrated",
-            "session-model-auto-migrated",
             json!({
                 "sessionId": session_id,
                 "previousModelId": previous_model_id,
@@ -428,7 +362,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             queue_state,
         } => Some(AgenticFrontendEvent::new(
             "agentic://deep-review-queue-state-changed",
-            "deep-review-queue-state-changed",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -465,7 +398,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             token_details,
         } => Some(AgenticFrontendEvent::new(
             "agentic://model-round-completed",
-            "model-round-completed",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -492,7 +424,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             display_content,
         } => Some(AgenticFrontendEvent::new(
             "agentic://user-steering-injected",
-            "user-steering-injected",
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
@@ -512,7 +443,7 @@ mod tests {
     use crate::{DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus};
 
     #[test]
-    fn thinking_chunk_projects_to_legacy_text_chunk_event() {
+    fn thinking_chunk_projects_to_text_chunk_event() {
         let projected = project_agentic_frontend_event(AgenticEvent::ThinkingChunk {
             session_id: "session-1".to_string(),
             turn_id: "turn-1".to_string(),
@@ -525,30 +456,8 @@ mod tests {
         .expect("projected");
 
         assert_eq!(projected.event_name, "agentic://text-chunk");
-        assert_eq!(projected.event_type, "text-chunk");
         assert_eq!(projected.payload["contentType"], "thinking");
         assert_eq!(projected.payload["isThinkingEnd"], true);
-        assert_eq!(projected.legacy_flat_message()["type"], "text-chunk");
-    }
-
-    #[test]
-    fn legacy_flat_dialog_turn_started_preserves_existing_shape() {
-        let projected = project_agentic_frontend_event(AgenticEvent::DialogTurnStarted {
-            session_id: "session-1".to_string(),
-            turn_id: "turn-1".to_string(),
-            turn_index: 1,
-            user_input: "raw input".to_string(),
-            original_user_input: Some("original".to_string()),
-            user_message_metadata: None,
-        })
-        .expect("projected");
-
-        let message = projected.legacy_flat_message();
-
-        assert_eq!(message["type"], "dialog-turn-started");
-        assert_eq!(message["sessionId"], "session-1");
-        assert!(message.get("userInput").is_none());
-        assert_eq!(message["originalUserInput"], "original");
     }
 
     #[test]
@@ -600,22 +509,5 @@ mod tests {
         assert_eq!(projected.event_name, "session_title_generated");
         assert_eq!(projected.payload["sessionId"], "session-1");
         assert!(projected.payload["timestamp"].as_i64().is_some());
-    }
-
-    #[test]
-    fn legacy_flat_message_keeps_projection_type_authoritative() {
-        let event = AgenticFrontendEvent::new(
-            "agentic://custom",
-            "projected-type",
-            json!({
-                "type": "payload-type",
-                "sessionId": "session-1",
-            }),
-        );
-
-        let message = event.legacy_flat_message();
-
-        assert_eq!(message["type"], "projected-type");
-        assert_eq!(message["sessionId"], "session-1");
     }
 }

@@ -128,21 +128,6 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
-    patterns: [
-      {
-        regex: /\bAgenticEvent::[A-Z]/,
-        message:
-          'WebSocket transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
-      },
-      {
-        regex: /\bfn\s+is_legacy_websocket_agentic_event_type\b/,
-        message:
-          'WebSocket transport adapter must not own the agentic event allowlist; use bitfun-events event manifest',
-      },
-    ],
-  },
-  {
     path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
     patterns: [
       {

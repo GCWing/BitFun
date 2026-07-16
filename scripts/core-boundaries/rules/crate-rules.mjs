@@ -20,7 +20,6 @@ export const noCoreDependencyCrates = [
   'terminal',
   'tool-runtime',
   'transport',
-  'api-layer',
   'webdriver',
 ];
 

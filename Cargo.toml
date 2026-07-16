@@ -9,7 +9,6 @@ members = [
     "src/crates/adapters/ai-adapters",
     "src/crates/adapters/opencode-adapter",
     "src/crates/adapters/webdriver",
-    "src/crates/adapters/api-layer",
     "src/crates/adapters/transport",
     "src/crates/services/services-core",
     "src/crates/services/services-integrations",

@@ -1746,7 +1746,7 @@ fn start_event_loop_with_transport(
                     }
 
                     let event_for_fanout = envelope.event.clone();
-                    if let Err(e) = transport.emit_event("", envelope.event).await {
+                    if let Err(e) = transport.emit_event(envelope.event).await {
                         log::error!("Failed to emit event: {:?}", e);
                     }
 
