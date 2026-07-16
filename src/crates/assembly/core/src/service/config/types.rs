@@ -540,6 +540,10 @@ pub struct AIConfig {
     #[serde(default = "default_skip_tool_confirmation")]
     pub skip_tool_confirmation: bool,
 
+    /// Whether tools with deferred exposure load their schemas on demand.
+    #[serde(default = "default_enable_deferred_tool_loading")]
+    pub enable_deferred_tool_loading: bool,
+
     /// Debug-mode configuration (log path, language templates, etc.).
     #[serde(default)]
     pub debug_mode_config: DebugModeConfig,
@@ -759,6 +763,10 @@ fn default_tool_confirmation_timeout() -> Option<u64> {
 }
 
 fn default_skip_tool_confirmation() -> bool {
+    true
+}
+
+fn default_enable_deferred_tool_loading() -> bool {
     true
 }
 
@@ -1513,6 +1521,7 @@ impl Default for AIConfig {
             tool_execution_timeout_secs: default_tool_execution_timeout(),
             tool_confirmation_timeout_secs: default_tool_confirmation_timeout(),
             skip_tool_confirmation: true,
+            enable_deferred_tool_loading: default_enable_deferred_tool_loading(),
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
@@ -2072,6 +2081,7 @@ mod tests {
 
         assert_eq!(config.stream_idle_timeout_secs, Some(600));
         assert_eq!(config.stream_ttft_timeout_secs, Some(600));
+        assert!(config.enable_deferred_tool_loading);
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
