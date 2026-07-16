@@ -154,8 +154,11 @@ Relay URL examples:
 
 - Direct: `http://<YOUR_SERVER_IP>:9700`
 - Localhost: `http://127.0.0.1:9700`
-- Behind a reverse proxy: `https://relay.example.com` (only add a path prefix
-  such as `/relay` if your proxy is configured that way)
+- Behind a reverse proxy: `https://relay.example.com/relay`
+
+The client appends paths (`/ws`, `/api/*`, `/r/*`) to the URL you enter. Use
+the `/relay` suffix to match the official server format
+(`https://remote.openbitfun.com/relay`). See **Reverse Proxy** for nginx config.
 
 **Desktop**
 
@@ -238,13 +241,69 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 
 ## Deployment Checklist
 
-1. Open ports: `9700` (direct), and `80/443` if using Caddy / another proxy.
-2. Hit `http://<server-ip>:9700/health`.
+1. Open ports: `9700` (direct), and `80/443` if using a reverse proxy.
+2. Hit `http://<server-ip>:9700/health` (or `https://relay.example.com/relay/health` behind a proxy).
 3. Confirm `RELAY_DB_PATH` if you need accounts (Compose does this for you).
 4. Create at least one user with `relay-admin`.
 5. Fill the same relay URL into Desktop / CLI and log in.
 6. If you terminate TLS on a reverse proxy, raise body size and read timeouts
    (see sync + device RPC notes below).
+7. Use the `/relay` suffix in the relay URL (e.g. `https://relay.example.com/relay`)
+   to match the official server format. See **Reverse Proxy** for nginx config.
+
+## Reverse Proxy
+
+When deploying behind a reverse proxy (Caddy, nginx, etc.), configure:
+
+- **Body size limit**: at least 100 MB (sync POSTs carry large encrypted bundles)
+- **Read/response timeout**: at least 130s (device RPC waits up to 120s)
+- **WebSocket upgrade**: the /ws endpoint requires Connection upgrade headers
+- **Path prefix**: serve the relay at `/relay/*` (strip prefix before proxying
+  to port 9700); serve static homepage files at `/` via exact-match locations
+
+### Nginx example (/relay prefix + homepage at /)
+
+```nginx
+server {
+    listen 80;
+    server_name relay.example.com;
+
+    # Homepage static files (exact match)
+    location = / {
+        root /path/to/relay-server/static/homepage;
+        try_files /index.html =404;
+    }
+    location = /i18n.json {
+        root /path/to/relay-server/static/homepage;
+    }
+    location = /i18n.shared.json {
+        root /path/to/relay-server/static/homepage;
+    }
+
+    # With /relay prefix: strip prefix, proxy to relay server
+    # For clients configured with https://relay.example.com/relay
+    location = /relay {
+        return 301 /relay/;
+    }
+    location /relay/ {
+        proxy_pass http://127.0.0.1:9700/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_read_timeout 130s;
+        proxy_send_timeout 130s;
+        client_max_body_size 100m;
+    }
+
+}
+```
+
+See `Caddyfile` for the Caddy equivalent.
 
 ## Environment Variables
 
