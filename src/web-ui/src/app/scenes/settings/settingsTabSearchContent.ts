@@ -71,8 +71,6 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/session-config', key: 'features.workspaceSearch.enable' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionTitle' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionDescription' },
-    { ns: 'settings/session-config', key: 'browserControl.sectionTitle' },
-    { ns: 'settings/session-config', key: 'browserControl.sectionDescription' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecute' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecuteDesc' },
     { ns: 'settings/agentic-tools', key: 'config.confirmTimeout' },
