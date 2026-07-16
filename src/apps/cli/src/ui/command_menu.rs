@@ -8,11 +8,12 @@ use ratatui::{
     Frame,
 };
 
-use crate::commands::{match_substring_in, CommandSpec, COMMAND_SPECS};
+use crate::actions::{slash_actions, ActionProjection, ActionState};
 use crate::ui::theme::{StyleKind, Theme};
 
 pub(super) struct CommandMenuState {
-    items: Vec<&'static CommandSpec>,
+    action_state: ActionState,
+    items: Vec<ActionProjection>,
     list_state: ListState,
     visible: bool,
     suppressed: bool,
@@ -21,8 +22,9 @@ pub(super) struct CommandMenuState {
 }
 
 impl CommandMenuState {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(action_state: ActionState) -> Self {
         Self {
+            action_state,
             items: Vec::new(),
             list_state: ListState::default(),
             visible: false,
@@ -33,15 +35,6 @@ impl CommandMenuState {
     }
 
     pub(super) fn update(&mut self, input: &str, cursor: usize) {
-        self.update_with_commands(input, cursor, COMMAND_SPECS);
-    }
-
-    pub(super) fn update_with_commands(
-        &mut self,
-        input: &str,
-        cursor: usize,
-        commands: &'static [CommandSpec],
-    ) {
         if self.suppressed && input == self.last_input {
             return;
         }
@@ -51,6 +44,7 @@ impl CommandMenuState {
         }
 
         self.last_input = input.to_string();
+        let selected_id = self.selected_item().map(|item| item.id.to_string());
 
         if !input.starts_with('/') || !self.cursor_in_command(input, cursor) {
             self.hide();
@@ -58,18 +52,36 @@ impl CommandMenuState {
         }
 
         let query = input.split_whitespace().next().unwrap_or("");
+        let mut commands = slash_actions(self.action_state);
         if query == "/" {
-            self.items = commands.iter().collect();
+            self.items = commands;
         } else {
-            self.items = match_substring_in(query, commands);
+            let normalized = query
+                .strip_prefix('/')
+                .unwrap_or(query)
+                .to_ascii_lowercase();
+            commands.retain(|spec| {
+                spec.name
+                    .strip_prefix('/')
+                    .unwrap_or(spec.name)
+                    .to_ascii_lowercase()
+                    .contains(&normalized)
+            });
+            self.items = commands;
         }
         self.items.sort_by_key(|spec| spec.name);
 
         self.visible = !self.items.is_empty();
         if self.visible {
-            let selected = self.list_state.selected().unwrap_or(0);
-            let clamped = selected.min(self.items.len().saturating_sub(1));
-            self.list_state.select(Some(clamped));
+            let selected = selected_id
+                .and_then(|id| self.items.iter().position(|item| item.id == id))
+                .unwrap_or_else(|| {
+                    self.list_state
+                        .selected()
+                        .unwrap_or(0)
+                        .min(self.items.len().saturating_sub(1))
+                });
+            self.list_state.select(Some(selected));
         } else {
             self.list_state.select(None);
         }
@@ -105,7 +117,7 @@ impl CommandMenuState {
         }
 
         let selected = self.selected_item()?;
-        let command = selected.name.to_string();
+        let command = selected.id.to_string();
         self.suppress();
         Some(command)
     }
@@ -219,9 +231,9 @@ impl CommandMenuState {
             && mouse.row < area.y.saturating_add(area.height)
     }
 
-    fn selected_item(&self) -> Option<&CommandSpec> {
+    fn selected_item(&self) -> Option<&ActionProjection> {
         let idx = self.list_state.selected().unwrap_or(0);
-        self.items.get(idx).copied()
+        self.items.get(idx)
     }
 
     fn suppress(&mut self) {
@@ -272,5 +284,97 @@ impl CommandMenuState {
             Some(space_idx) => cursor <= space_idx,
             None => true,
         }
+    }
+
+    pub(super) fn set_action_state(&mut self, action_state: ActionState) -> bool {
+        if self.action_state == action_state {
+            return false;
+        }
+        self.action_state = action_state;
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::KeyModifiers;
+
+    use super::*;
+
+    fn names(menu: &CommandMenuState) -> Vec<&str> {
+        menu.items.iter().map(|item| item.name).collect()
+    }
+
+    #[test]
+    fn chat_menu_keeps_substring_matching() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.update("/he", 3);
+
+        assert_eq!(names(&menu), ["/help", "/theme"]);
+    }
+
+    #[test]
+    fn slash_lists_all_actions_for_the_current_context() {
+        let mut chat = CommandMenuState::new(ActionState::chat(false, false));
+        chat.update("/", 1);
+        assert!(names(&chat).contains(&"/clear"));
+        assert!(names(&chat).contains(&"/new"));
+
+        let mut startup = CommandMenuState::new(ActionState::startup(false));
+        startup.update("/", 1);
+        assert!(!names(&startup).contains(&"/clear"));
+        assert!(!names(&startup).contains(&"/new"));
+        assert!(names(&startup).contains(&"/sessions"));
+    }
+
+    #[test]
+    fn processing_chat_hides_idle_only_actions() {
+        let mut menu = CommandMenuState::new(ActionState::chat(true, false));
+        menu.update("/", 1);
+
+        assert!(!names(&menu).contains(&"/agents"));
+        assert!(!names(&menu).contains(&"/new"));
+        assert!(names(&menu).contains(&"/help"));
+    }
+
+    #[test]
+    fn selection_returns_the_stable_action_id() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.update("/help", 5);
+
+        assert_eq!(menu.apply_selection().as_deref(), Some("help"));
+    }
+
+    #[test]
+    fn mouse_selection_returns_the_stable_action_id() {
+        let mut menu = CommandMenuState::new(ActionState::startup(false));
+        menu.update("/help", 5);
+        menu.last_area = Some(Rect::new(5, 5, 30, 3));
+
+        let selected = menu.handle_mouse_event(&MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 6,
+            row: 6,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(selected.as_deref(), Some("help"));
+    }
+
+    #[test]
+    fn state_refresh_preserves_the_selected_action_id() {
+        let mut menu = CommandMenuState::new(ActionState::chat(true, false));
+        menu.update("/", 1);
+        let logout_index = menu
+            .items
+            .iter()
+            .position(|item| item.id == "logout")
+            .unwrap();
+        menu.list_state.select(Some(logout_index));
+
+        assert!(menu.set_action_state(ActionState::chat(false, false)));
+        menu.update("/", 1);
+
+        assert_eq!(menu.selected_item().map(|item| item.id), Some("logout"));
     }
 }

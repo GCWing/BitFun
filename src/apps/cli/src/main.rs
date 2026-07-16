@@ -7,10 +7,10 @@
 mod account;
 mod account_sync;
 mod acp_cli;
+mod actions;
 mod agent;
 #[allow(dead_code)]
 mod chat_state;
-mod commands;
 mod config;
 mod diagnostics;
 mod logging;
@@ -557,7 +557,7 @@ async fn shutdown_mcp_servers() {
 
 /// Run the full interactive TUI flow: loading screen → startup page → chat
 async fn run_interactive(
-    _config: CliConfig,
+    config: CliConfig,
     default_agent: String,
     _workspace_str: String,
 ) -> Result<()> {
@@ -595,6 +595,7 @@ async fn run_interactive(
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
+        config,
         runtime.agent_runtime().clone(),
         runtime.compatibility().clone(),
         default_agent,

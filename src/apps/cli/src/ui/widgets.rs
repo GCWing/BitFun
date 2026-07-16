@@ -8,6 +8,8 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
+const INFO_POPUP_DISMISS_HINT: &str = " Press Esc to dismiss ";
+
 pub(super) struct Spinner {
     frame: usize,
 }
@@ -28,7 +30,7 @@ impl Spinner {
     }
 }
 
-/// Render a centered info popup overlay. Press any key to dismiss.
+/// Render a centered info popup overlay. Esc always dismisses it.
 pub(super) fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, accent: Color) {
     let lines: Vec<Line> = message
         .lines()
@@ -86,9 +88,20 @@ pub(super) fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, ac
             height: 1,
         };
         let hint = Paragraph::new(Line::from(Span::styled(
-            " Press any key to dismiss ",
+            INFO_POPUP_DISMISS_HINT,
             Style::default().fg(Color::DarkGray),
         )));
         frame.render_widget(hint, hint_area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::INFO_POPUP_DISMISS_HINT;
+
+    #[test]
+    fn info_popup_names_the_modal_safe_dismiss_key() {
+        assert!(INFO_POPUP_DISMISS_HINT.contains("Esc"));
+        assert!(!INFO_POPUP_DISMISS_HINT.contains("any key"));
     }
 }

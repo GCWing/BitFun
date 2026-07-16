@@ -16,8 +16,8 @@ impl ChatView {
 
     // ============ Command palette methods ============
 
-    pub(crate) fn show_command_palette(&mut self) {
-        self.command_palette.show();
+    pub(crate) fn show_command_palette(&mut self, action_state: crate::actions::ActionState) {
+        self.command_palette.show(action_state);
         self.popup_stack.push(PopupType::CommandPalette);
     }
 
@@ -26,7 +26,7 @@ impl ChatView {
     }
 
     pub(crate) fn reshow_command_palette(&mut self) {
-        self.command_palette.show();
+        self.command_palette.reshow();
     }
 
     pub(crate) fn command_palette_visible(&self) -> bool {

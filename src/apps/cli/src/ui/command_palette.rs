@@ -12,6 +12,7 @@ use ratatui::{
     Frame,
 };
 
+use crate::actions::{palette_actions, ActionState};
 use crate::ui::theme::{StyleKind, Theme};
 
 // ── Data types ──
@@ -26,6 +27,7 @@ struct PaletteItem {
 }
 
 /// Action returned after handling a key event
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PaletteAction {
     /// User confirmed selection — carries the item id
     Execute(String),
@@ -37,138 +39,67 @@ pub(crate) enum PaletteAction {
 
 // ── Default palette items ──
 
+const DEFAULT_ITEM_ORDER: &[&str] = &[
+    "new_session",
+    "sessions",
+    "usage",
+    "skills",
+    "subagents",
+    "select_model",
+    "add_model",
+    "theme",
+    "switch_agent",
+    "mcp_servers",
+    "login",
+    "logout",
+    "help",
+    "exit",
+];
+
+const SUGGESTED_ITEM_ORDER: &[&str] = &[
+    "select_model",
+    "switch_agent",
+    "theme",
+    "new_session",
+    "usage",
+];
+
+fn item_order(id: &str, order: &[&str]) -> usize {
+    order
+        .iter()
+        .position(|candidate| *candidate == id)
+        .unwrap_or(usize::MAX)
+}
+
 /// Build the default set of palette items (all groups)
-fn default_palette_items() -> Vec<PaletteItem> {
-    vec![
-        // Session group
-        PaletteItem {
-            id: "new_session".into(),
-            label: "New session".into(),
-            description: "Start a new conversation".into(),
-            group: "Session".into(),
-        },
-        PaletteItem {
-            id: "sessions".into(),
-            label: "Sessions".into(),
-            description: "Browse and switch sessions".into(),
-            group: "Session".into(),
-        },
-        PaletteItem {
-            id: "usage".into(),
-            label: "Usage report".into(),
-            description: "Generate a usage report for the current session".into(),
-            group: "Session".into(),
-        },
-        // Prompt group
-        PaletteItem {
-            id: "skills".into(),
-            label: "Skills".into(),
-            description: "Browse and select available skills".into(),
-            group: "Prompt".into(),
-        },
-        PaletteItem {
-            id: "subagents".into(),
-            label: "Subagents".into(),
-            description: "List and configure subagents".into(),
-            group: "Prompt".into(),
-        },
-        // Models group
-        PaletteItem {
-            id: "select_model".into(),
-            label: "Select model".into(),
-            description: "Select AI model for all modes".into(),
-            group: "Models".into(),
-        },
-        PaletteItem {
-            id: "add_model".into(),
-            label: "Add model".into(),
-            description: "Add a new AI model configuration".into(),
-            group: "Models".into(),
-        },
-        // Appearance group
-        PaletteItem {
-            id: "theme".into(),
-            label: "Theme".into(),
-            description: "Switch UI theme".into(),
-            group: "Appearance".into(),
-        },
-        // Agent group
-        PaletteItem {
-            id: "switch_agent".into(),
-            label: "Switch agent".into(),
-            description: "Switch agent mode".into(),
-            group: "Agent".into(),
-        },
-        // MCP group
-        PaletteItem {
-            id: "mcp_servers".into(),
-            label: "MCP servers".into(),
-            description: "Manage MCP servers".into(),
-            group: "MCP".into(),
-        },
-        // Account group
-        PaletteItem {
-            id: "login".into(),
-            label: "Login".into(),
-            description: "Log in to BitFun account".into(),
-            group: "Account".into(),
-        },
-        PaletteItem {
-            id: "logout".into(),
-            label: "Logout".into(),
-            description: "Log out of BitFun account".into(),
-            group: "Account".into(),
-        },
-        // System group
-        PaletteItem {
-            id: "help".into(),
-            label: "Help".into(),
-            description: "Show help information".into(),
-            group: "System".into(),
-        },
-        PaletteItem {
-            id: "exit".into(),
-            label: "Exit the app".into(),
-            description: "Quit the application".into(),
-            group: "System".into(),
-        },
-    ]
+fn default_palette_items(action_state: ActionState) -> Vec<PaletteItem> {
+    let mut actions = palette_actions(action_state);
+    actions.sort_by_key(|action| item_order(action.id, DEFAULT_ITEM_ORDER));
+    actions
+        .into_iter()
+        .map(|action| PaletteItem {
+            id: action.id.to_string(),
+            label: action.name.to_string(),
+            description: action.description.to_string(),
+            group: action.palette_group.unwrap_or("Other").to_string(),
+        })
+        .collect()
 }
 
 /// Build suggested items
-fn build_suggested_items() -> Vec<PaletteItem> {
-    vec![
-        PaletteItem {
-            id: "select_model".into(),
-            label: "Select model".into(),
-            description: "Select AI model for all modes".into(),
-            group: "Suggested".into(),
-        },
-        PaletteItem {
-            id: "switch_agent".into(),
-            label: "Switch agent".into(),
-            description: "Switch agent mode".into(),
-            group: "Suggested".into(),
-        },
-        PaletteItem {
-            id: "theme".into(),
-            label: "Theme".into(),
-            description: "Switch UI theme".into(),
-            group: "Suggested".into(),
-        },
-        PaletteItem {
-            id: "new_session".into(),
-            label: "New session".into(),
-            description: "Start a new conversation".into(),
-            group: "Suggested".into(),
-        },
-        PaletteItem {
-            id: "usage".into(),
-            label: "Usage report".into(),
-            description: "Generate a usage report for the current session".into(),
-            group: "Suggested".into(),
-        },
-    ]
+fn build_suggested_items(action_state: ActionState) -> Vec<PaletteItem> {
+    let mut actions = palette_actions(action_state);
+    actions.sort_by_key(|action| item_order(action.id, SUGGESTED_ITEM_ORDER));
+    actions
+        .into_iter()
+        .filter(|action| action.suggested)
+        .map(|action| PaletteItem {
+            id: action.id.to_string(),
+            label: action.name.to_string(),
+            description: action.description.to_string(),
+            group: "Suggested".to_string(),
+        })
+        .collect()
 }
 
 // ── Flattened row for rendering ──
@@ -185,6 +116,7 @@ enum PaletteRow {
 
 pub(super) struct CommandPaletteState {
     visible: bool,
+    action_state: Option<ActionState>,
     search_input: String,
     search_cursor: usize,
 
@@ -210,6 +142,7 @@ impl CommandPaletteState {
     pub(super) fn new() -> Self {
         Self {
             visible: false,
+            action_state: None,
             search_input: String::new(),
             search_cursor: 0,
             all_items: Vec::new(),
@@ -223,9 +156,10 @@ impl CommandPaletteState {
     }
 
     /// Show the command palette with the default items
-    pub(super) fn show(&mut self) {
-        let mut items = build_suggested_items();
-        items.extend(default_palette_items());
+    pub(super) fn show(&mut self, action_state: ActionState) {
+        self.action_state = Some(action_state);
+        let mut items = build_suggested_items(action_state);
+        items.extend(default_palette_items(action_state));
         self.all_items = items;
         self.search_input.clear();
         self.search_cursor = 0;
@@ -233,6 +167,30 @@ impl CommandPaletteState {
         self.scroll_offset = 0;
         self.visible = true;
         self.rebuild_filtered();
+    }
+
+    pub(super) fn set_action_state(&mut self, action_state: ActionState) {
+        if self.action_state == Some(action_state) {
+            return;
+        }
+        self.action_state = Some(action_state);
+
+        let selected_id = self.confirm_selection();
+        let mut items = build_suggested_items(action_state);
+        items.extend(default_palette_items(action_state));
+        self.all_items = items;
+        self.rebuild_filtered();
+
+        if let Some(selected_id) = selected_id {
+            if let Some(index) = self
+                .selectable_items
+                .iter()
+                .position(|item_index| self.all_items[*item_index].id == selected_id)
+            {
+                self.selected_index = index;
+                self.ensure_selected_visible();
+            }
+        }
     }
 
     /// Hide the command palette
@@ -388,10 +346,7 @@ impl CommandPaletteState {
         }
 
         match key.code {
-            KeyCode::Esc => {
-                self.hide();
-                PaletteAction::Dismiss
-            }
+            KeyCode::Esc => PaletteAction::Dismiss,
             KeyCode::Enter => {
                 if let Some(id) = self.confirm_selection() {
                     // Don't hide here to support back navigation
@@ -521,17 +476,13 @@ impl CommandPaletteState {
                 if let Some(sel_idx) = self.selectable_index_at_row(mouse.row, &area) {
                     self.selected_index = sel_idx;
                     if let Some(id) = self.confirm_selection() {
-                        self.hide();
                         return PaletteAction::Execute(id);
                     }
                 }
                 PaletteAction::None
             }
             // Click outside popup — dismiss
-            MouseEventKind::Down(MouseButton::Left) if !in_popup => {
-                self.hide();
-                PaletteAction::Dismiss
-            }
+            MouseEventKind::Down(MouseButton::Left) if !in_popup => PaletteAction::Dismiss,
             _ => PaletteAction::None,
         }
     }
@@ -777,5 +728,100 @@ impl CommandPaletteState {
             .nth(char_idx)
             .map(|(i, _)| i)
             .unwrap_or(self.search_input.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::KeyModifiers;
+
+    use super::*;
+
+    #[test]
+    fn registry_projection_preserves_palette_order() {
+        let idle = ActionState::chat(false, false);
+        let ids = default_palette_items(idle)
+            .into_iter()
+            .map(|item| item.id)
+            .collect::<Vec<_>>();
+        assert_eq!(ids, DEFAULT_ITEM_ORDER);
+
+        let suggested = build_suggested_items(idle)
+            .into_iter()
+            .map(|item| item.id)
+            .collect::<Vec<_>>();
+        assert_eq!(suggested, SUGGESTED_ITEM_ORDER);
+    }
+
+    #[test]
+    fn processing_palette_omits_idle_only_actions() {
+        let ids = default_palette_items(ActionState::chat(true, false))
+            .into_iter()
+            .map(|item| item.id)
+            .collect::<Vec<_>>();
+
+        assert!(!ids.iter().any(|id| id == "switch_agent"));
+        assert!(!ids.iter().any(|id| id == "new_session"));
+        assert!(ids.iter().any(|id| id == "help"));
+    }
+
+    #[test]
+    fn visible_palette_refreshes_for_turn_state_without_losing_search() {
+        let mut palette = CommandPaletteState::new();
+        palette.show(ActionState::chat(false, false));
+        palette.handle_key_event(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert!(palette
+            .all_items
+            .iter()
+            .any(|item| item.id == "new_session"));
+
+        palette.set_action_state(ActionState::chat(true, false));
+        assert_eq!(palette.search_input, "n");
+        assert!(!palette
+            .all_items
+            .iter()
+            .any(|item| item.id == "new_session"));
+
+        palette.set_action_state(ActionState::chat(false, false));
+        assert_eq!(palette.search_input, "n");
+        assert!(palette
+            .all_items
+            .iter()
+            .any(|item| item.id == "new_session"));
+    }
+
+    #[test]
+    fn hidden_palette_refreshes_before_back_navigation() {
+        let mut palette = CommandPaletteState::new();
+        palette.show(ActionState::chat(true, false));
+        assert!(!palette
+            .all_items
+            .iter()
+            .any(|item| item.id == "new_session"));
+
+        palette.hide();
+        palette.set_action_state(ActionState::chat(false, false));
+        palette.reshow();
+
+        assert!(palette
+            .all_items
+            .iter()
+            .any(|item| item.id == "new_session"));
+    }
+
+    #[test]
+    fn mouse_actions_leave_navigation_to_the_owner() {
+        let mut palette = CommandPaletteState::new();
+        palette.show(ActionState::startup(false));
+        palette.last_area = Some(Rect::new(10, 10, 40, 20));
+
+        let dismiss = palette.handle_mouse_event(&MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(dismiss, PaletteAction::Dismiss);
+        assert!(palette.is_visible());
     }
 }

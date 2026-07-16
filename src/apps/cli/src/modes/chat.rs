@@ -15,6 +15,10 @@ use tokio::sync::broadcast::error::TryRecvError;
 
 use bitfun_events::{AgenticEvent, ToolEventData};
 
+use crate::actions::{
+    action_by_id, action_for_alias, ActionContext, ActionHandler, ActionSpec, ActionState,
+    ResolvedKeymap,
+};
 use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
@@ -54,23 +58,6 @@ use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::{
     render_usage_report_markdown, SessionUsageReportRequest,
 };
-
-/// Keyboard shortcuts help text
-const KEYBOARD_SHORTCUTS_HELP: &str = "\
-Keyboard Shortcuts\n\
-─────────────────────────────────\n\
-Tab / Shift+Tab   Switch Agent\n\
-Ctrl+P            Command Palette\n\
-Ctrl+J / Ctrl+K   Prev / Next Tool\n\
-Ctrl+O            Expand / Collapse Tool\n\
-Ctrl+E            Toggle Browse Mode\n\
-↑ / ↓             Input History\n\
-PageUp / PageDown Scroll Messages\n\
-Ctrl+Home / End   Jump to Top / Bottom\n\
-Ctrl+U            Clear Input\n\
-Esc               Back / Interrupt\n\
-Ctrl+W            Close All Windows\n\
-Ctrl+C            Quit";
 
 /// Spinner/UI redraw interval while a turn is processing.
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
@@ -149,6 +136,7 @@ struct ChatEventContext<'a> {
 
 pub(crate) struct ChatMode {
     config: CliConfig,
+    keymap: ResolvedKeymap,
     /// Current agent type (e.g. "agentic", "plan", "debug")
     agent_type: String,
     workspace: Option<String>,
@@ -184,8 +172,10 @@ impl ChatMode {
             workspace.clone().map(PathBuf::from),
         ));
 
+        let keymap = ResolvedKeymap::new(&config.shortcuts);
         Self {
             config,
+            keymap,
             agent_type,
             workspace,
             agent,
@@ -478,7 +468,8 @@ impl ChatMode {
             (false, EffectiveColorScheme::Truecolor) => Theme::dark(),
         };
         let theme = self.resolve_configured_theme(base, appearance, scheme);
-        let mut chat_view = ChatView::new(theme);
+        let shortcut_hints = self.keymap.compact_hints(ActionState::chat(false, false));
+        let mut chat_view = ChatView::new(theme, shortcut_hints);
 
         // Create or restore core session
         let rt_handle = tokio::runtime::Handle::current();
@@ -594,6 +585,11 @@ impl ChatMode {
         let resize_redraw_debounce = Duration::from_millis(RESIZE_REDRAW_DEBOUNCE_MS);
 
         while !should_quit {
+            chat_view.set_action_state(
+                ActionState::chat(chat_state.is_processing, false),
+                &self.keymap,
+            );
+
             // Coalesce rapid resize bursts before invalidating caches and redrawing.
             if let Some(last_resize_at) = pending_resize_at {
                 if last_resize_at.elapsed() >= resize_redraw_debounce {
@@ -1068,6 +1064,12 @@ impl ChatMode {
             return Ok(None);
         }
 
+        let modal_state =
+            ActionState::chat(chat_state.is_processing, self.any_popup_visible(chat_view));
+        if let Some(action) = self.keymap.resolve_modal_safe(key, modal_state) {
+            return self.dispatch_action(action, modal_state, chat_view, chat_state, rt_handle);
+        }
+
         // ── Permission prompt intercepts all keys when active ──
         if let Some(ref mut prompt) = chat_state.permission_prompt {
             let action = prompt.handle_key_event(key);
@@ -1173,18 +1175,11 @@ impl ChatMode {
 
         // ── Normal key handling ──
 
-        // Global popup navigation: Ctrl+W closes all popups, Esc navigates back
+        // Host recovery keys win over configured actions while a popup is open.
         if self.any_popup_visible(chat_view) {
-            match (key.code, key.modifiers) {
-                (KeyCode::Char('w'), KeyModifiers::CONTROL) => {
-                    self.close_all_popups(chat_view);
-                    return Ok(None);
-                }
-                (KeyCode::Esc, _) => {
-                    self.navigate_back(chat_view);
-                    return Ok(None);
-                }
-                _ => {}
+            let state = ActionState::chat(chat_state.is_processing, true);
+            if let Some(action) = self.keymap.resolve_reserved(key, state) {
+                return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
             }
         }
 
@@ -1201,7 +1196,8 @@ impl ChatMode {
                 PaletteAction::Execute(id) => {
                     return self.handle_palette_action(&id, chat_view, chat_state, rt_handle);
                 }
-                PaletteAction::Dismiss | PaletteAction::None => {}
+                PaletteAction::Dismiss => self.navigate_back(chat_view),
+                PaletteAction::None => {}
             }
             return Ok(None);
         }
@@ -1402,103 +1398,20 @@ impl ChatMode {
             return self.handle_login_form_action(action, chat_view, chat_state, rt_handle);
         }
 
+        if let Some(action) = self
+            .keymap
+            .resolve(key, ActionState::chat(chat_state.is_processing, false))
+        {
+            return self.dispatch_action(
+                action,
+                ActionState::chat(chat_state.is_processing, false),
+                chat_view,
+                chat_state,
+                rt_handle,
+            );
+        }
+
         match (key.code, key.modifiers) {
-            // Ctrl+V: read clipboard directly (reliable paste on Windows where
-            // bracketed paste is broken — crossterm issue #962)
-            (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
-                match Clipboard::new().and_then(|mut cb| cb.get_text()) {
-                    Ok(text) if !text.is_empty() => {
-                        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-                        for c in normalized.chars() {
-                            chat_view.handle_char(c);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                // If processing, cancel the current turn instead of quitting
-                if chat_state.is_processing {
-                    tracing::info!("User requested cancellation");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some("Cancelling...".to_string()));
-                    return Ok(None);
-                }
-                tracing::info!("User requested quit");
-                return Ok(Some(ChatExitReason::Quit));
-            }
-
-            (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
-                chat_view.show_command_palette();
-                return Ok(None);
-            }
-
-            // Alt+Enter: insert newline in input
-            (KeyCode::Enter, m) if m.contains(KeyModifiers::ALT) => {
-                chat_view.handle_newline();
-            }
-
-            (KeyCode::Enter, _) => {
-                if let Some(cmd) = chat_view.apply_command_menu_selection() {
-                    let cmd_result = self.handle_command(&cmd, chat_view, chat_state, rt_handle)?;
-                    return Ok(cmd_result);
-                }
-
-                if chat_state.is_processing {
-                    let trimmed = chat_view.input_text().trim();
-                    if trimmed.starts_with('/') {
-                        if let Some(input) = chat_view.send_input() {
-                            let cmd_result =
-                                self.handle_command(&input, chat_view, chat_state, rt_handle)?;
-                            return Ok(cmd_result);
-                        }
-                    } else if !trimmed.is_empty() {
-                        chat_view.set_status(Some(
-                            "Currently processing. Type a /command, or press Ctrl+C to cancel."
-                                .to_string(),
-                        ));
-                    }
-                    return Ok(None);
-                }
-
-                if let Some(input) = chat_view.send_input() {
-                    tracing::info!("User input: {}", input);
-
-                    if input.starts_with('/') {
-                        let cmd_result =
-                            self.handle_command(&input, chat_view, chat_state, rt_handle)?;
-                        return Ok(cmd_result);
-                    }
-
-                    // Send message to agent
-                    let display_name = agent_display_name(&self.agent_type);
-                    chat_view.set_status(Some(format!("{} is thinking...", display_name)));
-
-                    let agent = self.agent.clone();
-                    let input_clone = input.clone();
-                    let agent_type = self.agent_type.clone();
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(agent.send_message(input_clone, &agent_type))
-                    }) {
-                        Ok(turn_id) => {
-                            tracing::info!("Started turn: {}", turn_id);
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to send message: {}", e);
-                            chat_view.set_status(Some(format!("Error: {}", e)));
-                        }
-                    }
-                }
-            }
-
             (KeyCode::Backspace, _) => {
                 chat_view.handle_backspace();
             }
@@ -1510,48 +1423,6 @@ impl ChatMode {
                 chat_view.move_cursor_right();
             }
 
-            // Ctrl+O: toggle expand/collapse on focused block tool
-            (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
-                chat_view.toggle_focused_tool_expand(chat_state);
-            }
-
-            // Ctrl+J: focus previous block tool (up)
-            (KeyCode::Char('j'), KeyModifiers::CONTROL) => {
-                chat_view.cycle_block_tool_focus_prev(chat_state);
-            }
-
-            // Ctrl+K: focus next block tool (down)
-            (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
-                chat_view.cycle_block_tool_focus_next(chat_state);
-            }
-
-            // ↑↓: input history only. Conversation scrolling stays on PageUp/PageDown or mouse.
-            (KeyCode::Up, KeyModifiers::NONE) => {
-                if chat_view.command_menu_visible() {
-                    chat_view.command_menu_up();
-                } else {
-                    chat_view.history_prev();
-                }
-            }
-            (KeyCode::Down, KeyModifiers::NONE) => {
-                if chat_view.command_menu_visible() {
-                    chat_view.command_menu_down();
-                } else {
-                    chat_view.history_next();
-                }
-            }
-
-            (KeyCode::Home, KeyModifiers::CONTROL) => {
-                let total = chat_view.count_message_lines(chat_state);
-                chat_view.scroll_to_top(total);
-                chat_view.set_status(Some("Jumped to conversation top".to_string()));
-            }
-
-            (KeyCode::End, KeyModifiers::CONTROL) => {
-                chat_view.scroll_to_bottom();
-                chat_view.set_status(Some("Jumped to conversation bottom".to_string()));
-            }
-
             (KeyCode::Home, _) => {
                 chat_view.set_cursor_home();
             }
@@ -1560,58 +1431,10 @@ impl ChatMode {
                 chat_view.set_cursor_end();
             }
 
-            (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
-                chat_view.clear_input();
-            }
-
-            (KeyCode::Char('e'), KeyModifiers::CONTROL) => {
-                chat_view.toggle_browse_mode();
-                let status_msg = if chat_view.browse_mode {
-                    "Entered browse mode, use PageUp/PageDown or mouse wheel to scroll conversation"
-                } else {
-                    "Exited browse mode"
-                };
-                chat_view.set_status(Some(status_msg.to_string()));
-            }
-
-            (KeyCode::PageUp, _) => {
-                let total = chat_view.count_message_lines(chat_state);
-                chat_view.scroll_up(10, total);
-            }
-
-            (KeyCode::PageDown, _) => {
-                chat_view.scroll_down(10);
-            }
-
             (KeyCode::Esc, _) => {
-                if chat_state.is_processing {
-                    tracing::info!("User requested cancellation (Esc)");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some("Cancelling...".to_string()));
-                    return Ok(None);
-                }
                 if chat_view.browse_mode {
                     chat_view.scroll_to_bottom();
                     chat_view.set_status(Some("Exited browse mode".to_string()));
-                }
-            }
-
-            (KeyCode::Tab, _) => {
-                if !chat_state.is_processing {
-                    self.cycle_agent(chat_view, chat_state, rt_handle);
-                }
-            }
-
-            (KeyCode::BackTab, _) => {
-                if !chat_state.is_processing {
-                    self.cycle_agent_reverse(chat_view, chat_state, rt_handle);
                 }
             }
 
@@ -1703,7 +1526,8 @@ impl ChatMode {
                                 );
                             }
                         }
-                        PaletteAction::Dismiss | PaletteAction::None => {}
+                        PaletteAction::Dismiss => context.this.navigate_back(context.chat_view),
+                        PaletteAction::None => {}
                     }
                 } else if context.chat_view.provider_selector_captures_mouse(&mouse) {
                     if let Some(selection) =
@@ -1780,9 +1604,9 @@ impl ChatMode {
                         _ => {}
                     }
                 }
-                if let Some(cmd) = context.chat_view.take_pending_command() {
-                    if let Some(reason) = context.this.handle_command(
-                        &cmd,
+                if let Some(action_id) = context.chat_view.take_pending_command() {
+                    if let Some(reason) = context.this.handle_action_id(
+                        &action_id,
                         context.chat_view,
                         context.chat_state,
                         context.rt_handle,
@@ -1848,84 +1672,27 @@ impl ChatMode {
         if !keep_in_stack {
             chat_view.hide_command_palette();
         }
+        self.handle_action_id(action_id, chat_view, chat_state, rt_handle)
+    }
 
-        match action_id {
-            // Session group
-            "new_session" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot start a new session while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
-                return Ok(Some(ChatExitReason::NewSession));
-            }
-            "sessions" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot switch sessions while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
-                self.show_session_selector(chat_view, chat_state, rt_handle);
-            }
-            "usage" => {
-                self.show_usage_report(chat_view, chat_state, rt_handle);
-            }
-            // Prompt group
-            "skills" => {
-                self.show_skill_selector(chat_view, chat_state, rt_handle);
-            }
-            "subagents" => {
-                self.show_subagent_selector(chat_view, chat_state, rt_handle);
-            }
-            // Models group
-            "select_model" => {
-                self.show_model_selector(chat_view, chat_state, rt_handle);
-            }
-            "add_model" => {
-                chat_view.show_provider_selector();
-            }
-            // Agent group
-            "switch_agent" => {
-                self.show_agent_selector(chat_view, chat_state, rt_handle);
-            }
-            // MCP group
-            "mcp_servers" => {
-                self.show_mcp_selector(chat_view, chat_state, rt_handle);
-            }
-            // Account group
-            "login" => {
-                return self.handle_command("/login", chat_view, chat_state, rt_handle);
-            }
-            "logout" => {
-                return self.handle_command("/logout", chat_view, chat_state, rt_handle);
-            }
-            // System group
-            "help" => {
-                chat_view.show_info_popup(KEYBOARD_SHORTCUTS_HELP.to_string());
-            }
-            "exit" => {
-                if chat_state.is_processing {
-                    tracing::info!("User requested cancellation via palette exit");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
-                }
-                return Ok(Some(ChatExitReason::Quit));
-            }
-            _ => {
-                chat_view.set_status(Some(format!("Unknown palette action: {}", action_id)));
-            }
-        }
-        Ok(None)
+    fn handle_action_id(
+        &mut self,
+        action_id: &str,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        let Some(action) = action_by_id(action_id, ActionContext::Chat) else {
+            chat_view.set_status(Some(format!("Unknown action: {action_id}")));
+            return Ok(None);
+        };
+        self.dispatch_action(
+            action,
+            ActionState::chat(chat_state.is_processing, false),
+            chat_view,
+            chat_state,
+            rt_handle,
+        )
     }
 
     /// Handle shortcut commands
@@ -1941,33 +1708,60 @@ impl ChatMode {
             return Ok(None);
         }
 
-        match parts[0] {
-            "/help" => {
-                chat_view.show_info_popup(KEYBOARD_SHORTCUTS_HELP.to_string());
+        let Some(action) = action_for_alias(parts[0], ActionContext::Chat) else {
+            chat_state.add_system_message(format!(
+                "Unknown command: {}\nUse /help to see available commands",
+                parts[0]
+            ));
+            return Ok(None);
+        };
+        self.dispatch_action(
+            action,
+            ActionState::chat(chat_state.is_processing, false),
+            chat_view,
+            chat_state,
+            rt_handle,
+        )
+    }
+
+    fn dispatch_action(
+        &mut self,
+        action: &'static ActionSpec,
+        state: ActionState,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if !action.available(state) {
+            chat_view.set_status(Some(action.unavailable_message(state)));
+            return Ok(None);
+        }
+
+        match action.handler {
+            ActionHandler::Help => {
+                chat_view.show_info_popup(self.keymap.help_text(state));
             }
-            "/clear" => {
+            ActionHandler::ClearConversation => {
                 if chat_state.is_processing {
-                    tracing::info!("User requested cancellation via /clear");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
+                    self.cancel_active_turn(chat_view, rt_handle);
                 }
                 chat_state.clear_messages();
                 chat_view.clear_screen();
                 chat_view.set_status(Some("Conversation cleared".to_string()));
             }
-            "/agents" => {
+            ActionHandler::OpenAgentSelector => {
                 self.show_agent_selector(chat_view, chat_state, rt_handle);
             }
-            "/models" => {
+            ActionHandler::SwitchAgent => {
+                self.cycle_agent(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::SwitchAgentReverse => {
+                self.cycle_agent_reverse(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::SelectModel => {
                 self.show_model_selector(chat_view, chat_state, rt_handle);
             }
-            "/theme" => {
+            ActionHandler::SelectTheme => {
                 let themes = self.list_available_themes();
                 chat_view.begin_theme_preview();
                 chat_view.show_theme_selector(themes, Some(self.config.ui.theme_id.clone()));
@@ -1975,129 +1769,191 @@ impl ChatMode {
                     "Theme selector: ↑↓ preview, Enter apply, Esc cancel".to_string(),
                 ));
             }
-            "/connect" => {
-                chat_view.show_provider_selector();
-            }
-            "/new" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot start a new session while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
+            ActionHandler::AddModel => chat_view.show_provider_selector(),
+            ActionHandler::NewSession => {
                 return Ok(Some(ChatExitReason::NewSession));
             }
-            "/sessions" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot switch sessions while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
+            ActionHandler::Sessions => {
                 self.show_session_selector(chat_view, chat_state, rt_handle);
             }
-            "/mcps" => {
+            ActionHandler::Skills => {
+                self.show_skill_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::ReloadSkills => {
+                self.reload_skills_from_disk(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::Subagents => {
+                self.show_subagent_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::McpServers => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);
             }
-            "/acp" => {
+            ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun-cli"));
                 chat_view.set_status(Some(
                     "ACP setup added to the conversation. You can keep typing.".to_string(),
                 ));
             }
-            "/usage" => {
-                self.show_usage_report(chat_view, chat_state, rt_handle);
-            }
-            "/init" => match crate::prompts::get_cli_prompt("init") {
+            ActionHandler::Init => match crate::prompts::get_cli_prompt("init") {
                 Some(prompt) => {
-                    self.send_message_to_agent(
-                        prompt.to_string(),
-                        chat_view,
-                        chat_state,
-                        rt_handle,
-                    );
+                    self.send_message_to_agent(prompt.to_string(), chat_view, chat_state, rt_handle)
                 }
-                None => {
-                    chat_state.add_system_message(
-                        "Init prompt not found. Please create prompts/init.md in the CLI crate."
-                            .to_string(),
-                    );
-                }
+                None => chat_state.add_system_message(
+                    "Init prompt not found. Please create prompts/init.md in the CLI crate."
+                        .to_string(),
+                ),
             },
-            "/skills" => {
-                self.show_skill_selector(chat_view, chat_state, rt_handle);
-            }
-            "/reload-skills" => {
-                self.reload_skills_from_disk(chat_view, chat_state, rt_handle);
-            }
-            "/subagents" => {
-                self.show_subagent_selector(chat_view, chat_state, rt_handle);
-            }
-            "/history" => {
+            ActionHandler::History => {
                 chat_state.add_system_message(format!(
                     "Current session statistics:\n\
-                             • Messages: {}\n\
-                             • Tool calls: {}\n\
-                             • Tokens: {}",
+                     • Messages: {}\n\
+                     • Tool calls: {}\n\
+                     • Tokens: {}",
                     chat_state.metadata.message_count,
                     chat_state.metadata.tool_calls,
                     chat_state.metadata.total_tokens
                 ));
             }
-            "/exit" => {
+            ActionHandler::Usage => self.show_usage_report(chat_view, chat_state, rt_handle),
+            ActionHandler::Exit => {
                 if chat_state.is_processing {
-                    tracing::info!("User requested cancellation via /exit");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
+                    self.cancel_active_turn(chat_view, rt_handle);
                 }
                 return Ok(Some(ChatExitReason::Quit));
             }
-            "/login" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Wait until the session is idle before using /login.".to_string(),
-                    ));
-                    return Ok(None);
-                }
+            ActionHandler::Login => {
                 self.close_all_popups(chat_view);
                 self.open_login_or_account_panel(chat_view, chat_state, rt_handle);
             }
-            "/logout" => {
-                let logged_in = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(crate::account::is_logged_in())
-                });
-                if !logged_in {
-                    chat_state.add_system_message("Not logged in.".to_string());
+            ActionHandler::Logout => self.logout(chat_state, rt_handle),
+            ActionHandler::OpenPalette => chat_view.show_command_palette(state),
+            ActionHandler::SubmitInput => {
+                return self.submit_input(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::Interrupt => self.cancel_active_turn(chat_view, rt_handle),
+            ActionHandler::ClosePopups => self.close_all_popups(chat_view),
+            ActionHandler::NavigateBack => self.navigate_back(chat_view),
+            ActionHandler::InsertNewline => chat_view.handle_newline(),
+            ActionHandler::Paste => self.paste_clipboard(chat_view),
+            ActionHandler::ToggleFocusedTool => {
+                chat_view.toggle_focused_tool_expand(chat_state);
+            }
+            ActionHandler::PreviousTool => {
+                chat_view.cycle_block_tool_focus_prev(chat_state);
+            }
+            ActionHandler::NextTool => {
+                chat_view.cycle_block_tool_focus_next(chat_state);
+            }
+            ActionHandler::HistoryPrevious => {
+                if chat_view.command_menu_visible() {
+                    chat_view.command_menu_up();
                 } else {
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(crate::account::logout())
-                    }) {
-                        Ok(()) => {
-                            chat_state.add_system_message("Logged out.".to_string());
-                        }
-                        Err(e) => {
-                            chat_state.add_system_message(format!("Logout failed: {e}"));
-                        }
-                    }
+                    chat_view.history_prev();
                 }
             }
-            _ => {
-                chat_state.add_system_message(format!(
-                    "Unknown command: {}\nUse /help to see available commands",
-                    parts[0]
-                ));
+            ActionHandler::HistoryNext => {
+                if chat_view.command_menu_visible() {
+                    chat_view.command_menu_down();
+                } else {
+                    chat_view.history_next();
+                }
             }
+            ActionHandler::JumpTop => {
+                let total = chat_view.count_message_lines(chat_state);
+                chat_view.scroll_to_top(total);
+                chat_view.set_status(Some("Jumped to conversation top".to_string()));
+            }
+            ActionHandler::JumpBottom => {
+                chat_view.scroll_to_bottom();
+                chat_view.set_status(Some("Jumped to conversation bottom".to_string()));
+            }
+            ActionHandler::ClearInput => chat_view.clear_input(),
+            ActionHandler::ToggleBrowse => {
+                chat_view.toggle_browse_mode();
+                let status = if chat_view.browse_mode {
+                    "Entered browse mode, use PageUp/PageDown or mouse wheel to scroll conversation"
+                } else {
+                    "Exited browse mode"
+                };
+                chat_view.set_status(Some(status.to_string()));
+            }
+            ActionHandler::ScrollUp => {
+                let total = chat_view.count_message_lines(chat_state);
+                chat_view.scroll_up(10, total);
+            }
+            ActionHandler::ScrollDown => chat_view.scroll_down(10),
+        }
+        Ok(None)
+    }
+
+    fn submit_input(
+        &mut self,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if let Some(action_id) = chat_view.apply_command_menu_selection() {
+            return self.handle_action_id(&action_id, chat_view, chat_state, rt_handle);
         }
 
+        if chat_state.is_processing {
+            let trimmed = chat_view.input_text().trim();
+            if trimmed.starts_with('/') {
+                if let Some(input) = chat_view.send_input() {
+                    return self.handle_command(&input, chat_view, chat_state, rt_handle);
+                }
+            } else if !trimmed.is_empty() {
+                chat_view.set_status(Some(
+                    "Currently processing. Type a /command, or use the interrupt shortcut."
+                        .to_string(),
+                ));
+            }
+            return Ok(None);
+        }
+
+        if let Some(input) = chat_view.send_input() {
+            tracing::info!("User input: {}", input);
+            if input.starts_with('/') {
+                return self.handle_command(&input, chat_view, chat_state, rt_handle);
+            }
+            self.send_message_to_agent(input, chat_view, chat_state, rt_handle);
+        }
         Ok(None)
+    }
+
+    fn cancel_active_turn(&self, chat_view: &mut ChatView, rt_handle: &tokio::runtime::Handle) {
+        tracing::info!("User requested cancellation");
+        let agent = self.agent.clone();
+        tokio::task::block_in_place(|| {
+            rt_handle.block_on(async move {
+                if let Err(error) = agent.cancel_current_turn().await {
+                    tracing::error!("Failed to cancel turn: {}", error);
+                }
+            })
+        });
+        chat_view.set_status(Some("Cancelling...".to_string()));
+    }
+
+    fn paste_clipboard(&self, chat_view: &mut ChatView) {
+        if let Ok(text) = Clipboard::new().and_then(|mut clipboard| clipboard.get_text()) {
+            let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+            for character in normalized.chars() {
+                chat_view.handle_char(character);
+            }
+        }
+    }
+
+    fn logout(&self, chat_state: &mut ChatState, rt_handle: &tokio::runtime::Handle) {
+        let logged_in =
+            tokio::task::block_in_place(|| rt_handle.block_on(crate::account::is_logged_in()));
+        if !logged_in {
+            chat_state.add_system_message("Not logged in.".to_string());
+            return;
+        }
+        match tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout())) {
+            Ok(()) => chat_state.add_system_message("Logged out.".to_string()),
+            Err(error) => chat_state.add_system_message(format!("Logout failed: {error}")),
+        }
     }
 
     fn show_usage_report(
@@ -3929,7 +3785,9 @@ mod tests {
     use tokio::sync::broadcast::error::TryRecvError;
 
     use super::{agent_event_stream_failure, mark_active_turn_failed};
+    use crate::actions::{ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
+    use crate::config::ShortcutsConfig;
 
     #[test]
     fn agent_event_stream_failure_ignores_empty_queue() {
@@ -3965,5 +3823,14 @@ mod tests {
         ));
         assert_eq!(state.current_turn_id(), None);
         assert!(!state.is_processing);
+    }
+
+    #[test]
+    fn shortcut_registry_contract_help_uses_resolved_keymap() {
+        let keymap = ResolvedKeymap::new(&ShortcutsConfig::default());
+
+        let help = keymap.help_text(ActionState::chat(false, false));
+        assert!(help.contains("Ctrl+P"));
+        assert!(help.contains("Command Palette"));
     }
 }
