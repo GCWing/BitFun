@@ -41,7 +41,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const markCustomizationActive = useMiniAppStore((state) => state.markCustomizationActive);
   const markCustomizationIdle = useMiniAppStore((state) => state.markCustomizationIdle);
   const { themeType } = useTheme();
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspace, workspacePath } = useCurrentWorkspace();
   const { closeScene } = useSceneManager();
   const { t, currentLanguage } = useI18n('scenes/miniapp');
 
@@ -247,6 +247,8 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
             appName={appName}
             themeType={themeType ?? 'dark'}
             workspacePath={workspacePath || undefined}
+            remoteConnectionId={workspace?.connectionId}
+            remoteSshHost={workspace?.sshHost}
             previewOpen={Boolean(customizePreview)}
             onPreviewChange={setCustomizePreview}
             onClose={() => setCustomizeOpen(false)}

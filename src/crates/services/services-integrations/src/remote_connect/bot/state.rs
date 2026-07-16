@@ -17,11 +17,126 @@ pub enum BotDisplayMode {
     Assistant,
 }
 
+/// Workspace selection retained by the bot, including SSH identity when remote.
+///
+/// Persisted bot state historically stored `current_workspace` as a bare path
+/// string. Deserialization still accepts that form and upgrades it in memory.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BotWorkspaceRef {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+impl BotWorkspaceRef {
+    pub fn local(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        }
+    }
+
+    pub fn with_identity(
+        path: impl Into<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            remote_connection_id: remote_connection_id
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            remote_ssh_host: remote_ssh_host
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
+        }
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+fn deserialize_optional_workspace_ref<'de, D>(
+    deserializer: D,
+) -> Result<Option<BotWorkspaceRef>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Null,
+        Path(String),
+        Full(BotWorkspaceRef),
+    }
+
+    match Option::<Raw>::deserialize(deserializer)? {
+        None | Some(Raw::Null) => Ok(None),
+        Some(Raw::Path(path)) => {
+            let trimmed = path.trim();
+            if trimmed.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(BotWorkspaceRef::local(trimmed)))
+            }
+        }
+        Some(Raw::Full(workspace)) => {
+            if workspace.path.trim().is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(workspace))
+            }
+        }
+    }
+}
+
+/// One selectable workspace row in the bot `/switch` picker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BotWorkspaceChoice {
+    pub path: String,
+    pub name: String,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+impl BotWorkspaceChoice {
+    pub fn new(
+        path: impl Into<String>,
+        name: impl Into<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            name: name.into(),
+            remote_connection_id,
+            remote_ssh_host,
+        }
+    }
+
+    pub fn to_workspace_ref(&self) -> BotWorkspaceRef {
+        BotWorkspaceRef::with_identity(
+            self.path.clone(),
+            self.remote_connection_id.clone(),
+            self.remote_ssh_host.clone(),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BotChatState {
     pub chat_id: String,
     pub paired: bool,
-    pub current_workspace: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_workspace_ref",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub current_workspace: Option<BotWorkspaceRef>,
     pub current_assistant: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_assistant_name: Option<String>,
@@ -87,8 +202,25 @@ impl BotChatState {
 
     pub fn active_workspace_path(&self) -> Option<String> {
         self.current_workspace
-            .clone()
+            .as_ref()
+            .map(|workspace| workspace.path.clone())
             .or_else(|| self.current_assistant.clone())
+    }
+
+    pub fn current_workspace_path(&self) -> Option<&str> {
+        self.current_workspace.as_ref().map(BotWorkspaceRef::path)
+    }
+
+    pub fn current_workspace_identity(&self) -> (Option<String>, Option<String>) {
+        self.current_workspace
+            .as_ref()
+            .map(|workspace| {
+                (
+                    workspace.remote_connection_id.clone(),
+                    workspace.remote_ssh_host.clone(),
+                )
+            })
+            .unwrap_or((None, None))
     }
 
     pub fn set_pending(&mut self, action: PendingAction) {
@@ -132,7 +264,7 @@ fn now_secs() -> i64 {
 #[derive(Debug, Clone)]
 pub enum PendingAction {
     SelectWorkspace {
-        options: Vec<(String, String)>,
+        options: Vec<BotWorkspaceChoice>,
     },
     SelectAssistant {
         options: Vec<(String, String)>,
@@ -254,7 +386,7 @@ mod tests {
         state.current_assistant = Some("/assistant".into());
         assert_eq!(state.active_workspace_path().as_deref(), Some("/assistant"));
 
-        state.current_workspace = Some("/workspace".into());
+        state.current_workspace = Some(BotWorkspaceRef::local("/workspace"));
         assert_eq!(state.active_workspace_path().as_deref(), Some("/workspace"));
     }
 
@@ -272,5 +404,53 @@ mod tests {
         assert!(state.pending_action.is_none());
         assert_eq!(state.pending_expires_at, 0);
         assert_eq!(state.pending_invalid_count, 0);
+    }
+
+    #[test]
+    fn current_workspace_deserializes_legacy_path_string() {
+        let state: BotChatState = serde_json::from_value(serde_json::json!({
+            "chat_id": "c1",
+            "paired": true,
+            "current_workspace": "/root/repos",
+            "current_assistant": null,
+            "current_session_id": null,
+            "display_mode": "pro"
+        }))
+        .expect("legacy path string must deserialize");
+
+        assert_eq!(
+            state.current_workspace,
+            Some(BotWorkspaceRef::local("/root/repos"))
+        );
+    }
+
+    #[test]
+    fn current_workspace_deserializes_identity_object() {
+        let state: BotChatState = serde_json::from_value(serde_json::json!({
+            "chat_id": "c1",
+            "paired": true,
+            "current_workspace": {
+                "path": "/root/repos",
+                "remote_connection_id": "conn-a",
+                "remote_ssh_host": "host-a"
+            },
+            "current_assistant": null,
+            "current_session_id": null,
+            "display_mode": "pro"
+        }))
+        .expect("identity object must deserialize");
+
+        assert_eq!(
+            state.current_workspace,
+            Some(BotWorkspaceRef::with_identity(
+                "/root/repos",
+                Some("conn-a".into()),
+                Some("host-a".into()),
+            ))
+        );
+        assert_eq!(
+            state.current_workspace_identity(),
+            (Some("conn-a".into()), Some("host-a".into()))
+        );
     }
 }

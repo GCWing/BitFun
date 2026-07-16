@@ -1638,6 +1638,8 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
             name: workspace.name.clone(),
             last_opened: "2026-05-25T00:00:00Z".to_string(),
             kind: workspace.kind,
+            remote_connection_id: workspace.remote_connection_id.clone(),
+            remote_ssh_host: workspace.remote_ssh_host.clone(),
         },
     ]))
     .expect("serialize recent workspaces");
@@ -1647,6 +1649,11 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
         recent_json["workspaces"][0]["last_opened"],
         "2026-05-25T00:00:00Z"
     );
+    assert_eq!(
+        recent_json["workspaces"][0]["remote_connection_id"],
+        "ssh-1"
+    );
+    assert_eq!(recent_json["workspaces"][0]["remote_ssh_host"], "dev-host");
 
     let assistant_json = serde_json::to_value(remote_assistant_list_response(vec![
         RemoteAssistantWorkspaceFacts {
@@ -1666,11 +1673,15 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
         remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
             path: "D:/workspace/project".to_string(),
             name: "project".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
         })),
         RemoteResponse::WorkspaceUpdated {
             success: true,
             path: Some("D:/workspace/project".to_string()),
             project_name: Some("project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
             error: None,
         }
     );

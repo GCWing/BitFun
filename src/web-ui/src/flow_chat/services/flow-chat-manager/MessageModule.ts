@@ -352,6 +352,8 @@ export async function sendMessage(
           turnId: dialogTurnId,
           agentType: currentAgentType,
           workspacePath,
+          remoteConnectionId: updatedSession.remoteConnectionId,
+          remoteSshHost: updatedSession.remoteSshHost,
           imageContexts: options?.imageContexts,
           userMessageMetadata: options?.userMessageMetadata,
         });
@@ -372,6 +374,8 @@ export async function sendMessage(
             turnId: dialogTurnId,
             agentType: currentAgentType,
             workspacePath,
+            remoteConnectionId: updatedSession.remoteConnectionId,
+            remoteSshHost: updatedSession.remoteSshHost,
             imageContexts: options?.imageContexts,
             userMessageMetadata: options?.userMessageMetadata,
           });

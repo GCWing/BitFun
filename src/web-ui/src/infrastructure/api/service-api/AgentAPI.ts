@@ -70,6 +70,8 @@ export interface StartDialogTurnRequest {
   turnId?: string; 
   agentType: string; 
   workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
   /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */
   imageContexts?: ImageInputContextData[];
   userMessageMetadata?: Record<string, unknown>;

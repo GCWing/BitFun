@@ -115,12 +115,14 @@ async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
 async fn open_workspace_with_snapshot(
     path: &str,
     snapshot_log_context: &str,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
 ) -> Result<RemoteWorkspaceUpdate, String> {
     let workspace_service = crate::service::workspace::get_global_workspace_service()
         .ok_or_else(|| "Workspace service not available".to_string())?;
     let path_buf = std::path::PathBuf::from(path);
     let info = workspace_service
-        .open_workspace(path_buf)
+        .open_workspace_resolving_known(path_buf, remote_connection_id, remote_ssh_host)
         .await
         .map_err(|error| error.to_string())?;
     if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
@@ -131,9 +133,19 @@ async fn open_workspace_with_snapshot(
     {
         error!("Failed to initialize snapshot after {snapshot_log_context}: {error}");
     }
+    let remote_connection_id = info.remote_ssh_connection_id().map(str::to_string);
+    let remote_ssh_host = info
+        .metadata
+        .get("sshHost")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
     Ok(RemoteWorkspaceUpdate {
         path: info.root_path.to_string_lossy().to_string(),
         name: info.name,
+        remote_connection_id,
+        remote_ssh_host,
     })
 }
 
@@ -1226,15 +1238,31 @@ impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
             .into_iter()
             .map(|workspace| RemoteRecentWorkspaceFacts {
                 path: workspace.root_path.to_string_lossy().to_string(),
-                name: workspace.name,
+                name: workspace.name.clone(),
                 last_opened: workspace.last_accessed.to_rfc3339(),
                 kind: remote_workspace_kind(workspace.workspace_kind),
+                remote_connection_id: workspace_metadata_string(
+                    &workspace.metadata,
+                    "connectionId",
+                ),
+                remote_ssh_host: workspace_metadata_string(&workspace.metadata, "sshHost"),
             })
             .collect()
     }
 
-    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
-        open_workspace_with_snapshot(path, "remote workspace set").await
+    async fn open_workspace(
+        &self,
+        path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> Result<RemoteWorkspaceUpdate, String> {
+        open_workspace_with_snapshot(
+            path,
+            "remote workspace set",
+            remote_connection_id,
+            remote_ssh_host,
+        )
+        .await
     }
 
     async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts> {
@@ -1255,7 +1283,7 @@ impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
     }
 
     async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
-        open_workspace_with_snapshot(path, "remote assistant set").await
+        open_workspace_with_snapshot(path, "remote assistant set", None, None).await
     }
 }
 

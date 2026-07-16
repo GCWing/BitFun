@@ -612,13 +612,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     const handler = (e: Event) => {
       const clientId = (e as CustomEvent<{ clientId?: string }>).detail?.clientId?.trim();
       if (!clientId) return;
+      const config = currentWorkspace
+        ? {
+            workspacePath: currentWorkspace.rootPath,
+            ...(currentWorkspace.workspaceKind === WorkspaceKind.Remote && currentWorkspace.connectionId
+              ? { remoteConnectionId: currentWorkspace.connectionId }
+              : {}),
+            ...(currentWorkspace.workspaceKind === WorkspaceKind.Remote && currentWorkspace.sshHost
+              ? { remoteSshHost: currentWorkspace.sshHost }
+              : {}),
+          }
+        : {};
       void FlowChatManager.getInstance()
-        .createAcpChatSession(clientId)
+        .createAcpChatSession(clientId, config)
         .catch(error => log.error('Failed to create ACP FlowChat session', error));
     };
     window.addEventListener('bitfun:create-acp-session', handler);
     return () => window.removeEventListener('bitfun:create-acp-session', handler);
-  }, []);
+  }, [currentWorkspace]);
 
   React.useEffect(() => {
     const handler = (event: Event) => {

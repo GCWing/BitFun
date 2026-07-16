@@ -24,7 +24,7 @@ use super::menu::{MenuItem, MenuView};
 pub use bitfun_services_integrations::remote_connect::bot::{
     parse_command, BotAction, BotActionStyle, BotChatState, BotCommand, BotDisplayMode,
     BotInteractionHandler, BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption,
-    PendingAction, RemoteDeviceTarget,
+    BotWorkspaceChoice, BotWorkspaceRef, PendingAction, RemoteDeviceTarget,
 };
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ fn ready_to_chat_body(state: &BotChatState, s: &'static BotStrings) -> Option<St
     // user wants to manage sessions they can use /resume which renders
     // proper session names.
     if state.display_mode == BotDisplayMode::Pro {
-        match &state.current_workspace {
+        match state.current_workspace_path() {
             Some(p) => Some(format!(
                 "{}: {}",
                 s.current_workspace_label,
@@ -847,6 +847,105 @@ async fn set_verbose(state: &mut BotChatState, on: bool, s: &'static BotStrings)
 // ── Switch context (workspace or assistant) ────────────────────────
 
 async fn start_switch(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
+    // Remote-device control: list/switch workspaces on the peer, not the local desktop.
+    if state.active_remote_device.is_some() {
+        if state.display_mode != BotDisplayMode::Pro {
+            return result_from_menu(
+                state,
+                MenuView::plain(s.switch_no_assistants)
+                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+            );
+        }
+        let cmd = serde_json::json!({ "cmd": "list_recent_workspaces" });
+        let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
+        match exec_remote_rpc(state, &cmd_json).await {
+            Ok(resp) => {
+                let val: serde_json::Value = match serde_json::from_str(&resp) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return result_from_menu(
+                            state,
+                            MenuView::plain(format!("{}{e}", s.workspace_open_failed_prefix))
+                                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                        );
+                    }
+                };
+                if val.get("resp").and_then(|value| value.as_str()) == Some("error") {
+                    let message = val
+                        .get("message")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or(s.workspace_service_unavailable);
+                    return result_from_menu(
+                        state,
+                        MenuView::plain(message.to_string())
+                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                    );
+                }
+                let workspaces = val
+                    .get("workspaces")
+                    .and_then(|value| value.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                if workspaces.is_empty() {
+                    return result_from_menu(
+                        state,
+                        MenuView::plain(s.switch_no_workspaces)
+                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                    );
+                }
+                let options: Vec<BotWorkspaceChoice> = workspaces
+                    .iter()
+                    .filter_map(|workspace| {
+                        let path = workspace
+                            .get("path")
+                            .and_then(|value| value.as_str())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())?;
+                        let name = workspace
+                            .get("name")
+                            .and_then(|value| value.as_str())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .unwrap_or(path);
+                        Some(BotWorkspaceChoice::new(
+                            path.to_string(),
+                            name.to_string(),
+                            workspace
+                                .get("remote_connection_id")
+                                .and_then(|value| value.as_str())
+                                .map(str::trim)
+                                .filter(|value| !value.is_empty())
+                                .map(str::to_string),
+                            workspace
+                                .get("remote_ssh_host")
+                                .and_then(|value| value.as_str())
+                                .map(str::trim)
+                                .filter(|value| !value.is_empty())
+                                .map(str::to_string),
+                        ))
+                    })
+                    .collect();
+                if options.is_empty() {
+                    return result_from_menu(
+                        state,
+                        MenuView::plain(s.switch_no_workspaces)
+                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                    );
+                }
+                let view = workspace_selection_view(state, &options, s);
+                state.set_pending(PendingAction::SelectWorkspace { options });
+                return result_from_menu(state, view);
+            }
+            Err(error) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(format!("{}{error}", s.workspace_open_failed_prefix))
+                        .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                );
+            }
+        }
+    }
+
     use crate::service::workspace::get_global_workspace_service;
 
     let ws_service = match get_global_workspace_service() {
@@ -869,9 +968,23 @@ async fn start_switch(state: &mut BotChatState, s: &'static BotStrings) -> Handl
                     .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
             );
         }
-        let options: Vec<(String, String)> = workspaces
+        let options: Vec<BotWorkspaceChoice> = workspaces
             .iter()
-            .map(|ws| (ws.root_path.to_string_lossy().to_string(), ws.name.clone()))
+            .map(|ws| {
+                let ssh_host = ws
+                    .metadata
+                    .get("sshHost")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string);
+                BotWorkspaceChoice::new(
+                    ws.root_path.to_string_lossy().to_string(),
+                    ws.name.clone(),
+                    ws.remote_ssh_connection_id().map(str::to_string),
+                    ssh_host,
+                )
+            })
             .collect();
         let view = workspace_selection_view(state, &options, s);
         state.set_pending(PendingAction::SelectWorkspace { options });
@@ -897,17 +1010,33 @@ async fn start_switch(state: &mut BotChatState, s: &'static BotStrings) -> Handl
 
 fn workspace_selection_view(
     state: &BotChatState,
-    options: &[(String, String)],
+    options: &[BotWorkspaceChoice],
     s: &'static BotStrings,
 ) -> MenuView {
     let mut items = Vec::new();
     let mut body = String::new();
-    for (i, (path, name)) in options.iter().enumerate() {
-        let is_current = state.current_workspace.as_deref() == Some(path.as_str());
+    for (i, choice) in options.iter().enumerate() {
+        let is_current = state.current_workspace.as_ref().is_some_and(|current| {
+            current.path == choice.path
+                && current.remote_connection_id == choice.remote_connection_id
+                && current.remote_ssh_host == choice.remote_ssh_host
+        });
         let marker = if is_current { s.current_marker } else { "" };
-        body.push_str(&format!("{}. {}{}\n", i + 1, name, marker));
+        let host_hint = choice
+            .remote_ssh_host
+            .as_deref()
+            .filter(|host| !host.is_empty())
+            .map(|host| format!(" ({host})"))
+            .unwrap_or_default();
+        body.push_str(&format!(
+            "{}. {}{}{}\n",
+            i + 1,
+            choice.name,
+            host_hint,
+            marker
+        ));
         items.push(MenuItem::default(
-            truncate_label(name, 24),
+            truncate_label(&choice.name, 24),
             (i + 1).to_string(),
         ));
     }
@@ -979,10 +1108,81 @@ fn session_selection_view(
 
 async fn select_workspace(
     state: &mut BotChatState,
-    path: &str,
-    name: &str,
+    choice: &BotWorkspaceChoice,
     s: &'static BotStrings,
 ) -> HandleResult {
+    if state.active_remote_device.is_some() {
+        let cmd = serde_json::json!({
+            "cmd": "set_workspace",
+            "path": choice.path,
+            "remote_connection_id": choice.remote_connection_id,
+            "remote_ssh_host": choice.remote_ssh_host,
+        });
+        let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
+        return match exec_remote_rpc(state, &cmd_json).await {
+            Ok(resp) => {
+                let val: serde_json::Value = match serde_json::from_str(&resp) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return result_from_menu(
+                            state,
+                            MenuView::plain(format!("{}{e}", s.workspace_open_failed_prefix)),
+                        );
+                    }
+                };
+                if val.get("success").and_then(|value| value.as_bool()) != Some(true) {
+                    let message = val
+                        .get("error")
+                        .and_then(|value| value.as_str())
+                        .or_else(|| val.get("message").and_then(|value| value.as_str()))
+                        .unwrap_or(s.workspace_open_failed_prefix);
+                    return result_from_menu(
+                        state,
+                        MenuView::plain(message.to_string())
+                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                    );
+                }
+                let workspace_path = val
+                    .get("path")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or(&choice.path)
+                    .to_string();
+                let workspace_ref = BotWorkspaceRef::with_identity(
+                    workspace_path.clone(),
+                    val.get("remote_connection_id")
+                        .and_then(|value| value.as_str())
+                        .map(str::to_string)
+                        .or_else(|| choice.remote_connection_id.clone()),
+                    val.get("remote_ssh_host")
+                        .and_then(|value| value.as_str())
+                        .map(str::to_string)
+                        .or_else(|| choice.remote_ssh_host.clone()),
+                );
+                state.current_workspace = Some(workspace_ref);
+                state.current_session_id = None;
+                let body = format!(
+                    "{}: {}\n{}: {}",
+                    s.devices_remote_prefix,
+                    state
+                        .active_remote_device
+                        .as_ref()
+                        .map(|device| device.device_name.as_str())
+                        .unwrap_or("remote"),
+                    s.current_workspace_label,
+                    choice.name,
+                );
+                let mut view = main_menu_view(state, s);
+                view = view.with_body(body);
+                result_from_menu(state, view)
+            }
+            Err(error) => result_from_menu(
+                state,
+                MenuView::plain(format!("{}{error}", s.workspace_open_failed_prefix))
+                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+            ),
+        };
+    }
+
     use crate::service::workspace::get_global_workspace_service;
 
     let ws_service = match get_global_workspace_service() {
@@ -991,8 +1191,15 @@ async fn select_workspace(
             return result_from_menu(state, MenuView::plain(s.workspace_service_unavailable));
         }
     };
-    let path_buf = std::path::PathBuf::from(path);
-    match ws_service.open_workspace(path_buf).await {
+    let path_buf = std::path::PathBuf::from(&choice.path);
+    match ws_service
+        .open_workspace_resolving_known(
+            path_buf,
+            choice.remote_connection_id.as_deref(),
+            choice.remote_ssh_host.as_deref(),
+        )
+        .await
+    {
         Ok(info) => {
             if let Err(e) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
                 info.root_path.clone(),
@@ -1002,15 +1209,36 @@ async fn select_workspace(
             {
                 error!("Failed to init snapshot after bot workspace switch: {e}");
             }
-            state.current_workspace = Some(path.to_string());
+            let workspace_path = info.root_path.to_string_lossy().to_string();
+            let remote_connection_id = info
+                .remote_ssh_connection_id()
+                .map(str::to_string)
+                .or_else(|| choice.remote_connection_id.clone());
+            let remote_ssh_host = info
+                .metadata
+                .get("sshHost")
+                .and_then(|value| value.as_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .or_else(|| choice.remote_ssh_host.clone());
+            let workspace_ref = BotWorkspaceRef::with_identity(
+                workspace_path.clone(),
+                remote_connection_id,
+                remote_ssh_host,
+            );
+            state.current_workspace = Some(workspace_ref.clone());
             state.current_session_id = None;
-            info!("Bot switched workspace to: {path}");
+            info!(
+                "Bot switched workspace to: {workspace_path} (connection_id={:?}, ssh_host={:?})",
+                workspace_ref.remote_connection_id, workspace_ref.remote_ssh_host
+            );
 
-            let session_count = count_workspace_sessions(path).await;
+            let session_count = count_workspace_sessions_for_ref(&workspace_ref).await;
             let body = format!(
                 "{}: {} · {}",
                 s.current_workspace_label,
-                name,
+                choice.name,
                 fmt_count(s.workspace_session_count_fmt, session_count),
             );
             let mut view = main_menu_view(state, s);
@@ -1072,11 +1300,90 @@ async fn select_assistant(
     }
 }
 
-async fn count_workspace_sessions(workspace_path: &str) -> usize {
+/// Looks up SSH identity for a workspace path already known to WorkspaceService.
+async fn bot_workspace_remote_identity(workspace_path: &str) -> (Option<String>, Option<String>) {
+    use crate::service::remote_ssh::normalize_remote_workspace_path;
+    use crate::service::workspace::{get_global_workspace_service, WorkspaceKind};
+
+    let Some(service) = get_global_workspace_service() else {
+        return (None, None);
+    };
+    let want = normalize_remote_workspace_path(workspace_path);
+    let path_buf = std::path::PathBuf::from(workspace_path);
+
+    let candidates = {
+        let mut list = Vec::new();
+        if let Some(current) = service.get_current_workspace().await {
+            list.push(current);
+        }
+        if let Some(by_path) = service.get_workspace_by_path(&path_buf).await {
+            list.push(by_path);
+        }
+        list.extend(service.get_recent_workspaces().await);
+        list
+    };
+
+    for workspace in candidates {
+        if workspace.workspace_kind != WorkspaceKind::Remote {
+            continue;
+        }
+        let root = normalize_remote_workspace_path(&workspace.root_path.to_string_lossy());
+        if root != want {
+            continue;
+        }
+        let connection_id = workspace.remote_ssh_connection_id().map(str::to_string);
+        let ssh_host = workspace
+            .metadata
+            .get("sshHost")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        return (connection_id, ssh_host);
+    }
+
+    (None, None)
+}
+
+/// Resolves the on-disk sessions directory for a bot workspace ref.
+///
+/// Remote SSH workspaces store sessions under `~/.bitfun/remote_ssh/{host}/...`,
+/// not under the remote POSIX path itself. Prefer identity captured at workspace
+/// selection time; fall back to registry lookup only for legacy path-only state.
+async fn resolve_bot_session_storage_path_for_ref(
+    workspace: &BotWorkspaceRef,
+) -> Option<std::path::PathBuf> {
+    use crate::agentic::session::CoreSessionStorePort;
+    use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
+
+    let mut remote_connection_id = workspace.remote_connection_id.clone();
+    let mut remote_ssh_host = workspace.remote_ssh_host.clone();
+    if remote_connection_id.is_none() && remote_ssh_host.is_none() {
+        let (fallback_connection_id, fallback_ssh_host) =
+            bot_workspace_remote_identity(&workspace.path).await;
+        remote_connection_id = fallback_connection_id;
+        remote_ssh_host = fallback_ssh_host;
+    }
+
+    CoreSessionStorePort::default()
+        .resolve_session_storage_path(SessionStoragePathRequest {
+            workspace_path: std::path::PathBuf::from(&workspace.path),
+            remote_connection_id,
+            remote_ssh_host,
+        })
+        .await
+        .ok()
+        .map(|resolution| resolution.effective_storage_path)
+}
+
+async fn count_workspace_sessions_for_ref(workspace: &BotWorkspaceRef) -> usize {
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::PathManager;
 
-    let wp = std::path::PathBuf::from(workspace_path);
+    let storage_path = match resolve_bot_session_storage_path_for_ref(workspace).await {
+        Some(path) => path,
+        None => return 0,
+    };
     let pm = match PathManager::new() {
         Ok(pm) => std::sync::Arc::new(pm),
         Err(_) => return 0,
@@ -1086,10 +1393,14 @@ async fn count_workspace_sessions(workspace_path: &str) -> usize {
         Err(_) => return 0,
     };
     store
-        .list_session_metadata(&wp)
+        .list_session_metadata(&storage_path)
         .await
         .map(|v| v.len())
         .unwrap_or(0)
+}
+
+async fn count_workspace_sessions(workspace_path: &str) -> usize {
+    count_workspace_sessions_for_ref(&BotWorkspaceRef::local(workspace_path)).await
 }
 
 fn truncate_label(label: &str, max_chars: usize) -> String {
@@ -1104,6 +1415,53 @@ fn truncate_label(label: &str, max_chars: usize) -> String {
 
 // ── Resume / new session ──────────────────────────────────────────
 
+#[derive(Debug, Clone)]
+struct RemoteDeviceWorkspaceFacts {
+    path: String,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
+}
+
+async fn query_remote_device_workspace(
+    state: &BotChatState,
+) -> Result<RemoteDeviceWorkspaceFacts, String> {
+    let cmd = serde_json::json!({ "cmd": "device_query_info" });
+    let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
+    let resp = exec_remote_rpc(state, &cmd_json).await?;
+    let val: serde_json::Value = serde_json::from_str(&resp).map_err(|error| error.to_string())?;
+    if val.get("resp").and_then(|value| value.as_str()) == Some("error") {
+        return Err(val
+            .get("message")
+            .and_then(|value| value.as_str())
+            .unwrap_or("Failed to query remote device workspace")
+            .to_string());
+    }
+    let path = val
+        .get("workspace_path")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            "No workspace is open on the remote device; select a recent workspace or create one first"
+                .to_string()
+        })?;
+    Ok(RemoteDeviceWorkspaceFacts {
+        path: path.to_string(),
+        remote_connection_id: val
+            .get("remote_connection_id")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        remote_ssh_host: val
+            .get("remote_ssh_host")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+    })
+}
+
 async fn start_resume(
     state: &mut BotChatState,
     page: usize,
@@ -1111,9 +1469,21 @@ async fn start_resume(
 ) -> HandleResult {
     // ── Remote device branch ──
     if state.active_remote_device.is_some() {
+        let workspace = match query_remote_device_workspace(state).await {
+            Ok(workspace) => workspace,
+            Err(error) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(format!("{}{error}", s.session_create_failed_prefix))
+                        .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                );
+            }
+        };
         let cmd = serde_json::json!({
             "cmd": "list_sessions",
-            "workspace_path": null,
+            "workspace_path": workspace.path,
+            "remote_connection_id": workspace.remote_connection_id,
+            "remote_ssh_host": workspace.remote_ssh_host,
             "limit": 10,
             "offset": page * 10,
         });
@@ -1129,6 +1499,17 @@ async fn start_resume(
                         );
                     }
                 };
+                if val.get("resp").and_then(|value| value.as_str()) == Some("error") {
+                    let message = val
+                        .get("message")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or(s.session_create_failed_prefix);
+                    return result_from_menu(
+                        state,
+                        MenuView::plain(message.to_string())
+                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                    );
+                }
                 let sessions = val
                     .get("sessions")
                     .and_then(|v| v.as_array())
@@ -1217,9 +1598,9 @@ async fn start_resume(
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::PathManager;
 
-    let ws_path = if state.display_mode == BotDisplayMode::Pro {
-        match &state.current_workspace {
-            Some(p) => std::path::PathBuf::from(p),
+    let workspace_ref = if state.display_mode == BotDisplayMode::Pro {
+        match state.current_workspace.clone() {
+            Some(workspace) => workspace,
             None => {
                 return result_from_menu(
                     state,
@@ -1232,7 +1613,7 @@ async fn start_resume(
         }
     } else {
         match &state.current_assistant {
-            Some(p) => std::path::PathBuf::from(p),
+            Some(p) => BotWorkspaceRef::local(p.clone()),
             None => {
                 return result_from_menu(
                     state,
@@ -1243,6 +1624,17 @@ async fn start_resume(
                 );
             }
         }
+    };
+
+    let Some(storage_path) = resolve_bot_session_storage_path_for_ref(&workspace_ref).await else {
+        return result_from_menu(
+            state,
+            MenuView::plain(format!(
+                "{}{}",
+                s.session_create_failed_prefix,
+                "Failed to resolve session storage for the current workspace"
+            )),
+        );
     };
 
     let page_size = 10usize;
@@ -1266,7 +1658,7 @@ async fn start_resume(
             );
         }
     };
-    let all_meta = match store.list_session_metadata(&ws_path).await {
+    let all_meta = match store.list_session_metadata(&storage_path).await {
         Ok(m) => m,
         Err(e) => {
             return result_from_menu(
@@ -1346,7 +1738,7 @@ async fn select_session(
     info!("Bot resumed session: {session_id}");
 
     let last_pair =
-        load_last_dialog_pair_from_turns(state.current_workspace.as_deref(), session_id).await;
+        load_last_dialog_pair_from_turns(state.current_workspace.as_ref(), session_id).await;
     let mut body = format!("{}{}\n", s.resume_resumed_prefix, session_name);
     if let Some((user_text, ai_text)) = last_pair {
         body.push('\n');
@@ -1367,7 +1759,7 @@ async fn select_session(
 }
 
 async fn load_last_dialog_pair_from_turns(
-    workspace_path: Option<&str>,
+    workspace: Option<&BotWorkspaceRef>,
     session_id: &str,
 ) -> Option<(String, String)> {
     use crate::agentic::persistence::PersistenceManager;
@@ -1376,10 +1768,14 @@ async fn load_last_dialog_pair_from_turns(
     const MAX_USER_LEN: usize = 200;
     const MAX_AI_LEN: usize = 400;
 
-    let wp = std::path::PathBuf::from(workspace_path?);
+    let workspace = workspace?;
+    let storage_path = resolve_bot_session_storage_path_for_ref(workspace).await?;
     let pm = std::sync::Arc::new(PathManager::new().ok()?);
     let store = PersistenceManager::new(pm).ok()?;
-    let turns = store.load_session_turns(&wp, session_id).await.ok()?;
+    let turns = store
+        .load_session_turns(&storage_path, session_id)
+        .await
+        .ok()?;
     let turn = turns.last()?;
 
     let user_text = strip_user_message_tags(&turn.user_message.content);
@@ -1482,16 +1878,39 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         } else {
             "Remote Session"
         };
+        let workspace = match query_remote_device_workspace(state).await {
+            Ok(workspace) => workspace,
+            Err(error) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(format!("{}{error}", s.session_create_failed_prefix))
+                        .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                );
+            }
+        };
         let cmd = serde_json::json!({
             "cmd": "create_session",
             "agent_type": agent_type,
             "session_name": session_name,
-            "workspace_path": null,
+            "workspace_path": workspace.path,
+            "remote_connection_id": workspace.remote_connection_id,
+            "remote_ssh_host": workspace.remote_ssh_host,
         });
         let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
         match exec_remote_rpc(state, &cmd_json).await {
             Ok(resp) => {
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&resp) {
+                    if val.get("resp").and_then(|value| value.as_str()) == Some("error") {
+                        let message = val
+                            .get("message")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or(s.session_create_failed_prefix);
+                        return result_from_menu(
+                            state,
+                            MenuView::plain(message.to_string())
+                                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                        );
+                    }
                     if let Some(sid) = val.get("session_id").and_then(|v| v.as_str()) {
                         state.current_session_id = Some(sid.to_string());
                         let body = format!(
@@ -1522,6 +1941,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
     use crate::agentic::coordination::get_global_coordinator;
     use crate::service::workspace::get_global_workspace_service;
     use crate::service_agent_runtime::CoreServiceAgentRuntime;
+    use bitfun_runtime_ports::RemoteSessionWorkspaceIdentity;
     use bitfun_services_integrations::remote_connect::{
         build_remote_session_create_request, RemoteConnectSubmissionSource,
     };
@@ -1535,9 +1955,9 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         }
     };
 
-    let ws_path = if is_claw {
+    let workspace_ref = if is_claw {
         if let Some(p) = state.current_assistant.clone() {
-            Some(p)
+            Some(BotWorkspaceRef::local(p))
         } else {
             let ws_service = match get_global_workspace_service() {
                 Some(s) => s,
@@ -1574,7 +1994,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                 state.current_assistant = Some(path.clone());
                 state.current_assistant_name = Some(name.clone());
             }
-            resolved.map(|(p, _)| p)
+            resolved.map(|(path, _)| BotWorkspaceRef::local(path))
         }
     } else {
         state.current_workspace.clone()
@@ -1604,7 +2024,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         }
     };
 
-    let Some(workspace_path) = ws_path else {
+    let Some(workspace_ref) = workspace_ref else {
         let view = if is_claw {
             MenuView::plain(s.no_assistant).with_items(vec![
                 MenuItem::primary(s.item_switch_assistant, "/switch"),
@@ -1619,11 +2039,20 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         return result_from_menu(state, view);
     };
 
+    let (mut remote_connection_id, mut remote_ssh_host) = (
+        workspace_ref.remote_connection_id.clone(),
+        workspace_ref.remote_ssh_host.clone(),
+    );
+    if remote_connection_id.is_none() && remote_ssh_host.is_none() {
+        let fallback = bot_workspace_remote_identity(&workspace_ref.path).await;
+        remote_connection_id = fallback.0;
+        remote_ssh_host = fallback.1;
+    }
     let request = build_remote_session_create_request(
         session_name,
         agent_type,
-        Some(workspace_path.clone()),
-        Default::default(),
+        Some(workspace_ref.path.clone()),
+        RemoteSessionWorkspaceIdentity::new(remote_connection_id, remote_ssh_host),
         RemoteConnectSubmissionSource::Bot,
     );
     let runtime = match CoreServiceAgentRuntime::agent_runtime(coordinator.clone()) {
@@ -1643,7 +2072,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                 s.session_created_prefix,
                 session_name,
                 s.session_workspace_label,
-                short_path_name(&workspace_path),
+                short_path_name(&workspace_ref.path),
                 s.session_start_hint,
             );
             let view = MenuView::plain("").with_body(body);
@@ -1722,8 +2151,8 @@ async fn route_pending(
                 }
                 Some(n) if n >= 1 && n <= options.len() => {
                     state.clear_pending();
-                    let (path, name) = options[n - 1].clone();
-                    select_workspace(state, &path, &name, s).await
+                    let choice = options[n - 1].clone();
+                    select_workspace(state, &choice, s).await
                 }
                 _ => {
                     state.set_pending(PendingAction::SelectWorkspace { options });
@@ -2675,7 +3104,7 @@ mod state_tests {
             "assistant path is the fallback when no Pro workspace is set"
         );
 
-        state.current_workspace = Some("/tmp/pro-ws".to_string());
+        state.current_workspace = Some(BotWorkspaceRef::local("/tmp/pro-ws"));
         assert_eq!(
             state.active_workspace_path().as_deref(),
             Some("/tmp/pro-ws"),
@@ -2768,7 +3197,7 @@ mod menu_tests {
     fn expert_mode_body_still_uses_workspace_dir_name() {
         let mut state = BotChatState::new("c".into());
         state.display_mode = BotDisplayMode::Pro;
-        state.current_workspace = Some("/tmp/projects/MyApp".to_string());
+        state.current_workspace = Some(BotWorkspaceRef::local("/tmp/projects/MyApp"));
         // `current_assistant_name` should not affect Pro mode at all.
         state.current_assistant_name = Some("ignored".to_string());
         let s = strings_for(BotLanguage::ZhCN);

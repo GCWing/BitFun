@@ -30,5 +30,8 @@ export function flowChatSessionConfigForWorkspace(workspace: WorkspaceInfo) {
     ...(isRemoteWorkspace(workspace) && workspace.connectionId
       ? { remoteConnectionId: workspace.connectionId }
       : {}),
+    ...(isRemoteWorkspace(workspace) && workspace.sshHost
+      ? { remoteSshHost: workspace.sshHost }
+      : {}),
   };
 }

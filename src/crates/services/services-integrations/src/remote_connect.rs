@@ -896,6 +896,8 @@ pub fn remote_recent_workspaces_response(
                 name: workspace.name,
                 last_opened: workspace.last_opened,
                 workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+                remote_connection_id: workspace.remote_connection_id,
+                remote_ssh_host: workspace.remote_ssh_host,
             })
             .collect(),
     }
@@ -924,12 +926,16 @@ pub fn remote_workspace_updated_response(
             success: true,
             path: Some(update.path),
             project_name: Some(update.name),
+            remote_connection_id: update.remote_connection_id,
+            remote_ssh_host: update.remote_ssh_host,
             error: None,
         },
         Err(message) => RemoteResponse::WorkspaceUpdated {
             success: false,
             path: None,
             project_name: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
             error: Some(message),
         },
     }
@@ -1052,9 +1058,18 @@ where
         RemoteCommand::ListRecentWorkspaces => {
             remote_recent_workspaces_response(host.recent_workspaces().await)
         }
-        RemoteCommand::SetWorkspace { path } => {
-            remote_workspace_updated_response(host.open_workspace(path).await)
-        }
+        RemoteCommand::SetWorkspace {
+            path,
+            remote_connection_id,
+            remote_ssh_host,
+        } => remote_workspace_updated_response(
+            host.open_workspace(
+                path,
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await,
+        ),
         RemoteCommand::ListAssistants => {
             remote_assistant_list_response(host.assistant_workspaces().await)
         }
@@ -1982,6 +1997,10 @@ pub struct RecentWorkspaceEntry {
     pub last_opened: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2026,6 +2045,10 @@ pub enum RemoteCommand {
     ListRecentWorkspaces,
     SetWorkspace {
         path: String,
+        #[serde(default)]
+        remote_connection_id: Option<String>,
+        #[serde(default)]
+        remote_ssh_host: Option<String>,
     },
     ListAssistants,
     SetAssistant {
@@ -2193,6 +2216,10 @@ pub enum RemoteResponse {
         success: bool,
         path: Option<String>,
         project_name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
         error: Option<String>,
     },
     AssistantList {
@@ -2311,6 +2338,12 @@ pub enum RemoteResponse {
     DeviceInfo {
         device_name: Option<String>,
         workspace_path: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_kind: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
         session_count: Option<usize>,
     },
     /// Result of a HostInvoke proxy call (JSON-compatible with local invoke).
@@ -3328,13 +3361,22 @@ mod tests {
                 name: "project".to_string(),
                 last_opened: "2026-05-29T00:00:00Z".to_string(),
                 kind: RemoteWorkspaceKind::Normal,
+                remote_connection_id: None,
+                remote_ssh_host: None,
             }]
         }
 
-        async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        async fn open_workspace(
+            &self,
+            path: &str,
+            _remote_connection_id: Option<&str>,
+            _remote_ssh_host: Option<&str>,
+        ) -> Result<RemoteWorkspaceUpdate, String> {
             Ok(RemoteWorkspaceUpdate {
                 path: path.to_string(),
                 name: "opened".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
         }
 
@@ -3353,6 +3395,8 @@ mod tests {
             Ok(RemoteWorkspaceUpdate {
                 path: path.to_string(),
                 name: "assistant".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
         }
     }
@@ -3380,6 +3424,8 @@ mod tests {
                 &host,
                 &RemoteCommand::SetWorkspace {
                     path: "/workspace/next".to_string(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
                 },
             )
             .await,
@@ -3387,6 +3433,8 @@ mod tests {
                 success: true,
                 path: Some("/workspace/next".to_string()),
                 project_name: Some("opened".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 error: None,
             }
         );

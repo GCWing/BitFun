@@ -172,6 +172,8 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
             git_branch: initialSync.git_branch,
             workspace_kind: initialSync.workspace_kind,
             assistant_id: initialSync.assistant_id,
+            remote_connection_id: initialSync.remote_connection_id,
+            remote_ssh_host: initialSync.remote_ssh_host,
           });
         }
       }

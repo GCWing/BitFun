@@ -200,6 +200,47 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
 
     async fn handle_device_command(&self, command: &RemoteCommand) -> RemoteResponse {
         match command {
+            RemoteCommand::DeviceQueryInfo => {
+                use bitfun_runtime_ports::RemoteSessionWorkspaceIdentity;
+                use bitfun_services_integrations::remote_connect::{
+                    RemoteInitialSyncRuntimeHost, RemoteWorkspaceRuntimeHost,
+                };
+
+                let workspace_host = CoreServiceAgentRuntime::remote_workspace_host();
+                let workspace =
+                    RemoteWorkspaceRuntimeHost::current_workspace(&workspace_host).await;
+                let session_count = if let Some(ref facts) = workspace {
+                    let sync_host = CoreServiceAgentRuntime::remote_initial_sync_host();
+                    let identity = RemoteSessionWorkspaceIdentity::from_workspace(facts);
+                    match RemoteInitialSyncRuntimeHost::list_session_metadata(
+                        &sync_host,
+                        std::path::Path::new(&facts.path),
+                        identity,
+                    )
+                    .await
+                    {
+                        Ok(metadata) => Some(metadata.len()),
+                        Err(_) => None,
+                    }
+                } else {
+                    Some(0)
+                };
+
+                RemoteResponse::DeviceInfo {
+                    device_name: None,
+                    workspace_path: workspace.as_ref().map(|facts| facts.path.clone()),
+                    workspace_kind: workspace
+                        .as_ref()
+                        .map(|facts| facts.kind.as_wire_str().to_string()),
+                    remote_connection_id: workspace
+                        .as_ref()
+                        .and_then(|facts| facts.remote_connection_id.clone()),
+                    remote_ssh_host: workspace
+                        .as_ref()
+                        .and_then(|facts| facts.remote_ssh_host.clone()),
+                    session_count,
+                }
+            }
             RemoteCommand::CreateWorkspace { path } => {
                 let path = std::path::PathBuf::from(path);
                 // Create the directory if it doesn't exist, then open it
@@ -215,6 +256,8 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
                     &host,
                     &RemoteCommand::SetWorkspace {
                         path: path.to_string_lossy().to_string(),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
                     },
                 )
                 .await

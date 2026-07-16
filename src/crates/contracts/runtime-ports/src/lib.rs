@@ -836,6 +836,10 @@ pub struct RemoteRecentWorkspaceFacts {
     pub name: String,
     pub last_opened: String,
     pub kind: RemoteWorkspaceKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -852,6 +856,10 @@ pub struct RemoteAssistantWorkspaceFacts {
 pub struct RemoteWorkspaceUpdate {
     pub path: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -902,7 +910,12 @@ pub struct RemoteFileChunkRange {
 pub trait RemoteWorkspaceRuntimeHost: Send + Sync {
     async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts>;
     async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts>;
-    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
+    async fn open_workspace(
+        &self,
+        path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> Result<RemoteWorkspaceUpdate, String>;
     async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts>;
     async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
 }
