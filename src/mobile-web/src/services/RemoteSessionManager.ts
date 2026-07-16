@@ -149,13 +149,17 @@ export class RemoteSessionManager {
   private async request<T>(cmd: object): Promise<T> {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const cmdWithId = { ...cmd, _request_id: requestId };
-    // When we have a delegated identity (desktop is logged into an account),
-    // route all commands through the relay HTTP RPC API directly to the
-    // paired desktop's device_id. This bypasses the room channel and allows
-    // the mobile to control any same-account device, not just the paired one.
+    // The QR-paired desktop keeps the proven room channel. Only a switched
+    // control target (another same-account device) is reached through the
+    // relay device RPC API using the delegated identity.
+    const targetDeviceId = this.client.pairedDeviceId;
+    const isRemoteTarget =
+      this.client.hasDelegatedIdentity
+      && !!targetDeviceId
+      && targetDeviceId !== this.client.homeDeviceId;
     let resp: T;
-    if (this.client.hasDelegatedIdentity && this.client.pairedDeviceId) {
-      resp = await this.client.sendDeviceRpc<T>(this.client.pairedDeviceId, cmdWithId);
+    if (isRemoteTarget && targetDeviceId) {
+      resp = await this.client.sendDeviceRpc<T>(targetDeviceId, cmdWithId);
     } else {
       resp = await this.client.sendCommand<T>(cmdWithId);
     }

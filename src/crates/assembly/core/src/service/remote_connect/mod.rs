@@ -165,24 +165,18 @@ pub struct RemoteConnectService {
     online_devices: Arc<RwLock<Vec<relay_client::DevicePresenceEntry>>>,
     /// Callback that provides a delegated identity (token + master_key)
     /// for paired mobile/IM clients. Set by the desktop layer after account
-    /// login. Called automatically after pairing succeeds.
-    delegated_identity_fn: Arc<
-        RwLock<
-            Option<
-                Arc<
-                    dyn Fn() -> std::pin::Pin<
-                            Box<
-                                dyn std::future::Future<Output = Option<(String, [u8; 32], String)>>
-                                    + Send
-                                    + Sync,
-                            >,
-                        > + Send
-                        + Sync,
-                >,
-            >,
-        >,
-    >,
+    /// login. Resolved on demand when a paired client sends
+    /// `get_delegated_identity` over the room channel.
+    delegated_identity_fn: Arc<RwLock<Option<DelegatedIdentityFn>>>,
 }
+
+/// Provider returning `(token, master_key, relay_url)` for the paired client.
+type DelegatedIdentityFn = Arc<
+    dyn Fn() -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Option<(String, [u8; 32], String)>> + Send + Sync>,
+        > + Send
+        + Sync,
+>;
 
 impl RemoteConnectService {
     pub fn new(config: RemoteConnectConfig) -> Result<Self> {
@@ -272,6 +266,40 @@ impl RemoteConnectService {
         identity: TrustedMobileIdentity,
     ) {
         *trusted_mobile_identity.write().await = Some(identity);
+    }
+
+    /// Answer a paired client's `get_delegated_identity` request using the
+    /// provider registered by the desktop layer after account login.
+    async fn resolve_delegated_identity_response(
+        delegated_identity_fn: &Arc<RwLock<Option<DelegatedIdentityFn>>>,
+        trusted_mobile_identity: &Arc<RwLock<Option<TrustedMobileIdentity>>>,
+        local_device_id: &str,
+    ) -> remote_server::RemoteResponse {
+        let provider = delegated_identity_fn.read().await.clone();
+        let Some(get_identity) = provider else {
+            return remote_server::RemoteResponse::Error {
+                message: "Desktop is not logged into a BitFun account".to_string(),
+            };
+        };
+        let Some((token, master_key, _relay_url)) = get_identity().await else {
+            return remote_server::RemoteResponse::Error {
+                message: "Desktop is not logged into a BitFun account".to_string(),
+            };
+        };
+        let user_id = trusted_mobile_identity
+            .read()
+            .await
+            .as_ref()
+            .map(|identity| identity.user_id.clone())
+            .unwrap_or_default();
+        use base64::{engine::general_purpose::STANDARD as B64, Engine};
+        info!("Delegated identity resolved for paired client");
+        remote_server::RemoteResponse::DelegateIdentity {
+            token,
+            user_id,
+            master_key: B64.encode(master_key),
+            device_id: local_device_id.to_string(),
+        }
     }
 
     async fn send_pairing_error_response(
@@ -567,7 +595,19 @@ impl RemoteConnectService {
                                     Ok((cmd, request_id)) => {
                                         handled_as_active_command = true;
                                         debug!("Remote command: {cmd:?}");
-                                        let response = server.dispatch(&cmd).await;
+                                        let response = if matches!(
+                                            cmd,
+                                            remote_server::RemoteCommand::GetDelegatedIdentity
+                                        ) {
+                                            RemoteConnectService::resolve_delegated_identity_response(
+                                                &delegated_identity_fn_arc,
+                                                &trusted_mobile_identity_arc,
+                                                &local_device_id,
+                                            )
+                                            .await
+                                        } else {
+                                            server.dispatch(&cmd).await
+                                        };
                                         match server
                                             .encrypt_response(&response, request_id.as_deref())
                                         {
@@ -669,51 +709,12 @@ impl RemoteConnectService {
 
                                                 *server_arc.write().await = Some(server);
 
-                                                // After pairing succeeds, if the desktop
-                                                // is logged into an account, delegate the
-                                                // account identity to the paired client
-                                                // (token + master_key via room channel).
-                                                let delegate_fn =
-                                                    delegated_identity_fn_arc.read().await.clone();
-                                                if let Some(get_identity) = delegate_fn {
-                                                    if let Some((token, master_key, _relay_url)) =
-                                                        get_identity().await
-                                                    {
-                                                        use base64::{
-                                                            engine::general_purpose::STANDARD as B64,
-                                                            Engine,
-                                                        };
-                                                        let identity_json = serde_json::json!({
-                                                            "resp": "delegate_identity",
-                                                            "token": token,
-                                                            "user_id": submitted_identity.user_id.clone(),
-                                                            "master_key": B64.encode(&master_key),
-                                                            "device_id": local_device_id.clone(),
-                                                        });
-                                                        let identity_str =
-                                                            serde_json::to_string(&identity_json)
-                                                                .unwrap_or_default();
-                                                        if let Ok((denc, dnonce)) =
-                                                            encryption::encrypt_to_base64(
-                                                                &shared_secret,
-                                                                &identity_str,
-                                                            )
-                                                        {
-                                                            if let Some(ref client) =
-                                                                *relay_arc.read().await
-                                                            {
-                                                                let _ = client
-                                                                    .send_relay_response(
-                                                                        &correlation_id,
-                                                                        &denc,
-                                                                        &dnonce,
-                                                                    )
-                                                                    .await;
-                                                                info!("Delegated identity sent to paired client");
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                // The delegated account identity is NOT
+                                                // pushed here: the relay pending request
+                                                // for this correlation_id is consumed by
+                                                // the initial_sync response, so a second
+                                                // frame would be dropped. Paired clients
+                                                // pull it via `get_delegated_identity`.
                                             }
                                         }
                                         Ok(false) => {

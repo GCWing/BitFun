@@ -158,6 +158,10 @@ await api.invoke('your_command', { request: { ... } });
 
 - When adding features, consider remote workspace and remote control synchronization support from the start. Local-only behavior can silently leave remote scenarios incomplete.
 - If a feature cannot reasonably support remote workspaces, gate it or show a clear unsupported-state message instead of letting it fail with a generic error.
+- Every desktop Tauri command must declare its remote-workspace policy in
+ `src/apps/desktop/src/api/remote_workspace_policy.rs`; the contract test there
+ rejects new commands without an explicit policy and forbids growing the
+ legacy-unaudited backlog.
 
 ### Agent loop behavior
 

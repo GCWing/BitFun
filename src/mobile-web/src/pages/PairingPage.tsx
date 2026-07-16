@@ -4,22 +4,21 @@ import { useI18n } from '../i18n';
 import { RelayHttpClient } from '../services/RelayHttpClient';
 import { RemoteSessionManager } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
+import { useTheme } from '../theme';
+import logoIcon from '../assets/Logo-ICON.png';
 
 interface PairingPageProps {
   onPaired: (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => void;
 }
 
-const CubeLogo: React.FC = () => (
-  <div className="pairing-page__cube">
-    <div className="pairing-page__cube-inner">
-      <div className="pairing-page__cube-face pairing-page__cube-face--front" />
-      <div className="pairing-page__cube-face pairing-page__cube-face--back" />
-      <div className="pairing-page__cube-face pairing-page__cube-face--right" />
-      <div className="pairing-page__cube-face pairing-page__cube-face--left" />
-      <div className="pairing-page__cube-face pairing-page__cube-face--top" />
-      <div className="pairing-page__cube-face pairing-page__cube-face--bottom" />
-    </div>
-  </div>
+const ThemeToggleIcon: React.FC<{ isDark: boolean }> = ({ isDark }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    {isDark ? (
+      <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM3 8a5 5 0 0 1 5-5v10a5 5 0 0 1-5-5Z" fill="currentColor"/>
+    ) : (
+      <path d="M8 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 8 1Zm0 11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 8 12Zm7-4a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1 0-1h1A.5.5 0 0 1 15 8ZM3 8a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1 0-1h1A.5.5 0 0 1 3 8Zm9.95-3.54a.5.5 0 0 1 0 .71l-.71.7a.5.5 0 1 1-.7-.7l.7-.71a.5.5 0 0 1 .71 0ZM5.46 11.24a.5.5 0 0 1 0 .71l-.7.71a.5.5 0 0 1-.71-.71l.7-.71a.5.5 0 0 1 .71 0Zm7.08 1.42a.5.5 0 0 1-.7 0l-.71-.71a.5.5 0 0 1 .7-.7l.71.7a.5.5 0 0 1 0 .71ZM5.46 4.76a.5.5 0 0 1-.71 0l-.71-.7a.5.5 0 0 1 .71-.71l.7.7a.5.5 0 0 1 0 .71ZM8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z" fill="currentColor"/>
+    )}
+  </svg>
 );
 
 const MOBILE_INSTALL_ID_KEY = 'bitfun.mobile.install_id';
@@ -81,6 +80,7 @@ function resolveRelayBaseUrl(): { room: string | null; pk: string | null; httpBa
 
 const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
   const { t } = useI18n();
+  const { isDark, toggleTheme } = useTheme();
   const {
     connectionStatus,
     setConnectionStatus,
@@ -178,6 +178,42 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       if (initialSync.sessions) {
         store.setSessions(initialSync.sessions);
       }
+
+      // Inherit the desktop's logged-in account identity (best-effort).
+      // When granted, the mobile can list and control same-account devices.
+      // Soft timeout so a slow/unsupported desktop never blocks pairing;
+      // DevicesPage retries identity acquisition on demand.
+      try {
+        const delegated = await Promise.race<boolean>([
+          client.requestDelegatedIdentity(),
+          new Promise<boolean>((resolve) => {
+            window.setTimeout(() => resolve(false), 10_000);
+          }),
+        ]);
+        const homeDeviceId = client.homeDeviceId;
+        if (delegated && homeDeviceId) {
+          store.setControlTarget({ deviceId: homeDeviceId, deviceName: null, isHome: true });
+          void client
+            .listDevices()
+            .then((devices) => {
+              const home = devices.find((d) => d.device_id === homeDeviceId);
+              if (home) {
+                useMobileStore.getState().setControlTarget({
+                  deviceId: homeDeviceId,
+                  deviceName: home.device_name,
+                  isHome: true,
+                });
+              }
+            })
+            .catch(() => {
+              // Device name resolution is cosmetic; ignore failures.
+            });
+        }
+      } catch {
+        // Desktop without account login (or delegation failure) is a normal
+        // single-device pairing; continue without device switching.
+      }
+
       onPaired(client, sessionMgr);
     } catch (e: any) {
       const errorMessage = e?.message || t('pairing.pairingFailed');
@@ -275,8 +311,15 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     <div className="pairing-page">
       <div className="pairing-page__actions">
         <LanguageToggleButton />
+        <button
+          className="pairing-page__theme-btn"
+          onClick={toggleTheme}
+          aria-label={t('common.toggleTheme')}
+        >
+          <ThemeToggleIcon isDark={isDark} />
+        </button>
       </div>
-      <CubeLogo />
+      <img src={logoIcon} alt="BitFun" className="pairing-page__logo" />
       <div className="pairing-page__brand">{t('shared.product.remote')}</div>
 
       <div className="pairing-page__spinner-wrap">

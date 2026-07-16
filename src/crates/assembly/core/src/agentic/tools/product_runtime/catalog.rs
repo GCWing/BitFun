@@ -782,7 +782,7 @@ mod tests {
             .allowed_tool_names
             .contains(&"ReviewPlatform".to_string()));
         assert!(manifest
-            .collapsed_tool_names
+            .deferred_tool_names
             .contains(&"ReviewPlatform".to_string()));
         assert!(manifest
             .tool_definitions

@@ -150,6 +150,9 @@ await api.invoke('your_command', { request: { ... } });
 
 - 新增功能时，从一开始就要考虑远程工作区和远程控制同步适配。只支持本地的行为很容易让远程场景功能缺失。
 - 如果某个功能无法合理支持远程工作区，必须做能力屏蔽，或展示明确的不支持提示，不能让它以通用错误的形式失败。
+- 每个桌面端 Tauri 命令都必须在
+ `src/apps/desktop/src/api/remote_workspace_policy.rs` 中声明远程工作区策略；
+ 该文件的契约测试会拒绝没有显式策略的新命令，并禁止 legacy-unaudited 存量清单增长。
 
 ### Agent loop 行为
 

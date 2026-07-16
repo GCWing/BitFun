@@ -2116,6 +2116,11 @@ pub enum RemoteCommand {
         path: String,
         session_id: Option<String>,
     },
+    /// Ask the paired desktop to delegate its logged-in account identity
+    /// (token + master_key) to this room-channel client so it can call the
+    /// relay device APIs directly. Answered by the host runtime; other hosts
+    /// return an error response.
+    GetDelegatedIdentity,
     Ping,
 
     // ── Device-to-device distributed control ──────────────────────────────
@@ -2318,6 +2323,14 @@ pub enum RemoteResponse {
     },
     /// Event already delivered out-of-band; ack only.
     DeviceEventAccepted,
+    /// Delegated account identity for a paired room-channel client.
+    /// `master_key` is base64-encoded; `device_id` is the delegating host.
+    DelegateIdentity {
+        token: String,
+        user_id: String,
+        master_key: String,
+        device_id: String,
+    },
     Error {
         message: String,
     },
@@ -2438,6 +2451,13 @@ where
             })
             .await,
         ),
+
+        // Answered by the host runtime (which owns the delegated identity
+        // provider) before dispatch reaches this router; this is the fallback
+        // for hosts that cannot delegate an account identity.
+        RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
+            message: "Delegated identity is not available on this host".to_string(),
+        },
 
         RemoteCommand::SendSessionToDevice { .. }
         | RemoteCommand::ExecuteOnDevice { .. }

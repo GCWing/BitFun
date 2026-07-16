@@ -526,11 +526,40 @@ pub struct ReviewPlatformWorkspaceSnapshot {
     pub auth_challenge: Option<ReviewPlatformAuthChallenge>,
 }
 
-/// Classifies workspace paths that must be handled by a product-level remote
-/// runtime before review-platform code probes the local Git repository.
+/// Product-level workspace runtime access for review-platform Git probing.
+///
+/// Review-platform only touches the workspace for repository discovery
+/// (`git rev-parse --show-toplevel`, `git remote -v`); provider data itself is
+/// fetched over HTTP from the host running BitFun. Remote SSH workspaces are
+/// therefore fully supported as long as the product runtime can execute those
+/// Git probes on the remote host, which is what this port injects.
 #[async_trait::async_trait]
 pub trait ReviewPlatformWorkspaceClassifier: Send + Sync {
+    /// True when `path` belongs to a remote workspace whose Git repository is
+    /// not reachable through the local filesystem.
     async fn is_remote_workspace_path(&self, path: &str) -> bool;
+
+    /// Executes a Git command inside a remote workspace and returns stdout.
+    ///
+    /// Only called for paths where [`Self::is_remote_workspace_path`] returned
+    /// `true`. `workspace_path` identifies the remote connection; `current_dir`
+    /// is the remote directory the Git command must run in (it may differ from
+    /// `workspace_path` once the repository root has been resolved).
+    ///
+    /// The default implementation fails loudly so hosts that classify paths as
+    /// remote without wiring remote Git execution surface a clear error instead
+    /// of silently degrading.
+    async fn execute_remote_git_command(
+        &self,
+        workspace_path: &str,
+        current_dir: &str,
+        args: &[&str],
+    ) -> Result<String, ReviewPlatformError> {
+        let _ = (current_dir, args);
+        Err(ReviewPlatformError::InvalidRepository(format!(
+            "Remote workspace Git execution is not wired for {workspace_path}"
+        )))
+    }
 }
 
 #[derive(Clone)]
@@ -538,6 +567,18 @@ pub struct ReviewPlatformService {
     token_store_path: PathBuf,
     token_store_lock: Arc<AsyncMutex<()>>,
     workspace_classifier: Arc<dyn ReviewPlatformWorkspaceClassifier>,
+}
+
+/// Resolved Git execution scope for one workspace path.
+#[derive(Debug, Clone)]
+struct WorkspaceGitScope {
+    /// Original workspace path; identifies the remote connection for remote
+    /// scopes (the repository root may sit above the registered workspace
+    /// root and would not resolve a connection on its own).
+    workspace_path: String,
+    /// Git repository root the probes must run in.
+    repository_root: String,
+    remote: bool,
 }
 
 struct LocalOnlyReviewPlatformWorkspaceClassifier;
@@ -713,20 +754,70 @@ impl ReviewPlatformService {
             .await
     }
 
+    /// Resolves how Git probes must run for `repository_path` (local process
+    /// vs. remote execution through the injected workspace runtime).
+    async fn workspace_git_scope(
+        &self,
+        repository_path: &str,
+    ) -> Result<WorkspaceGitScope, ReviewPlatformError> {
+        if self.is_remote_workspace_path(repository_path).await {
+            let output = self
+                .workspace_classifier
+                .execute_remote_git_command(
+                    repository_path,
+                    repository_path,
+                    &["rev-parse", "--show-toplevel"],
+                )
+                .await?;
+            // Remote roots are POSIX paths on the remote host; never apply
+            // local (Windows) path normalization to them.
+            let root = parse_repository_root_output(&output)?;
+            return Ok(WorkspaceGitScope {
+                workspace_path: repository_path.to_string(),
+                repository_root: root,
+                remote: true,
+            });
+        }
+
+        let root = get_repository_root(repository_path).await?;
+        Ok(WorkspaceGitScope {
+            workspace_path: repository_path.to_string(),
+            repository_root: root,
+            remote: false,
+        })
+    }
+
+    async fn execute_scope_git_command(
+        &self,
+        scope: &WorkspaceGitScope,
+        args: &[&str],
+    ) -> Result<String, ReviewPlatformError> {
+        if scope.remote {
+            self.workspace_classifier
+                .execute_remote_git_command(&scope.workspace_path, &scope.repository_root, args)
+                .await
+        } else {
+            execute_git_command(&scope.repository_root, args).await
+        }
+    }
+
     pub async fn discover_remotes(
         &self,
         repository_path: &str,
     ) -> Result<Vec<ReviewPlatformRemote>, ReviewPlatformError> {
         let auth_tokens = self.load_stored_tokens().await?;
-        Self::discover_remotes_with_tokens(repository_path, &auth_tokens).await
+        let scope = self.workspace_git_scope(repository_path).await?;
+        self.discover_remotes_in_scope(&scope, &auth_tokens).await
     }
 
-    async fn discover_remotes_with_tokens(
-        repository_path: &str,
+    async fn discover_remotes_in_scope(
+        &self,
+        scope: &WorkspaceGitScope,
         auth_tokens: &ReviewPlatformAuthTokens,
     ) -> Result<Vec<ReviewPlatformRemote>, ReviewPlatformError> {
-        let root = get_repository_root(repository_path).await?;
-        let output = execute_git_command(&root, &["remote", "-v"]).await?;
+        let output = self
+            .execute_scope_git_command(scope, &["remote", "-v"])
+            .await?;
 
         let mut seen = HashSet::new();
         let mut remotes = Vec::new();
@@ -795,19 +886,11 @@ impl ReviewPlatformService {
         per_page: Option<u32>,
         include_pull_requests: bool,
     ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
-        if self.is_remote_workspace_path(repository_path).await {
-            return Ok(empty_snapshot(
-                Vec::new(),
-                None,
-                None,
-                "Pull request browsing is not available for remote SSH workspaces yet.",
-            ));
-        }
-
         let pagination_request = PullRequestPagination::new(page, per_page);
         let auth_tokens = self.load_stored_tokens().await?;
-        let root = get_repository_root(repository_path).await?;
-        let remotes = Self::discover_remotes_with_tokens(&root, &auth_tokens).await?;
+        let scope = self.workspace_git_scope(repository_path).await?;
+        let root = scope.repository_root.clone();
+        let remotes = self.discover_remotes_in_scope(&scope, &auth_tokens).await?;
         let selected_remote = select_remote(&remotes, remote_id).cloned();
 
         let Some(remote) = selected_remote else {
@@ -961,15 +1044,9 @@ impl ReviewPlatformService {
         remote_id: &str,
         pull_request_id: &str,
     ) -> Result<ReviewPlatformPullRequestDetail, ReviewPlatformError> {
-        if self.is_remote_workspace_path(repository_path).await {
-            return Err(ReviewPlatformError::UnsupportedPlatform(
-                "remote SSH workspace".to_string(),
-            ));
-        }
-
         let auth_tokens = self.load_stored_tokens().await?;
-        let root = get_repository_root(repository_path).await?;
-        let remotes = Self::discover_remotes_with_tokens(&root, &auth_tokens).await?;
+        let scope = self.workspace_git_scope(repository_path).await?;
+        let remotes = self.discover_remotes_in_scope(&scope, &auth_tokens).await?;
         let remote = remotes
             .into_iter()
             .find(|remote| remote.id == remote_id)
@@ -1251,15 +1328,9 @@ impl ReviewPlatformService {
         repository_path: &str,
         remote_id: Option<&str>,
     ) -> Result<ProviderContext, ReviewPlatformError> {
-        if self.is_remote_workspace_path(repository_path).await {
-            return Err(ReviewPlatformError::UnsupportedPlatform(
-                "remote SSH workspace".to_string(),
-            ));
-        }
-
         let auth_tokens = self.load_stored_tokens().await?;
-        let root = get_repository_root(repository_path).await?;
-        let remotes = Self::discover_remotes_with_tokens(&root, &auth_tokens).await?;
+        let scope = self.workspace_git_scope(repository_path).await?;
+        let remotes = self.discover_remotes_in_scope(&scope, &auth_tokens).await?;
         let remote = select_remote_for_action(&remotes, remote_id)?.clone();
         if !remote.supported {
             return Err(ReviewPlatformError::UnsupportedPlatform(remote.host));
@@ -1309,19 +1380,19 @@ impl ReviewPlatformService {
         host: &str,
         project_path: &str,
     ) -> bool {
-        if self.is_remote_workspace_path(repository_path).await {
-            return false;
-        }
         if !matches!(
             platform,
             ReviewPlatformKind::Github | ReviewPlatformKind::Gitlab
         ) {
             return false;
         }
-        let Ok(root) = get_repository_root(repository_path).await else {
+        let Ok(scope) = self.workspace_git_scope(repository_path).await else {
             return false;
         };
-        let Ok(output) = execute_git_command(&root, &["remote", "-v"]).await else {
+        let Ok(output) = self
+            .execute_scope_git_command(&scope, &["remote", "-v"])
+            .await
+        else {
             return false;
         };
         output.lines().any(|line| {
@@ -4160,18 +4231,22 @@ fn canonicalize_stored_tokens(
 
 async fn get_repository_root(repository_path: &str) -> Result<String, ReviewPlatformError> {
     let output = execute_git_command(repository_path, &["rev-parse", "--show-toplevel"]).await?;
-    let root = output
+    let root = parse_repository_root_output(&output)?;
+    Ok(normalize_repository_root(&root))
+}
+
+fn parse_repository_root_output(output: &str) -> Result<String, ReviewPlatformError> {
+    output
         .lines()
         .next()
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .map(str::to_string)
         .ok_or_else(|| {
             ReviewPlatformError::InvalidRepository(
                 "Git repository root was not returned".to_string(),
             )
-        })?;
-
-    Ok(normalize_repository_root(root))
+        })
 }
 
 async fn execute_git_command(
@@ -7263,6 +7338,44 @@ mod tests {
         }
     }
 
+    /// Remote workspace runtime stub that records routed git commands and
+    /// answers repository probes for a GitLab-hosted remote repository.
+    #[derive(Default)]
+    struct RecordingRemoteGitRuntime {
+        commands: std::sync::Mutex<Vec<(String, String, Vec<String>)>>,
+    }
+
+    #[async_trait::async_trait]
+    impl ReviewPlatformWorkspaceClassifier for RecordingRemoteGitRuntime {
+        async fn is_remote_workspace_path(&self, _path: &str) -> bool {
+            true
+        }
+
+        async fn execute_remote_git_command(
+            &self,
+            workspace_path: &str,
+            current_dir: &str,
+            args: &[&str],
+        ) -> Result<String, ReviewPlatformError> {
+            self.commands.lock().expect("commands lock").push((
+                workspace_path.to_string(),
+                current_dir.to_string(),
+                args.iter().map(|arg| arg.to_string()).collect(),
+            ));
+            match args {
+                ["rev-parse", "--show-toplevel"] => Ok("/srv/projects\n".to_string()),
+                ["remote", "-v"] => Ok(concat!(
+                    "origin\thttps://gitlab.com/example/repo.git (fetch)\n",
+                    "origin\thttps://gitlab.com/example/repo.git (push)\n",
+                )
+                .to_string()),
+                _ => Err(ReviewPlatformError::InvalidRepository(format!(
+                    "unexpected remote git command: {args:?}"
+                ))),
+            }
+        }
+    }
+
     fn temp_token_store_path(name: &str) -> PathBuf {
         let id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -7770,21 +7883,85 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn workspace_snapshot_uses_injected_remote_classifier_before_git_probe() {
+    async fn workspace_snapshot_fails_loudly_when_remote_git_execution_is_not_wired() {
         let path = temp_token_store_path("remote-classifier");
         let service = ReviewPlatformService::new(path, Arc::new(AlwaysRemoteWorkspace));
 
-        let snapshot = service
+        let error = service
             .workspace_snapshot("not-a-git-repository", None, None, None)
             .await
-            .expect("remote workspace should return unsupported snapshot");
+            .expect_err("remote workspace without remote git wiring must fail loudly");
+
+        assert!(
+            error
+                .to_string()
+                .contains("Remote workspace Git execution is not wired"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_context_routes_git_probes_through_remote_runtime() {
+        let path = temp_token_store_path("remote-git-routing");
+        let runtime = Arc::new(RecordingRemoteGitRuntime::default());
+        let service = ReviewPlatformService::new(path, runtime.clone());
+
+        let snapshot = service
+            .workspace_context("/srv/projects/bitfun", None)
+            .await
+            .expect("remote workspace context should resolve through remote git");
 
         assert_eq!(
-            snapshot.message.as_deref(),
-            Some("Pull request browsing is not available for remote SSH workspaces yet.")
+            snapshot
+                .repository
+                .as_ref()
+                .map(|repository| repository.project_path.as_str()),
+            Some("example/repo")
         );
-        assert!(snapshot.remotes.is_empty());
-        assert!(snapshot.pull_requests.is_empty());
+        assert_eq!(
+            snapshot
+                .repository
+                .as_ref()
+                .and_then(|repository| repository.workspace_path.as_deref()),
+            Some("/srv/projects")
+        );
+
+        let commands = runtime.commands.lock().expect("commands lock").clone();
+        assert_eq!(
+            commands,
+            vec![
+                (
+                    "/srv/projects/bitfun".to_string(),
+                    "/srv/projects/bitfun".to_string(),
+                    vec!["rev-parse".to_string(), "--show-toplevel".to_string()],
+                ),
+                (
+                    "/srv/projects/bitfun".to_string(),
+                    "/srv/projects".to_string(),
+                    vec!["remote".to_string(), "-v".to_string()],
+                ),
+            ],
+            "git probes must run through the remote runtime, keyed by the workspace path"
+        );
+    }
+
+    #[tokio::test]
+    async fn repository_trusts_provider_identity_uses_remote_runtime() {
+        let path = temp_token_store_path("remote-trust");
+        let runtime = Arc::new(RecordingRemoteGitRuntime::default());
+        let service = ReviewPlatformService::new(path, runtime);
+
+        assert!(
+            service
+                .repository_trusts_provider_identity(
+                    "/srv/projects/bitfun",
+                    ReviewPlatformKind::Gitlab,
+                    "gitlab.com",
+                    "example/repo",
+                )
+                .await,
+            "remote workspace remotes must participate in provider identity trust"
+        );
     }
 
     #[tokio::test]
@@ -7846,6 +8023,15 @@ mod tests {
         fs::write(&file, "content")
             .await
             .expect("temporary file should be created");
+        // `git rev-parse --show-toplevel` reports the canonical path (for
+        // example `/private/var/...` instead of `/var/...` on macOS).
+        let root = root
+            .canonicalize()
+            .expect("temporary repository root should canonicalize");
+        let nested = nested
+            .canonicalize()
+            .expect("nested directory should canonicalize");
+        let file = nested.join("tracked.txt");
 
         execute_git_command(
             root.to_str()

@@ -173,6 +173,10 @@ const AppContent: React.FC = () => {
     navigateTo('sessions', 'pop');
   }, [navigateTo]);
 
+  const doPopFromDevices = useCallback(() => {
+    navigateTo('sessions', 'pop');
+  }, [navigateTo]);
+
   useEffect(() => {
     const onPopState = () => {
       const stack = pageStackRef.current;
@@ -191,6 +195,8 @@ const AppContent: React.FC = () => {
           doPopFromChat();
         } else if (currentPage === 'workspace') {
           doPopFromWorkspace();
+        } else if (currentPage === 'devices') {
+          doPopFromDevices();
         }
       } finally {
         isPopstateNavRef.current = false;
@@ -199,7 +205,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [doPopFromChat, doPopFromWorkspace]);
+  }, [doPopFromChat, doPopFromWorkspace, doPopFromDevices]);
 
   const handleOpenWorkspace = useCallback(() => {
     navigateTo('workspace', 'push');
@@ -260,14 +266,13 @@ const AppContent: React.FC = () => {
           />
         </div>
       )}
-      {page === 'devices' && clientRef.current && (
-        <DevicesPage
-          client={clientRef.current}
-          onBack={() => {
-            pageStackRef.current = pageStackRef.current.slice(0, -1);
-            setPage('sessions');
-          }}
-        />
+      {shouldShow('devices') && clientRef.current && (
+        <div className={`nav-page ${getNavClass('devices', currentPage, navDir, isAnimating)}`}>
+          <DevicesPage
+            client={clientRef.current}
+            onBack={doPopFromDevices}
+          />
+        </div>
       )}
       {shouldShow('sessions') && sessionMgrRef.current && (
         <div className={`nav-page ${getNavClass('sessions', currentPage, navDir, isAnimating)}`}>
@@ -276,11 +281,7 @@ const AppContent: React.FC = () => {
             onSelectSession={handleSelectSession}
             onOpenWorkspace={handleOpenWorkspace}
             onDisconnect={handleDisconnect}
-            onOpenDevices={() => {
-              pageStackRef.current = [...pageStackRef.current, 'devices'];
-              history.pushState({ page: 'devices' }, '');
-              setPage('devices');
-            }}
+            onOpenDevices={() => navigateTo('devices', 'push')}
           />
         </div>
       )}

@@ -1946,6 +1946,26 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(poll["since_version"], 7);
     assert_eq!(poll["known_msg_count"], 3);
     assert_eq!(poll["known_model_catalog_version"], 11);
+
+    let get_identity = serde_json::to_value(RemoteCommand::GetDelegatedIdentity)
+        .expect("serialize get delegated identity command");
+    assert_eq!(get_identity["cmd"], "get_delegated_identity");
+    let parsed: RemoteCommand = serde_json::from_str(r#"{"cmd":"get_delegated_identity"}"#)
+        .expect("parse get delegated identity command");
+    assert_eq!(parsed, RemoteCommand::GetDelegatedIdentity);
+
+    let identity = serde_json::to_value(RemoteResponse::DelegateIdentity {
+        token: "token-1".to_string(),
+        user_id: "user-1".to_string(),
+        master_key: "bWFzdGVyLWtleQ==".to_string(),
+        device_id: "device-1".to_string(),
+    })
+    .expect("serialize delegate identity response");
+    assert_eq!(identity["resp"], "delegate_identity");
+    assert_eq!(identity["token"], "token-1");
+    assert_eq!(identity["user_id"], "user-1");
+    assert_eq!(identity["master_key"], "bWFzdGVyLWtleQ==");
+    assert_eq!(identity["device_id"], "device-1");
 }
 
 #[test]

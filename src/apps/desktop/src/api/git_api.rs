@@ -11,7 +11,10 @@ use bitfun_core::service::git::{
 use bitfun_core::service::git::{
     GitBranch, GitCommit, GitOperationResult, GitRepository, GitStatus,
 };
-use bitfun_core::service::remote_ssh::{lookup_remote_connection, normalize_remote_workspace_path};
+use bitfun_core::service::remote_ssh::{
+    build_remote_git_command as build_remote_git_command_shared, lookup_remote_connection,
+    normalize_remote_workspace_path,
+};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -38,26 +41,8 @@ async fn resolve_remote_git_target(repository_path: &str) -> Option<RemoteGitTar
     })
 }
 
-fn shell_quote(value: &str) -> String {
-    if value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '-' | '_' | ':' | '=' | '@'))
-    {
-        value.to_string()
-    } else {
-        format!("'{}'", value.replace('\'', "'\\''"))
-    }
-}
-
 fn build_remote_git_command(repository_path: &str, args: &[String]) -> String {
-    let mut parts = vec![
-        "git".to_string(),
-        "-C".to_string(),
-        shell_quote(repository_path),
-        "--no-pager".to_string(),
-    ];
-    parts.extend(args.iter().map(|arg| shell_quote(arg)));
-    parts.join(" ")
+    build_remote_git_command_shared(repository_path, args)
 }
 
 async fn execute_remote_git_command(

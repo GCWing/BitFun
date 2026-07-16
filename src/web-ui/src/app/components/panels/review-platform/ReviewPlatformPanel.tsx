@@ -8,6 +8,7 @@ import {
   Clock3,
   Code2,
   Copy,
+  ExternalLink,
   GitCommitHorizontal,
   GitPullRequest,
   GitPullRequestClosed,
@@ -2089,6 +2090,37 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleOpenAuthModal} disabled={authSaving}>
                     <KeyRound size={13} />
                     {selectedRemote.platform === 'github' ? 'Authenticate' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!selectedPr && detailOnly && !loading && !detailLoading && !authChallenge && !detailError && !error && (
+            <div className="review-platform__detail-empty">
+              <GitPullRequest size={24} />
+              <span>
+                {snapshot.message
+                  || 'This pull request could not be resolved from the remotes of the current workspace.'}
+              </span>
+              <div className="review-platform__detail-empty-actions">
+                <Button
+                  className="review-platform__panel-button"
+                  size="small"
+                  variant="secondary"
+                  onClick={() => void loadSnapshot(undefined, { force: true })}
+                >
+                  Retry
+                </Button>
+                {initialPullRequestUrl && (
+                  <Button
+                    className="review-platform__panel-button"
+                    size="small"
+                    variant="secondary"
+                    onClick={handleOpenExternal}
+                  >
+                    <ExternalLink size={13} />
+                    Open in browser
                   </Button>
                 )}
               </div>

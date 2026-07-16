@@ -136,6 +136,36 @@
   }
 }
 
+.session-list__devices-btn {
+  @extend .session-list__theme-btn;
+
+  // Controlling a remote same-account device (not the QR-paired desktop).
+  &.is-remote {
+    border-color: var(--color-accent-200);
+    background: var(--color-accent-100);
+    color: var(--color-accent-500);
+  }
+}
+
+.session-list__header-target {
+  display: inline-block;
+  max-width: 120px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border: 1px solid var(--color-accent-200);
+  border-radius: var(--size-radius-full);
+  background: var(--color-accent-100);
+  color: var(--color-accent-500);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .session-list__workspace-bar {
   position: relative;
   z-index: 1;

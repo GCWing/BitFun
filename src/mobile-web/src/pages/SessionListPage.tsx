@@ -157,6 +157,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     setPairedDisplayMode,
     authenticatedUserId,
     connectionHealth,
+    controlTarget,
   } = useMobileStore();
   const { isDark, toggleTheme } = useTheme();
   const [creating, setCreating] = useState(false);
@@ -593,14 +594,21 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               <span className="session-list__header-user-id">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
                 {authenticatedUserId}
+                {controlTarget && !controlTarget.isHome && controlTarget.deviceName && (
+                  <span className="session-list__header-target" title={t('devices.controllingDevice', { name: controlTarget.deviceName })}>
+                    {controlTarget.deviceName}
+                  </span>
+                )}
               </span>
             )}
           </div>
         </div>
         <div className="session-list__header-actions">
           {onOpenDevices && (
-            <button className="session-list__devices-btn" onClick={onOpenDevices}
-              title="Devices" aria-label="Devices">
+            <button
+              className={`session-list__devices-btn ${controlTarget && !controlTarget.isHome ? 'is-remote' : ''}`}
+              onClick={onOpenDevices}
+              title={t('devices.title')} aria-label={t('devices.title')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                 <line x1="8" y1="21" x2="16" y2="21" />
