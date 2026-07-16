@@ -11,6 +11,7 @@ import {
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
+import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { useAgentsStore } from '../agentsStore';
 import {
   filterToolsForReviewMode,
@@ -116,7 +117,7 @@ const CreateAgentPage: React.FC = () => {
         const normalizedTools = tools
           .map((tool): SubagentEditorToolInfo | null => {
             const toolName = typeof tool?.name === 'string' ? tool.name : '';
-            if (!toolName) {
+            if (!toolName || !isUserSelectableToolName(toolName)) {
               return null;
             }
             return {
@@ -236,6 +237,7 @@ const CreateAgentPage: React.FC = () => {
   );
 
   const toggleTool = useCallback((toolName: string) => {
+    if (!isUserSelectableToolName(toolName)) return;
     setSelectedTools((prev) => {
       const next = new Set(prev);
       if (next.has(toolName)) {

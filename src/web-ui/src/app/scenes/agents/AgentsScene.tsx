@@ -33,6 +33,7 @@ import { useAgentsList } from './hooks/useAgentsList';
 import { AGENT_ICON_MAP } from './agentsIcons';
 import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentTheme';
 import { getCardGradient } from '@/shared/utils/cardGradients';
+import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
 import './AgentsScene.scss';
@@ -310,16 +311,24 @@ const AgentsHomeView: React.FC = () => {
     () => (selectedAgent?.agentKind === 'mode' ? getModeManageableSubagents(selectedAgent.id) : []),
     [getModeManageableSubagents, selectedAgent],
   );
-  const selectedAgentTools = useMemo(() => (
+  const selectedAgentConfiguredTools = useMemo(() => (
     selectedAgent?.agentKind === 'mode'
       ? (selectedAgentModeConfig?.enabled_tools ?? selectedAgent.defaultTools ?? [])
       : (selectedAgent?.defaultTools ?? [])
   ), [selectedAgent, selectedAgentModeConfig]);
+  const selectedAgentTools = useMemo(
+    () => selectedAgentConfiguredTools.filter(isUserSelectableToolName),
+    [selectedAgentConfiguredTools],
+  );
+  const userSelectableAvailableTools = useMemo(
+    () => availableTools.filter((tool) => isUserSelectableToolName(tool.name)),
+    [availableTools],
+  );
   const selectedAgentHasSkillTool = selectedAgent?.agentKind === 'mode'
-    ? modeHasSkillTool(selectedAgentTools)
+    ? modeHasSkillTool(selectedAgentConfiguredTools)
     : false;
   const selectedAgentHasTaskTool = selectedAgent?.agentKind === 'mode'
-    ? modeHasTaskTool(selectedAgentTools)
+    ? modeHasTaskTool(selectedAgentConfiguredTools)
     : false;
   const selectedAgentEnabledSubagents = useMemo(
     () => selectedAgentManageableSubagents.filter((subagent) => subagent.effectiveEnabled),
@@ -366,13 +375,13 @@ const AgentsHomeView: React.FC = () => {
   }, [allAgents, selectedAgentModeProfile]);
   const selectedAgentUsesSharedProfile = (selectedAgentModeProfile?.memberModeIds.length ?? 0) > 1;
   const getDisplayedToolCount = useCallback((agent: AgentWithCapabilities): number => {
-    if (agent.agentKind === 'mode') {
-      return getModeConfig(agent.id)?.enabled_tools?.length
-        ?? agent.defaultTools?.length
-        ?? agent.toolCount
-        ?? 0;
+    const configuredTools = agent.agentKind === 'mode'
+      ? (getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools)
+      : agent.defaultTools;
+    if (configuredTools) {
+      return configuredTools.filter(isUserSelectableToolName).length;
     }
-    return agent.toolCount ?? agent.defaultTools?.length ?? 0;
+    return agent.toolCount ?? 0;
   }, [getModeConfig]);
   const selectedAgentToolCount = selectedAgent ? getDisplayedToolCount(selectedAgent) : 0;
   const selectedAgentCapabilityTabs = useMemo(() => {
@@ -385,10 +394,12 @@ const AgentsHomeView: React.FC = () => {
 
     if (selectedAgentTools.length > 0) {
       const currentToolCount = selectedAgent?.agentKind === 'mode'
-        ? (toolsEditing ? (pendingTools ?? selectedAgentTools).length : selectedAgentTools.length)
+        ? (toolsEditing
+          ? (pendingTools ?? selectedAgentConfiguredTools).filter(isUserSelectableToolName).length
+          : selectedAgentTools.length)
         : selectedAgentTools.length;
       const totalToolCount = selectedAgent?.agentKind === 'mode'
-        ? availableTools.length
+        ? userSelectableAvailableTools.length
         : selectedAgentTools.length;
 
       tabs.push({
@@ -424,11 +435,12 @@ const AgentsHomeView: React.FC = () => {
 
     return tabs;
   }, [
-    availableTools.length,
+    userSelectableAvailableTools.length,
     pendingSkills,
     pendingSubagentIds,
     pendingTools,
     selectedAgent,
+    selectedAgentConfiguredTools,
     selectedAgentEnabledSubagentIds,
     selectedAgentHasSkillTool,
     selectedAgentHasTaskTool,
@@ -1008,7 +1020,7 @@ const AgentsHomeView: React.FC = () => {
                           size="small"
                           onClick={() => {
                             if (currentCapabilityTab === 'tools') {
-                              setPendingTools([...selectedAgentTools]);
+                              setPendingTools([...selectedAgentConfiguredTools]);
                               setToolsEditing(true);
                               return;
                             }
@@ -1031,9 +1043,9 @@ const AgentsHomeView: React.FC = () => {
                 {currentCapabilityTab === 'tools' ? (
                   selectedAgent.agentKind === 'mode' && toolsEditing ? (
                     <div className="agent-card__token-grid">
-                      {[...availableTools]
+                      {[...userSelectableAvailableTools]
                         .sort((a, b) => {
-                          const draft = pendingTools ?? selectedAgentTools;
+                          const draft = pendingTools ?? selectedAgentConfiguredTools;
                           const aOn = draft.includes(a.name);
                           const bOn = draft.includes(b.name);
                           if (aOn && !bOn) return -1;
@@ -1041,7 +1053,7 @@ const AgentsHomeView: React.FC = () => {
                           return 0;
                         })
                         .map((tool) => {
-                          const draft = pendingTools ?? selectedAgentTools;
+                          const draft = pendingTools ?? selectedAgentConfiguredTools;
                           const isOn = draft.includes(tool.name);
                           return (
                             <button
@@ -1051,7 +1063,7 @@ const AgentsHomeView: React.FC = () => {
                               title={tool.description || tool.name}
                               onClick={() => {
                                 setPendingTools((prev) => {
-                                  const current = prev ?? selectedAgentTools;
+                                  const current = prev ?? selectedAgentConfiguredTools;
                                   return isOn
                                     ? current.filter((n) => n !== tool.name)
                                     : [...current, tool.name];

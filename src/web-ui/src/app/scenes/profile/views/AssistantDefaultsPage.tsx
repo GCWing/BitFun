@@ -19,6 +19,7 @@ import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCP
 import { notificationService } from '@/shared/notification-system';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
+import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { useNurseryStore } from '../nurseryStore';
 
@@ -100,10 +101,15 @@ const AssistantDefaultsPage: React.FC = () => {
     [modeSkills],
   );
 
+  const userSelectableTools = useMemo(
+    () => availableTools.filter((tool) => isUserSelectableToolName(tool.name)),
+    [availableTools],
+  );
+
   // Split tools into built-in vs MCP
   const builtinTools = useMemo(
-    () => availableTools.filter((tool) => !isMcpTool(tool)),
-    [availableTools],
+    () => userSelectableTools.filter((tool) => !isMcpTool(tool)),
+    [userSelectableTools],
   );
 
   const builtinToolsEnabled = useMemo(
@@ -119,14 +125,14 @@ const AssistantDefaultsPage: React.FC = () => {
   // MCP tools grouped by server id
   const mcpToolsByServer = useMemo(() => {
     const map = new Map<string, ToolInfo[]>();
-    for (const tool of availableTools) {
+    for (const tool of userSelectableTools) {
       if (!isMcpTool(tool)) continue;
       const server = getMcpServerName(tool);
       if (!map.has(server)) map.set(server, []);
       map.get(server)!.push(tool);
     }
     return map;
-  }, [availableTools]);
+  }, [userSelectableTools]);
 
   // All known MCP server ids — union of detected tool servers + registered servers
   const mcpServerIds = useMemo(() => {
@@ -168,7 +174,7 @@ const AssistantDefaultsPage: React.FC = () => {
   }, [detail]);
 
   const handleToolToggle = useCallback(async (toolName: string) => {
-    if (!assistantModeConfig) return;
+    if (!assistantModeConfig || !isUserSelectableToolName(toolName)) return;
     setToolsLoading((prev) => ({ ...prev, [toolName]: true }));
     const current = assistantModeConfig.enabled_tools ?? [];
     const isEnabled = current.includes(toolName);
@@ -208,11 +214,13 @@ const AssistantDefaultsPage: React.FC = () => {
 
   const handleGroupToggleAll = useCallback(async (toolNames: string[]) => {
     if (!assistantModeConfig) return;
+    const selectableToolNames = toolNames.filter(isUserSelectableToolName);
+    if (selectableToolNames.length === 0) return;
     const current = assistantModeConfig.enabled_tools ?? [];
-    const allEnabled = toolNames.every((n) => current.includes(n));
+    const allEnabled = selectableToolNames.every((n) => current.includes(n));
     const newTools = allEnabled
-      ? current.filter((n) => !toolNames.includes(n))
-      : [...new Set([...current, ...toolNames])];
+      ? current.filter((n) => !selectableToolNames.includes(n))
+      : [...new Set([...current, ...selectableToolNames])];
     const newConfig = { ...assistantModeConfig, enabled_tools: newTools };
     setAssistantModeConfig(newConfig);
     try {
