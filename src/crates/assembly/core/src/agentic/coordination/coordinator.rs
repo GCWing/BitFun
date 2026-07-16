@@ -3149,6 +3149,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "original_user_input".to_string(),
             original_user_input.clone(),
         );
+        // Constraint revocation changes a user-authored safety boundary. Only
+        // submissions from an external user surface can authorize that change;
+        // agent-session follow-ups and scheduled/background work cannot speak
+        // for the user even though they also flow through a dialog turn.
+        let revocation_authorized = !matches!(
+            submission_policy.trigger_source,
+            DialogTriggerSource::AgentSession | DialogTriggerSource::ScheduledJob
+        );
+        context_vars.insert(
+            "edit_constraint_revocation_authorized".to_string(),
+            revocation_authorized.to_string(),
+        );
 
         // Pass model_id for token usage tracking
         if let Some(model_id) = &session.config.model_id {
