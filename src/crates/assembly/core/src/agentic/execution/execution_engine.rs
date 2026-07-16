@@ -2084,6 +2084,10 @@ impl ExecutionEngine {
         // The fast extractor receives the active state so explicit additions
         // and revocations form an auditable session-persistent state machine.
         if !original_user_input.trim().is_empty() {
+            let revocation_authorized = context
+                .context
+                .get("edit_constraint_revocation_authorized")
+                .is_some_and(|value| value == "true");
             let message_sha256 = crate::agentic::execution::edit_constraint_guard::message_sha256(
                 &original_user_input,
             );
@@ -2098,9 +2102,10 @@ impl ExecutionEngine {
                     .session_manager
                     .edit_constraints(&context.session_id)
                     .unwrap_or_default();
-                let mut extraction = crate::agentic::execution::edit_constraint_guard::extract_constraints_with_active(
+                let mut extraction = crate::agentic::execution::edit_constraint_guard::extract_constraints_with_active_and_revocation_authorization(
                     &original_user_input,
                     &active_constraints,
+                    revocation_authorized,
                 )
                 .await;
                 extraction.dialog_turn_id = Some(context.dialog_turn_id.clone());

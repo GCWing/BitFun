@@ -200,6 +200,10 @@ pub struct ConstraintExtractionRecord {
     /// Snapshot of the active ids shown to fast for this extraction.
     #[serde(default)]
     pub active_constraint_ids: Vec<String>,
+    /// Whether this turn originated at a real user submission and can therefore
+    /// relax an existing user-authored edit constraint.
+    #[serde(default)]
+    pub revocation_authorized: bool,
     #[serde(default)]
     pub model_status: ModelExtractionStatus,
     /// Exact additions parsed from the fast model, before deterministic
@@ -476,6 +480,33 @@ fn normalize_model_constraints(constraints: &mut [ExtractedConstraint], message_
     }
 }
 
+fn validated_revocation_ids(
+    revocations: &[ConstraintRevocation],
+    active_constraints: &[ExtractedConstraint],
+    revocation_authorized: bool,
+) -> (Vec<String>, Vec<String>) {
+    if !revocation_authorized {
+        return (Vec::new(), Vec::new());
+    }
+
+    let mut revoked = Vec::new();
+    let mut unmatched = Vec::new();
+    for revocation in revocations {
+        let constraint_id = revocation.constraint_id.trim();
+        if active_constraints
+            .iter()
+            .any(|constraint| constraint.id == constraint_id)
+        {
+            if !revoked.iter().any(|existing| existing == constraint_id) {
+                revoked.push(constraint_id.to_string());
+            }
+        } else if !unmatched.iter().any(|existing| existing == constraint_id) {
+            unmatched.push(constraint_id.to_string());
+        }
+    }
+    (revoked, unmatched)
+}
+
 fn response_excerpt(response: &str) -> String {
     response
         .chars()
@@ -498,6 +529,23 @@ pub async fn extract_constraints_with_active(
     user_message: &str,
     active_constraints: &[ExtractedConstraint],
 ) -> ConstraintExtractionRecord {
+    extract_constraints_with_active_and_revocation_authorization(
+        user_message,
+        active_constraints,
+        true,
+    )
+    .await
+}
+
+/// Extract additions and explicit revocations from one instruction, applying
+/// revocations only when the caller has established that the text came from a
+/// real user submission. Internal follow-ups may add protections but must
+/// never relax a protection on the user's behalf.
+pub async fn extract_constraints_with_active_and_revocation_authorization(
+    user_message: &str,
+    active_constraints: &[ExtractedConstraint],
+    revocation_authorized: bool,
+) -> ConstraintExtractionRecord {
     let started_at = Instant::now();
     let input_chars = user_message.chars().count();
     let message_sha256 = message_sha256(user_message);
@@ -514,6 +562,7 @@ pub async fn extract_constraints_with_active(
             deterministic_constraint_count: 0,
             model_attempts: 0,
             active_constraint_ids,
+            revocation_authorized,
             model_status: ModelExtractionStatus::NotRun,
             model_constraints: Vec::new(),
             model_revocations: Vec::new(),
@@ -551,6 +600,7 @@ pub async fn extract_constraints_with_active(
             deterministic_constraint_count,
             model_attempts: 0,
             active_constraint_ids,
+            revocation_authorized,
             model_status: ModelExtractionStatus::NotRun,
             model_constraints: Vec::new(),
             model_revocations: Vec::new(),
@@ -580,6 +630,7 @@ pub async fn extract_constraints_with_active(
                 deterministic_constraint_count,
                 0,
                 active_constraint_ids,
+                revocation_authorized,
                 input_chars,
                 prompt_chars,
                 input_truncated,
@@ -599,6 +650,7 @@ pub async fn extract_constraints_with_active(
                 deterministic_constraint_count,
                 0,
                 active_constraint_ids,
+                revocation_authorized,
                 input_chars,
                 prompt_chars,
                 input_truncated,
@@ -667,25 +719,11 @@ pub async fn extract_constraints_with_active(
                 model_constraints = parsed.additions.clone();
                 model_revocations = parsed.revocations;
 
-                for revocation in &model_revocations {
-                    let constraint_id = revocation.constraint_id.trim();
-                    if active_constraints
-                        .iter()
-                        .any(|constraint| constraint.id == constraint_id)
-                    {
-                        if !revoked_constraint_ids
-                            .iter()
-                            .any(|existing| existing == constraint_id)
-                        {
-                            revoked_constraint_ids.push(constraint_id.to_string());
-                        }
-                    } else if !unmatched_revocation_ids
-                        .iter()
-                        .any(|existing| existing == constraint_id)
-                    {
-                        unmatched_revocation_ids.push(constraint_id.to_string());
-                    }
-                }
+                (revoked_constraint_ids, unmatched_revocation_ids) = validated_revocation_ids(
+                    &model_revocations,
+                    active_constraints,
+                    revocation_authorized,
+                );
 
                 for constraint in &model_constraints {
                     if !constraints
@@ -724,6 +762,7 @@ pub async fn extract_constraints_with_active(
         deterministic_constraint_count,
         model_attempts,
         active_constraint_ids,
+        revocation_authorized,
         model_status,
         model_constraints,
         model_revocations,
@@ -751,6 +790,7 @@ fn extraction_with_failure(
     deterministic_constraint_count: usize,
     model_attempts: usize,
     active_constraint_ids: Vec<String>,
+    revocation_authorized: bool,
     input_chars: usize,
     prompt_chars: usize,
     input_truncated: bool,
@@ -770,6 +810,7 @@ fn extraction_with_failure(
         deterministic_constraint_count,
         model_attempts,
         active_constraint_ids,
+        revocation_authorized,
         model_status: ModelExtractionStatus::Failed,
         model_constraints: Vec::new(),
         model_revocations: Vec::new(),
@@ -994,6 +1035,134 @@ pub fn check(
         None,
     );
     None
+}
+
+/// Preflight explicit file targets in terminal commands. This covers the
+/// normal shell forms agents use for mutation while retaining Bash for build
+/// and test execution. Commands whose write targets are computed dynamically
+/// remain observable through the final patch/provenance telemetry instead of
+/// being silently treated as guarded direct-file writes.
+pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<ValidationResult> {
+    for path in explicit_bash_mutation_targets(command) {
+        if let Some(rejection) = check(
+            Some(context),
+            "Bash",
+            "explicit_shell_mutation",
+            &path,
+            false,
+        ) {
+            return Some(rejection);
+        }
+    }
+    None
+}
+
+fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    for segment in command
+        .split(['\n', ';', '|'])
+        .flat_map(|part| part.split("&&"))
+        .flat_map(|part| part.split("||"))
+    {
+        let words = segment
+            .split_whitespace()
+            .map(|word| {
+                word.trim_matches(|c: char| matches!(c, '\'' | '"' | '(' | ')' | '[' | ']'))
+            })
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>();
+        if words.is_empty() {
+            continue;
+        }
+
+        for (index, word) in words.iter().enumerate() {
+            let redirection = word.trim_start_matches(|c| matches!(c, '0'..='9'));
+            if matches!(redirection, ">" | ">>" | "1>" | "1>>") {
+                if let Some(path) = words.get(index + 1) {
+                    push_bash_target(&mut targets, path);
+                }
+            } else if let Some(path) = redirection
+                .strip_prefix(">>")
+                .or_else(|| redirection.strip_prefix('>'))
+            {
+                if !path.is_empty() {
+                    push_bash_target(&mut targets, path);
+                }
+            }
+        }
+
+        let Some(command_index) = words.iter().position(|word| !word.contains('=')) else {
+            continue;
+        };
+        let command_name = Path::new(words[command_index])
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(words[command_index])
+            .to_ascii_lowercase();
+        let arguments = &words[command_index + 1..];
+        match command_name.as_str() {
+            "tee" => {
+                for argument in arguments
+                    .iter()
+                    .filter(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(&mut targets, argument);
+                }
+            }
+            "cp" | "mv" | "install" => {
+                if let Some(path) = arguments
+                    .iter()
+                    .rev()
+                    .find(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(&mut targets, path);
+                }
+            }
+            "touch" | "truncate" | "rm" | "rmdir" | "unlink" => {
+                for argument in arguments
+                    .iter()
+                    .filter(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(&mut targets, argument);
+                }
+            }
+            "sed" | "perl" => {
+                if arguments
+                    .iter()
+                    .any(|argument| *argument == "-i" || argument.starts_with("-i"))
+                {
+                    let mut script_seen = false;
+                    for argument in arguments
+                        .iter()
+                        .filter(|argument| !argument.starts_with('-'))
+                    {
+                        if !script_seen {
+                            script_seen = true;
+                            continue;
+                        }
+                        if argument.starts_with('/')
+                            || argument.starts_with("./")
+                            || argument.starts_with("../")
+                            || argument.contains('.')
+                            || argument.starts_with("test/")
+                            || argument.starts_with("tests/")
+                        {
+                            push_bash_target(&mut targets, argument);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    targets
+}
+
+fn push_bash_target(targets: &mut Vec<String>, raw_path: &str) {
+    let path = raw_path.trim_matches(|c: char| matches!(c, '\'' | '"' | ','));
+    if !path.is_empty() && !targets.iter().any(|existing| existing == path) {
+        targets.push(path.to_string());
+    }
 }
 
 /// Checks the target and every non-symlink descendant before recursive delete.
@@ -1403,6 +1572,22 @@ mod tests {
     }
 
     #[test]
+    fn terminal_preflight_finds_explicit_mutation_targets() {
+        assert_eq!(
+            explicit_bash_mutation_targets("sed -i 's/old/new/' tests/example.rs"),
+            vec!["tests/example.rs".to_string()]
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets("printf x > test/unit/output.txt && touch src/lib.rs"),
+            vec!["test/unit/output.txt".to_string(), "src/lib.rs".to_string()]
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets("cargo test -p core"),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
     fn fast_response_parser_requires_the_observable_update_schema() {
         let valid = r#"{
             "additions": [{
@@ -1436,6 +1621,7 @@ mod tests {
             deterministic_constraint_count: 0,
             model_attempts: 2,
             active_constraint_ids: Vec::new(),
+            revocation_authorized: true,
             model_status: ModelExtractionStatus::Failed,
             model_constraints: Vec::new(),
             model_revocations: Vec::new(),
@@ -1464,6 +1650,31 @@ mod tests {
     }
 
     #[test]
+    fn internal_turns_cannot_revoke_a_user_edit_constraint() {
+        let protected = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+        let revocation = ConstraintRevocation {
+            constraint_id: protected.id.clone(),
+            description: "tests may be modified now".to_string(),
+        };
+
+        let (revoked, unmatched) =
+            validated_revocation_ids(&[revocation], &[protected.clone()], false);
+
+        assert!(revoked.is_empty());
+        assert!(unmatched.is_empty());
+        let (revoked, unmatched) = validated_revocation_ids(
+            &[ConstraintRevocation {
+                constraint_id: protected.id.clone(),
+                description: "tests may be modified now".to_string(),
+            }],
+            &[protected],
+            true,
+        );
+        assert_eq!(revoked, vec!["test:don't touch tests".to_string()]);
+        assert!(unmatched.is_empty());
+    }
+
+    #[test]
     fn state_applies_only_validated_explicit_revocations() {
         let protected = constraint("don't touch tests", ConstraintMatcher::TestFiles);
         let protected_id = protected.id.clone();
@@ -1478,6 +1689,7 @@ mod tests {
             deterministic_constraint_count: 0,
             model_attempts: 1,
             active_constraint_ids: vec![protected_id.clone()],
+            revocation_authorized: true,
             model_status: ModelExtractionStatus::Parsed,
             model_constraints: Vec::new(),
             model_revocations: vec![ConstraintRevocation {
@@ -1516,6 +1728,7 @@ mod tests {
             deterministic_constraint_count: 0,
             model_attempts: 1,
             active_constraint_ids: vec![protected.id.clone()],
+            revocation_authorized: true,
             model_status: ModelExtractionStatus::Parsed,
             model_constraints: Vec::new(),
             model_revocations: vec![ConstraintRevocation {
