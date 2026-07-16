@@ -19,7 +19,6 @@ import {
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import { configManager } from '../services/ConfigManager';
-import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import type { AIModelConfig, DebugModeConfig, LanguageDebugTemplate } from '../types';
 import {
@@ -36,29 +35,7 @@ import './DebugConfig.scss';
 
 const log = createLogger('SessionSettingsPanels');
 
-const IS_TAURI_DESKTOP = typeof window !== 'undefined' && '__TAURI__' in window;
-
 const AGENT_SESSION_TITLE = 'session-title-func-agent';
-
-type ComputerUseStatusPayload = {
-  computerUseEnabled: boolean;
-  accessibilityGranted: boolean;
-  screenCaptureGranted: boolean;
-  platformNote: string | null;
-};
-
-type BrowserControlLaunchResponse = {
-  success: boolean;
-  status: string;
-  message: string | null;
-  browserKind: string;
-};
-
-type BrowserControlBrowserOption = {
-  value: string;
-  label: string;
-  installed: boolean;
-};
 
 type SubagentBatchExecutionPolicy = 'safe_only' | 'force_parallel' | 'serial';
 
@@ -70,8 +47,6 @@ function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExe
     ? value
     : DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY;
 }
-
-const DEFAULT_BROWSER_CONTROL_BROWSER = 'default';
 
 export type SessionSettingsPanelVariant = 'personalization' | 'permissions';
 
@@ -99,94 +74,12 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
 
-  const [computerUseEnabled, setComputerUseEnabled] = useState(false);
-  const [computerUseAccess, setComputerUseAccess] = useState(false);
-  const [computerUseScreen, setComputerUseScreen] = useState(false);
-  const [computerUseBusy, setComputerUseBusy] = useState(false);
-  const [computerUseStatusLoading, setComputerUseStatusLoading] = useState(false);
-  const [computerUsePlatformNote, setComputerUsePlatformNote] = useState<string | null>(null);
-
-  // ── Browser control state ───────────────────────────────────────────────
-  const [browserCdpAvailable, setBrowserCdpAvailable] = useState(false);
-  const [browserKind, setBrowserKind] = useState('');
-  const [browserVersion, setBrowserVersion] = useState<string | null>(null);
-  const [browserPageCount, setBrowserPageCount] = useState(0);
-  const [browserOptions, setBrowserOptions] = useState<BrowserControlBrowserOption[]>([]);
-  const [preferredBrowser, setPreferredBrowser] = useState(DEFAULT_BROWSER_CONTROL_BROWSER);
-  const [browserControlBusy, setBrowserControlBusy] = useState(false);
-  const [browserStatusLoading, setBrowserStatusLoading] = useState(false);
-  const [platform, setPlatform] = useState<string>('');
-  const [browserRestartPrompt, setBrowserRestartPrompt] = useState<BrowserControlLaunchResponse | null>(null);
-
   // ── Debug mode config state ──────────────────────────────────────────────
   const [debugConfig, setDebugConfig] = useState<DebugModeConfig>(DEFAULT_DEBUG_MODE_CONFIG);
   const [debugHasChanges, setDebugHasChanges] = useState(false);
   const [debugSaving, setDebugSaving] = useState(false);
   const [expandedTemplates, setExpandedTemplates] = useState<Set<string>>(new Set());
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
-
-  const refreshComputerUseStatus = useCallback(async (): Promise<boolean> => {
-    if (!IS_TAURI_DESKTOP) return false;
-    setComputerUseStatusLoading(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const s = await invoke<ComputerUseStatusPayload>('computer_use_get_status');
-      setComputerUseEnabled(s.computerUseEnabled);
-      setComputerUseAccess(s.accessibilityGranted);
-      setComputerUseScreen(s.screenCaptureGranted);
-      setComputerUsePlatformNote(s.platformNote);
-      return true;
-    } catch (error) {
-      log.error('computer_use_get_status failed', error);
-      return false;
-    } finally {
-      setComputerUseStatusLoading(false);
-    }
-  }, []);
-
-  const refreshBrowserControlStatus = useCallback(async () => {
-    if (!IS_TAURI_DESKTOP) return;
-    setBrowserStatusLoading(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const [s, browsers] = await Promise.all([
-        invoke<{
-          cdpAvailable: boolean;
-          browserKind: string;
-          browserVersion: string | null;
-          port: number;
-          pageCount: number;
-        }>('browser_control_get_status', { request: { port: 9222 } }),
-        invoke<{ options: BrowserControlBrowserOption[] }>('browser_control_list_browsers'),
-      ]);
-      setBrowserCdpAvailable(s.cdpAvailable);
-      setBrowserKind(s.browserKind);
-      setBrowserVersion(s.browserVersion);
-      setBrowserPageCount(s.pageCount);
-      setBrowserOptions(browsers.options);
-    } catch (error) {
-      log.error('browser_control_get_status failed', error);
-    } finally {
-      setBrowserStatusLoading(false);
-    }
-  }, []);
-
-  const refreshDesktopStatus = useCallback((computerUseCfg: boolean | null | undefined) => {
-    if (!IS_TAURI_DESKTOP) {
-      setComputerUseEnabled(computerUseCfg ?? false);
-      return;
-    }
-
-    void refreshComputerUseStatus().then((ok) => {
-      if (!ok) setComputerUseEnabled(computerUseCfg ?? false);
-    });
-
-    void refreshBrowserControlStatus();
-
-    void systemAPI.getSystemInfo()
-      .then((info) => setPlatform(info.platform || ''))
-      .catch((error) => log.warn('getSystemInfo failed', error));
-  }, [refreshComputerUseStatus, refreshBrowserControlStatus]);
 
   const loadAllData = useCallback(async () => {
     setIsLoading(true);
@@ -201,8 +94,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         confirmTimeout,
         loadedSubagentBatchExecutionPolicy,
         debugConfigData,
-        computerUseCfg,
-        browserControlPreferredBrowser,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
@@ -213,8 +104,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
         configManager.getConfig<SubagentBatchExecutionPolicy>('ai.subagent_batch_execution_policy'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
-        configManager.getConfig<boolean>('ai.computer_use_enabled'),
-        configManager.getConfig<string>('ai.browser_control_preferred_browser'),
       ]);
 
       setSettings(loadedSettings);
@@ -228,16 +117,13 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
-      setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
-
-      refreshDesktopStatus(computerUseCfg);
     } catch (error) {
       log.error('Failed to load session config data', error);
       setSettings(await aiExperienceConfigService.getSettingsAsync());
     } finally {
       setIsLoading(false);
     }
-  }, [refreshDesktopStatus]);
+  }, []);
 
   useEffect(() => {
     loadAllData();
@@ -376,137 +262,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     } catch (error) {
       log.error('Failed to save subagent_max_concurrency', error);
       notificationService.error(tTools('messages.saveFailed'));
-    }
-  };
-
-  const handleComputerUseEnabledChange = async (checked: boolean) => {
-    setComputerUseBusy(true);
-    setComputerUseEnabled(checked);
-    try {
-      await configManager.setConfig('ai.computer_use_enabled', checked);
-      const { globalEventBus } = await import('@/infrastructure/event-bus');
-      globalEventBus.emit('mode:config:updated');
-      notificationService.success(
-        checked ? t('messages.saveSuccess') : t('messages.saveSuccess'),
-        { duration: 2000 }
-      );
-      if (checked) {
-        // Proactively surface the OS permission prompt (macOS Accessibility /
-        // Screen Recording) the moment the user opts in, instead of waiting
-        // for the first agent tool call to fail with a permission error.
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('computer_use_request_permissions');
-        } catch (permError) {
-          log.warn('computer_use_request_permissions failed', permError);
-        }
-      }
-      await refreshComputerUseStatus();
-    } catch (error) {
-      log.error('Failed to save computer_use_enabled', error);
-      notificationService.error(t('messages.saveFailed'));
-      setComputerUseEnabled(!checked);
-    } finally {
-      setComputerUseBusy(false);
-    }
-  };
-
-  const handleComputerUseOpenSettings = async (pane: 'accessibility' | 'screen_capture') => {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('computer_use_open_system_settings', { request: { pane } });
-    } catch (error) {
-      log.error('computer_use_open_system_settings failed', error);
-      notificationService.error(t('messages.saveFailed'));
-    }
-  };
-
-  const handleBrowserControlBrowserChange = async (value: string | number) => {
-    const nextValue = String(value || DEFAULT_BROWSER_CONTROL_BROWSER);
-    const previousValue = preferredBrowser;
-    setPreferredBrowser(nextValue);
-    setBrowserControlBusy(true);
-    try {
-      await configManager.setConfig(
-        'ai.browser_control_preferred_browser',
-        nextValue === DEFAULT_BROWSER_CONTROL_BROWSER ? '' : nextValue,
-      );
-      await refreshBrowserControlStatus();
-    } catch (error) {
-      log.error('Failed to save browser_control_preferred_browser', error);
-      setPreferredBrowser(previousValue);
-      notificationService.error(
-        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
-      );
-    } finally {
-      setBrowserControlBusy(false);
-    }
-  };
-
-  const handleBrowserControlLaunch = async () => {
-    setBrowserControlBusy(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<BrowserControlLaunchResponse>('browser_control_launch', { request: { port: 9222 } });
-      if (result.success) {
-        notificationService.success(
-          t('browserControl.connectSuccess', { browser: result.browserKind }),
-          { duration: 3000 }
-        );
-      } else if (result.status === 'needs_restart') {
-        setBrowserRestartPrompt(result);
-      } else if (result.message) {
-        notificationService.info(result.message, { duration: 8000 });
-      }
-      await refreshBrowserControlStatus();
-    } catch (error) {
-      log.error('browser_control_launch failed', error);
-      notificationService.error(t('browserControl.connectFailed'));
-    } finally {
-      setBrowserControlBusy(false);
-    }
-  };
-
-  const handleBrowserControlRestart = async () => {
-    if (!browserRestartPrompt) return;
-    setBrowserControlBusy(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<BrowserControlLaunchResponse>('browser_control_restart_with_cdp', {
-        request: { port: 9222 },
-      });
-      if (result.success) {
-        notificationService.success(
-          t('browserControl.restartSuccess', { browser: result.browserKind }),
-          { duration: 3000 }
-        );
-        setBrowserRestartPrompt(null);
-      } else if (result.message) {
-        notificationService.info(result.message, { duration: 8000 });
-      }
-      await refreshBrowserControlStatus();
-    } catch (error) {
-      log.error('browser_control_restart_with_cdp failed', error);
-      notificationService.error(t('browserControl.restartFailed'));
-    } finally {
-      setBrowserControlBusy(false);
-    }
-  };
-
-  const handleBrowserControlCreateLauncher = async () => {
-    setBrowserControlBusy(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const path = await invoke<string>('browser_control_create_launcher');
-      notificationService.success(
-        t('browserControl.createLauncherSuccess', { path }),
-        { duration: 5000 }
-      );
-    } catch (error) {
-      log.error('browser_control_create_launcher failed', error);
-      notificationService.error(t('browserControl.createLauncherFailed'));
-    } finally {
-      setBrowserControlBusy(false);
     }
   };
 
@@ -660,20 +415,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const enabledModels = models.filter((m: AIModelConfig) => m.enabled);
   const sessionTitleModelId = funcAgentModels[AGENT_SESSION_TITLE] || 'fast';
   const templateEntries = getTemplateEntries();
-  const computerUseAccessLabel = computerUseStatusLoading
-    ? t('loading.text')
-    : computerUseAccess ? t('computerUse.granted') : t('computerUse.notGranted');
-  const computerUseScreenLabel = computerUseStatusLoading
-    ? t('loading.text')
-    : computerUseScreen ? t('computerUse.granted') : t('computerUse.notGranted');
-  const browserStatusLabel = browserCdpAvailable
-    ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
-    : browserStatusLoading ? t('loading.text') : t('browserControl.notConnected');
-  const browserSelectOptions: SelectOption[] = browserOptions.map((option) => ({
-    value: option.value,
-    label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
-    disabled: !option.installed,
-  }));
 
   const pageTitle = variant === 'personalization'
     ? t('personalizationPage.title')
@@ -867,250 +608,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               />
             </div>
           </ConfigPageRow>
-        </ConfigPageSection>
-
-        {/* ── Computer use (desktop) ─────────────────────────────── */}
-        <ConfigPageSection
-          title={t('computerUse.sectionTitle')}
-          description={
-            IS_TAURI_DESKTOP ? t('computerUse.sectionDescription') : t('computerUse.desktopOnly')
-          }
-        >
-          {IS_TAURI_DESKTOP ? (
-            <>
-              <ConfigPageRow label={t('computerUse.enable')} description={t('computerUse.enableDesc')} align="center">
-                <div className="bitfun-func-agent-config__row-control">
-                  <Switch
-                    checked={computerUseEnabled}
-                    onChange={(e) => handleComputerUseEnabledChange(e.target.checked)}
-                    disabled={computerUseBusy || computerUseStatusLoading}
-                    size="small"
-                  />
-                </div>
-              </ConfigPageRow>
-              <ConfigPageRow
-                label={t('computerUse.accessibility')}
-                description={t('computerUse.accessibilityDesc')}
-                align="center"
-                balanced
-              >
-                <div
-                  className="bitfun-func-agent-config__row-control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span className={!computerUseStatusLoading && computerUseAccess ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
-                      {computerUseAccessLabel}
-                    </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void refreshComputerUseStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
-                  </span>
-                  {platform === 'macos' && (
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void handleComputerUseOpenSettings('accessibility')}
-                    >
-                      {t('computerUse.openSettings')}
-                    </Button>
-                  )}
-                </div>
-              </ConfigPageRow>
-              <ConfigPageRow
-                label={t('computerUse.screenCapture')}
-                description={t('computerUse.screenCaptureDesc')}
-                align="center"
-                balanced
-              >
-                <div
-                  className="bitfun-func-agent-config__row-control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span className={!computerUseStatusLoading && computerUseScreen ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
-                      {computerUseScreenLabel}
-                    </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void refreshComputerUseStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
-                  </span>
-                  {platform === 'macos' && (
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void handleComputerUseOpenSettings('screen_capture')}
-                    >
-                      {t('computerUse.openSettings')}
-                    </Button>
-                  )}
-                </div>
-              </ConfigPageRow>
-              {computerUsePlatformNote && (
-                <div
-                  className="bitfun-func-agent-config__platform-note"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 6,
-                    padding: '8px 0 4px',
-                  }}
-                >
-                  <Info size={14} style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
-                  <p className="bitfun-config-page-row__description" style={{ margin: 0 }}>
-                    <strong>{t('computerUse.platformNote')}: </strong>
-                    {computerUsePlatformNote}
-                  </p>
-                </div>
-              )}
-            </>
-          ) : null}
-        </ConfigPageSection>
-
-        {/* ── Browser control (CDP) ──────────────────────────────── */}
-        <ConfigPageSection
-          title={t('browserControl.sectionTitle')}
-          description={
-            IS_TAURI_DESKTOP ? t('browserControl.sectionDescription') : t('browserControl.desktopOnly')
-          }
-        >
-          {IS_TAURI_DESKTOP ? (
-            <>
-              {/* Only show browser selector when CDP is not connected */}
-              {!browserCdpAvailable && (
-              <ConfigPageRow
-                label={t('browserControl.preferredBrowser')}
-                description={t('browserControl.preferredBrowserDesc')}
-                align="center"
-                balanced
-              >
-                <div className="bitfun-func-agent-config__row-control">
-                  <Select
-                    value={preferredBrowser}
-                    options={browserSelectOptions}
-                    size="small"
-                    disabled={browserControlBusy || browserStatusLoading || browserSelectOptions.length === 0}
-                    onChange={(value) => {
-                      if (!Array.isArray(value)) void handleBrowserControlBrowserChange(value);
-                    }}
-                  />
-                </div>
-              </ConfigPageRow>
-              )}
-              <ConfigPageRow
-                label={t('browserControl.status')}
-                description={t('browserControl.statusDesc') || undefined}
-                align="center"
-                balanced
-              >
-                <div
-                  className="bitfun-func-agent-config__row-control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                    minWidth: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      minWidth: 0,
-                      maxWidth: '100%',
-                    }}
-                    title={browserCdpAvailable && browserVersion ? `${browserKind} ${browserVersion}` : undefined}
-                  >
-                    <span
-                      className={!browserStatusLoading && browserCdpAvailable ? 'bitfun-func-agent-config__perm-status--granted' : undefined}
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
-                    >
-                      {browserStatusLabel}
-                    </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('browserControl.refreshStatus')}
-                      tooltip={t('browserControl.refreshStatus')}
-                      disabled={browserControlBusy || browserStatusLoading}
-                      onClick={() => void refreshBrowserControlStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
-                  </span>
-                  {!browserCdpAvailable && (
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={browserControlBusy || browserStatusLoading}
-                      onClick={() => void handleBrowserControlLaunch()}
-                    >
-                      {t('browserControl.connect')}
-                    </Button>
-                  )}
-                </div>
-              </ConfigPageRow>
-              {platform === 'macos' && (
-                <ConfigPageRow
-                  label={t('browserControl.createLauncher')}
-                  description={t('browserControl.createLauncherDesc')}
-                  align="center"
-                >
-                  <div className="bitfun-func-agent-config__row-control">
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={browserControlBusy}
-                      onClick={() => void handleBrowserControlCreateLauncher()}
-                    >
-                      {t('browserControl.createLauncher')}
-                    </Button>
-                  </div>
-                </ConfigPageRow>
-              )}
-            </>
-          ) : null}
         </ConfigPageSection>
 
         {/* ── Debug mode settings ───────────────────────────────── */}
@@ -1325,44 +822,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               </Button>
             </div>
           )}
-        </Modal>
-
-        <Modal
-          isOpen={browserRestartPrompt !== null}
-          onClose={() => {
-            if (!browserControlBusy) setBrowserRestartPrompt(null);
-          }}
-          title={t('browserControl.restartModal.title')}
-          size="small"
-          closeOnOverlayClick={!browserControlBusy}
-        >
-          <div className="bitfun-debug-config__modal-body">
-            <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
-            <p>{t('browserControl.restartModal.warning')}</p>
-            {browserRestartPrompt?.message ? (
-              <p className="bitfun-func-agent-config__hint">{browserRestartPrompt.message}</p>
-            ) : null}
-          </div>
-          <div className="bitfun-debug-config__modal-footer">
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={() => setBrowserRestartPrompt(null)}
-              disabled={browserControlBusy}
-            >
-              {t('browserControl.restartModal.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              size="small"
-              onClick={() => void handleBrowserControlRestart()}
-              disabled={browserControlBusy}
-            >
-              {browserControlBusy
-                ? t('browserControl.restartModal.restarting')
-                : t('browserControl.restartModal.confirm')}
-            </Button>
-          </div>
         </Modal>
 
           </>
