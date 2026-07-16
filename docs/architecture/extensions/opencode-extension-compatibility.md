@@ -59,7 +59,8 @@
 - 第一条闭环只承诺官方 `.opencode/tools/` JS/TS 来源，不要求用户重打包或再次激活。单数 `tool/` 只有在冻结
   版本源码和测试明确证明时才作为该版本兼容输入，不能写成长期公开保证。package plugin、完整配置、
   Hook 和 TUI target 在该闭环稳定后按真实样例扩展。
-- Desktop 可以先验证固定版本 Bun；HarmonyOS 必须独立取证。只能覆盖 JS 子集的实现必须显示“能力受限”并列出
+- Desktop 可以先验证固定版本 Bun；HarmonyOS PC 原生 CLI/TUI 必须按
+  [平台专题](../platform-portability-design.md)独立取证，不包含 HarmonyOS 手机 Remote App。只能覆盖 JS 子集的实现必须显示“能力受限”并列出
   兼容差异，不能宣称 OpenCode runtime 完整兼容。
 - 扩展调用必须有期限、取消、有界队列、大小检查和崩溃恢复；更细的权限、沙箱和组织策略沿用现有控制点并延期
   单独设计，不在首条闭环扩大接口。

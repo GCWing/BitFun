@@ -3,10 +3,10 @@
 本文把现有架构债务整理为可独立验收的工作流。稳定边界见
 [产品运行时架构](../architecture/product-architecture.md)，专项细节见
 [Core 迁移](core-decomposition-plan.md)、[CLI/TUI](../architecture/cli-product-line-design.md)、
-[平台可行性](../architecture/platform-portability-design.md)和
+[HarmonyOS PC 平台规约](../architecture/platform-portability-design.md)和
 [OpenCode 兼容](opencode-extension-compatibility-plan.md)。专项文档不能用自己的阶段编号扩大本计划范围。
 
-本轮对照的上游基线为 `cabbce88348a24124714101a9e6c2f6371206fa1`（2026-07-16）；本文所在提交记录
+本轮对照的上游基线为 `ecad4f843`（2026-07-16）；本文所在提交记录
 本轮实现事实。后续事实变化必须随代码显式更新，只有代码、入口消费和对应验证同时成立的项目才标记为完成。
 
 ## 1. 裁决原则
@@ -30,7 +30,7 @@
 | 公开面 | `bitfun-core` 仍有迁移期 re-export；CLI 只完成部分 Runtime SDK 接入 | 按入口逐项迁移，不做全仓逐 symbol 台账或批量删除 |
 | CLI/TUI | `ShortcutsConfig` 已加载但真实按键分发仍硬编码；Slash、Palette、帮助和执行不是同一来源 | 先统一宿主 action 声明和键位解析，不重写 renderer |
 | OpenCode | 只有来源确认和静态工具名预览，没有 JS/TS `execute` 或真实工具注册 | 先做一个无外部依赖、遵循官方公开契约的 standalone custom tool 端到端样例 |
-| HarmonyOS | 现有 ArkTS app 是 Remote Surface；CLI 使用 `product-full`，HAP 内 TTY/PTY/进程/网络能力未证明 | 先做 HAP 可行性裁决；未通过前不承诺本地 TUI 产品 |
+| HarmonyOS PC | 未来平台目标，当前未实现 | 目标、问题、风险和旧设计闭环见平台规约；具体工作后续分别立项 |
 | 入口迁移 | CLI 已消费 Runtime Parts，但 CLI/ACP/Desktop 仍直接依赖 `bitfun-core/product-full` | 保持单一 owner，按 CLI → ACP → Desktop 的独立行为等价切片推进 |
 
 ## 3. 工作流一：边界与依赖可信
@@ -75,20 +75,11 @@
 退出条件：无配置、显式旧配置、冲突配置和真实按键输入均有测试；不存在绕过 registry 的第二套 Slash/Palette/
 Help/dispatch 元数据；终端异常路径仍能恢复。
 
-## 5. 工作流三：HarmonyOS 先做可行性裁决
+## 5. 工作流三：HarmonyOS PC 专题占位
 
-本工作流遵循[平台设计](../architecture/platform-portability-design.md)的五步证据，不把 cross-check 当产品支持。
-
-1. **可行性裁决**：用可安装 HAP 样例确定 Rust artifact、native bridge、输入/绘制方式、工作区范围、进程和
-   shell/PTY 能力。输出 ADR 和 go/no-go；失败时暂停或缩小本地目标。
-2. **最小宿主**：固定 `aarch64-unknown-linux-ohos` 工具链；HAP 可安装、启动、恢复、输入、resize 和安全退出。
-3. **本地核心预览**：在 HAP 内完成真实模型 turn、read/edit、one-shot shell、取消和会话恢复，不回退远端。
-4. **本地编码就绪**：补 Git status/diff、stdio MCP、后台结果、watch、交互 PTY 或等价能力。必需项未通过时继续
-   标记为预览。
-5. **OpenCode 资格**：在相同平台独立运行工作流四的 tool 样例；该结果不阻塞本地编码核心。
-
-`hdc shell` 只用于工具链和设备探针；现有 ArkTS Remote App 是独立远程入口。可行性裁决前不拆出一组 HarmonyOS
-专用端口，也不使用 `product-full` 或巨型平台抽象强行形成目标产物。
+本计划不设计或排期 HarmonyOS PC 实现。目标、问题、风险、旧设计闭环和禁止替代项统一见
+[HarmonyOS PC 平台规约](../architecture/platform-portability-design.md)；具体工作后续分别立项，现有手机 Remote
+App 保持不变。
 
 ## 6. 工作流四：OpenCode 从一个真实工具开始
 
@@ -102,7 +93,8 @@ Help/dispatch 元数据；终端异常路径仍能恢复。
    必须等待 CLI 拥有类型化状态/通知 owner，不能借用 GUI 本地服务；原始 OpenTUI/Solid renderer 保持不支持。
 
 工具实际加载并取得有效定义和 `execute` 后才能显示为可用。静态名称、可解析模块或进程启动成功都不等于工具
-可调用。Remote 和 HarmonyOS 未通过同一冻结样例前必须明确不支持，不能借 Desktop 代执行。
+可调用。Remote 和 HarmonyOS PC 原生 CLI/TUI 未通过同一冻结样例前必须明确不支持，不能借 Desktop 代执行；
+HarmonyOS 手机 Remote App 不在该平台执行范围内。
 
 ## 7. 工作流五：入口逐项迁移
 
@@ -119,13 +111,11 @@ Help/dispatch 元数据；终端异常路径仍能恢复。
 
 | 工作 | 必须等待 | 可以并行 |
 |---|---|---|
-| Relay 共享 owner / 反向边修复 | 已完成；embedded 宿主归位待后续 | OpenCode fixture、HarmonyOS 可行性样例 |
+| Relay 共享 owner / 反向边修复 | 已完成；embedded 宿主归位待后续 | OpenCode fixture |
 | CLI action/快捷键 | 当前 CLI 行为和配置 fixture | OpenCode standalone tool、入口 API 迁移 |
-| HarmonyOS 最小宿主 | HAP 可行性 go 决策、目标依赖清单 | Desktop OpenCode tool、CLI action |
-| HarmonyOS 本地核心 | 最小宿主、所需平台事实迁移 | Desktop OpenCode tool |
-| OpenCode standalone tool | OpenCode adapter 内的单一 source resolver、冻结版本/样例 | CLI action、HarmonyOS 可行性样例 |
+| OpenCode standalone tool | OpenCode adapter 内的单一 source resolver、冻结版本/样例 | CLI action |
 | OpenCode package/Hook/TUI | 前一切片稳定且有真实阻塞样例；TUI action 另等 action registry | 入口迁移 |
-| ACP/Desktop 迁移 | 前一入口行为等价 | HarmonyOS、OpenCode 深兼容 |
+| ACP/Desktop 迁移 | 前一入口行为等价 | OpenCode 深兼容 |
 
 这些依赖表示开始条件，不要求放在同一个 PR，也不形成统一大版本。
 
@@ -138,7 +128,7 @@ Help/dispatch 元数据；终端异常路径仍能恢复。
 | Relay | standalone/embedded 启动、路由、关闭和错误等价 |
 | CLI action | 无配置/旧配置/冲突配置、真实输入 dispatch、Help/Palette/Slash 一致、终端恢复 |
 | OpenCode tool | 冻结无外部依赖契约样例的 load/execute/context/cancel/timeout/error 端到端；静态预览不会进入工具集合 |
-| HarmonyOS | target 依赖快照、可安装 HAP、真机输入/绘制/路径/网络/存储/进程证据；不以 `hdc shell` 代替 |
+| HarmonyOS PC | 本计划只检查平台规约没有被实现文档提前展开；各专题启动后独立定义验证。HAP、`hdc shell`、移动 Remote App 与远端代执行不替代 |
 | 入口迁移 | 单入口生产消费、行为等价、旧转发删除和 focused test |
 
 ## 10. 暂停条件和延期
@@ -148,9 +138,9 @@ Help/dispatch 元数据；终端异常路径仍能恢复。
 - 新增无当前调用方的 trait/DTO/registry，或同一事实出现第二个写 owner；
 - 为平台或生态建立巨型总接口、服务定位器或新的 Agent/Tool Runtime；
 - 只有静态解析或编译成功，却把能力标记为产品可用；
-- HarmonyOS 真机证据失败后，改用 Desktop/Remote 代执行仍声称本地支持；
+- HarmonyOS PC 用户发行或真实终端证据失败后，改用 HAP、`hdc shell`、移动端或 Desktop/Remote 代执行仍声称本地支持；
 - 为追平竞品数量同时加入全量配置、Hook、renderer、Server 或权限系统；
 - 一次迁移要求重写完整 CLI、Desktop 或 Core，无法独立验收。
 
 明确延期：新权限语言和应用沙箱、全量 OpenCode config/Hook/TUI renderer/Server/Remote plugin、Codex/Claude 插件
-ABI、HarmonyOS 非 aarch64/商店签名/OEM，以及 Vim、语音、分享和协作等非核心 TUI 深度功能。
+ABI、HarmonyOS PC 具体实现、PC GUI、移动端本地适配，以及 Vim、语音、分享和协作等非核心 TUI 深度功能。

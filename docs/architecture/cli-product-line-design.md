@@ -4,8 +4,8 @@
 [`product-architecture.md`](product-architecture.md) 为准；Agent Runtime、工具和工作流归属见
 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件宿主与 OpenCode 适配边界见
 [`plugin-runtime-host-design.md`](extensions/plugin-runtime-host-design.md)；跨 GUI/TUI 的产品定制、品牌资源、界面
-布局选择和内置扩展见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；HarmonyOS 本地候选的
-平台证据见 [`platform-portability-design.md`](platform-portability-design.md)；跨专题顺序见
+布局选择和内置扩展见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；HarmonyOS PC 原生
+CLI/TUI 的目标、问题和风险规约见 [`platform-portability-design.md`](platform-portability-design.md)；跨专题顺序见
 [`../plans/product-architecture-evolution-plan.md`](../plans/product-architecture-evolution-plan.md)。本文只补充
 CLI 产品入口、配置兼容、TUI 布局消费和 CLI Agent 体验，不重复定义这些文档中的通用契约或内部 ABI。
 OpenCode 的完整扩展矩阵、配置资产、插件执行和 TUI Plugin 映射分别见
@@ -43,6 +43,8 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 5. 消费已校验的产品组装结果和 TUI 布局选择，生成不同品牌和能力范围的
    CLI 产物；通用产品定制不在 CLI 入口重复实现。
 6. 以任务成功率、恢复能力、工具正确性、上下文效率和资源开销评估 Agent 能力，而不是只比较命令数量。
+7. 把 HarmonyOS PC 作为一等 CLI/TUI 目标：用户在系统真实终端中安装并执行本地 `bitfun-cli`；HAP 内终端式
+   界面、`hdc shell`、移动 Remote App 和其他设备代执行均不构成该目标。
 
 ### 1.2 能力对齐口径
 
@@ -132,7 +134,7 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 | `ShortcutsConfig` 已加载，但主要按键分发仍硬编码；Slash、Palette、帮助和执行来自不同位置 | 配置可能保存却不生效，展示和真实行为会漂移 | 在 CLI 宿主建立单一 action registry 和上下文键位解析；不借机重写 renderer。 |
 | CLI 配置只覆盖入口本地选项，缺少统一层级、来源解释和兼容导入 | 用户无法安全迁移其他 CLI 资产，也难以解释最终配置来源 | 建立 BitFun Canonical Config、来源视图和一次性导入报告。 |
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 第一条闭环只完成一个无外部依赖的契约样例；取得真实 `execute` 并注册到 Tool Runtime 后才显示可用。 |
-| 当前 CLI 使用 `product-full`，现有 HarmonyOS ArkTS app 只是 Remote Surface | 不能据 target 可编译或远程页面推导本地 Agent/TUI 可用 | 先做可安装 HAP 的可行性裁决；真机证明最小宿主和本地核心后再承诺产品。 |
+| 当前 CLI 使用 `product-full`，OHOS target 图包含多组未验证的平台依赖 | 不能据依赖可解析、`hdc shell` 或移动 Remote App 推导 PC 本地 CLI/TUI 可用 | 问题与风险统一记录在平台规约；具体工作另立专题，HAP 不作为替代。 |
 | Product Capability 已有，但品牌、资源、默认策略和发行配置没有统一产品定义 | 白标需要修改多处常量和工作流，能力隐藏不等于后端禁用 | 产品定义只在组装/构建边界选择身份、资源、能力包、默认策略和发行事实。 |
 | CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；三平台编译由通用 workspace check 覆盖 | 真实模型审批/取消、Patch I/O 失败、PTY 与常规打包仍可能晚于 PR 发现 | 继续补进程级和 PTY 契约及 package smoke；避免为同一依赖图重复建立三平台编译矩阵。 |
 
@@ -157,6 +159,8 @@ CLI-P0 不是一个统一重构 PR。静态 profile、真实 Runtime Services、
 | TUI 边界 | 增量提取终端恢复守卫、命令分发和副作用边界 | 不改版视觉设计，恢复/取消回归可单独验证 |
 
 CLI-P0 不包含插件 JS/TS 执行、完整 checkpoint/rewind 或大规模 TUI 重写。
+CLI-P0/P1/P2 在 Windows、macOS、Linux 完成不表示 HarmonyOS PC 已支持；HarmonyOS PC 的具体适配由未来独立专题
+设计和验证，不能通过关闭必需编码能力直接宣称“本地编码就绪”。
 
 ### 3.2 CLI-P1：常用 CLI 工程闭环
 
@@ -330,14 +334,14 @@ Plugin Runtime 状态。
 冲突必须稳定并显示来源；退出、终端恢复和活动 turn 中断始终保留宿主 fallback。最低测试覆盖无配置、显式旧配置、
 冲突配置和真实输入 dispatch。
 
-### 4.6 HarmonyOS 本地候选
+### 4.6 HarmonyOS PC 原生终端产品
 
-HarmonyOS 本地候选可以复用 CLI 的 action 和 Runtime 语义，但不能直接复用 `product-full`、桌面终端实现或现有
-ArkTS Remote App。第一步是可安装 HAP 的 go/no-go 样例，验证 native bridge、输入/绘制、生命周期、工作区、网络、
-存储和进程模型；通过后再分别交付最小宿主、本地核心和编码就绪。`hdc shell` 只算开发探针。
+HarmonyOS PC 复用现有 `DeliveryProfile::Cli`、action、TUI 和 Runtime 语义；平台 target 不成为新的 Delivery
+Profile。目标产物是普通用户在系统真实终端中直接执行的本地 `bitfun-cli`，不是 HAP、ArkUI/ArkWeb 终端模拟器、
+`hdc shell` 工具或现有 HarmonyOS 手机 Remote App。
 
-具体依赖和真机证据见[平台适配设计](platform-portability-design.md)。OpenCode 脚本执行单独资格验证，不阻塞本地
-编码核心。
+问题清单、风险和旧设计闭环统一见[平台规约](platform-portability-design.md)。具体鸿蒙化工作、OpenCode 平台资格、
+HarmonyOS PC GUI 与移动端均另立专题。
 
 ## 5. CLI/TUI 对产品定制结果的消费
 
@@ -560,7 +564,7 @@ CLI Agent 能力加强必须落在共享 Agent Runtime、Tool Runtime 或 Harnes
 | Agent Runtime | session/turn/cancel、compact/checkpoint/rewind 的补偿/partial/re-entry、后台投递、Subagent、Hook 顺序和持久化恢复 |
 | Evaluation | 版本化评测清单、候选/基线重复运行、原始结果、阈值、失败分布和安全保护项 |
 | Product build | 当前产品组装结果/TUI 布局生成 CLI smoke artifact；通用 GUI/TUI、品牌、内置扩展和发行验证按产品定制文档执行 |
-| 平台 | Windows、macOS、Linux 的 build/smoke；Windows 单独覆盖 ConPTY、Ctrl+C、路径和进程树清理；HarmonyOS 先提供 HAP 可行性结论，再按最小宿主/本地核心/编码就绪保存真机证据 |
+| 平台 | Windows、macOS、Linux 的 build/smoke；Windows 单独覆盖 ConPTY、Ctrl+C、路径和进程树清理；HarmonyOS PC 仅遵循平台规约，具体验证由未来专题定义 |
 | Action/Keymap | registry 唯一性、Slash/Palette/Help/dispatch 一致、配置键位真实输入、冲突来源和终端恢复 fallback |
 
 通用 `cargo check --workspace` 负责三平台 CLI 编译保护；独立 CLI CI 运行
@@ -606,4 +610,5 @@ CLI-P2 各路线独立完成：
 6. CLI 只消费产品组装结果和 TUI 布局选择；产品构建脚本、GUI 布局、品牌和发行信息由产品定制模块管理。
 7. 先补产品组装、协议、配置和测试基础，再扩展插件执行和复杂 TUI 功能。
 8. Agent 能力以共享运行时语义和重复评测加强，不用 CLI 专属硬编码模拟高级能力。
-9. HarmonyOS 本地候选与 ArkTS Remote App 独立验收；没有 HAP 真机证据时不宣称本地支持。
+9. HarmonyOS PC 是真实系统终端中的原生 CLI/TUI 目标，与 HarmonyOS 手机 Remote App 和后续 PC GUI 独立；没有
+   普通用户安装渠道、TTY、本地 Agent 与编码流程真机证据时不宣称本地支持，也不改用 HAP 或 Remote 代替。

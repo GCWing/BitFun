@@ -182,6 +182,13 @@ await api.invoke('your_command', { request: { ... } });
 [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md)。CLI/TUI 展示留在 app；可复用产品行为通过
 Product Assembly、Agent Runtime、Tool/Harness、Runtime Services 或既有扩展边界承接。
 
+### HarmonyOS PC CLI/TUI 护栏
+
+涉及 HarmonyOS PC CLI/TUI 支持时，还必须阅读
+[`docs/architecture/platform-portability-design.md`](docs/architecture/platform-portability-design.md)。
+这是未来平台目标，不是已实现支持。目标是真实 PC 系统终端；HAP、`hdc shell`、
+手机 Remote App 和远端代执行都不能替代。具体适配必须另立专题，现有移动端能力保持不变。
+
 ### 产品定制护栏
 
 涉及产品定义、品牌发行、GUI/TUI 布局选择、产品内置扩展或定制构建任务时，先阅读

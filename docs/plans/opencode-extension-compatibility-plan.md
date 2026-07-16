@@ -17,7 +17,8 @@
 4. 外部类型停留在 adapter/worker 内；BitFun 只接收经过校验的工具定义、调用结果、变换或诊断。
 5. 脚本执行实现不进入通用平台抽象。若首个样例确实需要新端口，它只表达该调用方需要的 load/invoke/cancel/
    dispose 和诊断，不暴露 Bun、worker 数量、IPC 或进程句柄。
-6. Desktop、Remote 和 HarmonyOS 分别资格验证；一个平台可用不能推导其他平台可用。
+6. Desktop、Remote 和 HarmonyOS PC 原生 CLI/TUI 分别资格验证；一个平台可用不能推导其他平台可用。HarmonyOS
+   手机 Remote App 不在本计划的平台执行范围内。
 
 第三方脚本可以直接访问文件、网络、环境和子进程。独立进程、期限、取消和有界队列能限制故障传播，但没有
 OS/container 资源限制时不能称为沙箱，也不能保证阻止 CPU、内存或进程耗尽。来源身份、执行域和现有策略必须在
@@ -83,7 +84,8 @@ OpenCode source resolver
 改源码或重打包；产品状态明确列出 context 子集；失败不阻塞 TUI
 输入、终端恢复和无关工具；静态预览与实际 exports 冲突时以实际加载结果为准。
 
-Remote 和 HarmonyOS 在各自通过同一冻结样例前保持明确不支持，不能调用 Desktop worker 代执行工作区代码。
+Remote 和 HarmonyOS PC 原生 CLI/TUI 在各自通过同一冻结样例前保持明确不支持，不能调用 Desktop worker 代执行
+工作区代码；手机 Remote App 不作为 HarmonyOS PC 的通过证据。
 
 ## 5. OC-E2：一个真实 package plugin
 
@@ -137,7 +139,7 @@ command/slash/key 进入 CLI action registry。键位冲突、退出/恢复 fall
 | Tool Runtime 端到端 | - | 必需 | 必需 | Hook 涉及时 |
 | CLI 状态与诊断 | 必需 | 必需 | 必需 | 必需 |
 | TUI 输入/恢复 | 文案 | 失败路径 | 失败路径 | TUI 项必需 |
-| Remote/HarmonyOS | 明确状态 | 分别资格验证 | 分别资格验证 | 分别资格验证 |
+| Remote/HarmonyOS PC 原生 CLI/TUI | 明确状态 | 分别资格验证 | 分别资格验证 | 分别资格验证 |
 
 发布说明只列已通过的阶段、样例和平台。例如应写“Desktop 支持 OpenCode standalone custom tool 样例；package
 plugin、Hook 与 TUI plugin 尚未支持”，不能笼统写“已兼容 OpenCode 插件”。

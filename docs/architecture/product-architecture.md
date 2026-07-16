@@ -5,7 +5,7 @@
 约束见 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件运行时主机内部 ABI 和生态适配细节见
 [`plugin-runtime-host-design.md`](extensions/plugin-runtime-host-design.md)；跨 GUI/TUI 的产品定制、布局选择和
 内置扩展边界见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；CLI 产品入口和配置
-兼容见 [`cli-product-line-design.md`](cli-product-line-design.md)；跨平台和 HarmonyOS 本地运行候选见
+兼容见 [`cli-product-line-design.md`](cli-product-line-design.md)；HarmonyOS PC 原生 CLI/TUI 平台规约见
 [`platform-portability-design.md`](platform-portability-design.md)。跨专题实施顺序见
 [`../plans/product-architecture-evolution-plan.md`](../plans/product-architecture-evolution-plan.md)。OpenCode 扩展总矩阵、配置资产、插件执行、
 终端插件和外部集成适配分别见 [`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
@@ -241,8 +241,8 @@ flowchart LR
 |---|---|---|
 | Desktop / product-full | 生产入口仍直接依赖 `bitfun-core/product-full`；当前没有 managed-plugin 管理或 OpenCode 静态预览的生产 UI/调用方 | 共享代码可编译不等于 Desktop 已消费插件能力 |
 | CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；只为 BitFun 原生包提供来源审核、启用预览、精确内容确认和停用 | 本地 Agent 与 Peer Host 路径选择 `DeliveryProfile::Cli`，校验必需 Runtime Service 注册并消费同一 Runtime Parts/SDK；SDK 缺口由单一 Core 兼容门面转发。Peer Host 不再构造第二套调度、持久化或事件 owner。部分注册仍是 compatibility marker，不代表实时探活；插件 binding 明确禁用，不执行 OpenCode 插件代码 |
-| HarmonyOS 本地 CLI/TUI 候选 | 尚无本地 Rust 产品入口；CLI 的 `product-full` 依赖和 HAP 内终端/进程能力均未验证 | 先完成可安装 HAP 的可行性裁决；通过后再依次验证最小宿主、本地核心和编码能力。`hdc shell` 与现有 ArkTS Remote App 都不能作为本地产品完成证据 |
-| HarmonyOS Remote App | `src/apps/mobile/harmonyos` 是 ArkTS 远程入口，不持有本地 Rust Agent Runtime | 按 Remote Surface 独立演进；不能据此宣称本地工具、插件或 TUI 已移植 |
+| HarmonyOS PC 原生 CLI/TUI | 未来平台目标，当前未实现 | 目标、问题和风险见平台规约；具体适配另立专题，HAP、手机 Remote App 与远端代执行均不替代 |
+| HarmonyOS 手机 Remote App | `src/apps/mobile/harmonyos` 是 phone-only ArkTS 远程入口，不持有本地 Rust Agent Runtime | 保持当前能力并按移动端专题独立演进；本轮不提前设计移动 Runtime/TUI/GUI，也不能据此宣称 HarmonyOS PC 本地能力 |
 | ACP | 生产入口仍直接依赖 `bitfun-core/product-full` | `DeliveryProfile::Acp` 尚未进入入口组装；不得把测试中的 profile 解释为生产隔离 |
 | Server / Remote | 当前生产路由没有插件状态消费闭环；Remote 插件执行未实现 | 不在本地替远端项目发现、准备或执行插件；未接入时返回明确不支持 |
 | Web / Mobile Web | 依赖现有后端入口，不持有插件执行单元 | 对应 profile 当前为空计划或未接入生产，不能据枚举值宣称独立产品能力 |
@@ -273,6 +273,5 @@ flowchart LR
 - assembly 不得依赖 app crate。relay 的 room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router
   归属 `services/relay-service`，Cargo metadata 实际解析图检查阻止同类依赖回流。embedded TCP bind、静态 fallback
   和任务生命周期暂留 assembly 兼容路径，仍需迁往具体宿主；这项边界修复不构成 HarmonyOS 本地产品支持。
-- 平台支持按“目标依赖、编译、目标产品运行”三层取证。HarmonyOS 本地候选在 HAP 真机证明输入/绘制、路径、
-  网络、存储和进程行为前不能标记可用，也不能静默回退 Desktop/Remote 执行。
+- HarmonyOS PC 是未来平台目标，当前不能标记可用；具体支持证据和禁止替代项以平台规约为准。
 - 文档、边界脚本和 focused 测试能说明本次变更保护了哪个稳定接口切面，或删除/降级了哪个过宽接口。

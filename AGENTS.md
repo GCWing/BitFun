@@ -196,6 +196,15 @@ and [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md). Keep CLI/TUI presentatio
 in the app; move reusable product behavior through Product Assembly, Agent
 Runtime, Tool/Harness, Runtime Services, or the existing extension boundaries.
 
+### HarmonyOS PC CLI/TUI guardrails
+
+For changes that affect HarmonyOS PC CLI/TUI support, also read
+[`docs/architecture/platform-portability-design.md`](docs/architecture/platform-portability-design.md).
+This is a future platform target, not implemented support. The product target is
+the real PC system terminal; HAP, `hdc shell`, the phone Remote App, and remote
+execution are not substitutes. Design each concrete adaptation as a separate
+topic and keep the current mobile capability unchanged.
+
 ### Product customization guardrails
 
 For product definitions, branded distributions, GUI/TUI layout selection,
