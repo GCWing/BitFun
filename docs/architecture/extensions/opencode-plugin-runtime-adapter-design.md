@@ -6,8 +6,8 @@
 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)，终端插件见
 [`opencode-tui-plugin-adapter-design.md`](opencode-tui-plugin-adapter-design.md)。
 
-冻结接口以稳定提交的 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/4473fc3c9055046183990a965d68df3db7ea6f62/packages/plugin/src/index.ts)、
-[`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/4473fc3c9055046183990a965d68df3db7ea6f62/packages/plugin/src/tool.ts)
+冻结接口以 `v1.18.2` 稳定提交的 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/index.ts)、
+[`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/tool.ts)
 和实际插件 loader/npm 服务为准；[插件文档](https://opencode.ai/docs/plugins/)用于行为说明。
 
 本文是目标设计。当前实现结束于 BitFun 专用目录来源、启用记录、静态 custom tool 名称预览和诊断，尚未包含脚本执行进程、
@@ -21,7 +21,7 @@ BitFun 实现自己的插件 Runtime，不启动完整 OpenCode Runtime：
 - 首选执行后端是由 BitFun 固定版本并随产品交付或按需安装的 Bun，而不是自行重写 JavaScript 引擎或用
   Node 兼容层猜测 Bun 行为。Bun 负责 TypeScript、模块执行和 Bun Shell `$`；
   发布前必须完成对应平台的许可证、签名、更新和体积验证。
-- 依赖准备不使用 `bun install` 猜测 OpenCode 行为。`v1.17.20` 兼容模块使用 npm 配置、`@npmcli/arborist`、
+- 依赖准备不使用 `bun install` 猜测 OpenCode 行为。`v1.18.2` 兼容模块使用 npm 配置、`@npmcli/arborist`、
   `package-lock.json` 和 `ignoreScripts: true`；后续 OpenCode 版本改变实现时随兼容版本更新。
 - 执行进程提供 OpenCode 兼容上下文和插件接口；插件无需感知 BitFun Rust 内部类型。
 - OpenCode Adapter 把插件调用、钩子变换和工具结果转换成类型化进程消息。
@@ -346,7 +346,7 @@ OpenCode 稳定实现把 server 插件放在同一进程，因此插件理论上
 `cancelled`、`overloaded`、`policy-limited`、`worker-lost`、`temporarily-unavailable` 和 `invalid-response`。
 `temporarily-unavailable` 允许在既定退避后重试；其他错误是否可重试由对应能力明确声明。
 
-- 错误按插件、能力和根因聚合；相同错误限流，不持续刷日志和 Toast。
+- 错误按插件、能力和根因聚合；相同错误限流，不持续刷日志或界面提示。
 - 已知不兼容能力只禁用相应贡献；插件其他工具和 Hook 继续工作。
 - 连续失败可以暂停对应 Hook 或工具，用户可以查看原因并恢复；不能无提示永久隔离。
 - 插件状态页显示最后健康时间、失败能力、恢复动作和当前执行版本，不要求用户阅读原始日志。
