@@ -12,7 +12,7 @@ import {
   ConfigPageMessage,
 } from '@/component-library';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
-import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
+// import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   getTerminalService,
   refreshTerminalPanelPosition,
@@ -531,103 +531,103 @@ function BasicsTerminalSection() {
   );
 }
 
-function BasicsWindowBehaviorSection() {
-  const { t } = useTranslation('settings/basics');
-  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
-  const [behavior, setBehavior] = useState<CloseBehavior>('quit');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+// function BasicsWindowBehaviorSection() {
+//   const { t } = useTranslation('settings/basics');
+//   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+//   const [behavior, setBehavior] = useState<CloseBehavior>('quit');
+//   const [loading, setLoading] = useState(true);
+//   const [saving, setSaving] = useState(false);
+//   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
-  }, []);
+//   const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+//     setMessage({ type, text });
+//     setTimeout(() => setMessage(null), 3000);
+//   }, []);
 
-  const behaviorOptions = useMemo(
-    () => [
-      { value: 'quit', label: t('windowBehavior.options.quit') },
-      { value: 'minimize_to_tray', label: t('windowBehavior.options.minimizeToTray') },
-      { value: 'ask', label: t('windowBehavior.options.ask') },
-    ],
-    [t]
-  );
+//   const behaviorOptions = useMemo(
+//     () => [
+//       { value: 'quit', label: t('windowBehavior.options.quit') },
+//       { value: 'minimize_to_tray', label: t('windowBehavior.options.minimizeToTray') },
+//       { value: 'ask', label: t('windowBehavior.options.ask') },
+//     ],
+//     [t]
+//   );
 
-  useEffect(() => {
-    if (!isTauri) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoading(true);
-        const v = await configManager.getConfig<CloseBehavior>('app.close_button_behavior');
-        if (!cancelled) setBehavior(v ?? 'minimize_to_tray');
-      } catch {
-        // Key absent on first launch — fall back to default silently.
-        if (!cancelled) setBehavior('minimize_to_tray');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isTauri, showMessage, t]);
+//   useEffect(() => {
+//     if (!isTauri) {
+//       setLoading(false);
+//       return;
+//     }
+//     let cancelled = false;
+//     void (async () => {
+//       try {
+//         setLoading(true);
+//         const v = await configManager.getConfig<CloseBehavior>('app.close_button_behavior');
+//         if (!cancelled) setBehavior(v ?? 'minimize_to_tray');
+//       } catch {
+//         // Key absent on first launch — fall back to default silently.
+//         if (!cancelled) setBehavior('minimize_to_tray');
+//       } finally {
+//         if (!cancelled) setLoading(false);
+//       }
+//     })();
+//     return () => { cancelled = true; };
+//   }, [isTauri, showMessage, t]);
 
-  const handleChange = useCallback(
-    async (value: string) => {
-      const previous = behavior;
-      const next = value as CloseBehavior;
-      setBehavior(next);
-      setSaving(true);
-      try {
-        await configManager.setConfig('app.close_button_behavior', next);
-        configManager.clearCache();
-        showMessage('success', t('windowBehavior.messages.saved'));
-      } catch (error) {
-        setBehavior(previous);
-        log.error('Failed to save close behavior', { next, error });
-        showMessage('error', t('windowBehavior.messages.saveFailed'));
-      } finally {
-        setSaving(false);
-      }
-    },
-    [behavior, showMessage, t]
-  );
+//   const handleChange = useCallback(
+//     async (value: string) => {
+//       const previous = behavior;
+//       const next = value as CloseBehavior;
+//       setBehavior(next);
+//       setSaving(true);
+//       try {
+//         await configManager.setConfig('app.close_button_behavior', next);
+//         configManager.clearCache();
+//         showMessage('success', t('windowBehavior.messages.saved'));
+//       } catch (error) {
+//         setBehavior(previous);
+//         log.error('Failed to save close behavior', { next, error });
+//         showMessage('error', t('windowBehavior.messages.saveFailed'));
+//       } finally {
+//         setSaving(false);
+//       }
+//     },
+//     [behavior, showMessage, t]
+//   );
 
-  if (!isTauri) return null;
+//   if (!isTauri) return null;
 
-  if (loading) {
-    return <ConfigPageLoading text={t('windowBehavior.messages.loading')} />;
-  }
+//   if (loading) {
+//     return <ConfigPageLoading text={t('windowBehavior.messages.loading')} />;
+//   }
 
-  return (
-    <div className="bitfun-window-behavior-config">
-      <div className="bitfun-window-behavior-config__content">
-        <ConfigPageMessage message={message} />
-        <ConfigPageSection
-          title={t('windowBehavior.sections.title')}
-          description={t('windowBehavior.sections.hint')}
-        >
-          <ConfigPageRow
-            label={t('windowBehavior.closeButtonLabel')}
-            description={t('windowBehavior.closeButtonDescription')}
-            align="center"
-          >
-            <div className="bitfun-window-behavior-config__select-wrapper">
-              <Select
-                value={behavior}
-                onChange={(v) => { void handleChange(v as string); }}
-                options={behaviorOptions}
-                disabled={saving}
-              />
-            </div>
-          </ConfigPageRow>
-        </ConfigPageSection>
-      </div>
-    </div>
-  );
-}
+//   return (
+//     <div className="bitfun-window-behavior-config">
+//       <div className="bitfun-window-behavior-config__content">
+//         <ConfigPageMessage message={message} />
+//         <ConfigPageSection
+//           title={t('windowBehavior.sections.title')}
+//           description={t('windowBehavior.sections.hint')}
+//         >
+//           <ConfigPageRow
+//             label={t('windowBehavior.closeButtonLabel')}
+//             description={t('windowBehavior.closeButtonDescription')}
+//             align="center"
+//           >
+//             <div className="bitfun-window-behavior-config__select-wrapper">
+//               <Select
+//                 value={behavior}
+//                 onChange={(v) => { void handleChange(v as string); }}
+//                 options={behaviorOptions}
+//                 disabled={saving}
+//               />
+//             </div>
+//           </ConfigPageRow>
+//         </ConfigPageSection>
+//       </div>
+//     </div>
+//   );
+// }
 
 function BasicsNotificationsSection() {  const { t } = useTranslation('settings/basics');
   const [dialogNotify, setDialogNotify] = useState(true);
@@ -985,7 +985,7 @@ const BasicsConfig: React.FC = () => {
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="bitfun-basics-config__content">
         <BasicsAutoUpdateSection />
-        <BasicsWindowBehaviorSection />
+        {/* <BasicsWindowBehaviorSection /> */}
         <BasicsLoggingSection />
         <BasicsTerminalSection />
         <BasicsEnvVarsSection />
