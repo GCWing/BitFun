@@ -73,6 +73,7 @@ import {
 import {
   type BackgroundSubagentActivityItem,
 } from '../../utils/backgroundSubagentActivity';
+import { ConversationSelectionActions } from '@/features/learning-proposal';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -1474,6 +1475,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           isSending={isSendingBackgroundCommandInput}
           onClose={handleCloseBackgroundCommandInput}
           onSend={handleSendBackgroundCommandInput}
+        />
+
+        <ConversationSelectionActions
+          scopeRef={chatScopeRef}
+          activeSession={activeSession}
+          fallbackWorkspacePath={workspacePath}
         />
 
         <div

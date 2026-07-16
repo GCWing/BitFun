@@ -1371,6 +1371,13 @@ pub async fn run() {
             api::insights_api::load_insights_report,
             api::insights_api::has_insights_data,
             api::insights_api::cancel_insights_generation,
+            // Learning Proposal API
+            api::learning_proposal_api::create_learning_proposal,
+            api::learning_proposal_api::get_learning_proposal,
+            api::learning_proposal_api::list_learning_proposals,
+            api::learning_proposal_api::refresh_learning_proposal,
+            api::learning_proposal_api::approve_learning_proposal,
+            api::learning_proposal_api::reject_learning_proposal,
             // SSH Remote API
             api::ssh_api::ssh_list_saved_connections,
             api::ssh_api::ssh_save_connection,

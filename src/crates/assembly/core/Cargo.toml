@@ -31,6 +31,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true, optional = true }
 cron = { workspace = true, optional = true }
 regex = { workspace = true }
+pulldown-cmark = { workspace = true, optional = true }
 base64 = { workspace = true }
 image = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
@@ -200,6 +201,7 @@ plugin-source = [
 product-domains = [
     "ai-adapter-runtime",
     "dep:bitfun-product-domains",
+    "dep:pulldown-cmark",
     "plugin-source",
     "bitfun-services-integrations/function-agents",
     "bitfun-services-integrations/miniapp-runtime",

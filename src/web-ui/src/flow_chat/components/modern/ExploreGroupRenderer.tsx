@@ -68,6 +68,15 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     isLastGroupInTurn,
     wasCutByCritical,
   } = data;
+  const roundByItemId = useMemo(() => {
+    const result = new Map<string, { id: string; isStreaming: boolean }>();
+    for (const round of data.rounds) {
+      for (const item of round.items) {
+        result.set(item.id, { id: round.id, isStreaming: round.isStreaming });
+      }
+    }
+    return result;
+  }, [data.rounds]);
   const prevWasCutRef = useRef(wasCutByCritical);
   const {
     cardRootRef,
@@ -279,6 +288,8 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
               key={item.id}
               item={item}
               turnId={turnId}
+              roundId={roundByItemId.get(item.id)?.id}
+              isRoundStreaming={roundByItemId.get(item.id)?.isStreaming === true}
               isLastItem={isLastGroupInTurn && idx === allItems.length - 1}
             />
           ))}
@@ -295,10 +306,12 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
 interface ExploreItemRendererProps {
   item: FlowItem;
   turnId: string;
+  roundId?: string;
+  isRoundStreaming: boolean;
   isLastItem?: boolean;
 }
 
-const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId, isLastItem }) => {
+const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId, roundId, isRoundStreaming, isLastItem }) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -336,19 +349,45 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId
       return (
         <FlowTextBlock
           textItem={item as FlowTextItem}
+          traceContext={{ turnId, roundId, itemId: item.id }}
+          testAttributes={{
+            'data-turn-id': turnId,
+            'data-round-id': roundId,
+            'data-streaming': isRoundStreaming ? 'true' : 'false',
+            'data-learning-item-id': item.id,
+            'data-learning-source-kind': 'assistant_text',
+          }}
         />
       );
     
     case 'thinking': {
       const thinkingItem = item as FlowThinkingItem;
       return (
-        <ModelThinkingDisplay thinkingItem={thinkingItem} isLastItem={isLastItem} />
+        <div
+          className="flowchat-learning-source"
+          data-turn-id={turnId}
+          data-round-id={roundId}
+          data-streaming={isRoundStreaming ? 'true' : 'false'}
+          data-learning-item-id={item.id}
+          data-learning-source-kind="assistant_thinking"
+        >
+          <ModelThinkingDisplay thinkingItem={thinkingItem} isLastItem={isLastItem} />
+        </div>
       );
     }
     
     case 'tool':
       return (
-        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div
+          className="flowchat-flow-item"
+          data-turn-id={turnId}
+          data-round-id={roundId}
+          data-streaming={isRoundStreaming ? 'true' : 'false'}
+          data-flow-item-id={item.id}
+          data-flow-item-type="tool"
+          data-learning-item-id={item.id}
+          data-learning-source-kind="tool"
+        >
           <FlowToolCard
             toolItem={item as FlowToolItem}
             onConfirm={handleConfirm}

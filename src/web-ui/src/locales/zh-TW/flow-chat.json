@@ -2231,6 +2231,75 @@
       "title": "該輪以非標準方式結束"
     }
   },
+  "learningProposal": {
+    "selectionToolbarLabel": "已選對話內容操作",
+    "actions": {
+      "addToInput": "新增到輸入框",
+      "capture": "沉澱為經驗",
+      "review": "審閱",
+      "close": "關閉",
+      "reject": "拒絕",
+      "refresh": "重新整理分析",
+      "requestReanalysis": "要求重新分析",
+      "approve": "核准並寫入"
+    },
+    "notification": {
+      "analyzingTitle": "正在分析所選資訊",
+      "analyzingMessage": "BitFun 正在判斷這條經驗應該沉澱到哪裡。",
+      "readyTitle": "經驗沉澱提案已就緒",
+      "readyMessage": "請審閱針對 {{target}} 的建議更新。",
+      "staleTitle": "經驗沉澱提案需要重新整理",
+      "staleMessage": "提案建立後，目標 {{target}} 已發生變化。",
+      "failedTitle": "經驗沉澱提案需要處理",
+      "failedMessage": "請開啟提案查看問題，或要求重新分析。",
+      "appliedMessage": "已寫入核准的經驗。",
+      "rejectedMessage": "已拒絕這條經驗沉澱提案。"
+    },
+    "target": {
+      "pending": "正在判斷目標",
+      "kind": {
+        "memory": "Memory",
+        "skill": "Skill",
+        "agents_md": "專案指令",
+        "none": "無需持久化"
+      }
+    },
+    "status": {
+      "analyzing": "正在分析",
+      "ready": "等待審閱",
+      "applying": "正在寫入",
+      "applied": "已寫入",
+      "rejected": "已拒絕",
+      "stale": "需要重新整理",
+      "failed": "需要處理"
+    },
+    "sourceKind": {
+      "user_message": "使用者訊息",
+      "assistant_text": "Agent 回覆",
+      "assistant_thinking": "Agent 推理",
+      "tool": "工具活動",
+      "unknown": "對話內容"
+    },
+    "review": {
+      "title": "審閱經驗沉澱提案",
+      "loading": "正在載入最新提案...",
+      "remoteReadOnly": "目前版本僅支援審閱遠端工作區提案，不會修改任何檔案。",
+      "targetReadOnly": "目前版本僅提供此目標的修改建議，不會直接修改 Skill 或專案指令檔案。",
+      "staleNotice": "分析完成後目標已發生變化，請先重新整理提案再核准。",
+      "sourceTitle": "選取的原始內容",
+      "sourceKind": "來源",
+      "turn": "Turn",
+      "round": "Round",
+      "item": "Item",
+      "rationaleTitle": "為什麼選擇此目標",
+      "futureUseTitle": "未來何時會發揮作用",
+      "previewTitle": "建議變更"
+    },
+    "errors": {
+      "workspaceRequired": "請先開啟工作區，再沉澱經驗。",
+      "createFailed": "無法建立經驗沉澱提案，請重試。"
+    }
+  },
   "errors": {
     "sendFailed": "傳送訊息失敗"
   },

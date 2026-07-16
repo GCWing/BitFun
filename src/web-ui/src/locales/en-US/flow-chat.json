@@ -2231,6 +2231,75 @@
       "title": "Turn ended abnormally"
     }
   },
+  "learningProposal": {
+    "selectionToolbarLabel": "Selected conversation actions",
+    "actions": {
+      "addToInput": "Add to input",
+      "capture": "Capture as learning",
+      "review": "Review",
+      "close": "Close",
+      "reject": "Reject",
+      "refresh": "Refresh analysis",
+      "requestReanalysis": "Request reanalysis",
+      "approve": "Approve and write"
+    },
+    "notification": {
+      "analyzingTitle": "Analyzing selected insight",
+      "analyzingMessage": "BitFun is deciding where this learning belongs.",
+      "readyTitle": "Learning proposal ready",
+      "readyMessage": "Review the suggested update for {{target}}.",
+      "staleTitle": "Learning proposal needs a refresh",
+      "staleMessage": "The target {{target}} changed after this proposal was created.",
+      "failedTitle": "Learning proposal needs attention",
+      "failedMessage": "Open the proposal to review the issue or analyze it again.",
+      "appliedMessage": "The approved learning was written.",
+      "rejectedMessage": "The learning proposal was rejected."
+    },
+    "target": {
+      "pending": "Determining target",
+      "kind": {
+        "memory": "Memory",
+        "skill": "Skill",
+        "agents_md": "Repository instructions",
+        "none": "No persistent target"
+      }
+    },
+    "status": {
+      "analyzing": "Analyzing",
+      "ready": "Ready for review",
+      "applying": "Applying",
+      "applied": "Applied",
+      "rejected": "Rejected",
+      "stale": "Needs refresh",
+      "failed": "Needs attention"
+    },
+    "sourceKind": {
+      "user_message": "User message",
+      "assistant_text": "Agent response",
+      "assistant_thinking": "Agent reasoning",
+      "tool": "Tool activity",
+      "unknown": "Conversation item"
+    },
+    "review": {
+      "title": "Review learning proposal",
+      "loading": "Loading the latest proposal...",
+      "remoteReadOnly": "Remote workspace proposals are read-only in this version. No file will be changed.",
+      "targetReadOnly": "This target is a suggestion only in this version. No Skill or repository instruction file will be changed.",
+      "staleNotice": "The target changed after analysis. Refresh this proposal before approving it.",
+      "sourceTitle": "Selected source",
+      "sourceKind": "Source",
+      "turn": "Turn",
+      "round": "Round",
+      "item": "Item",
+      "rationaleTitle": "Why this target",
+      "futureUseTitle": "When this will help",
+      "previewTitle": "Proposed change"
+    },
+    "errors": {
+      "workspaceRequired": "Open a workspace before capturing a learning.",
+      "createFailed": "Could not create the learning proposal. Try again."
+    }
+  },
   "errors": {
     "sendFailed": "Failed to send message"
   },

@@ -4,6 +4,7 @@
 //! the full BitFun core runtime assembly.
 
 pub mod canvas;
+pub mod learning_proposal;
 
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;

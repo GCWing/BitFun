@@ -393,6 +393,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
         data-testid="chat-user-message"
         data-turn-id={turnId}
+        data-learning-item-id={steeringStatus ? undefined : message.id}
+        data-learning-source-kind={steeringStatus ? undefined : 'user_message'}
         data-status={dialogTurn?.status || ''}
         data-failed={isFailed ? 'true' : 'false'}
       >
