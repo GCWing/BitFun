@@ -7651,6 +7651,27 @@ fn runtime_port_error_from_bitfun(error: BitFunError) -> bitfun_runtime_ports::P
     bitfun_runtime_ports::PortError::new(kind, message)
 }
 
+fn runtime_port_error_preserving_message(error: BitFunError) -> bitfun_runtime_ports::PortError {
+    let message = error.to_string();
+    let mut port_error = runtime_port_error_from_bitfun(error);
+    port_error.message = message;
+    port_error
+}
+
+fn user_input_port_error(
+    error: bitfun_agent_runtime::user_questions::UserInputSendError,
+) -> bitfun_runtime_ports::PortError {
+    let kind = match &error {
+        bitfun_agent_runtime::user_questions::UserInputSendError::MissingChannel { .. } => {
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        }
+        bitfun_agent_runtime::user_questions::UserInputSendError::ChannelClosed { .. } => {
+            bitfun_runtime_ports::PortErrorKind::Cancelled
+        }
+    };
+    bitfun_runtime_ports::PortError::new(kind, format!("Tool error: {error}"))
+}
+
 #[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinator {
     async fn list_sessions(
@@ -7755,7 +7776,7 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 &request.session_id,
             )
             .await
-            .map_err(runtime_port_error_from_bitfun)?;
+            .map_err(runtime_port_error_preserving_message)?;
 
         Ok(bitfun_agent_runtime::sdk::AgentSessionRestoreResult {
             session: bitfun_runtime_ports::AgentSessionSummary {
@@ -7768,6 +7789,36 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
             },
             state: session.state,
         })
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_agent_runtime::sdk::AgentInteractionResponsePort for ConversationCoordinator {
+    async fn confirm_tool(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentToolConfirmationRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.confirm_tool(&request.tool_id, request.updated_input)
+            .await
+            .map_err(runtime_port_error_preserving_message)
+    }
+
+    async fn reject_tool(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentToolRejectionRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.reject_tool(&request.tool_id, request.reason)
+            .await
+            .map_err(runtime_port_error_preserving_message)
+    }
+
+    async fn submit_user_answers(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentUserAnswersRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        crate::agentic::tools::user_input_manager::get_user_input_manager()
+            .send_answer(&request.tool_id, request.answers)
+            .map_err(user_input_port_error)
     }
 }
 
@@ -7914,7 +7965,7 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
         let messages = self
             .get_messages(&request.session_id)
             .await
-            .map_err(runtime_port_error_from_bitfun)?;
+            .map_err(runtime_port_error_preserving_message)?;
 
         let messages = messages
             .into_iter()
@@ -8068,9 +8119,9 @@ mod tests {
     use super::{
         background_subagent_delivery_metadata, merge_prepended_messages_for_turn,
         normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
-        resolve_agent_submission_turn_id, should_require_tool_confirmation,
-        turn_review_manifest_for_agent, validate_background_subagent_delivery,
-        ConversationCoordinator, SubagentExecutionRequest,
+        resolve_agent_submission_turn_id, runtime_port_error_preserving_message,
+        should_require_tool_confirmation, turn_review_manifest_for_agent,
+        validate_background_subagent_delivery, ConversationCoordinator, SubagentExecutionRequest,
     };
     use crate::agentic::agents::{CustomSubagent, CustomSubagentKind, UserContextPolicy};
     use crate::agentic::core::{
@@ -8103,6 +8154,104 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
+
+    #[test]
+    fn migrated_runtime_ports_preserve_existing_core_error_messages() {
+        let error = runtime_port_error_preserving_message(
+            crate::util::errors::BitFunError::Validation("invalid session id".to_string()),
+        );
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        assert_eq!(error.message, "Validation error: invalid session id");
+    }
+
+    #[tokio::test]
+    async fn interaction_response_port_uses_core_owners_and_typed_stale_errors() {
+        use bitfun_agent_runtime::sdk::{
+            AgentInteractionResponsePort, AgentToolConfirmationRequest, AgentToolRejectionRequest,
+            AgentUserAnswersRequest,
+        };
+
+        let (coordinator, _) = test_coordinator();
+        let answer_tool_id = format!("answer-{}", uuid::Uuid::new_v4());
+        let (sender, receiver) = tokio::sync::oneshot::channel::<
+            bitfun_agent_runtime::user_questions::UserInputResponse,
+        >();
+        crate::agentic::tools::user_input_manager::get_user_input_manager()
+            .register_channel(answer_tool_id.clone(), sender);
+
+        AgentInteractionResponsePort::submit_user_answers(
+            &coordinator,
+            AgentUserAnswersRequest {
+                tool_id: answer_tool_id.clone(),
+                answers: serde_json::json!({ "0": "continue" }),
+            },
+        )
+        .await
+        .expect("deliver user answers through the Core-owned channel");
+        assert_eq!(
+            receiver.await.expect("receive user answers").answers,
+            serde_json::json!({ "0": "continue" })
+        );
+
+        let stale_answer = AgentInteractionResponsePort::submit_user_answers(
+            &coordinator,
+            AgentUserAnswersRequest {
+                tool_id: answer_tool_id.clone(),
+                answers: serde_json::json!({ "0": "continue" }),
+            },
+        )
+        .await
+        .expect_err("consumed answer channel must be reported as stale");
+        assert_eq!(
+            stale_answer.kind,
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        );
+        assert_eq!(
+            stale_answer.message,
+            format!("Tool error: Waiting channel not found: {answer_tool_id}")
+        );
+
+        let missing_tool_id = format!("tool-{}", uuid::Uuid::new_v4());
+        let confirmation = AgentInteractionResponsePort::confirm_tool(
+            &coordinator,
+            AgentToolConfirmationRequest {
+                tool_id: missing_tool_id.clone(),
+                updated_input: Some(serde_json::json!({ "path": "updated.txt" })),
+            },
+        )
+        .await
+        .expect_err("missing confirmation task");
+        assert_eq!(
+            confirmation.kind,
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        );
+        assert_eq!(
+            confirmation.message,
+            format!("Not found: Tool task not found: {missing_tool_id}")
+        );
+
+        let rejection = AgentInteractionResponsePort::reject_tool(
+            &coordinator,
+            AgentToolRejectionRequest {
+                tool_id: missing_tool_id.clone(),
+                reason: "Use a read-only path".to_string(),
+            },
+        )
+        .await
+        .expect_err("missing rejection task");
+        assert_eq!(
+            rejection.kind,
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        );
+        assert_eq!(
+            rejection.message,
+            format!("Not found: Tool task not found: {missing_tool_id}")
+        );
+    }
     use tokio::sync::RwLock as TokioRwLock;
 
     fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {

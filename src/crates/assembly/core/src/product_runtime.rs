@@ -259,28 +259,6 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
-    pub async fn confirm_tool(
-        &self,
-        tool_id: &str,
-        updated_input: Option<serde_json::Value>,
-    ) -> BitFunResult<()> {
-        self.coordinator.confirm_tool(tool_id, updated_input).await
-    }
-
-    pub async fn reject_tool(&self, tool_id: &str, reason: String) -> BitFunResult<()> {
-        self.coordinator.reject_tool(tool_id, reason).await
-    }
-
-    pub fn submit_user_answers(
-        &self,
-        tool_id: &str,
-        answers: serde_json::Value,
-    ) -> BitFunResult<()> {
-        crate::agentic::tools::user_input_manager::get_user_input_manager()
-            .send_answer(tool_id, answers)
-            .map_err(BitFunError::tool)
-    }
-
     pub async fn branch_session_at_latest_turn(
         &self,
         workspace_path: &Path,

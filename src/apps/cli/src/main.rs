@@ -954,7 +954,7 @@ async fn run_interactive_with_session(
             remote_ssh_host: None,
         })
         .await
-        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        .map_err(|error| anyhow::anyhow!(error.into_message()))?;
     let agent_type = sessions
         .iter()
         .find(|session| session.session_id == session_id)

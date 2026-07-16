@@ -38,6 +38,14 @@ pub struct UserInputResponse {
     pub answers: Value,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum UserInputSendError {
+    #[error("Waiting channel not found: {tool_id}")]
+    MissingChannel { tool_id: String },
+    #[error("Channel closed, cannot send answer: {tool_id}")]
+    ChannelClosed { tool_id: String },
+}
+
 pub struct UserInputManager {
     channels: Arc<DashMap<String, oneshot::Sender<UserInputResponse>>>,
 }
@@ -60,20 +68,24 @@ impl UserInputManager {
         self.channels.insert(tool_id, sender);
     }
 
-    pub fn send_answer(&self, tool_id: &str, answers: Value) -> Result<(), String> {
+    pub fn send_answer(&self, tool_id: &str, answers: Value) -> Result<(), UserInputSendError> {
         info!("Sending user answer: tool_id={}", tool_id);
 
         if let Some((_, sender)) = self.channels.remove(tool_id) {
             let response = UserInputResponse { answers };
             sender
                 .send(response)
-                .map_err(|_| format!("Channel closed, cannot send answer: {}", tool_id))?;
+                .map_err(|_| UserInputSendError::ChannelClosed {
+                    tool_id: tool_id.to_string(),
+                })?;
             debug!("Answer sent: tool_id={}", tool_id);
             Ok(())
         } else {
-            let error_msg = format!("Waiting channel not found: {}", tool_id);
-            warn!("{}", error_msg);
-            Err(error_msg)
+            let error = UserInputSendError::MissingChannel {
+                tool_id: tool_id.to_string(),
+            };
+            warn!("{}", error);
+            Err(error)
         }
     }
 
@@ -249,7 +261,7 @@ fn format_result_for_assistant(questions: &[Question], answers: &Value) -> Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{UserInputManager, UserInputResponse};
+    use super::{UserInputManager, UserInputResponse, UserInputSendError};
     use serde_json::json;
 
     #[tokio::test]
@@ -278,6 +290,33 @@ mod tests {
         assert!(manager.cancel("tool-1"));
         assert!(receiver.await.is_err());
         assert!(!manager.cancel("tool-1"));
+    }
+
+    #[tokio::test]
+    async fn user_input_manager_distinguishes_missing_and_closed_channels() {
+        let manager = UserInputManager::new();
+        let missing = manager
+            .send_answer("missing-tool", json!({ "0": "yes" }))
+            .expect_err("missing channel");
+        assert_eq!(
+            missing,
+            UserInputSendError::MissingChannel {
+                tool_id: "missing-tool".to_string(),
+            }
+        );
+
+        let (sender, receiver) = tokio::sync::oneshot::channel::<UserInputResponse>();
+        manager.register_channel("closed-tool".to_string(), sender);
+        drop(receiver);
+        let closed = manager
+            .send_answer("closed-tool", json!({ "0": "yes" }))
+            .expect_err("closed channel");
+        assert_eq!(
+            closed,
+            UserInputSendError::ChannelClosed {
+                tool_id: "closed-tool".to_string(),
+            }
+        );
     }
 
     #[test]

@@ -6,7 +6,8 @@
 //! implementations until a reviewed port/provider migration proves equivalence.
 
 use bitfun_agent_runtime::sdk::{
-    AgentRuntime, AgentRuntimeBuilder, AgentSessionRestorePort, RuntimeError,
+    AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder, AgentSessionRestorePort,
+    RuntimeError,
 };
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
@@ -395,6 +396,7 @@ fn core_agent_runtime_builder(
     transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
     thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
+    interaction_response: Arc<dyn AgentInteractionResponsePort>,
 ) -> AgentRuntimeBuilder {
     let agent_registry: Arc<dyn bitfun_agent_runtime::sdk::RuntimeAgentRegistry> =
         crate::agentic::agents::get_agent_registry();
@@ -405,6 +407,7 @@ fn core_agent_runtime_builder(
         .with_session_transcript_reader(transcript_reader)
         .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
+        .with_interaction_response_port(interaction_response)
         .with_agent_registry(agent_registry)
 }
 
@@ -782,7 +785,8 @@ impl CoreServiceAgentRuntime {
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
-        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         core_agent_runtime_builder(
             submission,
             session_management,
@@ -790,6 +794,7 @@ impl CoreServiceAgentRuntime {
             transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .build()
         .map_err(|error| error.to_string())
@@ -806,7 +811,8 @@ impl CoreServiceAgentRuntime {
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
-        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
@@ -816,6 +822,7 @@ impl CoreServiceAgentRuntime {
             transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
@@ -834,7 +841,8 @@ impl CoreServiceAgentRuntime {
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
-        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
@@ -843,6 +851,7 @@ impl CoreServiceAgentRuntime {
             transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -859,7 +868,8 @@ impl CoreServiceAgentRuntime {
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
-        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -870,6 +880,7 @@ impl CoreServiceAgentRuntime {
             transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
@@ -889,7 +900,8 @@ impl CoreServiceAgentRuntime {
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
-        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -901,6 +913,7 @@ impl CoreServiceAgentRuntime {
             transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
@@ -919,10 +932,7 @@ impl CoreServiceAgentRuntime {
     }
 
     pub(crate) fn runtime_error_message(error: RuntimeError) -> String {
-        match error {
-            RuntimeError::Port(error) => error.message,
-            other => other.to_string(),
-        }
+        error.into_message()
     }
 }
 
@@ -1509,6 +1519,7 @@ impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
     fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String> {
         crate::agentic::tools::user_input_manager::get_user_input_manager()
             .send_answer(tool_id, answers)
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -1580,6 +1591,7 @@ mod tests {
         fn assert_runtime_ports<T>()
         where
             T: AgentSubmissionPort
+                + AgentInteractionResponsePort
                 + AgentSessionManagementPort
                 + AgentThreadGoalManagementPort
                 + AgentTurnCancellationPort

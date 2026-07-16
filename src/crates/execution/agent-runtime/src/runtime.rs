@@ -50,10 +50,22 @@ pub enum RuntimeError {
     MissingSessionTranscriptReader,
     #[error("agent thread goal management port is not registered")]
     MissingThreadGoalManagementPort,
+    #[error("agent interaction response port is not registered")]
+    MissingInteractionResponsePort,
     #[error("runtime event sink is not registered")]
     MissingEventSink,
     #[error(transparent)]
     Port(#[from] PortError),
+}
+
+impl RuntimeError {
+    /// Returns the provider message without prepending the structured port error kind.
+    pub fn into_message(self) -> String {
+        match self {
+            Self::Port(error) => error.message,
+            other => other.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -80,6 +92,41 @@ pub trait AgentSessionRestorePort: Send + Sync {
         &self,
         request: AgentSessionRestoreRequest,
     ) -> PortResult<AgentSessionRestoreResult>;
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Confirms a pending tool call, optionally replacing its input before execution.
+pub struct AgentToolConfirmationRequest {
+    pub tool_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_input: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Rejects a pending tool call with the user's reason.
+pub struct AgentToolRejectionRequest {
+    pub tool_id: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Delivers answers to a pending user-question tool call.
+pub struct AgentUserAnswersRequest {
+    pub tool_id: String,
+    pub answers: serde_json::Value,
+}
+
+#[async_trait::async_trait]
+/// Routes product responses to the existing tool and user-input owners.
+///
+/// Implementations do not own approval policy or interaction lifecycle state.
+pub trait AgentInteractionResponsePort: Send + Sync {
+    async fn confirm_tool(&self, request: AgentToolConfirmationRequest) -> PortResult<()>;
+    async fn reject_tool(&self, request: AgentToolRejectionRequest) -> PortResult<()>;
+    async fn submit_user_answers(&self, request: AgentUserAnswersRequest) -> PortResult<()>;
 }
 
 #[derive(Clone, Default)]
@@ -140,6 +187,7 @@ pub struct AgentRuntime {
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
+    interaction_response: Option<Arc<dyn AgentInteractionResponsePort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
@@ -203,6 +251,13 @@ impl std::fmt::Debug for AgentRuntime {
                     .map(|_| "<dyn AgentTurnCancellationPort>"),
             )
             .field(
+                "interaction_response",
+                &self
+                    .interaction_response
+                    .as_ref()
+                    .map(|_| "<dyn AgentInteractionResponsePort>"),
+            )
+            .field(
                 "services",
                 &self.services.as_ref().map(|_| "<RuntimeServices>"),
             )
@@ -254,6 +309,7 @@ pub struct AgentRuntimeBuilder {
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
+    interaction_response: Option<Arc<dyn AgentInteractionResponsePort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
@@ -320,6 +376,14 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_interaction_response_port(
+        mut self,
+        port: Arc<dyn AgentInteractionResponsePort>,
+    ) -> Self {
+        self.interaction_response = Some(port);
+        self
+    }
+
     pub fn with_services(mut self, services: RuntimeServices) -> Self {
         self.services = Some(services);
         self
@@ -365,6 +429,7 @@ impl AgentRuntimeBuilder {
             dialog_turn,
             lifecycle_delivery,
             cancellation,
+            interaction_response,
             services,
             event_stream,
             tool_registry,
@@ -387,6 +452,7 @@ impl AgentRuntimeBuilder {
             dialog_turn,
             lifecycle_delivery,
             cancellation,
+            interaction_response,
             services,
             event_stream,
             tool_registry,
@@ -504,6 +570,42 @@ impl AgentRuntime {
             .as_ref()
             .map(|registry| registry.tool_names())
             .unwrap_or_default()
+    }
+
+    pub async fn confirm_tool(
+        &self,
+        request: AgentToolConfirmationRequest,
+    ) -> Result<(), RuntimeError> {
+        self.interaction_response
+            .as_ref()
+            .ok_or(RuntimeError::MissingInteractionResponsePort)?
+            .confirm_tool(request)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn reject_tool(
+        &self,
+        request: AgentToolRejectionRequest,
+    ) -> Result<(), RuntimeError> {
+        self.interaction_response
+            .as_ref()
+            .ok_or(RuntimeError::MissingInteractionResponsePort)?
+            .reject_tool(request)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn submit_user_answers(
+        &self,
+        request: AgentUserAnswersRequest,
+    ) -> Result<(), RuntimeError> {
+        self.interaction_response
+            .as_ref()
+            .ok_or(RuntimeError::MissingInteractionResponsePort)?
+            .submit_user_answers(request)
+            .await?;
+        Ok(())
     }
 
     pub fn harness_provider_ids(&self) -> Vec<&str> {

@@ -440,7 +440,7 @@ pub async fn submit_user_answers(
             "Failed to send user answer: tool_id={}, error={}",
             tool_id, e
         );
-        e
+        e.to_string()
     })?;
 
     Ok(())

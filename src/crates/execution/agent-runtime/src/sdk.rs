@@ -40,10 +40,11 @@ pub use crate::post_call_hooks::{
     RuntimeHookRegistryBuildError,
 };
 pub use crate::runtime::{
-    AgentEventStream, AgentRunHandle, AgentRunRequest, AgentSessionRestorePort,
-    AgentSessionRestoreRequest, AgentSessionRestoreResult, RuntimeAgentRegistry,
-    RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
-    SessionSelector,
+    AgentEventStream, AgentInteractionResponsePort, AgentRunHandle, AgentRunRequest,
+    AgentSessionRestorePort, AgentSessionRestoreRequest, AgentSessionRestoreResult,
+    AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentUserAnswersRequest,
+    RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError,
+    RuntimeToolRegistry, SessionSelector,
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
@@ -148,6 +149,14 @@ impl AgentRuntimeBuilder {
 
     pub fn with_cancellation_port(mut self, port: Arc<dyn AgentTurnCancellationPort>) -> Self {
         self.inner = self.inner.with_cancellation_port(port);
+        self
+    }
+
+    pub fn with_interaction_response_port(
+        mut self,
+        port: Arc<dyn AgentInteractionResponsePort>,
+    ) -> Self {
+        self.inner = self.inner.with_interaction_response_port(port);
         self
     }
 
@@ -310,6 +319,27 @@ impl AgentRuntime {
         request: AgentTurnCancellationRequest,
     ) -> Result<AgentTurnCancellationResult, RuntimeError> {
         self.inner.cancel_turn(request).await
+    }
+
+    pub async fn confirm_tool(
+        &self,
+        request: AgentToolConfirmationRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.confirm_tool(request).await
+    }
+
+    pub async fn reject_tool(
+        &self,
+        request: AgentToolRejectionRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.reject_tool(request).await
+    }
+
+    pub async fn submit_user_answers(
+        &self,
+        request: AgentUserAnswersRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.submit_user_answers(request).await
     }
 
     pub async fn publish_event(&self, event: RuntimeEventEnvelope) -> Result<(), RuntimeError> {

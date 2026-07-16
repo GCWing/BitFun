@@ -234,14 +234,16 @@ pub(crate) async fn handle_session_action(
                     remote_connection_id: None,
                     remote_ssh_host: None,
                 })
-                .await?;
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
             let transcript = runtime
                 .agent_runtime()
                 .read_session_transcript(SessionTranscriptRequest {
                     session_id: session_id.clone(),
                     turn_id: None,
                 })
-                .await?;
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
             println!("Session Details\n");
             println!("Name: {}", restored.session.session_name);
@@ -279,7 +281,7 @@ pub(crate) async fn handle_session_action(
                     remote_ssh_host: None,
                 })
                 .await
-                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
             println!("Deleted session from current project: {}", id);
         }
 
@@ -346,7 +348,7 @@ async fn list_cli_sessions(
             remote_ssh_host: None,
         })
         .await
-        .map_err(|error| anyhow::anyhow!(error.to_string()))
+        .map_err(|error| anyhow::anyhow!(error.into_message()))
 }
 
 pub(crate) fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> {
