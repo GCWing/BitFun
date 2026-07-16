@@ -5,6 +5,7 @@
 
 pub mod canvas;
 pub mod tool_permissions;
+pub mod learning_proposal;
 
 #[cfg(feature = "external-sources")]
 pub mod external_integration_policy;

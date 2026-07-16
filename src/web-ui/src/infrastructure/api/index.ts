@@ -37,12 +37,14 @@ import { i18nAPI } from './service-api/I18nAPI';
 import { btwAPI } from './service-api/BtwAPI';
 import { editorAiAPI } from './service-api/EditorAiAPI';
 import { reviewPlatformAPI } from './service-api/ReviewPlatformAPI';
+import { learningProposalAPI } from './service-api/LearningProposalAPI';
 import { insightsApi } from './insightsApi';
 import { speechAPI } from './service-api/SpeechAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, speechAPI };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, learningProposalAPI, insightsApi, speechAPI };
 export * from './service-api/ReviewPlatformAPI';
+export * from './service-api/LearningProposalAPI';
 
 // Export types
 export type { GitRepoHistory };
@@ -73,6 +75,7 @@ export const bitfunAPI = {
   btw: btwAPI,
   editorAi: editorAiAPI,
   reviewPlatform: reviewPlatformAPI,
+  learningProposal: learningProposalAPI,
   insights: insightsApi,
   speech: speechAPI,
 };

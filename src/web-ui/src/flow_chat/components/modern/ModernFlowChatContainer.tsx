@@ -75,6 +75,7 @@ import {
 import {
   type BackgroundSubagentActivityItem,
 } from '../../utils/backgroundSubagentActivity';
+import { ConversationSelectionActions } from '@/features/learning-proposal';
 import './ModernFlowChatContainer.scss';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
 import { pendingPermissionToolCallIdsForSession } from './permissionRequestRouting';
@@ -1533,6 +1534,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
             onRespondBatch={respondPermissionBatch}
           />
         )}
+        <ConversationSelectionActions
+          scopeRef={chatScopeRef}
+          activeSession={activeSession}
+          fallbackWorkspacePath={workspacePath}
+        />
 
         <div
           className="modern-flowchat-container__messages"

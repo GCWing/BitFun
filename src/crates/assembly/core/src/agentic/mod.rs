@@ -35,6 +35,8 @@ pub mod round_preempt;
 // Image analysis module
 pub mod image_analysis;
 pub(crate) mod keyed_lock;
+#[cfg(feature = "product-domains")]
+pub mod learning_proposals;
 pub mod memories;
 pub(crate) mod permission_policy;
 
