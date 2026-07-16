@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.develop.opensource.ohpcd.bitfun",
     "vendor": "example",
-    "versionCode": 1000001,
-    "versionName": "1.0.1",
+    "versionCode": 1000002,
+    "versionName": "1.0.2",
     "buildVersion": "1",
     "icon": "$media:layered_image",
     "label": "$string:app_name"
