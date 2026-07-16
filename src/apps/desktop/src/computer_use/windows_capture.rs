@@ -202,7 +202,9 @@ fn screenshot_window_via_wgc(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
 /// `(bgra_pixels, width, height)`.
 unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32, i32)> {
     let mut rect = RECT::default();
-    GetWindowRect(hwnd, &mut rect).map_err(|e| {
+    // SAFETY: `rect` is a valid out-parameter and a stale/invalid HWND is
+    // reported by the Win32 API.
+    unsafe { GetWindowRect(hwnd, &mut rect) }.map_err(|e| {
         BitFunError::service(format!("screen-region fallback: GetWindowRect failed: {e}"))
     })?;
     // Under Per-Monitor V2 DPI awareness, GetWindowRect returns PHYSICAL pixels
@@ -216,21 +218,25 @@ unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32
             "screen-region fallback: window has zero/negative bounds: {w}x{h}"
         )));
     }
-    let screen_dc = GetDC(None); // NULL HWND -> desktop DC
-    let mem_dc = CreateCompatibleDC(Some(screen_dc));
-    let bitmap = CreateCompatibleBitmap(screen_dc, w, h);
-    let old_bitmap = SelectObject(mem_dc, bitmap.into());
-    let blt_ok = BitBlt(
-        mem_dc,
-        0,
-        0,
-        w,
-        h,
-        Some(screen_dc),
-        physical_left,
-        physical_top,
-        SRCCOPY,
-    );
+    // SAFETY: the DC and bitmap handles are created in this block, remain live
+    // through the copy, and are restored/released before the function returns.
+    let screen_dc = unsafe { GetDC(None) }; // NULL HWND -> desktop DC
+    let mem_dc = unsafe { CreateCompatibleDC(Some(screen_dc)) };
+    let bitmap = unsafe { CreateCompatibleBitmap(screen_dc, w, h) };
+    let old_bitmap = unsafe { SelectObject(mem_dc, bitmap.into()) };
+    let blt_ok = unsafe {
+        BitBlt(
+            mem_dc,
+            0,
+            0,
+            w,
+            h,
+            Some(screen_dc),
+            physical_left,
+            physical_top,
+            SRCCOPY,
+        )
+    };
     let mut bmi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
@@ -246,19 +252,23 @@ unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32
     };
     let pixel_count = (w * h) as usize;
     let mut pixels = vec![0u8; pixel_count * 4];
-    let ok = GetDIBits(
-        mem_dc,
-        bitmap,
-        0,
-        h as u32,
-        Some(pixels.as_mut_ptr() as *mut _),
-        &mut bmi,
-        DIB_RGB_COLORS,
-    );
-    SelectObject(mem_dc, old_bitmap);
-    let _ = DeleteObject(bitmap.into());
-    let _ = DeleteDC(mem_dc);
-    ReleaseDC(None, screen_dc);
+    let ok = unsafe {
+        GetDIBits(
+            mem_dc,
+            bitmap,
+            0,
+            h as u32,
+            Some(pixels.as_mut_ptr() as *mut _),
+            &mut bmi,
+            DIB_RGB_COLORS,
+        )
+    };
+    unsafe {
+        SelectObject(mem_dc, old_bitmap);
+        let _ = DeleteObject(bitmap.into());
+        let _ = DeleteDC(mem_dc);
+        ReleaseDC(None, screen_dc);
+    }
     if blt_ok.is_err() {
         return Err(BitFunError::service(format!(
             "screen-region fallback: BitBlt failed: {blt_ok:?}"
@@ -334,7 +344,8 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
     // client-sized buffer loses non-client chrome (e.g. VCL/SAL dialogs put the
     // bottom button strip outside the standard Win32 client area).
     let mut win_rect = RECT::default();
-    GetWindowRect(hwnd, &mut win_rect).map_err(|e| {
+    // SAFETY: `win_rect` is a valid out-parameter and `hwnd` was checked above.
+    unsafe { GetWindowRect(hwnd, &mut win_rect) }.map_err(|e| {
         BitFunError::service(format!(
             "screenshot_window_bytes: GetWindowRect failed: {e}"
         ))
@@ -349,17 +360,19 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
     origin_x = win_rect.left;
     origin_y = win_rect.top;
 
-    let screen_dc = GetWindowDC(Some(hwnd));
-    let mem_dc = CreateCompatibleDC(Some(screen_dc));
-    let bitmap = CreateCompatibleBitmap(screen_dc, w, h);
-    let old_bitmap = SelectObject(mem_dc, bitmap.into());
+    // SAFETY: the DC and bitmap handles are created here, remain live through
+    // the capture, and are restored/released immediately after `GetDIBits`.
+    let screen_dc = unsafe { GetWindowDC(Some(hwnd)) };
+    let mem_dc = unsafe { CreateCompatibleDC(Some(screen_dc)) };
+    let bitmap = unsafe { CreateCompatibleBitmap(screen_dc, w, h) };
+    let old_bitmap = unsafe { SelectObject(mem_dc, bitmap.into()) };
 
     // Primary: PrintWindow with PW_RENDERFULLCONTENT. If it refuses, BitBlt
     // straight from the window DC as a last resort (best-effort — a failure
     // here surfaces downstream via the mostly-black detection + fallback).
-    let pw_ok = PrintWindow(hwnd, mem_dc, PW_RENDERFULLCONTENT);
+    let pw_ok = unsafe { PrintWindow(hwnd, mem_dc, PW_RENDERFULLCONTENT) };
     if !pw_ok.as_bool() {
-        let _ = BitBlt(mem_dc, 0, 0, w, h, Some(screen_dc), 0, 0, SRCCOPY);
+        let _ = unsafe { BitBlt(mem_dc, 0, 0, w, h, Some(screen_dc), 0, 0, SRCCOPY) };
     }
 
     // DWM extended-frame bounds: strip the invisible drop-shadow margin that
@@ -367,12 +380,16 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
     // Best-effort — if the DWM call fails, keep the full-window bitmap as-is.
     let dwm_rect: Option<RECT> = {
         let mut r = RECT::default();
-        let hr = DwmGetWindowAttribute(
-            hwnd,
-            DWMWA_EXTENDED_FRAME_BOUNDS,
-            &mut r as *mut _ as *mut _,
-            std::mem::size_of::<RECT>() as u32,
-        );
+        // SAFETY: `r` is a live `RECT` out-buffer with the exact byte size
+        // required by `DWMWA_EXTENDED_FRAME_BOUNDS`.
+        let hr = unsafe {
+            DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                &mut r as *mut _ as *mut _,
+                std::mem::size_of::<RECT>() as u32,
+            )
+        };
         hr.ok().map(|_| r)
     };
 
@@ -392,20 +409,24 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
 
     let pixel_count = (w * h) as usize;
     let mut pixels = vec![0u8; pixel_count * 4];
-    let ok = GetDIBits(
-        mem_dc,
-        bitmap,
-        0,
-        h as u32,
-        Some(pixels.as_mut_ptr() as *mut _),
-        &mut bmi,
-        DIB_RGB_COLORS,
-    );
+    let ok = unsafe {
+        GetDIBits(
+            mem_dc,
+            bitmap,
+            0,
+            h as u32,
+            Some(pixels.as_mut_ptr() as *mut _),
+            &mut bmi,
+            DIB_RGB_COLORS,
+        )
+    };
 
-    SelectObject(mem_dc, old_bitmap);
-    let _ = DeleteObject(bitmap.into());
-    let _ = DeleteDC(mem_dc);
-    ReleaseDC(Some(hwnd), screen_dc);
+    unsafe {
+        SelectObject(mem_dc, old_bitmap);
+        let _ = DeleteObject(bitmap.into());
+        let _ = DeleteDC(mem_dc);
+        ReleaseDC(Some(hwnd), screen_dc);
+    }
 
     if ok == 0 {
         return Err(BitFunError::service(
@@ -439,7 +460,7 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
             });
         }
         let occluded = target_is_obscured(hwnd);
-        match screenshot_via_screen_region(hwnd) {
+        match unsafe { screenshot_via_screen_region(hwnd) } {
             Ok((alt_pixels, alt_w, alt_h)) => {
                 // Screen-region BitBlt captures the full GetWindowRect region
                 // (no DWM crop), so its origin is the raw window top-left.

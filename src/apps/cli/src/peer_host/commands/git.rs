@@ -12,9 +12,7 @@ pub(crate) async fn git_is_repository(args: &Value) -> Result<Value, String> {
     let is_repo = GitService::is_repository(&repository_path)
         .await
         .map_err(|e| {
-            tracing::error!(
-                "Failed to check Git repository: path={repository_path}, error={e}"
-            );
+            tracing::error!("Failed to check Git repository: path={repository_path}, error={e}");
             format!("Failed to check Git repository: {e}")
         })?;
     Ok(json!(is_repo))

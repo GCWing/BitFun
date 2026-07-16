@@ -3,9 +3,9 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
+use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
 use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
-use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent, ToolEventData};
 use tokio::sync::{broadcast, mpsc};
 
@@ -239,12 +239,9 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
     if let AgenticEvent::ToolEvent {
         session_id,
         turn_id,
-        tool_event:
-            ToolEventData::Started {
-                identity,
-                params,
-                ..
-            },
+        tool_event: ToolEventData::Started {
+            identity, params, ..
+        },
         ..
     } = &event
     {
@@ -284,9 +281,7 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
     {
         let terminal_task_call = match tool_event {
             ToolEventData::Completed {
-                identity,
-                result,
-                ..
+                identity, result, ..
             } if identity.effective_name() == "Task" => Some((
                 identity.tool_id.as_str(),
                 result
@@ -296,12 +291,11 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
                     .get("cancelled_background_tasks")
                     .and_then(serde_json::Value::as_u64),
             )),
-            ToolEventData::Failed {
-                identity, ..
+            ToolEventData::Failed { identity, .. } | ToolEventData::Cancelled { identity, .. }
+                if identity.effective_name() == "Task" =>
+            {
+                Some((identity.tool_id.as_str(), None, None))
             }
-            | ToolEventData::Cancelled {
-                identity, ..
-            } if identity.effective_name() == "Task" => Some((identity.tool_id.as_str(), None, None)),
             _ => None,
         };
         if let Some((tool_id, background_task_id, cancelled_background_tasks)) = terminal_task_call
@@ -322,9 +316,10 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
         ..
     } = &event
     {
-        state
-            .turns
-            .record_confirmation(&PeerTurnKey::new(session_id, turn_id), identity.tool_id.clone())?;
+        state.turns.record_confirmation(
+            &PeerTurnKey::new(session_id, turn_id),
+            identity.tool_id.clone(),
+        )?;
     }
 
     let Some(projected) = project_agentic_frontend_event(event) else {

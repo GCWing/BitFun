@@ -1,5 +1,5 @@
 //! Persistent plain-text transcripts for user-created terminal sessions.
-//! For terminals with shell integration, the remaining text is command output: prompt and command-input rendering are omitted. 
+//! For terminals with shell integration, the remaining text is command output: prompt and command-input rendering are omitted.
 //! Terminals without shell integration retain raw terminal text.
 
 use std::collections::HashMap;

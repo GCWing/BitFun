@@ -811,9 +811,7 @@ impl ExecMode {
                     } if event_turn_id == &turn_id => {
                         use bitfun_events::ToolEventData;
                         match tool_event {
-                            ToolEventData::ConfirmationNeeded {
-                                identity, ..
-                            } => {
+                            ToolEventData::ConfirmationNeeded { identity, .. } => {
                                 let tool_id = &identity.tool_id;
                                 let tool_name = identity.effective_name();
                                 if self.approval_mode.rejects_confirmation() {

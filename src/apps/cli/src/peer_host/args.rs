@@ -36,8 +36,8 @@ pub(crate) fn optional_bool(obj: &Value, camel: &str) -> Option<bool> {
 
 pub(crate) fn get_usize(obj: &Value, camel: &str) -> Result<usize, String> {
     let snake = camel_to_snake(camel);
-    let value = field(obj, camel, &snake)
-        .ok_or_else(|| format!("Missing or invalid '{camel}' field"))?;
+    let value =
+        field(obj, camel, &snake).ok_or_else(|| format!("Missing or invalid '{camel}' field"))?;
     value
         .as_u64()
         .map(|n| n as usize)
@@ -71,6 +71,9 @@ mod tests {
         let snake = json!({ "workspace_path": "/b" });
         assert_eq!(get_string(&camel, "workspacePath").unwrap(), "/a");
         assert_eq!(get_string(&snake, "workspacePath").unwrap(), "/b");
-        assert_eq!(optional_string(&camel, "workspacePath").as_deref(), Some("/a"));
+        assert_eq!(
+            optional_string(&camel, "workspacePath").as_deref(),
+            Some("/a")
+        );
     }
 }

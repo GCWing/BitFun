@@ -45,8 +45,9 @@ const MENU_BAR_SEARCH_MAX_VISITED: usize = 4_000;
 unsafe fn build_shortcuts_cache_request(
     automation: &IUIAutomation,
 ) -> BitFunResult<IUIAutomationCacheRequest> {
-    let cache_req = automation
-        .CreateCacheRequest()
+    // SAFETY: `automation` is a live UI Automation COM interface and every
+    // property, pattern, and scope identifier below is a documented UIA value.
+    let cache_req = unsafe { automation.CreateCacheRequest() }
         .map_err(|e| BitFunError::tool(format!("UI Automation CreateCacheRequest: {}.", e)))?;
     for prop in [
         UIA_ControlTypePropertyId,
@@ -54,10 +55,10 @@ unsafe fn build_shortcuts_cache_request(
         UIA_AcceleratorKeyPropertyId,
         UIA_IsEnabledPropertyId,
     ] {
-        let _ = cache_req.AddProperty(prop);
+        let _ = unsafe { cache_req.AddProperty(prop) };
     }
-    let _ = cache_req.AddPattern(UIA_TogglePatternId);
-    let _ = cache_req.SetTreeScope(TreeScope_Subtree);
+    let _ = unsafe { cache_req.AddPattern(UIA_TogglePatternId) };
+    let _ = unsafe { cache_req.SetTreeScope(TreeScope_Subtree) };
     Ok(cache_req)
 }
 

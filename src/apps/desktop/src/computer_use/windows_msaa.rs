@@ -115,40 +115,50 @@ unsafe fn walk_bounded(
     max_depth: usize,
 ) -> BitFunResult<Vec<UiaNode>> {
     // BitFun is a Tauri GUI app; match the UIA path's apartment threading.
-    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    // SAFETY: initializes COM for the current thread; the result is intentionally
+    // ignored because an already initialized apartment is acceptable here.
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
 
     let hwnd_win = HWND(hwnd as *mut _);
     let mut raw_root: *mut std::ffi::c_void = null_mut();
     // `AccessibleObjectFromWindow` returns the IAccessible for the window's
     // client area (OBJID_CLIENT) via the IID we pass.
     let iid = IAccessible::IID;
-    let res = AccessibleObjectFromWindow(
-        hwnd_win,
-        OBJID_CLIENT,
-        &iid,
-        &mut raw_root as *mut _ as *mut _,
-    );
+    // SAFETY: `raw_root` is a valid out-pointer for the requested `IAccessible`
+    // IID. The API owns initialization and reports invalid HWNDs as errors.
+    let res = unsafe {
+        AccessibleObjectFromWindow(
+            hwnd_win,
+            OBJID_CLIENT,
+            &iid,
+            &mut raw_root as *mut _ as *mut _,
+        )
+    };
     if res.is_err() || raw_root.is_null() {
         return Err(BitFunError::tool(format!(
             "MSAA AccessibleObjectFromWindow failed for hwnd 0x{hwnd:x}: {res:?}."
         )));
     }
-    let root: IAccessible = IAccessible::from_raw(raw_root);
+    // SAFETY: success returned a non-null COM pointer for exactly
+    // `IAccessible::IID`; ownership is transferred into the interface wrapper.
+    let root: IAccessible = unsafe { IAccessible::from_raw(raw_root) };
 
     let mut nodes: Vec<UiaNode> = Vec::new();
     let mut counter = 0usize;
     let mut total = 0usize;
 
-    walk(
-        &root,
-        0,
-        None,
-        &mut nodes,
-        &mut counter,
-        &mut total,
-        max_depth,
-        max_total,
-    );
+    unsafe {
+        walk(
+            &root,
+            0,
+            None,
+            &mut nodes,
+            &mut counter,
+            &mut total,
+            max_depth,
+            max_total,
+        )
+    };
 
     log::debug!(
         "MSAA walk for hwnd 0x{hwnd:x} produced {} nodes ({} actionable).",
@@ -215,20 +225,19 @@ unsafe fn walk(
     }
     *total += 1;
 
-    let self_var = child_id_variant(CHILDID_SELF);
+    // SAFETY: constructs the documented `VT_I4` representation used by MSAA
+    // for `CHILDID_SELF` and the child indices below.
+    let self_var = unsafe { child_id_variant(CHILDID_SELF) };
 
     // Properties — each call wrapped to swallow per-element COM errors.
-    let role_int: Option<i32> = acc
-        .get_accRole(&self_var)
+    let role_int: Option<i32> = unsafe { acc.get_accRole(&self_var) }
         .ok()
-        .and_then(|v| variant_to_i32(&v));
-    let name: Option<String> = acc
-        .get_accName(&self_var)
+        .and_then(|v| unsafe { variant_to_i32(&v) });
+    let name: Option<String> = unsafe { acc.get_accName(&self_var) }
         .ok()
         .map(|b| b.to_string())
         .filter(|s| !s.trim().is_empty());
-    let default_action: Option<String> = acc
-        .get_accDefaultAction(&self_var)
+    let default_action: Option<String> = unsafe { acc.get_accDefaultAction(&self_var) }
         .ok()
         .map(|b| b.to_string())
         .filter(|s| !s.trim().is_empty());
@@ -239,9 +248,7 @@ unsafe fn walk(
         let mut t = 0i32;
         let mut w = 0i32;
         let mut h = 0i32;
-        if acc
-            .accLocation(&mut l, &mut t, &mut w, &mut h, &self_var)
-            .is_ok()
+        if unsafe { acc.accLocation(&mut l, &mut t, &mut w, &mut h, &self_var) }.is_ok()
             && w > 0
             && h > 0
         {
@@ -321,22 +328,24 @@ unsafe fn walk(
         nodes.push(node);
 
         // Recurse via accChildCount + get_accChild.
-        let child_count = acc.accChildCount().unwrap_or(0);
+        let child_count = unsafe { acc.accChildCount() }.unwrap_or(0);
         for i in 1..=child_count {
-            let child_var = child_id_variant(i);
+            let child_var = unsafe { child_id_variant(i) };
             // accChild returns IDispatch — query for IAccessible.
-            if let Ok(child_disp) = acc.get_accChild(&child_var) {
+            if let Ok(child_disp) = unsafe { acc.get_accChild(&child_var) } {
                 if let Ok(child_acc) = child_disp.cast::<IAccessible>() {
-                    walk(
-                        &child_acc,
-                        depth + 1,
-                        next_parent,
-                        nodes,
-                        counter,
-                        total,
-                        max_depth,
-                        max_total,
-                    );
+                    unsafe {
+                        walk(
+                            &child_acc,
+                            depth + 1,
+                            next_parent,
+                            nodes,
+                            counter,
+                            total,
+                            max_depth,
+                            max_total,
+                        )
+                    };
                 }
             }
         }
@@ -345,21 +354,23 @@ unsafe fn walk(
 
     // Non-emitting path (filtered out by !is_actionable && !has_content): still
     // recurse, propagating the same parent_index.
-    let child_count = acc.accChildCount().unwrap_or(0);
+    let child_count = unsafe { acc.accChildCount() }.unwrap_or(0);
     for i in 1..=child_count {
-        let child_var = child_id_variant(i);
-        if let Ok(child_disp) = acc.get_accChild(&child_var) {
+        let child_var = unsafe { child_id_variant(i) };
+        if let Ok(child_disp) = unsafe { acc.get_accChild(&child_var) } {
             if let Ok(child_acc) = child_disp.cast::<IAccessible>() {
-                walk(
-                    &child_acc,
-                    depth + 1,
-                    parent_index,
-                    nodes,
-                    counter,
-                    total,
-                    max_depth,
-                    max_total,
-                );
+                unsafe {
+                    walk(
+                        &child_acc,
+                        depth + 1,
+                        parent_index,
+                        nodes,
+                        counter,
+                        total,
+                        max_depth,
+                        max_total,
+                    )
+                };
             }
         }
     }
@@ -374,18 +385,26 @@ unsafe fn walk(
 /// `ManuallyDrop` is dereferenced explicitly.
 unsafe fn child_id_variant(id: i32) -> VARIANT {
     let mut var = VARIANT::default();
-    (*var.Anonymous.Anonymous).vt = VT_I4;
-    (*var.Anonymous.Anonymous).Anonymous.lVal = id;
+    // SAFETY: `VARIANT::default` is initialized, and setting `vt = VT_I4`
+    // selects the `lVal` union member written immediately afterward.
+    unsafe {
+        (*var.Anonymous.Anonymous).vt = VT_I4;
+        (*var.Anonymous.Anonymous).Anonymous.lVal = id;
+    }
     var
 }
 
 /// Read a `VT_I4` out of a VARIANT. `get_accRole` returns `VT_I4` in practice
 /// (custom roles may arrive as `VT_BSTR`, which we map to `None` = unknown).
 unsafe fn variant_to_i32(v: &VARIANT) -> Option<i32> {
-    if (*v.Anonymous.Anonymous).vt == VT_I4 {
-        Some((*v.Anonymous.Anonymous).Anonymous.lVal)
-    } else {
-        None
+    // SAFETY: the `lVal` union member is read only after the discriminant is
+    // confirmed to be `VT_I4`.
+    unsafe {
+        if (*v.Anonymous.Anonymous).vt == VT_I4 {
+            Some((*v.Anonymous.Anonymous).Anonymous.lVal)
+        } else {
+            None
+        }
     }
 }
 

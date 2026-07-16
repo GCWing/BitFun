@@ -440,12 +440,16 @@ fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
 /// user. Best-effort; returns whether the attribute was set.
 unsafe fn set_cloak(h: HWND, on: bool) -> bool {
     let v: BOOL = if on { TRUE } else { FALSE };
-    DwmSetWindowAttribute(
-        h,
-        DWMWA_CLOAK,
-        &v as *const _ as *const c_void,
-        std::mem::size_of::<BOOL>() as u32,
-    )
+    // SAFETY: `v` is a live `BOOL` whose pointer and byte length match the
+    // `DWMWA_CLOAK` contract; an invalid HWND is reported as an API error.
+    unsafe {
+        DwmSetWindowAttribute(
+            h,
+            DWMWA_CLOAK,
+            &v as *const _ as *const c_void,
+            std::mem::size_of::<BOOL>() as u32,
+        )
+    }
     .is_ok()
 }
 
@@ -454,24 +458,26 @@ unsafe fn set_cloak(h: HWND, on: bool) -> bool {
 /// honored even on a foreground-locked session without UIAccess. Single attach,
 /// no retry loop — bounded. Returns whether `target` actually became foreground.
 unsafe fn force_foreground_attached(target: HWND) -> bool {
-    let cur = GetForegroundWindow();
+    // SAFETY: all values are opaque Win32 handles/thread ids obtained from the
+    // same APIs; every successful attach is paired with a detach below.
+    let cur = unsafe { GetForegroundWindow() };
     if cur == target {
         return true;
     }
-    let my_tid = GetCurrentThreadId();
+    let my_tid = unsafe { GetCurrentThreadId() };
     let mut pid = 0u32;
-    let cur_tid = GetWindowThreadProcessId(cur, Some(&mut pid));
+    let cur_tid = unsafe { GetWindowThreadProcessId(cur, Some(&mut pid)) };
     let attached = cur_tid != 0 && cur_tid != my_tid;
     if attached {
-        let _ = AttachThreadInput(my_tid, cur_tid, 1);
+        let _ = unsafe { AttachThreadInput(my_tid, cur_tid, 1) };
     }
     // `SetForegroundWindow` may return BOOL (older bindings) or `Result`
     // (windows 0.61); `let _ =` discards either without a must_use warning.
-    let _ = SetForegroundWindow(target);
+    let _ = unsafe { SetForegroundWindow(target) };
     if attached {
-        let _ = AttachThreadInput(my_tid, cur_tid, 0);
+        let _ = unsafe { AttachThreadInput(my_tid, cur_tid, 0) };
     }
-    GetForegroundWindow() == target
+    (unsafe { GetForegroundWindow() }) == target
 }
 
 /// Type `text` into a **background** target via real `SendInput` Unicode
@@ -576,51 +582,60 @@ pub(super) fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) ->
 /// handle) with `TOKEN_QUERY` access for `OpenProcessToken` to succeed.
 unsafe fn process_integrity_rid(process: Handle) -> Option<u32> {
     let mut token: Handle = std::ptr::null_mut();
-    if OpenProcessToken(process, TOKEN_QUERY, &mut token) == 0 {
+    // SAFETY: the caller supplies a process handle valid for `TOKEN_QUERY`;
+    // `token` is a live out-pointer for the duration of the call.
+    if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) } == 0 {
         return None;
     }
     // Probe the required buffer size first (the first call always fails with
     // ERROR_INSUFFICIENT_BUFFER and writes `needed`).
     let mut needed: u32 = 0;
-    GetTokenInformation(
-        token,
-        TOKEN_INTEGRITY_LEVEL_CLASS,
-        std::ptr::null_mut(),
-        0,
-        &mut needed,
-    );
+    unsafe {
+        GetTokenInformation(
+            token,
+            TOKEN_INTEGRITY_LEVEL_CLASS,
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
+    };
     if needed == 0 {
-        CloseHandle(token);
+        unsafe { CloseHandle(token) };
         return None;
     }
     let mut buf = vec![0u8; needed as usize];
-    let ok = GetTokenInformation(
-        token,
-        TOKEN_INTEGRITY_LEVEL_CLASS,
-        buf.as_mut_ptr(),
-        needed,
-        &mut needed,
-    ) != 0;
-    CloseHandle(token);
+    let ok = unsafe {
+        GetTokenInformation(
+            token,
+            TOKEN_INTEGRITY_LEVEL_CLASS,
+            buf.as_mut_ptr(),
+            needed,
+            &mut needed,
+        )
+    } != 0;
+    unsafe { CloseHandle(token) };
     if !ok {
         return None;
     }
     // The buffer holds a TOKEN_MANDATORY_LABEL { SID_AND_ATTRIBUTES { Sid, Attr } }.
-    let tml = &*(buf.as_ptr() as *const TOKEN_MANDATORY_LABEL);
+    // SAFETY: a successful `GetTokenInformation(TokenIntegrityLevel)` fills
+    // `buf` with a `TOKEN_MANDATORY_LABEL` and a SID owned by that buffer.
+    // `read_unaligned` avoids assuming that `Vec<u8>` has the struct's alignment.
+    let tml = unsafe { (buf.as_ptr() as *const TOKEN_MANDATORY_LABEL).read_unaligned() };
     let sid = tml.label.sid as *const c_void;
-    let count_ptr = GetSidSubAuthorityCount(sid);
+    let count_ptr = unsafe { GetSidSubAuthorityCount(sid) };
     if count_ptr.is_null() {
         return None;
     }
-    let count = *count_ptr;
+    let count = unsafe { *count_ptr };
     if count == 0 {
         return None;
     }
-    let rid_ptr = GetSidSubAuthority(sid, (count - 1) as u32);
+    let rid_ptr = unsafe { GetSidSubAuthority(sid, (count - 1) as u32) };
     if rid_ptr.is_null() {
         return None;
     }
-    Some(*rid_ptr)
+    Some(unsafe { *rid_ptr })
 }
 
 /// If posting `msg` from the current process to `hwnd` would be silently
@@ -897,11 +912,13 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
     if ev.is_empty() {
         return Ok(());
     }
-    let sent = SendInput(
-        ev.len() as u32,
-        ev.as_ptr(),
-        std::mem::size_of::<Input>() as i32,
-    );
+    let sent = unsafe {
+        SendInput(
+            ev.len() as u32,
+            ev.as_ptr(),
+            std::mem::size_of::<Input>() as i32,
+        )
+    };
     if sent as usize != ev.len() {
         return Err(BitFunError::service(format!(
             "SendInput typed only {sent} of {} key events",
@@ -919,24 +936,28 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
 unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
     let mut ev: Vec<Input> = Vec::with_capacity(modifiers.len() * 2 + 2);
     for &m in modifiers {
-        let m_scan = MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC);
+        // SAFETY: `MapVirtualKeyW` accepts every virtual-key value and has no
+        // pointer or lifetime requirements.
+        let m_scan = unsafe { MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC) };
         ev.push(vk_event(m, m_scan, false));
     }
-    let scan = MapVirtualKeyW(keycode as u32, MAPVK_VK_TO_VSC);
+    let scan = unsafe { MapVirtualKeyW(keycode as u32, MAPVK_VK_TO_VSC) };
     ev.push(vk_event(keycode, scan, false));
     ev.push(vk_event(keycode, scan, true));
     for &m in modifiers.iter().rev() {
-        let m_scan = MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC);
+        let m_scan = unsafe { MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC) };
         ev.push(vk_event(m, m_scan, true));
     }
     if ev.is_empty() {
         return Ok(());
     }
-    let sent = SendInput(
-        ev.len() as u32,
-        ev.as_ptr(),
-        std::mem::size_of::<Input>() as i32,
-    );
+    let sent = unsafe {
+        SendInput(
+            ev.len() as u32,
+            ev.as_ptr(),
+            std::mem::size_of::<Input>() as i32,
+        )
+    };
     if sent as usize != ev.len() {
         return Err(BitFunError::service(format!(
             "SendInput sent only {sent} of {} key events",

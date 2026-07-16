@@ -103,22 +103,12 @@ unsafe fn create_d3d11_device() -> BitFunResult<(ID3D11Device, ID3D11DeviceConte
     let mut context: Option<ID3D11DeviceContext> = None;
     let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
-    if D3D11CreateDevice(
-        None,
-        D3D_DRIVER_TYPE_HARDWARE,
-        HMODULE::default(),
-        flags,
-        None,
-        D3D11_SDK_VERSION,
-        Some(&mut device),
-        None,
-        Some(&mut context),
-    )
-    .is_err()
-    {
+    // SAFETY: output pointers reference live `Option` slots, and all remaining
+    // arguments are documented D3D11 constants or null/default handles.
+    if unsafe {
         D3D11CreateDevice(
             None,
-            D3D_DRIVER_TYPE_WARP,
+            D3D_DRIVER_TYPE_HARDWARE,
             HMODULE::default(),
             flags,
             None,
@@ -127,6 +117,22 @@ unsafe fn create_d3d11_device() -> BitFunResult<(ID3D11Device, ID3D11DeviceConte
             None,
             Some(&mut context),
         )
+    }
+    .is_err()
+    {
+        unsafe {
+            D3D11CreateDevice(
+                None,
+                D3D_DRIVER_TYPE_WARP,
+                HMODULE::default(),
+                flags,
+                None,
+                D3D11_SDK_VERSION,
+                Some(&mut device),
+                None,
+                Some(&mut context),
+            )
+        }
         .map_err(|e| BitFunError::service(format!("D3D11CreateDevice (WARP): {e}")))?;
     }
 
@@ -143,7 +149,9 @@ unsafe fn create_winrt_d3d_device(d3d_device: &ID3D11Device) -> BitFunResult<IDi
     let dxgi_device: IDXGIDevice = d3d_device
         .cast()
         .map_err(|e| BitFunError::service(format!("IDXGIDevice cast: {e}")))?;
-    let inspectable = CreateDirect3D11DeviceFromDXGIDevice(&dxgi_device)
+    // SAFETY: `dxgi_device` is a live COM interface obtained from the supplied
+    // D3D11 device and remains alive through the conversion call.
+    let inspectable = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi_device) }
         .map_err(|e| BitFunError::service(format!("CreateDirect3D11DeviceFromDXGIDevice: {e}")))?;
     inspectable
         .cast()
@@ -161,12 +169,13 @@ unsafe fn copy_frame_to_bgra(
     let access: IDirect3DDxgiInterfaceAccess = surface
         .cast()
         .map_err(|e| BitFunError::service(format!("IDirect3DDxgiInterfaceAccess cast: {e}")))?;
-    let src_texture: ID3D11Texture2D = access
-        .GetInterface::<ID3D11Texture2D>()
+    // SAFETY: `access` is the live DXGI interface for `surface`; the requested
+    // interface type matches the WGC frame surface contract.
+    let src_texture: ID3D11Texture2D = unsafe { access.GetInterface::<ID3D11Texture2D>() }
         .map_err(|e| BitFunError::service(format!("GetInterface ID3D11Texture2D: {e}")))?;
 
     let mut desc = D3D11_TEXTURE2D_DESC::default();
-    src_texture.GetDesc(&mut desc);
+    unsafe { src_texture.GetDesc(&mut desc) };
     let width = desc.Width;
     let height = desc.Height;
     if width == 0 || height == 0 {
@@ -188,31 +197,34 @@ unsafe fn copy_frame_to_bgra(
         MiscFlags: 0,
     };
     let mut staging: Option<ID3D11Texture2D> = None;
-    d3d_device
-        .CreateTexture2D(&staging_desc, None, Some(&mut staging))
+    // SAFETY: `staging_desc` is fully initialized and `staging` is a live
+    // output slot for the newly created texture interface.
+    unsafe { d3d_device.CreateTexture2D(&staging_desc, None, Some(&mut staging)) }
         .map_err(|e| BitFunError::service(format!("CreateTexture2D staging: {e}")))?;
     let staging = staging.ok_or_else(|| {
         BitFunError::service("CreateTexture2D returned null staging texture".to_string())
     })?;
 
-    d3d_context.CopyResource(&staging, &src_texture);
+    unsafe { d3d_context.CopyResource(&staging, &src_texture) };
 
     let mut mapped = windows::Win32::Graphics::Direct3D11::D3D11_MAPPED_SUBRESOURCE::default();
-    d3d_context
-        .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+    unsafe { d3d_context.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped)) }
         .map_err(|e| BitFunError::service(format!("Map staging texture: {e}")))?;
 
     let row_pitch = mapped.RowPitch as usize;
     let width_bytes = (width as usize) * 4;
     let mut pixels = vec![0u8; (width as usize) * (height as usize) * 4];
     let src = mapped.pData as *const u8;
+    // SAFETY: a successful `Map` exposes `height` rows at `pData`, each with
+    // at least `width * 4` readable bytes according to `RowPitch`. Destination
+    // rows are disjoint slices of the fully allocated `pixels` buffer.
     for y in 0..height as usize {
-        let src_row = src.add(y * row_pitch);
-        let dst_row = pixels.as_mut_ptr().add(y * width_bytes);
-        std::ptr::copy_nonoverlapping(src_row, dst_row, width_bytes);
+        let src_row = unsafe { src.add(y * row_pitch) };
+        let dst_row = unsafe { pixels.as_mut_ptr().add(y * width_bytes) };
+        unsafe { std::ptr::copy_nonoverlapping(src_row, dst_row, width_bytes) };
     }
 
-    d3d_context.Unmap(&staging, 0);
+    unsafe { d3d_context.Unmap(&staging, 0) };
 
     Ok((pixels, width, height))
 }

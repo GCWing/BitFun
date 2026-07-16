@@ -172,14 +172,14 @@ impl ICoreWebView2WebMessageReceivedEventHandler_Impl for WebMessageReceivedHand
 
 unsafe fn register_message_handler(webview: &ICoreWebView2) -> Result<(), WebDriverErrorResponse> {
     let handler: ICoreWebView2WebMessageReceivedEventHandler = WebMessageReceivedHandler.into();
-    let mut token = std::mem::zeroed();
-    webview
-        .add_WebMessageReceived(&handler, &raw mut token)
-        .map_err(|error| {
-            WebDriverErrorResponse::unknown_error(format!(
-                "Failed to register WebView2 message handler: {error:?}"
-            ))
-        })?;
+    // SAFETY: `EventRegistrationToken` is an FFI value initialized by WebView2,
+    // and both COM interface references remain valid for the duration of the call.
+    let mut token = unsafe { std::mem::zeroed() };
+    unsafe { webview.add_WebMessageReceived(&handler, &raw mut token) }.map_err(|error| {
+        WebDriverErrorResponse::unknown_error(format!(
+            "Failed to register WebView2 message handler: {error:?}"
+        ))
+    })?;
 
     std::mem::forget(handler);
     Ok(())

@@ -794,10 +794,7 @@ impl ChatMode {
                             );
                             continue;
                         }
-                        if let ToolEventData::ConfirmationNeeded {
-                            identity, ..
-                        } = tool_event
-                        {
+                        if let ToolEventData::ConfirmationNeeded { identity, .. } = tool_event {
                             if self
                                 .runtime
                                 .approval_controller()

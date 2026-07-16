@@ -96,12 +96,14 @@ pub(super) fn find_top_window_for_pid(pid: u32) -> Option<HWND> {
         found: Option<isize>,
     }
     unsafe extern "system" fn cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let state = &mut *(lparam.0 as *mut FindState);
-        if IsWindowVisible(hwnd).0 == 0 || IsIconic(hwnd).0 != 0 {
+        // SAFETY: `lparam` is the unique `FindState` pointer supplied to the
+        // synchronous `EnumWindows` call below and remains live for the callback.
+        let state = unsafe { &mut *(lparam.0 as *mut FindState) };
+        if unsafe { IsWindowVisible(hwnd) }.0 == 0 || unsafe { IsIconic(hwnd) }.0 != 0 {
             return TRUE;
         }
         let mut pid: u32 = 0;
-        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
         if pid == state.target_pid {
             state.found = Some(hwnd.0 as isize);
             return windows::Win32::Foundation::FALSE;
@@ -131,19 +133,21 @@ fn enumerate_windows() -> Vec<WindowEntry> {
 }
 
 unsafe extern "system" fn enum_windows_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    let state = &*(lparam.0 as *const Mutex<EnumState>);
+    // SAFETY: `lparam` points to the live `Mutex<EnumState>` supplied to the
+    // synchronous `EnumWindows` call in `enumerate_windows`.
+    let state = unsafe { &*(lparam.0 as *const Mutex<EnumState>) };
 
     // Skip invisible or minimized windows.
-    if IsWindowVisible(hwnd).0 == 0 || IsIconic(hwnd).0 != 0 {
+    if unsafe { IsWindowVisible(hwnd) }.0 == 0 || unsafe { IsIconic(hwnd) }.0 != 0 {
         return TRUE;
     }
 
-    let title_len = GetWindowTextLengthW(hwnd);
+    let title_len = unsafe { GetWindowTextLengthW(hwnd) };
     if title_len == 0 {
         return TRUE;
     }
     let mut buf = vec![0u16; (title_len + 1) as usize];
-    let n = GetWindowTextW(hwnd, &mut buf);
+    let n = unsafe { GetWindowTextW(hwnd, &mut buf) };
     let title = {
         let len = (n as usize).min(buf.len());
         String::from_utf16_lossy(&buf[..len])
@@ -153,7 +157,7 @@ unsafe extern "system" fn enum_windows_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
     }
 
     let mut pid: u32 = 0;
-    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == 0 {
         return TRUE;
     }

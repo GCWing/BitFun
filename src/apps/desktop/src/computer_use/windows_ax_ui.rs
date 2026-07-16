@@ -140,8 +140,9 @@ fn localized_control_type_string(elem: &IUIAutomationElement) -> String {
 unsafe fn build_cache_request(
     automation: &IUIAutomation,
 ) -> BitFunResult<IUIAutomationCacheRequest> {
-    let cache_req = automation
-        .CreateCacheRequest()
+    // SAFETY: `automation` is a live UI Automation COM interface and all ids
+    // supplied below are documented properties, patterns, scopes, or filters.
+    let cache_req = unsafe { automation.CreateCacheRequest() }
         .map_err(|e| BitFunError::tool(format!("UI Automation CreateCacheRequest: {}.", e)))?;
 
     // Properties to pre-fetch (typed cached accessors read these).
@@ -154,7 +155,7 @@ unsafe fn build_cache_request(
         UIA_IsOffscreenPropertyId,
         UIA_BoundingRectanglePropertyId,
     ] {
-        let _ = cache_req.AddProperty(prop);
+        let _ = unsafe { cache_req.AddProperty(prop) };
     }
 
     // Patterns to pre-fetch (for action detection + Value read).
@@ -168,16 +169,16 @@ unsafe fn build_cache_request(
         UIA_TextPatternId,
         UIA_ScrollPatternId,
     ] {
-        let _ = cache_req.AddPattern(pat);
+        let _ = unsafe { cache_req.AddPattern(pat) };
     }
 
     // Fetch the entire subtree in one bulk RPC.
-    let _ = cache_req.SetTreeScope(TreeScope_Subtree);
+    let _ = unsafe { cache_req.SetTreeScope(TreeScope_Subtree) };
 
     // Control-view filter (same set ControlViewWalker would walk) — drops
     // decorative / raw-view nodes that only add noise.
-    if let Ok(ctrl_cond) = automation.ControlViewCondition() {
-        let _ = cache_req.SetTreeFilter(&ctrl_cond);
+    if let Ok(ctrl_cond) = unsafe { automation.ControlViewCondition() } {
+        let _ = unsafe { cache_req.SetTreeFilter(&ctrl_cond) };
     }
 
     Ok(cache_req)
@@ -193,7 +194,9 @@ pub(crate) unsafe fn build_updated_cache_with_retry(
 ) -> BitFunResult<IUIAutomationElement> {
     let mut attempt = 0u32;
     loop {
-        match uncached.BuildUpdatedCache(cache_req) {
+        // SAFETY: both COM interfaces are live for the call and `cache_req`
+        // was constructed by the same UI Automation instance.
+        match unsafe { uncached.BuildUpdatedCache(cache_req) } {
             Ok(e) => return Ok(e),
             Err(e) => {
                 attempt += 1;
@@ -422,39 +425,45 @@ unsafe fn walk_tree_full(
     max_elements: usize,
     max_depth: usize,
 ) -> BitFunResult<(String, Vec<UiaNode>)> {
-    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    // SAFETY: initializes COM for the current thread and creates the documented
+    // in-process UI Automation class; failures are handled below.
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
 
-    let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
-        .map_err(|e| {
+    let automation: IUIAutomation =
+        unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }.map_err(|e| {
             BitFunError::tool(format!(
                 "UI Automation (CoCreateInstance CUIAutomation): {}.",
                 e
             ))
         })?;
 
-    let cache_req = build_cache_request(&automation)?;
+    let cache_req = unsafe { build_cache_request(&automation) }?;
 
-    let uncached = automation.ElementFromHandle(hwnd).map_err(|e| {
+    // SAFETY: `hwnd` is the caller-provided target handle. UIA reports an
+    // error for an invalid or stale handle, which is propagated here.
+    let uncached = unsafe { automation.ElementFromHandle(hwnd) }.map_err(|e| {
         BitFunError::tool(format!("UI Automation ElementFromHandle failed: {}.", e))
     })?;
 
-    let root_elem = build_updated_cache_with_retry(&uncached, &cache_req)?;
+    let root_elem = unsafe { build_updated_cache_with_retry(&uncached, &cache_req) }?;
 
     let mut nodes: Vec<UiaNode> = Vec::new();
     let mut lines: Vec<(usize, String)> = Vec::new();
     let mut counter = 0usize;
     let mut total = 0usize;
-    walk_cached_bounded(
-        &root_elem,
-        0,
-        None,
-        &mut nodes,
-        &mut lines,
-        &mut counter,
-        &mut total,
-        max_elements,
-        max_depth,
-    );
+    unsafe {
+        walk_cached_bounded(
+            &root_elem,
+            0,
+            None,
+            &mut nodes,
+            &mut lines,
+            &mut counter,
+            &mut total,
+            max_elements,
+            max_depth,
+        )
+    };
 
     let tree_text = render_lines(&lines);
     Ok((tree_text, nodes))
@@ -555,21 +564,25 @@ unsafe fn walk_cached_bounded(
     }
 
     // Recurse using cached children — zero additional cross-process RPCs.
-    if let Ok(children) = element.GetCachedChildren() {
-        let len = children.Length().unwrap_or(0);
+    // SAFETY: `element` is a live cached UIA element, and child indices are
+    // bounded by the array length returned by UI Automation.
+    if let Ok(children) = unsafe { element.GetCachedChildren() } {
+        let len = unsafe { children.Length() }.unwrap_or(0);
         for i in 0..len {
-            if let Ok(child) = children.GetElement(i) {
-                walk_cached_bounded(
-                    &child,
-                    depth + 1,
-                    emitted_parent,
-                    nodes,
-                    lines,
-                    counter,
-                    total,
-                    max_elements,
-                    max_depth,
-                );
+            if let Ok(child) = unsafe { children.GetElement(i) } {
+                unsafe {
+                    walk_cached_bounded(
+                        &child,
+                        depth + 1,
+                        emitted_parent,
+                        nodes,
+                        lines,
+                        counter,
+                        total,
+                        max_elements,
+                        max_depth,
+                    )
+                };
             }
         }
     }
