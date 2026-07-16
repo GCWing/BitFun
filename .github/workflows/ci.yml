@@ -162,6 +162,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate PPT Live generated-file contract
+        run: pnpm run test:ppt-live
+
       - name: Validate GitHub config
         run: pnpm run check:github-config
 

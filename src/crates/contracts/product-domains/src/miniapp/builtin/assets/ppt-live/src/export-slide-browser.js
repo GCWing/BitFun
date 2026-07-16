@@ -5,18 +5,30 @@
 //   1. Mount slide HTML in an off-screen shadow-DOM div (1280×720)
 //   2. sanitizeSlideDocumentRoot() — normalize/repair the HTML for export
 //   3. extractSlideDataFromDocument() — walk DOM → structured slideData
-//   4. Optionally rasterize a background layer (text hidden) for visual fidelity
+//   4. Rasterize isolated local visual layers when native/SVG mapping is unsafe
+//   5. Escalate failed local captures to page-visual, then full-page fallback
 //
 // The prepared slideData is then passed to export-deck-browser.js →
 // pptx-html-build.js for the actual PPTX generation.
 // ─────────────────────────────────────────────────────────────────────────────
 import { normalizeSlideDocument, scopeSlideAuthorStyles } from './render.js';
+import { sanitizeSlideDocument, sanitizeSlideMarkup } from './sanitize-slide-markup.js';
 import { sanitizeSlideDocumentRoot } from './sanitize-slide-html.js';
 import { extractSlideDataFromDocument, measureBodyDimensions } from './html2pptx-dom-core.js';
+import { buildElementSlideHtml } from './element-model-html.js';
+import {
+  buildPageVisualFallbackRequest,
+  buildRasterFallbackRequests,
+  buildWholePageVisualFallbackRequest,
+  renderRasterFallbackPlan,
+} from './fallback-layer-render.js';
+
+export { buildElementSlideHtml };
 
 export const EXPORT_VIEWPORT = { width: 1280, height: 720 };
 
 const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text']);
+const EDITABLE_TEXT_TYPES = new Set([...RASTER_TEXT_TYPES, 'svg-text']);
 
 export function countVectorTextElements(slideData) {
   return (slideData?.elements || []).filter((el) => RASTER_TEXT_TYPES.has(el.type)).length;
@@ -94,11 +106,14 @@ function wrapExportDocument(root, body) {
     body,
     documentElement: root,
     defaultView: window,
+    querySelector: (sel) => root.querySelector(sel),
     querySelectorAll: (sel) => root.querySelectorAll(sel),
     createElement: (tag) => document.createElement(tag),
+    createTreeWalker: (...args) => document.createTreeWalker(...args),
     getElementById: (id) => root.querySelector(`#${id}`),
     head: root.querySelector('style')?.parentElement || root,
     _exportRoot: root,
+    _pptxSecurityDiagnostics: body._pptxSecurityDiagnostics || [],
   };
 }
 
@@ -141,7 +156,7 @@ async function waitForExportPaint() {
 }
 
 function mountMarkupOnRoot(root, markup) {
-  const parsed = new DOMParser().parseFromString(markup, 'text/html');
+  const parsed = sanitizeSlideDocument(new DOMParser().parseFromString(markup, 'text/html'));
   root.replaceChildren();
 
   parsed.querySelectorAll('style').forEach((node) => {
@@ -151,6 +166,7 @@ function mountMarkupOnRoot(root, markup) {
   });
 
   const body = document.createElement('div');
+  body._pptxSecurityDiagnostics = parsed._pptxSecurityDiagnostics || [];
   body.className = 'ppt-export-body';
   if (parsed.body) {
     for (const attr of parsed.body.attributes) {
@@ -206,16 +222,106 @@ function elementLabel(element) {
  * these findings as repair requirements rather than silently rasterizing or
  * flattening unsupported HTML.
  */
+export function analyzeMountedSlideForPptx(doc, source = '') {
+  if (!doc?.body) {
+    return {
+      valid: false,
+      issues: [{
+        severity: 'blocking',
+        kind: 'blocking',
+        code: 'unreadable_document',
+        message: 'The slide document could not be read.',
+        sourceId: 'slide-document',
+      }],
+    };
+  }
+  const issues = [...(doc._pptxSecurityDiagnostics || [])];
+  const seen = new Set(issues.map((item) => `${item.code}:${item.sourceId || ''}`));
+  const add = (code, message, element = null, severity = 'fallback') => {
+    const sourceId = element?.dataset?.pptxSourceId || element?.id || null;
+    const key = `${code}:${sourceId || ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    issues.push({
+      severity,
+      kind: severity === 'blocking' ? 'blocking' : undefined,
+      code,
+      message,
+      sourceId,
+      tag: element?.tagName?.toLowerCase?.() || null,
+    });
+  };
+  const body = doc.body;
+  if (body.querySelector('script,iframe,object,embed,base,meta[http-equiv="refresh" i],foreignObject,maction')) {
+    add('active_content_residual', 'Active content remained after sanitization.', body, 'blocking');
+  }
+  if (!String(source || '').trim() || !/<\/html>\s*$/i.test(String(source || '').trim())) {
+    add('incomplete_html', 'The slide document is incomplete.', body, 'blocking');
+  }
+  let bodyRect;
+  try {
+    bodyRect = body.getBoundingClientRect();
+    if (!(bodyRect.width > 0) || !(bodyRect.height > 0)) {
+      add('unmeasurable_canvas', 'The slide canvas could not be measured.', body, 'blocking');
+    }
+  } catch {
+    add('unmeasurable_canvas', 'The slide canvas could not be measured.', body, 'blocking');
+  }
+  if (bodyRect) {
+    if (Math.abs(bodyRect.width - EXPORT_VIEWPORT.width) > 2
+      || Math.abs(bodyRect.height - EXPORT_VIEWPORT.height) > 2) {
+      add('canvas_size', 'The slide canvas size requires page visual fallback.', body);
+    }
+    const dimensions = measureBodyDimensions(doc);
+    if (dimensions.errors?.length) {
+      add('canvas_overflow', 'Slide content exceeds the canvas.', body);
+    }
+    const view = doc.defaultView || window;
+    body.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li').forEach((element) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      if (rect.left < bodyRect.left - 1 || rect.top < bodyRect.top - 1
+        || rect.right > bodyRect.right + 1 || rect.bottom > bodyRect.bottom + 1) {
+        add('text_out_of_bounds', 'Text extends outside the slide canvas.', element);
+      }
+      const computed = view.getComputedStyle(element);
+      if (parseFloat(computed.fontSize || 0) > 12 && rect.bottom > bodyRect.bottom - 48) {
+        add('bottom_safety_margin', 'Text enters the bottom safety margin.', element);
+      }
+    });
+  }
+  return { valid: issues.length === 0, issues: issues.slice(0, 32) };
+}
+
 export async function validateSlideForPptxGeneration(html) {
+  let exportRoot = null;
+  try {
+    const doc = await loadHtmlInExportRoot(html);
+    exportRoot = doc._exportRoot;
+    sanitizeSlideDocumentRoot(doc);
+    await waitForExportPaint();
+    return analyzeMountedSlideForPptx(doc, html);
+  } finally {
+    if (exportRoot) removeExportRoot(exportRoot);
+  }
+}
+
+async function validateSlideForPptxGenerationLegacy(html) {
   const source = String(html || '').trim();
   const issues = [];
   const seen = new Set();
-  const add = (code, message, element = null) => {
+  const add = (code, message, element = null, severity = 'fallback') => {
     const suffix = element ? ` (${elementLabel(element)})` : '';
     const key = `${code}:${message}${suffix}`;
     if (seen.has(key)) return;
     seen.add(key);
-    issues.push({ code, message: `${message}${suffix}` });
+    issues.push({
+      severity,
+      code,
+      message: `${message}${suffix}`,
+      sourceId: element?.dataset?.pptxSourceId || element?.id || null,
+      tag: element?.tagName?.toLowerCase?.() || null,
+    });
   };
 
   if (!source || !/<\/html>\s*$/i.test(source)) {
@@ -237,6 +343,19 @@ export async function validateSlideForPptxGeneration(html) {
     exportRoot = doc._exportRoot;
     const view = doc.defaultView || window;
     const body = doc.body;
+    const sourceElements = [body, ...body.querySelectorAll('*')];
+    const usedSourceIds = new Set(
+      sourceElements.map((element) => element.dataset.pptxSourceId).filter(Boolean),
+    );
+    let sourceSequence = 1;
+    sourceElements.forEach((element) => {
+      if (element.dataset.pptxSourceId) return;
+      while (usedSourceIds.has(`pptx-source-${sourceSequence}`)) sourceSequence += 1;
+      const sourceId = `pptx-source-${sourceSequence}`;
+      element.dataset.pptxSourceId = sourceId;
+      usedSourceIds.add(sourceId);
+      sourceSequence += 1;
+    });
     const bodyRect = body.getBoundingClientRect();
     const bodyDimensions = measureBodyDimensions(doc);
     bodyDimensions.errors.forEach((message) => add('canvas_overflow', message));
@@ -318,9 +437,19 @@ export async function validateSlideForPptxGeneration(html) {
 
     try {
       const slideData = extractSlideDataFromDocument(doc);
-      (slideData.errors || []).forEach((message) => add('pptx_conversion', message));
+      (slideData.diagnostics || []).forEach((diagnostic) => {
+        const key = `${diagnostic.code}:${diagnostic.message}:${diagnostic.sourceId || ''}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        issues.push(diagnostic);
+      });
     } catch (error) {
-      add('pptx_conversion', String(error?.message || error || 'PPTX conversion validation failed.'));
+      add(
+        'pptx_serialization',
+        String(error?.message || error || 'PPTX conversion validation failed.'),
+        null,
+        'blocking',
+      );
     }
   } finally {
     if (exportRoot) removeExportRoot(exportRoot);
@@ -337,23 +466,60 @@ async function prepareSlideOnce(html, aggressive, options = {}) {
   try {
     const doc = await loadHtmlInExportRoot(html);
     exportRoot = doc._exportRoot;
-    sanitizeSlideDocumentRoot(doc, aggressive);
+    const repairResult = sanitizeSlideDocumentRoot(doc, aggressive);
     await waitForExportPaint();
 
     const bodyDimensions = measureBodyDimensions(doc);
     const slideData = extractSlideDataFromDocument(doc);
-    // Content overflow must never block the export: clip/off-slide content is
-    // preferable to a failed run. Demote overflow findings to warnings.
+    const analysis = analyzeMountedSlideForPptx(doc, html);
+    const mergedDiagnostics = [
+      ...(analysis.issues || []),
+      ...(repairResult?.diagnostics || []),
+      ...(slideData.diagnostics || []),
+    ];
+    const diagnosticKeys = new Set();
+    const diagnostics = mergedDiagnostics.filter((diagnostic) => {
+      const key = `${diagnostic.severity}:${diagnostic.code}:${diagnostic.sourceId || ''}`;
+      if (diagnosticKeys.has(key)) return false;
+      diagnosticKeys.add(key);
+      return true;
+    });
+    slideData.diagnostics = diagnostics;
+    const rasterRequests = buildRasterFallbackRequests(doc, diagnostics);
+    const pageFallbackCodes = new Set([
+      'canvas_size', 'canvas_overflow', 'text_out_of_bounds', 'bottom_safety_margin',
+    ]);
+    const pageFallbackDiagnostics = diagnostics.filter((item) => pageFallbackCodes.has(item.code));
+    const nativeVisualSourceIds = [...new Set(
+      (slideData.elements || [])
+        .filter((element) => !EDITABLE_TEXT_TYPES.has(element.type))
+        .map((element) => element.sourceId)
+        .filter(Boolean),
+    )];
+    const pageVisualRequest = pageFallbackDiagnostics.length
+      ? buildWholePageVisualFallbackRequest(
+        doc,
+        pageFallbackDiagnostics,
+        nativeVisualSourceIds,
+      )
+      : buildPageVisualFallbackRequest(doc, rasterRequests);
     const overflowWarnings = bodyDimensions.errors || [];
-    if (overflowWarnings.length) {
-      console.warn('[ppt-live-export] slide overflows canvas; exporting anyway:', overflowWarnings.join('; '));
-    }
     const safeBodyDimensions = { ...bodyDimensions, errors: [] };
-    const errors = slideData.errors || [];
-    if (!errors.length || options.allowValidationErrors) {
-      return { slideData, bodyDimensions: safeBodyDimensions, aggressive, warnings: overflowWarnings };
+    const blocking = diagnostics.filter((diagnostic) => diagnostic.severity === 'blocking');
+    if (!blocking.length || options.allowValidationErrors) {
+      return {
+        slideData,
+        bodyDimensions: safeBodyDimensions,
+        diagnostics,
+        rasterRequests,
+        pageVisualRequest,
+        aggressive,
+        warnings: overflowWarnings,
+      };
     }
-    return { error: new Error(errors.join('\n')) };
+    const error = new Error(blocking.map((diagnostic) => diagnostic.message).join('\n'));
+    error.diagnostics = blocking;
+    return { error };
   } finally {
     if (exportRoot) removeExportRoot(exportRoot);
   }
@@ -374,34 +540,46 @@ export async function prepareSlidesForPptxExport(slides, options = {}) {
     for (const [index, slide] of slides.entries()) {
       if (!slide?.html) continue;
       const item = await prepareSlideForPptxExport(slide.html, options);
-      let rasterBase64 = null;
-      const vectorTextCount = countVectorTextElements(item.slideData);
-      const rasterOnly = vectorTextCount === 0;
-      // Always render a raster background when the host WebView is available.
-      // For slides with vector text, slideHtmlForRasterBackdrop hides ALL text
-      // via universal CSS — the raster contains only visual elements (backgrounds,
-      // borders, images) and the vector layer overlays editable text. This
-      // avoids text-overlap from tag-based selective hiding.
-      if (typeof options.renderRaster === 'function') {
-        try {
-          if (typeof options.onRasterProgress === 'function') {
-            options.onRasterProgress(index, slide);
-          }
-          const rasterHtml = rasterOnly
-            ? slideExportHtml(slide)
-            : slideHtmlForRasterBackdrop(slide.html);
-          rasterBase64 = await options.renderRaster(rasterHtml, index);
-        } catch {
-          rasterBase64 = null;
-        }
+      if (item.rasterRequests?.length && typeof options.onRasterProgress === 'function') {
+        options.onRasterProgress(index, slide);
       }
+      const rasterResult = await renderRasterFallbackPlan({
+        localRequests: item.rasterRequests || [],
+        pageVisualRequest: item.pageVisualRequest,
+        fullPageRequest: {
+          sourceId: `slide-${index + 1}`,
+          zIndex: 0,
+          paintOrder: 0,
+          kind: 'raster',
+          phase: 'full-page',
+          bbox: { x: 0, y: 0, w: 13.333, h: 7.5 },
+          buildHtml: () => slideExportHtml(slide),
+          diagnostics: [],
+        },
+      }, options.renderRaster, index);
+      if (rasterResult.blocking) {
+        const error = new Error(
+          rasterResult.diagnostics.map((diagnostic) => diagnostic.message).join('\n')
+            || `Slide ${index + 1} fallback rendering failed`,
+        );
+        error.diagnostics = rasterResult.diagnostics;
+        throw error;
+      }
+      item.slideData.fallbackLayers = [
+        ...(item.slideData.fallbackLayers || []),
+        ...rasterResult.layers,
+      ];
+      item.slideData.fullPageFallback = rasterResult.fullPageFallback;
+      item.slideData.diagnostics = [
+        ...(item.slideData.diagnostics || []),
+        ...rasterResult.diagnostics,
+      ];
       prepared.push({
         index,
         slideId: slide.id,
         notes: slide,
         ...item,
-        rasterBase64,
-        rasterOnly: Boolean(rasterBase64 && rasterOnly),
+        fallbackDiagnostics: rasterResult.diagnostics,
       });
     }
     return prepared;
@@ -410,45 +588,7 @@ export async function prepareSlidesForPptxExport(slides, options = {}) {
   }
 }
 
-export function buildElementSlideHtml(slide = {}) {
-  const theme = slide.theme || {};
-  const title = String(slide.title || 'Slide').replace(/[<>&]/g, (ch) => ({
-    '<': '&lt;', '>': '&gt;', '&': '&amp;',
-  })[ch] || ch);
-  const subtitle = String(slide.subtitle || slide.claim || '').replace(/[<>&]/g, (ch) => ({
-    '<': '&lt;', '>': '&gt;', '&': '&amp;',
-  })[ch] || ch);
-  const background = theme.background || '#ffffff';
-  const ink = theme.ink || '#111111';
-  const muted = theme.muted || '#666666';
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  html, body { margin: 0; padding: 0; width: ${EXPORT_VIEWPORT.width}px; height: ${EXPORT_VIEWPORT.height}px; overflow: hidden; }
-  body {
-    box-sizing: border-box;
-    background: ${background};
-    color: ${ink};
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    display: grid;
-    align-content: center;
-    gap: 16px;
-    padding: 72px 96px;
-  }
-  h1 { margin: 0; font-size: 56px; line-height: 1.08; }
-  p { margin: 0; font-size: 24px; color: ${muted}; line-height: 1.35; }
-</style>
-</head>
-<body>
-  <h1>${title}</h1>
-  ${subtitle ? `<p>${subtitle}</p>` : ''}
-</body>
-</html>`;
-}
-
 export function slideExportHtml(slide) {
-  if (slide?.html) return normalizeSlideDocument(slide.html);
-  return buildElementSlideHtml(slide);
+  if (slide?.html) return sanitizeSlideMarkup(normalizeSlideDocument(slide.html));
+  return sanitizeSlideMarkup(buildElementSlideHtml(slide));
 }
