@@ -4,7 +4,7 @@
 //! standalone relay-server binary. Uses `MemoryAssetStore` for in-memory
 //! mobile-web file storage (no disk I/O for uploaded assets).
 
-use bitfun_relay_server::{build_relay_router, MemoryAssetStore, RoomManager};
+use bitfun_relay_service::{build_relay_router, MemoryAssetStore, RoomManager};
 use log::info;
 use std::sync::Arc;
 
@@ -28,7 +28,13 @@ pub async fn start_embedded_relay(
         }
     });
 
-    let mut app = build_relay_router(room_manager, asset_store, start_time, None);
+    let mut app = build_relay_router(
+        room_manager,
+        asset_store,
+        start_time,
+        None,
+        env!("CARGO_PKG_VERSION"),
+    );
 
     if let Some(dir) = static_dir {
         info!("Embedded relay: serving static files from {dir}");

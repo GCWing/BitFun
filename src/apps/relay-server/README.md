@@ -183,6 +183,24 @@ password.
 - Same machine Desktop + CLI share one `device_id`; the **last successful**
   `AuthConnect` wins as the live Peer Host for that id
 
+## Upgrade notes
+
+The supported Docker build context is now the repository root because the app
+uses the shared relay service:
+
+```bash
+docker build -f src/apps/relay-server/Dockerfile .
+docker compose -f src/apps/relay-server/docker-compose.yml build
+```
+
+Copying only `src/apps/relay-server` is no longer sufficient; deployments must
+also include `src/crates/services/relay-service`. The repository keeps one
+Docker build layout rather than duplicating the shared service.
+
+The Rust crate path `bitfun_relay_server` remains as a thin compatibility
+facade, including its existing module paths and four-argument router builder.
+New library consumers should depend on `bitfun-relay-service`.
+
 ## Quick Start (service ops)
 
 ### Recommended: Run on the target server
@@ -291,8 +309,9 @@ Used by Desktop / CLI / mobile-web for presence and Peer Device Mode RPC.
 #### Device RPC timeouts (Peer HostInvoke)
 
 `POST /api/devices/:target_device_id/rpc` waits up to **120 seconds** for the
-target device (`RPC_TIMEOUT` in `src/routes/devices.rs`). Peer Device Mode uses
-this for product `invoke` calls.
+target device (`RPC_TIMEOUT` in
+`../../crates/services/relay-service/src/routes/devices.rs`). Peer Device Mode
+uses this for product `invoke` calls.
 
 Reverse proxies in front of the relay must use a read / response timeout
 **≥ 120s** (recommend 130s), or clients see **HTTP 504** before Axum finishes.
@@ -340,8 +359,8 @@ Session sync posts a **full** encrypted session bundle. Large conversations can
 exceed Axum’s default ~2 MiB limit and fail with **HTTP 413**.
 
 This server raises the limit on sync POSTs to **64 MiB** (`SYNC_BODY_LIMIT` in
-`src/routes/sync.rs`). Proxies must raise their body limit too, or they reject
-uploads before Axum sees them:
+`../../crates/services/relay-service/src/routes/sync.rs`). Proxies must raise
+their body limit too, or they reject uploads before Axum sees them:
 
 ```nginx
 # nginx — must be >= Axum SYNC_BODY_LIMIT (64M)
@@ -416,14 +435,9 @@ Mobile ──HTTP──► Relay ◄──WebSocket── Desktop / CLI
 relay-server/
 ├── src/
 │   ├── main.rs             # Relay server binary entry point
-│   ├── lib.rs              # Shared library (router, asset stores)
 │   ├── config.rs           # Environment-based configuration
-│   ├── db.rs               # SQLite account/device/sync storage
-│   ├── admin.rs            # Account provisioning crypto (used by relay-admin)
-│   ├── bin/
-│   │   └── relay_admin.rs  # relay-admin CLI binary
-│   ├── relay/              # Room manager + device routing manager
-│   └── routes/             # HTTP/WS route handlers (auth, devices, sync, api, websocket)
+│   └── bin/
+│       └── relay_admin.rs  # relay-admin CLI binary
 ├── static/                 # Mobile-web static files
 ├── Cargo.toml
 ├── Dockerfile
@@ -434,6 +448,10 @@ relay-server/
 ├── common.sh               # Shared helpers for the scripts above
 └── README.md
 ```
+
+Reusable relay state, storage, asset stores, and HTTP/WebSocket routes live in
+`src/crates/services/relay-service`. This directory owns only the standalone
+process configuration, static-file fallback, and operator CLI.
 
 ## About `src/apps/server` vs `src/apps/relay-server`
 

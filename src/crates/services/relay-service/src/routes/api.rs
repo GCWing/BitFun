@@ -55,9 +55,16 @@ pub struct HealthResponse {
 }
 
 pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
+    health_check_for_host(State(state), env!("CARGO_PKG_VERSION")).await
+}
+
+pub(crate) async fn health_check_for_host(
+    State(state): State<AppState>,
+    host_version: &'static str,
+) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "healthy".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: host_version.to_string(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
         rooms: state.room_manager.room_count(),
         connections: state.room_manager.connection_count(),
@@ -72,9 +79,13 @@ pub struct ServerInfo {
 }
 
 pub async fn server_info() -> Json<ServerInfo> {
+    server_info_for_host(env!("CARGO_PKG_VERSION")).await
+}
+
+pub(crate) async fn server_info_for_host(host_version: &'static str) -> Json<ServerInfo> {
     Json(ServerInfo {
         name: "BitFun Relay Server".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: host_version.to_string(),
         protocol_version: 2,
     })
 }

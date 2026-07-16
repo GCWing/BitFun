@@ -218,7 +218,9 @@ async fn delete_device(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Disconnect active WS session if any.
-    state.device_manager.disconnect_device(&user_id, &target_device_id);
+    state
+        .device_manager
+        .disconnect_device(&user_id, &target_device_id);
 
     tracing::info!("Device {target_device_id} removed from account {user_id}");
     Ok(StatusCode::NO_CONTENT)

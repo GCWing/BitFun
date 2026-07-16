@@ -276,7 +276,7 @@ export const dependencyProfileRules = [
       'aes-gcm',
       'bitfun-product-capabilities',
       'bitfun-product-domains',
-      'bitfun-relay-server',
+      'bitfun-relay-service',
       'bitfun-tool-packs',
       'chrono-tz',
       'cron',
@@ -557,7 +557,6 @@ export const dependencyProfileRules = [
       'tokio-tungstenite',
       'uuid',
       'which',
-      'bitfun-relay-server',
     ],
   },
 ];

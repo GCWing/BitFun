@@ -6,8 +6,8 @@
 [平台可行性](../architecture/platform-portability-design.md)和
 [OpenCode 兼容](opencode-extension-compatibility-plan.md)。专项文档不能用自己的阶段编号扩大本计划范围。
 
-计划基线为上游 `5e48999f94daf119c1217ed6b71ba878d564f5dd`（2026-07-15）。当前 PR 只更新设计与计划，
-不表示其中任何目标能力已经实现。
+本轮对照的上游基线为 `cabbce88348a24124714101a9e6c2f6371206fa1`（2026-07-16）；本文所在提交记录
+本轮实现事实。后续事实变化必须随代码显式更新，只有代码、入口消费和对应验证同时成立的项目才标记为完成。
 
 ## 1. 裁决原则
 
@@ -26,7 +26,7 @@
 
 | 范围 | 当前事实 | 近期结论 |
 |---|---|---|
-| 编译依赖 | `assembly/core` 依赖 `apps/relay-server`；现有检查没有通用覆盖全部 Cargo dependency kind | 先补通用检查并移除 relay 反向边 |
+| 编译依赖 | `assembly/core -> apps/relay-server` 已移除；通用检查覆盖 normal/build/dev 依赖及 optional/target 变体 | 后续反向依赖和未知 crate 层级直接失败 |
 | 公开面 | `bitfun-core` 仍有迁移期 re-export；CLI 只完成部分 Runtime SDK 接入 | 按入口逐项迁移，不做全仓逐 symbol 台账或批量删除 |
 | CLI/TUI | `ShortcutsConfig` 已加载但真实按键分发仍硬编码；Slash、Palette、帮助和执行不是同一来源 | 先统一宿主 action 声明和键位解析，不重写 renderer |
 | OpenCode | 只有来源确认和静态工具名预览，没有 JS/TS `execute` 或真实工具注册 | 先做一个无外部依赖、遵循官方公开契约的 standalone custom tool 端到端样例 |
@@ -37,10 +37,12 @@
 
 交付：
 
-- 用 Cargo metadata 检查仓库层级方向，覆盖 workspace 和独立 manifest，以及 normal、build、dev、optional、
-  target dependency。已知债务进入不增长基线，未知层级或新增反向依赖失败。
-- 把 relay runtime/router 等可复用逻辑移到 service/adapter owner，让 standalone relay app 和嵌入式入口共同消费；
-  TCP bind、静态资源服务和 app 生命周期留在具体入口。
+- Cargo metadata 实际解析图检查已覆盖 workspace、独立 manifest，以及 normal、build、dev 依赖及 optional/target 变体；
+  未知层级或新增反向依赖直接失败。
+- relay 的 room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router 已归属
+  `services/relay-service`，standalone relay app 和嵌入式入口共同消费。
+  standalone 的 TCP bind、静态 fallback 和进程生命周期留在 app；embedded 的对应宿主逻辑暂留 assembly 兼容路径，
+  其迁移是独立后续工作，不构成 HarmonyOS 支持。
 - 把 contracts/Product Domain 中的环境、路径或进程探测迁到 service。现有 Agent Runtime helper 只处理多生态
   Skill 根，不是 custom tool resolver，应留在 Skill owner；`.opencode/tools/` 发现由 OpenCode adapter 新增并由
   当前静态预览与后续执行共同消费。旧路径删除前保持生产行为等价。
@@ -49,8 +51,9 @@
 
 退出条件：
 
-- `assembly -> apps` 反向边消失，standalone/embedded relay 行为测试通过；
-- 边界检查能命中反向 fixture，并允许已登记债务只减不增；
+- `assembly -> apps` 反向边消失，standalone/embedded relay 共用同一已测试 router；（共享 owner 与 Cargo 方向已满足，
+  embedded 宿主逻辑归位待后续）
+- 边界检查能命中 normal/build/dev 依赖及 optional/target 反向 fixture；（已满足）
 - contracts 和 Agent Runtime 不再新增环境或生态来源探测；
 - 本工作流没有新增无调用方端口、空 registry 或第二个 Runtime owner。
 
@@ -116,7 +119,7 @@ Help/dispatch 元数据；终端异常路径仍能恢复。
 
 | 工作 | 必须等待 | 可以并行 |
 |---|---|---|
-| Relay owner 修复 | Cargo 边界检查基线 | OpenCode fixture、HarmonyOS 可行性样例 |
+| Relay 共享 owner / 反向边修复 | 已完成；embedded 宿主归位待后续 | OpenCode fixture、HarmonyOS 可行性样例 |
 | CLI action/快捷键 | 当前 CLI 行为和配置 fixture | OpenCode standalone tool、入口 API 迁移 |
 | HarmonyOS 最小宿主 | HAP 可行性 go 决策、目标依赖清单 | Desktop OpenCode tool、CLI action |
 | HarmonyOS 本地核心 | 最小宿主、所需平台事实迁移 | Desktop OpenCode tool |

@@ -270,8 +270,9 @@ flowchart LR
 - GUI/TUI 布局选择不复制主题 schema，不固化动态能力状态，也不携带可执行 UI 或任意构建脚本。
 - 新 profile 只有在真实入口消费组装结果、能力可用性和类型化降级后才算接入；仅有枚举、空计划、re-export
   或单测不构成产品支持。
-- assembly 不新增对 app crate 的依赖。现有嵌入式 relay 反向依赖必须通过抽取可复用 relay owner 消除，并由
-  边界检查阻止同类依赖回流。
+- assembly 不得依赖 app crate。relay 的 room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router
+  归属 `services/relay-service`，Cargo metadata 实际解析图检查阻止同类依赖回流。embedded TCP bind、静态 fallback
+  和任务生命周期暂留 assembly 兼容路径，仍需迁往具体宿主；这项边界修复不构成 HarmonyOS 本地产品支持。
 - 平台支持按“目标依赖、编译、目标产品运行”三层取证。HarmonyOS 本地候选在 HAP 真机证明输入/绘制、路径、
   网络、存储和进程行为前不能标记可用，也不能静默回退 Desktop/Remote 执行。
 - 文档、边界脚本和 focused 测试能说明本次变更保护了哪个稳定接口切面，或删除/降级了哪个过宽接口。
