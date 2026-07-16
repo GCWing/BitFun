@@ -155,6 +155,8 @@ const PersistentFooterActions: React.FC = () => {
   const isBrowserActive =
     activeTabId === 'browser' || (activeTabId === 'session' && isBrowserPanelActiveInCanvas);
 
+  const SHOW_BROWSER_ENTRY = false;
+
   return (
     <>
       <div className="bitfun-nav-panel__footer">
@@ -277,21 +279,23 @@ const PersistentFooterActions: React.FC = () => {
             </button>
           </Tooltip>
 
-          <Tooltip content={t('scenes.browser')} placement="right">
-            <button
-              type="button"
-              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isBrowserActive ? ' is-active' : ''}`}
-              aria-label={t('scenes.browser')}
-              aria-pressed={isBrowserActive}
-              onClick={handleOpenBrowser}
-              data-testid="browser-panel-entry"
-            >
-              <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                <Globe size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                <ExternalLink size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-              </span>
-            </button>
-          </Tooltip>
+          {SHOW_BROWSER_ENTRY && (
+            <Tooltip content={t('scenes.browser')} placement="right">
+              <button
+                type="button"
+                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isBrowserActive ? ' is-active' : ''}`}
+                aria-label={t('scenes.browser')}
+                aria-pressed={isBrowserActive}
+                onClick={handleOpenBrowser}
+                data-testid="browser-panel-entry"
+              >
+                <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
+                  <Globe size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+                  <ExternalLink size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
+                </span>
+              </button>
+            </Tooltip>
+          )}
         </div>
 
         <div className="bitfun-nav-panel__footer-right">
