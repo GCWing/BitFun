@@ -1,12 +1,20 @@
 //! Edit constraint guard.
 //!
-//! Extracts "don't modify X" constraints from the task's first user message
-//! (once per session, best-effort, fail-open) and exposes a deterministic
-//! matcher so Edit/Write/Delete tools can reject edits that violate them via
-//! their existing `validate_input()` path. See docs/plans/edit-constraint-guard-plan.md.
+//! Extracts explicit "don't modify X" constraints from user instructions and
+//! exposes deterministic checks for file-mutation tools. Extraction evidence is
+//! persisted with the session, while every guard decision and successful direct
+//! file mutation is appended to a session-scoped JSONL telemetry stream.
 
+use log::warn;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::tools::framework::{ToolUseContext, ValidationResult};
@@ -14,287 +22,1629 @@ use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::util::json_extract::extract_json_from_ai_response;
 use crate::util::types::Message;
 
-/// Cap on how much of the first user message we send to the extraction model.
-/// PR-style task descriptions can run long; constraints are almost always
-/// stated near the top ("I've already taken care of...", "do not modify...").
+pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
+const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 3;
 const MAX_PROMPT_CHARS: usize = 8_000;
+const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
+const MAX_MODEL_ATTEMPTS: usize = 2;
+const MAX_RECURSIVE_INSPECTION_ENTRIES: usize = 100_000;
+const TELEMETRY_RELATIVE_PATH: &str = "telemetry/edit-constraint-guard.jsonl";
 
-const EXTRACTION_SYSTEM_PROMPT: &str = r#"You extract explicit prohibitions from a software task description.
+const EXTRACTION_SYSTEM_PROMPT: &str = r#"You update the active file-edit prohibitions for a software task.
 
-Find sentences that explicitly forbid modifying certain files, file types, or
-categories of files (e.g. "don't modify the test files", "you don't need to
-change the testing logic", "do not touch the migration files"). Ignore
-constraints about anything other than *which files may be edited* (e.g. style
-preferences, scope limits on behavior) — this tool only enforces file-edit
-prohibitions.
+You receive the currently active prohibitions and the latest user message.
 
-For each prohibition found, classify it into exactly ONE of these matcher kinds:
+- Add a prohibition only when the latest message explicitly forbids modifying
+  certain files, file types, or categories of files.
+- Revoke an active prohibition only when the latest message explicitly cancels,
+  relaxes, or contradicts it (e.g. "you may modify tests now"). A revocation
+  MUST copy the exact constraint_id from the active list. Never invent an id.
+- An unrelated message does not revoke anything.
+- Ignore constraints about anything other than *which files may be edited*.
+
+For each added prohibition, classify it into exactly ONE matcher kind:
 - "test_files": the prohibition is about test files / testing logic in general
 - "path_contains": the prohibition names specific files or keywords (give the literal substrings)
 - "path_under_dir": the prohibition names a specific directory (give the directory names)
 - "extension": the prohibition is about a specific file type (give the extensions, including the dot)
-- "unmatched": you found a prohibition but it doesn't fit any of the above (still report it, just tag as unmatched)
+- "unmatched": you found a prohibition but it doesn't fit any of the above
 
-Respond with ONLY a fenced ```json code block containing this exact shape (no other text):
+Respond with ONLY a fenced ```json code block containing this exact shape:
 ```json
 {
-  "constraints": [
-    {"description": "<short paraphrase of the prohibition>", "matcher": {"kind": "test_files"}},
+  "additions": [
+    {"description": "<short paraphrase>", "matcher": {"kind": "test_files"}},
     {"description": "<short paraphrase>", "matcher": {"kind": "path_contains", "substrings": ["..."]}},
     {"description": "<short paraphrase>", "matcher": {"kind": "path_under_dir", "dirs": ["..."]}},
     {"description": "<short paraphrase>", "matcher": {"kind": "extension", "exts": [".ext"]}},
     {"description": "<short paraphrase>", "matcher": {"kind": "unmatched"}}
+  ],
+  "revocations": [
+    {"constraint_id": "<exact active constraint id>", "description": "<what the user explicitly relaxed>"}
   ]
 }
 ```
-If there are no such prohibitions, respond with `{"constraints": []}`."#;
+If the latest message changes nothing, return empty `additions` and
+`revocations`."#;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConstraintSource {
+    Deterministic,
+    Model,
+    #[default]
+    Legacy,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExtractedConstraint {
-    /// Human-readable paraphrase, shown back to the agent in the rejection message.
+    #[serde(default)]
+    pub id: String,
+    /// Human-readable paraphrase shown to the agent in the rejection message.
     pub description: String,
     pub matcher: ConstraintMatcher,
+    #[serde(default)]
+    pub source: ConstraintSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_text: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ConstraintMatcher {
-    /// Reuses the same file-naming heuristic previously validated by the
-    /// (reverted) test-selection-gate: `_test.go`, `test_*.py`/`*_test.py`,
-    /// `.test.`/`.spec.`, or files under a `tests`/`test`/`__tests__` directory.
     TestFiles,
-    PathContains { substrings: Vec<String> },
-    PathUnderDir { dirs: Vec<String> },
-    Extension { exts: Vec<String> },
-    /// Extraction recognized a prohibition but could not map it to a
-    /// machine-checkable pattern. Never enforced; kept for future analysis.
+    PathContains {
+        substrings: Vec<String>,
+    },
+    PathUnderDir {
+        dirs: Vec<String>,
+    },
+    Extension {
+        exts: Vec<String>,
+    },
+    /// Recorded for analysis but never enforced.
     Unmatched,
 }
 
 impl ConstraintMatcher {
     pub fn matches(&self, file_path: &str) -> bool {
+        let normalized = file_path.replace('\\', "/");
         match self {
-            ConstraintMatcher::TestFiles => is_test_file(file_path),
-            ConstraintMatcher::PathContains { substrings } => {
-                substrings.iter().any(|s| !s.is_empty() && file_path.contains(s.as_str()))
-            }
-            ConstraintMatcher::PathUnderDir { dirs } => dirs.iter().any(|d| {
-                let d = d.trim_matches('/');
-                if d.is_empty() {
-                    return false;
-                }
-                file_path.starts_with(&format!("{d}/")) || file_path.contains(&format!("/{d}/"))
+            ConstraintMatcher::TestFiles => is_test_file(&normalized),
+            ConstraintMatcher::PathContains { substrings } => substrings
+                .iter()
+                .any(|value| !value.is_empty() && normalized.contains(value.as_str())),
+            ConstraintMatcher::PathUnderDir { dirs } => dirs.iter().any(|dir| {
+                let dir = dir.trim_matches('/');
+                !dir.is_empty()
+                    && (normalized == dir
+                        || normalized.starts_with(&format!("{dir}/"))
+                        || normalized.contains(&format!("/{dir}/")))
             }),
-            ConstraintMatcher::Extension { exts } => {
-                exts.iter().any(|e| !e.is_empty() && file_path.ends_with(e.as_str()))
-            }
+            ConstraintMatcher::Extension { exts } => exts
+                .iter()
+                .any(|extension| !extension.is_empty() && normalized.ends_with(extension)),
             ConstraintMatcher::Unmatched => false,
+        }
+    }
+
+    fn enforceable(&self) -> bool {
+        !matches!(self, ConstraintMatcher::Unmatched)
+    }
+}
+
+fn is_test_file(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    let lowercase = normalized.to_lowercase();
+    let name = Path::new(&lowercase)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let stem = Path::new(name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+
+    stem.starts_with("test_")
+        || stem.starts_with("test-")
+        || stem.ends_with("_test")
+        || stem.ends_with("-test")
+        || stem.ends_with("_tests")
+        || stem.ends_with("_spec")
+        || stem.ends_with("-spec")
+        || name.contains(".test.")
+        || name.contains(".spec.")
+        || lowercase
+            .split('/')
+            .any(|segment| matches!(segment, "tests" | "test" | "__tests__" | "spec" | "specs"))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExtractionStatus {
+    Extracted,
+    NoConstraints,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelExtractionStatus {
+    #[default]
+    NotRun,
+    Parsed,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConstraintRevocation {
+    pub constraint_id: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExtractionFailure {
+    pub stage: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConstraintExtractionRecord {
+    pub message_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialog_turn_id: Option<String>,
+    pub status: ExtractionStatus,
+    pub constraints: Vec<ExtractedConstraint>,
+    pub deterministic_constraint_count: usize,
+    pub model_attempts: usize,
+    /// Snapshot of the active ids shown to fast for this extraction.
+    #[serde(default)]
+    pub active_constraint_ids: Vec<String>,
+    #[serde(default)]
+    pub model_status: ModelExtractionStatus,
+    /// Exact additions parsed from the fast model, before deterministic
+    /// additions are merged in.
+    #[serde(default)]
+    pub model_constraints: Vec<ExtractedConstraint>,
+    /// Exact revocation requests parsed from the fast model. Invalid ids remain
+    /// here for telemetry but are never applied.
+    #[serde(default)]
+    pub model_revocations: Vec<ConstraintRevocation>,
+    /// Revocations validated against the active constraint ids supplied to the
+    /// model. Only these ids are applied to session state.
+    #[serde(default)]
+    pub revoked_constraint_ids: Vec<String>,
+    #[serde(default)]
+    pub unmatched_revocation_ids: Vec<String>,
+    pub input_chars: usize,
+    pub prompt_chars: usize,
+    pub input_truncated: bool,
+    pub latency_ms: u64,
+    pub extracted_at_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<ExtractionFailure>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_excerpt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditConstraintState {
+    pub schema_version: u32,
+    #[serde(default)]
+    pub constraints: Vec<ExtractedConstraint>,
+    #[serde(default)]
+    pub extractions: Vec<ConstraintExtractionRecord>,
+}
+
+impl Default for EditConstraintState {
+    fn default() -> Self {
+        Self {
+            schema_version: EDIT_CONSTRAINT_SCHEMA_VERSION,
+            constraints: Vec::new(),
+            extractions: Vec::new(),
         }
     }
 }
 
-/// Language-aware test-file heuristic. Re-derived from the (reverted)
-/// `test_selection_gate.rs::Lang::is_test_file` rules rather than imported,
-/// since that module no longer exists on this branch.
-fn is_test_file(path: &str) -> bool {
-    let normalized = path.replace('\\', "/");
-    let name = Path::new(&normalized)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or_default();
+impl EditConstraintState {
+    pub fn merge_extraction(&mut self, extraction: ConstraintExtractionRecord) {
+        self.schema_version = EDIT_CONSTRAINT_SCHEMA_VERSION;
+        self.constraints.retain(|constraint| {
+            !extraction
+                .revoked_constraint_ids
+                .iter()
+                .any(|constraint_id| constraint_id == &constraint.id)
+        });
+        for constraint in &extraction.constraints {
+            if !self
+                .constraints
+                .iter()
+                .any(|existing| existing.matcher == constraint.matcher)
+            {
+                self.constraints.push(constraint.clone());
+            }
+        }
+        self.extractions.push(extraction);
+    }
 
-    if name.ends_with("_test.go") {
-        return true;
+    pub fn message_processed(&self, dialog_turn_id: &str, message_sha256: &str) -> bool {
+        self.extractions.iter().any(|record| {
+            record.dialog_turn_id.as_deref() == Some(dialog_turn_id)
+                && record.message_sha256 == message_sha256
+                && record.status != ExtractionStatus::Failed
+        })
     }
-    if name.starts_with("test_") || name.ends_with("_test.py") {
-        return true;
+
+    pub fn latest_status(&self) -> Option<ExtractionStatus> {
+        self.extractions.last().map(|record| record.status)
     }
-    if name.contains(".test.") || name.contains(".spec.") {
-        return true;
+
+    pub fn has_enforceable_constraints(&self) -> bool {
+        self.constraints
+            .iter()
+            .any(|constraint| constraint.matcher.enforceable())
     }
-    if normalized.split('/').any(|seg| seg == "tests" || seg == "test" || seg == "__tests__") {
-        return true;
-    }
-    false
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ExtractionResponse {
-    #[serde(default)]
-    constraints: Vec<ExtractedConstraint>,
+    additions: Vec<ExtractedConstraint>,
+    revocations: Vec<ConstraintRevocation>,
 }
 
-/// One-shot, best-effort extraction against the task's first user message.
-/// Never propagates an error to the caller: any failure (no AI client
-/// configured, network error, malformed response) resolves to `Vec::new()`
-/// (fail open — no constraints enforced, identical to today's behavior).
-pub async fn extract_constraints(user_message: &str) -> Vec<ExtractedConstraint> {
-    if user_message.trim().is_empty() {
-        return Vec::new();
-    }
-    let truncated: String = user_message.chars().take(MAX_PROMPT_CHARS).collect();
+pub fn message_sha256(message: &str) -> String {
+    format!("{:x}", Sha256::digest(message.as_bytes()))
+}
 
-    let Ok(factory) = get_global_ai_client_factory().await else {
-        return Vec::new();
-    };
-    let Ok(client) = factory.get_client_resolved("fast").await else {
-        return Vec::new();
-    };
-
-    let prompt = format!(
-        "{EXTRACTION_SYSTEM_PROMPT}\n\n<task_description>\n{truncated}\n</task_description>"
-    );
-
-    let Ok(response) = client.send_message(vec![Message::user(prompt)], None).await else {
-        return Vec::new();
-    };
-    if response.text.is_empty() {
-        return Vec::new();
-    }
-    let Some(json_str) = extract_json_from_ai_response(&response.text) else {
-        return Vec::new();
-    };
-    serde_json::from_str::<ExtractionResponse>(&json_str)
-        .map(|r| r.constraints)
+fn timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
 }
 
-/// Returns the first constraint (if any) that `file_path` violates.
+fn truncate_for_extraction(message: &str) -> (String, bool) {
+    let chars = message.chars().collect::<Vec<_>>();
+    if chars.len() <= MAX_PROMPT_CHARS {
+        return (message.to_string(), false);
+    }
+
+    let side = MAX_PROMPT_CHARS / 2;
+    let mut output = chars[..side].iter().collect::<String>();
+    output.push_str("\n...[middle of task omitted for constraint extraction]...\n");
+    output.extend(chars[chars.len() - side..].iter());
+    (output, true)
+}
+
+fn relevant_sentences(message: &str) -> impl Iterator<Item = &str> {
+    message
+        .split_inclusive(|character: char| {
+            matches!(character, '.' | '!' | '?' | '\n' | '。' | '！' | '？')
+        })
+        .map(str::trim)
+        .filter(|sentence| !sentence.is_empty())
+}
+
+fn has_prohibition_signal(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    [
+        "do not",
+        "don't",
+        "dont",
+        "must not",
+        "should not",
+        "never modify",
+        "never change",
+        "no need to modify",
+        "no need to change",
+        "don't have to modify",
+        "do not have to modify",
+        "not allowed to modify",
+        "avoid modifying",
+        "already taken care of",
+        "keep tests unchanged",
+        "keep test files unchanged",
+        "leave tests unchanged",
+        "leave test files unchanged",
+        "tests are off limits",
+        "test files are off limits",
+        "tests must remain unchanged",
+        "test files must remain unchanged",
+        "without modifying tests",
+        "without modifying test files",
+        "only modify non-test",
+        "non-test files only",
+        "不要",
+        "不得",
+        "不能修改",
+        "禁止修改",
+        "无需修改",
+        "不需要修改",
+        "测试文件保持不变",
+        "仅修改非测试",
+    ]
+    .iter()
+    .any(|signal| lower.contains(signal))
+}
+
+fn deterministic_test_constraint(message: &str) -> Option<ExtractedConstraint> {
+    relevant_sentences(message).find_map(|sentence| {
+        let lower = sentence.to_lowercase();
+        let explicitly_relaxes_tests = [
+            "may modify tests",
+            "may modify test files",
+            "can modify tests",
+            "can modify test files",
+            "allowed to modify tests",
+            "allowed to modify test files",
+            "tests are no longer off limits",
+            "test files are no longer off limits",
+            "test restriction is lifted",
+            "test-file restriction is lifted",
+            "可以修改测试",
+            "可以改测试",
+            "允许修改测试",
+            "测试文件可以修改",
+            "测试可以修改",
+            "不再禁止修改测试",
+        ]
+        .iter()
+        .any(|signal| lower.contains(signal));
+        if explicitly_relaxes_tests {
+            return None;
+        }
+        let mentions_tests = lower.contains("test file")
+            || lower.contains("tests")
+            || lower.contains("testing logic")
+            || lower.contains("测试");
+        let mentions_mutation = [
+            "modify",
+            "change",
+            "edit",
+            "touch",
+            "update",
+            "alter",
+            "write",
+            "修改",
+            "改动",
+            "更改",
+            "编辑",
+            "保持不变",
+        ]
+        .iter()
+        .any(|word| lower.contains(word));
+        let prohibits_mutation = has_prohibition_signal(&lower);
+
+        (mentions_tests && mentions_mutation && prohibits_mutation).then(|| {
+            let source_text = sentence.chars().take(500).collect::<String>();
+            ExtractedConstraint {
+                id: "deterministic:test_files".to_string(),
+                description: "The task explicitly says not to modify test files or testing logic"
+                    .to_string(),
+                matcher: ConstraintMatcher::TestFiles,
+                source: ConstraintSource::Deterministic,
+                source_text: Some(source_text),
+            }
+        })
+    })
+}
+
+fn candidate_paths(context: Option<&ToolUseContext>, file_path: &str) -> Vec<String> {
+    let mut candidates = vec![file_path.replace('\\', "/")];
+    let Some(context) = context else {
+        return candidates;
+    };
+    let Ok(resolved) = context.resolve_tool_path(file_path) else {
+        return candidates;
+    };
+    for path in [
+        resolved.logical_path.clone(),
+        resolved.resolved_path.clone(),
+    ] {
+        let normalized = path.replace('\\', "/");
+        if !candidates.contains(&normalized) {
+            candidates.push(normalized);
+        }
+    }
+    if !resolved.uses_remote_workspace_backend() {
+        let resolved_path = Path::new(&resolved.resolved_path);
+        let canonical = fs::canonicalize(resolved_path).ok().or_else(|| {
+            let parent = resolved_path.parent()?;
+            let file_name = resolved_path.file_name()?;
+            fs::canonicalize(parent)
+                .ok()
+                .map(|parent| parent.join(file_name))
+        });
+        if let Some(canonical) = canonical {
+            let normalized = canonical.to_string_lossy().replace('\\', "/");
+            if !candidates.contains(&normalized) {
+                candidates.push(normalized);
+            }
+        }
+    }
+    candidates
+}
+
+fn normalize_model_constraints(constraints: &mut [ExtractedConstraint], message_sha256: &str) {
+    let message_prefix = message_sha256.chars().take(12).collect::<String>();
+    for (index, constraint) in constraints.iter_mut().enumerate() {
+        constraint.id = format!("model:{message_prefix}:{index}");
+        constraint.source = ConstraintSource::Model;
+    }
+}
+
+fn response_excerpt(response: &str) -> String {
+    response
+        .chars()
+        .take(MAX_RESPONSE_TELEMETRY_CHARS)
+        .collect()
+}
+
+/// Extract constraints from one user instruction when there is no prior
+/// session state. Kept as the simple entry point for callers and tests that do
+/// not need revocation semantics.
+pub async fn extract_constraints(user_message: &str) -> ConstraintExtractionRecord {
+    extract_constraints_with_active(user_message, &[]).await
+}
+
+/// Extract additions and explicit revocations from one user instruction.
+/// Explicit test-file prohibitions are recognized deterministically before the
+/// model call, while revocations are accepted only from a successfully parsed
+/// fast-model response that references an active constraint id.
+pub async fn extract_constraints_with_active(
+    user_message: &str,
+    active_constraints: &[ExtractedConstraint],
+) -> ConstraintExtractionRecord {
+    let started_at = Instant::now();
+    let input_chars = user_message.chars().count();
+    let message_sha256 = message_sha256(user_message);
+    let active_constraint_ids = active_constraints
+        .iter()
+        .map(|constraint| constraint.id.clone())
+        .collect::<Vec<_>>();
+    if user_message.trim().is_empty() {
+        return ConstraintExtractionRecord {
+            message_sha256,
+            dialog_turn_id: None,
+            status: ExtractionStatus::NoConstraints,
+            constraints: Vec::new(),
+            deterministic_constraint_count: 0,
+            model_attempts: 0,
+            active_constraint_ids,
+            model_status: ModelExtractionStatus::NotRun,
+            model_constraints: Vec::new(),
+            model_revocations: Vec::new(),
+            revoked_constraint_ids: Vec::new(),
+            unmatched_revocation_ids: Vec::new(),
+            input_chars,
+            prompt_chars: 0,
+            input_truncated: false,
+            latency_ms: 0,
+            extracted_at_ms: timestamp_ms(),
+            failure: None,
+            response_excerpt: None,
+        };
+    }
+
+    let mut constraints = deterministic_test_constraint(user_message)
+        .into_iter()
+        .collect::<Vec<_>>();
+    let deterministic_constraint_count = constraints.len();
+    let (truncated, input_truncated) = truncate_for_extraction(user_message);
+    let prompt_chars = truncated.chars().count();
+
+    // Once constraints are active, every new user instruction is sent to fast
+    // so an explicit relaxation cannot be missed by a keyword prefilter.
+    if !has_prohibition_signal(user_message) && active_constraints.is_empty() {
+        return ConstraintExtractionRecord {
+            message_sha256,
+            dialog_turn_id: None,
+            status: if constraints.is_empty() {
+                ExtractionStatus::NoConstraints
+            } else {
+                ExtractionStatus::Extracted
+            },
+            constraints,
+            deterministic_constraint_count,
+            model_attempts: 0,
+            active_constraint_ids,
+            model_status: ModelExtractionStatus::NotRun,
+            model_constraints: Vec::new(),
+            model_revocations: Vec::new(),
+            revoked_constraint_ids: Vec::new(),
+            unmatched_revocation_ids: Vec::new(),
+            input_chars,
+            prompt_chars,
+            input_truncated,
+            latency_ms: started_at
+                .elapsed()
+                .as_millis()
+                .try_into()
+                .unwrap_or(u64::MAX),
+            extracted_at_ms: timestamp_ms(),
+            failure: None,
+            response_excerpt: None,
+        };
+    }
+
+    let factory = match get_global_ai_client_factory().await {
+        Ok(factory) => factory,
+        Err(error) => {
+            return extraction_with_failure(
+                started_at,
+                message_sha256,
+                constraints,
+                deterministic_constraint_count,
+                0,
+                active_constraint_ids,
+                input_chars,
+                prompt_chars,
+                input_truncated,
+                "client_factory",
+                error.to_string(),
+                None,
+            );
+        }
+    };
+    let client = match factory.get_client_resolved("fast").await {
+        Ok(client) => client,
+        Err(error) => {
+            return extraction_with_failure(
+                started_at,
+                message_sha256,
+                constraints,
+                deterministic_constraint_count,
+                0,
+                active_constraint_ids,
+                input_chars,
+                prompt_chars,
+                input_truncated,
+                "client_resolution",
+                error.to_string(),
+                None,
+            );
+        }
+    };
+
+    let active_constraints_json =
+        serde_json::to_string(active_constraints).unwrap_or_else(|_| "[]".to_string());
+    let task_message = format!(
+        "<active_constraints>\n{active_constraints_json}\n</active_constraints>\n\
+         <latest_user_message>\n{truncated}\n</latest_user_message>"
+    );
+    let mut failure = None;
+    let mut last_response_excerpt = None;
+    let mut model_attempts = 0;
+    let mut model_status = ModelExtractionStatus::Failed;
+    let mut model_constraints = Vec::new();
+    let mut model_revocations = Vec::new();
+    let mut revoked_constraint_ids = Vec::new();
+    let mut unmatched_revocation_ids = Vec::new();
+
+    for attempt in 1..=MAX_MODEL_ATTEMPTS {
+        model_attempts = attempt;
+        let response = match client
+            .send_message(
+                vec![
+                    Message::system(EXTRACTION_SYSTEM_PROMPT.to_string()),
+                    Message::user(task_message.clone()),
+                ],
+                None,
+            )
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                failure = Some(ExtractionFailure {
+                    stage: "model_request".to_string(),
+                    reason: error.to_string(),
+                });
+                continue;
+            }
+        };
+
+        last_response_excerpt = Some(response_excerpt(&response.text));
+        if response.text.trim().is_empty() {
+            failure = Some(ExtractionFailure {
+                stage: "empty_response".to_string(),
+                reason: "The extraction model returned no text".to_string(),
+            });
+            continue;
+        }
+        let Some(json_string) = extract_json_from_ai_response(&response.text) else {
+            failure = Some(ExtractionFailure {
+                stage: "json_extraction".to_string(),
+                reason: "No JSON object was found in the extraction response".to_string(),
+            });
+            continue;
+        };
+        match serde_json::from_str::<ExtractionResponse>(&json_string) {
+            Ok(mut parsed) => {
+                normalize_model_constraints(&mut parsed.additions, &message_sha256);
+                model_constraints = parsed.additions.clone();
+                model_revocations = parsed.revocations;
+
+                for revocation in &model_revocations {
+                    let constraint_id = revocation.constraint_id.trim();
+                    if active_constraints
+                        .iter()
+                        .any(|constraint| constraint.id == constraint_id)
+                    {
+                        if !revoked_constraint_ids
+                            .iter()
+                            .any(|existing| existing == constraint_id)
+                        {
+                            revoked_constraint_ids.push(constraint_id.to_string());
+                        }
+                    } else if !unmatched_revocation_ids
+                        .iter()
+                        .any(|existing| existing == constraint_id)
+                    {
+                        unmatched_revocation_ids.push(constraint_id.to_string());
+                    }
+                }
+
+                for constraint in &model_constraints {
+                    if !constraints
+                        .iter()
+                        .any(|existing| existing.matcher == constraint.matcher)
+                    {
+                        constraints.push(constraint.clone());
+                    }
+                }
+                model_status = ModelExtractionStatus::Parsed;
+                failure = None;
+                break;
+            }
+            Err(error) => {
+                failure = Some(ExtractionFailure {
+                    stage: "schema_validation".to_string(),
+                    reason: error.to_string(),
+                });
+            }
+        }
+    }
+
+    let status = if !constraints.is_empty() || !revoked_constraint_ids.is_empty() {
+        ExtractionStatus::Extracted
+    } else if failure.is_some() {
+        ExtractionStatus::Failed
+    } else {
+        ExtractionStatus::NoConstraints
+    };
+
+    ConstraintExtractionRecord {
+        message_sha256,
+        dialog_turn_id: None,
+        status,
+        constraints,
+        deterministic_constraint_count,
+        model_attempts,
+        active_constraint_ids,
+        model_status,
+        model_constraints,
+        model_revocations,
+        revoked_constraint_ids,
+        unmatched_revocation_ids,
+        input_chars,
+        prompt_chars,
+        input_truncated,
+        latency_ms: started_at
+            .elapsed()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX),
+        extracted_at_ms: timestamp_ms(),
+        failure,
+        response_excerpt: last_response_excerpt,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn extraction_with_failure(
+    started_at: Instant,
+    message_sha256: String,
+    constraints: Vec<ExtractedConstraint>,
+    deterministic_constraint_count: usize,
+    model_attempts: usize,
+    active_constraint_ids: Vec<String>,
+    input_chars: usize,
+    prompt_chars: usize,
+    input_truncated: bool,
+    stage: &str,
+    reason: String,
+    response_excerpt: Option<String>,
+) -> ConstraintExtractionRecord {
+    ConstraintExtractionRecord {
+        message_sha256,
+        dialog_turn_id: None,
+        status: if constraints.is_empty() {
+            ExtractionStatus::Failed
+        } else {
+            ExtractionStatus::Extracted
+        },
+        constraints,
+        deterministic_constraint_count,
+        model_attempts,
+        active_constraint_ids,
+        model_status: ModelExtractionStatus::Failed,
+        model_constraints: Vec::new(),
+        model_revocations: Vec::new(),
+        revoked_constraint_ids: Vec::new(),
+        unmatched_revocation_ids: Vec::new(),
+        input_chars,
+        prompt_chars,
+        input_truncated,
+        latency_ms: started_at
+            .elapsed()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX),
+        extracted_at_ms: timestamp_ms(),
+        failure: Some(ExtractionFailure {
+            stage: stage.to_string(),
+            reason,
+        }),
+        response_excerpt,
+    }
+}
+
 pub fn find_violation<'a>(
     constraints: &'a [ExtractedConstraint],
     file_path: &str,
 ) -> Option<&'a ExtractedConstraint> {
-    constraints.iter().find(|c| c.matcher.matches(file_path))
+    constraints
+        .iter()
+        .find(|constraint| constraint.matcher.matches(file_path))
 }
 
-/// Rejection message threaded back to the model as the tool's error result.
-/// Designed to redirect the agent toward reconsidering its implementation
-/// rather than just reporting "action denied".
 pub fn violation_message(file_path: &str, constraint: &ExtractedConstraint) -> String {
     format!(
         "This file (`{file_path}`) matches a constraint stated in the task: \"{}\". \
          This edit was not applied.\n\n\
          Editing a file you were told not to touch usually means your own implementation \
          doesn't match what's expected — not that the file is wrong. Reconsider your \
-         source-code approach instead of adjusting this file.\n\n\
-         If you're certain this file must change for a legitimate reason unrelated to \
-         making your own code compile or pass tests, explain why before retrying with \
-         `force: true`.",
+         source-code approach instead of adjusting this file.",
         constraint.description
     )
 }
 
-/// Shared `validate_input()` check for Edit/Write/Delete. Returns `Some(rejection)`
-/// if `file_path` violates a cached constraint for this session and the caller
-/// didn't pass `force: true`; `None` means the edit may proceed (no session,
-/// no cached constraints yet, no violation, or the escape hatch was used).
+fn telemetry_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn try_append_tool_telemetry(
+    context: &ToolUseContext,
+    event: &Value,
+) -> Result<std::path::PathBuf, String> {
+    let Some(session_id) = context.session_id.as_deref() else {
+        return Err("tool context has no session id".to_string());
+    };
+    let session_dir = context
+        .current_workspace_session_dir(session_id)
+        .map_err(|error| format!("failed to resolve session directory: {error}"))?;
+    let path = session_dir.join(TELEMETRY_RELATIVE_PATH);
+    append_jsonl(&path, event)?;
+    Ok(path)
+}
+
+fn append_jsonl(path: &Path, event: &Value) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "telemetry path has no parent".to_string())?;
+
+    let _guard = telemetry_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("failed to create telemetry directory: {error}"))?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|error| format!("failed to open telemetry stream: {error}"))?;
+    serde_json::to_writer(&mut file, event)
+        .and_then(|_| file.write_all(b"\n").map_err(serde_json::Error::io))
+        .map_err(|error| format!("failed to append telemetry event: {error}"))?;
+    Ok(())
+}
+
+fn append_tool_telemetry(context: &ToolUseContext, event: &Value) {
+    if let Err(error) = try_append_tool_telemetry(context, event) {
+        warn!("Failed to append edit constraint telemetry event: {error}");
+    }
+}
+
+fn resolved_path(context: &ToolUseContext, file_path: &str) -> Option<String> {
+    context
+        .resolve_tool_path(file_path)
+        .ok()
+        .map(|resolved| resolved.resolved_path)
+}
+
+fn decision_result(
+    context: Option<&ToolUseContext>,
+    tool_name: &str,
+    operation: &str,
+    file_path: &str,
+    decision: &str,
+    force_requested: bool,
+    state: Option<&EditConstraintState>,
+    violation: Option<&ExtractedConstraint>,
+    message: Option<String>,
+    error_code: Option<i32>,
+) -> Option<ValidationResult> {
+    let decision_id = Uuid::new_v4().to_string();
+    if let Some(context) = context {
+        append_tool_telemetry(
+            context,
+            &json!({
+                "event": "guard_decision",
+                "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
+                "decision_id": decision_id,
+                "timestamp_ms": timestamp_ms(),
+                "session_id": context.session_id,
+                "dialog_turn_id": context.dialog_turn_id,
+                "tool_call_id": context.tool_call_id,
+                "agent_type": context.agent_type,
+                "tool_name": tool_name,
+                "operation": operation,
+                "requested_path": file_path,
+                "resolved_path": resolved_path(context, file_path),
+                "workspace_kind": if context.is_remote() { "remote" } else { "local" },
+                "decision": decision,
+                "force_requested": force_requested,
+                "extraction_status": state.and_then(EditConstraintState::latest_status),
+                "constraint": violation,
+            }),
+        );
+    }
+
+    message.map(|message| ValidationResult {
+        result: false,
+        message: Some(message),
+        error_code,
+        meta: Some(json!({
+            "failure_kind": "edit_constraint_guard",
+            "guard_decision_id": decision_id,
+            "guard_decision": decision,
+            "constraint_id": violation.map(|constraint| constraint.id.as_str()),
+            "protected_path": file_path,
+            "force_requested": force_requested,
+        })),
+    })
+}
+
+/// Deterministic guard check shared by direct file mutation tools.
 ///
-/// `force: true` is intentionally silent here — it only suppresses the block,
-/// it does not validate the agent's stated justification (the input schema
-/// requires the tool description to ask for one; enforcing its *content* would
-/// need another LLM round-trip, which is out of scope for v1). The bypass is
-/// still visible in the tool call args for later trajectory review.
+/// `force` is no longer a model-controlled escape hatch. A stale caller that
+/// still sends it is rejected and recorded explicitly.
 pub fn check(
     context: Option<&ToolUseContext>,
+    tool_name: &str,
+    operation: &str,
     file_path: &str,
-    force: bool,
+    force_requested: bool,
 ) -> Option<ValidationResult> {
-    if force {
+    let state = context
+        .and_then(|value| value.session_id.as_deref())
+        .and_then(|session_id| {
+            get_global_coordinator()?
+                .get_session_manager()
+                .edit_constraint_state(session_id)
+        });
+
+    if force_requested {
+        return decision_result(
+            context,
+            tool_name,
+            operation,
+            file_path,
+            "force_denied",
+            true,
+            state.as_ref(),
+            None,
+            Some(
+                "`force` cannot override constraints stated by the user. Reconsider the source-code approach without modifying the protected file."
+                    .to_string(),
+            ),
+            Some(403),
+        );
+    }
+
+    let paths = candidate_paths(context, file_path);
+    let violation = state.as_ref().and_then(|state| {
+        paths
+            .iter()
+            .find_map(|path| find_violation(&state.constraints, path))
+    });
+    if let Some(violation) = violation {
+        return decision_result(
+            context,
+            tool_name,
+            operation,
+            file_path,
+            "deny",
+            false,
+            state.as_ref(),
+            Some(violation),
+            Some(violation_message(file_path, violation)),
+            Some(403),
+        );
+    }
+
+    let decision = match state.as_ref().and_then(EditConstraintState::latest_status) {
+        Some(ExtractionStatus::Failed) | None => "allow_extraction_unavailable",
+        _ => "allow",
+    };
+    decision_result(
+        context,
+        tool_name,
+        operation,
+        file_path,
+        decision,
+        false,
+        state.as_ref(),
+        None,
+        None,
+        None,
+    );
+    None
+}
+
+/// Checks the target and every non-symlink descendant before recursive delete.
+/// Inspection failures are fail-closed only when an enforceable constraint is
+/// active, because otherwise there is no protected path to discover.
+pub async fn check_recursive_delete(
+    context: Option<&ToolUseContext>,
+    root_path: &str,
+    force_requested: bool,
+) -> Option<ValidationResult> {
+    if let Some(rejection) = check(
+        context,
+        "Delete",
+        "recursive_delete",
+        root_path,
+        force_requested,
+    ) {
+        return Some(rejection);
+    }
+    let context = context?;
+    let session_id = context.session_id.as_deref()?;
+    let state = get_global_coordinator()?
+        .get_session_manager()
+        .edit_constraint_state(session_id)?;
+    if !state.has_enforceable_constraints() {
         return None;
     }
-    let session_id = context.and_then(|c| c.session_id.as_deref())?;
-    let coordinator = get_global_coordinator()?;
-    let constraints = coordinator.get_session_manager().edit_constraints(session_id)?;
-    let violation = find_violation(&constraints, file_path)?;
 
-    Some(ValidationResult {
-        result: false,
-        message: Some(violation_message(file_path, violation)),
-        error_code: Some(403),
-        meta: None,
-    })
+    let resolved = match context.resolve_tool_path(root_path) {
+        Ok(resolved) => resolved,
+        Err(_) => return None,
+    };
+    let Some(workspace_fs) = context.ws_fs() else {
+        if resolved.uses_remote_workspace_backend() {
+            return decision_result(
+                Some(context),
+                "Delete",
+                "recursive_delete",
+                root_path,
+                "deny_inspection_failed",
+                false,
+                Some(&state),
+                None,
+                Some(
+                    "Recursive delete was not applied because the remote workspace filesystem is unavailable"
+                        .to_string(),
+                ),
+                Some(503),
+            );
+        }
+        return check_local_recursive_delete(context, root_path, &resolved.resolved_path, &state);
+    };
+    match workspace_fs.is_dir(&resolved.resolved_path).await {
+        Ok(true) => {}
+        Ok(false) => return None,
+        Err(error) => {
+            return decision_result(
+                Some(context),
+                "Delete",
+                "recursive_delete",
+                root_path,
+                "deny_inspection_failed",
+                false,
+                Some(&state),
+                None,
+                Some(format!(
+                    "Recursive delete was not applied because the target type could not be inspected: {error}"
+                )),
+                Some(503),
+            );
+        }
+    }
+
+    let mut pending = vec![resolved.resolved_path];
+    let mut inspected = 0usize;
+    while let Some(directory) = pending.pop() {
+        let entries = match workspace_fs.read_dir(&directory).await {
+            Ok(entries) => entries,
+            Err(error) => {
+                return decision_result(
+                    Some(context),
+                    "Delete",
+                    "recursive_delete",
+                    root_path,
+                    "deny_inspection_failed",
+                    false,
+                    Some(&state),
+                    None,
+                    Some(format!(
+                        "Recursive delete was not applied because protected descendants could not be inspected: {error}"
+                    )),
+                    Some(503),
+                );
+            }
+        };
+
+        for entry in entries {
+            if entry.is_symlink {
+                continue;
+            }
+            inspected += 1;
+            if inspected > MAX_RECURSIVE_INSPECTION_ENTRIES {
+                return decision_result(
+                    Some(context),
+                    "Delete",
+                    "recursive_delete",
+                    root_path,
+                    "deny_inspection_limit",
+                    false,
+                    Some(&state),
+                    None,
+                    Some("Recursive delete was not applied because protected-path inspection exceeded its safety limit".to_string()),
+                    Some(413),
+                );
+            }
+            if let Some(violation) = find_violation(&state.constraints, &entry.path) {
+                return decision_result(
+                    Some(context),
+                    "Delete",
+                    "recursive_delete",
+                    &entry.path,
+                    "deny",
+                    false,
+                    Some(&state),
+                    Some(violation),
+                    Some(violation_message(&entry.path, violation)),
+                    Some(403),
+                );
+            }
+            if entry.is_dir {
+                pending.push(entry.path);
+            }
+        }
+    }
+    None
+}
+
+fn check_local_recursive_delete(
+    context: &ToolUseContext,
+    root_path: &str,
+    resolved_root: &str,
+    state: &EditConstraintState,
+) -> Option<ValidationResult> {
+    let root = Path::new(resolved_root);
+    let metadata = match fs::symlink_metadata(root) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            return decision_result(
+                Some(context),
+                "Delete",
+                "recursive_delete",
+                root_path,
+                "deny_inspection_failed",
+                false,
+                Some(state),
+                None,
+                Some(format!(
+                    "Recursive delete was not applied because the target could not be inspected: {error}"
+                )),
+                Some(503),
+            );
+        }
+    };
+    if !metadata.is_dir() {
+        return None;
+    }
+
+    let mut pending = vec![root.to_path_buf()];
+    let mut inspected = 0usize;
+    while let Some(directory) = pending.pop() {
+        let entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(error) => {
+                return decision_result(
+                    Some(context),
+                    "Delete",
+                    "recursive_delete",
+                    root_path,
+                    "deny_inspection_failed",
+                    false,
+                    Some(state),
+                    None,
+                    Some(format!(
+                        "Recursive delete was not applied because protected descendants could not be inspected: {error}"
+                    )),
+                    Some(503),
+                );
+            }
+        };
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => {
+                    return decision_result(
+                        Some(context),
+                        "Delete",
+                        "recursive_delete",
+                        root_path,
+                        "deny_inspection_failed",
+                        false,
+                        Some(state),
+                        None,
+                        Some(format!(
+                            "Recursive delete was not applied because a descendant could not be inspected: {error}"
+                        )),
+                        Some(503),
+                    );
+                }
+            };
+            let path = entry.path();
+            let entry_metadata = match fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(error) => {
+                    return decision_result(
+                        Some(context),
+                        "Delete",
+                        "recursive_delete",
+                        root_path,
+                        "deny_inspection_failed",
+                        false,
+                        Some(state),
+                        None,
+                        Some(format!(
+                            "Recursive delete was not applied because a descendant type could not be inspected: {error}"
+                        )),
+                        Some(503),
+                    );
+                }
+            };
+            if entry_metadata.file_type().is_symlink() {
+                continue;
+            }
+            inspected += 1;
+            if inspected > MAX_RECURSIVE_INSPECTION_ENTRIES {
+                return decision_result(
+                    Some(context),
+                    "Delete",
+                    "recursive_delete",
+                    root_path,
+                    "deny_inspection_limit",
+                    false,
+                    Some(state),
+                    None,
+                    Some("Recursive delete was not applied because protected-path inspection exceeded its safety limit".to_string()),
+                    Some(413),
+                );
+            }
+            let path_string = path.to_string_lossy().to_string();
+            if let Some(violation) = find_violation(&state.constraints, &path_string) {
+                return decision_result(
+                    Some(context),
+                    "Delete",
+                    "recursive_delete",
+                    &path_string,
+                    "deny",
+                    false,
+                    Some(state),
+                    Some(violation),
+                    Some(violation_message(&path_string, violation)),
+                    Some(403),
+                );
+            }
+            if entry_metadata.is_dir() {
+                pending.push(path);
+            }
+        }
+    }
+    None
+}
+
+/// Records a successful direct mutation. Offline evaluation can join these
+/// events with the final patch and mark paths with no matching event as
+/// unattributed; this function never blocks or repairs the patch.
+pub fn record_mutation_applied(
+    context: &ToolUseContext,
+    tool_name: &str,
+    operation: &str,
+    file_path: &str,
+) {
+    append_tool_telemetry(
+        context,
+        &json!({
+            "event": "mutation_applied",
+            "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
+            "mutation_id": Uuid::new_v4().to_string(),
+            "timestamp_ms": timestamp_ms(),
+            "session_id": context.session_id,
+            "dialog_turn_id": context.dialog_turn_id,
+            "tool_call_id": context.tool_call_id,
+            "agent_type": context.agent_type,
+            "tool_name": tool_name,
+            "operation": operation,
+            "requested_path": file_path,
+            "resolved_path": resolved_path(context, file_path),
+            "workspace_kind": if context.is_remote() { "remote" } else { "local" },
+        }),
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
+    use std::collections::HashMap;
+
+    fn constraint(description: &str, matcher: ConstraintMatcher) -> ExtractedConstraint {
+        ExtractedConstraint {
+            id: format!("test:{description}"),
+            description: description.to_string(),
+            matcher,
+            source: ConstraintSource::Legacy,
+            source_text: None,
+        }
+    }
 
     #[test]
     fn test_files_matcher_covers_common_conventions() {
-        let m = ConstraintMatcher::TestFiles;
-        assert!(m.matches("report/util_test.go"));
-        assert!(m.matches("pkg/foo/test_bar.py"));
-        assert!(m.matches("pkg/foo/bar_test.py"));
-        assert!(m.matches("src/foo.test.tsx"));
-        assert!(m.matches("src/foo.spec.ts"));
-        assert!(m.matches("test/components/Foo-test.tsx"));
-        assert!(m.matches("__tests__/foo.js"));
-        assert!(!m.matches("src/foo.ts"));
-        assert!(!m.matches("report/util.go"));
+        let matcher = ConstraintMatcher::TestFiles;
+        for path in [
+            "report/util_test.go",
+            "pkg/foo/test_bar.py",
+            "pkg/foo/bar_test.py",
+            "src/foo.test.tsx",
+            "src/foo.spec.ts",
+            "spec/models/user_spec.rb",
+            "pkg/foo_test.cc",
+            "src/foo-test.js",
+            "src/test-widget.ts",
+            "test/components/Foo-test.tsx",
+            "__tests__/foo.js",
+            "TEST/UPPER.spec.ts",
+        ] {
+            assert!(matcher.matches(path), "expected test path: {path}");
+        }
+        assert!(!matcher.matches("src/foo.ts"));
+        assert!(!matcher.matches("report/util.go"));
     }
 
     #[test]
-    fn path_contains_matcher() {
-        let m = ConstraintMatcher::PathContains {
-            substrings: vec!["package-lock.json".to_string()],
+    fn deterministic_extractor_recognizes_swebench_wording() {
+        let message = "I've already taken care of all changes to any of the test files. You DON'T have to modify the testing logic or any of the tests. Keep changes minimal and limited to non-tests.";
+        let extracted = deterministic_test_constraint(message).expect("test constraint");
+        assert_eq!(extracted.matcher, ConstraintMatcher::TestFiles);
+        assert_eq!(extracted.source, ConstraintSource::Deterministic);
+        assert!(extracted.source_text.is_some());
+    }
+
+    #[test]
+    fn deterministic_extractor_does_not_confuse_do_not_run_tests() {
+        assert!(deterministic_test_constraint("Do not run the tests on Windows.").is_none());
+    }
+
+    #[test]
+    fn deterministic_extractor_recognizes_unchanged_and_non_test_only_wording() {
+        for message in [
+            "Keep test files unchanged.",
+            "Tests must remain unchanged.",
+            "Only modify non-test files.",
+            "测试文件保持不变。",
+        ] {
+            assert!(
+                deterministic_test_constraint(message).is_some(),
+                "expected deterministic constraint for: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn deterministic_extractor_does_not_turn_explicit_relaxation_into_a_prohibition() {
+        for message in [
+            "You can modify tests now.",
+            "Test files are allowed to be modified.",
+            "现在可以修改测试文件。",
+        ] {
+            assert!(
+                deterministic_test_constraint(message).is_none(),
+                "expected no deterministic prohibition for: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn long_prompt_keeps_both_ends() {
+        let input = format!("start{}do not modify tests", "x".repeat(MAX_PROMPT_CHARS));
+        let (truncated, was_truncated) = truncate_for_extraction(&input);
+        assert!(was_truncated);
+        assert!(truncated.starts_with("start"));
+        assert!(truncated.ends_with("do not modify tests"));
+    }
+
+    #[test]
+    fn matchers_cover_paths_extensions_and_unmatched() {
+        assert!(ConstraintMatcher::PathContains {
+            substrings: vec!["package-lock.json".to_string()]
+        }
+        .matches("frontend/package-lock.json"));
+        assert!(ConstraintMatcher::PathUnderDir {
+            dirs: vec!["migrations".to_string()]
+        }
+        .matches("db/migrations/0002_add_column.sql"));
+        assert!(ConstraintMatcher::Extension {
+            exts: vec![".lock".to_string()]
+        }
+        .matches("Cargo.lock"));
+        assert!(!ConstraintMatcher::Unmatched.matches("anything.go"));
+    }
+
+    #[test]
+    fn fast_response_parser_requires_the_observable_update_schema() {
+        let valid = r#"{
+            "additions": [{
+                "description": "do not modify tests",
+                "matcher": {"kind": "test_files"}
+            }],
+            "revocations": [{
+                "constraint_id": "deterministic:test_files",
+                "description": "tests may now be modified"
+            }]
+        }"#;
+        let parsed: ExtractionResponse = serde_json::from_str(valid).expect("valid schema");
+        assert_eq!(parsed.additions.len(), 1);
+        assert_eq!(parsed.revocations.len(), 1);
+
+        assert!(serde_json::from_str::<ExtractionResponse>(
+            r#"{"constraints": [], "revocations": []}"#
+        )
+        .is_err());
+        assert!(serde_json::from_str::<ExtractionResponse>(r#"{"additions": []}"#).is_err());
+    }
+
+    #[test]
+    fn state_distinguishes_failed_from_processed_extraction() {
+        let mut state = EditConstraintState::default();
+        let failed = ConstraintExtractionRecord {
+            message_sha256: "hash".to_string(),
+            dialog_turn_id: Some("turn-1".to_string()),
+            status: ExtractionStatus::Failed,
+            constraints: Vec::new(),
+            deterministic_constraint_count: 0,
+            model_attempts: 2,
+            active_constraint_ids: Vec::new(),
+            model_status: ModelExtractionStatus::Failed,
+            model_constraints: Vec::new(),
+            model_revocations: Vec::new(),
+            revoked_constraint_ids: Vec::new(),
+            unmatched_revocation_ids: Vec::new(),
+            input_chars: 10,
+            prompt_chars: 10,
+            input_truncated: false,
+            latency_ms: 1,
+            extracted_at_ms: 1,
+            failure: Some(ExtractionFailure {
+                stage: "schema_validation".to_string(),
+                reason: "bad json".to_string(),
+            }),
+            response_excerpt: None,
         };
-        assert!(m.matches("frontend/package-lock.json"));
-        assert!(!m.matches("frontend/package.json"));
+        state.merge_extraction(failed);
+        assert!(!state.message_processed("turn-1", "hash"));
+
+        let mut completed = state.extractions[0].clone();
+        completed.status = ExtractionStatus::NoConstraints;
+        completed.failure = None;
+        state.merge_extraction(completed);
+        assert!(state.message_processed("turn-1", "hash"));
+        assert!(!state.message_processed("turn-2", "hash"));
     }
 
     #[test]
-    fn path_under_dir_matcher() {
-        let m = ConstraintMatcher::PathUnderDir {
-            dirs: vec!["migrations".to_string()],
-        };
-        assert!(m.matches("migrations/0001_init.sql"));
-        assert!(m.matches("db/migrations/0002_add_column.sql"));
-        assert!(!m.matches("db/migration_helpers.go"));
+    fn state_applies_only_validated_explicit_revocations() {
+        let protected = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+        let protected_id = protected.id.clone();
+        let mut state = EditConstraintState::default();
+        state.constraints.push(protected);
+
+        state.merge_extraction(ConstraintExtractionRecord {
+            message_sha256: "relaxation-hash".to_string(),
+            dialog_turn_id: Some("turn-2".to_string()),
+            status: ExtractionStatus::Extracted,
+            constraints: Vec::new(),
+            deterministic_constraint_count: 0,
+            model_attempts: 1,
+            active_constraint_ids: vec![protected_id.clone()],
+            model_status: ModelExtractionStatus::Parsed,
+            model_constraints: Vec::new(),
+            model_revocations: vec![ConstraintRevocation {
+                constraint_id: protected_id.clone(),
+                description: "tests may be modified now".to_string(),
+            }],
+            revoked_constraint_ids: vec![protected_id],
+            unmatched_revocation_ids: Vec::new(),
+            input_chars: 24,
+            prompt_chars: 24,
+            input_truncated: false,
+            latency_ms: 1,
+            extracted_at_ms: 1,
+            failure: None,
+            response_excerpt: Some(
+                r#"{"additions":[],"revocations":[{"constraint_id":"test:don't touch tests"}]}"#
+                    .to_string(),
+            ),
+        });
+
+        assert!(state.constraints.is_empty());
+        assert_eq!(state.schema_version, EDIT_CONSTRAINT_SCHEMA_VERSION);
     }
 
     #[test]
-    fn extension_matcher() {
-        let m = ConstraintMatcher::Extension {
-            exts: vec![".lock".to_string()],
-        };
-        assert!(m.matches("Cargo.lock"));
-        assert!(!m.matches("Cargo.toml"));
-    }
+    fn failed_or_unmatched_revocation_keeps_active_constraint() {
+        let protected = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+        let mut state = EditConstraintState::default();
+        state.constraints.push(protected.clone());
 
-    #[test]
-    fn unmatched_never_matches() {
-        let m = ConstraintMatcher::Unmatched;
-        assert!(!m.matches("anything.go"));
+        state.merge_extraction(ConstraintExtractionRecord {
+            message_sha256: "invalid-relaxation-hash".to_string(),
+            dialog_turn_id: Some("turn-2".to_string()),
+            status: ExtractionStatus::NoConstraints,
+            constraints: Vec::new(),
+            deterministic_constraint_count: 0,
+            model_attempts: 1,
+            active_constraint_ids: vec![protected.id.clone()],
+            model_status: ModelExtractionStatus::Parsed,
+            model_constraints: Vec::new(),
+            model_revocations: vec![ConstraintRevocation {
+                constraint_id: "invented-id".to_string(),
+                description: "ambiguous relaxation".to_string(),
+            }],
+            revoked_constraint_ids: Vec::new(),
+            unmatched_revocation_ids: vec!["invented-id".to_string()],
+            input_chars: 20,
+            prompt_chars: 20,
+            input_truncated: false,
+            latency_ms: 1,
+            extracted_at_ms: 1,
+            failure: None,
+            response_excerpt: None,
+        });
+
+        assert_eq!(state.constraints, vec![protected]);
     }
 
     #[test]
     fn find_violation_returns_first_match() {
         let constraints = vec![
-            ExtractedConstraint {
-                description: "don't touch tests".to_string(),
-                matcher: ConstraintMatcher::TestFiles,
-            },
-            ExtractedConstraint {
-                description: "don't touch lockfiles".to_string(),
-                matcher: ConstraintMatcher::Extension {
+            constraint("don't touch tests", ConstraintMatcher::TestFiles),
+            constraint(
+                "don't touch lockfiles",
+                ConstraintMatcher::Extension {
                     exts: vec![".lock".to_string()],
                 },
-            },
+            ),
         ];
         assert_eq!(
-            find_violation(&constraints, "report/util_test.go").map(|c| c.description.as_str()),
+            find_violation(&constraints, "report/util_test.go")
+                .map(|constraint| constraint.description.as_str()),
             Some("don't touch tests")
         );
         assert_eq!(
-            find_violation(&constraints, "Cargo.lock").map(|c| c.description.as_str()),
+            find_violation(&constraints, "Cargo.lock")
+                .map(|constraint| constraint.description.as_str()),
             Some("don't touch lockfiles")
         );
-        assert!(find_violation(&constraints, "src/main.rs").is_none());
+    }
+
+    #[test]
+    fn force_is_rejected_even_without_runtime_context() {
+        let rejection =
+            check(None, "Edit", "edit", "tests/example.rs", true).expect("force must be denied");
+        assert!(!rejection.result);
+        assert_eq!(rejection.error_code, Some(403));
+        assert_eq!(
+            rejection
+                .meta
+                .as_ref()
+                .and_then(|value| value.get("guard_decision"))
+                .and_then(Value::as_str),
+            Some("force_denied")
+        );
     }
 
     #[tokio::test]
-    async fn extract_constraints_returns_empty_for_blank_input() {
-        assert!(extract_constraints("").await.is_empty());
-        assert!(extract_constraints("   \n  ").await.is_empty());
+    async fn blank_input_is_no_constraints_not_failure() {
+        let extraction = extract_constraints("   \n  ").await;
+        assert_eq!(extraction.status, ExtractionStatus::NoConstraints);
+        assert!(extraction.constraints.is_empty());
+        assert!(extraction.failure.is_none());
+    }
+
+    #[test]
+    fn successful_mutation_telemetry_is_persisted_as_jsonl() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-edit-constraint-telemetry-{}",
+            Uuid::new_v4()
+        ));
+        fs::create_dir_all(&root).expect("create temp workspace");
+        let event = json!({
+            "event": "mutation_applied",
+            "tool_call_id": "tool-call-1",
+            "requested_path": "tests/example.rs",
+        });
+        let telemetry_path = root.join(TELEMETRY_RELATIVE_PATH);
+        append_jsonl(&telemetry_path, &event).expect("append telemetry event");
+        let line = fs::read_to_string(&telemetry_path).expect("read telemetry");
+        let event: Value = serde_json::from_str(line.trim()).expect("valid jsonl event");
+        assert_eq!(event["event"], "mutation_applied");
+        assert_eq!(event["tool_call_id"], "tool-call-1");
+        assert_eq!(event["requested_path"], "tests/example.rs");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn local_recursive_delete_fallback_finds_protected_descendant() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-edit-constraint-recursive-delete-{}",
+            Uuid::new_v4()
+        ));
+        let target = root.join("parent");
+        fs::create_dir_all(target.join("tests")).expect("create test directory");
+        fs::write(target.join("tests/example.rs"), "test").expect("create test file");
+        let context = ToolUseContext {
+            tool_call_id: Some("tool-call-1".to_string()),
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: Some("turn-1".to_string()),
+            workspace: Some(WorkspaceBinding::new(None, root.clone())),
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        };
+        let state = EditConstraintState {
+            constraints: vec![constraint(
+                "don't touch tests",
+                ConstraintMatcher::TestFiles,
+            )],
+            ..Default::default()
+        };
+
+        let rejection =
+            check_local_recursive_delete(&context, "parent", &target.to_string_lossy(), &state)
+                .expect("recursive delete should be denied");
+        assert_eq!(rejection.error_code, Some(403));
+        assert!(rejection
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("tests"));
+
+        let _ = fs::remove_dir_all(root);
     }
 }

@@ -2080,22 +2080,34 @@ impl ExecutionEngine {
             .cloned()
             .unwrap_or_default();
 
-        // Edit constraint guard: extract "don't modify X" constraints from the
-        // first turn's user message, once per session (best-effort, fail-open —
-        // see edit_constraint_guard::extract_constraints). Cached in
-        // SessionManager and consulted by Edit/Write/Delete's validate_input().
-        if context.turn_index == 0
-            && self
-                .session_manager
-                .edit_constraints(&context.session_id)
-                .is_none()
-        {
-            let constraints = crate::agentic::execution::edit_constraint_guard::extract_constraints(
+        // Edit constraint guard: process each distinct user instruction once.
+        // The fast extractor receives the active state so explicit additions
+        // and revocations form an auditable session-persistent state machine.
+        if !original_user_input.trim().is_empty() {
+            let message_sha256 = crate::agentic::execution::edit_constraint_guard::message_sha256(
                 &original_user_input,
-            )
-            .await;
-            self.session_manager
-                .remember_edit_constraints(&context.session_id, constraints);
+            );
+            let already_processed = self
+                .session_manager
+                .edit_constraint_state(&context.session_id)
+                .is_some_and(|state| {
+                    state.message_processed(&context.dialog_turn_id, &message_sha256)
+                });
+            if !already_processed {
+                let active_constraints = self
+                    .session_manager
+                    .edit_constraints(&context.session_id)
+                    .unwrap_or_default();
+                let mut extraction = crate::agentic::execution::edit_constraint_guard::extract_constraints_with_active(
+                    &original_user_input,
+                    &active_constraints,
+                )
+                .await;
+                extraction.dialog_turn_id = Some(context.dialog_turn_id.clone());
+                self.session_manager
+                    .remember_edit_constraint_extraction(&context.session_id, extraction)
+                    .await;
+            }
         }
 
         let model_id = self

@@ -145,11 +145,6 @@ impl Tool for FileEditTool {
                     "type": "boolean",
                     "default": false,
                     "description": "Replace all occurrences of old_string (default false)"
-                },
-                "force": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Only set true after a prior call was rejected for touching a file the task said not to modify, AND you have a legitimate reason unrelated to making your own code compile or pass tests. State that reason in your response before retrying with this set."
                 }
             },
             "required": ["file_path", "old_string", "new_string"],
@@ -208,9 +203,9 @@ impl Tool for FileEditTool {
             .get("force")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        if let Some(rejection) =
-            crate::agentic::execution::edit_constraint_guard::check(context, file_path, force)
-        {
+        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check(
+            context, "Edit", "edit", file_path, force,
+        ) {
             return rejection;
         }
 
@@ -370,6 +365,12 @@ impl Tool for FileEditTool {
                 &edit_result.new_content,
                 timestamp_ms,
             );
+            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+                context,
+                "Edit",
+                "edit",
+                &resolved.logical_path,
+            );
 
             let result = ToolResult::Result {
                 data: json!({
@@ -421,6 +422,12 @@ impl Tool for FileEditTool {
             &resolved,
             &edit_result.new_content,
             timestamp_ms,
+        );
+        crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+            context,
+            "Edit",
+            "edit",
+            &resolved.logical_path,
         );
 
         let result = ToolResult::Result {
@@ -501,6 +508,7 @@ mod tests {
             .get("old_string")
             .and_then(|value| value.get("minLength"))
             .is_none());
+        assert!(properties.get("force").is_none());
     }
 
     #[test]

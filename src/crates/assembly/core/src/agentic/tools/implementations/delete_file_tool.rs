@@ -101,11 +101,6 @@ Important notes:
                 "recursive": {
                     "type": "boolean",
                     "description": "If true, recursively delete directories and their contents. Required when deleting non-empty directories. Default: false"
-                },
-                "force": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Only set true after a prior call was rejected for touching a file the task said not to modify, AND you have a legitimate reason unrelated to making your own code compile or pass tests. State that reason in your response before retrying with this set."
                 }
             },
             "required": ["path"]
@@ -154,9 +149,21 @@ Important notes:
             .get("force")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        if let Some(rejection) =
-            crate::agentic::execution::edit_constraint_guard::check(context, path_str, force)
-        {
+        let recursive = input
+            .get("recursive")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let rejection = if recursive {
+            crate::agentic::execution::edit_constraint_guard::check_recursive_delete(
+                context, path_str, force,
+            )
+            .await
+        } else {
+            crate::agentic::execution::edit_constraint_guard::check(
+                context, "Delete", "delete", path_str, force,
+            )
+        };
+        if let Some(rejection) = rejection {
             return rejection;
         }
 
@@ -345,6 +352,16 @@ Important notes:
                     stderr
                 )));
             }
+            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+                context,
+                "Delete",
+                if recursive {
+                    "recursive_delete"
+                } else {
+                    "delete"
+                },
+                &resolved.logical_path,
+            );
 
             let result_data = json!({
                 "success": true,
@@ -379,11 +396,33 @@ Important notes:
         });
 
         let result_text = self.render_result_for_assistant(&result_data);
+        crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
+            context,
+            "Delete",
+            if recursive {
+                "recursive_delete"
+            } else {
+                "delete"
+            },
+            &resolved.logical_path,
+        );
 
         Ok(vec![ToolResult::Result {
             data: result_data,
             result_for_assistant: Some(result_text),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DeleteFileTool;
+    use crate::agentic::tools::framework::Tool;
+
+    #[test]
+    fn schema_does_not_expose_force_override() {
+        let schema = DeleteFileTool::new().input_schema();
+        assert!(schema["properties"].get("force").is_none());
     }
 }
