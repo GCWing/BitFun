@@ -106,12 +106,14 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
+  const [enableDeferredToolLoading, setEnableDeferredToolLoading] = useState(true);
   const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
   const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
     useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
+  const [deferredToolLoadingConfigSaving, setDeferredToolLoadingConfigSaving] = useState(false);
 
   const [computerUseEnabled, setComputerUseEnabled] = useState(false);
   const [computerUseAccess, setComputerUseAccess] = useState(false);
@@ -210,6 +212,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         allModels,
         funcAgentModelsData,
         skipConfirm,
+        deferredToolLoadingEnabled,
         loadedSubagentMaxConcurrency,
         execTimeout,
         confirmTimeout,
@@ -223,6 +226,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
         configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
         configManager.getConfig<boolean>('ai.skip_tool_confirmation'),
+        configManager.getConfig<boolean>('ai.enable_deferred_tool_loading'),
         configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
@@ -238,6 +242,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setSkipToolConfirmation(skipConfirm ?? true);
+      setEnableDeferredToolLoading(deferredToolLoadingEnabled ?? true);
       setSubagentMaxConcurrency(loadedSubagentMaxConcurrency != null
         ? loadedSubagentMaxConcurrency
         : DEFAULT_SUBAGENT_MAX_CONCURRENCY);
@@ -476,6 +481,24 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSkipToolConfirmation(!checked);
     } finally {
       setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleDeferredToolLoadingChange = async (checked: boolean) => {
+    const previous = enableDeferredToolLoading;
+    setEnableDeferredToolLoading(checked);
+    setDeferredToolLoadingConfigSaving(true);
+    try {
+      await configManager.setConfig('ai.enable_deferred_tool_loading', checked);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save enable_deferred_tool_loading', error);
+      notificationService.error(
+        `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+      setEnableDeferredToolLoading(previous);
+    } finally {
+      setDeferredToolLoadingConfigSaving(false);
     }
   };
 
@@ -1183,6 +1206,26 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 step={1}
                 size="small"
                 variant="compact"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('deferredToolLoading.sectionTitle')}
+          description={t('deferredToolLoading.sectionDescription')}
+        >
+          <ConfigPageRow
+            label={t('common.enable')}
+            description={!enableDeferredToolLoading ? t('deferredToolLoading.warning') : undefined}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control">
+              <Switch
+                checked={enableDeferredToolLoading}
+                onChange={(event) => handleDeferredToolLoadingChange(event.target.checked)}
+                disabled={deferredToolLoadingConfigSaving}
+                size="small"
               />
             </div>
           </ConfigPageRow>

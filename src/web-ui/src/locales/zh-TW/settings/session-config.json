@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "權限管理",
-    "subtitle": "加速工作區搜尋、工具執行、Computer use、瀏覽器控制與偵錯模式"
+    "subtitle": "加速工作區搜尋、工具執行、工具定義載入、Computer use、瀏覽器控制與偵錯模式"
   },
   "features": {
     "sessionTitle": {
@@ -49,6 +49,11 @@
   "toolExecution": {
     "sectionTitle": "工具執行行為",
     "sectionDescription": "本會話中 AI 調用工具時的確認與超時策略。"
+  },
+  "deferredToolLoading": {
+    "sectionTitle": "工具延遲載入",
+    "sectionDescription": "僅在需要時載入部分工具的完整 Schema（包括部分內建工具及所有 MCP 工具）。",
+    "warning": "目前會在每次請求中傳送啟用工具的完整 Schema；如果設定了大量 MCP 工具會占用較多 Token。"
   },
   "computerUse": {
     "sectionTitle": "Computer use（桌面自動化）",

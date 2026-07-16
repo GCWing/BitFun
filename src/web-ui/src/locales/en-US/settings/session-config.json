@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "Permission management",
-    "subtitle": "Accelerated workspace search, tool execution, Computer use, browser control, and debug mode"
+    "subtitle": "Accelerated workspace search, tool execution, tool definition loading, Computer use, browser control, and debug mode"
   },
   "features": {
     "sessionTitle": {
@@ -49,6 +49,11 @@
   "toolExecution": {
     "sectionTitle": "Tool execution behavior",
     "sectionDescription": "Confirmation and timeout settings when tools run in a session."
+  },
+  "deferredToolLoading": {
+    "sectionTitle": "Deferred tool loading",
+    "sectionDescription": "Load detailed schemas for some tools only when needed, including a subset of built-in tools and all MCP tools.",
+    "warning": "Each request now sends full schemas for enabled tools. Configuring many MCP tools uses more tokens."
   },
   "computerUse": {
     "sectionTitle": "Computer use (desktop)",

@@ -5,6 +5,7 @@ Notes:
 - "Overriding agents" only lists built-in agents that explicitly define `tool_exposure_overrides()` in the current code.
 - Custom subagents do not currently support independent exposure overrides and inherit the default behavior.
 - Dynamically registered MCP tools default to `Deferred`; they are discovered at runtime and are not enumerated in the built-in table below.
+- Global `ai.enable_deferred_tool_loading=false` overrides all allowed tools to `Direct` and removes `GetToolSpec` and `CallDeferredTool` from the model-visible manifest.
 
 **Tool Exposure Table**
 

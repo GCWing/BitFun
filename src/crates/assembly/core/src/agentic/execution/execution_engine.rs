@@ -2646,7 +2646,20 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
-        let tool_manifest_context_vars = context.context.clone();
+        let deferred_tool_loading_enabled = match get_global_config_service().await {
+            Ok(service) => service
+                .get_config::<bool>(Some("ai.enable_deferred_tool_loading"))
+                .await
+                .unwrap_or(true),
+            Err(_) => true,
+        };
+        let mut execution_context_vars = context.context.clone();
+        execution_context_vars.insert(
+            "enable_deferred_tool_loading".to_string(),
+            deferred_tool_loading_enabled.to_string(),
+        );
+        execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
+        let tool_manifest_context_vars = execution_context_vars.clone();
 
         let tool_description_context = tool_context_runtime::build_tool_description_context(
             &agent_type,
@@ -2786,9 +2799,6 @@ impl ExecutionEngine {
         let enable_context_compression = session.config.enable_context_compression;
         let compression_trigger_budget =
             Self::compression_trigger_budget(context_window, ai_client.config.max_tokens);
-
-        let mut execution_context_vars = context.context.clone();
-        execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
 
         // If the primary model is text-only, do not send image payloads to the provider.
         // Instead, keep a text-only placeholder (including `image_id`).

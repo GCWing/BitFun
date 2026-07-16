@@ -10,10 +10,12 @@ use bitfun_agent_tools::{
     ContextualToolManifest, ContextualVisibleTools, GetToolSpecCatalogProvider,
     GetToolSpecDeferredToolSummary, GetToolSpecExecutionError, GetToolSpecRuntime,
     ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolManifestDefinition,
-    GET_TOOL_SPEC_TOOL_NAME,
+    CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
 };
 use serde_json::Value;
 use std::sync::Arc;
+
+const DEFERRED_TOOL_LOADING_CONTEXT_KEY: &str = "enable_deferred_tool_loading";
 
 #[derive(Debug, Clone)]
 pub struct ResolvedToolManifest {
@@ -129,6 +131,43 @@ impl GetToolSpecCatalogProvider<dyn Tool, ToolUseContext> for ProductToolCatalog
 }
 
 impl ProductToolCatalogProvider {
+    fn deferred_tool_loading_enabled(context: &ToolUseContext) -> bool {
+        context
+            .custom_data
+            .get(DEFERRED_TOOL_LOADING_CONTEXT_KEY)
+            .and_then(|value| {
+                value
+                    .as_bool()
+                    .or_else(|| value.as_str().and_then(|value| value.parse::<bool>().ok()))
+            })
+            .unwrap_or(true)
+    }
+
+    fn resolve_manifest_inputs(
+        allowed_tools: &[String],
+        exposure_overrides: &AgentToolPolicyOverrides,
+        context: &ToolUseContext,
+    ) -> (Vec<String>, AgentToolPolicyOverrides) {
+        if Self::deferred_tool_loading_enabled(context) {
+            return (allowed_tools.to_vec(), exposure_overrides.clone());
+        }
+
+        let allowed_tools = allowed_tools
+            .iter()
+            .filter(|tool_name| {
+                tool_name.as_str() != GET_TOOL_SPEC_TOOL_NAME
+                    && tool_name.as_str() != CALL_DEFERRED_TOOL_NAME
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let exposure_overrides = allowed_tools
+            .iter()
+            .map(|tool_name| (tool_name.clone(), ToolExposure::Direct))
+            .collect();
+
+        (allowed_tools, exposure_overrides)
+    }
+
     async fn default_deferred_tools(&self) -> Vec<ToolRef> {
         let registry = get_global_tool_registry();
         let registry = registry.read().await;
@@ -151,8 +190,13 @@ impl ProductToolCatalogProvider {
         let policy = agent_registry
             .get_agent_tool_policy(agent_type, workspace_root)
             .await;
+        let (allowed_tools, exposure_overrides) = Self::resolve_manifest_inputs(
+            &policy.allowed_tools,
+            &policy.exposure_overrides,
+            context,
+        );
         let visible_tools = product_tool_catalog_runtime(self)
-            .visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context)
+            .visible_tools(&allowed_tools, &exposure_overrides, context)
             .await;
         Ok(visible_tools.deferred_tools)
     }
@@ -169,8 +213,13 @@ impl ProductToolCatalogProvider {
         let policy = agent_registry
             .get_agent_tool_policy(agent_type, workspace_root)
             .await;
+        let (allowed_tools, exposure_overrides) = Self::resolve_manifest_inputs(
+            &policy.allowed_tools,
+            &policy.exposure_overrides,
+            context,
+        );
         let visible_tools = product_tool_catalog_runtime(self)
-            .visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context)
+            .visible_tools(&allowed_tools, &exposure_overrides, context)
             .await;
         let mut tools = visible_tools.direct_tools;
         tools.extend(visible_tools.deferred_tools);
@@ -196,8 +245,13 @@ pub(crate) async fn resolve_product_visible_tools(
     context: &ToolUseContext,
 ) -> ContextualVisibleTools<dyn Tool> {
     let provider = ProductToolCatalogProvider;
+    let (allowed_tools, exposure_overrides) = ProductToolCatalogProvider::resolve_manifest_inputs(
+        allowed_tools,
+        exposure_overrides,
+        context,
+    );
     product_tool_catalog_runtime(&provider)
-        .visible_tools(allowed_tools, exposure_overrides, context)
+        .visible_tools(&allowed_tools, &exposure_overrides, context)
         .await
 }
 
@@ -207,8 +261,13 @@ pub(crate) async fn resolve_product_tool_manifest(
     context: &ToolUseContext,
 ) -> ContextualToolManifest<dyn Tool> {
     let provider = ProductToolCatalogProvider;
+    let (allowed_tools, exposure_overrides) = ProductToolCatalogProvider::resolve_manifest_inputs(
+        allowed_tools,
+        exposure_overrides,
+        context,
+    );
     product_tool_catalog_runtime(&provider)
-        .tool_manifest(allowed_tools, exposure_overrides, context)
+        .tool_manifest(&allowed_tools, &exposure_overrides, context)
         .await
 }
 
@@ -260,6 +319,7 @@ mod tests {
         resolve_product_get_tool_spec_results, resolve_product_readonly_enabled_tools,
         resolve_product_resolved_tool_manifest, resolve_product_resolved_visible_tools,
         resolve_product_tool_manifest, ProductToolCatalogProvider,
+        DEFERRED_TOOL_LOADING_CONTEXT_KEY,
     };
     use crate::agentic::agents::AgentToolPolicyOverrides;
     use crate::agentic::tools::framework::{
@@ -269,9 +329,10 @@ mod tests {
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use bitfun_agent_tools::{
-        GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, GET_TOOL_SPEC_TOOL_NAME,
+        GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, CALL_DEFERRED_TOOL_NAME,
+        GET_TOOL_SPEC_TOOL_NAME,
     };
-    use serde_json::json;
+    use serde_json::{json, Value};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -539,6 +600,82 @@ mod tests {
             .as_deref(),
             Some("<deferred_tools>\n- mcp__github__search_repos\n</deferred_tools>")
         );
+    }
+
+    #[tokio::test]
+    async fn disabled_deferred_tool_loading_exposes_builtin_and_mcp_tools_directly() {
+        let registry = create_tool_registry();
+        let tool_snapshot = vec![
+            registry.get_tool("Read").expect("Read tool"),
+            registry
+                .get_tool(GET_TOOL_SPEC_TOOL_NAME)
+                .expect("GetToolSpec gateway"),
+            registry
+                .get_tool(CALL_DEFERRED_TOOL_NAME)
+                .expect("CallDeferredTool gateway"),
+            registry.get_tool("WebFetch").expect("WebFetch tool"),
+            Arc::new(DeferredMcpCatalogTool) as Arc<dyn Tool>,
+        ];
+        let allowed_tools = vec![
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            CALL_DEFERRED_TOOL_NAME.to_string(),
+            "mcp__github__search_repos".to_string(),
+        ];
+        let mut context = tool_context(Some("agentic"));
+        context.custom_data.insert(
+            DEFERRED_TOOL_LOADING_CONTEXT_KEY.to_string(),
+            Value::String("false".to_string()),
+        );
+
+        let (allowed_tools, exposure_overrides) =
+            ProductToolCatalogProvider::resolve_manifest_inputs(
+                &allowed_tools,
+                &AgentToolPolicyOverrides::default(),
+                &context,
+            );
+        let manifest = bitfun_agent_tools::resolve_contextual_tool_manifest(
+            &tool_snapshot,
+            &allowed_tools,
+            &exposure_overrides,
+            &context,
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .await;
+
+        assert_eq!(
+            allowed_tools,
+            vec![
+                "Read".to_string(),
+                "WebFetch".to_string(),
+                "mcp__github__search_repos".to_string(),
+            ]
+        );
+        assert!(manifest.deferred_tool_names.is_empty());
+        assert!(manifest.deferred_tools.is_empty());
+        for tool_name in ["Read", "WebFetch", "mcp__github__search_repos"] {
+            assert!(
+                manifest
+                    .tool_definitions
+                    .iter()
+                    .any(|definition| definition.name == tool_name),
+                "{tool_name} must be directly exposed when deferred loading is disabled"
+            );
+        }
+        assert!(
+            manifest.tool_definitions.iter().all(|definition| {
+                definition.name != GET_TOOL_SPEC_TOOL_NAME
+                    && definition.name != CALL_DEFERRED_TOOL_NAME
+            }),
+            "internal deferred gateways must be hidden when deferred loading is disabled"
+        );
+        let mcp_tool = manifest
+            .tool_definitions
+            .iter()
+            .find(|definition| definition.name == "mcp__github__search_repos")
+            .expect("MCP tool must be in the direct manifest");
+        assert_eq!(mcp_tool.parameters["required"], json!(["query"]));
     }
 
     #[tokio::test]
