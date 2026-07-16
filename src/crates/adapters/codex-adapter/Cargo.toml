@@ -1,0 +1,29 @@
+[package]
+name = "bitfun-codex-adapter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Codex-compatible plugin adapter for BitFun — implements PluginHostAdapter for .codex-plugin/plugin.json sources"
+
+[lib]
+name = "bitfun_codex_adapter"
+crate-type = ["rlib"]
+
+[dependencies]
+async-trait = { workspace = true }
+bitfun-plugin-runtime-host = { path = "../../execution/plugin-runtime-host" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+dirs = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

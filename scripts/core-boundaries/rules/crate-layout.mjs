@@ -25,6 +25,7 @@ export const crateLayoutRules = [
   { crateName: 'acp', layer: 'interfaces', path: 'src/crates/interfaces/acp' },
   { crateName: 'ai-adapters', layer: 'adapters', path: 'src/crates/adapters/ai-adapters' },
   { crateName: 'api-layer', layer: 'adapters', path: 'src/crates/adapters/api-layer' },
+  { crateName: 'codex-adapter', layer: 'adapters', path: 'src/crates/adapters/codex-adapter' },
   { crateName: 'opencode-adapter', layer: 'adapters', path: 'src/crates/adapters/opencode-adapter' },
   { crateName: 'transport', layer: 'adapters', path: 'src/crates/adapters/transport' },
   { crateName: 'webdriver', layer: 'adapters', path: 'src/crates/adapters/webdriver' },

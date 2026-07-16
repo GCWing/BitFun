@@ -21,7 +21,7 @@ use bitfun_agent_runtime::skills::{
     PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
 use log::{debug, error};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::fs;
@@ -60,17 +60,64 @@ fn sort_remote_dir_entries(entries: &mut [crate::agentic::workspace::WorkspaceDi
 pub struct SkillRegistry {
     /// Cached raw user-level skills (no workspace-specific project skills).
     cache: RwLock<Vec<SkillInfo>>,
+    /// Plugin-contributed skill roots (for codex/opencode adapters).
+    /// Keyed by workspace root: `Some(path)` for local workspaces, `None` for the
+    /// global (non-workspace) fallback. Per-workspace isolation prevents plugin
+    /// roots from workspace A leaking into workspace B.
+    pub(crate) plugin_skill_roots: RwLock<HashMap<Option<PathBuf>, Vec<(PathBuf, String)>>>,
+    /// Workspace-aware skill cache keyed by workspace root path.
+    /// Populated on first call to get_all_skills_for_workspace and
+    /// invalidated by refresh / add_plugin_skill_root.
+    workspace_cache: RwLock<HashMap<Option<PathBuf>, Vec<SkillInfo>>>,
 }
 
 impl SkillRegistry {
     fn new() -> Self {
         Self {
             cache: RwLock::new(Vec::new()),
+            plugin_skill_roots: RwLock::new(HashMap::new()),
+            workspace_cache: RwLock::new(HashMap::new()),
         }
     }
 
     pub fn global() -> &'static Self {
         SKILL_REGISTRY.get_or_init(Self::new)
+    }
+
+    /// Registers a plugin-contributed skill root directory for a specific workspace.
+    /// Duplicate (path, plugin_id) pairs per workspace are silently ignored.
+    pub async fn add_plugin_skill_root(&self, path: PathBuf, plugin_id: &str, workspace_root: Option<&Path>) {
+        let ws_key = workspace_root.map(|p| p.to_path_buf());
+        let slot = format!("plugin.{plugin_id}");
+        {
+            let roots = self.plugin_skill_roots.read().await;
+            if let Some(existing) = roots.get(&ws_key) {
+                if existing.iter().any(|(p, s)| p == &path && s == &slot) {
+                    return; // Already registered — skip duplicate.
+                }
+            }
+        }
+        {
+            let mut roots = self.plugin_skill_roots.write().await;
+            roots.entry(ws_key).or_default().push((path, slot));
+        }
+        // Invalidate both caches so the next read picks up the new root.
+        self.cache.write().await.clear();
+        self.workspace_cache.write().await.clear();
+    }
+
+    /// Removes all plugin-contributed skill roots for a workspace.
+    /// Call on workspace switch or close to prevent cross-workspace leakage.
+    pub async fn remove_plugin_skill_roots_for_workspace(&self, workspace_root: Option<&Path>) {
+        let ws_key = workspace_root.map(|p| p.to_path_buf());
+        let had = {
+            let mut roots = self.plugin_skill_roots.write().await;
+            roots.remove(&ws_key).is_some()
+        };
+        if had {
+            self.cache.write().await.clear();
+            self.workspace_cache.write().await.clear();
+        }
     }
 
     fn get_possible_paths_for_workspace(workspace_root: Option<&Path>) -> Vec<SkillRootEntry> {
@@ -250,6 +297,27 @@ impl SkillRegistry {
             let mut part = Self::scan_skills_in_dir(&entry).await;
             skills.append(&mut part);
         }
+
+        // Scan plugin-contributed skill roots (local workspaces only).
+        {
+            let ws_key = workspace_root.map(|p| p.to_path_buf());
+            let plugin_roots = self.plugin_skill_roots.read().await;
+            if let Some(roots) = plugin_roots.get(&ws_key) {
+                let base_priority = 500usize;
+                for (idx, (path, _plugin_slot)) in roots.iter().enumerate() {
+                    let entry = SkillRootEntry {
+                        path: path.clone(),
+                        level: SkillLocation::User,
+                        slot: "plugin",
+                        priority: base_priority + idx,
+                        is_builtin: false,
+                    };
+                    let mut part = Self::scan_skills_in_dir(&entry).await;
+                    skills.append(&mut part);
+                }
+            }
+        }
+
         skills
     }
 
@@ -327,6 +395,8 @@ impl SkillRegistry {
         fs: &dyn WorkspaceFileSystem,
         remote_root: &str,
     ) -> Vec<SkillCandidate> {
+        // Remote workspaces: plugin skills are local-only and gated.
+        // Passing `None` as workspace_root only picks up global-fallback roots.
         let mut skills = self.scan_skill_candidates_for_workspace(None).await;
         skills.extend(Self::scan_remote_project_skills(fs, remote_root).await);
         skills
@@ -472,10 +542,23 @@ impl SkillRegistry {
         ));
         let mut cache = self.cache.write().await;
         *cache = skills;
+        // Invalidate workspace cache so the next workspace-aware call rescans.
+        self.workspace_cache.write().await.clear();
     }
 
-    pub async fn refresh_for_workspace(&self, _workspace_root: Option<&Path>) {
-        self.refresh().await;
+    pub async fn refresh_for_workspace(&self, workspace_root: Option<&Path>) {
+        let key = workspace_root.map(|p| p.to_path_buf());
+        let skills = sort_skills(annotate_shadowed_skills(
+            self.scan_skill_candidates_for_workspace(workspace_root)
+                .await,
+        ));
+        let mut wcache = self.workspace_cache.write().await;
+        wcache.insert(key, skills);
+        // Also refresh the global cache when it matches the None key.
+        if workspace_root.is_none() {
+            let mut cache = self.cache.write().await;
+            *cache = wcache.get(&None).cloned().unwrap_or_default();
+        }
     }
 
     pub async fn get_all_skills(&self) -> Vec<SkillInfo> {
@@ -488,10 +571,22 @@ impl SkillRegistry {
         &self,
         workspace_root: Option<&Path>,
     ) -> Vec<SkillInfo> {
-        sort_skills(annotate_shadowed_skills(
+        let key = workspace_root.map(|p| p.to_path_buf());
+        // Check workspace-aware cache first.
+        {
+            let wcache = self.workspace_cache.read().await;
+            if let Some(cached) = wcache.get(&key) {
+                return cached.clone();
+            }
+        }
+        // Cache miss — scan, sort, and populate the workspace cache.
+        let skills = sort_skills(annotate_shadowed_skills(
             self.scan_skill_candidates_for_workspace(workspace_root)
                 .await,
-        ))
+        ));
+        let mut wcache = self.workspace_cache.write().await;
+        wcache.insert(key, skills.clone());
+        skills
     }
 
     pub async fn get_all_skills_for_remote_workspace(
