@@ -735,7 +735,7 @@ fn file_read_freshness_policy_preserves_read_edit_write_guardrails() {
         is_full_file_read: true,
     };
 
-    assert_eq!(normalize_tool_file_content("alpha\r\n"), "alpha\n");
+    assert_eq!(normalize_tool_file_content("alpha\r\n"), "alpha");
     assert!(file_read_facts_content_matches(full_read, "alpha\n"));
     assert!(file_read_facts_are_fresh(full_read, "alpha\n", Some(200)));
     assert!(!file_read_facts_are_fresh(full_read, "beta\n", Some(200)));
@@ -754,6 +754,35 @@ fn file_read_freshness_policy_preserves_read_edit_write_guardrails() {
         Some(200)
     ));
     assert!(file_read_facts_are_fresh(partial_read, "full file\n", None));
+}
+
+#[test]
+fn file_read_freshness_tolerates_read_tool_trailing_newline_reconstruction_gap() {
+    // The cached "last Read result" content is rebuilt from cat -n-style
+    // output via a line-split/join, which drops a trailing newline even when
+    // the file on disk ends with one. Remote workspaces have no mtime to
+    // short-circuit this comparison, so every full-file Edit/Write on a
+    // trailing-newline file (the common case) must still be considered fresh.
+    let cached_without_trailing_newline = FileReadFreshnessFacts {
+        content: "alpha\nbeta",
+        timestamp_ms: 100,
+        is_full_file_read: true,
+    };
+
+    assert!(file_read_facts_content_matches(
+        cached_without_trailing_newline,
+        "alpha\nbeta\n"
+    ));
+    assert!(file_read_facts_are_fresh(
+        cached_without_trailing_newline,
+        "alpha\nbeta\n",
+        None
+    ));
+    assert!(!file_read_facts_are_fresh(
+        cached_without_trailing_newline,
+        "alpha\ngamma\n",
+        None
+    ));
 }
 
 #[test]
