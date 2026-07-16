@@ -399,6 +399,34 @@ pub async fn set_macos_edit_menu_mode(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn get_clipboard() -> Result<String, String> {
+    use arboard::Clipboard;
+    match Clipboard::new() {
+        Ok(mut clipboard) => {
+            match clipboard.get_text() {
+                Ok(text) => Ok(text),
+                Err(e) => Err(format!("Failed to get clipboard text: {}", e))
+            }
+        },
+        Err(e) => Err(format!("Failed to create clipboard text: {}", e))
+    }
+}
+
+#[tauri::command]
+pub async fn set_clipboard(text: String) -> Result<(), String> {
+    use arboard::Clipboard;
+    match Clipboard::new() {
+        Ok(mut clipboard) => {
+            match clipboard.set_text(text) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(format!("Failed to set clipboard text: {}", e))
+            }
+        },
+        Err(e) => Err(format!("Failed to create clipboard text: {}", e))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendNotificationRequest {
