@@ -54,7 +54,12 @@ pub async fn get_plugin_status(
         });
     }
 
-    let plugins = discover_plugins(workspace_path.as_deref().map(std::path::Path::new));
+    let ws_root: Option<PathBuf> = workspace_path.as_deref().map(PathBuf::from);
+    let plugins = tokio::task::spawn_blocking(move || {
+        discover_plugins(ws_root.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Plugin discovery panicked: {e}"))?;
     Ok(PluginStatusResponse {
         plugins_enabled: true,
         plugins,
@@ -73,13 +78,17 @@ pub async fn set_plugins_enabled(
         .await
         .map_err(|e| format!("Failed to save plugin enabled state: {e}"))?;
 
+    let plugins = if enabled {
+        tokio::task::spawn_blocking(|| discover_plugins(None))
+            .await
+            .map_err(|e| format!("Plugin discovery panicked: {e}"))?
+    } else {
+        Vec::new()
+    };
+
     Ok(PluginStatusResponse {
         plugins_enabled: enabled,
-        plugins: if enabled {
-            discover_plugins(None)
-        } else {
-            Vec::new()
-        },
+        plugins,
     })
 }
 
@@ -106,11 +115,14 @@ pub async fn set_plugin_trust(
     }
 
     // Return updated view for this plugin
-    let plugins = discover_plugins(None);
+    let pid = request.plugin_id.clone();
+    let plugins = tokio::task::spawn_blocking(|| discover_plugins(None))
+        .await
+        .map_err(|e| format!("Plugin discovery panicked: {e}"))?;
     plugins
         .into_iter()
-        .find(|p| p.plugin_id == request.plugin_id)
-        .ok_or_else(|| format!("Plugin '{}' not found", request.plugin_id))
+        .find(|p| p.plugin_id == pid)
+        .ok_or_else(|| format!("Plugin '{}' not found", pid))
 }
 
 /// Refreshes plugin discovery and returns updated status.
@@ -127,10 +139,13 @@ pub async fn refresh_plugins(
         });
     }
 
-    // Re-run discovery (sync I/O, acceptable for a user-initiated refresh).
+    // Re-run discovery off the async runtime to avoid blocking.
     let ws_root: Option<PathBuf> = workspace_path.as_deref().map(PathBuf::from);
-    let ws_root_ref: Option<&std::path::Path> = ws_root.as_deref();
-    let plugins = discover_plugins(ws_root_ref);
+    let plugins = tokio::task::spawn_blocking(move || {
+        discover_plugins(ws_root.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Plugin discovery panicked: {e}"))?;
     Ok(PluginStatusResponse {
         plugins_enabled: true,
         plugins,
