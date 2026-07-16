@@ -8,11 +8,16 @@ If the user names a skill (with `[$SkillName]` or plain text) OR the task clearl
 Below is the list of skills that can be used with the Skill tool. Each entry includes a name and description"#;
 const AGENT_LISTING_TITLE: &str = "# Agent Listing";
 const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";
-const DEFERRED_TOOL_LISTING_TITLE: &str = "# Deferred Tool Listing";
-const DEFERRED_TOOL_LISTING_GUIDANCE: &str = r#"The following tools are intentionally deferred. Their listed descriptions are short summaries rather than full usage instructions.
-Before calling a deferred tool, call `GetToolSpec` with its exact tool name to read its full schema.
-After reading the returned spec, call `CallDeferredTool` with the exact tool name and put the target arguments inside `args`.
-If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again."#;
+const TOOL_CALLING_GUIDANCE_TITLE: &str = "# Tool Calling Guide";
+const TOOL_CALLING_GUIDANCE: &str = r#"You can access two types of tools:
+- Direct tools: tools in the available tool list include their full definitions. Call them directly using their listed names and input schemas.
+- Deferred tools: call them through `CallDeferredTool`.
+  Before the first call for a deferred tool whose full spec is not already available in the current conversation, call `GetToolSpec` with its exact name.
+  Once its spec is available, call `CallDeferredTool` directly with that tool name and its arguments inside `args`.
+  Do not call `GetToolSpec` again unless the system reports that the spec is stale or unavailable.
+
+## Deferred Tool Listing
+Each entry has the form `tool_name[: optional short description]`."#;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PromptEnvironmentFacts<'a> {
@@ -583,9 +588,9 @@ impl ToolListingSections {
             .as_deref()
             .map(|deferred_tool_listing| {
                 Self::render_section(
-                    DEFERRED_TOOL_LISTING_TITLE,
+                    TOOL_CALLING_GUIDANCE_TITLE,
                     deferred_tool_listing,
-                    Some(DEFERRED_TOOL_LISTING_GUIDANCE),
+                    Some(TOOL_CALLING_GUIDANCE),
                 )
             })
     }

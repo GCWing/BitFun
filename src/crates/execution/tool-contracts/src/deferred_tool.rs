@@ -64,7 +64,8 @@ pub fn call_deferred_tool_short_description() -> String {
 pub fn call_deferred_tool_description() -> String {
     r#"Call a deferred tool after reading its full schema with GetToolSpec.
 
-Pass the exact deferred tool name in tool_name and put only that tool's arguments inside args."#
+Pass the exact deferred tool name in tool_name and put only that tool's arguments inside args.
+The order is important. ALWAYS output tool_name first, then args."#
         .to_string()
 }
 

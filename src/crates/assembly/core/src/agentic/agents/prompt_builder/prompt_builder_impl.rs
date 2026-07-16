@@ -655,8 +655,9 @@ mod tests {
         assert!(!skill_listing.contains("# Agent Listing"));
         assert!(agent_listing.contains("# Agent Listing"));
         assert!(agent_listing.contains("<available_agents>"));
-        assert!(!agent_listing.contains("# Deferred Tool Listing"));
-        assert!(deferred_tool_listing.contains("# Deferred Tool Listing"));
+        assert!(!agent_listing.contains("# Tool Calling Guide"));
+        assert!(deferred_tool_listing.contains("# Tool Calling Guide"));
+        assert!(deferred_tool_listing.contains("## Deferred Tool Listing"));
         assert!(deferred_tool_listing.contains("<deferred_tools>"));
         assert!(user_context.contains("# User Context"));
         assert!(user_context.contains("As you answer the user's questions"));

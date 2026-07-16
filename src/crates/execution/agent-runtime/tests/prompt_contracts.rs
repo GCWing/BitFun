@@ -51,10 +51,23 @@ fn tool_listing_sections_render_only_present_sections() {
         .expect("skill listing should render")
         .starts_with("# Skill Listing\nA skill is a set of instructions"));
     assert!(sections.render_agent_listing_reminder().is_none());
-    assert!(sections
+    let deferred_tool_listing = sections
         .render_deferred_tool_listing_reminder()
-        .expect("deferred tool listing should render")
-        .starts_with("# Deferred Tool Listing\n"));
+        .expect("deferred tool listing should render");
+    assert!(deferred_tool_listing.starts_with("# Tool Calling Guide\n"));
+    assert!(deferred_tool_listing.contains("Direct tools: tools in the available tool list"));
+    assert!(deferred_tool_listing.contains("Deferred tools: call them through `CallDeferredTool`"));
+    assert!(deferred_tool_listing.contains(
+        "Before the first call for a deferred tool whose full spec is not already available"
+    ));
+    assert!(deferred_tool_listing
+        .contains("Once its spec is available, call `CallDeferredTool` directly"));
+    assert!(deferred_tool_listing
+        .contains("unless the system reports that the spec is stale or unavailable"));
+    assert!(deferred_tool_listing.contains("tool_name[: optional short description]"));
+    assert!(deferred_tool_listing.contains(
+        "## Deferred Tool Listing\nEach entry has the form `tool_name[: optional short description]`.\n\nSearch: summary"
+    ));
 }
 
 #[test]

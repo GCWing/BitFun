@@ -12,15 +12,15 @@ use bitfun_agent_tools::{
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
     build_tool_execution_timeout_presentation, build_tool_path_policy_denial_message,
     build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
-    call_deferred_tool_input_schema, collect_loaded_deferred_tool_specs, effective_tool_invocation,
-    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
-    get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
-    is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
-    normalize_runtime_relative_path, parse_bitfun_current_session_uri, parse_bitfun_runtime_uri,
-    posix_resolve_path_with_workspace, posix_style_path_is_absolute,
-    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
-    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
-    resolve_get_tool_spec_detail_from_provider,
+    call_deferred_tool_description, call_deferred_tool_input_schema,
+    collect_loaded_deferred_tool_specs, effective_tool_invocation, get_tool_spec_input_schema,
+    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
+    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
+    is_tool_path_allowed_by_resolved_roots, normalize_host_path, normalize_runtime_relative_path,
+    parse_bitfun_current_session_uri, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
+    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
+    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
+    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
     resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
     resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
     resolve_tool_path_with_context_roots, resolve_workspace_tool_path,
@@ -95,6 +95,8 @@ impl StaticToolProviderPlan for TestProviderPlan {
 fn call_deferred_tool_contract_uses_nested_object_arguments() {
     let schema = call_deferred_tool_input_schema();
 
+    assert!(call_deferred_tool_description()
+        .contains("The order is important. ALWAYS output tool_name first, then args."));
     assert_eq!(schema["additionalProperties"], false);
     assert_eq!(schema["required"], json!(["tool_name", "args"]));
     assert_eq!(schema["properties"]["args"]["type"], "object");
