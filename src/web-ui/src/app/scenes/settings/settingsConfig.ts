@@ -18,6 +18,7 @@ export type ConfigTab =
   | 'mcp-tools'
   | 'acp-agents'
   // | 'lsp' // temporarily hidden from config center
+  | 'plugins'
   | 'editor'
   | 'keyboard';
 
@@ -229,6 +230,20 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'claude code',
           'codex',
           'stdio',
+        ],
+      },
+      {
+        id: 'plugins',
+        labelKey: 'configCenter.tabs.plugins',
+        descriptionKey: 'configCenter.tabDescriptions.plugins',
+        keywords: [
+          'plugin',
+          'extension',
+          'addon',
+          'opencode',
+          'codex',
+          'skill',
+          'hook',
         ],
       },
     ],

@@ -27,6 +27,7 @@ bitfun-transport = { path = "../../crates/adapters/transport", features = ["taur
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
 bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-codex-adapter = { path = "../../crates/adapters/codex-adapter" }
 
 # Tauri
 tauri = { workspace = true }

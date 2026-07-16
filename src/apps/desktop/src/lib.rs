@@ -1282,6 +1282,11 @@ pub async fn run() {
             api::peer_host_invoke::peer_control_detach,
             api::peer_host_invoke::peer_mode_ping,
             api::peer_host_invoke::peer_controller_set_active,
+            // Plugin API
+            api::plugin_api::get_plugin_status,
+            api::plugin_api::set_plugins_enabled,
+            api::plugin_api::set_plugin_trust,
+            api::plugin_api::refresh_plugins,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,

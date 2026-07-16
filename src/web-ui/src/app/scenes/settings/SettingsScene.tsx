@@ -12,6 +12,7 @@ import './SettingsScene.scss';
 
 const AIModelConfig = lazy(() => import('../../../infrastructure/config/components/AIModelConfig'));
 const McpToolsConfig = lazy(() => import('../../../infrastructure/config/components/McpToolsConfig'));
+const PluginsConfig = lazy(() => import('../../../infrastructure/config/components/PluginsConfig'));
 const AcpAgentsConfig = lazy(() => import('../../../infrastructure/config/components/AcpAgentsConfig'));
 const EditorConfig = lazy(() => import('../../../infrastructure/config/components/EditorConfig'));
 const BasicsConfig = lazy(() => import('../../../infrastructure/config/components/BasicsConfig'));
@@ -71,6 +72,7 @@ const SettingsScene: React.FC = () => {
     case 'memories':         Content = MemoriesConfig;       break;
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
+    case 'plugins':          Content = PluginsConfig;        break;
     case 'editor':           Content = EditorConfig;         break;
     case 'keyboard':         Content = KeyboardShortcutsTab; break;
   }

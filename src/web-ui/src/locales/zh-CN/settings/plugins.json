@@ -1,0 +1,20 @@
+{
+  "title": "插件",
+  "subtitle": "管理发现的 Codex 和 OpenCode 插件，控制哪些技能对 Agent 可见。",
+  "loading": "正在加载插件状态...",
+  "refresh": "刷新",
+  "globalSection": "插件系统",
+  "pluginsEnabled": "启用插件支持",
+  "pluginsEnabledDesc": "{{count}} 个插件活跃。插件技能将对 Agent 可见。",
+  "pluginsDisabledDesc": "插件支持已关闭。不会加载任何插件技能。",
+  "pluginListSection": "已发现的插件",
+  "noPluginsFound": "未发现插件。请将 Codex 或 OpenCode 插件安装到 ~/.agents/plugins/ 或工作区 .agents/plugins/ 目录。",
+  "enabled": "已启用",
+  "disabled": "已禁用",
+  "skillsCount": "{{count}} 个技能",
+  "diagnosticsCount": "{{count}} 个警告",
+  "errorLoading": "加载插件状态失败。",
+  "errorToggleGlobal": "切换插件支持失败。",
+  "errorTogglePlugin": "更新插件信任状态失败。",
+  "errorRefresh": "刷新插件发现失败。"
+}

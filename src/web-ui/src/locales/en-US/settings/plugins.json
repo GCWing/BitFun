@@ -1,0 +1,20 @@
+{
+  "title": "Plugins",
+  "subtitle": "Manage discovered Codex and OpenCode plugins and control which skills are available to agents.",
+  "loading": "Loading plugin status...",
+  "refresh": "Refresh",
+  "globalSection": "Plugin System",
+  "pluginsEnabled": "Enable Plugin Support",
+  "pluginsEnabledDesc": "{{count}} plugin(s) active. Skills from plugins are visible to agents.",
+  "pluginsDisabledDesc": "Plugin support is disabled. No plugin skills will be loaded.",
+  "pluginListSection": "Discovered Plugins",
+  "noPluginsFound": "No plugins found. Install Codex or OpenCode plugins into ~/.agents/plugins/ or the workspace .agents/plugins/ directory.",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "skillsCount": "{{count}} skill(s)",
+  "diagnosticsCount": "{{count}} warning(s)",
+  "errorLoading": "Failed to load plugin status.",
+  "errorToggleGlobal": "Failed to toggle plugin support.",
+  "errorTogglePlugin": "Failed to update plugin trust.",
+  "errorRefresh": "Failed to refresh plugin discovery."
+}

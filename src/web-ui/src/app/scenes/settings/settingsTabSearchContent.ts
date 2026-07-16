@@ -132,6 +132,13 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/acp-agents', key: 'json.title' },
   ],
 
+  plugins: [
+    { ns: 'settings/plugins', key: 'title' },
+    { ns: 'settings/plugins', key: 'subtitle' },
+    { ns: 'settings/plugins', key: 'globalSection' },
+    { ns: 'settings/plugins', key: 'pluginListSection' },
+  ],
+
   editor: [
     { ns: 'settings/editor', key: 'title' },
     { ns: 'settings/editor', key: 'subtitle' },
