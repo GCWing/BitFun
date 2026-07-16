@@ -47,6 +47,10 @@
         {
             "name": "permission_external_native_code_reason",
             "value": "用于允许加载和执行外部原生代码库"
+        },
+        {
+            "name": "permission_read_pasteboard_reason",
+            "value": "用于读取剪贴板内容以进行终端复制和粘贴"
         }
     ]
 }

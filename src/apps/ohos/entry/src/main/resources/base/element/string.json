@@ -46,6 +46,10 @@
         {
             "name": "permission_external_native_code_reason",
             "value": "Used to allow loading and executing external native code libraries"
+        },
+        {
+            "name": "permission_read_pasteboard_reason",
+            "value": "Used to read clipboard contents for terminal copy and paste"
         }
     ]
 }

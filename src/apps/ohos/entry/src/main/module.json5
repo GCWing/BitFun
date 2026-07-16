@@ -101,6 +101,16 @@
       {
         "name": "ohos.permission.ALLOW_EXTERNAL_NATIVE_CODE",
         "reason": "$string:permission_external_native_code_reason"
+      },
+      {
+        "name": "ohos.permission.READ_PASTEBOARD",
+        "reason": "$string:permission_read_pasteboard_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "always"
+        }
       }
     ],
     "extensionAbilities": [
