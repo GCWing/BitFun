@@ -973,7 +973,7 @@ impl Tool for ComputerUseTool {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     async fn description_with_context(

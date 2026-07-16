@@ -59,4 +59,20 @@ describe('ReviewPlatformAPI identity evidence wire', () => {
       { request },
     );
   });
+
+  it('loads workspace context without requesting a pull request list', async () => {
+    const context = { remotes: [], pullRequests: [] };
+    invokeMock.mockResolvedValueOnce(context);
+
+    await expect(
+      reviewPlatformAPI.getWorkspaceContext('D:/workspace/example', 'origin:github:example__repo'),
+    ).resolves.toBe(context);
+
+    expect(invokeMock).toHaveBeenCalledWith('review_platform_get_workspace_context', {
+      request: {
+        repositoryPath: 'D:/workspace/example',
+        remoteId: 'origin:github:example__repo',
+      },
+    });
+  });
 });

@@ -7,7 +7,7 @@ use agent_client_protocol::schema::{
     ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{Client, ConnectionTo, Result};
-use bitfun_core::service::session::ToolItemData;
+use bitfun_core::service::session::{ToolItemData, ToolItemIdentityExt};
 use bitfun_events::ToolEventData;
 
 pub(super) const PERMISSION_ALLOW_ONCE: &str = "allow_once";
@@ -61,8 +61,8 @@ pub(super) fn tool_event_updates(
 /// "in progress", leaving a stuck tool card in the client transcript.
 pub(super) fn tool_call_replay_updates(tool_item: &ToolItemData) -> Vec<SessionUpdate> {
     let tool_id = tool_item.id.clone();
-    let tool_name = tool_item.tool_name.as_str();
-    let raw_input = sanitize_tool_input(tool_name, tool_item.tool_call.input.clone());
+    let tool_name = tool_item.effective_name();
+    let raw_input = sanitize_tool_input(tool_name, tool_item.effective_input().clone());
 
     let initial = ToolCall::new(tool_id.clone(), tool_title(tool_name))
         .kind(tool_kind(tool_name))
@@ -195,7 +195,7 @@ pub(super) fn permission_request(
 
 fn initial_tool_call(tool_event: &ToolEventData) -> ToolCall {
     let tool_id = tool_event.tool_id().to_string();
-    let tool_name = tool_event.tool_name();
+    let tool_name = tool_event.effective_tool_name();
     ToolCall::new(tool_id, tool_title(tool_name))
         .kind(tool_kind(tool_name))
         .status(ToolCallStatus::Pending)
@@ -205,24 +205,29 @@ fn initial_tool_call(tool_event: &ToolEventData) -> ToolCall {
 fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
     let tool_id = tool_event.tool_id().to_string();
     let fields = match tool_event {
-        ToolEventData::EarlyDetected { tool_name, .. } => ToolCallUpdateFields::new()
-            .title(tool_title(tool_name))
-            .kind(tool_kind(tool_name))
+        ToolEventData::EarlyDetected { identity } => ToolCallUpdateFields::new()
+            .title(tool_title(identity.effective_name()))
+            .kind(tool_kind(identity.effective_name()))
             .status(ToolCallStatus::Pending),
         ToolEventData::ParamsPartial {
-            tool_name, params, ..
+            identity, params, ..
         } => {
             let fields = ToolCallUpdateFields::new().status(ToolCallStatus::Pending);
-            if is_write_like_tool(tool_name) {
-                match serde_json::from_str::<serde_json::Value>(params) {
-                    Ok(value) => fields
-                        .raw_input(sanitize_tool_input(tool_name, value.clone()))
-                        .content(vec![text_content(write_input_status_text(&value))]),
-                    Err(_) => fields.content(vec![text_content(format!(
-                        "Writing file ({} bytes received so far).",
-                        params.len()
-                    ))]),
+            if let Ok(wire_input) = serde_json::from_str::<serde_json::Value>(params) {
+                let (tool_name, effective_input) =
+                    bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, &wire_input);
+                if is_write_like_tool(tool_name) {
+                    fields
+                        .raw_input(sanitize_tool_input(tool_name, effective_input.clone()))
+                        .content(vec![text_content(write_input_status_text(effective_input))])
+                } else {
+                    fields.content(vec![text_content(format!("Input: {}", effective_input))])
                 }
+            } else if is_write_like_tool(identity.effective_name()) {
+                fields.content(vec![text_content(format!(
+                    "Writing file ({} bytes received so far).",
+                    params.len()
+                ))])
             } else {
                 fields.content(vec![text_content(format!("Input: {}", params))])
             }
@@ -240,13 +245,17 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
                 dependencies.join(", ")
             ))]),
         ToolEventData::Started {
-            tool_name, params, ..
-        } => ToolCallUpdateFields::new()
-            .title(tool_title(tool_name))
-            .kind(tool_kind(tool_name))
-            .status(ToolCallStatus::InProgress)
-            .locations(tool_locations(params))
-            .raw_input(sanitize_tool_input(tool_name, params.clone())),
+            identity, params, ..
+        } => {
+            let (tool_name, effective_input) =
+                bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params);
+            ToolCallUpdateFields::new()
+                .title(tool_title(tool_name))
+                .kind(tool_kind(tool_name))
+                .status(ToolCallStatus::InProgress)
+                .locations(tool_locations(effective_input))
+                .raw_input(sanitize_tool_input(tool_name, effective_input.clone()))
+        }
         ToolEventData::Progress {
             message,
             percentage,
@@ -269,13 +278,17 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             .status(ToolCallStatus::InProgress)
             .content(vec![text_content(value_to_display_text(data))]),
         ToolEventData::ConfirmationNeeded {
-            tool_name, params, ..
-        } => ToolCallUpdateFields::new()
-            .title(format!("Allow {}?", tool_name))
-            .status(ToolCallStatus::Pending)
-            .locations(tool_locations(params))
-            .raw_input(sanitize_tool_input(tool_name, params.clone()))
-            .content(vec![text_content("Waiting for permission.")]),
+            identity, params, ..
+        } => {
+            let (tool_name, effective_input) =
+                bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params);
+            ToolCallUpdateFields::new()
+                .title(format!("Allow {}?", tool_name))
+                .status(ToolCallStatus::Pending)
+                .locations(tool_locations(effective_input))
+                .raw_input(sanitize_tool_input(tool_name, effective_input.clone()))
+                .content(vec![text_content("Waiting for permission.")])
+        }
         ToolEventData::Confirmed { .. } => ToolCallUpdateFields::new()
             .status(ToolCallStatus::InProgress)
             .content(vec![text_content("Permission granted.")]),
@@ -283,12 +296,13 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             .status(ToolCallStatus::Failed)
             .content(vec![text_content("Permission rejected.")]),
         ToolEventData::Completed {
-            tool_name,
+            identity,
             result,
             result_for_assistant,
             duration_ms,
             ..
         } => {
+            let tool_name = identity.effective_name();
             let raw_output = sanitize_tool_payload(tool_name, result.clone());
             let display = result_for_assistant
                 .clone()
@@ -517,63 +531,22 @@ fn value_to_display_text(value: &serde_json::Value) -> String {
     }
 }
 
-trait ToolEventExt {
-    fn tool_id(&self) -> &str;
-    fn tool_name(&self) -> &str;
-}
-
-impl ToolEventExt for ToolEventData {
-    fn tool_id(&self) -> &str {
-        match self {
-            Self::EarlyDetected { tool_id, .. }
-            | Self::ParamsPartial { tool_id, .. }
-            | Self::Queued { tool_id, .. }
-            | Self::Waiting { tool_id, .. }
-            | Self::Started { tool_id, .. }
-            | Self::Progress { tool_id, .. }
-            | Self::Streaming { tool_id, .. }
-            | Self::StreamChunk { tool_id, .. }
-            | Self::ConfirmationNeeded { tool_id, .. }
-            | Self::Confirmed { tool_id, .. }
-            | Self::Rejected { tool_id, .. }
-            | Self::Completed { tool_id, .. }
-            | Self::Failed { tool_id, .. }
-            | Self::Cancelled { tool_id, .. } => tool_id,
-        }
-    }
-
-    fn tool_name(&self) -> &str {
-        match self {
-            Self::EarlyDetected { tool_name, .. }
-            | Self::ParamsPartial { tool_name, .. }
-            | Self::Queued { tool_name, .. }
-            | Self::Waiting { tool_name, .. }
-            | Self::Started { tool_name, .. }
-            | Self::Progress { tool_name, .. }
-            | Self::Streaming { tool_name, .. }
-            | Self::StreamChunk { tool_name, .. }
-            | Self::ConfirmationNeeded { tool_name, .. }
-            | Self::Confirmed { tool_name, .. }
-            | Self::Rejected { tool_name, .. }
-            | Self::Completed { tool_name, .. }
-            | Self::Failed { tool_name, .. }
-            | Self::Cancelled { tool_name, .. } => tool_name,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use agent_client_protocol::schema::ContentBlock;
     use bitfun_core::service::session::ToolCallData;
+    use bitfun_events::ToolEventIdentity;
+
+    fn identity(tool_name: &str) -> ToolEventIdentity {
+        ToolEventIdentity::direct("tool-1", tool_name)
+    }
 
     #[test]
     fn early_detected_creates_tool_call_once() {
         let mut seen = HashSet::new();
         let event = ToolEventData::EarlyDetected {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Read".to_string(),
+            identity: identity("Read"),
         };
 
         let first = tool_event_updates(&event, &mut seen);
@@ -590,8 +563,7 @@ mod tests {
     fn completed_event_maps_to_completed_update_with_output() {
         let mut seen = HashSet::new();
         let event = ToolEventData::Completed {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Bash".to_string(),
+            identity: identity("Bash"),
             result: serde_json::json!({ "stdout": "ok" }),
             result_for_assistant: Some("done".to_string()),
             duration_ms: 42,
@@ -617,8 +589,7 @@ mod tests {
     fn write_started_supports_combined_payload_input() {
         let mut seen = HashSet::new();
         let event = ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Write".to_string(),
+            identity: identity("Write"),
             params: serde_json::json!({
                 "payload": "+++ src/lib.rs\nhello\n",
             }),
@@ -643,11 +614,43 @@ mod tests {
     }
 
     #[test]
+    fn deferred_write_started_projects_effective_identity_and_input() {
+        let mut seen = HashSet::new();
+        let event = ToolEventData::Started {
+            identity: ToolEventIdentity::resolved(
+                "tool-1",
+                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+                "Write",
+            ),
+            params: serde_json::json!({
+                "tool_name": "Write",
+                "args": {
+                    "file_path": "src/lib.rs",
+                    "content": "updated"
+                }
+            }),
+            timeout_seconds: None,
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+        assert_eq!(update.fields.title.as_deref(), Some("Run Write"));
+        assert_eq!(
+            update.fields.raw_input,
+            Some(serde_json::json!({
+                "file_path": "src/lib.rs",
+                "content": "updated"
+            }))
+        );
+    }
+
+    #[test]
     fn write_started_supports_path_only_empty_file_input() {
         let mut seen = HashSet::new();
         let event = ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Write".to_string(),
+            identity: identity("Write"),
             params: serde_json::json!({
                 "payload": "+++ src/empty.rs",
             }),
@@ -696,8 +699,7 @@ mod tests {
         let mut seen = HashSet::new();
         let content = "x".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS + 10);
         let event = ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Write".to_string(),
+            identity: identity("Write"),
             params: serde_json::json!({
                 "file_path": "src/lib.rs",
                 "content": content,
@@ -744,8 +746,7 @@ mod tests {
         let mut seen = HashSet::new();
         let content = "a".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS + 25);
         let event = ToolEventData::ParamsPartial {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Write".to_string(),
+            identity: identity("Write"),
             params: serde_json::json!({
                 "file_path": "src/main.rs",
                 "content": content,
@@ -779,8 +780,7 @@ mod tests {
     fn write_started_sends_small_content_on_in_progress_update() {
         let mut seen = HashSet::new();
         let event = ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Write".to_string(),
+            identity: identity("Write"),
             params: serde_json::json!({
                 "file_path": "tiny.txt",
                 "content": "hello\n",
@@ -821,8 +821,7 @@ mod tests {
         let old_string = "old".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
         let new_string = "new".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
         let event = ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Edit".to_string(),
+            identity: identity("Edit"),
             params: serde_json::json!({
                 "file_path": "src/lib.rs",
                 "old_string": old_string,
@@ -873,8 +872,7 @@ mod tests {
         let old_string = "old".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
         let new_string = "new".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
         let event = ToolEventData::Completed {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Edit".to_string(),
+            identity: identity("Edit"),
             result: serde_json::json!({
                 "file_path": "src/lib.rs",
                 "old_string": old_string,
@@ -986,6 +984,24 @@ mod tests {
             panic!("expected tool call update");
         };
         update
+    }
+
+    #[test]
+    fn replay_projects_deferred_wire_call_to_effective_tool() {
+        let mut item = replay_tool_item("tool-1", "CallDeferredTool", Some("completed"), None);
+        item.tool_call.input = serde_json::json!({
+            "tool_name": "WebFetch",
+            "args": { "url": "https://example.test" }
+        });
+        let updates = tool_call_replay_updates(&item);
+        let SessionUpdate::ToolCall(tool_call) = &updates[0] else {
+            panic!("expected initial tool call");
+        };
+        assert_eq!(tool_call.title, tool_title("WebFetch"));
+        assert_eq!(
+            tool_call.raw_input,
+            Some(serde_json::json!({ "url": "https://example.test" }))
+        );
     }
 
     #[test]

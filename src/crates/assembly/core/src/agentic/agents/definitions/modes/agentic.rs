@@ -107,12 +107,19 @@ mod tests {
     use crate::agentic::tools::framework::ToolExposure;
 
     #[test]
+    fn agentic_mode_enables_review_platform_by_default() {
+        let tools = AgenticMode::new().default_tools();
+
+        assert!(tools.contains(&"ReviewPlatform".to_string()));
+    }
+
+    #[test]
     fn agentic_mode_expands_web_research_tools() {
         let mode = AgenticMode::new();
         let overrides = mode.tool_exposure_overrides();
 
-        assert_eq!(overrides.get("WebSearch"), Some(&ToolExposure::Expanded));
-        assert_eq!(overrides.get("WebFetch"), Some(&ToolExposure::Expanded));
+        assert_eq!(overrides.get("WebSearch"), Some(&ToolExposure::Direct));
+        assert_eq!(overrides.get("WebFetch"), Some(&ToolExposure::Direct));
         assert!(mode.default_tools().contains(&"WebSearch".to_string()));
         assert!(mode.default_tools().contains(&"WebFetch".to_string()));
     }

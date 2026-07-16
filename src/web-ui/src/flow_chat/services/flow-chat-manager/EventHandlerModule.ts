@@ -23,6 +23,7 @@ import type { NotificationAction } from '../../../shared/notification-system/typ
 import { createLogger } from '@/shared/utils/logger';
 import { handleThreadGoalUpdated } from '../threadGoalEventService';
 import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDisplay';
+import { effectiveToolInvocation, getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 import type {
   DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
@@ -542,7 +543,7 @@ function findSubagentParentInfoByRound(
 
           const toolItem = item as FlowToolItem;
           if (
-            toolItem.toolName?.toLowerCase() === 'task' &&
+            getEffectiveToolName(toolItem).toLowerCase() === 'task' &&
             toolItem.subagentSessionId === subagentSessionId &&
             toolItem.subagentDialogTurnId === subagentDialogTurnId
           ) {
@@ -2652,14 +2653,15 @@ function detectModifiedPlanFiles(dialogTurn: DialogTurn): string[] {
     for (const item of round.items) {
       if (item.type !== 'tool') continue;
       const toolItem = item as FlowToolItem;
+      const effective = effectiveToolInvocation(toolItem.toolName, toolItem.toolCall?.input);
       
-      if (toolItem.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
+      if (effective.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
         const planPath = toolItem.toolResult.result?.plan_file_path;
         if (planPath) createPlanFiles.add(planPath);
       }
       
-      if (['Edit', 'Write'].includes(toolItem.toolName) && toolItem.toolResult?.success) {
-        const input = toolItem.toolCall?.input;
+      if (['Edit', 'Write'].includes(effective.toolName) && toolItem.toolResult?.success) {
+        const input = effective.input as any;
         const filePath = splitFilePathAndContent(input?.payload)?.filePath
           || input?.file_path
           || input?.target_file

@@ -1360,6 +1360,15 @@ pub trait DialogRoundInjectionSource: Send + Sync {
         turn_id: &str,
     ) -> RoundInjectionToolPreemption;
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection>;
+
+    fn acknowledge_consumed(
+        &self,
+        _session_id: &str,
+        _turn_id: &str,
+        _injection_id: &str,
+        _kind: RoundInjectionKind,
+    ) {
+    }
 }
 
 /// Legacy session metadata key for the pre-Codex goal mode experiment.

@@ -98,6 +98,33 @@ impl ActiveDialogTurn {
         self.user_message_metadata.as_ref()
     }
 
+    pub fn background_subagent_task_id(&self) -> Option<&str> {
+        if self.policy.trigger_source != DialogTriggerSource::AgentSession {
+            return None;
+        }
+        let Some(metadata) = self
+            .user_message_metadata()
+            .and_then(serde_json::Value::as_object)
+        else {
+            return None;
+        };
+        (metadata.get("kind").and_then(serde_json::Value::as_str) == Some("background_result")
+            && metadata
+                .get("sourceKind")
+                .and_then(serde_json::Value::as_str)
+                == Some("subagent"))
+        .then(|| {
+            metadata
+                .get("backgroundTaskId")
+                .and_then(serde_json::Value::as_str)
+        })
+        .flatten()
+    }
+
+    fn is_background_subagent_delivery(&self, background_task_id: &str) -> bool {
+        self.background_subagent_task_id() == Some(background_task_id)
+    }
+
     pub fn reply_route(&self) -> Option<&AgentSessionReplyRoute> {
         self.reply_route.as_ref()
     }
@@ -162,6 +189,30 @@ impl ActiveDialogTurnStore {
         self.inner
             .get(session_id)
             .is_some_and(|turn| turn.turn_id() == turn_id)
+    }
+
+    pub fn user_message_metadata_bool_for_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        key: &str,
+    ) -> Option<bool> {
+        self.inner.get(session_id).and_then(|turn| {
+            (turn.turn_id() == turn_id)
+                .then(|| turn.user_message_metadata()?.get(key)?.as_bool())
+                .flatten()
+        })
+    }
+
+    pub fn turn_id_for_background_subagent_delivery(
+        &self,
+        session_id: &str,
+        background_task_id: &str,
+    ) -> Option<String> {
+        self.inner.get(session_id).and_then(|turn| {
+            turn.is_background_subagent_delivery(background_task_id)
+                .then(|| turn.turn_id().to_string())
+        })
     }
 
     pub fn suppression_key_for_requester(
@@ -600,6 +651,14 @@ impl SessionRoundInjectionBuffer {
         taken
     }
 
+    pub fn remove_by_id(&self, session_id: &str, injection_id: &str) -> Option<RoundInjection> {
+        let mut entry = self.inner.get_mut(session_id)?;
+        let index = entry
+            .iter()
+            .position(|message| message.id == injection_id)?;
+        Some(entry.remove(index))
+    }
+
     pub fn has_pending_for_turn(&self, session_id: &str, turn_id: &str) -> bool {
         self.inner
             .get(session_id)
@@ -703,6 +762,29 @@ pub fn resolve_background_delivery_injection(
         display_content,
         created_at,
     }
+}
+
+pub fn resolve_background_delivery_injection_for_turn(
+    kind: BackgroundInjectionKind,
+    injection_id: String,
+    content: String,
+    display_content: Option<String>,
+    created_at: SystemTime,
+    turn_id: String,
+) -> RoundInjection {
+    let mut injection = resolve_background_delivery_injection(
+        kind,
+        injection_id,
+        content,
+        display_content,
+        created_at,
+    );
+    injection.target = RoundInjectionTarget::ExactTurn(turn_id);
+    injection
+}
+
+pub fn is_background_result_injection(kind: RoundInjectionKind) -> bool {
+    kind == RoundInjectionKind::BackgroundResult
 }
 
 /// Outcome of a completed dialog turn, used to notify the concrete scheduler.
@@ -982,6 +1064,71 @@ mod tests {
             store.take_for_outcome("session-1", "turn-new"),
             ActiveDialogTurnTakeResult::Absent
         ));
+    }
+
+    #[test]
+    fn active_turn_metadata_lookup_is_bound_to_the_exact_turn() {
+        let store = ActiveDialogTurnStore::default();
+        store.insert(
+            "session-1",
+            ActiveDialogTurn::new(
+                "turn-current".to_string(),
+                None,
+                None,
+                None,
+                "agentic".to_string(),
+                "input".to_string(),
+                Some(serde_json::json!({
+                    "require_tool_confirmation": true,
+                    "kind": "background_result",
+                    "sourceKind": "subagent",
+                    "backgroundTaskId": "spoofed-background-task"
+                })),
+                DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
+                None,
+            ),
+        );
+
+        assert_eq!(
+            store.user_message_metadata_bool_for_turn(
+                "session-1",
+                "turn-current",
+                "require_tool_confirmation"
+            ),
+            Some(true)
+        );
+        assert!(store
+            .user_message_metadata_bool_for_turn(
+                "session-1",
+                "turn-stale",
+                "require_tool_confirmation"
+            )
+            .is_none());
+        assert!(store
+            .turn_id_for_background_subagent_delivery("session-1", "spoofed-background-task")
+            .is_none());
+        store.insert(
+            "session-2",
+            ActiveDialogTurn::new(
+                "turn-background".to_string(),
+                None,
+                None,
+                None,
+                "agentic".to_string(),
+                "result".to_string(),
+                Some(serde_json::json!({
+                    "kind": "background_result",
+                    "sourceKind": "subagent",
+                    "backgroundTaskId": "background-task"
+                })),
+                DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                None,
+            ),
+        );
+        assert_eq!(
+            store.turn_id_for_background_subagent_delivery("session-2", "background-task"),
+            Some("turn-background".to_string())
+        );
     }
 
     #[test]

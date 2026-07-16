@@ -3,41 +3,19 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use bitfun_core::agentic::coordination::{self, DialogScheduler};
-use bitfun_core::agentic::system::AgenticSystem;
-use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::filesystem::FileSystemServiceFactory;
 use bitfun_core::service::workspace::{self, WorkspaceService};
 
+use crate::runtime::CliRuntimeContext;
+
 use super::fanout::start_peer_event_fanout;
-use super::state::{set_peer_host_state, try_peer_host_state, PeerHostState};
+use super::state::{set_peer_host_state, try_peer_host_state, PeerHostState, PeerTurnTracker};
 
 /// Ensure Peer Host services are ready. Idempotent.
-pub(crate) async fn ensure_peer_host_ready(agentic: &AgenticSystem) -> Result<()> {
+pub(crate) async fn ensure_peer_host_ready(runtime: &CliRuntimeContext) -> Result<()> {
     if try_peer_host_state().is_some() {
         return Ok(());
     }
-
-    let path_manager = try_get_path_manager_arc().context("path manager")?;
-    let persistence = Arc::new(
-        bitfun_core::agentic::persistence::PersistenceManager::new(path_manager)
-            .context("persistence manager")?,
-    );
-
-    let scheduler = if let Some(existing) = coordination::get_global_scheduler() {
-        existing
-    } else {
-        let session_manager = agentic.coordinator.get_session_manager().clone();
-        let scheduler = DialogScheduler::new(agentic.coordinator.clone(), session_manager);
-        agentic
-            .coordinator
-            .set_scheduler_notifier(scheduler.outcome_sender());
-        agentic
-            .coordinator
-            .set_round_injection_source(scheduler.round_injection_monitor());
-        coordination::set_global_scheduler(scheduler.clone());
-        scheduler
-    };
 
     let workspace_service = if let Some(existing) = workspace::get_global_workspace_service() {
         existing
@@ -54,12 +32,12 @@ pub(crate) async fn ensure_peer_host_ready(agentic: &AgenticSystem) -> Result<()
     let filesystem_service = Arc::new(FileSystemServiceFactory::create_default());
 
     let state = PeerHostState {
-        coordinator: agentic.coordinator.clone(),
-        scheduler,
-        event_queue: agentic.event_queue.clone(),
+        agent_runtime: runtime.agent_runtime().clone(),
+        compatibility: runtime.compatibility().clone(),
+        agent_events: runtime.agent_events().clone(),
+        turns: PeerTurnTracker::new(),
         workspace_service,
         filesystem_service,
-        persistence,
     };
 
     if set_peer_host_state(state.clone()).is_err() {
@@ -67,7 +45,7 @@ pub(crate) async fn ensure_peer_host_ready(agentic: &AgenticSystem) -> Result<()
         return Ok(());
     }
 
-    start_peer_event_fanout(state.event_queue.clone());
+    start_peer_event_fanout(state);
     tracing::info!("CLI peer host services ready");
     Ok(())
 }

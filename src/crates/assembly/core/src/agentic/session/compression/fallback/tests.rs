@@ -39,6 +39,7 @@ fn clears_tool_results_from_compressed_history() {
     let tool_result = Message::tool_result(ToolResult {
         tool_id: "tool_1".to_string(),
         tool_name: "Read".to_string(),
+        effective_tool_name: None,
         result: json!({"content": "ignored"}),
         result_for_assistant: Some("Read succeeded with file preview".to_string()),
         is_error: false,
@@ -225,6 +226,7 @@ fn renders_contract_facts_even_when_tool_results_are_cleared() {
         vec![vec![Message::tool_result(ToolResult {
             tool_id: "tool_1".to_string(),
             tool_name: "Read".to_string(),
+            effective_tool_name: None,
             result: json!({"content": "large output omitted"}),
             result_for_assistant: Some("large output omitted".to_string()),
             is_error: false,

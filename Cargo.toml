@@ -13,6 +13,7 @@ members = [
     "src/crates/adapters/transport",
     "src/crates/services/services-core",
     "src/crates/services/services-integrations",
+    "src/crates/services/relay-service",
     "src/crates/services/terminal",
     "src/crates/assembly/product-capabilities",
     "src/crates/contracts/product-domains",

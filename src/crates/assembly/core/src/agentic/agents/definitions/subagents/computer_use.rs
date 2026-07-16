@@ -20,8 +20,8 @@ impl Default for ComputerUseMode {
 impl ComputerUseMode {
     pub fn new() -> Self {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("ControlHub".to_string(), ToolExposure::Expanded);
-        tool_exposure_overrides.insert("ComputerUse".to_string(), ToolExposure::Expanded);
+        tool_exposure_overrides.insert("ControlHub".to_string(), ToolExposure::Direct);
+        tool_exposure_overrides.insert("ComputerUse".to_string(), ToolExposure::Direct);
         Self {
             default_tools: vec![
                 "AskUserQuestion".to_string(),

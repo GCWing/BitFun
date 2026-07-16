@@ -85,6 +85,7 @@ static MAIN_WINDOW_HIDDEN_ON_MACOS: AtomicBool = AtomicBool::new(false);
 static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
 
 const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
+const BROWSER_WEBVIEW_PAGE_LOAD_EVENT: &str = "browser-webview-page-load";
 const CRON_DESKTOP_START_FALLBACK_DELAY: Duration = Duration::from_secs(120);
 
 #[cfg(target_os = "macos")]
@@ -280,7 +281,6 @@ pub async fn run() {
     // Install the rustls ring CryptoProvider as the process-level default early,
     // so that all subsequent TLS operations (relay_client, reqwest, tokio-tungstenite)
     // reuse the same provider instead of each attempting their own install_default().
-    // This is a no-op on non-Windows platforms where tokio-tungstenite handles it.
     bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
 
     eprintln!("=== BitFun Desktop Starting ===");
@@ -429,6 +429,26 @@ pub async fn run() {
         .manage(scheduler)
         .manage(terminal_state)
         .manage(startup_trace.clone())
+        .on_page_load(|webview, payload| {
+            let label = webview.label();
+            if label.starts_with("embedded-browser-view-")
+                || label.starts_with("embedded-browser-panel-view-")
+            {
+                let event = match payload.event() {
+                    tauri::webview::PageLoadEvent::Started => "started",
+                    tauri::webview::PageLoadEvent::Finished => "finished",
+                };
+                let _ = webview.emit_to(
+                    "main",
+                    BROWSER_WEBVIEW_PAGE_LOAD_EVENT,
+                    serde_json::json!({
+                        "label": label,
+                        "event": event,
+                        "url": payload.url(),
+                    }),
+                );
+            }
+        })
         .setup(move |app| {
             let setup_started = Instant::now();
             startup_trace.record_phase("tauri_setup_start", "native_setup");
@@ -1006,6 +1026,7 @@ pub async fn run() {
             git_resolve_revision,
             git_get_repository,
             review_platform_get_workspace_snapshot,
+            review_platform_get_workspace_context,
             review_platform_get_pull_request_detail,
             review_platform_get_pull_request_review_target,
             review_platform_get_issue,
@@ -1333,6 +1354,10 @@ pub async fn run() {
             api::miniapp_export_api::miniapp_render_slide_page,
             // Browser API (embedded webview)
             api::browser_api::browser_webview_eval,
+            api::browser_api::browser_webview_create,
+            api::browser_api::browser_webview_navigate,
+            api::browser_api::browser_webview_reload,
+            api::browser_api::browser_webview_set_bounds,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_list_browsers,

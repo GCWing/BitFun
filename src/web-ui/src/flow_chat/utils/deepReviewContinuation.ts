@@ -4,6 +4,7 @@ import {
   normalizeAiErrorDetail,
 } from '@/shared/ai-errors/aiErrorPresenter';
 import type { FlowToolItem, Session } from '../types/flow-chat';
+import { getEffectiveToolName } from './toolInvocationIdentity';
 
 export type DeepReviewContinuationPhase = 'review_interrupted' | 'resume_blocked';
 export type DeepReviewResultRecoveryReason =
@@ -311,7 +312,7 @@ export function collectReviewerProgress(session: Session): DeepReviewReviewerPro
   for (const turn of session.dialogTurns) {
     for (const round of turn.modelRounds) {
       for (const item of round.items) {
-        if (item.type !== 'tool' || item.toolName !== 'Task') {
+        if (item.type !== 'tool' || getEffectiveToolName(item) !== 'Task') {
           continue;
         }
         const progress = getReviewerProgressFromTask(item);

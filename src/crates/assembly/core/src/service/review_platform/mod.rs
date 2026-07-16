@@ -69,6 +69,15 @@ impl ReviewPlatformService {
             .await
     }
 
+    pub async fn workspace_context(
+        repository_path: &str,
+        remote_id: Option<&str>,
+    ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
+        owner_service()?
+            .workspace_context(repository_path, remote_id)
+            .await
+    }
+
     pub async fn pull_request_detail(
         repository_path: &str,
         remote_id: &str,

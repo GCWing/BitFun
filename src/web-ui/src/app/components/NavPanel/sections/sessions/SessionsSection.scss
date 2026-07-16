@@ -198,14 +198,23 @@
       animation: bitfun-nav-session-spin 1s linear infinite;
     }
 
+    &.is-ask-user {
+      // Mix warning hue with text-primary to guarantee ≥3:1 contrast in both
+      // Light and Dark themes (pure --color-warning falls below threshold in
+      // Light theme). 70% text-primary keeps the icon readable at 14px.
+      color: color-mix(in srgb, var(--color-text-primary) 70%, var(--color-warning) 30%);
+      transition: opacity $motion-fast $easing-standard;
+      animation: bitfun-nav-ask-user-pulse 2s ease-in-out infinite;
+    }
+
     .bitfun-nav-panel__inline-item:hover &,
     .bitfun-nav-panel__inline-item.is-active & {
       opacity: 1;
     }
   }
 
-  // 「助理会话」区块：行前导图标悬停微微放大（与顶部 __top-action-icon-slot 的 1.07 一致；运行中 Loader 仅用旋转动画）
-  &__items--session-blocks &__inline-item:hover &__inline-item-icon:not(.is-running) {
+  // 「助理会话」区块：行前导图标悬停微微放大（与顶部 __top-action-icon-slot 的 1.07 一致；运行中 Loader/问号仅用自身动画）
+  &__items--session-blocks &__inline-item:hover &__inline-item-icon:not(.is-running):not(.is-ask-user) {
     transform: scale(1.07);
   }
 
@@ -686,6 +695,18 @@
   }
 }
 
+@keyframes bitfun-nav-ask-user-pulse {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
 @keyframes bitfun-nav-background-subagent-bot-cycle {
   0%,
   62%,
@@ -727,6 +748,11 @@
     opacity: 0.8;
   }
 
+  .bitfun-nav-panel__inline-item-icon.is-ask-user {
+    animation: none;
+    opacity: 0.9;
+  }
+
   .bitfun-nav-panel__inline-item-review-badge svg {
     animation: none;
   }
@@ -743,11 +769,11 @@
     }
   }
 
-  .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item:hover .bitfun-nav-panel__inline-item-icon:not(.is-running) {
+  .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item:hover .bitfun-nav-panel__inline-item-icon:not(.is-running):not(.is-ask-user) {
     transform: scale(1);
   }
 
-  .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item-icon:not(.is-running) {
+  .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item-icon:not(.is-running):not(.is-ask-user) {
     transition: opacity $motion-fast $easing-standard;
   }
 }

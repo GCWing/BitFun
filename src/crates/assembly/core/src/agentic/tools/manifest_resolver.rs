@@ -43,7 +43,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -71,7 +71,7 @@ mod tests {
         .await;
 
         assert_eq!(facade.allowed_tool_names, owner.allowed_tool_names);
-        assert_eq!(facade.collapsed_tool_names, owner.collapsed_tool_names);
+        assert_eq!(facade.deferred_tool_names, owner.deferred_tool_names);
         assert_eq!(
             facade
                 .tool_definitions
@@ -109,24 +109,24 @@ mod tests {
 
         assert_eq!(
             facade
-                .expanded_tools
+                .direct_tools
                 .iter()
                 .map(|tool| tool.name().to_string())
                 .collect::<Vec<_>>(),
             owner
-                .expanded_tools
+                .direct_tools
                 .iter()
                 .map(|tool| tool.name().to_string())
                 .collect::<Vec<_>>()
         );
         assert_eq!(
             facade
-                .collapsed_tools
+                .deferred_tools
                 .iter()
                 .map(|tool| tool.name().to_string())
                 .collect::<Vec<_>>(),
             owner
-                .collapsed_tools
+                .deferred_tools
                 .iter()
                 .map(|tool| tool.name().to_string())
                 .collect::<Vec<_>>()

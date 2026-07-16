@@ -241,6 +241,9 @@ async fn spawn_device_routing(relay_url: &str, device_name: &str) -> Result<()> 
         while let Some(event) = event_rx.recv().await {
             handle_relay_event(event, &session_arc, &relay_client_arc).await;
         }
+        if is_current_routing_client(&relay_client_arc).await {
+            crate::peer_host::update_controller_presence(Vec::new()).await;
+        }
         tracing::info!("Device routing event loop exited");
     });
 
@@ -249,9 +252,19 @@ async fn spawn_device_routing(relay_url: &str, device_name: &str) -> Result<()> 
 
 /// Disconnect the device-routing connection (if any).
 pub(crate) async fn stop_device_routing() {
-    if let Some(client) = device_relay_client().write().await.take() {
+    let client = { device_relay_client().write().await.take() };
+    if let Some(client) = client {
         client.disconnect().await;
     }
+    crate::peer_host::update_controller_presence(Vec::new()).await;
+}
+
+async fn is_current_routing_client(client: &Arc<RelayClient>) -> bool {
+    device_relay_client()
+        .read()
+        .await
+        .as_ref()
+        .is_some_and(|current| Arc::ptr_eq(current, client))
 }
 
 /// Log out: tear down routing, revoke the token (best-effort), clear state.
@@ -277,6 +290,10 @@ async fn handle_relay_event(
     session_arc: &Arc<RwLock<Option<AccountSession>>>,
     relay_client: &Arc<RelayClient>,
 ) {
+    if !is_current_routing_client(relay_client).await {
+        tracing::debug!("Ignoring event from a stale device routing client");
+        return;
+    }
     match event {
         RelayEvent::AuthOk { user_id, device_id } => {
             tracing::info!("Device routing auth ok: user={user_id} device={device_id}");
@@ -284,9 +301,14 @@ async fn handle_relay_event(
         RelayEvent::AuthError { message } => {
             tracing::warn!("Device routing auth error: {message}");
             TOKEN_EXPIRED.store(true, Ordering::Relaxed);
+            crate::peer_host::update_controller_presence(Vec::new()).await;
         }
         RelayEvent::DevicePresence { devices } => {
             tracing::info!("Device presence updated: {} online", devices.len());
+            crate::peer_host::update_controller_presence(
+                devices.into_iter().map(|device| device.device_id).collect(),
+            )
+            .await;
         }
         RelayEvent::DeviceMessageReceived {
             source_device_id,
@@ -365,6 +387,7 @@ async fn handle_relay_event(
         }
         RelayEvent::Disconnected => {
             tracing::info!("Device routing disconnected");
+            crate::peer_host::update_controller_presence(Vec::new()).await;
         }
         RelayEvent::Reconnected => {
             tracing::info!("Device routing reconnected");

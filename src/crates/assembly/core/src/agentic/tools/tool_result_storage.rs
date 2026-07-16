@@ -26,18 +26,38 @@ const READ_TOOL_NAME: &str = "Read";
 const BASH_TOOL_NAME: &str = "Bash";
 const SHELL_MAX_TOOL_RESULT_CHARS: usize = 30_000;
 
+fn effective_tool_name(result: &ToolResult) -> &str {
+    result
+        .effective_tool_name
+        .as_deref()
+        .unwrap_or(&result.tool_name)
+}
+
+#[cfg(test)]
 pub(crate) async fn maybe_persist_large_tool_result(
+    result: ToolResult,
+    context: &ToolUseContext,
+) -> ToolResult {
+    let effective_tool_name = effective_tool_name(&result).to_string();
+    maybe_persist_large_tool_result_for_tool(result, &effective_tool_name, context).await
+}
+
+pub(crate) async fn maybe_persist_large_tool_result_for_tool(
     mut result: ToolResult,
+    effective_tool_name: &str,
     context: &ToolUseContext,
 ) -> ToolResult {
     let policy = ToolResultStoragePolicy::default();
-    if should_skip_tool_result(&result) || visible_content_is_compacted(&result) {
+    if should_skip_tool_result(&result, effective_tool_name)
+        || visible_content_is_compacted(&result)
+    {
         return result;
     }
 
-    let per_tool_limit = effective_per_tool_limit(&result.tool_name, policy);
+    let per_tool_limit = effective_per_tool_limit(effective_tool_name, policy);
     let visible_chars = result_visible_content(&result).chars().count();
-    let content_override = content_override_if_oversized(&result, per_tool_limit);
+    let content_override =
+        content_override_if_oversized(&result, effective_tool_name, per_tool_limit);
     if visible_chars <= per_tool_limit
         && content_override.is_none()
         && !json_result_is_oversized(&result, per_tool_limit)
@@ -53,7 +73,7 @@ pub(crate) async fn maybe_persist_large_tool_result(
         Err(error) => {
             warn!(
                 "Failed to persist oversized tool result: tool_name={}, tool_id={}, error={}",
-                result.tool_name, result.tool_id, error
+                effective_tool_name, result.tool_id, error
             );
             result
         }
@@ -99,7 +119,7 @@ pub(crate) async fn apply_round_tool_result_budget(
             Err(error) => {
                 warn!(
                     "Failed to persist round-budget tool result: tool_name={}, tool_id={}, error={}",
-                    result.tool_name, result.tool_id, error
+                    effective_tool_name(result), result.tool_id, error
                 );
             }
         }
@@ -115,8 +135,8 @@ pub(crate) async fn apply_round_tool_result_budget(
     results
 }
 
-fn should_skip_tool_result(result: &ToolResult) -> bool {
-    result.tool_name == GET_TOOL_SPEC_TOOL_NAME
+fn should_skip_tool_result(result: &ToolResult, effective_tool_name: &str) -> bool {
+    effective_tool_name == GET_TOOL_SPEC_TOOL_NAME
         || result
             .image_attachments
             .as_ref()
@@ -127,7 +147,7 @@ fn collect_round_budget_candidates(results: &[ToolResult]) -> Vec<ToolResultPers
     results
         .iter()
         .enumerate()
-        .filter(|(_, result)| !should_skip_tool_result(result))
+        .filter(|(_, result)| !should_skip_tool_result(result, effective_tool_name(result)))
         .filter(|(_, result)| !visible_content_is_compacted(result))
         .map(|(index, result)| ToolResultPersistenceCandidate {
             index,
@@ -190,7 +210,7 @@ async fn persist_tool_result(
 
     debug!(
         "Persisted oversized tool result: tool_name={}, tool_id={}, chars={}, path={}",
-        result.tool_name,
+        effective_tool_name(result),
         result.tool_id,
         serialized.chars().count(),
         path.display()
@@ -265,8 +285,12 @@ fn effective_per_tool_limit(tool_name: &str, policy: ToolResultStoragePolicy) ->
     }
 }
 
-fn content_override_if_oversized(result: &ToolResult, limit: usize) -> Option<String> {
-    if result.tool_name != BASH_TOOL_NAME {
+fn content_override_if_oversized(
+    result: &ToolResult,
+    effective_tool_name: &str,
+    limit: usize,
+) -> Option<String> {
+    if effective_tool_name != BASH_TOOL_NAME {
         return None;
     }
 
@@ -362,7 +386,7 @@ mod tests {
             session_id: Some("session_1".to_string()),
             dialog_turn_id: Some("turn_1".to_string()),
             workspace: Some(WorkspaceBinding::new(None, root)),
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data,
             computer_use_host: None,
@@ -383,6 +407,7 @@ mod tests {
         ToolResult {
             tool_id: tool_id.to_string(),
             tool_name: tool_name.to_string(),
+            effective_tool_name: None,
             result: json!({ "content": text }),
             result_for_assistant: Some(text),
             is_error: false,
@@ -395,6 +420,7 @@ mod tests {
         ToolResult {
             tool_id: tool_id.to_string(),
             tool_name: "Bash".to_string(),
+            effective_tool_name: None,
             result: json!({
                 "success": false,
                 "output": output,
@@ -494,6 +520,37 @@ mod tests {
             .current_workspace_session_tool_results_dir("session_1")
             .expect("session tool-results dir");
         assert!(!session_dir.join("get_tool_spec_1.txt").exists());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn deferred_mcp_large_result_uses_effective_policy_and_keeps_wire_identity() {
+        let root = temp_workspace("deferred-mcp");
+        let context = test_context(root.clone());
+        let result = tool_result(
+            "mcp_call_1",
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            "x".repeat(DEFAULT_MAX_TOOL_RESULT_CHARS + 1),
+        );
+
+        let processed =
+            maybe_persist_large_tool_result_for_tool(result, "mcp__github__search_repos", &context)
+                .await;
+
+        assert_eq!(
+            processed.tool_name,
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME
+        );
+        assert!(processed
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with(PERSISTED_OUTPUT_TAG));
+        let output_path = context
+            .current_workspace_session_tool_result_path("session_1", "mcp_call_1.txt")
+            .expect("deferred MCP tool result path");
+        assert!(output_path.exists());
 
         let _ = std::fs::remove_dir_all(root);
     }

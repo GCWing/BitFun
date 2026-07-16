@@ -42,7 +42,7 @@ fn tool_listing_sections_render_only_present_sections() {
     let sections = ToolListingSections {
         skill_listing: Some("skill-a\nskill-b".to_string()),
         agent_listing: None,
-        collapsed_tool_listing: Some("Search: summary".to_string()),
+        deferred_tool_listing: Some("Search: summary".to_string()),
     };
 
     assert!(!sections.is_empty());
@@ -51,16 +51,29 @@ fn tool_listing_sections_render_only_present_sections() {
         .expect("skill listing should render")
         .starts_with("# Skill Listing\nA skill is a set of instructions"));
     assert!(sections.render_agent_listing_reminder().is_none());
-    assert!(sections
-        .render_collapsed_tool_listing_reminder()
-        .expect("collapsed tool listing should render")
-        .starts_with("# Collapsed Tool Listing\n"));
+    let deferred_tool_listing = sections
+        .render_deferred_tool_listing_reminder()
+        .expect("deferred tool listing should render");
+    assert!(deferred_tool_listing.starts_with("# Tool Calling Guide\n"));
+    assert!(deferred_tool_listing.contains("Direct tools: tools in the available tool list"));
+    assert!(deferred_tool_listing.contains("Deferred tools: call them through `CallDeferredTool`"));
+    assert!(deferred_tool_listing.contains(
+        "Before the first call for a deferred tool whose full spec is not already available"
+    ));
+    assert!(deferred_tool_listing
+        .contains("Once its spec is available, call `CallDeferredTool` directly"));
+    assert!(deferred_tool_listing
+        .contains("unless the system reports that the spec is stale or unavailable"));
+    assert!(deferred_tool_listing.contains("tool_name[: optional short description]"));
+    assert!(deferred_tool_listing.contains(
+        "## Deferred Tool Listing\nEach entry has the form `tool_name[: optional short description]`.\n\nSearch: summary"
+    ));
 }
 
 #[test]
 fn prepended_prompt_reminders_keep_runtime_injection_order() {
     let reminders = PrependedPromptReminders {
-        collapsed_tool_listing: Some("collapsed-tools".to_string()),
+        deferred_tool_listing: Some("deferred-tools".to_string()),
         skill_listing: Some("skills".to_string()),
         agent_listing: Some("agents".to_string()),
         runtime_context: Some("runtime-context".to_string()),
@@ -70,7 +83,7 @@ fn prepended_prompt_reminders_keep_runtime_injection_order() {
     assert_eq!(
         reminders.ordered_reminders(),
         vec![
-            "collapsed-tools",
+            "deferred-tools",
             "skills",
             "agents",
             "runtime-context",

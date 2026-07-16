@@ -13,6 +13,8 @@
 // Unit conversions:  96 px = 1 inch,  1 px = 0.75 pt,  PPTX uses inches/EMU.
 // Slide canvas:      1280×720 px = 13.333"×7.5" (LAYOUT_WIDE).
 // ─────────────────────────────────────────────────────────────────────────────
+import { buildDomPaintOrderMap } from './paint-order.js';
+
 export const PT_PER_PX = 0.75;
 export const PX_PER_IN = 96;
 
@@ -43,7 +45,57 @@ export function measureBodyDimensions(doc = document) {
 
 export function extractSlideDataFromDocument(doc = document) {
   const document = doc;
-  const view = document.defaultView || window;
+  const view = document?.defaultView || globalThis.window;
+  const diagnostics = [];
+  const diagnosticKeys = new Set();
+
+  const addDiagnostic = (severity, code, message, element = null) => {
+    const sourceId = element?.dataset?.pptxSourceId || element?.id || null;
+    const key = `${severity}:${code}:${sourceId || ''}`;
+    if (diagnosticKeys.has(key)) return;
+    diagnosticKeys.add(key);
+    const diagnostic = {
+      severity,
+      kind: severity === 'blocking' ? 'blocking' : undefined,
+      code,
+      message,
+      sourceId,
+      tag: element?.tagName?.toLowerCase?.() || null,
+    };
+    try {
+      const rect = element?.getBoundingClientRect?.();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        diagnostic.bbox = {
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+    } catch {
+      // bbox is optional.
+    }
+    diagnostics.push(diagnostic);
+  };
+
+  if (!document?.body || !view?.getComputedStyle) {
+    addDiagnostic(
+      'blocking',
+      'unreadable_document',
+      'Slide document has no readable body or computed-style view.',
+      document?.documentElement || null,
+    );
+    const unreadableDiagnostic = diagnostics[diagnostics.length - 1];
+    unreadableDiagnostic.sourceId = unreadableDiagnostic.sourceId || 'slide-document';
+    unreadableDiagnostic.tag = 'document';
+    return {
+      background: { type: 'color', value: 'FFFFFF' },
+      elements: [],
+      placeholders: [],
+      diagnostics,
+      errors: diagnostics.map((item) => item.message),
+    };
+  }
 
     const PT_PER_PX = 0.75;
     const PX_PER_IN = 96;
@@ -252,7 +304,7 @@ export function extractSlideDataFromDocument(doc = document) {
       element.childNodes.forEach((node) => {
         let textTransform = baseTextTransform;
 
-        const isText = node.nodeType === Node.TEXT_NODE || node.tagName === 'BR';
+        const isText = node.nodeType === view.Node.TEXT_NODE || node.tagName === 'BR';
         if (isText) {
           const text = node.tagName === 'BR' ? '\n' : textTransform(node.textContent.replace(/\s+/g, ' '));
           const prevRun = runs[runs.length - 1];
@@ -262,7 +314,7 @@ export function extractSlideDataFromDocument(doc = document) {
             runs.push({ text, options: { ...baseOptions } });
           }
 
-        } else if (node.nodeType === Node.ELEMENT_NODE && node.textContent.trim()) {
+        } else if (node.nodeType === view.Node.ELEMENT_NODE && node.textContent.trim()) {
           const options = { ...baseOptions };
           const computed = view.getComputedStyle(node);
 
@@ -287,16 +339,16 @@ export function extractSlideDataFromDocument(doc = document) {
 
             // Validate: Check for margins on inline elements
             if (computed.marginLeft && parseFloat(computed.marginLeft) > 0) {
-              errors.push(`Inline element <${node.tagName.toLowerCase()}> has margin-left which is not supported in PowerPoint. Remove margin from inline elements.`);
+              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-left; fallback layout may be needed.`, node);
             }
             if (computed.marginRight && parseFloat(computed.marginRight) > 0) {
-              errors.push(`Inline element <${node.tagName.toLowerCase()}> has margin-right which is not supported in PowerPoint. Remove margin from inline elements.`);
+              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-right; fallback layout may be needed.`, node);
             }
             if (computed.marginTop && parseFloat(computed.marginTop) > 0) {
-              errors.push(`Inline element <${node.tagName.toLowerCase()}> has margin-top which is not supported in PowerPoint. Remove margin from inline elements.`);
+              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-top; fallback layout may be needed.`, node);
             }
             if (computed.marginBottom && parseFloat(computed.marginBottom) > 0) {
-              errors.push(`Inline element <${node.tagName.toLowerCase()}> has margin-bottom which is not supported in PowerPoint. Remove margin from inline elements.`);
+              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-bottom; fallback layout may be needed.`, node);
             }
 
             // Recursively process the child node. This will flatten nested spans into multiple runs.
@@ -328,7 +380,7 @@ export function extractSlideDataFromDocument(doc = document) {
         const style = view.getComputedStyle(el);
         const bgImage = style.backgroundImage || '';
         if (bgImage.includes('linear-gradient') || bgImage.includes('radial-gradient')) {
-          return { gradient: true };
+          return { gradient: true, element: el };
         }
         if (bgImage && bgImage !== 'none') {
           const urlMatch = bgImage.match(/url\(["']?([^"')]+)["']?\)/);
@@ -345,6 +397,14 @@ export function extractSlideDataFromDocument(doc = document) {
     // Extract background from body / slide root wrapper
     const body = document.body;
     const bodyRect = body.getBoundingClientRect();
+    if (!(bodyRect.width > 0) || !(bodyRect.height > 0)) {
+      addDiagnostic(
+        'blocking',
+        'unmeasurable_canvas',
+        'Slide canvas has no measurable width or height.',
+        body,
+      );
+    }
     const boxFor = (rect) => ({
       left: rect.left - bodyRect.left,
       top: rect.top - bodyRect.top,
@@ -390,14 +450,52 @@ export function extractSlideDataFromDocument(doc = document) {
     };
 
     const readZIndex = (el) => {
-      const raw = view.getComputedStyle(el).zIndex;
-      if (!raw || raw === 'auto') return 0;
-      const parsed = parseInt(raw, 10);
-      return Number.isFinite(parsed) ? parsed : 0;
+      let current = el;
+      while (current && current !== body) {
+        const raw = view.getComputedStyle(current).zIndex;
+        if (raw && raw !== 'auto') {
+          const parsed = parseInt(raw, 10);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+        current = current.parentElement;
+      }
+      return 0;
     };
 
+    const domPaintOrder = buildDomPaintOrderMap(document);
+    const sourceSubOrders = new Map();
+    let unmappedPaintOrder = Math.max(-1, ...domPaintOrder.values()) + 1;
+    const nextPaintMetadata = (el) => {
+      const sourceId = el?.dataset?.pptxSourceId || el?.id || null;
+      const subOrder = sourceSubOrders.get(sourceId) || 0;
+      sourceSubOrders.set(sourceId, subOrder + 1);
+      return {
+        sourceId,
+        paintOrder: domPaintOrder.get(sourceId) ?? unmappedPaintOrder++,
+        subOrder,
+      };
+    };
     const pushElement = (entry, el) => {
-      if (el) entry.zIndex = readZIndex(el);
+      const paintMetadata = nextPaintMetadata(el);
+      entry.kind = entry.kind || 'native';
+      entry.paintOrder = entry.paintOrder ?? paintMetadata.paintOrder;
+      entry.subOrder = entry.subOrder ?? paintMetadata.subOrder;
+      if (!entry.bbox) {
+        if (entry.position) {
+          entry.bbox = { ...entry.position };
+        } else if (entry.type === 'line') {
+          entry.bbox = {
+            x: Math.min(entry.x1, entry.x2),
+            y: Math.min(entry.y1, entry.y2),
+            w: Math.abs(entry.x2 - entry.x1),
+            h: Math.abs(entry.y2 - entry.y1),
+          };
+        }
+      }
+      if (el) {
+        entry.zIndex = readZIndex(el);
+        entry.sourceId = paintMetadata.sourceId;
+      }
       elements.push(entry);
     };
 
@@ -422,14 +520,13 @@ export function extractSlideDataFromDocument(doc = document) {
       return null;
     };
 
-    // Collect validation errors
-    const errors = [];
-
     const bgResolved = resolveSlideBackground(body);
     if (bgResolved.gradient) {
-      errors.push(
-        'CSS gradients are not supported. Use Sharp to rasterize gradients as PNG images first, ' +
-        'then reference with background-image: url(\'gradient.png\')',
+      addDiagnostic(
+        'fallback',
+        'css_gradient',
+        'CSS gradient requires fallback rendering; native gradient mapping is not available.',
+        bgResolved.element || body,
       );
     }
 
@@ -440,6 +537,7 @@ export function extractSlideDataFromDocument(doc = document) {
 
     // Process all elements
     const elements = [];
+    const slideDataFallbackLayers = [];
     const placeholders = [];
     const textTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI'];
     const genericInlineTextTags = new Set([
@@ -459,7 +557,7 @@ export function extractSlideDataFromDocument(doc = document) {
     };
 
     const hasDirectText = (el) => Array.from(el.childNodes).some(
-      (node) => node.nodeType === Node.TEXT_NODE && node.textContent.replace(/\s+/g, ' ').trim(),
+      (node) => node.nodeType === view.Node.TEXT_NODE && node.textContent.replace(/\s+/g, ' ').trim(),
     );
 
     const isGenericTextElement = (el) => {
@@ -519,12 +617,13 @@ export function extractSlideDataFromDocument(doc = document) {
       const text = el.textContent.replace(/\s+/g, ' ').trim();
       if (rect.width === 0 || rect.height === 0 || !text) return false;
 
-      if (type !== 'text' && el.tagName !== 'LI' && /^[•\-\*▪▸○●◆◇■□]\s/.test(text.trimStart())) {
-        errors.push(
-          `Text element <${el.tagName.toLowerCase()}> starts with bullet symbol "${text.substring(0, 20)}...". ` +
-          'Use <ul> or <ol> lists instead of manual bullet symbols.'
+      if (type !== 'text' && el.tagName !== 'LI' && /^[•●○▪‣·▸◆◇■□]\s/u.test(text.trimStart())) {
+        addDiagnostic(
+          'fallback',
+          'manual_bullet_unrepaired',
+          `Text element <${el.tagName.toLowerCase()}> still starts with a manual bullet; exporting as editable text.`,
+          el,
         );
-        return false;
       }
 
       const computed = view.getComputedStyle(el);
@@ -629,8 +728,494 @@ export function extractSlideDataFromDocument(doc = document) {
       return true;
     };
 
+    const svgColor = (value, fallback = null) => {
+      if (!value || value === 'none' || value === 'transparent') return fallback;
+      return rgbToHex(value);
+    };
+    const svgNumber = (value, fallback = 0) => {
+      const parsed = parseFloat(String(value || ''));
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const identityMatrix = () => [1, 0, 0, 1, 0, 0];
+    const multiplyMatrix = (left, right) => [
+      left[0] * right[0] + left[2] * right[1],
+      left[1] * right[0] + left[3] * right[1],
+      left[0] * right[2] + left[2] * right[3],
+      left[1] * right[2] + left[3] * right[3],
+      left[0] * right[4] + left[2] * right[5] + left[4],
+      left[1] * right[4] + left[3] * right[5] + left[5],
+    ];
+    const parseSvgTransform = (value = '') => {
+      const raw = String(value || '').trim();
+      let matrix = identityMatrix();
+      let layoutMatrix = identityMatrix();
+      let rotation = 0;
+      if (!raw || raw === 'none') {
+        return { matrix, layoutMatrix, rotation, reliable: true };
+      }
+      if (/(?:skew|perspective|matrix3d)\s*\(/i.test(raw)) {
+        return { matrix, layoutMatrix, rotation, reliable: false };
+      }
+      const functions = raw.matchAll(/(matrix|translate|scale|rotate)\s*\(([^)]*)\)/gi);
+      let matched = false;
+      for (const match of functions) {
+        matched = true;
+        const name = match[1].toLowerCase();
+        const values = match[2].trim().split(/[\s,]+/).filter(Boolean).map((item) => parseFloat(item));
+        let next = identityMatrix();
+        let nextLayout = identityMatrix();
+        if (name === 'matrix' && values.length >= 6) {
+          if (Math.abs(values[1]) > 1e-6 || Math.abs(values[2]) > 1e-6) {
+            return { matrix, layoutMatrix, rotation, reliable: false };
+          }
+          next = values.slice(0, 6);
+          nextLayout = next;
+        } else if (name === 'translate') {
+          next = [1, 0, 0, 1, values[0] || 0, values[1] || 0];
+          nextLayout = next;
+        } else if (name === 'scale') {
+          const x = Number.isFinite(values[0]) ? values[0] : 1;
+          const y = Number.isFinite(values[1]) ? values[1] : x;
+          next = [x, 0, 0, y, 0, 0];
+          nextLayout = next;
+        } else if (name === 'rotate') {
+          const angle = values[0] || 0;
+          rotation += angle;
+          const radians = angle * Math.PI / 180;
+          const cos = Math.cos(radians);
+          const sin = Math.sin(radians);
+          const rotationMatrix = [cos, sin, -sin, cos, 0, 0];
+          if (Number.isFinite(values[1]) && Number.isFinite(values[2])) {
+            next = multiplyMatrix(
+              multiplyMatrix([1, 0, 0, 1, values[1], values[2]], rotationMatrix),
+              [1, 0, 0, 1, -values[1], -values[2]],
+            );
+          } else {
+            next = rotationMatrix;
+          }
+        }
+        matrix = multiplyMatrix(matrix, next);
+        layoutMatrix = multiplyMatrix(layoutMatrix, nextLayout);
+      }
+      return { matrix, layoutMatrix, rotation, reliable: matched };
+    };
+    const transformForSvgNode = (node, svg) => {
+      if (typeof node.getCTM === 'function') {
+        try {
+          const ctm = node.getCTM();
+          const matrix = ctm
+            ? [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f].map(Number)
+            : null;
+          if (matrix?.every(Number.isFinite)) {
+            const scaleX = Math.hypot(matrix[0], matrix[1]);
+            const scaleY = Math.hypot(matrix[2], matrix[3]);
+            const orthogonality = scaleX > 0 && scaleY > 0
+              ? Math.abs((matrix[0] * matrix[2] + matrix[1] * matrix[3]) / (scaleX * scaleY))
+              : Infinity;
+            if (orthogonality > 1e-5 || matrix[0] * matrix[3] - matrix[1] * matrix[2] <= 0) {
+              return {
+                matrix,
+                layoutMatrix: identityMatrix(),
+                rotation: 0,
+                reliable: false,
+                coordinateSpace: 'viewport',
+              };
+            }
+            return {
+              matrix,
+              layoutMatrix: [scaleX, 0, 0, scaleY, matrix[4], matrix[5]],
+              rotation: Math.atan2(matrix[1], matrix[0]) * 180 / Math.PI,
+              reliable: true,
+              coordinateSpace: 'viewport',
+            };
+          }
+        } catch {
+          // Fall through to deterministic attribute/computed-style parsing.
+        }
+      }
+      const chain = [];
+      let current = node;
+      while (current && current !== svg) {
+        chain.unshift(current);
+        current = current.parentElement;
+      }
+      let matrix = identityMatrix();
+      let layoutMatrix = identityMatrix();
+      let rotation = 0;
+      for (const item of chain) {
+        const attributeTransform = parseSvgTransform(item.getAttribute('transform'));
+        if (!attributeTransform.reliable) {
+          return { matrix, layoutMatrix, rotation, reliable: false };
+        }
+        matrix = multiplyMatrix(matrix, attributeTransform.matrix);
+        layoutMatrix = multiplyMatrix(layoutMatrix, attributeTransform.layoutMatrix);
+        rotation += attributeTransform.rotation;
+
+        const computedTransformValue = view.getComputedStyle(item).transform;
+        if (computedTransformValue && computedTransformValue !== 'none'
+          && computedTransformValue !== item.getAttribute('transform')) {
+          const computedTransform = parseSvgTransform(computedTransformValue);
+          if (!computedTransform.reliable) {
+            return { matrix, layoutMatrix, rotation, reliable: false };
+          }
+          let computedMatrix = computedTransform.matrix;
+          const originValues = String(view.getComputedStyle(item).transformOrigin || '')
+            .split(/\s+/).map((value) => parseFloat(value));
+          if (Number.isFinite(originValues[0]) && Number.isFinite(originValues[1])
+            && computedTransform.rotation) {
+            computedMatrix = multiplyMatrix(
+              multiplyMatrix(
+                [1, 0, 0, 1, originValues[0], originValues[1]],
+                computedMatrix,
+              ),
+              [1, 0, 0, 1, -originValues[0], -originValues[1]],
+            );
+          }
+          matrix = multiplyMatrix(matrix, computedMatrix);
+          layoutMatrix = multiplyMatrix(layoutMatrix, computedTransform.layoutMatrix);
+          rotation += computedTransform.rotation;
+        }
+      }
+      return {
+        matrix,
+        layoutMatrix,
+        rotation,
+        reliable: true,
+        coordinateSpace: 'viewBox',
+      };
+    };
+    const transformPoint = (point, matrix) => ({
+      x: matrix[0] * point.x + matrix[2] * point.y + matrix[4],
+      y: matrix[1] * point.x + matrix[3] * point.y + matrix[5],
+    });
+    const parseSvgPoints = (value) => {
+      const numbers = String(value || '').trim().split(/[\s,]+/).filter(Boolean).map(Number);
+      const points = [];
+      for (let index = 0; index + 1 < numbers.length; index += 2) {
+        if (Number.isFinite(numbers[index]) && Number.isFinite(numbers[index + 1])) {
+          points.push({ x: numbers[index], y: numbers[index + 1] });
+        }
+      }
+      return points;
+    };
+    const svgStyleProperties = [
+      'fill', 'fill-opacity', 'fill-rule',
+      'stroke', 'stroke-width', 'stroke-opacity', 'stroke-linecap', 'stroke-linejoin',
+      'stroke-dasharray', 'stroke-dashoffset',
+      'opacity', 'color', 'vector-effect',
+    ];
+    const resolvedSvgStyle = (element, property) => {
+      let current = element;
+      while (current) {
+        const value = String(
+          view.getComputedStyle(current).getPropertyValue(property) || '',
+        ).trim();
+        if (value && !['inherit', 'unset', 'initial'].includes(value)) return value;
+        if (['opacity', 'vector-effect'].includes(property)) break;
+        current = current.parentElement;
+      }
+      return '';
+    };
+    const inlineComputedSvgStyles = (original, clone) => {
+      svgStyleProperties.forEach((property) => {
+        const value = resolvedSvgStyle(original, property);
+        if (value) clone.style.setProperty(property, value);
+      });
+      const originalChildren = [...original.children];
+      const cloneChildren = [...clone.children];
+      originalChildren.forEach((child, index) => {
+        if (cloneChildren[index]) inlineComputedSvgStyles(child, cloneChildren[index]);
+      });
+    };
+    const serializeSvgVisual = (svg, node) => {
+      const rootClone = svg.cloneNode(false);
+      rootClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      if (!rootClone.getAttribute('width')) rootClone.setAttribute('width', '100%');
+      if (!rootClone.getAttribute('height')) rootClone.setAttribute('height', '100%');
+      inlineComputedSvgStyles(svg, rootClone);
+
+      [...svg.querySelectorAll('defs')].forEach((defs) => {
+        const defsClone = defs.cloneNode(true);
+        inlineComputedSvgStyles(defs, defsClone);
+        rootClone.appendChild(defsClone);
+      });
+
+      const ancestors = [];
+      let current = node.parentElement;
+      while (current && current !== svg) {
+        ancestors.unshift(current);
+        current = current.parentElement;
+      }
+      let targetParent = rootClone;
+      ancestors.forEach((ancestor) => {
+        const ancestorClone = ancestor.cloneNode(false);
+        inlineComputedSvgStyles(ancestor, ancestorClone);
+        targetParent.appendChild(ancestorClone);
+        targetParent = ancestorClone;
+      });
+      const targetClone = node.cloneNode(true);
+      inlineComputedSvgStyles(node, targetClone);
+      targetClone.querySelectorAll?.('text').forEach((text) => text.remove());
+      targetParent.appendChild(targetClone);
+      return `data:image/svg+xml,${encodeURIComponent(rootClone.outerHTML)}`;
+    };
+    const boundsOfPoints = (points) => {
+      const xs = points.map((point) => point.x);
+      const ys = points.map((point) => point.y);
+      return {
+        left: Math.min(...xs),
+        top: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+      };
+    };
+    const isDiamondPoints = (points) => {
+      if (points.length !== 4) return false;
+      const bounds = boundsOfPoints(points);
+      const cx = bounds.left + bounds.width / 2;
+      const cy = bounds.top + bounds.height / 2;
+      const tolerance = Math.max(bounds.width, bounds.height) * 0.08 + 0.01;
+      return points.every((point) => (
+        Math.abs(point.x - cx) <= tolerance || Math.abs(point.y - cy) <= tolerance
+      ));
+    };
+    const emitNativeSvg = (svg) => {
+      const svgRect = rectFor(svg);
+      if (svgRect.width <= 0 || svgRect.height <= 0) return;
+      const viewBox = String(svg.getAttribute('viewBox') || `0 0 ${svgRect.width} ${svgRect.height}`)
+        .trim().split(/[\s,]+/).map(Number);
+      const [vbX = 0, vbY = 0, vbW = svgRect.width, vbH = svgRect.height] = viewBox;
+      const xScale = svgRect.width / (vbW || svgRect.width);
+      const yScale = svgRect.height / (vbH || svgRect.height);
+      const fallbackLayers = slideDataFallbackLayers;
+      const toSlidePoint = (point) => ({
+        x: svgRect.left + ((point.x - vbX) * xScale),
+        y: svgRect.top + ((point.y - vbY) * yScale),
+      });
+      const pushLine = (start, end, node, stroke, width, coordinateSpace = 'viewBox') => {
+        const toLinePoint = (point) => (
+          coordinateSpace === 'viewport'
+            ? { x: svgRect.left + point.x, y: svgRect.top + point.y }
+            : toSlidePoint(point)
+        );
+        const first = toLinePoint(start);
+        const second = toLinePoint(end);
+        pushElement({
+          type: 'line',
+          kind: 'native',
+          x1: pxToInch(first.x),
+          y1: pxToInch(first.y),
+          x2: pxToInch(second.x),
+          y2: pxToInch(second.y),
+          color: stroke || '000000',
+          width,
+        }, node);
+      };
+      const hasBrowserOnlySvg = Boolean(
+        svg.querySelector('filter,mask,foreignObject,use,pattern,textPath,clipPath,image'),
+      );
+      const canSerializeSvgVisual = (node) => (
+        !svg.querySelector('script')
+        && !/(?:href|src)\s*=\s*["']\s*(?:https?:)?\/\//i.test(node.outerHTML || '')
+      );
+      const pushSvgImageLayer = (node, code, message) => {
+        if (!canSerializeSvgVisual(node)) {
+          addDiagnostic(
+            'fallback',
+            'complex_svg_raster',
+            'Complex SVG cannot be safely serialized and requires local browser raster rendering.',
+            svg,
+          );
+          return;
+        }
+        const paintMetadata = nextPaintMetadata(node);
+        fallbackLayers.push({
+          sourceId: paintMetadata.sourceId,
+          zIndex: readZIndex(node),
+          paintOrder: paintMetadata.paintOrder,
+          subOrder: paintMetadata.subOrder,
+          kind: 'svg-image',
+          captureStrategy: 'local-svg',
+          bbox: {
+            x: pxToInch(svgRect.left),
+            y: pxToInch(svgRect.top),
+            w: pxToInch(svgRect.width),
+            h: pxToInch(svgRect.height),
+          },
+          data: serializeSvgVisual(svg, node),
+          diagnostics: [{
+            severity: 'fallback',
+            code,
+            message,
+            sourceId: node.dataset?.pptxSourceId || node.id || null,
+          }],
+        });
+      };
+      svg.querySelectorAll('rect,circle,ellipse,line,polyline,polygon,text,path').forEach((node) => {
+        const tag = node.tagName.toLowerCase();
+        if (tag === 'path') {
+          if (!hasBrowserOnlySvg) {
+            pushSvgImageLayer(
+              node,
+              'complex_svg_vector',
+              'Complex SVG geometry is preserved as a local movable vector image.',
+            );
+          }
+          return;
+        }
+        const transform = transformForSvgNode(node, svg);
+        if (!transform.reliable) {
+          pushSvgImageLayer(
+            node,
+            'svg_transform_vector',
+            'SVG transform cannot be represented reliably as a native shape; preserving it as SVG.',
+          );
+          return;
+        }
+        const transformedToSlidePoint = (transformed) => (
+          transform.coordinateSpace === 'viewport'
+            ? { x: svgRect.left + transformed.x, y: svgRect.top + transformed.y }
+            : toSlidePoint(transformed)
+        );
+        const transformToSlidePoint = (point, matrix) => (
+          transformedToSlidePoint(transformPoint(point, matrix))
+        );
+        const mapPoint = (x, y) => transformToSlidePoint(
+          { x: svgNumber(x), y: svgNumber(y) },
+          transform.matrix,
+        );
+        const mapLayoutPoint = (x, y) => transformToSlidePoint(
+          { x: svgNumber(x), y: svgNumber(y) },
+          transform.layoutMatrix,
+        );
+        const fill = svgColor(node.getAttribute('fill') || view.getComputedStyle(node).fill);
+        const stroke = svgColor(node.getAttribute('stroke') || view.getComputedStyle(node).stroke);
+        const opacity = svgNumber(node.getAttribute('opacity') || view.getComputedStyle(node).opacity, 1);
+        const lineWidth = svgNumber(node.getAttribute('stroke-width'), 1) * 0.75;
+        const common = {
+          type: tag === 'text' ? 'svg-text' : 'svg-shape',
+          kind: 'native',
+          svgType: tag,
+          position: null,
+          shape: { fill, line: stroke ? { color: stroke, width: lineWidth } : null, transparency: Math.round((1 - opacity) * 100), rectRadius: 0 },
+        };
+        if (tag === 'rect') {
+          const x = svgNumber(node.getAttribute('x'));
+          const y = svgNumber(node.getAttribute('y'));
+          const width = svgNumber(node.getAttribute('width'));
+          const height = svgNumber(node.getAttribute('height'));
+          const points = [
+            mapPoint(x, y), mapPoint(x + width, y), mapPoint(x + width, y + height), mapPoint(x, y + height),
+          ];
+          const bounds = boundsOfPoints(points);
+          const layoutBounds = boundsOfPoints([
+            mapLayoutPoint(x, y),
+            mapLayoutPoint(x + width, y),
+            mapLayoutPoint(x + width, y + height),
+            mapLayoutPoint(x, y + height),
+          ]);
+          common.position = { x: pxToInch(layoutBounds.left), y: pxToInch(layoutBounds.top), w: pxToInch(layoutBounds.width), h: pxToInch(layoutBounds.height) };
+          common.bbox = { x: pxToInch(bounds.left), y: pxToInch(bounds.top), w: pxToInch(bounds.width), h: pxToInch(bounds.height) };
+          if (transform.rotation) common.shape.rotate = transform.rotation;
+        } else if (tag === 'circle' || tag === 'ellipse') {
+          const rx = tag === 'circle' ? svgNumber(node.getAttribute('r')) : svgNumber(node.getAttribute('rx'));
+          const ry = tag === 'circle' ? rx : svgNumber(node.getAttribute('ry'));
+          const cx = svgNumber(node.getAttribute('cx'));
+          const cy = svgNumber(node.getAttribute('cy'));
+          const points = [
+            mapPoint(cx - rx, cy), mapPoint(cx + rx, cy), mapPoint(cx, cy - ry), mapPoint(cx, cy + ry),
+          ];
+          const bounds = boundsOfPoints(points);
+          const layoutBounds = boundsOfPoints([
+            mapLayoutPoint(cx - rx, cy), mapLayoutPoint(cx + rx, cy),
+            mapLayoutPoint(cx, cy - ry), mapLayoutPoint(cx, cy + ry),
+          ]);
+          common.position = { x: pxToInch(layoutBounds.left), y: pxToInch(layoutBounds.top), w: pxToInch(layoutBounds.width), h: pxToInch(layoutBounds.height) };
+          common.bbox = { x: pxToInch(bounds.left), y: pxToInch(bounds.top), w: pxToInch(bounds.width), h: pxToInch(bounds.height) };
+          if (transform.rotation) common.shape.rotate = transform.rotation;
+        } else if (tag === 'line') {
+          pushLine(
+            transformPoint({ x: svgNumber(node.getAttribute('x1')), y: svgNumber(node.getAttribute('y1')) }, transform.matrix),
+            transformPoint({ x: svgNumber(node.getAttribute('x2')), y: svgNumber(node.getAttribute('y2')) }, transform.matrix),
+            node,
+            stroke,
+            lineWidth,
+            transform.coordinateSpace,
+          );
+          return;
+        } else if (tag === 'text') {
+          common.text = node.textContent || '';
+          const fontSize = svgNumber(node.getAttribute('font-size'), 16);
+          const origin = mapPoint(node.getAttribute('x'), svgNumber(node.getAttribute('y')) - fontSize);
+          common.position = { x: pxToInch(origin.x), y: pxToInch(origin.y), w: pxToInch(Math.max(1, svgRect.width)), h: pxToInch(Math.max(1, fontSize * yScale * 1.3)) };
+          common.style = { fontSize: svgNumber(node.getAttribute('font-size'), 16) * 0.75, fontFace: 'Arial', color: fill || '000000', align: 'left' };
+          if (transform.rotation) common.style.rotate = transform.rotation;
+        } else {
+          const points = parseSvgPoints(node.getAttribute('points'))
+            .map((point) => transformPoint(point, transform.matrix));
+          if (tag === 'polygon' && (points.length === 3 || isDiamondPoints(points))) {
+            const slidePoints = points.map(transformedToSlidePoint);
+            const bounds = boundsOfPoints(slidePoints);
+            common.svgType = points.length === 3 ? 'triangle' : 'diamond';
+            common.position = {
+              x: pxToInch(bounds.left),
+              y: pxToInch(bounds.top),
+              w: pxToInch(bounds.width),
+              h: pxToInch(bounds.height),
+            };
+            common.bbox = { ...common.position };
+            if (transform.rotation) common.shape.rotate = transform.rotation;
+          } else {
+            const closed = tag === 'polygon' && points.length > 2 ? [...points, points[0]] : points;
+            for (let index = 0; index + 1 < closed.length; index += 1) {
+              pushLine(
+                closed[index],
+                closed[index + 1],
+                node,
+                stroke || fill,
+                lineWidth,
+                transform.coordinateSpace,
+              );
+            }
+            if (tag === 'polygon' && fill && points.length > 2) {
+              const sourceId = node.dataset?.pptxSourceId || node.id || null;
+              fallbackLayers.push({
+                sourceId,
+                zIndex: readZIndex(node),
+                paintOrder: domPaintOrder.get(sourceId) ?? unmappedPaintOrder++,
+                subOrder: -1,
+                kind: 'svg-image',
+                bbox: {
+                  x: pxToInch(svgRect.left),
+                  y: pxToInch(svgRect.top),
+                  w: pxToInch(svgRect.width),
+                  h: pxToInch(svgRect.height),
+                },
+                data: serializeSvgVisual(svg, node),
+                diagnostics: [{
+                  severity: 'fallback',
+                  code: 'svg_polygon_fill',
+                  message: 'Polygon fill is preserved as a local SVG layer over an editable outline.',
+                  sourceId: node.dataset?.pptxSourceId || node.id || null,
+                }],
+              });
+            }
+            return;
+          }
+        }
+        if (common.position || common.type === 'line') pushElement(common, node);
+      });
+      processed.add(svg);
+      svg.querySelectorAll('*').forEach((node) => processed.add(node));
+    };
+
     document.querySelectorAll('*').forEach((el) => {
       if (processed.has(el)) return;
+
+      if (el.tagName === 'svg') {
+        emitNativeSvg(el);
+        return;
+      }
 
       // [data-pptx-merge="true"] — opt-in: merge all <p>/<h1>-<h6> descendants
       // into ONE PowerPoint text frame (single editable text box).
@@ -646,9 +1231,11 @@ export function extractSlideDataFromDocument(doc = document) {
 
         // Reject nested merge containers — undefined behavior.
         if (el.querySelector('[data-pptx-merge="true"]')) {
-          errors.push(
-            `data-pptx-merge container cannot contain another data-pptx-merge container. ` +
-            'Nested merge is not supported.'
+          addDiagnostic(
+            'fallback',
+            'nested_merge_container',
+            'Nested data-pptx-merge containers require fallback handling.',
+            el,
           );
           processed.add(el);
           return;
@@ -658,11 +1245,12 @@ export function extractSlideDataFromDocument(doc = document) {
 
         // Container background image — same restriction as regular divs.
         if (mergeComputed.backgroundImage && mergeComputed.backgroundImage !== 'none') {
-          errors.push(
-            'Background images on data-pptx-merge container are not supported. ' +
-            'Use solid colors or borders, or layer images via slide.addImage().'
+          addDiagnostic(
+            'fallback',
+            'merge_background_image',
+            'Background image on data-pptx-merge requires fallback rendering.',
+            el,
           );
-          return;
         }
 
         // Emit a shape for the container's bg/uniform-border (mirrors the regular div branch).
@@ -677,7 +1265,7 @@ export function extractSlideDataFromDocument(doc = document) {
         const mHasUniformBorder = mHasBorder && mBorders.every(b => b === mBorders[0]);
 
         if (mHasBg || mHasUniformBorder) {
-          elements.push({
+          pushElement({
             type: 'shape',
             text: '',
             position: {
@@ -707,15 +1295,17 @@ export function extractSlideDataFromDocument(doc = document) {
               })(),
               shadow: parseBoxShadow(mergeComputed.boxShadow)
             }
-          });
+          }, el);
         }
 
         // Collect <p>/<h*> descendants in document order.
         const textDescendants = Array.from(el.querySelectorAll('p, h1, h2, h3, h4, h5, h6'));
         if (textDescendants.length === 0) {
-          errors.push(
-            `data-pptx-merge container has no <p>/<h*> children to merge. ` +
-            'Remove the data-pptx-merge attribute or add text elements.'
+          addDiagnostic(
+            'fallback',
+            'empty_merge_container',
+            'data-pptx-merge container has no semantic text children.',
+            el,
           );
           processed.add(el);
           return;
@@ -794,7 +1384,7 @@ export function extractSlideDataFromDocument(doc = document) {
           return;
         }
 
-        elements.push({
+        pushElement({
           type: 'merged-text',
           items: mergedRuns,
           position: {
@@ -804,7 +1394,7 @@ export function extractSlideDataFromDocument(doc = document) {
             h: pxToInch(containerRect.height)
           },
           style: baseStyle
-        });
+        }, el);
 
         processed.add(el);
         return;
@@ -881,8 +1471,11 @@ export function extractSlideDataFromDocument(doc = document) {
       if (el.classList && el.classList.contains('placeholder')) {
         const rect = rectFor(el);
         if (rect.width === 0 || rect.height === 0) {
-          errors.push(
-            `Placeholder "${el.id || 'unnamed'}" has ${rect.width === 0 ? 'width: 0' : 'height: 0'}. Check the layout CSS.`
+          addDiagnostic(
+            'fallback',
+            'unmeasurable_placeholder',
+            `Placeholder "${el.id || 'unnamed'}" has ${rect.width === 0 ? 'width: 0' : 'height: 0'}.`,
+            el,
           );
         } else {
           placeholders.push({
@@ -901,7 +1494,7 @@ export function extractSlideDataFromDocument(doc = document) {
       if (el.tagName === 'IMG') {
         const rect = rectFor(el);
         if (rect.width > 0 && rect.height > 0) {
-          elements.push({
+          pushElement({
             type: 'image',
             src: el.src,
             position: {
@@ -910,7 +1503,52 @@ export function extractSlideDataFromDocument(doc = document) {
               w: pxToInch(rect.width),
               h: pxToInch(rect.height)
             }
-          });
+          }, el);
+          processed.add(el);
+          return;
+        }
+      }
+
+      // Common CSS arrow: a zero-sized box with one opaque border and
+      // transparent side borders maps cleanly to an editable PPT triangle.
+      if (el.tagName === 'DIV') {
+        const computed = view.getComputedStyle(el);
+        const isZeroBox = svgNumber(computed.width) === 0 && svgNumber(computed.height) === 0;
+        const sides = ['Top', 'Right', 'Bottom', 'Left'].map((side) => ({
+          side,
+          width: svgNumber(computed[`border${side}Width`]),
+          color: computed[`border${side}Color`],
+        }));
+        const opaqueSides = sides.filter((side) => (
+          side.width > 0 && !isTransparentBg(side.color)
+        ));
+        if (isZeroBox && opaqueSides.length === 1 && sides.filter((side) => side.width > 0).length >= 3) {
+          const active = opaqueSides[0];
+          const rect = rectFor(el);
+          const horizontal = sides.find((side) => side.side === 'Left').width
+            + sides.find((side) => side.side === 'Right').width;
+          const vertical = sides.find((side) => side.side === 'Top').width
+            + sides.find((side) => side.side === 'Bottom').width;
+          const rotations = { Bottom: 0, Left: 90, Top: 180, Right: 270 };
+          pushElement({
+            type: 'svg-shape',
+            svgType: 'triangle',
+            kind: 'native',
+            text: '',
+            position: {
+              x: pxToInch(rect.left - sides.find((side) => side.side === 'Left').width),
+              y: pxToInch(rect.top - sides.find((side) => side.side === 'Top').width),
+              w: pxToInch(Math.max(1, horizontal)),
+              h: pxToInch(Math.max(1, vertical)),
+            },
+            shape: {
+              fill: rgbToHex(active.color),
+              line: null,
+              transparency: extractAlpha(active.color),
+              rectRadius: 0,
+              rotate: rotations[active.side],
+            },
+          }, el);
           processed.add(el);
           return;
         }
@@ -925,11 +1563,12 @@ export function extractSlideDataFromDocument(doc = document) {
         // Check for background images on shapes
         const bgImage = computed.backgroundImage;
         if (bgImage && bgImage !== 'none') {
-          errors.push(
-            'Background images on DIV elements are not supported. ' +
-            'Use solid colors or borders for shapes, or use slide.addImage() in PptxGenJS to layer images.'
+          addDiagnostic(
+            'fallback',
+            'container_background_image',
+            'Container background image requires fallback rendering.',
+            el,
           );
-          return;
         }
 
         // Check for borders - both uniform and partial
@@ -1154,18 +1793,60 @@ export function extractSlideDataFromDocument(doc = document) {
       emitTextElement(el);
     });
 
-    const paintRank = (type) => {
-      if (type === 'shape') return 0;
-      if (type === 'line') return 1;
-      if (type === 'image') return 2;
-      return 3;
-    };
     elements.sort((a, b) => {
       const z = (a.zIndex ?? 0) - (b.zIndex ?? 0);
       if (z !== 0) return z;
-      return paintRank(a.type) - paintRank(b.type);
+      const paint = (a.paintOrder ?? 0) - (b.paintOrder ?? 0);
+      if (paint !== 0) return paint;
+      const sub = (a.subOrder ?? 0) - (b.subOrder ?? 0);
+      if (sub !== 0) return sub;
+      return (a.stableOrder ?? 0) - (b.stableOrder ?? 0);
     });
 
-    return { background, elements, placeholders, errors };
+    document.querySelectorAll('*').forEach((element) => {
+      const computed = view.getComputedStyle(element);
+      const filter = String(computed.filter || element.style?.filter || '');
+      if (filter && filter !== 'none') {
+        addDiagnostic('fallback', 'css_filter', 'CSS filter requires fallback rendering.', element);
+      }
+      if (String(element.tagName).toUpperCase() === 'SVG') {
+        if (element.querySelector('filter,mask,foreignObject,use,pattern,textPath,clipPath,image')) {
+          addDiagnostic(
+            'fallback',
+            'complex_svg_raster',
+            'SVG filter, mask, or foreignObject requires local browser raster rendering.',
+            element,
+          );
+        } else if (element.querySelector('path')) {
+          addDiagnostic(
+            'fallback',
+            'complex_svg_vector',
+            'Complex SVG geometry is preserved as a local SVG image.',
+            element,
+          );
+        }
+      }
+    });
+
+    const blockingErrors = diagnostics
+      .filter((diagnostic) => diagnostic.severity === 'blocking')
+      .map((diagnostic) => diagnostic.message);
+    slideDataFallbackLayers.sort((a, b) => {
+      const z = (a.zIndex ?? 0) - (b.zIndex ?? 0);
+      if (z !== 0) return z;
+      const order = (a.paintOrder ?? 0) - (b.paintOrder ?? 0);
+      if (order !== 0) return order;
+      const sub = (a.subOrder ?? 0) - (b.subOrder ?? 0);
+      if (sub !== 0) return sub;
+      return (a.stableOrder ?? 0) - (b.stableOrder ?? 0);
+    });
+    return {
+      background,
+      elements,
+      fallbackLayers: slideDataFallbackLayers,
+      placeholders,
+      diagnostics,
+      errors: blockingErrors,
+    };
   
 }

@@ -174,11 +174,14 @@ jobs:
             APPINDICATOR_PKG=libayatana-appindicator3-dev
           fi
 
+          # Tauri pins AppImage GTK input methods to its bundled cache, so the
+          # fcitx5 GTK3 bridge must be present before linuxdeploy builds it.
           sudo apt-get install -y --no-install-recommends \
             pkg-config \
             xdg-utils \
             libglib2.0-dev \
             libgtk-3-dev \
+            fcitx5-frontend-gtk3 \
             libxdo-dev \
             "$WEBKIT_PKG" \
             "$APPINDICATOR_PKG" \
@@ -219,6 +222,11 @@ jobs:
 
       - name: Build desktop app
         run: ${{ matrix.platform.build_command }}
+
+      - name: Verify AppImage fcitx5 GTK module
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/ci/verify-appimage-fcitx.sh "${{ matrix.platform.target }}"
 
       - name: Upload bundles
         uses: actions/upload-artifact@v6

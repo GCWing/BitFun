@@ -267,7 +267,7 @@ mod tests {
             session_id: session_id.map(str::to_string),
             dialog_turn_id: Some("turn-1".to_string()),
             workspace: Some(WorkspaceBinding::new(None, root)),
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,

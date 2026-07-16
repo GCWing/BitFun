@@ -1,7 +1,9 @@
 use crate::agentic::agents::{
     get_agent_registry, AgentInfo, SubagentListScope, SubagentQueryContext,
 };
-use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
+use crate::agentic::coordination::{
+    get_global_coordinator, validate_background_subagent_delivery, SubagentExecutionRequest,
+};
 use crate::agentic::deep_review::task_adapter::{
     self as deep_review_task_adapter, DeepReviewLaunchBatchInfo,
     DeepReviewProviderQueueWaitOutcome, DeepReviewQueueWaitOutcome, DeepReviewQueueWaitSkipReason,
@@ -187,8 +189,12 @@ impl Tool for TaskTool {
         input: &Value,
         context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        let _ = context;
-        Self::validate_invocation_input(input, false)
+        Self::validate_invocation_input(
+            input,
+            false,
+            context.and_then(ToolUseContext::workspace_root),
+        )
+        .await
     }
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {

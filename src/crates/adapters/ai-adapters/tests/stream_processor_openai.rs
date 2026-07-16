@@ -34,9 +34,9 @@ async fn openai_fixture_keeps_collecting_tool_args_across_usage_chunks() {
             event,
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
-            } if round_id == "round_fixture" && tool_id == "call_1" && tool_name == "tool_a"
+            } if round_id == "round_fixture" && identity.tool_id == "call_1" && identity.tool_name == "tool_a"
         )
     });
     assert!(early_detected, "expected early tool detection event");
@@ -122,11 +122,11 @@ async fn openai_fixture_keeps_malformed_tool_arguments_invalid() {
         .filter_map(|event| match event {
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, .. },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
             } => {
                 assert_eq!(round_id, "round_fixture");
-                Some(tool_id.as_str())
+                Some(identity.tool_id.as_str())
             }
             _ => None,
         })
@@ -255,9 +255,9 @@ async fn openai_fixture_reattaches_id_only_prelude_to_following_payload_chunk() 
             event,
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
-            } if round_id == "round_fixture" && tool_id == "call_1" && tool_name == "tool_a"
+            } if round_id == "round_fixture" && identity.tool_id == "call_1" && identity.tool_name == "tool_a"
         )
     });
     assert!(
@@ -398,11 +398,11 @@ async fn openai_fixture_filters_orphan_id_only_block_when_it_shares_chunk_with_f
         .filter_map(|event| match event {
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, .. },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
             } => {
                 assert_eq!(round_id, "round_fixture");
-                Some(tool_id.as_str())
+                Some(identity.tool_id.as_str())
             }
             _ => None,
         })
@@ -417,12 +417,12 @@ async fn openai_fixture_filters_orphan_id_only_block_when_it_shares_chunk_with_f
                 round_id,
                 tool_event:
                     ToolEventData::ParamsPartial {
-                        tool_id, params, ..
+                        identity, params, ..
                     },
                 ..
             } => {
                 assert_eq!(round_id, "round_fixture");
-                Some((tool_id.as_str(), params.as_str()))
+                Some((identity.tool_id.as_str(), params.as_str()))
             }
             _ => None,
         })
@@ -471,11 +471,11 @@ async fn openai_fixture_routes_interleaved_tool_args_by_index() {
         .filter_map(|event| match event {
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, .. },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
             } => {
                 assert_eq!(round_id, "round_fixture");
-                Some(tool_id.as_str())
+                Some(identity.tool_id.as_str())
             }
             _ => None,
         })
@@ -490,12 +490,12 @@ async fn openai_fixture_routes_interleaved_tool_args_by_index() {
                 round_id,
                 tool_event:
                     ToolEventData::ParamsPartial {
-                        tool_id, params, ..
+                        identity, params, ..
                     },
                 ..
             } => {
                 assert_eq!(round_id, "round_fixture");
-                Some((tool_id.as_str(), params.as_str()))
+                Some((identity.tool_id.as_str(), params.as_str()))
             }
             _ => None,
         })
@@ -532,9 +532,9 @@ async fn openai_fixture_accepts_tool_call_without_type_field() {
             event,
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
-            } if round_id == "round_fixture" && tool_id == "call_abc123" && tool_name == "test_tool"
+            } if round_id == "round_fixture" && identity.tool_id == "call_abc123" && identity.tool_name == "test_tool"
         )
     });
     assert!(
@@ -573,11 +573,11 @@ async fn openai_fixture_ignores_trailing_empty_tool_args_finish_chunk() {
         .filter_map(|event| match event {
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, .. },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
             } => {
                 assert_eq!(round_id, "round_fixture");
-                Some(tool_id.as_str())
+                Some(identity.tool_id.as_str())
             }
             _ => None,
         })

@@ -22,6 +22,13 @@ pub struct ReviewPlatformWorkspaceSnapshotRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformWorkspaceContextRequest {
+    pub repository_path: String,
+    pub remote_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReviewPlatformPullRequestDetailRequest {
     pub repository_path: String,
     pub remote_id: String,
@@ -86,6 +93,22 @@ pub async fn review_platform_get_workspace_snapshot(
             error
         )
     })
+}
+
+#[tauri::command]
+pub async fn review_platform_get_workspace_context(
+    _state: State<'_, AppState>,
+    request: ReviewPlatformWorkspaceContextRequest,
+) -> Result<ReviewPlatformWorkspaceSnapshot, String> {
+    ReviewPlatformService::workspace_context(&request.repository_path, request.remote_id.as_deref())
+        .await
+        .map_err(|error| {
+            error!(
+            "Failed to get review platform workspace context: path={}, remote_id={:?}, error={}",
+            request.repository_path, request.remote_id, error
+        );
+            format!("Failed to get review platform workspace context: {}", error)
+        })
 }
 
 #[tauri::command]

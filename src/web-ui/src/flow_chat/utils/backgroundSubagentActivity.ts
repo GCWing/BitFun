@@ -1,5 +1,6 @@
 import { SessionExecutionState } from '../state-machine/types';
 import type { DialogTurn, FlowChatState, FlowToolItem, Session } from '../types/flow-chat';
+import { getEffectiveToolName } from './toolInvocationIdentity';
 
 export type BackgroundSubagentActivityStatus = 'processing' | 'finishing';
 
@@ -99,7 +100,7 @@ function collectBackgroundTaskToolsBySubagentId(
 
           const toolItem = item as BackgroundTaskTool;
           if (
-            toolItem.toolName?.toLowerCase() === 'task' &&
+            getEffectiveToolName(toolItem).toLowerCase() === 'task' &&
             toolItem.subagentSessionId &&
             isBackgroundTaskTool(toolItem)
           ) {
@@ -132,7 +133,7 @@ function findBackgroundTaskToolForSubagent(
 
         const toolItem = item as BackgroundTaskTool;
         if (
-          toolItem.toolName?.toLowerCase() === 'task' &&
+          getEffectiveToolName(toolItem).toLowerCase() === 'task' &&
           toolItem.subagentSessionId === subagentSessionId &&
           isBackgroundTaskTool(toolItem)
         ) {

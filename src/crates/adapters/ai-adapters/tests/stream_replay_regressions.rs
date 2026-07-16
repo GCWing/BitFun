@@ -96,12 +96,12 @@ async fn replays_structurally_empty_openai_reasoning_content_with_tool_call() {
                 round_id,
                 tool_event:
                     ToolEventData::ParamsPartial {
-                        tool_id, params, ..
+                        identity, params, ..
                     },
                 ..
             } => {
                 assert_eq!(round_id, "round_fixture");
-                Some((tool_id.as_str(), params.as_str()))
+                Some((identity.tool_id.as_str(), params.as_str()))
             }
             _ => None,
         })
@@ -185,9 +185,9 @@ async fn replays_structurally_empty_anthropic_thinking_with_signature_and_tool_u
             event,
             AgenticEvent::ToolEvent {
                 round_id,
-                tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
+                tool_event: ToolEventData::EarlyDetected { identity },
                 ..
-            } if round_id == "round_fixture" && tool_id == "toolu_ds_1" && tool_name == "lookup_status"
+            } if round_id == "round_fixture" && identity.tool_id == "toolu_ds_1" && identity.tool_name == "lookup_status"
         )
     });
     assert!(

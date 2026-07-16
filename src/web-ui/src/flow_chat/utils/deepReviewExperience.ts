@@ -11,6 +11,7 @@ import type { Session } from '../types/flow-chat';
 import type { CodeReviewRemediationData } from './codeReviewRemediation';
 import type { DeepReviewInterruption, DeepReviewReviewerProgress } from './deepReviewContinuation';
 import { collectReviewerProgress } from './deepReviewContinuation';
+import { getEffectiveToolName } from './toolInvocationIdentity';
 
 // ---------------------------------------------------------------------------
 // Reviewer progress
@@ -203,7 +204,7 @@ export function extractPartialReviewData(
   for (const turn of session.dialogTurns) {
     for (const round of turn.modelRounds) {
       for (const item of round.items) {
-        if (item.type !== 'tool' || item.toolName !== 'Task') {
+        if (item.type !== 'tool' || getEffectiveToolName(item) !== 'Task') {
           continue;
         }
         const reviewer = String(

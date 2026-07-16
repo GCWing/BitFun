@@ -498,7 +498,7 @@ async fn initialize_core_services(
     );
 
     if bootstrap_profile.starts_peer_host() {
-        if let Err(e) = peer_host::ensure_peer_host_ready(runtime.agentic_system()).await {
+        if let Err(e) = peer_host::ensure_peer_host_ready(runtime.as_ref()).await {
             tracing::warn!("Failed to initialize CLI peer host services: {e}");
         } else {
             tracing::info!("CLI peer host services initialized");
@@ -977,6 +977,11 @@ async fn run_interactive_with_session(
 }
 
 fn main() {
+    // Install rustls CryptoProvider before any TLS-capable work (relay WS,
+    // reqwest rustls paths, Feishu wss). Required when both ring and aws-lc-rs
+    // are linked: rustls cannot auto-select a provider.
+    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+
     let worker = std::thread::Builder::new()
         .stack_size(16 * 1024 * 1024)
         .spawn(|| {

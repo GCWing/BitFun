@@ -11,7 +11,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_events::AgenticEvent;
+use bitfun_agent_tools::effective_tool_invocation;
+use bitfun_events::{AgenticEvent, ToolEventIdentity};
 use tokio::time::{sleep, Instant};
 
 use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
@@ -21,6 +22,15 @@ use crate::runtime::CliRuntimeContext;
 
 const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
 const INTERRUPT_EVENT_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
+
+fn effective_event_invocation<'a>(
+    identity: &'a ToolEventIdentity,
+    params: &'a serde_json::Value,
+) -> (&'a str, &'a serde_json::Value) {
+    let (derived_name, effective_input) = effective_tool_invocation(&identity.tool_name, params);
+    debug_assert_eq!(identity.effective_name(), derived_name);
+    (derived_name, effective_input)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ExecOutputFormat {
@@ -698,27 +708,27 @@ impl ExecMode {
                             use bitfun_events::ToolEventData;
                             match tool_event {
                                 ToolEventData::Started {
-                                    tool_name,
-                                    tool_id,
-                                    params,
-                                    ..
+                                    identity, params, ..
                                 } => {
+                                    let (tool_name, input) =
+                                        effective_event_invocation(identity, params);
                                     self.print_text(|| {
                                         let started_at = chrono::Utc::now().to_rfc3339();
-                                        let input_preview = Self::tool_input_preview(params);
+                                        let input_preview = Self::tool_input_preview(input);
                                         eprintln!("   [subagent] {}", tool_name);
                                         eprintln!("      Started at: {}", started_at);
-                                        eprintln!("      Tool ID: {}", tool_id);
+                                        eprintln!("      Tool ID: {}", identity.tool_id);
                                         eprintln!("      CWD: {}", self.workspace_display());
                                         eprintln!("      Input: {}", input_preview);
                                     });
                                 }
                                 ToolEventData::Completed {
-                                    tool_name,
+                                    identity,
                                     result_for_assistant,
                                     result,
                                     ..
                                 } => {
+                                    let tool_name = identity.effective_name();
                                     let summary = result_for_assistant
                                         .clone()
                                         .unwrap_or_else(|| result.to_string());
@@ -730,8 +740,9 @@ impl ExecMode {
                                     });
                                 }
                                 ToolEventData::Failed {
-                                    tool_name, error, ..
+                                    identity, error, ..
                                 } => {
+                                    let tool_name = identity.effective_name();
                                     self.print_text(|| {
                                         eprintln!("   [subagent] {} failed: {}", tool_name, error)
                                     });
@@ -801,8 +812,10 @@ impl ExecMode {
                         use bitfun_events::ToolEventData;
                         match tool_event {
                             ToolEventData::ConfirmationNeeded {
-                                tool_id, tool_name, ..
+                                identity, ..
                             } => {
+                                let tool_id = &identity.tool_id;
+                                let tool_name = identity.effective_name();
                                 if self.approval_mode.rejects_confirmation() {
                                     let mut message = format!(
                                         "Permission rejected for {tool_name}; rerun with --auto to approve tool requests"
@@ -883,24 +896,24 @@ impl ExecMode {
                                 }
                             }
                             ToolEventData::Started {
-                                tool_name,
-                                tool_id,
-                                params,
-                                ..
+                                identity, params, ..
                             } => {
-                                self.print_tool_start_details(tool_name, tool_id, params);
+                                let (tool_name, input) =
+                                    effective_event_invocation(identity, params);
+                                self.print_tool_start_details(tool_name, &identity.tool_id, input);
                                 total_tool_calls += 1;
                             }
                             ToolEventData::Progress { message, .. } => {
                                 self.print_text(|| eprintln!("   In progress: {}", message));
                             }
                             ToolEventData::Completed {
-                                tool_name,
+                                identity,
                                 result_for_assistant,
                                 result,
                                 duration_ms,
                                 ..
                             } => {
+                                let tool_name = identity.effective_name();
                                 let summary = result_for_assistant
                                     .clone()
                                     .unwrap_or_else(|| result.to_string());
@@ -912,8 +925,9 @@ impl ExecMode {
                                 });
                             }
                             ToolEventData::Failed {
-                                tool_name, error, ..
+                                identity, error, ..
                             } => {
+                                let tool_name = identity.effective_name();
                                 self.print_text(|| eprintln!("   [x] {}: {}", tool_name, error));
                             }
                             _ => {}
@@ -1289,11 +1303,13 @@ mod patch_tests {
     use std::process::Command;
 
     use super::{
-        completed_turn_failure, event_belongs_to_exec_turn, event_turn_id,
-        serialize_stream_envelope, write_patch_to_path, ExecApprovalMode, ExecJsonResult, ExecMode,
-        ExecTokenUsage, TOOL_START_INPUT_PREVIEW_CHARS,
+        completed_turn_failure, effective_event_invocation, event_belongs_to_exec_turn,
+        event_turn_id, serialize_stream_envelope, write_patch_to_path, ExecApprovalMode,
+        ExecJsonResult, ExecMode, ExecTokenUsage, TOOL_START_INPUT_PREVIEW_CHARS,
     };
-    use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
+    use bitfun_events::{
+        AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, ToolEventIdentity,
+    };
     use serde_json::json;
 
     #[test]
@@ -1677,5 +1693,24 @@ mod patch_tests {
             "session-other",
             "turn-current"
         ));
+    }
+
+    #[test]
+    fn deferred_exec_event_projects_effective_name_and_input() {
+        let identity = ToolEventIdentity::resolved(
+            "tool-1",
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            "CreatePlan",
+        );
+        let wire_input = json!({
+            "tool_name": "CreatePlan",
+            "args": { "title": "Ship deferred tools" }
+        });
+
+        let (tool_name, input) = effective_event_invocation(&identity, &wire_input);
+
+        assert_eq!(tool_name, "CreatePlan");
+        assert_eq!(input, &json!({ "title": "Ship deferred tools" }));
+        assert_eq!(wire_input["tool_name"], "CreatePlan");
     }
 }

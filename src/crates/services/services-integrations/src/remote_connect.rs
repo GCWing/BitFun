@@ -2840,22 +2840,26 @@ impl RemoteSessionStateTracker {
                 }
             }
             AE::ToolEvent { tool_event, .. } => {
+                let tool_id = tool_event.tool_id().to_string();
+                let tool_name = tool_event.effective_tool_name().to_string();
+                let effective_params = match tool_event {
+                    bitfun_events::ToolEventData::Started {
+                        identity, params, ..
+                    }
+                    | bitfun_events::ToolEventData::ConfirmationNeeded {
+                        identity, params, ..
+                    } => Some(
+                        bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params)
+                            .1
+                            .clone(),
+                    ),
+                    _ => None,
+                };
                 if let Ok(value) = serde_json::to_value(tool_event) {
                     let event_type = value
                         .get("event_type")
                         .and_then(|value| value.as_str())
                         .unwrap_or("");
-                    let tool_id = value
-                        .get("tool_id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let tool_name = value
-                        .get("tool_name")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("")
-                        .to_string();
-
                     let mut state = self.state.write().unwrap();
                     let allow_name_fallback = tool_id.is_empty() && !tool_name.is_empty();
                     let mut pending_tool_event: Option<TrackerEvent> = None;
@@ -2872,7 +2876,7 @@ impl RemoteSessionStateTracker {
                             );
                         }
                         "ConfirmationNeeded" => {
-                            let params = value.get("params").cloned();
+                            let params = effective_params.clone();
                             let input_preview = params.as_ref().and_then(make_slim_tool_params);
                             Self::upsert_active_tool(
                                 &mut state,
@@ -2885,7 +2889,7 @@ impl RemoteSessionStateTracker {
                             );
                         }
                         "Started" => {
-                            let params = value.get("params").cloned();
+                            let params = effective_params.clone();
                             let input_preview = params.as_ref().and_then(make_slim_tool_params);
                             let tool_input = if tool_name == "AskUserQuestion"
                                 || tool_name == "Task"

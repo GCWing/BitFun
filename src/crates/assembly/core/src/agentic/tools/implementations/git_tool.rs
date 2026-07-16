@@ -893,7 +893,7 @@ impl Tool for GitTool {
 
 This tool provides a safe and convenient way to execute Git commands. It supports common Git operations like status, diff, log, add, commit, branch, checkout, pull, push, and more.
 
-If this tool was collapsed earlier in the conversation, only call it after `GetToolSpec` has returned this definition. A failed direct call that says "Tool 'Git' is collapsed" means the next tool call should be `GetToolSpec` with `{"tool_name":"Git"}`; after that, retry `Git` with the schema below.
+If this definition was returned by `GetToolSpec`, execute it through `CallDeferredTool` with `tool_name` set to `Git` and put the arguments matching the schema below inside `args`. If Git is directly exposed in the available tool list, call it directly instead.
 
 ## Supported Operations
 
@@ -1001,11 +1001,11 @@ When creating commits, use this format for the commit message:
     }
 
     fn short_description(&self) -> String {
-        "Inspect and operate on the Git repository; load with GetToolSpec before first use when collapsed.".to_string()
+        "Inspect and operate on the Git repository; load with GetToolSpec before deferred execution.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {

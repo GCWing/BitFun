@@ -51,6 +51,7 @@ export interface FlowThinkingItem extends FlowItem {
 
 export interface FlowToolItem extends FlowItem {
   type: 'tool';
+  /** Provider-facing identity. Deferred calls remain `CallDeferredTool`. */
   toolName: string;
   terminalSessionId?: string;
   interruptionReason?: 'app_restart' | 'retry_superseded';

@@ -12,6 +12,7 @@ import { FlowToolCardErrorBoundary } from './FlowToolCardErrorBoundary';
 import { useTranslation } from 'react-i18next';
 import { getToolInterruptionNote } from '../utils/toolInterruption';
 import { ToolApprovalBar } from './ToolApprovalBar';
+import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 
 const log = createLogger('FlowToolCard');
 
@@ -40,28 +41,29 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   displayContext = 'default',
 }) => {
   const { t } = useTranslation('flow-chat');
-  const config = getToolCardConfig(toolItem.toolName);
-  const CardComponent = getToolCardComponent(toolItem.toolName);
-  const interruptionNote = getToolInterruptionNote(toolItem, t);
-  const cardHandlesInterruptionNote = toolItem.toolName === 'Task';
+  const effectiveToolItem = projectEffectiveToolItem(toolItem);
+  const config = getToolCardConfig(effectiveToolItem.toolName);
+  const CardComponent = getToolCardComponent(effectiveToolItem.toolName);
+  const interruptionNote = getToolInterruptionNote(effectiveToolItem, t);
+  const cardHandlesInterruptionNote = effectiveToolItem.toolName === 'Task';
   const toolCardTestId =
-    toolItem.toolName === 'Bash'
+    effectiveToolItem.toolName === 'Bash'
       ? 'chat-shell-tool-card'
-      : toolItem.toolName === 'WebFetch'
+      : effectiveToolItem.toolName === 'WebFetch'
         ? 'chat-browser-tool-card'
         : undefined;
 
   const handleConfirm = React.useCallback((updatedInput?: any, permissionOptionId?: string, approve?: boolean) => {
     log.debug('handleConfirm called', {
       toolId: toolItem.id,
-      toolName: toolItem.toolName,
+      toolName: effectiveToolItem.toolName,
       hasUpdatedInput: updatedInput !== undefined,
       updatedInputKeys: updatedInput ? Object.keys(updatedInput) : [],
       hasPermissionOption: Boolean(permissionOptionId),
       approve
     });
     onConfirm?.(toolItem.id, updatedInput, permissionOptionId, approve);
-  }, [toolItem.id, toolItem.toolName, onConfirm]);
+  }, [effectiveToolItem.toolName, toolItem.id, onConfirm]);
 
   const handleReject = React.useCallback((options?: ToolRejectOptions) => {
     onReject?.(toolItem.id, options);
@@ -75,16 +77,16 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     <div
       className={`flow-tool-card-wrapper ${className}`}
       data-testid={toolCardTestId}
-      data-tool-name={toolItem.toolName}
+      data-tool-name={effectiveToolItem.toolName}
       data-tool-card-id={toolItem.id}
     >
       <FlowToolCardErrorBoundary
-        toolItem={toolItem}
+        toolItem={effectiveToolItem}
         displayName={config.displayName}
         sessionId={sessionId}
       >
         <CardComponent
-          toolItem={toolItem}
+          toolItem={effectiveToolItem}
           config={config}
           interruptionNote={interruptionNote}
           onOpenInEditor={onOpenInEditor}
@@ -95,7 +97,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
         />
       </FlowToolCardErrorBoundary>
       <ToolApprovalBar
-        toolItem={toolItem}
+        toolItem={effectiveToolItem}
         onConfirm={handleConfirm}
         onReject={handleReject}
       />
@@ -115,6 +117,8 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   
   return (
     prevProps.toolItem.id === nextProps.toolItem.id &&
+    prevProps.toolItem.toolName === nextProps.toolItem.toolName &&
+    prevProps.toolItem.toolCall === nextProps.toolItem.toolCall &&
     prevProps.sessionId === nextProps.sessionId &&
     prevProps.toolItem.status === nextProps.toolItem.status &&
     prevProps.toolItem.interruptionReason === nextProps.toolItem.interruptionReason &&

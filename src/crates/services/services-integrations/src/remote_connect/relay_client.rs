@@ -25,16 +25,12 @@ use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
 /// `install_default()` returns `Err` only when a provider is already installed,
 /// which is harmless — we silently ignore it.
 ///
-/// This is safe to call multiple times and from any thread.
-#[cfg(windows)]
+/// This is safe to call multiple times and from any thread. Required on all
+/// platforms: rustls 0.23 does not auto-select a provider when multiple TLS
+/// stacks are linked into the process.
 pub fn ensure_rustls_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
-
-/// No-op on non-Windows platforms: tokio-tungstenite's built-in TLS support
-/// handles CryptoProvider installation automatically.
-#[cfg(not(windows))]
-pub fn ensure_rustls_crypto_provider() {}
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -558,6 +554,11 @@ impl RelayClient {
 }
 
 async fn dial(ws_url: &str) -> Result<WsStream> {
+    // Ensure CryptoProvider is installed before any rustls TLS handshake.
+    // Startup already calls this; calling again is a no-op once installed and
+    // protects reconnect / late-init paths.
+    ensure_rustls_crypto_provider();
+
     let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
         .max_message_size(Some(64 * 1024 * 1024))
         .max_frame_size(Some(64 * 1024 * 1024))
@@ -591,8 +592,8 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
 
     #[cfg(not(windows))]
     {
-        // Non-Windows uses tokio-tungstenite's built-in rustls connector,
-        // which installs the CryptoProvider as needed.
+        // Non-Windows uses tokio-tungstenite's built-in rustls connector.
+        // CryptoProvider must already be installed (see ensure_rustls_crypto_provider).
         let (stream, _) = tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false)
             .await
             .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;

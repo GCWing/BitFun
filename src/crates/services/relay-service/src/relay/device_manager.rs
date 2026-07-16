@@ -272,10 +272,7 @@ mod tests {
         assert_eq!(mgr.conn_mapping(2), Some(("user-1".into(), "dev-1".into())));
 
         // Closing the active conn still cleans up.
-        assert_eq!(
-            mgr.unregister(2),
-            Some(("user-1".into(), "dev-1".into()))
-        );
+        assert_eq!(mgr.unregister(2), Some(("user-1".into(), "dev-1".into())));
         assert!(mgr.online_devices("user-1").is_empty());
     }
 }

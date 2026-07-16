@@ -10,7 +10,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::{
     build_get_tool_spec_catalog_description, build_get_tool_spec_description,
-    GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME,
+    GetToolSpecDeferredToolSummary, GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME,
 };
 use serde_json::Value;
 
@@ -21,10 +21,10 @@ impl GetToolSpecTool {
         Self
     }
 
-    pub(crate) fn build_collapsed_tools_context_section(
-        collapsed_tools: &[GetToolSpecCollapsedToolSummary],
+    pub(crate) fn build_deferred_tools_context_section(
+        deferred_tools: &[GetToolSpecDeferredToolSummary],
     ) -> Option<String> {
-        build_get_tool_spec_catalog_description(collapsed_tools)
+        build_get_tool_spec_catalog_description(deferred_tools)
     }
 }
 
@@ -116,30 +116,35 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn collapsed_tools_context_lists_names_without_short_descriptions() {
+    fn deferred_tools_context_lists_names_without_short_descriptions() {
         let tool_name = format!("CatalogDescriptionTestTool_{}", uuid::Uuid::new_v4());
-        let description = GetToolSpecTool::build_collapsed_tools_context_section(&[
-            bitfun_agent_tools::GetToolSpecCollapsedToolSummary {
+        let description = GetToolSpecTool::build_deferred_tools_context_section(&[
+            bitfun_agent_tools::GetToolSpecDeferredToolSummary {
                 name: tool_name.clone(),
-                short_description: "Concise catalog entry.".to_string(),
+                short_description: None,
             },
         ])
-        .expect("collapsed tools section");
+        .expect("deferred tools section");
 
         assert!(description.contains(&format!("- {}", tool_name)));
         assert!(!description.contains("Concise catalog entry."));
     }
 
     #[tokio::test]
-    async fn reloading_already_unlocked_tool_returns_assistant_hint() {
+    async fn reloading_already_loaded_tool_returns_assistant_hint() {
         let tool = GetToolSpecTool::new();
+        let registry = crate::agentic::tools::registry::get_global_tool_registry();
+        let catalog_generation = registry.read().await.current_snapshot_generation();
         let context = ToolUseContext {
             tool_call_id: None,
             agent_type: None,
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
-            unlocked_collapsed_tools: vec!["WebFetch".to_string()],
+            loaded_deferred_tool_specs: vec![bitfun_agent_tools::LoadedDeferredToolSpec {
+                tool_name: "WebFetch".to_string(),
+                catalog_generation,
+            }],
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,

@@ -423,6 +423,40 @@ impl RemoteConnectService {
             )
             .await?;
 
+        // Wait for RoomCreated before HTTP upload / QR generation so the relay
+        // has registered the room (avoids upload 404 races on BitFun/Custom).
+        // Mirror start_device_connection's AuthOk wait pattern.
+        {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+            let expected_room = qr_payload.room_id.clone();
+            let mut got_room = false;
+            while !got_room {
+                match tokio::time::timeout_at(deadline, event_rx.recv()).await {
+                    Ok(Some(relay_client::RelayEvent::RoomCreated { room_id })) => {
+                        if room_id == expected_room {
+                            info!("Room created on relay: {room_id}");
+                            got_room = true;
+                        } else {
+                            log::warn!(
+                                "Unexpected RoomCreated room_id={room_id}, expected={expected_room}"
+                            );
+                        }
+                    }
+                    Ok(Some(other)) => {
+                        log::debug!(
+                            "Skipping relay event while waiting for RoomCreated: {other:?}"
+                        );
+                    }
+                    Ok(None) => {
+                        anyhow::bail!("relay connection closed before RoomCreated");
+                    }
+                    Err(_) => {
+                        anyhow::bail!("timeout waiting for RoomCreated");
+                    }
+                }
+            }
+        }
+
         let web_app_url: String = match &method {
             ConnectionMethod::Lan { .. } | ConnectionMethod::Ngrok => relay_url.clone(),
             ConnectionMethod::BitfunServer => {

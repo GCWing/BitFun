@@ -19,6 +19,9 @@ const PX_PER_IN = 96;
 const EMU_PER_IN = 914400;
 const SLIDE_W_IN = 13.333;
 const SLIDE_H_IN = 7.5;
+const EDITABLE_TEXT_TYPES = new Set([
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'svg-text', 'list', 'merged-text',
+]);
 
 // PowerPoint and browsers render the same font at the same point size with
 // measurably different glyph widths (different font metric tables / hinting).
@@ -129,7 +132,68 @@ async function addBackground(slideData, targetSlide) {
 }
 
 function addElements(slideData, targetSlide, pres) {
-  for (const el of slideData.elements) {
+  if (slideData.fullPageFallback) {
+    const payload = toImagePayload(
+      slideData.fullPageFallback.data || slideData.fullPageFallback.src,
+    );
+    if (!payload) throw new Error('Full-page fallback has no image payload');
+    targetSlide.addImage({
+      ...payload,
+      x: 0,
+      y: 0,
+      w: SLIDE_W_IN,
+      h: SLIDE_H_IN,
+    });
+    return;
+  }
+  const suppressedNativeVisualIds = new Set([
+    ...(slideData.suppressedNativeVisualIds || []),
+    ...(slideData.fallbackLayers || [])
+      .flatMap((layer) => layer.suppressedNativeVisualIds || []),
+  ]);
+  const paintItems = [
+    ...(slideData.elements || []).map((element, order) => ({
+      type: 'element',
+      item: element,
+      zIndex: element.zIndex ?? 0,
+      order: element.paintOrder ?? order,
+      subOrder: element.subOrder ?? 0,
+      stableOrder: order,
+    })),
+    ...(slideData.fallbackLayers || []).map((layer, order) => ({
+      type: 'fallback',
+      item: layer,
+      zIndex: layer.zIndex ?? 0,
+      order: layer.paintOrder ?? ((slideData.elements || []).length + order),
+      subOrder: layer.subOrder ?? 0,
+      stableOrder: (slideData.elements || []).length + order,
+    })),
+  ].sort((a, b) => (
+    a.zIndex - b.zIndex
+    || a.order - b.order
+    || a.subOrder - b.subOrder
+    || a.stableOrder - b.stableOrder
+  ));
+  for (const paintItem of paintItems) {
+    if (paintItem.type === 'fallback') {
+      const layer = paintItem.item;
+      const payload = toImagePayload(layer.data || layer.src);
+      const bbox = layer.bbox || {};
+      if (!payload) continue;
+      const fullPageCanvas = layer.canvas === 'full-page';
+      targetSlide.addImage({
+        ...payload,
+        x: fullPageCanvas ? 0 : (bbox.x ?? 0),
+        y: fullPageCanvas ? 0 : (bbox.y ?? 0),
+        w: fullPageCanvas ? SLIDE_W_IN : (bbox.w ?? SLIDE_W_IN),
+        h: fullPageCanvas ? SLIDE_H_IN : (bbox.h ?? SLIDE_H_IN),
+      });
+      continue;
+    }
+    const el = paintItem.item;
+    if (suppressedNativeVisualIds.has(el.sourceId) && !EDITABLE_TEXT_TYPES.has(el.type)) {
+      continue;
+    }
     if (el.type === 'image') {
       const payload = toImagePayload(el.src);
       if (!payload) continue;
@@ -148,14 +212,22 @@ function addElements(slideData, targetSlide, pres) {
         h: el.y2 - el.y1,
         line: { color: el.color, width: el.width },
       });
-    } else if (el.type === 'shape') {
+    } else if (el.type === 'shape' || el.type === 'svg-shape') {
       const shapeOptions = {
         x: el.position.x,
         y: el.position.y,
         w: el.position.w,
         h: el.position.h,
-        shape: el.shape.rectRadius > 0 ? pres.ShapeType.roundRect : pres.ShapeType.rect,
       };
+      const nativeShapeType = {
+        circle: pres.ShapeType.ellipse,
+        ellipse: pres.ShapeType.ellipse,
+        triangle: pres.ShapeType.triangle,
+        diamond: pres.ShapeType.diamond,
+        rect: pres.ShapeType.rect,
+      }[el.svgType];
+      shapeOptions.shape = nativeShapeType
+        || (el.shape.rectRadius > 0 ? pres.ShapeType.roundRect : pres.ShapeType.rect);
       if (el.shape.fill) {
         shapeOptions.fill = { color: el.shape.fill };
         if (el.shape.transparency != null) shapeOptions.fill.transparency = el.shape.transparency;
@@ -163,7 +235,12 @@ function addElements(slideData, targetSlide, pres) {
       if (el.shape.line) shapeOptions.line = el.shape.line;
       if (el.shape.rectRadius > 0) shapeOptions.rectRadius = el.shape.rectRadius;
       if (el.shape.shadow) shapeOptions.shadow = el.shape.shadow;
-      targetSlide.addText(el.text || '', shapeOptions);
+      if (el.shape.rotate != null) shapeOptions.rotate = el.shape.rotate;
+      if (el.type === 'svg-shape') {
+        targetSlide.addShape(shapeOptions.shape, shapeOptions);
+      } else {
+        targetSlide.addText(el.text || '', shapeOptions);
+      }
     } else if (el.type === 'list' || el.type === 'merged-text') {
       const { x: boxX, w: boxW } = safeTextBoxGeometry(el.position.x, el.position.w, el.style.align, false);
       const listOptions = {
@@ -233,10 +310,38 @@ export async function buildSlideFromExtracted(slideData, bodyDimensions, pres, o
   if (validationWarnings.length) {
     console.warn('[ppt-live-export] slide validation warnings (export continues):', validationWarnings.join('; '));
   }
+  const diagnostics = [
+    ...(slideData?.diagnostics || []),
+    ...validationWarnings.map((message) => ({
+      severity: 'fallback',
+      code: 'pptx_layout_warning',
+      message,
+      sourceId: null,
+      tag: null,
+    })),
+  ];
   const targetSlide = options.slide || pres.addSlide();
-  await addBackground(slideData, targetSlide);
-  addElements(slideData, targetSlide, pres);
-  return { slide: targetSlide, placeholders: slideData.placeholders || [] };
+  try {
+    await addBackground(slideData, targetSlide);
+    addElements(slideData, targetSlide, pres);
+  } catch (error) {
+    const diagnostic = {
+      severity: 'blocking',
+      kind: 'blocking',
+      code: 'pptx_serialization',
+      message: String(error?.message || error || 'PPTX serialization failed.'),
+      sourceId: null,
+      tag: null,
+    };
+    error.diagnostic = diagnostic;
+    error.diagnostics = [...diagnostics, diagnostic];
+    throw error;
+  }
+  return {
+    slide: targetSlide,
+    placeholders: slideData.placeholders || [],
+    diagnostics,
+  };
 }
 
 export function createPptxDeck(deck = {}) {

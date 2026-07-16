@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import type { DialogTurn, FlowToolItem, ModelRound, Session } from '../../types/flow-chat';
 import { processToolEvent, processToolParamsPartialInternal } from './ToolEventModule';
+import { convertDialogTurnToBackendFormat } from './PersistenceModule';
+import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
 
 function resetStore(): void {
   FlowChatStore.getInstance().setState(() => ({
@@ -356,6 +358,150 @@ describe('processToolEvent late Started event behavior', () => {
 
     const updatedTurn = FlowChatStore.getInstance().getState().sessions.get('session-1')?.dialogTurns[0];
     expect(updatedTurn?.modelRounds[0]?.items.some(item => item.id === 'tool-late-1')).toBe(false);
+  });
+});
+
+describe('deferred tool wire identity', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('keeps one wire invocation through streaming and Started while selecting the effective card', () => {
+    const session = createSessionWithTool({
+      id: 'placeholder',
+      type: 'tool',
+      toolName: 'Read',
+      timestamp: 1000,
+      status: 'completed',
+      toolCall: { id: 'placeholder', input: {} },
+    });
+    session.dialogTurns[0].modelRounds[0].items = [];
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+
+    const context = makeToolContext();
+    processToolEvent(context, 'session-1', 'turn-1', 'round-1', {
+      event_type: 'EarlyDetected',
+      tool_id: 'tool-deferred',
+      tool_name: 'CallDeferredTool',
+    });
+    processToolParamsPartialInternal('session-1', 'turn-1', {
+      event_type: 'ParamsPartial',
+      tool_id: 'tool-deferred',
+      tool_name: 'CallDeferredTool',
+      params: JSON.stringify({
+        tool_name: 'CreatePlan',
+        args: { name: 'Plan', overview: 'Overview', plan: '# Plan' },
+      }),
+    });
+
+    const wireInput = {
+      tool_name: 'CreatePlan',
+      args: { name: 'Plan', overview: 'Overview', plan: '# Plan' },
+    };
+    processToolEvent(context, 'session-1', 'turn-1', 'round-1', {
+      event_type: 'Started',
+      tool_id: 'tool-deferred',
+      tool_name: 'CallDeferredTool',
+      effective_tool_name: 'CreatePlan',
+      params: wireInput,
+    });
+
+    const tool = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'tool-deferred') as FlowToolItem;
+    expect(tool).toMatchObject({
+      toolName: 'CallDeferredTool',
+      toolCall: { id: 'tool-deferred', input: wireInput },
+      status: 'running',
+    });
+
+    const effective = projectEffectiveToolItem(tool);
+    expect(effective).toMatchObject({
+      toolName: 'CreatePlan',
+      toolCall: { input: wireInput.args },
+    });
+
+    const turn = FlowChatStore.getInstance().getState().sessions
+      .get('session-1')!.dialogTurns[0];
+    const persisted = convertDialogTurnToBackendFormat(turn, 0);
+    expect(persisted.modelRounds[0].toolItems[0]).toMatchObject({
+      toolName: 'CallDeferredTool',
+      toolCall: { input: wireInput },
+    });
+  });
+
+  it('uses wire input for deferred confirmation and derives the Write view', () => {
+    const wireInput = {
+      tool_name: 'Write',
+      args: { file_path: 'README.md', content: 'updated' },
+    };
+    const tool: FlowToolItem = {
+      id: 'tool-write',
+      type: 'tool',
+      toolName: 'CallDeferredTool',
+      timestamp: 1001,
+      status: 'queued',
+      toolCall: { id: 'tool-write', input: wireInput },
+    };
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', createSessionWithTool(tool)]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolEvent(makeToolContext(), 'session-1', 'turn-1', 'round-1', {
+      event_type: 'ConfirmationNeeded',
+      tool_id: 'tool-write',
+      tool_name: 'CallDeferredTool',
+      effective_tool_name: 'Write',
+      params: wireInput,
+    });
+
+    const updated = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'tool-write') as FlowToolItem;
+    expect(updated).toMatchObject({
+      toolName: 'CallDeferredTool',
+      toolCall: { input: wireInput },
+      status: 'pending_confirmation',
+      requiresConfirmation: true,
+    });
+    expect(projectEffectiveToolItem(updated)).toMatchObject({
+      toolName: 'Write',
+      toolCall: { input: wireInput.args },
+    });
+  });
+
+  it('keeps effective identity for Streaming even when no Started event arrives', () => {
+    const wireInput = {
+      tool_name: 'mcp__docs__search',
+      args: { query: 'identity' },
+    };
+    const tool: FlowToolItem = {
+      id: 'tool-streaming',
+      type: 'tool',
+      toolName: 'CallDeferredTool',
+      timestamp: 1001,
+      status: 'queued',
+      toolCall: { id: 'tool-streaming', input: wireInput },
+    };
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', createSessionWithTool(tool)]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolEvent(makeToolContext(), 'session-1', 'turn-1', 'round-1', {
+      event_type: 'Streaming',
+      tool_id: 'tool-streaming',
+      tool_name: 'CallDeferredTool',
+      effective_tool_name: 'mcp__docs__search',
+      chunks_received: 1,
+    });
+
+    const updated = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'tool-streaming') as FlowToolItem;
+    expect(updated.status).toBe('streaming');
+    expect(projectEffectiveToolItem(updated).toolName).toBe('mcp__docs__search');
   });
 });
 

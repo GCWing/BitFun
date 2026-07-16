@@ -55,12 +55,37 @@ FS) and must not be mixed with Peer Device Mode.
 - Peer: decrypt → allow/deny → execute on the peer host:
   - Desktop: webview bridge `peer-host-invoke://request` → same Tauri handlers
     as local UI → `peer_host_invoke_complete`
-  - CLI: Core HostInvoke registry (`WorkspaceService`, FS, config, session,
-    git, `DialogScheduler`) — no webview. Desktop-only surfaces (MiniApp /
-    cron / ACP list) return empty or no-op so hydrate does not fail.
+  - CLI: the invocation-scoped CLI product runtime handles dialog submit/cancel
+    through the Agent Runtime SDK and session/snapshot gaps through one Core
+    compatibility facade — no webview and no second scheduler, persistence
+    manager, or event queue. Desktop-only surfaces (MiniApp / cron / ACP list)
+    return empty or no-op so hydrate does not fail.
 - Events: peer agentic projection (and other product events such as terminal /
   FS / MCP interaction) fan-out as `RemoteCommand::DeviceEvent` to attached
   controllers; controller re-emits the same event names locally.
+- CLI Peer Host forwards only turns submitted through Peer Host and linked
+  child turns. A background-result follow-up inherits ownership only when its
+  Core-internal metadata identifies the exact tracked parent and source child
+  turns; if an unrelated turn is running in the same session, the result queues
+  behind it without losing Peer ownership. Completed source lineage uses a
+  bounded, one-shot tombstone while delivery waits on session serialization;
+  session drain or event-stream interruption clears it. Peer Host
+  requires an attached controller before submit and binds tool confirmation to
+  the exact observed tool and turn. Confirmable Peer tools always wait for the
+  controller even when the host's global policy skips confirmation, so an Agent
+  pauses until the controller responds; exact background-result follow-ups
+  retain this Peer-only confirmation requirement. The host cancels tracked turns when the
+  last controller detaches/goes offline or the agent-event subscription
+  lags/closes; continuity loss also projects the existing dialog-turn-failed
+  terminal event. Terminal ownership remains tracked until the event reaches the
+  delivery attempt, and a closed local delivery queue uses the same direct
+  DeviceEvent path. Delivery targets are captured when an event is queued and
+  rechecked against the currently attached set before each send. A per-target
+  delivery lease serializes detach or offline removal with the local Relay
+  enqueue attempt. An explicit disconnect still restores the local controller
+  UI, but reports a warning when host cancellation was not confirmed. This
+  boundary does not change the Relay envelope or add ACK, replay, or reconnect
+  recovery.
 - Relay `POST /api/devices/:id/rpc` waits up to **120s** for the peer response;
   reverse proxies in front of the relay must use a matching (or higher) read
   timeout or they will return 504 first.

@@ -1,6 +1,7 @@
 import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 
 import type { DialogTurn, FlowToolItem } from '../types/flow-chat';
+import { effectiveToolInvocation, getEffectiveToolName } from './toolInvocationIdentity';
 
 const FILE_MUTATION_TOOLS = new Set([
   'write',
@@ -59,21 +60,26 @@ export function collectModifiedFilePathsFromTurns(
         }
 
         const tool = item as FlowToolItem;
+        const effective = effectiveToolInvocation(tool.toolName, tool.toolCall?.input);
         if (
-          !FILE_MUTATION_TOOLS.has(normalizeToolName(tool.toolName)) ||
+          !FILE_MUTATION_TOOLS.has(normalizeToolName(effective.toolName)) ||
           tool.status !== 'completed' ||
           tool.toolResult?.success === false
         ) {
           continue;
         }
 
-        const input = tool.toolCall?.input;
+        const input = effective.input;
         if (!input || typeof input !== 'object') {
           continue;
         }
 
-        const combinedFilePath = splitFilePathAndContent(input.payload)?.filePath;
-        const filePath = combinedFilePath ?? input.file_path ?? input.filePath ?? input.path;
+        const inputRecord = input as Record<string, unknown>;
+        const combinedFilePath = splitFilePathAndContent(inputRecord.payload)?.filePath;
+        const filePath = combinedFilePath
+          ?? inputRecord.file_path
+          ?? inputRecord.filePath
+          ?? inputRecord.path;
         if (typeof filePath === 'string' && filePath.trim()) {
           paths.add(workspaceRelativePath(filePath, workspacePath));
         }
@@ -95,7 +101,7 @@ export function hasOpaqueWorkspaceMutationRisk(
           continue;
         }
         const tool = item as FlowToolItem;
-        if (OPAQUE_WORKSPACE_TOOLS.has(normalizeToolName(tool.toolName))) {
+        if (OPAQUE_WORKSPACE_TOOLS.has(normalizeToolName(getEffectiveToolName(tool)))) {
           return true;
         }
       }

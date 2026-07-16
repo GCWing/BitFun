@@ -51,7 +51,6 @@ impl CliProductRuntimeState {
 #[derive(Clone)]
 pub(crate) struct CliRuntimeContext {
     workspace_root: PathBuf,
-    agentic_system: AgenticSystem,
     agent_runtime: AgentRuntime,
     compatibility: CoreAgentRuntimeCompatibility,
     agent_events: CliAgentEventSource,
@@ -101,6 +100,7 @@ impl CliRuntimeContext {
         .context("Failed to build CLI Agent Runtime SDK")?;
         let compatibility = CoreAgentRuntimeCompatibility::build(
             agentic_system.coordinator.clone(),
+            scheduler,
             agentic_system.token_usage_service.clone(),
         );
 
@@ -116,7 +116,6 @@ impl CliRuntimeContext {
         Ok(Self {
             workspace_root,
             agent_events: CliAgentEventSource::new(agentic_system.event_queue.clone()),
-            agentic_system,
             agent_runtime,
             compatibility,
             services,
@@ -128,10 +127,6 @@ impl CliRuntimeContext {
 
     pub(crate) fn workspace_root(&self) -> &Path {
         &self.workspace_root
-    }
-
-    pub(crate) fn agentic_system(&self) -> &AgenticSystem {
-        &self.agentic_system
     }
 
     pub(crate) fn agent_runtime(&self) -> &AgentRuntime {
