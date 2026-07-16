@@ -24,8 +24,20 @@
     "linux": {
       "deb": {
         "depends": [
-          "libwebkit2gtk-4.1-0",
-          "libgtk-3-0"
+          "libc6",
+          "libcairo2",
+          "libgcc-s1",
+          "libgdk-pixbuf-2.0-0",
+          "libglib2.0-0",
+          "libjavascriptcoregtk-4.1-0",
+          "liblept5",
+          "liblzma5",
+          "libsoup-3.0-0",
+          "libtesseract5",
+          "libxcb1",
+          "libxdo3",
+          "tesseract-ocr-eng",
+          "zlib1g"
         ],
         "files": {
           "/usr/share/icons/hicolor/16x16/apps/bitfun-desktop.png": "icons/hicolor/16x16/apps/bitfun-desktop.png",
