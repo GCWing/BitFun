@@ -7,7 +7,7 @@ use arboard::Clipboard;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,8 +16,8 @@ use tokio::sync::broadcast::error::TryRecvError;
 use bitfun_events::{AgenticEvent, ToolEventData};
 
 use crate::actions::{
-    action_by_id, action_for_alias, ActionContext, ActionHandler, ActionSpec, ActionState,
-    ResolvedKeymap,
+    action_by_id, action_for_alias, slash_actions, ActionContext, ActionHandler, ActionSpec,
+    ActionState, ResolvedKeymap,
 };
 use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
 use crate::chat_state::ChatState;
@@ -25,6 +25,7 @@ use crate::config::CliConfig;
 use crate::runtime::CliRuntimeContext;
 use crate::ui::agent_selector::AgentItem;
 use crate::ui::chat::{ChatView, MouseGestureOutcome};
+use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
 use crate::ui::command_palette::PaletteAction;
 use crate::ui::login_form::LoginFormAction;
 use crate::ui::mcp_add_dialog::McpAddAction;
@@ -54,6 +55,12 @@ use bitfun_core::agentic::tools::implementations::skills::{
     registry::SkillRegistry,
     ModeSkillInfo, SkillInfo,
 };
+use bitfun_core::external_sources::{
+    expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
+    prompt_command_conflict_key, remember_external_source_conflict_choice,
+    set_external_prompt_command_conflict_choice, subscribe_external_source_updates,
+    ExternalSourceCatalogSnapshot, PromptCommandAvailability,
+};
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::{
     render_usage_report_markdown, SessionUsageReportRequest,
@@ -63,6 +70,317 @@ use bitfun_core::service::session_usage::{
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
 /// Coalesce rapid resize bursts to reduce flicker during window drag.
 const RESIZE_REDRAW_DEBOUNCE_MS: u64 = 75;
+
+fn native_command_conflict_key<'a>(
+    execution_domain_id: &str,
+    command_name: &str,
+    candidates: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> String {
+    format!(
+        "native:{}",
+        prompt_command_conflict_key(execution_domain_id, command_name, candidates)
+    )
+}
+
+fn external_command_projections(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    conflict_choices: &BTreeMap<String, String>,
+) -> Vec<ExternalCommandProjection> {
+    let built_in_actions = slash_actions(ActionState::chat(false, false));
+    let mut projections = snapshot
+        .commands
+        .iter()
+        .map(|entry| {
+            let ecosystem = snapshot
+                .sources
+                .iter()
+                .find(|source| source.record.key == entry.definition.id.source)
+                .map(|source| source.record.ecosystem_id.as_str())
+                .unwrap_or("external");
+            let restricted = !matches!(
+                entry.definition.availability,
+                PromptCommandAvailability::Available
+            );
+            let native_collision = built_in_actions.iter().find_map(|action| {
+                if !action
+                    .name
+                    .trim_start_matches('/')
+                    .eq_ignore_ascii_case(&entry.definition.name)
+                {
+                    return None;
+                }
+                let source = snapshot
+                    .sources
+                    .iter()
+                    .find(|source| source.record.key == entry.definition.id.source)?;
+                let native_candidate_id = format!("bitfun.cli:{}", action.id);
+                let external_candidate_id = entry.definition.id.stable_key();
+                let conflict_key = native_command_conflict_key(
+                    source.record.execution_domain_id.as_str(),
+                    &entry.definition.name,
+                    [
+                        (native_candidate_id.as_str(), env!("CARGO_PKG_VERSION")),
+                        (
+                            external_candidate_id.as_str(),
+                            entry.definition.content_version.as_str(),
+                        ),
+                    ],
+                );
+                Some(NativeCommandCollisionProjection {
+                    native_action_id: action.id.to_string(),
+                    native_candidate_id,
+                    external_candidate_id,
+                    selected_candidate_id: conflict_choices.get(&conflict_key).cloned(),
+                    conflict_key,
+                })
+            });
+            ExternalCommandProjection {
+                action_id: format!("external-command:{}", entry.definition.name),
+                command_name: entry.definition.name.clone(),
+                invocation_alias: format!("/{}", entry.definition.name),
+                candidate_id: entry.definition.id.stable_key(),
+                content_version: entry.definition.content_version.clone(),
+                description: format!("{} · {}", entry.definition.description, ecosystem),
+                restricted,
+                provider_conflict_key: None,
+                native_collision,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for conflict in snapshot
+        .command_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        let built_in = built_in_actions.iter().find(|action| {
+            action
+                .name
+                .trim_start_matches('/')
+                .eq_ignore_ascii_case(&conflict.command_name)
+        });
+        let native_group = built_in.and_then(|action| {
+            let execution_domain = conflict.candidates.iter().find_map(|candidate| {
+                snapshot
+                    .sources
+                    .iter()
+                    .find(|source| source.record.key == candidate.source)
+                    .map(|source| source.record.execution_domain_id.as_str())
+            })?;
+            let native_candidate_id = format!("bitfun.cli:{}", action.id);
+            let mut candidates = conflict
+                .candidates
+                .iter()
+                .map(|candidate| {
+                    (
+                        candidate.candidate_id.as_str(),
+                        candidate.content_version.as_str(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            candidates.push((native_candidate_id.as_str(), env!("CARGO_PKG_VERSION")));
+            let conflict_key =
+                native_command_conflict_key(execution_domain, &conflict.command_name, candidates);
+            Some((action.id.to_string(), native_candidate_id, conflict_key))
+        });
+        projections.extend(conflict.candidates.iter().map(|candidate| {
+            let native_collision = native_group.as_ref().map(
+                |(native_action_id, native_candidate_id, conflict_key)| {
+                    NativeCommandCollisionProjection {
+                        native_action_id: native_action_id.clone(),
+                        native_candidate_id: native_candidate_id.clone(),
+                        external_candidate_id: candidate.candidate_id.clone(),
+                        selected_candidate_id: conflict_choices.get(conflict_key).cloned(),
+                        conflict_key: conflict_key.clone(),
+                    }
+                },
+            );
+            ExternalCommandProjection {
+                action_id: format!("external-command-candidate:{}", candidate.candidate_id),
+                command_name: conflict.command_name.clone(),
+                invocation_alias: format!(
+                    "/external:{}:{}",
+                    candidate.source.provider_id, conflict.command_name
+                ),
+                candidate_id: candidate.candidate_id.clone(),
+                content_version: candidate.content_version.clone(),
+                description: format!(
+                    "{} · {} · {}",
+                    candidate.command_description,
+                    candidate.source_display_name,
+                    candidate.ecosystem_id
+                ),
+                restricted: !matches!(candidate.availability, PromptCommandAvailability::Available),
+                provider_conflict_key: Some(conflict.conflict_key.clone()),
+                native_collision,
+            }
+        }));
+    }
+    projections
+}
+
+fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, usize) {
+    snapshot
+        .commands
+        .iter()
+        .fold((0, 0), |(available, restricted), entry| {
+            if matches!(
+                entry.definition.availability,
+                PromptCommandAvailability::Available
+            ) {
+                (available + 1, restricted)
+            } else {
+                (available, restricted + 1)
+            }
+        })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuiltinCommandReconfirmation {
+    conflict_key: String,
+    candidate_id: String,
+    confirmed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ExternalSourceConflictPreferences {
+    choices: BTreeMap<String, String>,
+    lineage_current_keys: BTreeMap<String, String>,
+    conflicted_candidate_ids: BTreeSet<String>,
+}
+
+impl
+    From<(
+        BTreeMap<String, String>,
+        BTreeMap<String, String>,
+        BTreeSet<String>,
+    )> for ExternalSourceConflictPreferences
+{
+    fn from(
+        (choices, lineage_current_keys, conflicted_candidate_ids): (
+            BTreeMap<String, String>,
+            BTreeMap<String, String>,
+            BTreeSet<String>,
+        ),
+    ) -> Self {
+        Self {
+            choices,
+            lineage_current_keys,
+            conflicted_candidate_ids,
+        }
+    }
+}
+
+fn builtin_command_reconfirmation(
+    action_id: &str,
+    action_name: &str,
+    preferences: &ExternalSourceConflictPreferences,
+) -> Option<BuiltinCommandReconfirmation> {
+    let candidate_id = format!("bitfun.cli:{action_id}");
+    let participated_in_conflict = preferences.conflicted_candidate_ids.contains(&candidate_id);
+    if !participated_in_conflict {
+        return None;
+    }
+    let command_name = action_name.trim_start_matches('/');
+    let conflict_key = native_command_conflict_key(
+        "local-user",
+        command_name,
+        [(candidate_id.as_str(), env!("CARGO_PKG_VERSION"))],
+    );
+    let confirmed = preferences.choices.get(&conflict_key) == Some(&candidate_id);
+    Some(BuiltinCommandReconfirmation {
+        conflict_key,
+        candidate_id,
+        confirmed,
+    })
+}
+
+fn builtin_reconfirmation_names(
+    preferences: &ExternalSourceConflictPreferences,
+) -> BTreeSet<String> {
+    slash_actions(ActionState::chat(false, false))
+        .into_iter()
+        .filter(|action| {
+            builtin_command_reconfirmation(action.id, action.name, preferences)
+                .is_some_and(|reconfirmation| !reconfirmation.confirmed)
+        })
+        .map(|action| action.name.trim_start_matches('/').to_ascii_lowercase())
+        .collect()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommandQualifier {
+    Unqualified,
+    Builtin,
+    External,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommandRoute {
+    Builtin,
+    External,
+    AskForCollisionChoice,
+    WaitForDiscovery,
+    UnknownBuiltin,
+}
+
+fn parse_command_token(token: &str) -> (CommandQualifier, &str) {
+    let requested_name = token.trim_start_matches('/');
+    let Some((qualifier, command_name)) = requested_name.split_once(':') else {
+        return (CommandQualifier::Unqualified, requested_name);
+    };
+    if qualifier.eq_ignore_ascii_case("builtin") {
+        (CommandQualifier::Builtin, command_name)
+    } else if qualifier.eq_ignore_ascii_case("external") {
+        (CommandQualifier::External, command_name)
+    } else {
+        (CommandQualifier::Unqualified, requested_name)
+    }
+}
+
+fn command_route(
+    qualifier: CommandQualifier,
+    has_builtin: bool,
+    external: Option<&ExternalCommandProjection>,
+    discovery_pending: bool,
+    builtin_reconfirmation_required: bool,
+) -> CommandRoute {
+    match qualifier {
+        CommandQualifier::Builtin => {
+            if has_builtin {
+                CommandRoute::Builtin
+            } else {
+                CommandRoute::UnknownBuiltin
+            }
+        }
+        CommandQualifier::External => CommandRoute::External,
+        CommandQualifier::Unqualified => {
+            if builtin_reconfirmation_required {
+                return CommandRoute::AskForCollisionChoice;
+            }
+            if discovery_pending {
+                return CommandRoute::WaitForDiscovery;
+            }
+            if let Some(collision) = external.and_then(|command| command.native_collision.as_ref())
+            {
+                return match collision.selected_candidate_id.as_deref() {
+                    Some(selected) if selected == collision.external_candidate_id => {
+                        CommandRoute::External
+                    }
+                    Some(selected) if selected == collision.native_candidate_id => {
+                        CommandRoute::Builtin
+                    }
+                    _ => CommandRoute::AskForCollisionChoice,
+                };
+            }
+            if has_builtin {
+                CommandRoute::Builtin
+            } else {
+                CommandRoute::External
+            }
+        }
+    }
+}
 
 fn agent_event_stream_failure(error: TryRecvError) -> Option<String> {
     match error {
@@ -150,6 +468,10 @@ pub(crate) struct ChatMode {
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
     pending_mcp_tasks: Vec<PendingMcpTask>,
+    external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
+    external_source_conflict_choices: BTreeMap<String, String>,
+    external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
+    external_source_conflicted_candidate_ids: BTreeSet<String>,
 }
 
 /// Map agent_type to a display name for status messages
@@ -184,6 +506,10 @@ impl ChatMode {
             initial_prompt: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
+            external_source_snapshot: None,
+            external_source_conflict_choices: BTreeMap::new(),
+            external_source_conflict_lineage_current_keys: BTreeMap::new(),
+            external_source_conflicted_candidate_ids: BTreeSet::new(),
         }
     }
 
@@ -197,6 +523,36 @@ impl ChatMode {
     pub(crate) fn with_initial_prompt(mut self, prompt: String) -> Self {
         self.initial_prompt = Some(prompt);
         self
+    }
+
+    fn external_conflict_preferences(&self) -> ExternalSourceConflictPreferences {
+        ExternalSourceConflictPreferences {
+            choices: self.external_source_conflict_choices.clone(),
+            lineage_current_keys: self.external_source_conflict_lineage_current_keys.clone(),
+            conflicted_candidate_ids: self.external_source_conflicted_candidate_ids.clone(),
+        }
+    }
+
+    fn update_external_source_view(
+        &self,
+        chat_view: &mut ChatView,
+        snapshot: &ExternalSourceCatalogSnapshot,
+    ) {
+        let preferences = self.external_conflict_preferences();
+        chat_view.set_external_source_state(
+            external_command_projections(snapshot, &preferences.choices),
+            snapshot.discovery_pending,
+            builtin_reconfirmation_names(&preferences),
+        );
+    }
+
+    fn replace_external_conflict_preferences(
+        &mut self,
+        preferences: ExternalSourceConflictPreferences,
+    ) {
+        self.external_source_conflict_choices = preferences.choices;
+        self.external_source_conflict_lineage_current_keys = preferences.lineage_current_keys;
+        self.external_source_conflicted_candidate_ids = preferences.conflicted_candidate_ids;
     }
 
     fn workspace_path_for_sync(&self, chat_state: &ChatState) -> std::path::PathBuf {
@@ -534,6 +890,46 @@ impl ChatMode {
         self.agent_type = chat_state.agent_type.clone();
         self.workspace = chat_state.workspace.clone();
 
+        let external_workspace = self.agent.workspace_path_buf();
+        let (initial_external_sources, mut external_source_rx, conflict_preferences) =
+            tokio::task::block_in_place(|| {
+                rt_handle.block_on(async {
+                    let updates =
+                        subscribe_external_source_updates(Some(&external_workspace)).await;
+                    let snapshot = external_source_snapshot(Some(&external_workspace), false).await;
+                    let preferences = external_source_conflict_choices().await.map(Into::into);
+                    (snapshot, updates.ok(), preferences)
+                })
+            });
+        match conflict_preferences {
+            Ok(preferences) => self.replace_external_conflict_preferences(preferences),
+            Err(error) => tracing::warn!("External source preferences are unavailable: {}", error),
+        }
+        match initial_external_sources {
+            Ok(snapshot) => {
+                let (available, restricted) = external_command_counts(&snapshot);
+                let pending_conflicts = snapshot
+                    .command_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_none())
+                    .count();
+                self.update_external_source_view(&mut chat_view, &snapshot);
+                self.external_source_snapshot = Some(snapshot.clone());
+                if snapshot.discovery_pending {
+                    chat_view.set_status(Some(
+                        "Checking compatible commands from external AI applications".to_string(),
+                    ));
+                } else if available + restricted > 0 || pending_conflicts > 0 {
+                    chat_view.set_status(Some(format!(
+                        "External sources: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
+                    )));
+                }
+            }
+            Err(error) => {
+                tracing::warn!("External source discovery is unavailable: {}", error);
+            }
+        }
+
         // Load current model name for display
         self.load_current_model_name(&mut chat_state, &rt_handle);
 
@@ -620,6 +1016,59 @@ impl ChatMode {
             // Poll completion of non-blocking MCP operations before rendering.
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
+            }
+
+            let mut external_source_closed = false;
+            if let Some(receiver) = external_source_rx.as_mut() {
+                let mut latest = None;
+                for _ in 0..4 {
+                    match receiver.try_recv() {
+                        Ok(snapshot) => latest = Some(snapshot),
+                        Err(TryRecvError::Lagged(_)) => continue,
+                        Err(TryRecvError::Empty) => break,
+                        Err(TryRecvError::Closed) => {
+                            external_source_closed = true;
+                            break;
+                        }
+                    }
+                }
+                if let Some(snapshot) = latest {
+                    let discovery_just_finished = self
+                        .external_source_snapshot
+                        .as_ref()
+                        .is_some_and(|previous| previous.discovery_pending)
+                        && !snapshot.discovery_pending;
+                    let preferences = tokio::task::block_in_place(|| {
+                        rt_handle
+                            .block_on(external_source_conflict_choices())
+                            .map(Into::into)
+                    });
+                    if let Ok(preferences) = preferences {
+                        self.replace_external_conflict_preferences(preferences);
+                    }
+                    self.update_external_source_view(&mut chat_view, &snapshot);
+                    if snapshot.discovery_pending {
+                        chat_view.set_status(Some(
+                            "Checking compatible commands from external AI applications"
+                                .to_string(),
+                        ));
+                    } else if discovery_just_finished {
+                        let (available, restricted) = external_command_counts(&snapshot);
+                        let pending_conflicts = snapshot
+                            .command_conflicts
+                            .iter()
+                            .filter(|conflict| conflict.selected_candidate_id.is_none())
+                            .count();
+                        chat_view.set_status(Some(format!(
+                            "External sources ready: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
+                        )));
+                    }
+                    self.external_source_snapshot = Some(snapshot);
+                    needs_redraw = true;
+                }
+            }
+            if external_source_closed {
+                external_source_rx = None;
             }
 
             if chat_view.login_form_visible() {
@@ -1687,10 +2136,37 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
+        if let Some(external) = self.external_command_projection_for_action(action_id) {
+            return self.select_and_handle_external_command(
+                &external, "", chat_view, chat_state, rt_handle,
+            );
+        }
         let Some(action) = action_by_id(action_id, ActionContext::Chat) else {
             chat_view.set_status(Some(format!("Unknown action: {action_id}")));
             return Ok(None);
         };
+        if let Some(collision) = self.native_command_collision_for_action(action.id) {
+            self.remember_native_command_choice(
+                &collision,
+                &collision.native_candidate_id,
+                chat_view,
+                rt_handle,
+            );
+        } else if let Some(reconfirmation) = builtin_command_reconfirmation(
+            action.id,
+            action.name,
+            &self.external_conflict_preferences(),
+        )
+        .filter(|reconfirmation| !reconfirmation.confirmed)
+        {
+            self.remember_command_choice(
+                &reconfirmation.conflict_key,
+                &reconfirmation.candidate_id,
+                vec![reconfirmation.candidate_id.clone()],
+                chat_view,
+                rt_handle,
+            );
+        }
         self.dispatch_action(
             action,
             ActionState::chat(chat_state.is_processing, false),
@@ -1713,20 +2189,439 @@ impl ChatMode {
             return Ok(None);
         }
 
-        let Some(action) = action_for_alias(parts[0], ActionContext::Chat) else {
+        let token = parts[0];
+        let (qualifier, command_name) = parse_command_token(token);
+        let arguments = command
+            .get(token.len()..)
+            .map(str::trim_start)
+            .unwrap_or("");
+        if let Some(candidate) = self.external_conflict_projection_for_alias(token) {
+            return self.select_and_handle_external_command(
+                &candidate, arguments, chat_view, chat_state, rt_handle,
+            );
+        }
+        let builtin_alias = format!("/{command_name}");
+        let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
+        let mut external = self.external_command_projection(command_name);
+        let authoritative_preferences = tokio::task::block_in_place(|| {
+            rt_handle
+                .block_on(external_source_conflict_choices())
+                .map(Into::into)
+        });
+        if let Ok(authoritative_preferences) = authoritative_preferences {
+            if authoritative_preferences != self.external_conflict_preferences() {
+                self.replace_external_conflict_preferences(authoritative_preferences);
+                external = self.external_command_projection(command_name);
+                if let Some(snapshot) = &self.external_source_snapshot {
+                    self.update_external_source_view(chat_view, snapshot);
+                }
+            }
+        }
+        let builtin_reconfirmation = builtin_action.and_then(|action| {
+            builtin_command_reconfirmation(
+                action.id,
+                action.name,
+                &self.external_conflict_preferences(),
+            )
+        });
+        if let Some(collision) = external
+            .as_ref()
+            .and_then(|command| command.native_collision.as_ref())
+            .cloned()
+        {
+            if qualifier == CommandQualifier::External {
+                self.remember_native_command_choice(
+                    &collision,
+                    &collision.external_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            } else if qualifier == CommandQualifier::Builtin {
+                self.remember_native_command_choice(
+                    &collision,
+                    &collision.native_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+        } else if qualifier == CommandQualifier::Builtin {
+            if let Some(reconfirmation) = builtin_reconfirmation
+                .as_ref()
+                .filter(|reconfirmation| !reconfirmation.confirmed)
+            {
+                self.remember_command_choice(
+                    &reconfirmation.conflict_key,
+                    &reconfirmation.candidate_id,
+                    vec![reconfirmation.candidate_id.clone()],
+                    chat_view,
+                    rt_handle,
+                );
+            } else if let Some(collision) = builtin_action
+                .and_then(|action| self.native_command_collision_for_action(action.id))
+            {
+                let native_candidate_id = collision.native_candidate_id.clone();
+                self.remember_native_command_choice(
+                    &collision,
+                    &native_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+        }
+        let unresolved_candidates = self.external_conflict_projections(command_name);
+        let native_choice_is_active = unresolved_candidates.iter().any(|candidate| {
+            candidate
+                .native_collision
+                .as_ref()
+                .is_some_and(|collision| {
+                    collision.selected_candidate_id.as_deref()
+                        == Some(collision.native_candidate_id.as_str())
+                })
+        });
+        if external.is_none()
+            && qualifier != CommandQualifier::Builtin
+            && !unresolved_candidates.is_empty()
+            && !native_choice_is_active
+        {
+            let mut choices = unresolved_candidates
+                .iter()
+                .map(|candidate| {
+                    if candidate.restricted {
+                        format!("{} (restricted)", candidate.invocation_alias)
+                    } else {
+                        candidate.invocation_alias.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            if builtin_action.is_some() {
+                choices.insert(0, format!("/builtin:{command_name}"));
+            }
             chat_state.add_system_message(format!(
-                "Unknown command: {}\nUse /help to see available commands",
-                parts[0]
+                "Command /{command_name} is provided by multiple sources. Choose one once: {}. The choice is remembered until a participant changes.",
+                choices.join(", ")
             ));
             return Ok(None);
-        };
-        self.dispatch_action(
-            action,
-            ActionState::chat(chat_state.is_processing, false),
+        }
+        let discovery_pending = self
+            .external_source_snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.discovery_pending);
+        let builtin_reconfirmation_required = external.is_none()
+            && builtin_reconfirmation
+                .as_ref()
+                .is_some_and(|reconfirmation| !reconfirmation.confirmed);
+        match command_route(
+            qualifier,
+            builtin_action.is_some(),
+            external.as_ref(),
+            discovery_pending,
+            builtin_reconfirmation_required,
+        ) {
+            CommandRoute::Builtin => {
+                let action = builtin_action.expect("route requires an available built-in action");
+                self.dispatch_action(
+                    action,
+                    ActionState::chat(chat_state.is_processing, false),
+                    chat_view,
+                    chat_state,
+                    rt_handle,
+                )
+            }
+            CommandRoute::External => match self.handle_external_command(
+                command_name,
+                arguments,
+                external.as_ref(),
+                chat_view,
+                chat_state,
+                rt_handle,
+            ) {
+                Ok(result) => Ok(result),
+                Err(error) if error.to_string().contains("command not found") => {
+                    chat_state.add_system_message(format!(
+                        "Unknown command: {}\nUse /help or type / to see available commands",
+                        parts[0]
+                    ));
+                    Ok(None)
+                }
+                Err(error) => Err(error),
+            },
+            CommandRoute::AskForCollisionChoice => {
+                if builtin_reconfirmation_required {
+                    chat_state.add_system_message(format!(
+                        "The previous external candidate for /{command_name} changed or was removed. Use /builtin:{command_name} once to confirm the remaining BitFun command."
+                    ));
+                } else {
+                    chat_state.add_system_message(format!(
+                        "Command /{command_name} is provided by BitFun and an external source. Choose /builtin:{command_name} or /external:{command_name}; the choice is remembered until the external command changes."
+                    ));
+                }
+                Ok(None)
+            }
+            CommandRoute::WaitForDiscovery => {
+                let explicit = if builtin_action.is_some() {
+                    format!(" Use /builtin:{command_name} to run the BitFun command now.")
+                } else {
+                    String::new()
+                };
+                chat_state.add_system_message(format!(
+                    "BitFun is still checking compatible external commands.{explicit}"
+                ));
+                Ok(None)
+            }
+            CommandRoute::UnknownBuiltin => {
+                chat_state.add_system_message(format!(
+                    "Unknown built-in command: /builtin:{command_name}\nUse /help or type / to see available commands"
+                ));
+                Ok(None)
+            }
+        }
+    }
+
+    fn external_command_projection(&self, command_name: &str) -> Option<ExternalCommandProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .find(|command| {
+            command.provider_conflict_key.is_none()
+                && command.command_name.eq_ignore_ascii_case(command_name)
+        })
+    }
+
+    fn external_command_projection_for_action(
+        &self,
+        action_id: &str,
+    ) -> Option<ExternalCommandProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .find(|command| command.action_id == action_id)
+    }
+
+    fn external_conflict_projection_for_alias(
+        &self,
+        token: &str,
+    ) -> Option<ExternalCommandProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .find(|command| {
+            command.provider_conflict_key.is_some()
+                && command.invocation_alias.eq_ignore_ascii_case(token)
+        })
+    }
+
+    fn external_conflict_projections(&self, command_name: &str) -> Vec<ExternalCommandProjection> {
+        self.external_source_snapshot
+            .as_ref()
+            .map(|snapshot| {
+                external_command_projections(snapshot, &self.external_source_conflict_choices)
+                    .into_iter()
+                    .filter(|command| {
+                        command.provider_conflict_key.is_some()
+                            && command.command_name.eq_ignore_ascii_case(command_name)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn native_command_collision_for_action(
+        &self,
+        action_id: &str,
+    ) -> Option<NativeCommandCollisionProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .filter_map(|command| command.native_collision)
+        .find(|collision| collision.native_action_id == action_id)
+    }
+
+    fn remember_native_command_choice(
+        &mut self,
+        collision: &NativeCommandCollisionProjection,
+        candidate_id: &str,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        self.remember_command_choice(
+            &collision.conflict_key,
+            candidate_id,
+            vec![
+                collision.native_candidate_id.clone(),
+                collision.external_candidate_id.clone(),
+            ],
+            chat_view,
+            rt_handle,
+        );
+    }
+
+    fn remember_command_choice(
+        &mut self,
+        conflict_key: &str,
+        candidate_id: &str,
+        participants: Vec<String>,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let persisted = tokio::task::block_in_place(|| {
+            rt_handle.block_on(remember_external_source_conflict_choice(
+                conflict_key,
+                candidate_id,
+                participants.clone(),
+            ))
+        });
+        match persisted {
+            Ok(preferences) => self.replace_external_conflict_preferences(preferences.into()),
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to persist external command conflict choice: {}",
+                    error
+                );
+                chat_view.set_status(Some(
+                    "The command choice could not be saved; this explicit command will run once"
+                        .to_string(),
+                ));
+            }
+        }
+        if let Some(snapshot) = &self.external_source_snapshot {
+            self.update_external_source_view(chat_view, snapshot);
+        }
+    }
+
+    fn select_and_handle_external_command(
+        &mut self,
+        projection: &ExternalCommandProjection,
+        arguments: &str,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if projection.restricted {
+            chat_state.add_system_message(format!(
+                "External command {} is currently restricted and cannot be selected.",
+                projection.invocation_alias
+            ));
+            return Ok(None);
+        }
+        if let Some(provider_conflict_key) = &projection.provider_conflict_key {
+            let workspace = self.agent.workspace_path_buf();
+            let snapshot = tokio::task::block_in_place(|| {
+                rt_handle.block_on(set_external_prompt_command_conflict_choice(
+                    Some(&workspace),
+                    provider_conflict_key,
+                    &projection.candidate_id,
+                ))
+            });
+            let snapshot = match snapshot {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    chat_state.add_system_message(format!(
+                        "Could not select {}: {error}",
+                        projection.invocation_alias
+                    ));
+                    return Ok(None);
+                }
+            };
+            if let Some(collision) = &projection.native_collision {
+                self.remember_native_command_choice(
+                    collision,
+                    &projection.candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+            self.external_source_snapshot = Some(snapshot);
+            let Some(active) = self.external_command_projection(&projection.command_name) else {
+                chat_state.add_system_message(format!(
+                    "Selected external command /{} is no longer available; refresh and choose again.",
+                    projection.command_name
+                ));
+                return Ok(None);
+            };
+            if let Some(collision) = &active.native_collision {
+                self.remember_native_command_choice(
+                    collision,
+                    &active.candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+            if let Some(snapshot) = &self.external_source_snapshot {
+                self.update_external_source_view(chat_view, snapshot);
+            }
+            return self.handle_external_command(
+                &projection.command_name,
+                arguments,
+                Some(&active),
+                chat_view,
+                chat_state,
+                rt_handle,
+            );
+        }
+        if let Some(collision) = &projection.native_collision {
+            self.remember_native_command_choice(
+                collision,
+                &projection.candidate_id,
+                chat_view,
+                rt_handle,
+            );
+        }
+        self.handle_external_command(
+            &projection.command_name,
+            arguments,
+            Some(projection),
             chat_view,
             chat_state,
             rt_handle,
         )
+    }
+
+    fn handle_external_command(
+        &mut self,
+        command_name: &str,
+        arguments: &str,
+        expected: Option<&ExternalCommandProjection>,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if chat_state.is_processing {
+            chat_view.set_status(Some(
+                "External prompt commands are unavailable while a turn is processing".to_string(),
+            ));
+            return Ok(None);
+        }
+        let workspace = self.agent.workspace_path_buf();
+        let expanded = tokio::task::block_in_place(|| {
+            rt_handle.block_on(expand_external_prompt_command(
+                Some(&workspace),
+                command_name,
+                arguments,
+                expected.map(|command| command.candidate_id.as_str()),
+                expected.map(|command| command.content_version.as_str()),
+            ))
+        });
+        match expanded {
+            Ok(expanded) => {
+                self.send_message_to_agent(expanded.content, chat_view, chat_state, rt_handle);
+                Ok(None)
+            }
+            Err(error) if error.contains("command not found") => Err(anyhow!(error)),
+            Err(error) => {
+                chat_state.add_system_message(format!(
+                    "External command /{command_name} is unavailable: {error}"
+                ));
+                Ok(None)
+            }
+        }
     }
 
     fn dispatch_action(
@@ -3794,10 +4689,224 @@ impl ChatMode {
 mod tests {
     use tokio::sync::broadcast::error::TryRecvError;
 
-    use super::{agent_event_stream_failure, mark_active_turn_failed};
+    use super::{
+        agent_event_stream_failure, builtin_command_reconfirmation, command_route,
+        external_command_projections, mark_active_turn_failed, parse_command_token,
+        CommandQualifier, CommandRoute, ExternalSourceConflictPreferences,
+    };
     use crate::actions::{ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
+    use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
+    use bitfun_core::external_sources::ExternalSourceCatalogSnapshot;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn external_command(
+        name: &str,
+        selected_candidate_id: Option<&str>,
+    ) -> ExternalCommandProjection {
+        ExternalCommandProjection {
+            action_id: format!("external-command:{name}"),
+            command_name: name.to_string(),
+            invocation_alias: format!("/{name}"),
+            candidate_id: format!("external:{name}"),
+            content_version: "v1".to_string(),
+            description: "External command".to_string(),
+            restricted: false,
+            provider_conflict_key: None,
+            native_collision: Some(NativeCommandCollisionProjection {
+                native_action_id: name.to_string(),
+                native_candidate_id: format!("bitfun.cli:{name}"),
+                external_candidate_id: format!("external:{name}"),
+                conflict_key: "conflict-v1".to_string(),
+                selected_candidate_id: selected_candidate_id.map(str::to_string),
+            }),
+        }
+    }
+
+    #[test]
+    fn explicit_builtin_never_falls_through_to_an_external_command() {
+        let external = external_command("review", None);
+        assert_eq!(
+            command_route(
+                CommandQualifier::Builtin,
+                false,
+                Some(&external),
+                false,
+                false,
+            ),
+            CommandRoute::UnknownBuiltin
+        );
+    }
+
+    #[test]
+    fn command_qualifiers_are_ascii_case_insensitive() {
+        assert_eq!(
+            parse_command_token("/BUILTIN:help"),
+            (CommandQualifier::Builtin, "help")
+        );
+        assert_eq!(
+            parse_command_token("/External:review"),
+            (CommandQualifier::External, "review")
+        );
+    }
+
+    #[test]
+    fn unresolved_provider_conflicts_expose_explicit_cli_choices() {
+        let snapshot: ExternalSourceCatalogSnapshot = serde_json::from_value(serde_json::json!({
+            "generation": 1,
+            "discoveryPending": false,
+            "sources": [
+                {
+                    "stableKey": "first",
+                    "record": {
+                        "key": { "providerId": "first.commands", "sourceId": "global" },
+                        "ecosystemId": "first",
+                        "displayName": "First commands",
+                        "sourceKind": "prompt_commands",
+                        "scope": "user_global",
+                        "location": "/first",
+                        "executionDomainId": "local-user",
+                        "health": "available",
+                        "contentVersion": "source-v1"
+                    },
+                    "lifecycle": "available"
+                },
+                {
+                    "stableKey": "second",
+                    "record": {
+                        "key": { "providerId": "second.commands", "sourceId": "global" },
+                        "ecosystemId": "second",
+                        "displayName": "Second commands",
+                        "sourceKind": "prompt_commands",
+                        "scope": "user_global",
+                        "location": "/second",
+                        "executionDomainId": "local-user",
+                        "health": "available",
+                        "contentVersion": "source-v1"
+                    },
+                    "lifecycle": "available"
+                }
+            ],
+            "commands": [],
+            "commandConflicts": [{
+                "conflictKey": "provider-conflict-v1",
+                "commandName": "review",
+                "candidates": [
+                    {
+                        "candidateId": "first-candidate",
+                        "source": { "providerId": "first.commands", "sourceId": "global" },
+                        "sourceDisplayName": "First commands",
+                        "ecosystemId": "first",
+                        "contentVersion": "command-v1",
+                        "commandDescription": "First review",
+                        "sourceScope": "user_global",
+                        "sourceLocation": "/first",
+                        "availability": { "state": "available" }
+                    },
+                    {
+                        "candidateId": "second-candidate",
+                        "source": { "providerId": "second.commands", "sourceId": "global" },
+                        "sourceDisplayName": "Second commands",
+                        "ecosystemId": "second",
+                        "contentVersion": "command-v1",
+                        "commandDescription": "Second review",
+                        "sourceScope": "user_global",
+                        "sourceLocation": "/second",
+                        "availability": { "state": "available" }
+                    }
+                ]
+            }]
+        }))
+        .unwrap();
+
+        let projections = external_command_projections(&snapshot, &BTreeMap::new());
+
+        assert_eq!(projections.len(), 2);
+        assert!(projections.iter().all(|projection| {
+            projection.provider_conflict_key.as_deref() == Some("provider-conflict-v1")
+        }));
+        assert!(projections
+            .iter()
+            .any(|projection| projection.invocation_alias == "/external:first.commands:review"));
+        assert!(projections
+            .iter()
+            .any(|projection| projection.invocation_alias == "/external:second.commands:review"));
+    }
+
+    #[test]
+    fn native_collision_requires_one_choice_and_then_reuses_it() {
+        let unresolved = external_command("help", None);
+        assert_eq!(
+            command_route(
+                CommandQualifier::Unqualified,
+                true,
+                Some(&unresolved),
+                false,
+                false,
+            ),
+            CommandRoute::AskForCollisionChoice
+        );
+        let selected = external_command("help", Some("external:help"));
+        assert_eq!(
+            command_route(
+                CommandQualifier::Unqualified,
+                true,
+                Some(&selected),
+                false,
+                false,
+            ),
+            CommandRoute::External
+        );
+    }
+
+    #[test]
+    fn discovery_pending_requires_an_explicit_command_qualifier() {
+        assert_eq!(
+            command_route(CommandQualifier::Unqualified, true, None, true, false,),
+            CommandRoute::WaitForDiscovery
+        );
+        assert_eq!(
+            command_route(CommandQualifier::Builtin, true, None, true, false),
+            CommandRoute::Builtin
+        );
+    }
+
+    #[test]
+    fn removed_external_candidate_requires_builtin_reconfirmation() {
+        assert_eq!(
+            command_route(CommandQualifier::Unqualified, true, None, false, true,),
+            CommandRoute::AskForCollisionChoice
+        );
+        assert_eq!(
+            command_route(CommandQualifier::Builtin, true, None, false, true),
+            CommandRoute::Builtin
+        );
+    }
+
+    #[test]
+    fn persisted_collision_history_detects_a_removed_external_candidate() {
+        let action =
+            crate::actions::action_for_alias("/help", crate::actions::ActionContext::Chat).unwrap();
+        let mut preferences = ExternalSourceConflictPreferences {
+            choices: BTreeMap::new(),
+            lineage_current_keys: BTreeMap::new(),
+            conflicted_candidate_ids: BTreeSet::from([
+                "bitfun.cli:help".to_string(),
+                "external:help".to_string(),
+            ]),
+        };
+
+        let pending = builtin_command_reconfirmation(action.id, action.name, &preferences).unwrap();
+        assert!(!pending.confirmed);
+
+        preferences
+            .choices
+            .insert(pending.conflict_key.clone(), pending.candidate_id.clone());
+        let confirmed =
+            builtin_command_reconfirmation(action.id, action.name, &preferences).unwrap();
+        assert!(confirmed.confirmed);
+    }
 
     #[test]
     fn agent_event_stream_failure_ignores_empty_queue() {

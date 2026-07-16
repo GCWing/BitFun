@@ -1,0 +1,50 @@
+{
+  "title": "外部 AI 应用",
+  "subtitle": "无需复制，即可使用其他 AI 应用中兼容的工作内容。",
+  "loading": "正在检查外部来源…",
+  "actions": {
+    "refresh": "刷新",
+    "refreshing": "正在刷新…"
+  },
+  "unavailable": {
+    "title": "来源暂不可用",
+    "desktopOnly": "外部来源目前仅在桌面应用中可用。",
+    "remoteWorkspace": "暂不支持远程工作区来源，且不会用本地配置代替加载。"
+  },
+  "errors": {
+    "nonBlocking": "部分外部来源刷新失败，已有的有效命令会继续保留。{{error}}"
+  },
+  "diagnostics": {
+    "summary": "有 {{count}} 条来源信息需要关注，已有的有效命令会继续保留。"
+  },
+  "sources": {
+    "title": "已识别来源",
+    "description": "来源保留在原始位置；此页面打开期间会自动感知变更。",
+    "globalOnly": "当前仅显示用户全局来源；打开工作区后会同时包含项目来源。",
+    "empty": "未识别到兼容的外部来源。",
+    "commandCount": "{{count}} 个命令",
+    "toggleLabel": "启用 {{name}}"
+  },
+  "scope": {
+    "user_global": "用户全局",
+    "project": "项目",
+    "remote_user": "远程用户",
+    "remote_project": "远程项目"
+  },
+  "lifecycle": {
+    "available": "可用",
+    "restricted": "受限",
+    "degraded": "需要关注",
+    "unavailable": "不可用",
+    "removed": "已移除",
+    "suppressed": "已停用",
+    "using_last_valid_version": "使用上一个有效版本"
+  },
+  "conflicts": {
+    "title": "需要你的选择",
+    "description": "同名扩展不会被静默激活；在参与方版本变化前只需选择一次。",
+    "commandName": "多个来源都提供了 /{{name}}",
+    "pending": "选择一个当前可用的来源后，该命令才会变为可用。",
+    "restricted": "当前版本不可用"
+  }
+}

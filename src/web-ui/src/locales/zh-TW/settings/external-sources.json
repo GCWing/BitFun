@@ -1,0 +1,50 @@
+{
+  "title": "外部 AI 應用",
+  "subtitle": "無需複製，即可使用其他 AI 應用中相容的工作內容。",
+  "loading": "正在檢查外部來源…",
+  "actions": {
+    "refresh": "重新整理",
+    "refreshing": "正在重新整理…"
+  },
+  "unavailable": {
+    "title": "來源暫不可用",
+    "desktopOnly": "外部來源目前僅在桌面應用中可用。",
+    "remoteWorkspace": "暫不支援遠端工作區來源，且不會以本機設定代替載入。"
+  },
+  "errors": {
+    "nonBlocking": "部分外部來源重新整理失敗，已有的有效命令會繼續保留。{{error}}"
+  },
+  "diagnostics": {
+    "summary": "有 {{count}} 條來源資訊需要注意，已有的有效命令會繼續保留。"
+  },
+  "sources": {
+    "title": "已識別來源",
+    "description": "來源保留在原始位置；此頁面開啟期間會自動感知變更。",
+    "globalOnly": "目前僅顯示使用者全域來源；開啟工作區後會同時包含專案來源。",
+    "empty": "未識別到相容的外部來源。",
+    "commandCount": "{{count}} 個命令",
+    "toggleLabel": "啟用 {{name}}"
+  },
+  "scope": {
+    "user_global": "使用者全域",
+    "project": "專案",
+    "remote_user": "遠端使用者",
+    "remote_project": "遠端專案"
+  },
+  "lifecycle": {
+    "available": "可用",
+    "restricted": "受限",
+    "degraded": "需要注意",
+    "unavailable": "不可用",
+    "removed": "已移除",
+    "suppressed": "已停用",
+    "using_last_valid_version": "使用上一個有效版本"
+  },
+  "conflicts": {
+    "title": "需要你的選擇",
+    "description": "同名擴充不會被靜默啟用；在參與方版本變化前只需選擇一次。",
+    "commandName": "多個來源都提供了 /{{name}}",
+    "pending": "選擇一個目前可用的來源後，該命令才會變為可用。",
+    "restricted": "目前版本不可用"
+  }
+}

@@ -17,6 +17,7 @@ export const crateLayoutRules = [
   { crateName: 'tool-runtime', layer: 'execution', path: 'src/crates/execution/tool-execution' },
 
   { crateName: 'product-capabilities', layer: 'assembly', path: 'src/crates/assembly/product-capabilities' },
+  { crateName: 'external-sources', layer: 'assembly', path: 'src/crates/assembly/external-sources' },
 
   { crateName: 'services-core', layer: 'services', path: 'src/crates/services/services-core' },
   { crateName: 'services-integrations', layer: 'services', path: 'src/crates/services/services-integrations' },

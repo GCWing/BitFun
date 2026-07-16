@@ -9,6 +9,7 @@
 | Crate | 职责 | 本地文档 |
 |---|---|---|
 | `core` | `bitfun-core` 兼容门面与 product-full 组装 | [AGENTS.md](core/AGENTS.md) |
+| `external-sources` | 基于能力专属 provider 契约的生态中立来源生命周期协调 | 继承本指南 |
 | `product-capabilities` | 产品能力 profile、tool group facts、service requirements 与 harness selection | [AGENTS.md](product-capabilities/AGENTS.md) |
 
 ## 放置规则

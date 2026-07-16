@@ -444,6 +444,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "get_external_source_snapshot",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "get_file_change_history",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -1349,6 +1353,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("set_config", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "set_external_source_conflict_choice_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "set_external_source_enabled_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),
     (
         "set_miniapp_draft_storage",

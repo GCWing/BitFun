@@ -65,10 +65,10 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   concrete managed-package discovery and trust persistence stay in
   `services-integrations`, while ecosystem parsing and Plugin Runtime Host
   behavior remain in their adapter and execution owners.
-- `plugin_runtime` is the only product-full composition file allowed to select
-  an ecosystem adapter and inject it into Plugin Runtime Host. Product surfaces
-  consume its product-level activation view and must not import adapter or Host
-  ABI types.
+- `plugin_runtime` and `external_sources` are the reviewed product-full
+  composition files allowed to select ecosystem adapters for their respective
+  capability contracts. Product surfaces consume product-level views and must
+  not import adapter or Host ABI types.
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.

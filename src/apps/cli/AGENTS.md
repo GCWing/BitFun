@@ -37,14 +37,14 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
 - Product assembly may expose only the immutable protection IDs allowed by the
   customization design. CLI must not turn them into user/source plugin policy or
   store plugin activation, update, permission, or health state in the assembly result.
-- Current OpenCode adapter code is a managed-package/static-preview path only. After the matching
-  OC-R phases are implemented, OpenCode standard config and plugin sources become
-  read-only live sources without requiring a BitFun import. Low-risk declarative
-  results follow the user's auto-apply/ask preference; executable sources require
-  one source/target activation before import and another decision only when the
-  pre-import execution envelope or post-import contribution set expands. Codex
-  and Claude remain import/reference sources unless their own design explicitly
-  changes. Never copy credentials or silently ignore unsupported fields.
+- OpenCode Prompt Commands from standard user and project configuration are
+  read-only live sources. CLI may execute only the expanded prompt through the
+  existing agent owner; it must re-confirm changed conflict participants and
+  must not execute OpenCode plugin code, tools, hooks, or subagents.
+- The managed-package OpenCode adapter remains a static-preview path. Other
+  OpenCode plugin capabilities, Codex, and Claude remain import/reference sources
+  unless their own reviewed adapter design explicitly changes. Never copy
+  credentials or silently ignore unsupported fields.
 - Keep native instruction references, explicit import records, executable plugin
   sources, and credentials as separate asset classes. Importing non-executable
   config must not establish executable-source policy. CLI consumes the external

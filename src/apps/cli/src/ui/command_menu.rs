@@ -8,12 +8,45 @@ use ratatui::{
     Frame,
 };
 
-use crate::actions::{slash_actions, ActionProjection, ActionState};
+use crate::actions::{slash_actions, ActionState};
 use crate::ui::theme::{StyleKind, Theme};
+use std::collections::BTreeSet;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ExternalCommandProjection {
+    pub action_id: String,
+    pub command_name: String,
+    pub invocation_alias: String,
+    pub candidate_id: String,
+    pub content_version: String,
+    pub description: String,
+    pub restricted: bool,
+    pub provider_conflict_key: Option<String>,
+    pub native_collision: Option<NativeCommandCollisionProjection>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NativeCommandCollisionProjection {
+    pub native_action_id: String,
+    pub native_candidate_id: String,
+    pub external_candidate_id: String,
+    pub conflict_key: String,
+    pub selected_candidate_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CommandMenuItem {
+    id: String,
+    name: String,
+    description: String,
+}
 
 pub(super) struct CommandMenuState {
     action_state: ActionState,
-    items: Vec<ActionProjection>,
+    items: Vec<CommandMenuItem>,
+    external_commands: Vec<ExternalCommandProjection>,
+    external_discovery_pending: bool,
+    builtin_reconfirmations: BTreeSet<String>,
     list_state: ListState,
     visible: bool,
     suppressed: bool,
@@ -26,6 +59,9 @@ impl CommandMenuState {
         Self {
             action_state,
             items: Vec::new(),
+            external_commands: Vec::new(),
+            external_discovery_pending: false,
+            builtin_reconfirmations: BTreeSet::new(),
             list_state: ListState::default(),
             visible: false,
             suppressed: false,
@@ -52,7 +88,88 @@ impl CommandMenuState {
         }
 
         let query = input.split_whitespace().next().unwrap_or("");
-        let mut commands = slash_actions(self.action_state);
+        let built_in = slash_actions(self.action_state);
+        let built_in_names = built_in
+            .iter()
+            .map(|action| action.name.to_ascii_lowercase())
+            .collect::<std::collections::HashSet<_>>();
+        let mut commands = built_in
+            .into_iter()
+            .map(|action| {
+                let collision = self.external_commands.iter().find_map(|command| {
+                    let collision = command.native_collision.as_ref()?;
+                    (collision.native_action_id == action.id).then_some(collision)
+                });
+                let selected_external = collision.is_some_and(|collision| {
+                    collision.selected_candidate_id.as_deref()
+                        == Some(collision.external_candidate_id.as_str())
+                });
+                let unresolved =
+                    collision.is_some_and(|collision| collision.selected_candidate_id.is_none());
+                let command_name = action.name.trim_start_matches('/').to_ascii_lowercase();
+                let reconfirmation_required = self.builtin_reconfirmations.contains(&command_name);
+                let discovery_pending = self.external_discovery_pending
+                    && self.action_state.context == crate::actions::ActionContext::Chat;
+                let name = if selected_external
+                    || unresolved
+                    || reconfirmation_required
+                    || discovery_pending
+                {
+                    format!("/builtin:{}", action.name.trim_start_matches('/'))
+                } else {
+                    action.name.to_string()
+                };
+                CommandMenuItem {
+                    id: action.id.to_string(),
+                    name,
+                    description: if unresolved || reconfirmation_required {
+                        format!("{} (choose once)", action.description)
+                    } else if discovery_pending {
+                        format!("{} (checking external sources)", action.description)
+                    } else {
+                        action.description.to_string()
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        if self.action_state.context == crate::actions::ActionContext::Chat
+            && !self.action_state.is_processing
+        {
+            commands.extend(self.external_commands.iter().map(|command| {
+                let requested_name = format!("/{}", command.command_name);
+                let selected_external =
+                    command.native_collision.as_ref().is_some_and(|collision| {
+                        collision.selected_candidate_id.as_deref()
+                            == Some(collision.external_candidate_id.as_str())
+                    });
+                let collides = built_in_names.contains(&requested_name.to_ascii_lowercase());
+                let name = if command.provider_conflict_key.is_some() {
+                    command.invocation_alias.clone()
+                } else if collides && !selected_external {
+                    format!("/external:{}", command.command_name)
+                } else {
+                    requested_name
+                };
+                let unresolved = command
+                    .native_collision
+                    .as_ref()
+                    .is_some_and(|collision| collision.selected_candidate_id.is_none());
+                let description = if command.restricted {
+                    format!("{} (currently restricted)", command.description)
+                } else if unresolved {
+                    format!("{} (choose once)", command.description)
+                } else if command.provider_conflict_key.is_some() {
+                    format!("{} (choose this source)", command.description)
+                } else {
+                    command.description.clone()
+                };
+                CommandMenuItem {
+                    id: command.action_id.clone(),
+                    name,
+                    description,
+                }
+            }));
+        }
         if query == "/" {
             self.items = commands;
         } else {
@@ -63,13 +180,13 @@ impl CommandMenuState {
             commands.retain(|spec| {
                 spec.name
                     .strip_prefix('/')
-                    .unwrap_or(spec.name)
+                    .unwrap_or(&spec.name)
                     .to_ascii_lowercase()
                     .contains(&normalized)
             });
             self.items = commands;
         }
-        self.items.sort_by_key(|spec| spec.name);
+        self.items.sort_by(|left, right| left.name.cmp(&right.name));
 
         self.visible = !self.items.is_empty();
         if self.visible {
@@ -117,7 +234,7 @@ impl CommandMenuState {
         }
 
         let selected = self.selected_item()?;
-        let command = selected.id.to_string();
+        let command = selected.id.clone();
         self.suppress();
         Some(command)
     }
@@ -135,9 +252,9 @@ impl CommandMenuState {
                 let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);
                 let desc_style = theme.style(StyleKind::Muted);
                 let line = Line::from(vec![
-                    Span::styled(spec.name, name_style),
+                    Span::styled(spec.name.clone(), name_style),
                     Span::raw(" - "),
-                    Span::styled(spec.description, desc_style),
+                    Span::styled(spec.description.clone(), desc_style),
                 ]);
                 ListItem::new(line)
             })
@@ -231,7 +348,7 @@ impl CommandMenuState {
             && mouse.row < area.y.saturating_add(area.height)
     }
 
-    fn selected_item(&self) -> Option<&ActionProjection> {
+    fn selected_item(&self) -> Option<&CommandMenuItem> {
         let idx = self.list_state.selected().unwrap_or(0);
         self.items.get(idx)
     }
@@ -293,6 +410,24 @@ impl CommandMenuState {
         self.action_state = action_state;
         true
     }
+
+    #[cfg(test)]
+    pub(super) fn set_external_commands(&mut self, commands: Vec<ExternalCommandProjection>) {
+        self.external_commands = commands;
+        self.update(&self.last_input.clone(), self.last_input.chars().count());
+    }
+
+    pub(super) fn set_external_source_state(
+        &mut self,
+        commands: Vec<ExternalCommandProjection>,
+        discovery_pending: bool,
+        builtin_reconfirmations: BTreeSet<String>,
+    ) {
+        self.external_commands = commands;
+        self.external_discovery_pending = discovery_pending;
+        self.builtin_reconfirmations = builtin_reconfirmations;
+        self.update(&self.last_input.clone(), self.last_input.chars().count());
+    }
 }
 
 #[cfg(test)]
@@ -302,7 +437,7 @@ mod tests {
     use super::*;
 
     fn names(menu: &CommandMenuState) -> Vec<&str> {
-        menu.items.iter().map(|item| item.name).collect()
+        menu.items.iter().map(|item| item.name.as_str()).collect()
     }
 
     #[test]
@@ -375,6 +510,149 @@ mod tests {
         assert!(menu.set_action_state(ActionState::chat(false, false)));
         menu.update("/", 1);
 
-        assert_eq!(menu.selected_item().map(|item| item.id), Some("logout"));
+        assert_eq!(
+            menu.selected_item().map(|item| item.id.as_str()),
+            Some("logout")
+        );
+    }
+
+    #[test]
+    fn external_commands_join_chat_menu_without_entering_the_host_action_registry() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.set_external_commands(vec![ExternalCommandProjection {
+            action_id: "external-command:review".to_string(),
+            command_name: "review".to_string(),
+            invocation_alias: "/review".to_string(),
+            candidate_id: "external:review".to_string(),
+            content_version: "v1".to_string(),
+            description: "Review from OpenCode".to_string(),
+            restricted: false,
+            provider_conflict_key: None,
+            native_collision: None,
+        }]);
+        menu.update("/rev", 4);
+
+        assert_eq!(names(&menu), ["/review"]);
+        assert_eq!(
+            menu.apply_selection().as_deref(),
+            Some("external-command:review")
+        );
+    }
+
+    #[test]
+    fn built_in_aliases_are_protected_with_an_explicit_external_fallback_alias() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.set_external_commands(vec![ExternalCommandProjection {
+            action_id: "external-command:help".to_string(),
+            command_name: "help".to_string(),
+            invocation_alias: "/help".to_string(),
+            candidate_id: "external:help".to_string(),
+            content_version: "v1".to_string(),
+            description: "External help".to_string(),
+            restricted: false,
+            provider_conflict_key: None,
+            native_collision: Some(NativeCommandCollisionProjection {
+                native_action_id: "help".to_string(),
+                native_candidate_id: "bitfun.cli:help".to_string(),
+                external_candidate_id: "external:help".to_string(),
+                conflict_key: "conflict-v1".to_string(),
+                selected_candidate_id: None,
+            }),
+        }]);
+        menu.update("/", 1);
+
+        assert!(names(&menu).contains(&"/builtin:help"));
+        assert!(names(&menu).contains(&"/external:help"));
+    }
+
+    #[test]
+    fn remembered_external_choice_routes_the_plain_alias_until_content_changes() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.set_external_commands(vec![ExternalCommandProjection {
+            action_id: "external-command:help".to_string(),
+            command_name: "help".to_string(),
+            invocation_alias: "/help".to_string(),
+            candidate_id: "external:help".to_string(),
+            content_version: "v1".to_string(),
+            description: "External help".to_string(),
+            restricted: false,
+            provider_conflict_key: None,
+            native_collision: Some(NativeCommandCollisionProjection {
+                native_action_id: "help".to_string(),
+                native_candidate_id: "bitfun.cli:help".to_string(),
+                external_candidate_id: "external:help".to_string(),
+                conflict_key: "conflict-v1".to_string(),
+                selected_candidate_id: Some("external:help".to_string()),
+            }),
+        }]);
+        menu.update("/", 1);
+
+        assert!(names(&menu).contains(&"/builtin:help"));
+        assert!(names(&menu).contains(&"/help"));
+        assert!(!names(&menu).contains(&"/external:help"));
+    }
+
+    #[test]
+    fn discovery_pending_keeps_builtin_commands_available_but_explicit() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.set_external_source_state(Vec::new(), true, BTreeSet::new());
+        menu.update("/help", 5);
+
+        assert!(names(&menu).contains(&"/builtin:help"));
+        assert!(!names(&menu).contains(&"/help"));
+        assert!(menu.items.iter().any(|item| {
+            item.name == "/builtin:help" && item.description.contains("checking external sources")
+        }));
+    }
+
+    #[test]
+    fn removed_external_collision_keeps_builtin_alias_explicit_until_reconfirmed() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.set_external_source_state(Vec::new(), false, BTreeSet::from(["help".to_string()]));
+        menu.update("/help", 5);
+
+        assert!(names(&menu).contains(&"/builtin:help"));
+        assert!(!names(&menu).contains(&"/help"));
+        assert_eq!(menu.apply_selection().as_deref(), Some("help"));
+    }
+
+    #[test]
+    fn removed_external_collision_mouse_selection_returns_builtin_action_for_confirmation() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.set_external_source_state(Vec::new(), false, BTreeSet::from(["help".to_string()]));
+        menu.update("/help", 5);
+        menu.last_area = Some(Rect::new(5, 5, 40, 3));
+
+        let selected = menu.handle_mouse_event(&MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 6,
+            row: 6,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(selected.as_deref(), Some("help"));
+    }
+
+    #[test]
+    fn unresolved_provider_candidates_have_explicit_selectable_aliases() {
+        let mut menu = CommandMenuState::new(ActionState::chat(false, false));
+        menu.set_external_commands(vec![ExternalCommandProjection {
+            action_id: "external-command-candidate:opencode-review".to_string(),
+            command_name: "review".to_string(),
+            invocation_alias: "/external:opencode.commands:review".to_string(),
+            candidate_id: "opencode-review".to_string(),
+            content_version: "v1".to_string(),
+            description: "OpenCode project · opencode".to_string(),
+            restricted: false,
+            provider_conflict_key: Some("provider-conflict-v1".to_string()),
+            native_collision: None,
+        }]);
+        menu.update("/external:opencode", 18);
+
+        assert_eq!(names(&menu), ["/external:opencode.commands:review"]);
+        assert_eq!(
+            menu.apply_selection().as_deref(),
+            Some("external-command-candidate:opencode-review")
+        );
     }
 }

@@ -17,6 +17,7 @@ export const noCoreDependencyCrates = [
   'tool-packs',
   'product-domains',
   'opencode-adapter',
+  'external-sources',
   'terminal',
   'tool-runtime',
   'transport',
@@ -35,7 +36,7 @@ export const forbiddenManifestDependencyRules = [
     reason:
       'OpenCode adapter production dependencies are limited to the reviewed product composition root',
     message:
-      'only bitfun-core product-full assembly may inject bitfun-opencode-adapter through the Plugin Runtime Host boundary',
+      'only bitfun-core product-full assembly may register bitfun-opencode-adapter through reviewed capability composition roots',
   },
 ];
 

@@ -1,0 +1,50 @@
+{
+  "title": "External AI applications",
+  "subtitle": "Use compatible work from other AI applications without copying it into BitFun.",
+  "loading": "Checking external sources…",
+  "actions": {
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…"
+  },
+  "unavailable": {
+    "title": "Sources unavailable",
+    "desktopOnly": "External sources are available in the desktop app.",
+    "remoteWorkspace": "Remote workspace sources are not supported yet. No local configuration was loaded in their place."
+  },
+  "errors": {
+    "nonBlocking": "Some external sources could not be refreshed. Existing valid commands remain available. {{error}}"
+  },
+  "diagnostics": {
+    "summary": "{{count}} source entries need attention. Existing valid commands remain available."
+  },
+  "sources": {
+    "title": "Detected sources",
+    "description": "Sources remain in their original locations. Changes are picked up automatically while this page is open.",
+    "globalOnly": "Showing user-global sources. Open a workspace to include its project sources.",
+    "empty": "No compatible external sources were detected.",
+    "commandCount": "{{count}} commands",
+    "toggleLabel": "Enable {{name}}"
+  },
+  "scope": {
+    "user_global": "User",
+    "project": "Project",
+    "remote_user": "Remote user",
+    "remote_project": "Remote project"
+  },
+  "lifecycle": {
+    "available": "Available",
+    "restricted": "Restricted",
+    "degraded": "Needs attention",
+    "unavailable": "Unavailable",
+    "removed": "Removed",
+    "suppressed": "Disabled",
+    "using_last_valid_version": "Using last valid version"
+  },
+  "conflicts": {
+    "title": "Needs your choice",
+    "description": "Same-name extensions are not activated silently. Your choice is remembered until a participant changes version.",
+    "commandName": "/{{name}} is provided by multiple sources",
+    "pending": "Choose one available source to make this command available.",
+    "restricted": "Not available in this release"
+  }
+}

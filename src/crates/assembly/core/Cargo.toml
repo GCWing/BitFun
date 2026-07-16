@@ -85,6 +85,9 @@ bitfun-harness = { path = "../../execution/harness" }
 # Product capability pack contracts
 bitfun-product-capabilities = { path = "../product-capabilities", default-features = false, optional = true }
 
+# Ecosystem-neutral external source lifecycle coordinator
+bitfun-external-sources = { path = "../external-sources", optional = true }
+
 # Agent tool contracts
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 
@@ -176,6 +179,7 @@ product-full = [
     "dep:globset",
     "dep:include_dir",
     "dep:bitfun-opencode-adapter",
+    "dep:bitfun-external-sources",
     "dep:bitfun-plugin-runtime-host",
     "dep:indexmap",
     "dep:md5",

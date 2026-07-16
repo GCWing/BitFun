@@ -12,9 +12,13 @@ crate-type = ["rlib"]
 [dependencies]
 async-trait = { workspace = true }
 bitfun-plugin-runtime-host = { path = "../../execution/plugin-runtime-host" }
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["plugin-source"] }
+bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources", "plugin-source"] }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["markdown"] }
+dirs = { workspace = true }
+dunce = { workspace = true }
 hex = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -24,6 +28,7 @@ urlencoding = { workspace = true }
 [dev-dependencies]
 bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["plugin-source"] }
 tokio = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

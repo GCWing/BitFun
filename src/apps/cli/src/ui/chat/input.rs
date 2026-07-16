@@ -6,7 +6,22 @@ impl ChatView {
     }
 
     fn refresh_command_menu(&mut self) {
-        self.command_menu.update(&self.text_input.input, self.text_input.cursor);
+        self.command_menu
+            .update(&self.text_input.input, self.text_input.cursor);
+    }
+
+    pub(crate) fn set_external_source_state(
+        &mut self,
+        commands: Vec<crate::ui::command_menu::ExternalCommandProjection>,
+        discovery_pending: bool,
+        builtin_reconfirmations: std::collections::BTreeSet<String>,
+    ) {
+        self.command_menu.set_external_source_state(
+            commands,
+            discovery_pending,
+            builtin_reconfirmations,
+        );
+        self.refresh_command_menu();
     }
 
     /// Send user input, returns the input text if non-empty

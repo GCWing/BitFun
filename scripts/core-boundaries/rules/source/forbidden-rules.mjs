@@ -4115,10 +4115,12 @@ export const forbiddenContentUnderRules = [
           /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
         allowPaths: [
           'src/crates/adapters/opencode-adapter/tests/opencode_source_adapter.rs',
+          'src/crates/adapters/opencode-adapter/tests/opencode_command_adapter.rs',
           'src/crates/assembly/core/src/plugin_runtime.rs',
+          'src/crates/assembly/core/src/external_sources.rs',
         ],
         message:
-          'only a reviewed product composition root may import bitfun-opencode-adapter and inject it into Plugin Runtime Host',
+          'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',
       },
     ],
   },

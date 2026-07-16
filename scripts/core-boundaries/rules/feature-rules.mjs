@@ -196,6 +196,6 @@ export const ownerCrateFeatureAssemblyRules = [
   {
     manifestPath: 'src/crates/contracts/product-domains/Cargo.toml',
     reason: 'product-domains must keep product domain feature groups explicit and default-light',
-    requiredProductFullFeatures: ['plugin-source', 'miniapp', 'function-agents'],
+    requiredProductFullFeatures: ['plugin-source', 'miniapp', 'function-agents', 'external-sources'],
   },
 ];

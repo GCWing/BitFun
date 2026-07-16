@@ -41,6 +41,7 @@ use api::custom_agent_api::{
     update_custom_agent,
 };
 use api::diff_api::*;
+use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
 use api::i18n_api::*;
@@ -909,6 +910,9 @@ pub async fn run() {
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
             api::editor_ai_api::editor_ai_cancel,
+            get_external_source_snapshot,
+            set_external_source_enabled_command,
+            set_external_source_conflict_choice_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
             get_readonly_tools_info,

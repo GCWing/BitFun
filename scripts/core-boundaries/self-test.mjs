@@ -955,9 +955,11 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions'
   ) {
-    throw new Error('OpenCode adapter public API budget must stay limited to one reviewed factory');
+    throw new Error(
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and command provider surface',
+    );
   }
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
     for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {

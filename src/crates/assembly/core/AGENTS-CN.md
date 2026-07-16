@@ -45,7 +45,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Product-domain 改动可以在有等价保护时迁移纯产品领域计划；filesystem writes、worker/host side effect、
   Git/AI concrete calls、marker IO 和 path-manager integration 仍留在 core，除非有经过评审的 owner 设计。
 - `plugin_source` 只注入产品目录并保留兼容接口；受管插件包发现与信任持久化归 `services-integrations`，生态适配解析与 Plugin Runtime Host 行为分别归对应的适配器层和执行层。
-- `plugin_runtime` 是 `product-full` 唯一允许选择生态适配器并注入 Plugin Runtime Host 的组装文件。产品入口只消费其产品级激活视图，不得导入适配器或 Host ABI 类型。
+- `plugin_runtime` 与 `external_sources` 是经过评审、可分别为对应能力契约选择生态适配器的 `product-full` 组装文件。
+  产品入口只消费产品级视图，不得导入适配器或 Host ABI 类型。
 - Remote/service 改动必须保持 external protocol lifecycle、workspace projection、scheduler/session restore、
   terminal pre-warm 和 product execution 边界清晰。
 - Feature 改动必须保持 `product-full` 作为兼容产品组装边界；默认能力选择只有在单独的 product matrix review 后才能变化。

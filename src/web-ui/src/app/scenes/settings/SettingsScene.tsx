@@ -13,6 +13,7 @@ import './SettingsScene.scss';
 const AIModelConfig = lazy(() => import('../../../infrastructure/config/components/AIModelConfig'));
 const McpToolsConfig = lazy(() => import('../../../infrastructure/config/components/McpToolsConfig'));
 const AcpAgentsConfig = lazy(() => import('../../../infrastructure/config/components/AcpAgentsConfig'));
+const ExternalSourcesConfig = lazy(() => import('../../../infrastructure/config/components/ExternalSourcesConfig'));
 const EditorConfig = lazy(() => import('../../../infrastructure/config/components/EditorConfig'));
 const BasicsConfig = lazy(() => import('../../../infrastructure/config/components/BasicsConfig'));
 const AppearanceConfig = lazy(() => import('../../../infrastructure/config/components/AppearanceConfig'));
@@ -70,6 +71,7 @@ const SettingsScene: React.FC = () => {
     case 'review':           Content = ReviewConfig;         break;
     case 'memories':         Content = MemoriesConfig;       break;
     case 'mcp-tools':        Content = McpToolsConfig;      break;
+    case 'external-sources': Content = ExternalSourcesConfig; break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
     case 'editor':           Content = EditorConfig;         break;
     case 'keyboard':         Content = KeyboardShortcutsTab; break;

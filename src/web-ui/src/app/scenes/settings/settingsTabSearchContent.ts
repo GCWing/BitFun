@@ -127,6 +127,15 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/mcp', key: 'section.serverList.description' },
   ],
 
+  'external-sources': [
+    { ns: 'settings/external-sources', key: 'title' },
+    { ns: 'settings/external-sources', key: 'subtitle' },
+    { ns: 'settings/external-sources', key: 'sources.title' },
+    { ns: 'settings/external-sources', key: 'sources.description' },
+    { ns: 'settings/external-sources', key: 'conflicts.title' },
+    { ns: 'settings/external-sources', key: 'conflicts.description' },
+  ],
+
   'acp-agents': [
     { ns: 'settings/acp-agents', key: 'title' },
     { ns: 'settings/acp-agents', key: 'subtitle' },

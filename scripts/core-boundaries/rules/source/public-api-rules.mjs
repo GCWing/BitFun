@@ -5,6 +5,7 @@ export const publicApiContractSlices = [
   'bitfun-plugin-extension-contract',
   'plugin-runtime-internal-abi',
   'opencode-adapter-boundary',
+  'external-source-command-contract',
 ];
 
 const contractSlices = {
@@ -12,6 +13,7 @@ const contractSlices = {
   bitfunPluginExtension: 'bitfun-plugin-extension-contract',
   pluginRuntimeInternalAbi: 'plugin-runtime-internal-abi',
   opencodeAdapterBoundary: 'opencode-adapter-boundary',
+  externalSourceCommandContract: 'external-source-command-contract',
 };
 
 function pluginRuntimeEntry(symbol, p0, consumer, verification, contractSlice, wireImpact = true) {
@@ -172,6 +174,108 @@ export const opencodeAdapterPublicApiEntries = [
     'load_opencode_package_adapter',
     'bitfun-core managed plugin composition root and PluginRuntimeHost integration tests',
   ),
+  opencodeAdapterEntry(
+    'OpenCodeCommandProvider',
+    'bitfun-core external source composition root and OpenCode command adapter tests',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeCommandProviderOptions',
+    'OpenCode command adapter fixture tests and explicit environment injection',
+  ),
+];
+
+function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'external source contract tests, fake-provider coordinator tests, OpenCode command fixtures, and CLI/Desktop product tests',
+    p0: 'PR1 ecosystem-neutral source catalog and OpenCode prompt-command vertical slice',
+    contractSlice: contractSlices.externalSourceCommandContract,
+    wireImpact,
+    rationale:
+      'PR1 needs typed capability contracts and provider-neutral lifecycle coordination without ecosystem payload leakage',
+    exit: 'remove only through a reviewed capability-contract migration with equivalent isolation and product tests',
+  };
+}
+
+export const externalSourceContractPublicApiEntries = [
+  'ExternalSourceContractError',
+  'SourceKey',
+  'SourceQualifiedCommandId',
+  'ExternalSourceScope',
+  'ExternalSourceHealth',
+  'ExternalSourceDiagnosticSeverity',
+  'ExternalSourceDiagnostic',
+  'ExternalSourceRecord',
+  'PromptCommandAvailability',
+  'PromptCommandDefinition',
+  'ExpandedPromptCommand',
+  'PromptCommandProviderIdentity',
+  'PromptCommandProviderSnapshot',
+  'ExternalSourceContext',
+  'ExternalWatchRoot',
+  'ExternalSourceProviderError',
+  'PromptCommandSourceProvider',
+  'ExternalSourceLifecycleState',
+  'ExternalSourceCatalogEntry',
+  'PromptCommandCatalogEntry',
+  'PromptCommandConflictCandidate',
+  'PromptCommandConflict',
+  'prompt_command_conflict_key',
+  'ExternalSourceCatalogSnapshot',
+].map((symbol) =>
+  externalSourceEntry(
+    symbol,
+    'product-domains external source contract owner',
+    'ecosystem command providers, external-source coordinator, product composition, and neutral product surfaces',
+    true,
+  ),
+);
+
+export const externalSourceCoordinatorPublicApiEntries = [
+  externalSourceEntry(
+    'ExternalSourceCoordinator',
+    'external-sources assembly owner',
+    'bitfun-core product composition root',
+  ),
+  ...['ExternalSourceDiscoveryRequest', 'ExternalSourceDiscoveryResult'].map((symbol) =>
+    externalSourceEntry(
+      symbol,
+      'external-sources assembly owner',
+      'bitfun-core bounded concurrent provider scheduler',
+    ),
+  ),
+];
+
+export const externalSourceCorePublicApiEntries = [
+  ...[
+    'ExpandedPromptCommand',
+    'ExternalSourceCatalogEntry',
+    'ExternalSourceCatalogSnapshot',
+    'ExternalSourceDiagnostic',
+    'ExternalSourceLifecycleState',
+    'PromptCommandAvailability',
+    'PromptCommandCatalogEntry',
+    'PromptCommandDefinition',
+    'SourceKey',
+    'prompt_command_conflict_key',
+    'external_source_conflict_choices',
+    'remember_external_source_conflict_choice',
+    'set_external_prompt_command_conflict_choice',
+    'external_source_snapshot',
+    'set_external_source_enabled',
+    'expand_external_prompt_command',
+    'subscribe_external_source_updates',
+    'ExternalSourceSubscription',
+  ].map((symbol) =>
+    externalSourceEntry(
+      symbol,
+      'bitfun-core external source composition facade',
+      'bitfun-cli and desktop host APIs',
+    ),
+  ),
 ];
 
 function pluginSourceEntry(symbol, owner, consumer, verification, wireImpact) {
@@ -294,6 +398,24 @@ export const publicApiAllowlistRules = [
     reason:
       'managed plugin package and trust contracts must stay explicitly budgeted and ecosystem-neutral',
     allowedSymbolEntries: pluginSourceContractPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/external_sources.rs',
+    reason:
+      'external source contracts must stay capability-specific, ecosystem-neutral, and explicitly consumer-backed',
+    allowedSymbolEntries: externalSourceContractPublicApiEntries,
+  },
+  {
+    path: 'src/crates/assembly/external-sources/src/lib.rs',
+    reason:
+      'external source assembly API must expose only the provider-neutral coordinator',
+    allowedSymbolEntries: externalSourceCoordinatorPublicApiEntries,
+  },
+  {
+    path: 'src/crates/assembly/core/src/external_sources.rs',
+    reason:
+      'core external source facade must stay limited to neutral product operations and read models',
+    allowedSymbolEntries: externalSourceCorePublicApiEntries,
   },
   {
     path: 'src/crates/services/services-integrations/src/plugin_source.rs',

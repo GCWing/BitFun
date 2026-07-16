@@ -3,7 +3,7 @@
 /// Build terminal user interface using ratatui
 pub(crate) mod agent_selector;
 pub(crate) mod chat;
-mod command_menu;
+pub(crate) mod command_menu;
 pub(crate) mod command_palette;
 mod diff_render;
 pub(crate) mod login_form;

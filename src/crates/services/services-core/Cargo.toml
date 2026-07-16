@@ -23,6 +23,7 @@ chrono = { workspace = true }
 zip = { workspace = true, optional = true }
 thiserror = { workspace = true }
 log = { workspace = true }
+fs2 = { workspace = true }
 notify = { workspace = true, optional = true }
 ignore = { workspace = true }
 sha2 = { workspace = true }
@@ -32,6 +33,7 @@ regex = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [features]
 default = ["lsp"]
