@@ -35,6 +35,7 @@ import {
   featureReferencesFeature,
   unexpectedDependencyOwnerFeatures,
 } from './manifest-feature-helpers.mjs';
+import { checkCargoDependencyLayersSafely } from './cargo-dependency-boundaries.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -1125,6 +1126,7 @@ export function runCoreBoundaryCheck() {
   }
 
   checkCrateLayoutRules();
+  failures.push(...checkCargoDependencyLayersSafely({ root: ROOT, crateLayoutRules }));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);

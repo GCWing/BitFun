@@ -1,0 +1,54 @@
+[package]
+name = "bitfun-relay-service"
+version = "0.2.13"
+authors = ["BitFun Team"]
+edition = "2021"
+description = "Reusable relay runtime for BitFun Remote Connect"
+
+[lib]
+name = "bitfun_relay_service"
+path = "src/lib.rs"
+
+[dependencies]
+# Dependencies stay explicit so the service can be built with the standalone
+# relay application without copying the root workspace manifest into Docker.
+axum = { version = "0.8", features = ["json", "ws"] }
+tower-http = { version = "0.6.11", features = ["cors"] }
+tokio = { version = "1.52", features = ["full"] }
+futures-util = "0.3.31"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+dashmap = "6"
+rand = "0.8"
+base64 = "0.22"
+sha2 = "0.10"
+
+# The relay stores encrypted blobs and password-derived hashes, not master keys.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+argon2 = "0.5"
+aes-gcm = "0.10"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unexpected_cfgs = "warn"
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"

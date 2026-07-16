@@ -601,7 +601,7 @@ export function runManifestParserSelfTest({
     'rmcp',
     'image',
     'tool-runtime',
-    'bitfun-relay-server',
+    'bitfun-relay-service',
     'htmd',
     'legible',
     'readability-js',
@@ -635,7 +635,7 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-service']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
@@ -652,11 +652,7 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerDeps = new Set(
     servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
-  const servicesIntegrationsDefaultOnlyGuardDeps = new Set(['bitfun-relay-server']);
   for (const dep of servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
-    if (servicesIntegrationsDefaultOnlyGuardDeps.has(dep)) {
-      continue;
-    }
     if (!servicesOptionalOwnerDeps.has(dep)) {
       throw new Error(
         `services-integrations optional dependency owner rule must cover forbidden dependency ${dep}`,

@@ -1,0 +1,14 @@
+**
+!src/
+!src/apps/
+!src/apps/relay-server/
+!src/apps/relay-server/Dockerfile
+!src/apps/relay-server/Cargo.toml
+!src/apps/relay-server/src/
+!src/apps/relay-server/src/**
+!src/crates/
+!src/crates/services/
+!src/crates/services/relay-service/
+!src/crates/services/relay-service/Cargo.toml
+!src/crates/services/relay-service/src/
+!src/crates/services/relay-service/src/**
