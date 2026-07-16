@@ -17,10 +17,15 @@ import {
   type ConnectionStatus,
   type SSHContextValue,
 } from './SSHRemoteContext';
+import {
+  REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS,
+  reconnectUntilDeadline,
+  remoteReconnectTimeoutSeconds,
+} from './remoteWorkspaceReconnect';
 
 const log = createLogger('SSHRemoteProvider');
 const pendingAcpCapabilityRefreshes = new Set<string>();
-const REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS = 60_000;
+const RECONNECT_TIMEOUT_SECONDS = remoteReconnectTimeoutSeconds();
 
 function refreshRemoteAcpCapabilities(connectionId: string): void {
   const normalized = connectionId.trim();
@@ -198,8 +203,8 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
         notificationService.error(
           pathList
-            ? `Remote workspace connection timed out after 60 seconds and was removed: ${pathList}`
-            : 'Remote workspace connection timed out after 60 seconds.',
+            ? `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds and was removed: ${pathList}`
+            : `Remote workspace connection timed out after ${RECONNECT_TIMEOUT_SECONDS} seconds.`,
           { duration: 8000 }
         );
 
@@ -248,7 +253,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   const reportRemoteWorkspaceReconnectFailure = useCallback((workspace: RemoteWorkspace) => {
     const path = normalizeRemoteWorkspacePath(workspace.remotePath);
     notificationService.error(
-      `Remote workspace could not reconnect within 60 seconds and was removed: ${path}`,
+      `Remote workspace could not reconnect within ${RECONNECT_TIMEOUT_SECONDS} seconds and was removed: ${path}`,
       { duration: 8000 }
     );
   }, []);
@@ -267,17 +272,13 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     };
   }, []);
 
-  // Try to reconnect a single remote workspace with retries.
-  // Returns the reconnected workspace info on success, false on failure.
-  // Waits RETRY_WAIT_MS between each attempt (fixed, not exponential).
-  const RETRY_WAIT_MS = 10_000;
-
+  // Try to reconnect a single remote workspace until the reconnect budget expires.
+  // Fast connection failures must keep retrying inside the budget; only then remove.
   const tryReconnectWithRetry = useCallback(async (
     workspace: RemoteWorkspace,
-    maxRetries: number,
-    timeoutMs: number
+    timeoutMs: number = REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS
   ): Promise<false | { workspace: RemoteWorkspace; connectionId: string }> => {
-    log.info('tryReconnectWithRetry: starting', { workspace, maxRetries, timeoutMs });
+    log.info('tryReconnectWithRetry: starting', { workspace, timeoutMs });
 
     const savedConnections = await sshApi.listSavedConnections();
     const savedConn = savedConnections.find(c => c.id === workspace.connectionId);
@@ -305,11 +306,13 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       auth: authMethod,
     };
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        log.info(`Attempting to reconnect (${attempt}/${maxRetries})`, {
+    return reconnectUntilDeadline({
+      totalTimeoutMs: timeoutMs,
+      attempt: async (attemptTimeoutMs, attempt) => {
+        log.info(`Attempting to reconnect (attempt ${attempt})`, {
           connectionId: workspace.connectionId,
           host: reconnectConfig.host,
+          attemptTimeoutMs,
         });
 
         const connectWithTimeout = async (): Promise<{ connectionId: string }> => {
@@ -320,36 +323,44 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
           return { connectionId: result.connectionId };
         };
 
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Connection timeout')), timeoutMs);
-        });
+        let timeoutId: number | undefined;
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = window.setTimeout(
+              () => reject(new Error('Connection timeout')),
+              attemptTimeoutMs
+            );
+          });
 
-        const result = await Promise.race([connectWithTimeout(), timeoutPromise]);
+          const result = await Promise.race([connectWithTimeout(), timeoutPromise]);
 
-        // Successfully connected — open the workspace in SSH state manager
-        await sshApi.openWorkspace(result.connectionId, workspace.remotePath);
-        const reconnectedWorkspace: RemoteWorkspace = {
-          connectionId: result.connectionId,
-          connectionName: savedConn.name,
-          remotePath: workspace.remotePath,
-          sshHost: reconnectConfig.host?.trim() || workspace.sshHost?.trim() || undefined,
-        };
+          // Successfully connected — open the workspace in SSH state manager
+          await sshApi.openWorkspace(result.connectionId, workspace.remotePath);
+          const reconnectedWorkspace: RemoteWorkspace = {
+            connectionId: result.connectionId,
+            connectionName: savedConn.name,
+            remotePath: workspace.remotePath,
+            sshHost: reconnectConfig.host?.trim() || workspace.sshHost?.trim() || undefined,
+          };
 
-        log.info('Successfully reconnected to remote workspace', {
-          originalConnectionId: workspace.connectionId,
-          newConnectionId: result.connectionId,
-        });
-        return { workspace: reconnectedWorkspace, connectionId: result.connectionId };
-      } catch (err) {
-        log.warn(`Reconnect attempt ${attempt}/${maxRetries} failed`, { connectionId: workspace.connectionId, error: err });
-        if (attempt < maxRetries) {
-          // Fixed 10-second wait between retries
-          await new Promise(resolve => setTimeout(resolve, RETRY_WAIT_MS));
+          log.info('Successfully reconnected to remote workspace', {
+            originalConnectionId: workspace.connectionId,
+            newConnectionId: result.connectionId,
+          });
+          return { workspace: reconnectedWorkspace, connectionId: result.connectionId };
+        } catch (err) {
+          log.warn(`Reconnect attempt ${attempt} failed`, {
+            connectionId: workspace.connectionId,
+            error: err,
+          });
+          throw err;
+        } finally {
+          if (timeoutId !== undefined) {
+            window.clearTimeout(timeoutId);
+          }
         }
-      }
-    }
-
-    return false;
+      },
+    });
   }, []);
 
   const statusRef = useRef<ConnectionStatus>(status);
@@ -542,11 +553,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             connectionId: workspace.connectionId,
             remotePath: workspace.remotePath,
           });
-          const result = await tryReconnectWithRetry(
-            workspace,
-            1,
-            REMOTE_WORKSPACE_RECONNECT_TIMEOUT_MS
-          );
+          const result = await tryReconnectWithRetry(workspace);
 
           if (result !== false) {
             log.info('Reconnection successful', { newConnectionId: result.connectionId });
