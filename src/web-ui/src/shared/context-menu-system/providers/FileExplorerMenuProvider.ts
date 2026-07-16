@@ -128,16 +128,6 @@ export class FileExplorerMenuProvider implements IMenuProvider {
 
     }
 
-    // Download (available for both files and directories)
-    items.push({
-      id: 'file-download',
-      label: i18nService.t('common:file.download'),
-      icon: 'Download',
-      onClick: () => {
-        globalEventBus.emit('file:download', { path: fileContext.filePath, isDirectory });
-      }
-    });
-
     items.push({
       id: 'file-separator-1',
       label: '',
