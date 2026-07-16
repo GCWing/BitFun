@@ -39,17 +39,24 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   store plugin activation, update, permission, or health state in the assembly result.
 - Current OpenCode adapter code is a managed-package/static-preview path only. After the matching
   OC-R phases are implemented, OpenCode standard config and plugin sources become
-  read-only source files whose valid results can affect runtime behavior without
-  a BitFun import or second activation. Codex and Claude remain import/reference
-  sources unless their own design explicitly changes. Never copy credentials or
-  silently ignore unsupported fields.
+  read-only live sources without requiring a BitFun import. Low-risk declarative
+  results follow the user's auto-apply/ask preference; executable sources require
+  one source/target activation before import and another decision only when the
+  pre-import execution envelope or post-import contribution set expands. Codex
+  and Claude remain import/reference sources unless their own design explicitly
+  changes. Never copy credentials or silently ignore unsupported fields.
 - Keep native instruction references, explicit import records, executable plugin
   sources, and credentials as separate asset classes. Importing non-executable
-  config must not establish executable-source policy; live OpenCode execution is
-  governed by the source/target policy resolved before module import.
+  config must not establish executable-source policy. CLI consumes the external
+  source status and typed actions; it must not add another activation layer on top
+  of the source/target decision or claim that post-import confirmation can undo
+  candidate-module side effects.
 - CLI plugin screens consume capability services, read-only status, and typed
   diagnostics. They must not depend on Plugin Runtime Host ABI or raw ecosystem
   payloads.
+- Non-interactive commands return `action-required` only when the current operation
+  actually depends on a pending external asset. Unrelated confirmations remain in
+  structured status or `stderr` summaries and must not block the command.
 - External ACP agents, external config import, and managed plugins are separate
   capabilities with separate trust and lifecycle state.
 
