@@ -117,20 +117,22 @@ pub async fn init_agentic_system_with_workspace(
     info!("Agentic system initialization complete");
 
     // Initialize plugin support (OpenCode + Codex adapters).
-    // Discovers and registers plugin skills, MCP servers, and hooks.
-    // Wrap in spawn_blocking to avoid blocking the async runtime with
-    // synchronous filesystem I/O during plugin discovery.
-    let ws_root = workspace_root.map(|p| p.to_path_buf());
-    let _ = tokio::task::spawn_blocking(move || {
-        let rt = tokio::runtime::Handle::current();
-        rt.block_on(async {
-            crate::agentic::codex_integration::initialize_plugin_support(
-                ws_root.as_deref(),
-            )
-            .await;
+    // Discovers and registers plugin skills — gated behind product-full
+    // because it depends on the plugin runtime host and the codex adapter.
+    #[cfg(feature = "product-full")]
+    {
+        let ws_root = workspace_root.map(|p| p.to_path_buf());
+        let _ = tokio::task::spawn_blocking(move || {
+            let rt = tokio::runtime::Handle::current();
+            rt.block_on(async {
+                crate::agentic::codex_integration::initialize_plugin_support(
+                    ws_root.as_deref(),
+                )
+                .await;
+            })
         })
-    })
-    .await;
+        .await;
+    }
 
     Ok(AgenticSystem {
         coordinator,

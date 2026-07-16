@@ -8,7 +8,7 @@ use bitfun_plugin_runtime_host::PluginHostAdapter;
 use bitfun_runtime_ports::{
     PluginAuditRef, PluginDiagnostic, PluginDiagnosticDetail, PluginDiagnosticSeverity,
     PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
-    PluginRuntimeReadRequest, PluginRuntimeReadResponse, PluginRuntimeUnavailableReason,
+    PluginRuntimeReadRequest, PluginRuntimeReadResponse,
     PluginSourceKind, PluginSourceRef,
     PluginStatusKind, PluginStatusSnapshot, PluginTrustLevel, PortResult,
 };
@@ -96,6 +96,7 @@ impl CodexProjection {
 
 pub struct CodexPluginHostAdapter {
     projections: Vec<CodexProjection>,
+    source_trust_epoch: u64,
 }
 
 #[async_trait]
@@ -138,39 +139,76 @@ impl PluginHostAdapter for CodexPluginHostAdapter {
         &self,
         envelope: PluginDispatchEnvelope,
     ) -> PortResult<PluginResponseEnvelope> {
-        for p in &self.projections {
-            if p.source.plugin_id == envelope.source.plugin_id {
-                return Ok(p.dispatch_response(&envelope));
-            }
+        // Reject stale trust epochs — the caller must provide a current epoch.
+        if envelope.epochs.trust_epoch != self.source_trust_epoch {
+            return Ok(PluginResponseEnvelope {
+                envelope_version: 1,
+                request_event_id: envelope.event_id.clone(),
+                project_domain_id: envelope.project_domain_id.clone(),
+                workspace_id: envelope.workspace_id.clone(),
+                adapter_id: ADAPTER_ID.to_string(),
+                plugin_id: Some(envelope.source.plugin_id.clone()),
+                completed_at_ms: 0,
+                effects: Vec::new(),
+                diagnostics: vec![PluginDiagnostic {
+                    diagnostic_id: "codex.trust_epoch_stale".to_string(),
+                    severity: PluginDiagnosticSeverity::Error,
+                    source: envelope.source.clone(),
+                    code: "codex.trust_epoch_stale".to_string(),
+                    message: "Codex plugin trust epoch is stale".to_string(),
+                    detail: PluginDiagnosticDetail::Trust {
+                        trust_level: PluginTrustLevel::Unknown,
+                    },
+                    audit: PluginAuditRef {
+                        correlation_id: envelope.correlation_id.clone(),
+                        event_id: Some(envelope.event_id.clone()),
+                    },
+                    retryable: true,
+                }],
+                quarantine: None,
+                plugin_statuses: Vec::new(),
+                observed_epochs: envelope.epochs.clone(),
+            });
         }
-        Ok(PluginResponseEnvelope {
-            envelope_version: 1,
-            request_event_id: envelope.event_id.clone(),
-            project_domain_id: envelope.project_domain_id.clone(),
-            workspace_id: envelope.workspace_id.clone(),
-            adapter_id: ADAPTER_ID.to_string(),
-            plugin_id: Some(envelope.source.plugin_id.clone()),
-            completed_at_ms: 0,
-            effects: Vec::new(),
-            diagnostics: vec![PluginDiagnostic {
-                diagnostic_id: "codex.source_mismatch".to_string(),
-                severity: PluginDiagnosticSeverity::Info,
-                source: envelope.source.clone(),
-                code: "codex.source_mismatch".to_string(),
-                message: format!("no projection for '{}'", envelope.source.plugin_id),
-                detail: PluginDiagnosticDetail::Adapter {
-                    adapter_id: ADAPTER_ID.to_string(),
-                },
-                audit: PluginAuditRef {
-                    correlation_id: envelope.correlation_id.clone(),
-                    event_id: Some(envelope.event_id.clone()),
-                },
-                retryable: false,
-            }],
-            quarantine: None,
-            plugin_statuses: Vec::new(),
-            observed_epochs: envelope.epochs.clone(),
-        })
+        match self.projection_for_source(&envelope.source) {
+            Some(p) => Ok(p.dispatch_response(&envelope)),
+            None => Ok(PluginResponseEnvelope {
+                envelope_version: 1,
+                request_event_id: envelope.event_id.clone(),
+                project_domain_id: envelope.project_domain_id.clone(),
+                workspace_id: envelope.workspace_id.clone(),
+                adapter_id: ADAPTER_ID.to_string(),
+                plugin_id: Some(envelope.source.plugin_id.clone()),
+                completed_at_ms: 0,
+                effects: Vec::new(),
+                diagnostics: vec![PluginDiagnostic {
+                    diagnostic_id: "codex.source_mismatch".to_string(),
+                    severity: PluginDiagnosticSeverity::Info,
+                    source: envelope.source.clone(),
+                    code: "codex.source_mismatch".to_string(),
+                    message: format!("no projection for '{}'", envelope.source.plugin_id),
+                    detail: PluginDiagnosticDetail::Adapter {
+                        adapter_id: ADAPTER_ID.to_string(),
+                    },
+                    audit: PluginAuditRef {
+                        correlation_id: envelope.correlation_id.clone(),
+                        event_id: Some(envelope.event_id.clone()),
+                    },
+                    retryable: false,
+                }],
+                quarantine: None,
+                plugin_statuses: Vec::new(),
+                observed_epochs: envelope.epochs.clone(),
+            }),
+        }
+    }
+}
+
+impl CodexPluginHostAdapter {
+    fn projection_for_source(&self, source: &PluginSourceRef) -> Option<&CodexProjection> {
+        self.projections
+            .iter()
+            .find(|p| source_identity_matches(&p.source, source))
     }
 }
 
@@ -178,46 +216,67 @@ impl PluginHostAdapter for CodexPluginHostAdapter {
 // Factory
 // ============================================================================
 
-fn compute_content_hash(plugin_id: &str) -> String {
+fn compute_content_hash(plugin_root: &Path, version: &Option<String>) -> String {
     let mut h = Sha256::new();
-    h.update(plugin_id.as_bytes());
+    h.update(plugin_root.to_string_lossy().as_bytes());
+    h.update(b":");
+    if let Some(v) = version {
+        h.update(v.as_bytes());
+    } else {
+        h.update(b"0.0.0");
+    }
     h.update(b":codex-plugin:v1");
     format!("sha256:{:x}", h.finalize())
+}
+
+fn source_identity_matches(left: &PluginSourceRef, right: &PluginSourceRef) -> bool {
+    left.plugin_id == right.plugin_id
+        && left.source_kind == right.source_kind
+        && left.source == right.source
+        && left.version == right.version
+        && left.content_hash == right.content_hash
+}
+
+fn find_trust_level(
+    source_trust_refs: &[PluginSourceRef],
+    candidate: &PluginSourceRef,
+) -> PluginTrustLevel {
+    for r in source_trust_refs {
+        if source_identity_matches(r, candidate) {
+            return r.trust_level;
+        }
+    }
+    PluginTrustLevel::Unknown
 }
 
 pub fn load_codex_compatible_adapter(
     project_root: impl AsRef<Path>,
     _observed_at_ms: u64,
-    _source_trust_epoch: u64,
+    source_trust_epoch: u64,
     source_trust_refs: &[PluginSourceRef],
 ) -> PortResult<Arc<dyn PluginHostAdapter>> {
-    use std::collections::HashMap;
-
     let project = project_root.as_ref();
-    let trust: HashMap<String, PluginTrustLevel> = source_trust_refs
-        .iter()
-        .map(|r| (r.plugin_id.clone(), r.trust_level))
-        .collect();
-
     let discoveries = discovery::discover_all(Some(project));
     let mut projections = Vec::new();
 
     for d in &discoveries {
         match discovery::load_plugin_manifest(d) {
             Ok(plugin) => {
-                let tl = trust
-                    .get(&plugin.plugin_id)
-                    .copied()
-                    .unwrap_or(PluginTrustLevel::Unknown);
+                let content_hash = compute_content_hash(&plugin.root, &plugin.version);
+                let source_ref = PluginSourceRef {
+                    plugin_id: plugin.plugin_id.clone(),
+                    source_kind: PluginSourceKind::OpenCodeCompatible,
+                    source: plugin.root.to_string_lossy().to_string(),
+                    version: plugin.version.clone(),
+                    content_hash,
+                    trust_level: PluginTrustLevel::Unknown, // placeholder — resolved below
+                    manifest: None,
+                };
+                let trust_level = find_trust_level(source_trust_refs, &source_ref);
                 projections.push(CodexProjection {
                     source: PluginSourceRef {
-                        plugin_id: plugin.plugin_id.clone(),
-                        source_kind: PluginSourceKind::OpenCodeCompatible,
-                        source: plugin.root.to_string_lossy().to_string(),
-                        version: plugin.version.clone(),
-                        content_hash: compute_content_hash(&plugin.plugin_id),
-                        trust_level: tl,
-                        manifest: None,
+                        trust_level,
+                        ..source_ref
                     },
                     load_diagnostics: Vec::new(),
                     plugin_name: plugin.name.clone(),
@@ -233,5 +292,8 @@ pub fn load_codex_compatible_adapter(
         }
     }
 
-    Ok(Arc::new(CodexPluginHostAdapter { projections }))
+    Ok(Arc::new(CodexPluginHostAdapter {
+        projections,
+        source_trust_epoch,
+    }))
 }

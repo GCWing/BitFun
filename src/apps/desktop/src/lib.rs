@@ -1562,7 +1562,11 @@ async fn init_agentic_system() -> anyhow::Result<(
 
     // Initialize Codex+OpenCode plugin support — discovers plugins from
     // ~/.agents/plugins/ and registers their skills with SkillRegistry.
-    bitfun_core::agentic::codex_integration::initialize_plugin_support(None).await;
+    // Gated behind product-full because it depends on the plugin runtime host.
+    #[cfg(feature = "product-full")]
+    {
+        bitfun_core::agentic::codex_integration::initialize_plugin_support(None).await;
+    }
 
     Ok((
         coordinator,

@@ -1,8 +1,12 @@
 //! Codex plugin source discovery.
 //!
-//! Scans standard Codex plugin paths to find installed plugins:
-//! - `~/.agents/plugins/` (personal plugins)
-//! - `<workspace>/.agents/plugins/` (project plugins)
+//! Discovers Codex plugins from `~/.agents/plugins/` (personal) and
+//! `<workspace>/.agents/plugins/` (project).
+//!
+//! Discovery order per plugins directory:
+//! 1. Parse `marketplace.json` (Codex standard format) → resolve plugin roots
+//!    from `plugins[].source.path`.
+//! 2. Fall back to scanning direct subdirectories for `.codex-plugin/plugin.json`.
 
 use super::manifest::{self, ManifestError};
 use std::path::{Path, PathBuf};
@@ -15,9 +19,70 @@ pub struct PluginDiscovery {
     pub dir_name: String,
 }
 
+/// Codex marketplace.json root object.
+#[derive(serde::Deserialize)]
+struct Marketplace {
+    #[serde(default)]
+    plugins: Vec<MarketplacePlugin>,
+}
+
+#[derive(serde::Deserialize)]
+struct MarketplacePlugin {
+    source: MarketplaceSource,
+}
+
+#[derive(serde::Deserialize)]
+struct MarketplaceSource {
+    path: String,
+}
+
+/// Attempts to discover plugins via `marketplace.json`.
+/// Returns `None` if the file is absent or unparseable (caller should fall back).
+fn discover_via_marketplace(dir: &Path) -> Option<Vec<PluginDiscovery>> {
+    let marketplace_path = dir.join("marketplace.json");
+    let content = std::fs::read_to_string(&marketplace_path).ok()?;
+    let marketplace: Marketplace = serde_json::from_str(&content).ok()?;
+    let mut discoveries = Vec::new();
+    for plugin in &marketplace.plugins {
+        let relative = &plugin.source.path;
+        let plugin_root = resolve_plugin_path(dir, relative);
+        // Reject path traversal.
+        if plugin_root
+            .to_string_lossy()
+            .contains(".invalid-path-traversal-rejected")
+        {
+            continue;
+        }
+        let dir_name = plugin_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(relative)
+            .to_string();
+        match manifest::find_manifest_in_root(&plugin_root) {
+            Some(manifest_path) => discoveries.push(PluginDiscovery {
+                manifest_path,
+                plugin_root,
+                dir_name,
+            }),
+            None => log::warn!(
+                "Codex marketplace: no manifest found in {}",
+                plugin_root.display()
+            ),
+        }
+    }
+    Some(discoveries)
+}
+
 /// Scans a directory for plugin subdirectories containing `.codex-plugin/plugin.json`.
+/// Prefers marketplace.json over direct scanning.
 /// Skips symlinks to avoid following links to arbitrary filesystem locations.
 pub fn scan_directory(dir: &Path) -> Vec<PluginDiscovery> {
+    // 1. Try marketplace.json first (Codex standard).
+    if let Some(marketplace) = discover_via_marketplace(dir) {
+        return marketplace;
+    }
+
+    // 2. Fall back to direct subdirectory scanning.
     let mut discoveries = Vec::new();
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
