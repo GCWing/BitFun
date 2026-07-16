@@ -1828,14 +1828,54 @@ pub struct SessionTranscript {
     pub messages: Vec<TranscriptMessage>,
 }
 
+/// Read-only transcript content shared by runtime consumers.
+///
+/// This projection preserves portable history facts without exposing the Core persistence
+/// message type. Multimodal entries report attachment counts rather than transporting image
+/// payloads; callers that need attachment content require a separate, authorized capability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TranscriptContent {
+    Text(String),
+    Multimodal {
+        text: String,
+        image_count: usize,
+    },
+    ToolResult {
+        tool_id: String,
+        tool_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effective_tool_name: Option<String>,
+        result: serde_json::Value,
+        is_error: bool,
+    },
+    Mixed {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_content: Option<String>,
+        text: String,
+        #[serde(default)]
+        tool_calls: Vec<TranscriptToolCall>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptToolCall {
+    pub tool_id: String,
+    pub tool_name: String,
+    #[serde(default)]
+    pub arguments: serde_json::Value,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptMessage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub turn_id: Option<String>,
-    #[serde(default)]
-    pub content: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<u64>,
+    pub content: TranscriptContent,
 }
 
 #[async_trait::async_trait]
@@ -2669,6 +2709,23 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["turnId"], "turn_1");
         assert!(json.get("fromTurnId").is_none());
+    }
+
+    #[test]
+    fn transcript_contract_keeps_portable_message_identity_and_content() {
+        let message = TranscriptMessage {
+            id: Some("message_1".to_string()),
+            role: "assistant".to_string(),
+            turn_id: Some("turn_1".to_string()),
+            timestamp_ms: Some(3000),
+            content: TranscriptContent::Text("done".to_string()),
+        };
+
+        let message_json = serde_json::to_value(message).expect("serialize transcript message");
+
+        assert_eq!(message_json["id"], "message_1");
+        assert_eq!(message_json["timestampMs"], 3000);
+        assert_eq!(message_json["content"]["Text"], "done");
     }
 
     #[test]

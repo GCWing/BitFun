@@ -4,13 +4,11 @@ use std::collections::HashMap;
 /// Pure UI rendering state for the chat interface.
 /// All session lifecycle and persistence is handled by bitfun-core.
 /// This module only maintains transient state needed for TUI rendering.
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use bitfun_agent_runtime::prompt_markup::strip_prompt_markup;
+use bitfun_agent_runtime::sdk::{SessionTranscript, TranscriptContent, TranscriptMessage};
 use bitfun_agent_tools::effective_tool_invocation;
-use bitfun_core::agentic::core::message::{
-    Message as CoreMessage, MessageContent, MessageRole as CoreMessageRole,
-};
-use bitfun_core::agentic::core::strip_prompt_markup;
 use bitfun_events::ToolEventData;
 
 use crate::ui::permission::PermissionPrompt;
@@ -64,13 +62,48 @@ pub(crate) enum MessageRole {
     Tool,
 }
 
-impl From<&CoreMessageRole> for MessageRole {
-    fn from(role: &CoreMessageRole) -> Self {
+impl From<&str> for MessageRole {
+    fn from(role: &str) -> Self {
         match role {
-            CoreMessageRole::User => MessageRole::User,
-            CoreMessageRole::Assistant => MessageRole::Assistant,
-            CoreMessageRole::System => MessageRole::System,
-            CoreMessageRole::Tool => MessageRole::Tool,
+            "user" => MessageRole::User,
+            "assistant" => MessageRole::Assistant,
+            "tool" => MessageRole::Tool,
+            _ => MessageRole::System,
+        }
+    }
+}
+
+pub(crate) fn transcript_role_label(role: &str) -> &'static str {
+    match role {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "tool" => "Tool",
+        "system" => "System",
+        _ => "Unknown",
+    }
+}
+
+pub(crate) fn transcript_message_preview(message: &TranscriptMessage) -> String {
+    match &message.content {
+        TranscriptContent::Text(text) => text.lines().next().unwrap_or("").to_string(),
+        TranscriptContent::Multimodal { text, image_count } => {
+            if text.is_empty() {
+                format!("[{image_count} images]")
+            } else {
+                text.lines().next().unwrap_or("").to_string()
+            }
+        }
+        TranscriptContent::Mixed {
+            text, tool_calls, ..
+        } => {
+            if text.is_empty() {
+                format!("[{} tool calls]", tool_calls.len())
+            } else {
+                text.lines().next().unwrap_or("").to_string()
+            }
+        }
+        TranscriptContent::ToolResult { tool_name, .. } => {
+            format!("[Tool result: {tool_name}]")
         }
     }
 }
@@ -137,13 +170,13 @@ pub(crate) struct ChatMessage {
 }
 
 impl ChatMessage {
-    /// Convert a core Message to a UI ChatMessage
-    pub(crate) fn from_core_message(msg: &CoreMessage) -> Self {
-        let role = MessageRole::from(&msg.role);
+    /// Convert a portable session transcript message to UI state.
+    fn from_transcript_message(msg: &TranscriptMessage, index: usize) -> Self {
+        let role = MessageRole::from(msg.role.as_str());
         let mut flow_items = Vec::new();
 
         match &msg.content {
-            MessageContent::Text(text) => {
+            TranscriptContent::Text(text) => {
                 if !text.is_empty() {
                     flow_items.push(FlowItem::Text {
                         content: display_text_for_role(&role, text),
@@ -151,7 +184,7 @@ impl ChatMessage {
                     });
                 }
             }
-            MessageContent::Mixed {
+            TranscriptContent::Mixed {
                 reasoning_content,
                 text,
                 tool_calls,
@@ -192,7 +225,7 @@ impl ChatMessage {
                     });
                 }
             }
-            MessageContent::Multimodal { text, .. } => {
+            TranscriptContent::Multimodal { text, .. } => {
                 if !text.is_empty() {
                     flow_items.push(FlowItem::Text {
                         content: display_text_for_role(&role, text),
@@ -200,13 +233,12 @@ impl ChatMessage {
                     });
                 }
             }
-            MessageContent::ToolResult {
+            TranscriptContent::ToolResult {
                 tool_id,
                 tool_name,
                 effective_tool_name,
                 result,
                 is_error,
-                ..
             } => {
                 let result_str = extract_fallback_summary(result);
                 flow_items.push(FlowItem::Tool {
@@ -233,9 +265,14 @@ impl ChatMessage {
         }
 
         Self {
-            id: msg.id.clone(),
+            id: msg
+                .id
+                .clone()
+                .unwrap_or_else(|| format!("transcript-message-{index}")),
             role,
-            timestamp: msg.timestamp,
+            timestamp: UNIX_EPOCH
+                .checked_add(Duration::from_millis(msg.timestamp_ms.unwrap_or_default()))
+                .unwrap_or(UNIX_EPOCH),
             flow_items,
             is_streaming: false,
             version: 0,
@@ -321,22 +358,22 @@ impl ChatState {
         }
     }
 
-    /// Load historical messages from core and create ChatState.
+    /// Load historical messages from the portable runtime transcript.
     ///
     /// Tool results (ToolResult messages) are merged back into the corresponding
     /// tool calls (in Mixed messages) so that tool cards render with full result data.
-    pub(crate) fn from_core_messages(
+    pub(crate) fn from_session_transcript(
         core_session_id: String,
         session_name: String,
         agent_type: String,
         workspace: Option<String>,
-        core_messages: &[CoreMessage],
+        transcript: &SessionTranscript,
     ) -> Self {
         // Step 1: Build tool_id -> (result_summary, metadata, is_error) lookup from ToolResult messages
         let mut tool_results: HashMap<String, (String, Option<serde_json::Value>, bool)> =
             HashMap::new();
-        for msg in core_messages {
-            if let MessageContent::ToolResult {
+        for msg in &transcript.messages {
+            if let TranscriptContent::ToolResult {
                 tool_id,
                 result,
                 is_error,
@@ -352,16 +389,18 @@ impl ChatState {
         }
 
         // Step 2: Convert messages, merging tool results into tool call display states
-        let messages: Vec<ChatMessage> = core_messages
+        let messages: Vec<ChatMessage> = transcript
+            .messages
             .iter()
+            .enumerate()
             .filter(|msg| {
                 // Skip tool result messages (merged into tool cards above)
-                !matches!(msg.role, CoreMessageRole::Tool)
+                msg.1.role != "tool"
                 // Skip system messages (internal)
-                && !matches!(msg.role, CoreMessageRole::System)
+                && msg.1.role != "system"
             })
-            .map(|msg| {
-                let mut chat_msg = ChatMessage::from_core_message(msg);
+            .map(|(index, msg)| {
+                let mut chat_msg = ChatMessage::from_transcript_message(msg, index);
                 // Merge tool results into corresponding tool display states
                 for item in &mut chat_msg.flow_items {
                     if let FlowItem::Tool { tool_state } = item {
@@ -1091,8 +1130,10 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ChatState, FlowItem};
-    use bitfun_core::agentic::core::message::{Message, ToolCall};
+    use super::{ChatState, FlowItem, ToolDisplayStatus};
+    use bitfun_agent_runtime::sdk::{
+        SessionTranscript, TranscriptContent, TranscriptMessage, TranscriptToolCall,
+    };
     use bitfun_events::{ToolEventData, ToolEventIdentity};
     use serde_json::json;
 
@@ -1151,36 +1192,104 @@ mod tests {
     #[test]
     fn deferred_history_projects_effective_view_without_mutating_wire_message() {
         let wire_input = deferred_input();
-        let messages = vec![Message::assistant_with_tools(
-            String::new(),
-            vec![ToolCall {
-                tool_id: "tool-1".to_string(),
-                tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
-                arguments: wire_input.clone(),
-                raw_arguments: None,
-                is_error: false,
-                recovered_from_truncation: false,
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("message-1".to_string()),
+                role: "assistant".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                timestamp_ms: Some(1234),
+                content: TranscriptContent::Mixed {
+                    reasoning_content: None,
+                    text: String::new(),
+                    tool_calls: vec![TranscriptToolCall {
+                        tool_id: "tool-1".to_string(),
+                        tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+                        arguments: wire_input.clone(),
+                    }],
+                },
             }],
-        )];
+        };
 
-        let state = ChatState::from_core_messages(
+        let state = ChatState::from_session_transcript(
             "session-1".to_string(),
             "Session".to_string(),
             "agentic".to_string(),
             None,
-            &messages,
+            &transcript,
         );
 
         assert_create_plan_item(&state.messages[0].flow_items[0]);
-        let bitfun_core::agentic::core::message::MessageContent::Mixed { tool_calls, .. } =
-            &messages[0].content
-        else {
-            panic!("expected mixed message");
-        };
         assert_eq!(
-            tool_calls[0].tool_name,
+            match &transcript.messages[0].content {
+                TranscriptContent::Mixed { tool_calls, .. } => tool_calls[0].tool_name.as_str(),
+                _ => panic!("expected mixed transcript content"),
+            },
             bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME
         );
-        assert_eq!(tool_calls[0].arguments, wire_input);
+        assert_eq!(
+            match &transcript.messages[0].content {
+                TranscriptContent::Mixed { tool_calls, .. } => &tool_calls[0].arguments,
+                _ => panic!("expected mixed transcript content"),
+            },
+            &wire_input
+        );
+    }
+
+    #[test]
+    fn transcript_history_merges_tool_results_into_the_rendered_tool_card() {
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![
+                TranscriptMessage {
+                    id: Some("assistant-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1234),
+                    content: TranscriptContent::Mixed {
+                        reasoning_content: None,
+                        text: String::new(),
+                        tool_calls: vec![TranscriptToolCall {
+                            tool_id: "tool-1".to_string(),
+                            tool_name: "Read".to_string(),
+                            arguments: json!({ "file_path": "README.md" }),
+                        }],
+                    },
+                },
+                TranscriptMessage {
+                    id: Some("tool-result-1".to_string()),
+                    role: "tool".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1300),
+                    content: TranscriptContent::ToolResult {
+                        tool_id: "tool-1".to_string(),
+                        tool_name: "Read".to_string(),
+                        effective_tool_name: None,
+                        result: json!({ "display_summary": "README contents" }),
+                        is_error: true,
+                    },
+                },
+            ],
+        };
+
+        let state = ChatState::from_session_transcript(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+            &transcript,
+        );
+
+        assert_eq!(state.messages.len(), 1);
+        assert_eq!(state.messages[0].id, "assistant-1");
+        let FlowItem::Tool { tool_state } = &state.messages[0].flow_items[0] else {
+            panic!("expected tool item");
+        };
+        assert_eq!(tool_state.status, ToolDisplayStatus::Failed);
+        assert_eq!(tool_state.result.as_deref(), Some("README contents"));
+        assert_eq!(
+            tool_state.metadata,
+            Some(json!({ "display_summary": "README contents" }))
+        );
     }
 }

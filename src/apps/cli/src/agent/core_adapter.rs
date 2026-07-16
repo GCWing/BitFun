@@ -11,10 +11,10 @@ use tokio::sync::Mutex;
 use super::Agent;
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionListRequest, AgentTurnCancellationRequest,
+    AgentSessionListRequest, AgentSessionRestoreRequest, AgentTurnCancellationRequest,
+    SessionTranscript, SessionTranscriptRequest,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
-use bitfun_core::agentic::core::Message;
 use bitfun_core::agentic::persistence::session_branch::SessionBranchResult;
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::session::DialogTurnData;
@@ -119,11 +119,18 @@ impl CoreAgentAdapter {
         let sessions = self
             .list_sessions_in_workspace(&effective_workspace)
             .await?;
-        let summary = validated_session_summary(&sessions, session_id, &effective_workspace)?;
+        validated_session_summary(&sessions, session_id, &effective_workspace)?;
 
-        self.compatibility
-            .restore_session(&effective_workspace, session_id)
-            .await?;
+        let restored = self
+            .runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: effective_workspace.to_string_lossy().to_string(),
+                session_id: session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
         let mut session_id_guard = self.session_id.lock().await;
         let mut turn_id_guard = self.current_turn_id.lock().await;
@@ -135,7 +142,7 @@ impl CoreAgentAdapter {
         *session_id_guard = Some(session_id.to_string());
         *turn_id_guard = None;
 
-        Ok((summary, effective_workspace))
+        Ok((restored.session, effective_workspace))
     }
 
     pub(crate) async fn delete_session(&self, session_id: &str) -> Result<()> {
@@ -150,11 +157,14 @@ impl CoreAgentAdapter {
             .map_err(|error| anyhow::anyhow!(error.to_string()))
     }
 
-    pub(crate) async fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
-        self.compatibility
-            .get_messages(session_id)
+    pub(crate) async fn get_transcript(&self, session_id: &str) -> Result<SessionTranscript> {
+        self.runtime
+            .read_session_transcript(SessionTranscriptRequest {
+                session_id: session_id.to_string(),
+                turn_id: None,
+            })
             .await
-            .map_err(Into::into)
+            .map_err(|error| anyhow::anyhow!(error.to_string()))
     }
 
     pub(crate) async fn update_session_model(
@@ -269,8 +279,13 @@ impl CoreAgentAdapter {
             return Ok(());
         }
         match self
-            .compatibility
-            .restore_session(&workspace, session_id)
+            .runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: workspace.to_string_lossy().to_string(),
+                session_id: session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
             .await
         {
             Ok(_) => {

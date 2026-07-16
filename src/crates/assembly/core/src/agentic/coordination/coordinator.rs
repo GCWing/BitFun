@@ -7733,6 +7733,45 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
 }
 
 #[async_trait::async_trait]
+impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordinator {
+    async fn restore_session(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionRestoreRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_agent_runtime::sdk::AgentSessionRestoreResult>
+    {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        let session = self
+            .restore_session_for_workspace(
+                SessionStoragePathRequest {
+                    workspace_path: PathBuf::from(request.workspace_path),
+                    remote_connection_id: request.remote_connection_id,
+                    remote_ssh_host: request.remote_ssh_host,
+                },
+                &request.session_id,
+            )
+            .await
+            .map_err(runtime_port_error_from_bitfun)?;
+
+        Ok(bitfun_agent_runtime::sdk::AgentSessionRestoreResult {
+            session: bitfun_runtime_ports::AgentSessionSummary {
+                session_id: session.session_id,
+                session_name: session.session_name,
+                agent_type: session.agent_type,
+                turn_count: session.dialog_turn_ids.len(),
+                created_at_ms: runtime_session_time_ms(session.created_at),
+                last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
+            },
+            state: session.state,
+        })
+    }
+}
+
+#[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentThreadGoalManagementPort for ConversationCoordinator {
     async fn get_thread_goal(
         &self,
@@ -7875,12 +7914,7 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
         let messages = self
             .get_messages(&request.session_id)
             .await
-            .map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
-                    error.to_string(),
-                )
-            })?;
+            .map_err(runtime_port_error_from_bitfun)?;
 
         let messages = messages
             .into_iter()
@@ -7897,10 +7931,54 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
                 }
                 .to_string();
 
+                let content = match message.content {
+                    MessageContent::Text(text) => {
+                        bitfun_runtime_ports::TranscriptContent::Text(text)
+                    }
+                    MessageContent::Multimodal { text, images } => {
+                        bitfun_runtime_ports::TranscriptContent::Multimodal {
+                            text,
+                            image_count: images.len(),
+                        }
+                    }
+                    MessageContent::ToolResult {
+                        tool_id,
+                        tool_name,
+                        effective_tool_name,
+                        result,
+                        is_error,
+                        ..
+                    } => bitfun_runtime_ports::TranscriptContent::ToolResult {
+                        tool_id,
+                        tool_name,
+                        effective_tool_name,
+                        result,
+                        is_error,
+                    },
+                    MessageContent::Mixed {
+                        reasoning_content,
+                        text,
+                        tool_calls,
+                    } => bitfun_runtime_ports::TranscriptContent::Mixed {
+                        reasoning_content,
+                        text,
+                        tool_calls: tool_calls
+                            .into_iter()
+                            .map(|tool_call| bitfun_runtime_ports::TranscriptToolCall {
+                                tool_id: tool_call.tool_id,
+                                tool_name: tool_call.tool_name,
+                                arguments: tool_call.arguments,
+                            })
+                            .collect(),
+                    },
+                };
+
                 bitfun_runtime_ports::TranscriptMessage {
+                    id: Some(message.id),
                     role,
                     turn_id: message.metadata.turn_id,
-                    content: serde_json::to_value(message.content).unwrap_or_default(),
+                    timestamp_ms: Some(runtime_session_time_ms(message.timestamp)),
+                    content,
                 }
             })
             .collect();

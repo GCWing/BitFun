@@ -5,7 +5,9 @@
 //! session restore, terminal pre-warm, remote image conversion, and runtime-port
 //! implementations until a reviewed port/provider migration proves equivalence.
 
-use bitfun_agent_runtime::sdk::{AgentRuntime, AgentRuntimeBuilder, RuntimeError};
+use bitfun_agent_runtime::sdk::{
+    AgentRuntime, AgentRuntimeBuilder, AgentSessionRestorePort, RuntimeError,
+};
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentSessionCreateRequest, AgentSessionManagementPort, AgentSubmissionPort,
@@ -377,6 +379,8 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
+    session_restore: Arc<dyn AgentSessionRestorePort>,
+    transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
     thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
 ) -> AgentRuntimeBuilder {
@@ -385,6 +389,8 @@ fn core_agent_runtime_builder(
     AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
+        .with_session_restore_port(session_restore)
+        .with_session_transcript_reader(transcript_reader)
         .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
         .with_agent_registry(agent_registry)
@@ -760,11 +766,16 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
         )
@@ -779,6 +790,9 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -786,6 +800,8 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
         )
@@ -802,12 +818,17 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
         )
@@ -823,6 +844,9 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -830,6 +854,8 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
         )
@@ -848,6 +874,9 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -856,6 +885,8 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
         )

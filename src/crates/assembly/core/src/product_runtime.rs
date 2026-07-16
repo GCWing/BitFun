@@ -17,7 +17,7 @@ use bitfun_runtime_services::RuntimeServices;
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
 };
-use crate::agentic::core::{Message, Session, SessionConfig, SessionState};
+use crate::agentic::core::{Session, SessionConfig, SessionState};
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::{SessionBranchRequest, SessionBranchResult};
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
@@ -242,16 +242,6 @@ impl CoreAgentRuntimeCompatibility {
         }
     }
 
-    pub async fn restore_session(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<Session> {
-        self.coordinator
-            .restore_session(workspace_path, session_id)
-            .await
-    }
-
     pub async fn is_session_loaded(
         &self,
         workspace_path: &Path,
@@ -261,10 +251,6 @@ impl CoreAgentRuntimeCompatibility {
             .get_session_manager()
             .is_session_loaded_for_workspace_path(workspace_path, session_id)
             .await
-    }
-
-    pub async fn get_messages(&self, session_id: &str) -> BitFunResult<Vec<Message>> {
-        self.coordinator.get_messages(session_id).await
     }
 
     pub async fn update_session_model(&self, session_id: &str, model_id: &str) -> BitFunResult<()> {
@@ -698,8 +684,6 @@ mod tests {
 
         let _ = build;
         let _ = CoreAgentRuntimeCompatibility::create_session_with_id;
-        let _ = CoreAgentRuntimeCompatibility::restore_session;
-        let _ = CoreAgentRuntimeCompatibility::get_messages;
         let _ = CoreAgentRuntimeCompatibility::branch_session_at_latest_turn;
         let _ = CoreAgentRuntimeCompatibility::generate_session_usage_report;
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;

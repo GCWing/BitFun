@@ -490,20 +490,25 @@ impl ChatMode {
                         Some(effective_workspace_path.to_string_lossy().to_string());
 
                     // Load historical messages for UI display
-                    let messages = agent.get_messages(&rid).await.unwrap_or_default();
+                    let transcript = agent.get_transcript(&rid).await.unwrap_or_else(|_| {
+                        bitfun_agent_runtime::sdk::SessionTranscript {
+                            session_id: rid.clone(),
+                            messages: Vec::new(),
+                        }
+                    });
 
-                    let state = ChatState::from_core_messages(
+                    let state = ChatState::from_session_transcript(
                         rid.clone(),
                         summary.session_name,
                         summary.agent_type,
                         effective_workspace,
-                        &messages,
+                        &transcript,
                     );
 
                     tracing::info!(
                         "Session restored: {}, {} messages loaded",
                         rid,
-                        messages.len()
+                        transcript.messages.len()
                     );
 
                     Ok::<_, anyhow::Error>((rid, state))
@@ -2941,15 +2946,20 @@ impl ChatMode {
                 let effective_workspace =
                     Some(effective_workspace_path.to_string_lossy().to_string());
 
-                // Load historical messages from core.
-                let messages = agent.get_messages(&sid).await.unwrap_or_default();
+                // Load historical messages through the runtime transcript contract.
+                let transcript = agent.get_transcript(&sid).await.unwrap_or_else(|_| {
+                    bitfun_agent_runtime::sdk::SessionTranscript {
+                        session_id: sid.clone(),
+                        messages: Vec::new(),
+                    }
+                });
 
-                let state = ChatState::from_core_messages(
+                let state = ChatState::from_session_transcript(
                     sid.clone(),
                     session_summary.session_name,
                     restored_agent_type.clone(),
                     effective_workspace,
-                    &messages,
+                    &transcript,
                 );
 
                 Ok::<_, anyhow::Error>((state, restored_agent_type))

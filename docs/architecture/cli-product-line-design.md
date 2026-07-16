@@ -255,6 +255,11 @@ TUI renderer、实验性接口和完整外部 Server 协议按总矩阵明确降
 | 脚本执行服务 | 物理进程健康、资源预算、进程树与句柄、类型化脚本请求和回收 | 决定工具权限、业务结果、TUI 或品牌资源 |
 | 生态配置适配器 | 解析受支持外部格式并生成导入候选/诊断 | 直接写运行时配置、读取密钥、决定最终权限 |
 
+CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Runtime SDK 的类型化端口完成；TUI 只把
+`SessionTranscript` 投影为本地渲染状态，不再消费 Core `Message`。Peer Host、账户同步、会话分支、用量、快照和
+工具交互仍使用经过审查的 Core compatibility 方法，直到各自具备明确 owner、稳定 DTO、远程语义和行为等价测试。
+这是一条垂直链路迁移，不是删除整个兼容门面或新建 CLI 专用服务层。
+
 Runtime Configuration Service 当前由 `bitfun-core/service/config` 负责。在经评审的 port/provider
 迁移完成前，CLI 和生态适配器不得另建写入器；adapter 只做 discover/parse/normalize，配置服务才能
 预览/应用、记录来源，并通过远程工作区 provider 写目标层。产品定义、品牌资源、界面布局选择

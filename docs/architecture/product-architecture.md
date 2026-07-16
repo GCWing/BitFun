@@ -101,7 +101,42 @@ handler，不构成生产消费闭环。
 client 或未来 CLI/HarmonyOS 计划，不能证明同名 Rust transport adapter 已接入；未接入实现应删除，待端到端
 调用链确定后再按宿主边界实现。
 
-### 2.2 入口形态接口规则
+### 2.2 宿主通信契约与 Tauri 薄适配
+
+前后端契约按能力语义归属，不按 Tauri command 名称归属。稳定的请求、响应、状态事实和类型化错误放在对应
+`contracts/*`、Runtime SDK 或能力 owner；Tauri、HTTP/WebSocket、CLI/TUI 与未来平台宿主只负责把各自协议映射到
+这些类型。该规则降低框架耦合，但不要求把每个 Desktop DTO 都搬进共享 crate。
+
+| 层 | 允许 | 禁止 |
+|---|---|---|
+| 能力 owner / Runtime SDK | 类型化请求/响应、状态事实、权限/取消语义、与框架无关的用例方法 | `tauri::State`、`AppHandle`、窗口/菜单对象、command 宏、HTTP/WebSocket envelope |
+| Desktop Tauri adapter | 解包宿主状态、构造稳定请求、调用 owner/SDK、把类型化错误映射为 Desktop 协议、投递桌面事件 | 复制业务校验、持有第二份权威状态、把 Tauri 类型传入下层 |
+| Server / Remote adapter | 路由鉴权、协议 envelope、连接生命周期、背压与取消映射 | 为同一能力另建语义不同的 DTO 或 handler |
+| GUI / TUI 消费方 | 依赖入口侧 API interface、稳定读模型或 Runtime SDK；各自保留渲染状态 | UI 组件直接持有平台句柄，或让 React/TUI 状态成为后端契约 |
+
+Rust 与 TypeScript 的字段一致性以能力所有者的 DTO 为事实源，不以 Tauri command 参数为事实源。单宿主阶段由
+前端基础设施层维护对应接口，并用序列化契约测试锁定字段命名、可选字段和错误形状；达到独立版本化门槛后，才使用
+不依赖 Tauri 的 JSON Schema 或类型生成任务输出只读 TypeScript 类型。生成结果只同步数据形状，不承载权限、重试或
+业务分支。本阶段不为此新增生成器或框架依赖。
+
+抽取共享契约需要满足以下任一条件：至少两个当前生产宿主复用同一语义，或存在独立版本化的外部消费者。只有一个
+Desktop command 使用的序列化对象继续留在 `src/apps/desktop`；即使它不含 Tauri 类型，也不因“未来可能复用”而
+提升为公共 DTO。共享的框架中立用例 handler 也遵循同一门槛：它必须拥有真实的编排、权限、取消或错误语义，不能
+只是通用转发层。
+
+单条能力按垂直切片迁移：
+
+1. 先确认权威 owner、当前生产消费方、远程/多产品形态语义和现有行为基线。
+2. 把稳定事实与请求/响应放到能力所有者的契约模块，并以序列化、错误、取消和行为等价测试锁定。
+3. 让非 Desktop 消费方或第二宿主先通过 Runtime SDK / owner 接口形成真实调用链。
+4. 将 Tauri command 收敛为薄 adapter；前端基础设施层负责 `invoke` 映射，UI 组件不直接依赖 Tauri API。
+5. 删除重复 DTO、旧 handler 或兼容方法；无法证明等价时保留已标注的兼容边界，不做批量迁移。
+
+因此仓库不恢复一个通用 `api-layer` 作为默认中转层。只有达到上述复用门槛且现有 owner 无法合理承载时，才评审
+窄范围共享 API 模块。HarmonyOS GUI/TUI 可复用稳定能力契约，但仍需各自的平台宿主、生命周期和交付验证；契约
+抽取只是前置条件，不代表 HarmonyOS 已受支持。
+
+### 2.3 入口形态接口规则
 
 入口形态接口只描述宿主可消费的声明，不描述具体渲染实现。TUI 与 GUI 的能力边界不同，不能因为存在一个界面插件就自动扩展为全入口稳定接口。
 

@@ -18,8 +18,9 @@ use bitfun_runtime_ports::{
     AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
     AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
     AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, DialogSubmitOutcome, PluginRuntimeBinding, PortError,
-    RuntimeEventEnvelope, ThreadGoal,
+    AgentTurnCancellationResult, DialogSubmitOutcome, PluginRuntimeBinding, PortError, PortResult,
+    RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
+    ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -43,12 +44,42 @@ pub enum RuntimeError {
     MissingCancellationPort,
     #[error("agent session management port is not registered")]
     MissingSessionManagementPort,
+    #[error("agent session restore port is not registered")]
+    MissingSessionRestorePort,
+    #[error("session transcript reader is not registered")]
+    MissingSessionTranscriptReader,
     #[error("agent thread goal management port is not registered")]
     MissingThreadGoalManagementPort,
     #[error("runtime event sink is not registered")]
     MissingEventSink,
     #[error(transparent)]
     Port(#[from] PortError),
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRestoreRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRestoreResult {
+    pub session: AgentSessionSummary,
+    pub state: crate::session_state::SessionState,
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionRestorePort: Send + Sync {
+    async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> PortResult<AgentSessionRestoreResult>;
 }
 
 #[derive(Clone, Default)]
@@ -103,6 +134,8 @@ pub trait RuntimeAgentRegistry: Send + Sync {
 pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
+    session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
@@ -126,6 +159,20 @@ impl std::fmt::Debug for AgentRuntime {
                     .session_management
                     .as_ref()
                     .map(|_| "<dyn AgentSessionManagementPort>"),
+            )
+            .field(
+                "session_restore",
+                &self
+                    .session_restore
+                    .as_ref()
+                    .map(|_| "<dyn AgentSessionRestorePort>"),
+            )
+            .field(
+                "session_transcript_reader",
+                &self
+                    .session_transcript_reader
+                    .as_ref()
+                    .map(|_| "<dyn SessionTranscriptReader>"),
             )
             .field(
                 "thread_goal_management",
@@ -201,6 +248,8 @@ where
 pub struct AgentRuntimeBuilder {
     submission: Option<Arc<dyn AgentSubmissionPort>>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
+    session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
@@ -229,6 +278,19 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.session_management = Some(port);
+        self
+    }
+
+    pub fn with_session_restore_port(mut self, port: Arc<dyn AgentSessionRestorePort>) -> Self {
+        self.session_restore = Some(port);
+        self
+    }
+
+    pub fn with_session_transcript_reader(
+        mut self,
+        reader: Arc<dyn SessionTranscriptReader>,
+    ) -> Self {
+        self.session_transcript_reader = Some(reader);
         self
     }
 
@@ -297,6 +359,8 @@ impl AgentRuntimeBuilder {
         let Self {
             submission,
             session_management,
+            session_restore,
+            session_transcript_reader,
             thread_goal_management,
             dialog_turn,
             lifecycle_delivery,
@@ -317,6 +381,8 @@ impl AgentRuntimeBuilder {
         Ok(AgentRuntime {
             submission: submission.ok_or(RuntimeBuildError::MissingSubmissionPort)?,
             session_management,
+            session_restore,
+            session_transcript_reader,
             thread_goal_management,
             dialog_turn,
             lifecycle_delivery,
@@ -496,6 +562,34 @@ impl AgentRuntime {
             .ok_or(RuntimeError::MissingSessionManagementPort)?;
         session_management
             .delete_session(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> Result<AgentSessionRestoreResult, RuntimeError> {
+        let session_restore = self
+            .session_restore
+            .as_ref()
+            .ok_or(RuntimeError::MissingSessionRestorePort)?;
+        session_restore
+            .restore_session(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn read_session_transcript(
+        &self,
+        request: SessionTranscriptRequest,
+    ) -> Result<SessionTranscript, RuntimeError> {
+        let reader = self
+            .session_transcript_reader
+            .as_ref()
+            .ok_or(RuntimeError::MissingSessionTranscriptReader)?;
+        reader
+            .read_session_transcript(request)
             .await
             .map_err(RuntimeError::from)
     }
@@ -701,6 +795,7 @@ impl AgentRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session_state::SessionState;
     use bitfun_runtime_ports::{
         AgentBackgroundResultRequest, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
         AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
@@ -710,8 +805,9 @@ mod tests {
         DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, PermissionPort,
         PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
         PluginRuntimeClient, PluginRuntimeUnavailableReason, PortErrorKind, PortResult,
-        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort, ThreadGoal,
-        ThreadGoalStatus, WorkspacePort,
+        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort,
+        SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
+        ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
     };
     use bitfun_runtime_services::{test_support::FakeRuntimePort, RuntimeServicesBuilder};
 
@@ -722,6 +818,8 @@ mod tests {
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
+        restored_sessions: Mutex<Vec<AgentSessionRestoreRequest>>,
+        transcript_requests: Mutex<Vec<SessionTranscriptRequest>>,
         workspace_binding_requests: Mutex<Vec<AgentSessionWorkspaceRequest>>,
         thread_goal_gets: Mutex<Vec<AgentThreadGoalGetRequest>>,
         thread_goal_creates: Mutex<Vec<AgentThreadGoalCreateRequest>>,
@@ -840,6 +938,50 @@ mod tests {
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: Some("host-1".to_string()),
             }))
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSessionRestorePort for FakeAgentRuntimePorts {
+        async fn restore_session(
+            &self,
+            request: AgentSessionRestoreRequest,
+        ) -> PortResult<AgentSessionRestoreResult> {
+            self.restored_sessions.lock().unwrap().push(request);
+            Ok(AgentSessionRestoreResult {
+                session: AgentSessionSummary {
+                    session_id: "session_1".to_string(),
+                    session_name: "Main".to_string(),
+                    agent_type: "agentic".to_string(),
+                    turn_count: 3,
+                    created_at_ms: 1000,
+                    last_active_at_ms: 2000,
+                },
+                state: SessionState::Idle,
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SessionTranscriptReader for FakeAgentRuntimePorts {
+        async fn read_session_transcript(
+            &self,
+            request: SessionTranscriptRequest,
+        ) -> PortResult<SessionTranscript> {
+            self.transcript_requests
+                .lock()
+                .unwrap()
+                .push(request.clone());
+            Ok(SessionTranscript {
+                session_id: request.session_id,
+                messages: vec![TranscriptMessage {
+                    id: Some("message_1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: request.turn_id,
+                    timestamp_ms: Some(1000),
+                    content: TranscriptContent::Text("done".to_string()),
+                }],
+            })
         }
     }
 
@@ -1298,6 +1440,112 @@ mod tests {
                 .as_deref(),
             Some("turn_1")
         );
+    }
+
+    #[tokio::test]
+    async fn session_restore_and_transcript_read_delegate_to_registered_ports() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_session_management_port(ports.clone())
+            .with_session_restore_port(ports.clone())
+            .with_session_transcript_reader(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let restored = runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: "/workspace/project".to_string(),
+                session_id: "session_1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("restore session");
+        let transcript = runtime
+            .read_session_transcript(SessionTranscriptRequest {
+                session_id: "session_1".to_string(),
+                turn_id: None,
+            })
+            .await
+            .expect("read transcript");
+
+        assert_eq!(restored.session.session_id, "session_1");
+        assert_eq!(transcript.messages[0].id.as_deref(), Some("message_1"));
+        assert_eq!(ports.restored_sessions.lock().unwrap().len(), 1);
+        assert_eq!(ports.transcript_requests.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn session_restore_contract_serializes_runtime_owned_state() {
+        let request = AgentSessionRestoreRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
+        let result = AgentSessionRestoreResult {
+            session: AgentSessionSummary {
+                session_id: "session_1".to_string(),
+                session_name: "Main".to_string(),
+                agent_type: "agentic".to_string(),
+                turn_count: 3,
+                created_at_ms: 1000,
+                last_active_at_ms: 2000,
+            },
+            state: SessionState::Error {
+                error: "recoverable failure".to_string(),
+                recoverable: true,
+            },
+        };
+
+        let request_json = serde_json::to_value(request).expect("serialize restore request");
+        let result_json = serde_json::to_value(result).expect("serialize restore result");
+
+        assert_eq!(request_json["workspacePath"], "/workspace/project");
+        assert_eq!(request_json["remoteConnectionId"], "conn-1");
+        assert_eq!(request_json["remoteSshHost"], "host-1");
+        assert_eq!(result_json["state"]["Error"]["recoverable"], true);
+    }
+
+    #[tokio::test]
+    async fn session_restore_requires_registered_port() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: "/workspace/project".to_string(),
+                session_id: "session_1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .unwrap_err();
+
+        assert_eq!(error, RuntimeError::MissingSessionRestorePort);
+    }
+
+    #[tokio::test]
+    async fn transcript_read_requires_registered_reader() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .read_session_transcript(SessionTranscriptRequest {
+                session_id: "session_1".to_string(),
+                turn_id: None,
+            })
+            .await
+            .unwrap_err();
+
+        assert_eq!(error, RuntimeError::MissingSessionTranscriptReader);
     }
 
     #[tokio::test]

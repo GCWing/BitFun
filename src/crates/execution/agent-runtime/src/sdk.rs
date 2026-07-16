@@ -40,7 +40,8 @@ pub use crate::post_call_hooks::{
     RuntimeHookRegistryBuildError,
 };
 pub use crate::runtime::{
-    AgentEventStream, AgentRunHandle, AgentRunRequest, RuntimeAgentRegistry,
+    AgentEventStream, AgentRunHandle, AgentRunRequest, AgentSessionRestorePort,
+    AgentSessionRestoreRequest, AgentSessionRestoreResult, RuntimeAgentRegistry,
     RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
     SessionSelector,
 };
@@ -66,8 +67,9 @@ pub use bitfun_runtime_ports::{
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
-    SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, TerminalPort,
-    ThreadGoal, ThreadGoalStatus, WorkspacePort,
+    SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, SessionTranscript,
+    SessionTranscriptReader, SessionTranscriptRequest, TerminalPort, ThreadGoal, ThreadGoalStatus,
+    TranscriptContent, TranscriptMessage, TranscriptToolCall, WorkspacePort,
 };
 pub use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,
@@ -107,6 +109,19 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.inner = self.inner.with_session_management_port(port);
+        self
+    }
+
+    pub fn with_session_restore_port(mut self, port: Arc<dyn AgentSessionRestorePort>) -> Self {
+        self.inner = self.inner.with_session_restore_port(port);
+        self
+    }
+
+    pub fn with_session_transcript_reader(
+        mut self,
+        reader: Arc<dyn SessionTranscriptReader>,
+    ) -> Self {
+        self.inner = self.inner.with_session_transcript_reader(reader);
         self
     }
 
@@ -211,6 +226,20 @@ impl AgentRuntime {
         request: AgentSessionDeleteRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.delete_session(request).await
+    }
+
+    pub async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> Result<AgentSessionRestoreResult, RuntimeError> {
+        self.inner.restore_session(request).await
+    }
+
+    pub async fn read_session_transcript(
+        &self,
+        request: SessionTranscriptRequest,
+    ) -> Result<SessionTranscript, RuntimeError> {
+        self.inner.read_session_transcript(request).await
     }
 
     pub async fn resolve_session_workspace_binding(
