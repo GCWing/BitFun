@@ -486,6 +486,7 @@ mod tests {
             "SessionMessage",
             "SessionHistory",
             "Cron",
+            "LegionControl",
             "WebSearch",
             "WebFetch",
             "ListMCPResources",
@@ -658,9 +659,6 @@ mod tests {
             vec![
                 "CreatePlan",
                 "GetFileDiff",
-                "SessionControl",
-                "SessionMessage",
-                "SessionHistory",
                 "Cron",
                 "WebSearch",
                 "WebFetch",

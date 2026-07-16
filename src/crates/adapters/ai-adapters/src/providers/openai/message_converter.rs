@@ -406,7 +406,27 @@ impl OpenAIMessageConverter {
 
     pub fn convert_tools(tools: Option<Vec<ToolDefinition>>) -> Option<Vec<Value>> {
         tools.map(|tool_defs| {
-            tool_defs
+            let mut seen = std::collections::HashSet::new();
+            let mut dupes = Vec::new();
+            let filtered: Vec<ToolDefinition> = tool_defs
+                .into_iter()
+                .filter(|tool| {
+                    if !seen.insert(tool.name.clone()) {
+                        dupes.push(tool.name.clone());
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .collect();
+            if !dupes.is_empty() {
+                log::error!(
+                    target: "ai::openai_stream_request",
+                    "DUPLICATE TOOL NAMES detected and deduplicated: {:?}",
+                    dupes
+                );
+            }
+            filtered
                 .into_iter()
                 .map(|tool| {
                     json!({
