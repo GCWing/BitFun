@@ -207,12 +207,13 @@ const PersistentFooterActions: React.FC = () => {
                       <span>{t('shared:features.remoteControl')}</span>
                     </button>
                   </Tooltip>
-                  <div className="bitfun-nav-panel__footer-menu-divider" />
+                  <div className="bitfun-nav-panel__footer-menu-divider" style={{ display: 'none'}}/>
                   <button
                     type="button"
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
                     onClick={handleFloatingMode}
+                    style={{ display: 'none'}}
                   >
                     <PictureInPicture2 size={14} />
                     <span>{t('header.switchToToolbar')}</span>
