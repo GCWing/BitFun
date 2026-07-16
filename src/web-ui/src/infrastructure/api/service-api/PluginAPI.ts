@@ -6,6 +6,7 @@ export interface PluginStatusView {
   name: string;
   version: string | null;
   source: string;
+  scope: string;
   trustLevel: string;
   enabled: boolean;
   skillCount: number;
@@ -15,6 +16,7 @@ export interface PluginStatusView {
 export interface PluginStatusResponse {
   pluginsEnabled: boolean;
   plugins: PluginStatusView[];
+  workspacePath?: string;
 }
 
 export interface SetPluginTrustRequest {

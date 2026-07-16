@@ -8,6 +8,8 @@
   "pluginsEnabledDesc": "{{count}} plugin(s) active. Skills from plugins are visible to agents.",
   "pluginsDisabledDesc": "Plugin support is disabled. No plugin skills will be loaded.",
   "pluginListSection": "Discovered Plugins",
+  "userPlugins": "User Plugins",
+  "workspacePlugins": "Workspace Plugins",
   "noPluginsFound": "No plugins found. Install Codex or OpenCode plugins into ~/.agents/plugins/ or the workspace .agents/plugins/ directory.",
   "enabled": "Enabled",
   "disabled": "Disabled",

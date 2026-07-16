@@ -4,8 +4,7 @@
 
 use crate::api::app_state::AppState;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::State;
 
 /// Status view of a single discovered plugin, returned to the frontend.
@@ -16,13 +15,28 @@ pub struct PluginStatusView {
     pub name: String,
     pub version: Option<String>,
     pub source: String,
+    /// "user" for personal plugins (~/.agents/plugins/), "workspace" for project plugins.
+    pub scope: String,
     pub trust_level: String,
     pub enabled: bool,
     pub skill_count: usize,
     pub diagnostics: Vec<String>,
 }
 
-/// Request body for set_plugin_trust.
+// request structs (Tauri convention: { request: { ... } })
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPluginStatusRequest {
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPluginsEnabledRequest {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetPluginTrustRequest {
@@ -30,55 +44,65 @@ pub struct SetPluginTrustRequest {
     pub trusted: bool,
 }
 
-/// Response for get_plugin_status / refresh_plugins.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshPluginsRequest {
+    pub workspace_path: Option<String>,
+}
+
+// response
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginStatusResponse {
     pub plugins_enabled: bool,
     pub plugins: Vec<PluginStatusView>,
+    pub workspace_path: Option<String>,
 }
 
 const PLUGINS_ENABLED_KEY: &str = "plugins.enabled";
 
-/// Returns the current plugin discovery status.
+// commands
+
 #[tauri::command]
 pub async fn get_plugin_status(
     state: State<'_, AppState>,
-    workspace_path: Option<String>,
+    request: GetPluginStatusRequest,
 ) -> Result<PluginStatusResponse, String> {
     let plugins_enabled = get_plugins_enabled(&state).await;
+    let ws_path = request.workspace_path.clone();
     if !plugins_enabled {
         return Ok(PluginStatusResponse {
             plugins_enabled: false,
             plugins: Vec::new(),
+            workspace_path: ws_path,
         });
     }
 
-    let ws_root: Option<PathBuf> = workspace_path.as_deref().map(PathBuf::from);
-    let plugins = tokio::task::spawn_blocking(move || {
-        discover_plugins(ws_root.as_deref())
-    })
-    .await
-    .map_err(|e| format!("Plugin discovery panicked: {e}"))?;
+    let ws_root: Option<PathBuf> = ws_path.as_deref().map(PathBuf::from);
+    let plugins = tokio::task::spawn_blocking(move || discover_plugins(ws_root.as_deref()))
+        .await
+        .map_err(|e| format!("Plugin discovery panicked: {e}"))?;
+
     Ok(PluginStatusResponse {
         plugins_enabled: true,
         plugins,
+        workspace_path: request.workspace_path,
     })
 }
 
-/// Enables or disables the plugin system globally.
 #[tauri::command]
 pub async fn set_plugins_enabled(
     state: State<'_, AppState>,
-    enabled: bool,
+    request: SetPluginsEnabledRequest,
 ) -> Result<PluginStatusResponse, String> {
     state
         .config_service
-        .set_config(PLUGINS_ENABLED_KEY, serde_json::Value::Bool(enabled))
+        .set_config(PLUGINS_ENABLED_KEY, serde_json::Value::Bool(request.enabled))
         .await
         .map_err(|e| format!("Failed to save plugin enabled state: {e}"))?;
 
-    let plugins = if enabled {
+    let plugins = if request.enabled {
         tokio::task::spawn_blocking(|| discover_plugins(None))
             .await
             .map_err(|e| format!("Plugin discovery panicked: {e}"))?
@@ -87,12 +111,12 @@ pub async fn set_plugins_enabled(
     };
 
     Ok(PluginStatusResponse {
-        plugins_enabled: enabled,
+        plugins_enabled: request.enabled,
         plugins,
+        workspace_path: None,
     })
 }
 
-/// Sets trust for a specific plugin.
 #[tauri::command]
 pub async fn set_plugin_trust(
     state: State<'_, AppState>,
@@ -100,7 +124,6 @@ pub async fn set_plugin_trust(
 ) -> Result<PluginStatusView, String> {
     let denied_key = plugin_denied_config_key(&request.plugin_id);
     if request.trusted {
-        // Clear the denied flag (restore trust).
         state
             .config_service
             .reset_config(Some(&denied_key))
@@ -114,7 +137,6 @@ pub async fn set_plugin_trust(
             .map_err(|e| format!("Failed to save plugin trust: {e}"))?;
     }
 
-    // Return updated view for this plugin
     let pid = request.plugin_id.clone();
     let plugins = tokio::task::spawn_blocking(|| discover_plugins(None))
         .await
@@ -125,39 +147,43 @@ pub async fn set_plugin_trust(
         .ok_or_else(|| format!("Plugin '{}' not found", pid))
 }
 
-/// Refreshes plugin discovery and returns updated status.
 #[tauri::command]
 pub async fn refresh_plugins(
     state: State<'_, AppState>,
-    workspace_path: Option<String>,
+    request: RefreshPluginsRequest,
 ) -> Result<PluginStatusResponse, String> {
     let plugins_enabled = get_plugins_enabled(&state).await;
+    let ws_path = request.workspace_path.clone();
     if !plugins_enabled {
         return Ok(PluginStatusResponse {
             plugins_enabled: false,
             plugins: Vec::new(),
+            workspace_path: ws_path,
         });
     }
 
-    // Re-run discovery off the async runtime to avoid blocking.
-    let ws_root: Option<PathBuf> = workspace_path.as_deref().map(PathBuf::from);
-    let plugins = tokio::task::spawn_blocking(move || {
-        discover_plugins(ws_root.as_deref())
-    })
-    .await
-    .map_err(|e| format!("Plugin discovery panicked: {e}"))?;
+    let ws_root: Option<PathBuf> = ws_path.as_deref().map(PathBuf::from);
+    let plugins = tokio::task::spawn_blocking(move || discover_plugins(ws_root.as_deref()))
+        .await
+        .map_err(|e| format!("Plugin discovery panicked: {e}"))?;
+
     Ok(PluginStatusResponse {
         plugins_enabled: true,
         plugins,
+        workspace_path: request.workspace_path,
     })
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────
+// helpers
 
 async fn get_plugins_enabled(state: &AppState) -> bool {
-    match state.config_service.get_config::<serde_json::Value>(Some(PLUGINS_ENABLED_KEY)).await {
+    match state
+        .config_service
+        .get_config::<serde_json::Value>(Some(PLUGINS_ENABLED_KEY))
+        .await
+    {
         Ok(value) => value.as_bool().unwrap_or(true),
-        Err(_) => true, // Default to enabled when not configured
+        Err(_) => true,
     }
 }
 
@@ -165,39 +191,54 @@ fn plugin_denied_config_key(plugin_id: &str) -> String {
     format!("plugins.denied.{plugin_id}")
 }
 
-fn discover_plugins(workspace_root: Option<&std::path::Path>) -> Vec<PluginStatusView> {
-    let discoveries = bitfun_codex_adapter::discovery::discover_all(workspace_root);
+fn discover_plugins(workspace_root: Option<&Path>) -> Vec<PluginStatusView> {
     let mut views = Vec::new();
 
-    for d in &discoveries {
-        match bitfun_codex_adapter::discovery::load_plugin_manifest(d) {
-            Ok(plugin) => {
-                let skill_count = plugin.skill_roots.len();
-                views.push(PluginStatusView {
-                    plugin_id: plugin.plugin_id.clone(),
-                    name: plugin.name.clone(),
-                    version: plugin.version.clone(),
-                    source: plugin.root.to_string_lossy().to_string(),
-                    trust_level: "Trusted".to_string(),
-                    enabled: true,
-                    skill_count,
-                    diagnostics: Vec::new(),
-                });
-            }
-            Err(e) => {
-                views.push(PluginStatusView {
-                    plugin_id: d.dir_name.clone(),
-                    name: d.dir_name.clone(),
-                    version: None,
-                    source: d.plugin_root.to_string_lossy().to_string(),
-                    trust_level: "Unknown".to_string(),
-                    enabled: false,
-                    skill_count: 0,
-                    diagnostics: vec![format!("Manifest error: {e}")],
-                });
+    // user-level plugins (~/.agents/plugins/)
+    let user_discoveries = bitfun_codex_adapter::discovery::discover_all(None);
+    for d in &user_discoveries {
+        views.push(build_view(d, "user"));
+    }
+
+    // workspace-level plugins (<ws>/.agents/plugins/)
+    if let Some(ws_root) = workspace_root {
+        let ws_discoveries = bitfun_codex_adapter::discovery::discover_all(Some(ws_root));
+        for d in &ws_discoveries {
+            if !user_discoveries.iter().any(|u| u.plugin_root == d.plugin_root) {
+                views.push(build_view(d, "workspace"));
             }
         }
     }
 
     views
+}
+
+fn build_view(
+    d: &bitfun_codex_adapter::discovery::PluginDiscovery,
+    scope: &str,
+) -> PluginStatusView {
+    match bitfun_codex_adapter::discovery::load_plugin_manifest(d) {
+        Ok(plugin) => PluginStatusView {
+            plugin_id: plugin.plugin_id.clone(),
+            name: plugin.name.clone(),
+            version: plugin.version.clone(),
+            source: plugin.root.to_string_lossy().to_string(),
+            scope: scope.to_string(),
+            trust_level: "Trusted".to_string(),
+            enabled: true,
+            skill_count: plugin.skill_roots.len(),
+            diagnostics: Vec::new(),
+        },
+        Err(e) => PluginStatusView {
+            plugin_id: d.dir_name.clone(),
+            name: d.dir_name.clone(),
+            version: None,
+            source: d.plugin_root.to_string_lossy().to_string(),
+            scope: scope.to_string(),
+            trust_level: "Unknown".to_string(),
+            enabled: false,
+            skill_count: 0,
+            diagnostics: vec![format!("Manifest error: {e}")],
+        },
+    }
 }

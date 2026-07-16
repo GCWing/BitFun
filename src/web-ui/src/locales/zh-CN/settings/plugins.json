@@ -8,6 +8,8 @@
   "pluginsEnabledDesc": "{{count}} 个插件活跃。插件技能将对 Agent 可见。",
   "pluginsDisabledDesc": "插件支持已关闭。不会加载任何插件技能。",
   "pluginListSection": "已发现的插件",
+  "userPlugins": "用户插件",
+  "workspacePlugins": "工作区插件",
   "noPluginsFound": "未发现插件。请将 Codex 或 OpenCode 插件安装到 ~/.agents/plugins/ 或工作区 .agents/plugins/ 目录。",
   "enabled": "已启用",
   "disabled": "已禁用",
