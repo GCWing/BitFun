@@ -16,11 +16,13 @@ import {
 import { createLogger } from '@/shared/utils/logger';
 import { systemAPI } from '@/infrastructure/api';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
-import { isTauriRuntime } from '@/infrastructure/update/tauriEnv';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDialog';
 import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
 import './AboutDialog.scss';
+import './AboutDialogLinks.scss';
+import './AboutDialogOpenSource.scss';
 
 const log = createLogger('AboutDialog');
 
@@ -140,18 +142,31 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     setManualCheckErrorMessage(null);
     setManualCheckBusy(true);
     try {
-      const res = await systemAPI.checkForUpdates();
-      if (!res.updateAvailable) {
+      // Try OHOS native update path first
+      const ohosRes = await systemAPI.checkForUpdatesOhos();
+      if (ohosRes.error) {
+        setManualCheckErrorMessage(String(ohosRes.error));
+        setManualCheckStatus('error');
+      } else if (!ohosRes.updateAvailable) {
         setManualCheckStatus('latest');
-      } else {
-        setManualData(res);
-        setManualOpen(true);
       }
-    } catch (e) {
-      log.error('check_for_updates failed', e);
-      const msg = e instanceof Error ? e.message : String(e);
-      setManualCheckErrorMessage(formatUpdateInstallError(msg, t));
-      setManualCheckStatus('error');
+      // If updateAvailable is true, the native dialog was already shown
+    } catch {
+      // Not OHOS runtime, fall back to Tauri updater
+      try {
+        const res = await systemAPI.checkForUpdates();
+        if (!res.updateAvailable) {
+          setManualCheckStatus('latest');
+        } else {
+          setManualData(res);
+          setManualOpen(true);
+        }
+      } catch (e) {
+        log.error('check_for_updates failed', e);
+        const msg = e instanceof Error ? e.message : String(e);
+        setManualCheckErrorMessage(formatUpdateInstallError(msg, t));
+        setManualCheckStatus('error');
+      }
     } finally {
       setManualCheckBusy(false);
     }

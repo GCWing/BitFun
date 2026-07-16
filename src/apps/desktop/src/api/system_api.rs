@@ -341,6 +341,19 @@ pub async fn open_external_ohos(url: String) -> Result<(), String> {
     }
 }
 #[tauri::command]
+pub async fn check_for_updates_ohos() -> Result<String, String> {
+    #[cfg(target_env = "ohos")]
+    {
+        use crate::api::ohos::update::check_app_update_ohos;
+        check_app_update_ohos().await
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+        Err("check_for_updates_ohos is only supported on ohos".to_string())
+    }
+}
+
+#[tauri::command]
 pub async fn set_macos_edit_menu_mode(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -489,6 +502,25 @@ pub fn ohos_mark_clean_shutdown() {
     log::info!("Quit requested via quit_app command");
     crate::crash_diagnostics::mark_clean_shutdown("quit_app_command");
     crate::perform_process_exit_cleanup();
+}
+
+#[cfg(target_env = "ohos")]
+#[napi]
+pub fn get_app_config_bool(path: String) -> bool {
+    use std::sync::OnceLock;
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    let runtime = RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build napi config runtime")
+    });
+    runtime.block_on(async {
+        let Ok(service) = bitfun_core::service::config::get_global_config_service().await else {
+            return false;
+        };
+        service.get_config::<bool>(Some(&path)).await.unwrap_or(false)
+    })
 }
 
 /// Hide the main window so it lives only in the system tray (used by the "ask"
