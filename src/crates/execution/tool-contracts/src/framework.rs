@@ -2549,7 +2549,7 @@ mod tests {
     fn get_tool_spec_description_preserves_prompt_contract() {
         let description = build_get_tool_spec_description();
 
-        assert!(description.contains("Read full schema"));
+        assert!(description.contains("Read the full schema"));
         assert!(description.contains("Do not call GetToolSpec again"));
     }
 

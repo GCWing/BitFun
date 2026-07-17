@@ -12,8 +12,9 @@ use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use crate::runtime::DesktopRuntimeContext;
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentInputAttachment, AgentSubmissionSource,
-    AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentTurnCancellationRequest,
+    AgentDialogTurnRequest, AgentInputAttachment, AgentSessionModelUpdateRequest,
+    AgentSubmissionSource, AgentToolConfirmationRequest, AgentToolRejectionRequest,
+    AgentTurnCancellationRequest,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -887,13 +888,17 @@ pub async fn create_session(
 
 #[tauri::command]
 pub async fn update_session_model(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: UpdateSessionModelRequest,
 ) -> Result<(), String> {
-    coordinator
-        .update_session_model(&request.session_id, &request.model_name)
+    runtime
+        .agent_runtime()
+        .update_session_model(AgentSessionModelUpdateRequest {
+            session_id: request.session_id,
+            model_id: request.model_name,
+        })
         .await
-        .map_err(|e| format!("Failed to update session model: {}", e))
+        .map_err(|error| format!("Failed to update session model: {}", error.into_message()))
 }
 
 #[tauri::command]

@@ -6024,6 +6024,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_model_update_is_restored_from_persistence() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Persisted model update".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    model_id: Some("primary".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .update_session_model_id(&session.session_id, "auto")
+            .await
+            .expect("model update should persist");
+        manager.sessions.remove(&session.session_id);
+
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should restore from persistence");
+        assert_eq!(restored.config.model_id.as_deref(), Some("auto"));
+    }
+
+    #[tokio::test]
     async fn session_storage_identity_rejects_same_id_in_another_workspace() {
         let workspace = TestWorkspace::new();
         let other_workspace = TestWorkspace::new();

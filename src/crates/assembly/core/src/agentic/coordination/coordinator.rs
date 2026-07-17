@@ -7969,6 +7969,18 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
 }
 
 #[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentSessionModelPort for ConversationCoordinator {
+    async fn update_session_model(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionModelUpdateRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.update_session_model(&request.session_id, &request.model_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)
+    }
+}
+
+#[async_trait::async_trait]
 impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordinator {
     async fn restore_session(
         &self,
@@ -8468,6 +8480,78 @@ mod tests {
             rejection.message,
             format!("Not found: Tool task not found: {missing_tool_id}")
         );
+    }
+
+    #[tokio::test]
+    async fn session_model_port_preserves_core_not_found_errors() {
+        use bitfun_agent_runtime::sdk::{AgentSessionModelPort, AgentSessionModelUpdateRequest};
+
+        let (coordinator, _) = test_coordinator();
+        let error = AgentSessionModelPort::update_session_model(
+            &coordinator,
+            AgentSessionModelUpdateRequest {
+                session_id: "missing-session".to_string(),
+                model_id: "auto".to_string(),
+            },
+        )
+        .await
+        .expect_err("missing session must remain a typed not-found error");
+
+        assert_eq!(error.kind, bitfun_runtime_ports::PortErrorKind::NotFound);
+        assert!(error.message.contains("missing-session"));
+    }
+
+    #[tokio::test]
+    async fn session_model_runtime_updates_the_real_core_session() {
+        use bitfun_agent_runtime::sdk::{AgentRuntimeBuilder, AgentSessionModelUpdateRequest};
+
+        let (coordinator, session_manager) = test_coordinator();
+        let coordinator = Arc::new(coordinator);
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-session-model-runtime-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let workspace_path_string = workspace_path.to_string_lossy().into_owned();
+        let session = TEST_AGENT_MODEL_DEFAULTS
+            .scope(
+                AgentModelDefaultsConfig::default(),
+                coordinator.create_session_with_workspace(
+                    None,
+                    "Runtime model update".to_string(),
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path_string.clone()),
+                        model_id: Some("primary".to_string()),
+                        ..Default::default()
+                    },
+                    workspace_path_string,
+                ),
+            )
+            .await
+            .expect("real Core session should be created");
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(coordinator.clone())
+            .with_session_model_port(coordinator)
+            .build()
+            .expect("assembled agent runtime");
+
+        runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: session.session_id.clone(),
+                model_id: " default ".to_string(),
+            })
+            .await
+            .expect("runtime model port should update the Core owner");
+
+        assert_eq!(
+            session_manager
+                .get_session(&session.session_id)
+                .and_then(|session| session.config.model_id.clone())
+                .as_deref(),
+            Some("auto")
+        );
+        let _ = std::fs::remove_dir_all(workspace_path);
     }
     use tokio::sync::RwLock as TokioRwLock;
 

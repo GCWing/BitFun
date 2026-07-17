@@ -7,7 +7,7 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionRestorePort, RuntimeError,
+    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRestorePort, RuntimeError,
 };
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
@@ -397,6 +397,7 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
+    session_model: Arc<dyn AgentSessionModelPort>,
     session_restore: Arc<dyn AgentSessionRestorePort>,
     transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
     thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
@@ -408,6 +409,7 @@ fn core_agent_runtime_builder(
     AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
+        .with_session_model_port(session_model)
         .with_session_restore_port(session_restore)
         .with_session_transcript_reader(transcript_reader)
         .with_thread_goal_management_port(thread_goal_management)
@@ -710,6 +712,7 @@ impl CoreServiceAgentRuntime {
 
     pub(crate) async fn update_remote_session_model(
         coordinator: &ConversationCoordinator,
+        runtime: &AgentRuntime,
         session_id: &str,
         model_id: &str,
     ) -> Result<String, String> {
@@ -745,11 +748,13 @@ impl CoreServiceAgentRuntime {
                 .map_err(|e| format!("Failed to restore session: {e}"))?;
         }
 
-        coordinator
-            .get_session_manager()
-            .update_session_model_id(session_id, &normalized_model_id)
+        runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: session_id.to_string(),
+                model_id: normalized_model_id.clone(),
+            })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(Self::runtime_error_message)?;
 
         if coordinator
             .get_session_manager()
@@ -785,6 +790,7 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
@@ -794,6 +800,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
             session_restore,
             transcript_reader,
             thread_goal_management,
@@ -811,6 +818,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
@@ -822,6 +830,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
             session_restore,
             transcript_reader,
             thread_goal_management,
@@ -841,6 +850,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
@@ -851,6 +861,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
             session_restore,
             transcript_reader,
             thread_goal_management,
@@ -869,6 +880,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
@@ -880,6 +892,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
             session_restore,
             transcript_reader,
             thread_goal_management,
@@ -939,6 +952,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
@@ -950,6 +964,7 @@ impl CoreServiceAgentRuntime {
         let builder = core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
             session_restore,
             transcript_reader,
             thread_goal_management,
@@ -1439,6 +1454,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     ) -> Result<String, String> {
         CoreServiceAgentRuntime::update_remote_session_model(
             self.coordinator.as_ref(),
+            &self.runtime,
             session_id,
             model_id,
         )

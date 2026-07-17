@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnPort, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSubmissionPort, AgentTurnCancellationPort, RuntimeBuildError,
+    AgentSessionModelPort, AgentSubmissionPort, AgentTurnCancellationPort, RuntimeBuildError,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 
@@ -22,11 +22,13 @@ impl DesktopRuntimeContext {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<Self, RuntimeBuildError> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
         let agent_runtime = AgentRuntimeBuilder::new()
             .with_submission_port(submission)
+            .with_session_model_port(session_model)
             .with_dialog_turn_port(dialog_turn)
             .with_cancellation_port(cancellation)
             .with_interaction_response_port(interaction_response)
@@ -57,6 +59,7 @@ mod tests {
         assert!(runtime_source.contains("with_dialog_turn_port"));
         assert!(runtime_source.contains("with_cancellation_port"));
         assert!(runtime_source.contains("with_interaction_response_port"));
+        assert!(runtime_source.contains("with_session_model_port"));
     }
 
     #[test]

@@ -2257,6 +2257,7 @@ fn remote_connect_tracker_keeps_subagent_items_out_of_parent_accumulators() {
         parent_dialog_turn_id: "parent-turn".to_string(),
         parent_tool_call_id: "task-1".to_string(),
         agent_type: None,
+        model_id: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "child-session".to_string(),
