@@ -1864,8 +1864,6 @@ impl SessionManager {
                 )));
             }
         }
-        self.commit_session_storage_path_claim(&session_id, &session_storage_path, storage_claim);
-
         // 2. Initialize the in-memory context cache.
         self.context_store.create_session(&session_id);
         self.token_anchor_store.create_session(&session_id);
@@ -1877,10 +1875,26 @@ impl SessionManager {
         // Use the local `session` directly -- no need to re-fetch from DashMap,
         // which would hold a Ref guard across the async save_session call.
         if self.config.enable_persistence && Self::should_persist_session(&session) {
-            self.persistence_manager
-                .save_session(&session_storage_path, &session)
-                .await?;
+            if let Err(error) = self
+                .persistence_manager
+                .create_session_if_absent(&session_storage_path, &session)
+                .await
+            {
+                self.sessions.remove(&session_id);
+                self.context_store.delete_session(&session_id);
+                self.token_anchor_store.delete_session(&session_id);
+                self.turn_skill_agent_snapshot_store
+                    .delete_session(&session_id);
+                self.file_read_state_store.delete_session(&session_id);
+                self.release_failed_session_storage_path_claim(
+                    &session_id,
+                    &session_storage_path,
+                    storage_claim,
+                );
+                return Err(error);
+            }
         }
+        self.commit_session_storage_path_claim(&session_id, &session_storage_path, storage_claim);
 
         info!("Session created: session_name={}", session.session_name);
 
@@ -6181,6 +6195,52 @@ mod tests {
         assert!(error.to_string().contains("session_id"));
         assert!(manager.get_session(invalid_id).is_none());
         assert!(manager.session_storage_path_index.get(invalid_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn persistent_session_creation_failure_does_not_publish_runtime_state() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_id = "failed-persistent-session";
+        persistence_manager.fail_next_session_state_write_for_test(session_id);
+        let manager = test_manager(persistence_manager.clone());
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+
+        manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Must not become visible".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+            )
+            .await
+            .expect_err("state persistence failure must fail session creation");
+
+        assert!(manager.get_session(session_id).is_none());
+        assert!(manager.session_storage_path_index.get(session_id).is_none());
+        assert!(!persistence_manager
+            .session_storage_exists(workspace.path(), session_id)
+            .expect("session storage existence"));
+        assert!(persistence_manager
+            .load_session_metadata(workspace.path(), session_id)
+            .await
+            .expect("load session metadata")
+            .is_none());
+
+        manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Retry succeeds".to_string(),
+                "agentic".to_string(),
+                config,
+            )
+            .await
+            .expect("retry should not be blocked by partial persistence");
     }
 
     #[tokio::test]

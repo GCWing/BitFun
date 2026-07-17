@@ -240,6 +240,14 @@ impl AgentRuntime {
         self.inner.create_session(request).await
     }
 
+    pub async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        self.inner.create_session_with_id(session_id, request).await
+    }
+
     pub async fn list_sessions(
         &self,
         request: AgentSessionListRequest,

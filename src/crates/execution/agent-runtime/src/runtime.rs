@@ -18,9 +18,9 @@ use bitfun_runtime_ports::{
     AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
     AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
     AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, DialogSubmitOutcome, PluginRuntimeBinding, PortError, PortResult,
-    RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
-    ThreadGoal,
+    AgentTurnCancellationResult, DialogSubmitOutcome, PluginRuntimeBinding, PortError,
+    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
+    SessionTranscriptRequest, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -673,6 +673,29 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
+    pub async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        let result = self
+            .submission
+            .create_session_with_id(session_id.clone(), request)
+            .await
+            .map_err(RuntimeError::from)?;
+        if result.session_id != session_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent submission provider returned session_id '{}' for requested session_id '{}'",
+                    result.session_id, session_id
+                ),
+            )
+            .into());
+        }
+        Ok(result)
+    }
+
     pub async fn list_sessions(
         &self,
         request: AgentSessionListRequest,
@@ -949,6 +972,7 @@ mod tests {
     #[derive(Debug, Default)]
     struct FakeAgentRuntimePorts {
         created_sessions: Mutex<Vec<AgentSessionCreateRequest>>,
+        exact_session_result_id: Mutex<Option<String>>,
         submitted_messages: Mutex<Vec<AgentSubmissionRequest>>,
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
@@ -1134,6 +1158,24 @@ mod tests {
             })
         }
 
+        async fn create_session_with_id(
+            &self,
+            session_id: String,
+            request: AgentSessionCreateRequest,
+        ) -> PortResult<AgentSessionCreateResult> {
+            self.created_sessions.lock().unwrap().push(request.clone());
+            Ok(AgentSessionCreateResult {
+                session_id: self
+                    .exact_session_result_id
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .unwrap_or(session_id),
+                session_name: request.session_name,
+                agent_type: request.agent_type,
+            })
+        }
+
         async fn submit_message(
             &self,
             request: AgentSubmissionRequest,
@@ -1312,6 +1354,65 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err, RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
+    }
+
+    #[tokio::test]
+    async fn create_session_with_id_uses_exact_identity() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let created = runtime
+            .create_session_with_id(
+                "fixed-session-id".to_string(),
+                AgentSessionCreateRequest {
+                    session_name: "Fixed session".to_string(),
+                    agent_type: "agentic".to_string(),
+                    workspace_path: Some("/workspace/project".to_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .expect("create session");
+
+        assert_eq!(created.session_id, "fixed-session-id");
+    }
+
+    #[tokio::test]
+    async fn create_session_with_id_rejects_provider_identity_mismatch() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.exact_session_result_id.lock().unwrap() = Some("other-session-id".to_string());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .create_session_with_id(
+                "fixed-session-id".to_string(),
+                AgentSessionCreateRequest {
+                    session_name: "Fixed session".to_string(),
+                    agent_type: "agentic".to_string(),
+                    workspace_path: Some("/workspace/project".to_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .expect_err("runtime must reject a provider identity mismatch");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::Backend,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]

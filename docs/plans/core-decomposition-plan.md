@@ -22,7 +22,7 @@
 | 事实 | 当前状态 | 结论 |
 |---|---|---|
 | 产品能力组装 | `DeliveryProfile`、`ProductAssembler`、能力计划、服务可用性和测试已存在 | 这些是可测试的 assembly facts，不代表产品入口已接入 |
-| CLI / Desktop / ACP | 三者仍启用 `bitfun-core/product-full`；CLI 已提交 `DeliveryProfile::Cli` 并消费 Runtime Parts/SDK，Desktop 与 ACP 尚未切换 | CLI 已建立产品组装边界但仍保留 Core owner；三个入口均未完成 owner 迁移 |
+| CLI / Desktop / ACP | 三者仍按需启用 `bitfun-core/product-full`；CLI 与 ACP 已分别提交对应 `DeliveryProfile` 并消费 Runtime Parts/SDK，Desktop 主交互已消费由现有 owner 构造的窄口径 SDK 门面 | 三个入口均复用单一 Core owner；完整 Desktop profile 和剩余兼容操作仍需逐项迁移 |
 | Server | 当前生产路由只形成 health/info/ping 基线 | 没有插件状态或独立产品组装闭环 |
 | Server / Remote / Web / Mobile Web / SDK profile | 当前为空计划、未接入入口或仅有 preview 测试 | 不得据枚举值宣称产品能力已交付 |
 | Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v1 preview 门面和 smoke test | 发布边界仍需真实嵌入方证明 |
@@ -59,7 +59,8 @@ assembly → apps。embedded 的 bind、静态 fallback 和任务生命周期移
 CLI 是首个入口迁移对象，因为它已有独立产品诉求、显式设计和最小 CI 命令。
 
 当前纵向切片已经完成：入口只提交一次 `DeliveryProfile::Cli`，通过现有 `ProductAssembler` 获得计划、服务可用性、
-Harness 和禁用的插件 binding；TUI、Exec、Session 与 Usage 共用一个 `CliRuntimeContext`。会话创建/列举/
+Harness 和禁用的插件 binding；TUI、Exec、Session 与 Usage 共用一个 `CliRuntimeContext`。会话创建（包括
+`exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/
 删除、轮次提交和取消走 Agent Runtime SDK；SDK v1 缺口集中在一个 Core 兼容门面。Agentic Event Queue 仍是唯一
 owner，各入口只建立独立广播订阅，有界兼容队列满载不再阻断广播。TUI 与 Exec 审批均为调用级策略，不写全局
 配置；CLI 本地路径不获取具体 PersistenceManager。交互、执行和管理入口分别控制 Peer Host/MCP 生命周期，管理查询不启动
@@ -71,8 +72,8 @@ Peer Host 的 Runtime 接入和跨 Relay/Desktop/Web 的协议切换保持独立
 
 下一步按独立纵向切片推进：
 
-1. 以真实调用方和行为等价测试补齐 SDK 端口，逐项缩小固定 ID 会话创建、模型更新、分支、用量、快照和持久化维护兼容面。
-2. 迁移 ACP 的会话/权限/事件投影，但保留 ACP stdio 生命周期在接口入口。
+1. 以真实调用方和行为等价测试补齐 SDK 端口，逐项缩小模型更新、分支、用量、快照和持久化维护兼容面。
+2. 继续迁移 ACP 尚未接入 SDK 的持久化历史、模型/模式和 MCP 操作；ACP stdio 与协议投影生命周期保留在接口入口。
 3. 继续拆分 TUI 副作用边界并补 package smoke，不以大规模重写替代现有回归保护。
 
 当前 assembly 切换条件已经满足：CLI 生产入口消费真实组装结果，目标链路没有第二套状态，独立测试与三平台

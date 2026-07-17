@@ -257,14 +257,20 @@ impl CoreAgentAdapter {
             }
         }
 
-        self.compatibility
+        self.runtime
             .create_session_with_id(
                 session_id.to_string(),
-                session_name,
-                effective_agent_type,
-                self.workspace_path_string(),
+                AgentSessionCreateRequest {
+                    session_name,
+                    agent_type: effective_agent_type,
+                    workspace_path: Some(self.workspace_path_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
             )
-            .await?;
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         tracing::info!("Recreated backend session with existing id: {}", session_id);
         Ok(())
@@ -316,18 +322,24 @@ impl CoreAgentAdapter {
         let mut session_id_guard = self.session_id.lock().await;
 
         let session = self
-            .compatibility
+            .runtime
             .create_session_with_id(
-                session_id.clone(),
-                Self::build_default_session_name(),
-                agent_type.to_string(),
-                self.workspace_path_string(),
+                session_id,
+                AgentSessionCreateRequest {
+                    session_name: Self::build_default_session_name(),
+                    agent_type: agent_type.to_string(),
+                    workspace_path: Some(self.workspace_path_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
             )
-            .await?;
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         let id = session.session_id.clone();
         *session_id_guard = Some(id.clone());
-        tracing::info!("Created core session with fixed id: {}", id);
+        tracing::info!("Created runtime session with fixed id: {}", id);
 
         Ok(id)
     }

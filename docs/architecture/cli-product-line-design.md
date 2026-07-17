@@ -93,8 +93,10 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - BitFun 原生插件目录的发现、内容校验、来源确认，以及 OpenCode custom tool 静态名称预览。
 - CLI 本地 Agent 入口以类型化 `RuntimeServices` 调用 `ProductAssembler`，选择 `DeliveryProfile::Cli`，
   并把 `ProductRuntimeParts`、Agent Runtime SDK、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
-- TUI、`exec`、会话、用量和交互模式下的 Peer Host 复用同一上下文。SDK 已承接会话创建/列举/删除、
-  轮次提交和取消；SDK v1 尚未覆盖的固定 ID、恢复视图、消息、分支、用量、快照和工具确认由一个 Core
+- TUI、`exec`、会话、用量和交互模式下的 Peer Host 复用同一上下文。SDK 已承接会话创建（包括
+  `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除、轮次提交和取消；普通创建
+  DTO 保持 v1 字段集合，固定 ID 冲突返回 `InvalidRequest`。SDK v1 尚未覆盖的恢复视图、
+  消息、分支、用量、快照和工具确认由一个 Core
   兼容门面转发给原 owner。
 - Agentic Event Queue 仍是唯一事件 owner；TUI、`exec` 与 Peer Host 使用独立广播订阅，不互相消费事件。
 - 有界旧队列只承担兼容存储；达到容量时不得抑制广播。CLI 保持一个后台 drain，订阅方一旦报告 lag/closed，

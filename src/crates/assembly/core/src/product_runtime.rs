@@ -138,6 +138,8 @@ impl CoreAgentRuntimeCompatibility {
         }
     }
 
+    /// Compatibility shim for callers migrating to the Agent Runtime SDK.
+    #[deprecated(note = "use AgentRuntime::create_session_with_id")]
     pub async fn create_session_with_id(
         &self,
         session_id: String,
@@ -680,6 +682,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn compatibility_operations_have_one_core_owned_facade() {
         fn build(
             coordinator: Arc<ConversationCoordinator>,

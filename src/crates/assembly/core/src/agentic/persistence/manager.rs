@@ -284,6 +284,8 @@ struct ParsedTranscriptTurnSelector {
 pub struct PersistenceManager {
     path_manager: Arc<PathManager>,
     runtime_service: Arc<WorkspaceRuntimeService>,
+    #[cfg(test)]
+    fail_next_session_state_write: std::sync::Mutex<Option<String>>,
 }
 
 impl PersistenceManager {
@@ -291,6 +293,8 @@ impl PersistenceManager {
         Ok(Self {
             runtime_service: Arc::new(WorkspaceRuntimeService::new(path_manager.clone())),
             path_manager,
+            #[cfg(test)]
+            fail_next_session_state_write: std::sync::Mutex::new(None),
         })
     }
 
@@ -305,6 +309,14 @@ impl PersistenceManager {
 
     pub fn runtime_service(&self) -> &Arc<WorkspaceRuntimeService> {
         &self.runtime_service
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_session_state_write_for_test(&self, session_id: &str) {
+        *self
+            .fail_next_session_state_write
+            .lock()
+            .expect("session state fault lock") = Some(session_id.to_string());
     }
 
     /// Resolve the on-disk sessions directory for `workspace_path`.
@@ -1360,12 +1372,78 @@ impl PersistenceManager {
 
     // ============ Session Persistence ============
 
+    /// Persist a newly created session without overwriting an existing session ID.
+    ///
+    /// The final session directory is created exclusively so this manager owns any
+    /// cleanup required by a failed first write. This also prevents a losing
+    /// creator in another runtime or process from deleting the winning session.
+    pub(crate) async fn create_session_if_absent(
+        &self,
+        workspace_path: &Path,
+        session: &Session,
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(&session.session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+
+        let sessions_dir = self.project_sessions_dir(workspace_path);
+        fs::create_dir_all(&sessions_dir).await.map_err(|error| {
+            BitFunError::io(format!(
+                "Failed to create sessions directory {}: {}",
+                sessions_dir.display(),
+                error
+            ))
+        })?;
+        let session_dir = self
+            .session_layout(workspace_path)
+            .session_dir(&session.session_id);
+        match fs::create_dir(&session_dir).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                return Err(BitFunError::Validation(format!(
+                    "Persisted session ID already exists: {}",
+                    session.session_id
+                )));
+            }
+            Err(error) => {
+                return Err(BitFunError::io(format!(
+                    "Failed to claim session directory {}: {}",
+                    session_dir.display(),
+                    error
+                )));
+            }
+        }
+
+        if let Err(error) = self.save_session_files(workspace_path, session).await {
+            if let Err(cleanup_error) = self
+                .session_metadata_store(workspace_path)
+                .delete_session_dir_and_index(&session.session_id)
+                .await
+            {
+                warn!(
+                    "Failed to clean up partial session persistence: session_id={}, error={}",
+                    session.session_id, cleanup_error
+                );
+            }
+            return Err(error);
+        }
+
+        Ok(())
+    }
+
     /// Save session
     pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
         Self::validate_session_id(&session.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &session.session_id)
             .await?;
+        self.save_session_files(workspace_path, session).await
+    }
+
+    async fn save_session_files(
+        &self,
+        workspace_path: &Path,
+        session: &Session,
+    ) -> BitFunResult<()> {
         let existing_metadata = self
             .load_session_metadata(workspace_path, &session.session_id)
             .await?;
@@ -1384,6 +1462,17 @@ impl PersistenceManager {
             compression_state: session.compression_state.clone(),
             runtime_state: sanitize_persisted_session_state(&session.state),
         };
+        #[cfg(test)]
+        {
+            let mut fault = self
+                .fail_next_session_state_write
+                .lock()
+                .expect("session state fault lock");
+            if fault.as_deref() == Some(session.session_id.as_str()) {
+                *fault = None;
+                return Err(BitFunError::io("Injected session state write failure"));
+            }
+        }
         self.save_stored_session_state(workspace_path, &session.session_id, &state)
             .await
     }
@@ -2654,6 +2743,7 @@ mod tests {
         SessionRelationshipKind, SessionTranscriptExportOptions, StoredSessionIndexFile,
         TextItemData, UserMessageData,
     };
+    use crate::BitFunError;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Instant;
@@ -2700,6 +2790,82 @@ mod tests {
             .expect_err("path-like session id must be rejected");
 
         assert!(error.to_string().contains("session_id"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn concurrent_first_session_persistence_keeps_the_winner() {
+        let workspace = TestWorkspace::new();
+        let manager_a = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("first persistence manager"),
+        );
+        let manager_b = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("second persistence manager"),
+        );
+        let session_id = format!("concurrent-session-{}", Uuid::new_v4());
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let session_a = Session::new_with_id(
+            session_id.clone(),
+            "First contender".to_string(),
+            "agent".to_string(),
+            config.clone(),
+        );
+        let session_b = Session::new_with_id(
+            session_id.clone(),
+            "Second contender".to_string(),
+            "agent".to_string(),
+            config,
+        );
+        let workspace_path = workspace.path().to_path_buf();
+        let barrier = Arc::new(tokio::sync::Barrier::new(3));
+
+        let first = tokio::spawn({
+            let manager = manager_a.clone();
+            let barrier = barrier.clone();
+            let workspace_path = workspace_path.clone();
+            async move {
+                barrier.wait().await;
+                let result = manager
+                    .create_session_if_absent(&workspace_path, &session_a)
+                    .await;
+                ("First contender", result)
+            }
+        });
+        let second = tokio::spawn({
+            let manager = manager_b.clone();
+            let barrier = barrier.clone();
+            let workspace_path = workspace_path.clone();
+            async move {
+                barrier.wait().await;
+                let result = manager
+                    .create_session_if_absent(&workspace_path, &session_b)
+                    .await;
+                ("Second contender", result)
+            }
+        });
+        barrier.wait().await;
+
+        let first = first.await.expect("first contender should finish");
+        let second = second.await.expect("second contender should finish");
+        let outcomes = [first, second];
+        let winner = outcomes
+            .iter()
+            .find_map(|(name, result)| result.is_ok().then_some(*name))
+            .expect("one contender must persist the session");
+        let failures = outcomes
+            .iter()
+            .filter_map(|(_, result)| result.as_ref().err())
+            .collect::<Vec<_>>();
+
+        assert_eq!(failures.len(), 1, "exactly one contender must fail");
+        assert!(matches!(failures[0], BitFunError::Validation(_)));
+        let persisted = manager_a
+            .load_session(workspace.path(), &session_id)
+            .await
+            .expect("the winning session must remain persisted");
+        assert_eq!(persisted.session_name, winner);
     }
 
     #[tokio::test]

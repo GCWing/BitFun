@@ -1650,6 +1650,23 @@ pub trait AgentSubmissionPort: Send + Sync {
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult>;
 
+    /// Creates a session with an exact caller-provided identity.
+    ///
+    /// Providers that do not support exact identity creation keep the default
+    /// typed unsupported response. A successful response must preserve
+    /// `session_id` exactly.
+    async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> PortResult<AgentSessionCreateResult> {
+        let _ = (session_id, request);
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "exact session identity creation is not supported by this provider",
+        ))
+    }
+
     async fn submit_message(
         &self,
         request: AgentSubmissionRequest,
@@ -1954,6 +1971,35 @@ impl SubagentContextMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agent_session_create_request_keeps_rust_literal_compatible() {
+        let request = AgentSessionCreateRequest {
+            session_name: "Generated session".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            metadata: serde_json::Map::new(),
+        };
+
+        let json = serde_json::to_value(request).expect("serialize create request");
+
+        assert!(json.get("sessionId").is_none());
+    }
+
+    #[test]
+    fn agent_session_create_request_keeps_legacy_payload_compatible() {
+        let request: AgentSessionCreateRequest = serde_json::from_value(serde_json::json!({
+            "sessionName": "Generated session",
+            "agentType": "agentic",
+            "workspacePath": "/workspace/project"
+        }))
+        .expect("deserialize legacy create request");
+
+        let json = serde_json::to_value(request).expect("serialize create request");
+        assert!(json.get("sessionId").is_none());
+    }
 
     #[test]
     fn port_error_display_keeps_kind_and_message() {

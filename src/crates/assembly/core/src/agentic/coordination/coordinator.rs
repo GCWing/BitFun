@@ -7474,46 +7474,78 @@ fn resolve_agent_session_create_created_by(
         .map(ToOwned::to_owned)
 }
 
+fn runtime_port_backend_error(error: BitFunError) -> bitfun_runtime_ports::PortError {
+    bitfun_runtime_ports::PortError::new(
+        bitfun_runtime_ports::PortErrorKind::Backend,
+        error.to_string(),
+    )
+}
+
+async fn create_agent_session_from_runtime_request(
+    coordinator: &ConversationCoordinator,
+    session_id: Option<String>,
+    request: bitfun_runtime_ports::AgentSessionCreateRequest,
+    map_core_error: fn(BitFunError) -> bitfun_runtime_ports::PortError,
+) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
+    let workspace_path = request.workspace_path.clone().ok_or_else(|| {
+        bitfun_runtime_ports::PortError::new(
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+            "workspace_path is required to create an agent session",
+        )
+    })?;
+    let created_by = resolve_agent_session_create_created_by(&request.metadata);
+    let session = coordinator
+        .create_session_with_workspace_and_creator(
+            session_id,
+            request.session_name,
+            request.agent_type,
+            SessionConfig {
+                workspace_path: Some(workspace_path.clone()),
+                remote_connection_id: request.remote_connection_id,
+                remote_ssh_host: request.remote_ssh_host,
+                ..Default::default()
+            },
+            workspace_path,
+            created_by,
+        )
+        .await
+        .map_err(map_core_error)?;
+
+    Ok(bitfun_runtime_ports::AgentSessionCreateResult {
+        session_id: session.session_id,
+        session_name: session.session_name,
+        agent_type: session.agent_type,
+    })
+}
+
 #[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
     async fn create_session(
         &self,
         request: bitfun_runtime_ports::AgentSessionCreateRequest,
     ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
-        let workspace_path = request.workspace_path.clone().ok_or_else(|| {
+        create_agent_session_from_runtime_request(self, None, request, runtime_port_backend_error)
+            .await
+    }
+
+    async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: bitfun_runtime_ports::AgentSessionCreateRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
+        bitfun_core_types::validate_session_id(&session_id).map_err(|message| {
             bitfun_runtime_ports::PortError::new(
                 bitfun_runtime_ports::PortErrorKind::InvalidRequest,
-                "workspace_path is required to create an agent session",
+                message,
             )
         })?;
-
-        let session = self
-            .create_session_with_workspace_and_creator(
-                None,
-                request.session_name,
-                request.agent_type,
-                SessionConfig {
-                    workspace_path: Some(workspace_path.clone()),
-                    remote_connection_id: request.remote_connection_id.clone(),
-                    remote_ssh_host: request.remote_ssh_host.clone(),
-                    ..Default::default()
-                },
-                workspace_path,
-                resolve_agent_session_create_created_by(&request.metadata),
-            )
-            .await
-            .map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
-                    error.to_string(),
-                )
-            })?;
-
-        Ok(bitfun_runtime_ports::AgentSessionCreateResult {
-            session_id: session.session_id,
-            session_name: session.session_name,
-            agent_type: session.agent_type,
-        })
+        create_agent_session_from_runtime_request(
+            self,
+            Some(session_id),
+            request,
+            runtime_port_error_from_bitfun,
+        )
+        .await
     }
 
     async fn submit_message(
@@ -8254,7 +8286,9 @@ mod tests {
     }
     use tokio::sync::RwLock as TokioRwLock;
 
-    fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
+    fn test_coordinator_with_max_active_sessions(
+        max_active_sessions: usize,
+    ) -> (ConversationCoordinator, Arc<SessionManager>) {
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
         let session_manager = Arc::new(SessionManager::new(
             Arc::new(SessionContextStore::new()),
@@ -8263,7 +8297,7 @@ mod tests {
                     .expect("persistence manager"),
             ),
             SessionManagerConfig {
-                max_active_sessions: 100,
+                max_active_sessions,
                 session_idle_timeout: Duration::from_secs(3600),
                 auto_save_interval: Duration::from_secs(300),
                 enable_persistence: false,
@@ -8301,6 +8335,10 @@ mod tests {
         );
 
         (coordinator, session_manager)
+    }
+
+    fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
+        test_coordinator_with_max_active_sessions(100)
     }
 
     #[test]
@@ -9115,6 +9153,107 @@ mod tests {
         assert_eq!(created.created_by.as_deref(), Some("session-parent"));
 
         let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn agent_submission_create_session_preserves_v1_backend_error_classification() {
+        let (coordinator, _) = test_coordinator_with_max_active_sessions(0);
+        let error = AgentSubmissionPort::create_session(
+            &coordinator,
+            AgentSessionCreateRequest {
+                session_name: "Over capacity".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect_err("v1 create should preserve its backend error classification");
+
+        assert_eq!(error.kind, bitfun_runtime_ports::PortErrorKind::Backend);
+    }
+
+    #[tokio::test]
+    async fn agent_submission_create_session_preserves_requested_session_id() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-agent-session-fixed-id-port-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+
+        let result = AgentSubmissionPort::create_session_with_id(
+            &coordinator,
+            "fixed-session-id".to_string(),
+            AgentSessionCreateRequest {
+                session_name: "Fixed worker".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect("fixed-id session creation should succeed");
+
+        assert_eq!(result.session_id, "fixed-session-id");
+        assert!(session_manager.get_session("fixed-session-id").is_some());
+
+        let duplicate_error = AgentSubmissionPort::create_session_with_id(
+            &coordinator,
+            "fixed-session-id".to_string(),
+            AgentSessionCreateRequest {
+                session_name: "Duplicate worker".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect_err("duplicate fixed session id should be rejected");
+        assert_eq!(
+            duplicate_error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        assert!(duplicate_error.message.contains("already exists"));
+        assert_eq!(
+            session_manager
+                .get_session("fixed-session-id")
+                .expect("original fixed-id session should remain")
+                .session_name,
+            "Fixed worker"
+        );
+
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn agent_submission_create_session_rejects_invalid_requested_session_id() {
+        let (coordinator, _) = test_coordinator();
+        let error = AgentSubmissionPort::create_session_with_id(
+            &coordinator,
+            "../other-session".to_string(),
+            AgentSessionCreateRequest {
+                session_name: "Invalid worker".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect_err("invalid fixed session id should be rejected");
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
     }
 
     #[tokio::test]
