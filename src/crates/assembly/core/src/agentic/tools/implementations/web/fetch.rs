@@ -131,7 +131,8 @@ Example usage:
                 return ValidationResult {
                     result: false,
                     message: Some(
-                        "Fetching GitHub domains is disabled in this evaluation build.".to_string(),
+                        "Fetching GitHub or source-code mirror domains is disabled in this evaluation build. This evaluation cannot query GitHub through web tools; inspect only the local repository and task materials."
+                            .to_string(),
                     ),
                     error_code: Some(403),
                     meta: None,
@@ -171,7 +172,8 @@ Example usage:
             .map_err(|_| BitFunError::tool("URL is invalid".to_string()))?;
         if is_blocked_github_url(&parsed_url) {
             return Err(BitFunError::tool(
-                "Fetching GitHub domains is disabled in this evaluation build.".to_string(),
+                "Fetching GitHub or source-code mirror domains is disabled in this evaluation build. This evaluation cannot query GitHub through web tools; inspect only the local repository and task materials."
+                    .to_string(),
             ));
         }
 
@@ -203,7 +205,7 @@ Example usage:
                 .filter(is_blocked_github_url)
             {
                 return Err(BitFunError::tool(format!(
-                    "Fetching GitHub domains is disabled in this evaluation build: {}",
+                    "Fetching GitHub or source-code mirror domains is disabled in this evaluation build: {}. Inspect only the local repository and task materials.",
                     target.host_str().unwrap_or("unknown host")
                 )));
             }

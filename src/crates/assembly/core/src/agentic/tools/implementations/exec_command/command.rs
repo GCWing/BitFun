@@ -7,6 +7,7 @@ use super::local_shell::{resolve_local_exec_shell, ResolvedLocalExecShell};
 use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant_with_notes;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::implementations::shell_command_safety;
 use crate::infrastructure::events::event_system::{
     get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
 };
@@ -859,7 +860,7 @@ Output:
     async fn validate_input(
         &self,
         input: &Value,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         let cmd = input.get("cmd").and_then(Value::as_str).unwrap_or_default();
         if cmd.trim().is_empty() {
@@ -869,6 +870,21 @@ Output:
                 error_code: Some(400),
                 meta: None,
             };
+        }
+        if let Some(message) = shell_command_safety::denial_for_command(cmd) {
+            return ValidationResult {
+                result: false,
+                message: Some(message),
+                error_code: Some(403),
+                meta: None,
+            };
+        }
+        if let Some(context) = context {
+            if let Some(rejection) =
+                crate::agentic::execution::edit_constraint_guard::check_bash_command(context, cmd)
+            {
+                return rejection;
+            }
         }
         ValidationResult {
             result: true,
@@ -1002,6 +1018,33 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
     use terminal_core::ShellType;
+
+    #[tokio::test]
+    async fn validation_applies_evaluation_shell_policy() {
+        let tool = ExecCommandTool::new();
+
+        for command in [
+            "curl https://codeload.github.com/org/repo/tar.gz/main",
+            "curl https://sourcegraph.com/github.com/org/repo/-/raw/src/lib.rs",
+            "git fetch origin",
+            "git show origin/main",
+            "git show 878c25b",
+        ] {
+            let validation = tool.validate_input(&json!({"cmd": command}), None).await;
+            assert!(!validation.result, "should block: {command}");
+            assert_eq!(validation.error_code, Some(403));
+        }
+    }
+
+    #[tokio::test]
+    async fn validation_allows_current_workspace_git_inspection() {
+        let tool = ExecCommandTool::new();
+
+        for command in ["git status --short", "git diff", "git diff HEAD"] {
+            let validation = tool.validate_input(&json!({"cmd": command}), None).await;
+            assert!(validation.result, "should allow: {command}");
+        }
+    }
 
     #[test]
     fn powershell_commands_force_utf8_output() {
