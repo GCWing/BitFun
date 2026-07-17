@@ -142,16 +142,14 @@ pub async fn browser_webview_create(
     let window = app
         .get_window("main")
         .ok_or_else(|| "main window not found".to_string())?;
-    let mut builder =
+    let builder =
         tauri::webview::WebviewBuilder::new(request.label, tauri::WebviewUrl::External(url))
             .initialization_script(video_decoder_compatibility_script())
             .transparent(false)
             .background_color(tauri::window::Color(0, 0, 0, 255));
 
     #[cfg(any(debug_assertions, feature = "devtools"))]
-    {
-        builder = builder.devtools(true);
-    }
+    let builder = builder.devtools(true);
 
     window
         .add_child(
