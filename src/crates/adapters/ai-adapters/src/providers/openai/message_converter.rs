@@ -172,58 +172,14 @@ impl OpenAIMessageConverter {
             })]);
         }
 
-        let parsed = match serde_json::from_str::<Value>(content) {
-            Ok(parsed) if parsed.is_array() => parsed,
-            _ => {
-                return Some(vec![json!({
+        Some(
+            Self::parse_responses_content_parts(role, content).unwrap_or_else(|| {
+                vec![json!({
                     "type": text_item_type,
                     "text": content,
-                })]);
-            }
-        };
-
-        let mut content_items = Vec::new();
-
-        if let Some(items) = parsed.as_array() {
-            for item in items {
-                let item_type = item.get("type").and_then(Value::as_str);
-                match item_type {
-                    Some("text") | Some("input_text") | Some("output_text") => {
-                        if let Some(text) = item.get("text").and_then(Value::as_str) {
-                            content_items.push(json!({
-                                "type": text_item_type,
-                                "text": text,
-                            }));
-                        }
-                    }
-                    Some("image_url") if role != "assistant" => {
-                        let image_url = item.get("image_url").and_then(|value| {
-                            value
-                                .get("url")
-                                .and_then(Value::as_str)
-                                .or_else(|| value.as_str())
-                        });
-
-                        if let Some(image_url) = image_url {
-                            content_items.push(json!({
-                                "type": "input_image",
-                                "image_url": image_url,
-                            }));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        if content_items.is_empty() {
-            Some(vec![json!({
-                "type": text_item_type,
-                "text": content,
-            })])
-        } else {
-            Some(content_items)
-        }
+                })]
+            }),
+        )
     }
 
     fn responses_text_item_type(role: &str) -> &'static str {
@@ -232,6 +188,84 @@ impl OpenAIMessageConverter {
         } else {
             "input_text"
         }
+    }
+
+    fn parse_responses_content_parts(role: &str, content: &str) -> Option<Vec<Value>> {
+        let items = serde_json::from_str::<Value>(content)
+            .ok()?
+            .as_array()?
+            .clone();
+        let text_item_type = Self::responses_text_item_type(role);
+        let mut content_items = Vec::with_capacity(items.len());
+
+        for item in items {
+            let item_type = item.get("type").and_then(Value::as_str)?;
+            match item_type {
+                "text" | "input_text" | "output_text" => {
+                    let text = item.get("text").and_then(Value::as_str)?;
+                    content_items.push(json!({
+                        "type": text_item_type,
+                        "text": text,
+                    }));
+                }
+                "image_url" if role != "assistant" => {
+                    let image_url = Self::extract_image_url_value(item.get("image_url")?)?;
+                    content_items.push(json!({
+                        "type": "input_image",
+                        "image_url": image_url,
+                    }));
+                }
+                _ => return None,
+            }
+        }
+
+        Some(content_items)
+    }
+
+    fn parse_chat_completions_content_parts(role: &str, content: &str) -> Option<Vec<Value>> {
+        let items = serde_json::from_str::<Value>(content)
+            .ok()?
+            .as_array()?
+            .clone();
+        let mut content_items = Vec::with_capacity(items.len());
+
+        for item in items {
+            let item_type = item.get("type").and_then(Value::as_str)?;
+            match item_type {
+                "text" | "input_text" | "output_text" => {
+                    let text = item.get("text").and_then(Value::as_str)?;
+                    content_items.push(json!({
+                        "type": "text",
+                        "text": text,
+                    }));
+                }
+                "image_url" if role == "user" => {
+                    let image_url_value = item.get("image_url")?;
+                    let image_url = Self::extract_image_url_value(image_url_value)?;
+                    let mut content_item = json!({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": image_url,
+                        }
+                    });
+                    if let Some(detail) = image_url_value.get("detail").and_then(Value::as_str) {
+                        content_item["image_url"]["detail"] = Value::String(detail.to_string());
+                    }
+                    content_items.push(content_item);
+                }
+                _ => return None,
+            }
+        }
+
+        Some(content_items)
+    }
+
+    fn extract_image_url_value(value: &Value) -> Option<String> {
+        value
+            .get("url")
+            .and_then(Value::as_str)
+            .or_else(|| value.as_str())
+            .map(ToString::to_string)
     }
 
     fn convert_single_message(mut msg: Message) -> Value {
@@ -304,12 +338,10 @@ impl OpenAIMessageConverter {
                     warn!("[OpenAI] Message content is empty: role={}", msg.role);
                 }
             } else {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
-                    if parsed.is_array() {
-                        openai_msg["content"] = parsed;
-                    } else {
-                        openai_msg["content"] = Value::String(content);
-                    }
+                if let Some(content_parts) =
+                    Self::parse_chat_completions_content_parts(&msg.role, &content)
+                {
+                    openai_msg["content"] = Value::Array(content_parts);
                 } else {
                     openai_msg["content"] = Value::String(content);
                 }
@@ -556,6 +588,149 @@ mod tests {
         assert_eq!(content[0]["type"], json!("image_url"));
         assert_eq!(content[1]["type"], json!("text"));
         assert_eq!(content[1]["text"], json!("ok"));
+    }
+
+    #[test]
+    fn keeps_tool_json_array_result_as_plain_text_for_chat_completions() {
+        let raw_json = json!([
+            {
+                "name": ".github",
+                "type": "dir"
+            }
+        ])
+        .to_string();
+
+        let msg = Message {
+            role: "tool".to_string(),
+            content: Some(raw_json.clone()),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: Some("call_1".to_string()),
+            name: Some("WebFetch".to_string()),
+            is_error: None,
+            tool_image_attachments: None,
+        };
+
+        let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
+
+        assert_eq!(openai[0]["content"], json!(raw_json));
+    }
+
+    #[test]
+    fn keeps_non_content_json_array_as_plain_text_for_chat_completions() {
+        let raw_json = json!([
+            {
+                "name": ".github",
+                "type": "dir"
+            }
+        ])
+        .to_string();
+
+        let msg = Message {
+            role: "user".to_string(),
+            content: Some(raw_json.clone()),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            is_error: None,
+            tool_image_attachments: None,
+        };
+
+        let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
+
+        assert_eq!(openai[0]["content"], json!(raw_json));
+    }
+
+    #[test]
+    fn keeps_mixed_valid_and_invalid_json_array_as_plain_text_for_chat_completions() {
+        let raw_json = json!([
+            {
+                "type": "text",
+                "text": "hello"
+            },
+            {
+                "type": "dir",
+                "name": ".github"
+            }
+        ])
+        .to_string();
+
+        let msg = Message {
+            role: "user".to_string(),
+            content: Some(raw_json.clone()),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            is_error: None,
+            tool_image_attachments: None,
+        };
+
+        let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
+
+        assert_eq!(openai[0]["content"], json!(raw_json));
+    }
+
+    #[test]
+    fn keeps_non_content_json_array_as_plain_text_for_responses_input() {
+        let raw_json = json!([
+            {
+                "name": ".github",
+                "type": "dir"
+            }
+        ])
+        .to_string();
+
+        let (_, input) =
+            OpenAIMessageConverter::convert_messages_to_responses_input(vec![Message {
+                role: "user".to_string(),
+                content: Some(raw_json.clone()),
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+                is_error: None,
+                tool_image_attachments: None,
+            }]);
+
+        assert_eq!(input[0]["content"][0]["type"], json!("input_text"));
+        assert_eq!(input[0]["content"][0]["text"], json!(raw_json));
+    }
+
+    #[test]
+    fn keeps_mixed_valid_and_invalid_json_array_as_plain_text_for_responses_input() {
+        let raw_json = json!([
+            {
+                "type": "text",
+                "text": "hello"
+            },
+            {
+                "type": "dir",
+                "name": ".github"
+            }
+        ])
+        .to_string();
+
+        let (_, input) =
+            OpenAIMessageConverter::convert_messages_to_responses_input(vec![Message {
+                role: "user".to_string(),
+                content: Some(raw_json.clone()),
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+                is_error: None,
+                tool_image_attachments: None,
+            }]);
+
+        assert_eq!(input[0]["content"][0]["type"], json!("input_text"));
+        assert_eq!(input[0]["content"][0]["text"], json!(raw_json));
     }
 
     #[test]
