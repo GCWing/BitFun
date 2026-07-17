@@ -114,14 +114,21 @@ impl ChatMode {
                     .filter(|conflict| conflict.selected_candidate_id.is_none())
                     .count();
                 let tool_notice = self.take_external_tool_notice(&snapshot);
+                let agent_notice = self.take_external_agent_notice(&snapshot);
                 self.update_external_source_view(&mut chat_view, &snapshot);
                 self.external_source_snapshot = Some(snapshot.clone());
                 if snapshot.discovery_pending {
                     chat_view.set_status(Some(
                         "Checking compatible content from external AI applications".to_string(),
                     ));
-                } else if let Some(notice) = tool_notice {
-                    chat_view.set_status(Some(notice));
+                } else if tool_notice.is_some() || agent_notice.is_some() {
+                    chat_view.set_status(Some(
+                        [tool_notice, agent_notice]
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                    ));
                 } else if available + restricted > 0 || pending_conflicts > 0 {
                     chat_view.set_status(Some(format!(
                         "External sources: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
@@ -215,6 +222,9 @@ impl ChatMode {
             if self.poll_external_tool_mutation(&mut chat_view) {
                 needs_redraw = true;
             }
+            if self.poll_external_agent_mutation(&mut chat_view) {
+                needs_redraw = true;
+            }
 
             let mut external_source_closed = false;
             if let Some(receiver) = external_source_rx.as_mut() {
@@ -245,13 +255,20 @@ impl ChatMode {
                         self.replace_external_conflict_preferences(preferences);
                     }
                     let tool_notice = self.take_external_tool_notice(&snapshot);
+                    let agent_notice = self.take_external_agent_notice(&snapshot);
                     self.update_external_source_view(&mut chat_view, &snapshot);
                     if snapshot.discovery_pending {
                         chat_view.set_status(Some(
                             "Checking compatible content from external AI applications".to_string(),
                         ));
-                    } else if let Some(notice) = tool_notice {
-                        chat_view.set_status(Some(notice));
+                    } else if tool_notice.is_some() || agent_notice.is_some() {
+                        chat_view.set_status(Some(
+                            [tool_notice, agent_notice]
+                                .into_iter()
+                                .flatten()
+                                .collect::<Vec<_>>()
+                                .join("; "),
+                        ));
                     } else if discovery_just_finished {
                         let (available, restricted) = external_command_counts(&snapshot);
                         let pending_conflicts = snapshot

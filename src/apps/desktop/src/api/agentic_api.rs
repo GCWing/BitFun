@@ -817,6 +817,7 @@ pub async fn create_session(
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
             model_id: c.model_name,
+            ..Default::default()
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),

@@ -250,6 +250,10 @@ pub struct SubagentQueryContext<'a> {
     pub workspace_root: Option<&'a Path>,
     pub list_scope: SubagentListScope,
     pub include_disabled: bool,
+    /// False for remote workspaces until an explicit remote source provider is
+    /// available. This prevents a matching path string from selecting local
+    /// external-source routes.
+    pub external_sources_supported: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -378,6 +382,7 @@ pub enum SubagentSourceKind {
     Builtin,
     Project,
     User,
+    External,
     Unspecified,
 }
 
@@ -388,6 +393,7 @@ pub enum SubAgentSource {
     Builtin,
     Project,
     User,
+    External,
 }
 
 pub const fn subagent_source_kind(source: Option<SubAgentSource>) -> SubagentSourceKind {
@@ -395,6 +401,7 @@ pub const fn subagent_source_kind(source: Option<SubAgentSource>) -> SubagentSou
         Some(SubAgentSource::Builtin) => SubagentSourceKind::Builtin,
         Some(SubAgentSource::Project) => SubagentSourceKind::Project,
         Some(SubAgentSource::User) => SubagentSourceKind::User,
+        Some(SubAgentSource::External) => SubagentSourceKind::External,
         None => SubagentSourceKind::Unspecified,
     }
 }
@@ -404,7 +411,8 @@ pub const fn subagent_source_presentation_rank(source: Option<SubAgentSource>) -
         Some(SubAgentSource::Builtin) => 0,
         Some(SubAgentSource::Project) => 1,
         Some(SubAgentSource::User) => 2,
-        None => 3,
+        Some(SubAgentSource::External) => 3,
+        None => 4,
     }
 }
 
@@ -450,6 +458,7 @@ pub fn resolve_subagent_default_enabled(
         SubagentSourceKind::Builtin => visibility.can_access_from_parent(parent_agent_type),
         SubagentSourceKind::Project
         | SubagentSourceKind::User
+        | SubagentSourceKind::External
         | SubagentSourceKind::Unspecified => true,
     }
 }
@@ -503,7 +512,7 @@ const fn default_reason(
         SubagentSourceKind::Project | SubagentSourceKind::User => {
             Some(SubagentStateReason::CustomDefaultEnabled)
         }
-        SubagentSourceKind::Unspecified => None,
+        SubagentSourceKind::External | SubagentSourceKind::Unspecified => None,
     }
 }
 

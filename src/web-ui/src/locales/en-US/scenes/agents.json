@@ -23,6 +23,7 @@
     "builtin": "Built-in",
     "user": "User",
     "project": "Project",
+    "external": "External",
     "mode": "Agent",
     "subagent": "Sub-Agent"
   },
@@ -60,6 +61,7 @@
       "subagent": "Sub-Agent",
       "userSubagent": "User Sub-Agent",
       "projectSubagent": "Project Sub-Agent",
+      "externalSubagent": "External Sub-Agent",
       "disabled": "Disabled"
     },
     "actions": {
@@ -68,16 +70,18 @@
     "meta": {
       "tools": "{{count}} tools",
       "skills": "{{count}} skills",
-      "subagents": "{{count}} sub-agents"
+      "subagents": "{{count}} sub-agents",
+      "externalProvider": "External · {{provider}}",
+      "singleRun": "One run only · No follow-up"
     },
     "modelSelector": {
       "label": "Model",
-      "default": "Use default Subagent model",
+      "default": "Use default Sub-Agent model",
       "inherit": "Inherit parent session",
       "fast": "Fast model",
       "primary": "Primary model",
       "auto": "Automatic selection",
-      "updateFailed": "Failed to update the Subagent model"
+      "updateFailed": "Failed to update the Sub-Agent model"
     }
   },
   "capabilityCategories": {
@@ -134,6 +138,8 @@
     "customActions": "Custom agent",
     "editAgent": "Edit",
     "deleteAgent": "Delete",
+    "externalActions": "External agent",
+    "manageExternalAgent": "Manage in External AI applications",
     "deleteConfirm": "Delete custom agent \"{{name}}\"? This cannot be undone.",
     "deleteSuccess": "Deleted \"{{name}}\"",
     "deleteFailed": "Delete failed: ",

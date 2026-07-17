@@ -51,6 +51,7 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "switch_agent",
     "mcp_servers",
     "external_tools",
+    "external_agents",
     "login",
     "logout",
     "help",

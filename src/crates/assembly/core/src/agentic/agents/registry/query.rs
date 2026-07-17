@@ -16,6 +16,46 @@ use std::collections::HashSet;
 use std::path::Path;
 
 impl AgentRegistry {
+    /// Return every effective local subagent definition that can participate in
+    /// product-level external-source conflict resolution. This deliberately
+    /// ignores presentation visibility: a hidden but explicitly addressable
+    /// local agent must still block a same-name external route from being
+    /// selected silently.
+    pub(crate) async fn get_local_subagents_for_external_resolution(
+        &self,
+        workspace_root: Option<&Path>,
+    ) -> Vec<AgentInfo> {
+        self.ensure_user_custom_agents_loaded().await;
+        if let Some(workspace_root) = workspace_root {
+            if !self.read_project_subagents().contains_key(workspace_root) {
+                self.load_custom_agents(Some(workspace_root)).await;
+            }
+        }
+
+        let user_overrides = get_subagent_overrides().await;
+        let project_overrides = match workspace_root {
+            Some(workspace_root) => load_project_subagent_overrides_local(workspace_root)
+                .await
+                .ok(),
+            None => None,
+        };
+        let mut result = Vec::new();
+        {
+            let map = self.read_agents();
+            result.extend(map.values().filter_map(|entry| {
+                local_conflict_info(entry, None, project_overrides.as_ref(), &user_overrides)
+            }));
+        }
+        if let Some(workspace_root) = workspace_root {
+            if let Some(project_entries) = self.read_project_subagents().get(workspace_root) {
+                result.extend(project_entries.values().filter_map(|entry| {
+                    local_conflict_info(entry, None, project_overrides.as_ref(), &user_overrides)
+                }));
+            }
+        }
+        Self::sort_subagents_for_presentation(result)
+    }
+
     fn sort_subagents_for_presentation(mut result: Vec<AgentInfo>) -> Vec<AgentInfo> {
         result.sort_by(|a, b| {
             subagent_source_presentation_rank(a.subagent_source)
@@ -109,11 +149,13 @@ impl AgentRegistry {
                 AgentSource::Builtin => mode_presentation_rank(&a.id),
                 AgentSource::User => 100,
                 AgentSource::Project => 101,
+                AgentSource::External => 102,
             };
             let b_rank = match b.source {
                 AgentSource::Builtin => mode_presentation_rank(&b.id),
                 AgentSource::User => 100,
                 AgentSource::Project => 101,
+                AgentSource::External => 102,
             };
             a_rank
                 .cmp(&b_rank)
@@ -219,6 +261,7 @@ impl AgentRegistry {
             workspace_root,
             list_scope: SubagentListScope::RegistryManagement,
             include_disabled: true,
+            external_sources_supported: true,
         })
         .await
     }
@@ -301,6 +344,11 @@ impl AgentRegistry {
                 );
             }
         }
+        if query.external_sources_supported {
+            if let Some(workspace_root) = query.workspace_root {
+                result = self.apply_external_routes_to_query(workspace_root, result);
+            }
+        }
         Self::sort_subagents_for_presentation(result)
     }
 
@@ -315,6 +363,7 @@ impl AgentRegistry {
             workspace_root,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
+            external_sources_supported: false,
         };
         let user_overrides = get_subagent_overrides().await;
         let project_overrides = match query.workspace_root {
@@ -342,4 +391,27 @@ impl AgentRegistry {
                 )
             })
     }
+}
+
+fn local_conflict_info(
+    entry: &AgentEntry,
+    parent_agent_type: Option<&str>,
+    project_overrides: Option<&crate::service::config::types::AgentSubagentOverrideConfig>,
+    user_overrides: &crate::service::config::types::AgentSubagentOverrideConfig,
+) -> Option<AgentInfo> {
+    if entry.category != AgentCategory::SubAgent || entry.source == AgentSource::External {
+        return None;
+    }
+    let availability =
+        resolve_availability(entry, parent_agent_type, project_overrides, user_overrides);
+    if !availability.effective_enabled {
+        return None;
+    }
+    let mut info = AgentInfo::from_agent_entry(entry);
+    info.subagent_source = entry.subagent_source;
+    info.default_enabled = availability.default_enabled;
+    info.effective_enabled = availability.effective_enabled;
+    info.override_state = availability.override_state;
+    info.state_reason = availability.state_reason;
+    Some(info)
 }

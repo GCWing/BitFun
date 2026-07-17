@@ -1,5 +1,6 @@
 use crate::session_state::SessionState;
 pub use bitfun_core_types::SessionKind;
+pub use bitfun_core_types::{SessionContinuationPolicy, SessionModelBindingPolicy};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -160,6 +161,24 @@ pub struct SessionConfig {
     /// Model config ID used by this session (for token usage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
+    /// Whether this child session accepts another delegated turn.
+    #[serde(default, skip_serializing_if = "is_reusable_continuation_policy")]
+    pub continuation_policy: SessionContinuationPolicy,
+    /// Whether config reconciliation may replace this session's model.
+    #[serde(default, skip_serializing_if = "is_mutable_model_binding_policy")]
+    pub model_binding_policy: SessionModelBindingPolicy,
+    /// Runtime identity approved for an immutable concrete model binding.
+    /// Mutable sessions leave this unset and continue to resolve selectors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_binding_fingerprint: Option<String>,
+}
+
+fn is_reusable_continuation_policy(policy: &SessionContinuationPolicy) -> bool {
+    *policy == SessionContinuationPolicy::Reusable
+}
+
+fn is_mutable_model_binding_policy(policy: &SessionModelBindingPolicy) -> bool {
+    *policy == SessionModelBindingPolicy::Mutable
 }
 
 impl Default for SessionConfig {
@@ -176,6 +195,9 @@ impl Default for SessionConfig {
             remote_connection_id: None,
             remote_ssh_host: None,
             model_id: None,
+            continuation_policy: SessionContinuationPolicy::default(),
+            model_binding_policy: SessionModelBindingPolicy::default(),
+            model_binding_fingerprint: None,
         }
     }
 }
@@ -241,7 +263,7 @@ pub fn sanitize_persisted_session_state(state: &SessionState) -> SessionState {
 mod tests {
     use super::{
         sanitize_persisted_session_state, CompressionState, PersistedSessionStateFile, Session,
-        SessionConfig,
+        SessionConfig, SessionContinuationPolicy, SessionModelBindingPolicy,
     };
     use crate::session_state::{ProcessingPhase, SessionState};
     use serde_json::json;
@@ -261,6 +283,46 @@ mod tests {
         assert!(config.remote_connection_id.is_none());
         assert!(config.remote_ssh_host.is_none());
         assert!(config.model_id.is_none());
+        assert_eq!(
+            config.continuation_policy,
+            SessionContinuationPolicy::Reusable
+        );
+        assert_eq!(
+            config.model_binding_policy,
+            SessionModelBindingPolicy::Mutable
+        );
+    }
+
+    #[test]
+    fn non_default_subagent_session_policies_are_persisted_and_legacy_defaults_remain_compatible() {
+        let config = SessionConfig {
+            continuation_policy: SessionContinuationPolicy::FreshOnly,
+            model_binding_policy: SessionModelBindingPolicy::ApprovedImmutable,
+            ..SessionConfig::default()
+        };
+        let serialized = serde_json::to_value(&config).expect("session config should serialize");
+        assert_eq!(serialized["continuation_policy"], "fresh_only");
+        assert_eq!(serialized["model_binding_policy"], "approved_immutable");
+
+        let mut legacy = serialized;
+        legacy
+            .as_object_mut()
+            .expect("session config should be an object")
+            .remove("continuation_policy");
+        legacy
+            .as_object_mut()
+            .expect("session config should be an object")
+            .remove("model_binding_policy");
+        let restored: SessionConfig =
+            serde_json::from_value(legacy).expect("legacy session config should deserialize");
+        assert_eq!(
+            restored.continuation_policy,
+            SessionContinuationPolicy::Reusable
+        );
+        assert_eq!(
+            restored.model_binding_policy,
+            SessionModelBindingPolicy::Mutable
+        );
     }
 
     #[test]

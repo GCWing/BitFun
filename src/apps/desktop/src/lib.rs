@@ -933,6 +933,8 @@ pub async fn run() {
             set_external_source_conflict_choice_command,
             set_external_tool_target_decision_command,
             set_external_tool_conflict_choice_command,
+            set_external_subagent_activation_command,
+            choose_external_subagent_conflict_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
             get_readonly_tools_info,

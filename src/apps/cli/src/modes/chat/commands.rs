@@ -171,6 +171,17 @@ impl ChatMode {
             self.handle_external_tool_review(arguments, chat_view, chat_state, rt_handle);
             return Ok(None);
         }
+        let can_route_external_agent_review = builtin_action
+            .is_some_and(|action| action.handler == ActionHandler::ExternalAgents)
+            && qualifier != CommandQualifier::External
+            && (qualifier == CommandQualifier::Builtin
+                || (external.is_none()
+                    && unresolved_candidates.is_empty()
+                    && !builtin_reconfirmation_required));
+        if can_route_external_agent_review {
+            self.handle_external_agent_review(arguments, chat_view, chat_state, rt_handle);
+            return Ok(None);
+        }
         let native_choice_is_active = unresolved_candidates.iter().any(|candidate| {
             candidate
                 .native_collision
@@ -589,6 +600,9 @@ impl ChatMode {
             ActionHandler::ExternalTools => {
                 self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
             }
+            ActionHandler::ExternalAgents => {
+                self.handle_external_agent_review("", chat_view, chat_state, rt_handle);
+            }
             ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun-cli"));
                 chat_view.set_status(Some(
@@ -740,5 +754,4 @@ impl ChatMode {
             chat_view.insert_paste(&text);
         }
     }
-
 }

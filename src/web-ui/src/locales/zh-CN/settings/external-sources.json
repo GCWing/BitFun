@@ -1,60 +1,154 @@
 {
   "title": "外部 AI 应用",
-  "subtitle": "无需复制，即可使用其他 AI 应用中兼容的工作内容。",
+  "subtitle": "无需复制文件，即可使用其他 AI 应用中受支持的命令、工具和 Agent。",
   "loading": "正在检查外部来源…",
   "checkingNonBlocking": "仍在检查变更；检查完成前可以继续使用当前设置。",
+  "common": {
+    "details": "详情",
+    "hideDetails": "收起详情",
+    "close": "关闭",
+    "unknown": "未知",
+    "technicalDetails": "技术详情"
+  },
   "actions": {
     "refresh": "刷新",
     "refreshing": "正在刷新…",
-    "updated": "外部来源设置已更新，请在下方确认当前状态。"
+    "updated": "已保存，当前状态如下。",
+    "waitForUpdate": "另一项更改仍在保存，请等待完成后再做选择。",
+    "agentUpdated": "已保存“{{name}}”的更改并刷新状态。"
   },
   "unavailable": {
-    "title": "来源暂不可用",
+    "title": "外部配置暂不可用",
     "desktopOnly": "外部来源目前仅在桌面应用中可用。",
-    "remoteWorkspace": "暂不支持远程工作区来源，且不会用本地配置代替加载。"
+    "remoteWorkspace": "远程工作区暂不能使用本机外部配置，BitFun 也不会改为加载本机配置。"
   },
   "errors": {
-    "nonBlocking": "当前外部来源状态无法确认；页面仍显示最后一次已知状态，请刷新并检查详情后再使用。",
-    "technicalDetails": "技术详情"
+    "loadFailed": "BitFun 无法加载当前外部配置。请勿假定外部内容可用，并刷新重试。",
+    "refreshFailed": "BitFun 无法检查变更。之前已启用的内容仍可使用，但可能未包含最近的变化；请刷新重试。",
+    "mutationUnknown": "BitFun 无法确认本次更改是否已保存。请勿假定启用、停用或来源选择已经生效，并刷新确认当前状态。"
   },
   "diagnostics": {
-    "summary": "有 {{count}} 条来源信息需要关注；使用受影响内容前请检查技术详情。"
+    "summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。",
+    "category": {
+      "confirmationStateUnavailable": "BitFun 无法验证已保存的工具确认状态，因此相关工具保持停用。请检查 BitFun 设置存储后刷新。",
+      "conflictHistoryUnavailable": "BitFun 无法保存冲突信息，因此相关名称保持不可用。请检查 BitFun 设置存储后刷新。",
+      "checkInProgress": "仍在检查一个来源，现有内容可以继续使用。",
+      "checkTimedOut": "检查一个来源用时过长，其他内容仍可使用。请刷新重试。",
+      "confirmationRequired": "一个来源需要你的确认，BitFun 才能使用其中的内容。",
+      "sourceTooLarge": "来源内容过多，部分文件已跳过。请减少文件数量或大小后刷新。",
+      "invalidSettings": "部分配置无法读取，已被跳过。请修正来源配置后刷新。",
+      "unreadableSource": "BitFun 无法读取来源中的部分内容。请检查文件访问权限后刷新。",
+      "notSupported": "BitFun 暂不支持此类外部内容，因此没有加载或运行它。",
+      "checkFailed": "BitFun 未能检查一个来源，其他来源仍可使用。请刷新重试。",
+      "sourceIssue": "BitFun 在一个来源中发现问题，受影响的内容未启用。请查看技术详情。"
+    }
   },
   "sources": {
-    "title": "已识别来源",
-    "description": "来源保留在原始位置；此页面打开期间会自动感知变更。",
-    "globalOnly": "当前仅显示用户全局来源；打开工作区后会同时包含项目来源。",
-    "empty": "未识别到兼容的外部来源。",
+    "title": "配置来源",
+    "description": "配置仍保留在原位置；打开此页面后会自动检查变化。",
+    "globalOnly": "当前仅显示适用于所有工作区的来源；打开工作区后还会显示该项目的来源。",
+    "empty": "未发现受支持的外部配置。",
     "commandCount": "{{count}} 个命令",
     "toolCount": "{{count}} 个工具",
+    "agentCount": "{{count}} 个 Agent",
     "toggleLabel": "启用 {{name}}"
   },
+  "agents": {
+    "title": "发现的 Agent",
+    "description": "Agent 仍保存在原应用中。启用前，请确认下方的模型、工具和运行位置；其指令或这些设置变化后，BitFun 会再次请你确认。",
+    "disable": "停用",
+    "enable": "启用 Agent",
+    "reviewTitle": "查看 {{name}} 的运行设置",
+    "approvalWarning": "启用后，该 Agent 可以让所选模型调用上方工具。其指令、模型、工具或配置来源发生变化时，BitFun 会要求你再次确认。",
+    "singleRun": "单次运行，不支持续问",
+    "modelUnavailable": "不可用",
+    "model": "模型：{{model}}",
+    "tools": "工具：{{tools}}",
+    "executionDomain": "运行位置：本机和当前工作区",
+    "compatibility": "状态：{{state}}",
+    "sources": "由 {{count}} 个配置来源共同定义",
+    "noDescription": "未提供说明",
+    "noTools": "无工具"
+  },
+  "agentState": {
+    "approval_required": "待确认",
+    "declined": "保持停用",
+    "disabled": "已停用",
+    "active": "已启用",
+    "conflict": "需要选择",
+    "blocked": "暂不支持",
+    "unavailable": "暂时不可用"
+  },
+  "agentChanges": {
+    "unavailable": "{{name}} 已无法用于新任务（{{state}}）。请在下方检查它当前使用的模型、工具、配置来源或同名冲突。",
+    "unavailableMany": "已有 {{count}} 个已启用 Agent 无法用于新任务。请在下方检查它们当前的设置。",
+    "removedState": "配置来源已删除"
+  },
+  "agentCompatibility": {
+    "ready": "支持",
+    "ready_with_degradation": "支持，但部分设置不会生效",
+    "blocked": "不支持",
+    "invalid": "配置有误"
+  },
+  "agentDiagnostics": {
+    "activationBlocked": "暂时无法启用此 Agent。",
+    "degradedOnly": "部分设置在 BitFun 中不会生效。请查看说明，确认实际结果符合预期。",
+    "modelUnavailable": {
+      "reason": "该 Agent 请求的模型在 BitFun 中不可用。",
+      "impact": "{{impact}}",
+      "nextStep": "请在来源应用中改用可用模型，或在 BitFun 中设置可用的固定 Sub-Agent 模型，然后刷新。"
+    },
+    "toolUnavailable": {
+      "reason": "该 Agent 请求的一个或多个工具在 BitFun 中不可用。",
+      "impact": "{{impact}}",
+      "nextStep": "请在来源应用中移除或替换不支持的工具，然后刷新。"
+    },
+    "invalidDefinition": {
+      "reason": "该 Agent 的配置缺少必填内容或包含无效内容。",
+      "impact": "{{impact}}",
+      "nextStep": "请在原应用中修正 Agent 配置，然后刷新。"
+    },
+    "unsupportedBehavior": {
+      "reason": "该 Agent 需要 BitFun 当前不支持的行为或设置。",
+      "impact": "{{impact}}",
+      "nextStep": "请在原应用中改用受支持的设置并补全必填内容，然后刷新。"
+    },
+    "ignoredOption": {
+      "reason": "BitFun 不会应用这项设置。",
+      "impact": "{{impact}}",
+      "nextStep": "启用前，请确认上方实际使用的模型和工具，并确认最终效果仍符合预期。"
+    }
+  },
+  "agentConflicts": {
+    "title": "选择同名 Agent",
+    "description": "BitFun 不会替你决定使用哪一个。你的选择会保留，直到其中一个 Agent 的设置发生变化。",
+    "agentName": "找到多个名为 {{name}} 的 Agent",
+    "disableAll": "暂不使用任何一个",
+    "pending": "请选择今后执行任务时使用哪一个 Agent。选择外部 Agent 时，也会确认下方显示的模型、工具和运行位置。",
+    "selectionApproves": "选择后，也表示你确认了下方显示的模型、工具、运行位置和配置来源。"
+  },
   "tools": {
-    "title": "已识别工具",
-    "description": "工具代码保留在原始位置；识别过程不会执行代码。",
-    "review": "重新审核",
-    "details": "详情",
-    "hideDetails": "收起详情",
-    "disable": "停用模块",
-    "reviewTitle": "审核来自 {{source}} 的 {{name}}",
-    "cancelReview": "关闭",
+    "title": "发现的工具",
+    "description": "工具代码仍保留在原位置；BitFun 检查来源时不会运行这些代码。",
+    "review": "查看设置",
+    "disable": "停用这些工具",
+    "reviewTitle": "查看 {{name}}（来自 {{source}}）",
     "reason": "原因：{{reason}}",
     "nextStep": "下一步：{{nextStep}}",
-    "targetScope": "此操作会应用到该模块导出的所有工具。"
+    "targetScope": "此操作会同时影响该来源提供的所有工具。"
   },
   "toolApprovals": {
-    "title": "等待审核的工具",
-    "description": "加载其他应用的代码前，请确认来源和执行访问范围。",
+    "title": "待确认的工具",
+    "description": "启用其他应用中的工具代码前，请确认代码位置以及它可以访问的内容。",
     "source": "来源：{{location}}",
-    "sourceRoot": "来源根目录：{{location}}",
-    "modulePath": "模块文件：{{location}}",
-    "scope": "作用域：{{scope}}",
-    "executionDomain": "执行域：{{domain}}",
-    "runtime": "运行时：{{runtime}}",
-    "unknown": "未知",
-    "workingDirectory": "工作目录：{{location}}",
-    "capabilities": "直接访问：{{capabilities}}",
-    "warning": "工具代码会继承当前用户权限和环境变量；这不构成操作系统级沙箱，工具创建的后代进程也可能在取消后继续运行。",
+    "sourceRoot": "来源文件夹：{{location}}",
+    "modulePath": "代码文件：{{location}}",
+    "scope": "适用范围：{{scope}}",
+    "executionDomain": "运行位置：{{domain}}",
+    "runtime": "运行环境：{{runtime}}",
+    "workingDirectory": "启动目录：{{location}}",
+    "capabilities": "可直接访问：{{capabilities}}",
+    "warning": "工具代码会使用你的用户权限并继承环境变量，且不会在操作系统沙箱中隔离。它启动的进程可能在你取消后继续运行。",
     "keepDisabled": "保持停用",
     "enable": "启用工具"
   },
@@ -65,37 +159,37 @@
     "environment": "环境变量"
   },
   "toolState": {
-    "approval_required": "需要审核",
+    "approval_required": "待确认",
     "disabled": "已停用",
     "active": "已启用",
     "conflict": "需要选择",
-    "unsupported": "已识别，暂不支持",
-    "runtime_unavailable": "运行时不可用",
-    "load_failed": "加载失败"
+    "unsupported": "暂不支持",
+    "runtime_unavailable": "运行环境不可用",
+    "load_failed": "无法加载"
   },
   "toolReason": {
-    "approval_required": "BitFun 加载该模块前需要你的批准。",
-    "disabled": "该目标已按用户选择停用。",
-    "active": "模块已成功加载，并在当前执行域中提供。",
-    "conflict": "另一个实现使用了相同的工具名称。",
-    "unsupported": "模块使用了当前运行时不支持的语法或行为。",
-    "runtime_unavailable": "所需的 JavaScript 运行时不可用。",
-    "load_failed": "工具进程无法加载该模块。"
+    "approval_required": "启用前，需要确认这个工具文件的访问范围。",
+    "disabled": "你已选择停用这个工具来源。",
+    "active": "工具代码已加载，可以使用。",
+    "conflict": "另一个工具使用了相同名称。",
+    "unsupported": "这个工具文件包含 BitFun 当前不支持的语法或操作。",
+    "runtime_unavailable": "所需的 JavaScript 运行环境不可用。",
+    "load_failed": "BitFun 无法加载这个工具文件。"
   },
   "toolNextStep": {
-    "approval_required": "审核访问范围，然后启用目标或保持停用。",
-    "disabled": "确认来源和访问范围后启用目标。",
-    "active": "无需操作；如需停止提供该模块的全部工具，可停用此模块。",
-    "conflict": "在下方选择提供方，或停用此目标。",
-    "unsupported": "将模块转换为受支持的单文件 JavaScript 子集，然后刷新。",
-    "runtime_unavailable": "恢复所需运行时，然后刷新。",
-    "load_failed": "修复模块后刷新，或停用此目标。"
+    "approval_required": "确认上方来源和访问范围后，启用或继续停用这些工具。",
+    "disabled": "确认上方来源和访问范围后，再启用这些工具。",
+    "active": "无需操作。如需停止使用该来源的全部工具，请停用这些工具。",
+    "conflict": "请在下方选择要使用的工具，或继续保持停用。",
+    "unsupported": "请将来源改为 BitFun 当前支持的单文件 JavaScript 格式，然后刷新。",
+    "runtime_unavailable": "请恢复所需的 JavaScript 运行环境，然后刷新。",
+    "load_failed": "请修复来源后刷新，或继续停用这些工具。"
   },
   "toolConflicts": {
-    "title": "工具冲突需要选择",
-    "description": "如有现有本地或 MCP 实现，选择前会继续保留；否则该名称保持不可用。候选内容变化前不会重复询问。",
-    "toolName": "多个实现都提供了 {{name}}",
-    "pending": "请选择 BitFun 对此执行域中相同候选集合应提供的实现。"
+    "title": "选择同名工具",
+    "description": "选择前，BitFun 会继续使用当前可用的本地或 MCP 工具；如果没有可用工具，则暂时停用该名称。选项发生变化前不会再次询问。",
+    "toolName": "找到多个名为 {{name}} 的工具",
+    "pending": "请选择今后调用这个工具名称时使用哪一个工具。"
   },
   "toolCandidateKind": {
     "built_in": "内置",
@@ -103,10 +197,15 @@
     "external": "外部"
   },
   "scope": {
-    "user_global": "用户全局",
-    "project": "项目",
-    "remote_user": "远程用户",
-    "remote_project": "远程项目"
+    "user_global": "所有工作区",
+    "project": "当前工作区",
+    "remote_user": "所有远程工作区",
+    "remote_project": "当前远程工作区"
+  },
+  "executionLocation": {
+    "local": "本机",
+    "remote": "当前远程环境",
+    "unknown": "未知"
   },
   "runtime": {
     "java_script": "JavaScript",
@@ -114,18 +213,18 @@
   },
   "lifecycle": {
     "available": "可用",
-    "restricted": "受限",
-    "degraded": "需要关注",
-    "unavailable": "不可用",
-    "removed": "已移除",
+    "restricted": "当前版本暂不支持",
+    "degraded": "部分内容不可用",
+    "unavailable": "暂时不可用",
+    "removed": "来源已移除",
     "suppressed": "已停用",
-    "using_last_valid_version": "使用上一个有效版本"
+    "using_last_valid_version": "正在使用上次可用的内容"
   },
   "conflicts": {
-    "title": "需要你的选择",
-    "description": "同名扩展不会被静默激活；在参与方版本变化前只需选择一次。",
-    "commandName": "多个来源都提供了 /{{name}}",
-    "pending": "选择一个当前可用的来源后，该命令才会变为可用。",
-    "restricted": "当前版本不可用"
+    "title": "选择同名命令",
+    "description": "多个来源提供同名命令时，BitFun 不会替你选择。你的选择会保留，直到其中一个来源发生变化。",
+    "commandName": "多个来源提供了 /{{name}}",
+    "pending": "请选择使用哪个来源的命令。",
+    "restricted": "当前版本暂不支持"
   }
 }

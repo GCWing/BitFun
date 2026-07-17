@@ -1,9 +1,9 @@
 use bitfun_product_domains::external_sources::{
-    ExternalSourceCatalogEntry, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState, ExternalSourceProviderError,
-    ExternalToolDefinition, ExternalToolProviderIdentity, ExternalToolProviderSnapshot,
-    ExternalToolSourceProvider, ExternalWatchRoot, PreparedExternalToolTarget, ProviderId,
-    SourceQualifiedToolTargetId,
+    ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceContext,
+    ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState,
+    ExternalSourceProviderError, ExternalToolDefinition, ExternalToolProviderIdentity,
+    ExternalToolProviderSnapshot, ExternalToolSourceProvider, ExternalWatchRoot,
+    PreparedExternalToolTarget, ProviderId, SourceQualifiedToolTargetId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -311,6 +311,7 @@ impl ExternalToolCoordinator {
                     } else {
                         ExternalSourceDiagnosticSeverity::Error
                     },
+                    asset_kind: ExternalSourceAssetKind::Tool,
                     code: error.code.clone(),
                     message: error.message.clone(),
                     source: None,

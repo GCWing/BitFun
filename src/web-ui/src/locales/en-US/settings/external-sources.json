@@ -1,60 +1,154 @@
 {
   "title": "External AI applications",
-  "subtitle": "Use compatible work from other AI applications without copying it into BitFun.",
+  "subtitle": "Use supported commands, tools, and agents from other AI applications without copying their files into BitFun.",
   "loading": "Checking external sources…",
   "checkingNonBlocking": "Still checking for changes. You can continue using settings while this finishes.",
+  "common": {
+    "details": "Details",
+    "hideDetails": "Hide details",
+    "close": "Close",
+    "unknown": "Unknown",
+    "technicalDetails": "Technical details"
+  },
   "actions": {
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
-    "updated": "External source settings updated. Review the current status below."
+    "updated": "Saved. The current status is shown below.",
+    "waitForUpdate": "Another change is still being saved. Wait for it to finish before making another choice.",
+    "agentUpdated": "Saved changes to {{name}} and refreshed its status."
   },
   "unavailable": {
-    "title": "Sources unavailable",
-    "desktopOnly": "External sources are available in the desktop app.",
-    "remoteWorkspace": "Remote workspace sources are not supported yet. No local configuration was loaded in their place."
+    "title": "External settings unavailable",
+    "desktopOnly": "External sources are currently available only in the desktop app.",
+    "remoteWorkspace": "Remote workspaces cannot use local external settings yet. BitFun did not load local settings in their place."
   },
   "errors": {
-    "nonBlocking": "The current external-source state could not be confirmed. The last known state remains visible; refresh and review the details before relying on it.",
-    "technicalDetails": "Technical details"
+    "loadFailed": "BitFun could not load the current external settings. Do not assume external content is available; refresh to try again.",
+    "refreshFailed": "BitFun could not check for changes. Previously enabled content remains available, but recent changes may be missing; refresh to retry.",
+    "mutationUnknown": "BitFun could not confirm whether your change was saved. Do not assume an enable, disable, or source choice took effect; refresh to confirm the current state."
   },
   "diagnostics": {
-    "summary": "{{count}} source entries need attention. Review the technical details before relying on affected content."
+    "summary": "{{count}} items need attention. Review the details to see what is affected.",
+    "category": {
+      "confirmationStateUnavailable": "BitFun could not verify saved tool confirmations, so affected tools remain disabled. Check BitFun settings storage, then refresh.",
+      "conflictHistoryUnavailable": "BitFun could not save conflict information, so affected names remain unavailable. Check BitFun settings storage, then refresh.",
+      "checkInProgress": "One source is still being checked. Existing content remains available.",
+      "checkTimedOut": "Checking one source took too long. Other content remains available; refresh to try again.",
+      "confirmationRequired": "A source needs your confirmation before BitFun can use it.",
+      "sourceTooLarge": "Some files were skipped because the source is too large. Reduce its size, then refresh.",
+      "invalidSettings": "Some settings could not be read and were skipped. Fix the source, then refresh.",
+      "unreadableSource": "BitFun could not read part of a source. Check file access, then refresh.",
+      "notSupported": "This type of external content is not supported yet, so BitFun did not load or run it.",
+      "checkFailed": "BitFun could not check one source. Other sources remain available; refresh to retry.",
+      "sourceIssue": "BitFun found an issue in one source. The affected content was not enabled; review the technical details."
+    }
   },
   "sources": {
-    "title": "Detected sources",
-    "description": "Sources remain in their original locations. Changes are picked up automatically while this page is open.",
-    "globalOnly": "Showing user-global sources. Open a workspace to include its project sources.",
-    "empty": "No compatible external sources were detected.",
+    "title": "Configuration sources",
+    "description": "Settings stay in their original locations. Open this page to check for changes automatically.",
+    "globalOnly": "Showing sources available to all workspaces. Open a workspace to also show sources from that project.",
+    "empty": "No supported external settings were found.",
     "commandCount": "{{count}} commands",
     "toolCount": "{{count}} tools",
+    "agentCount": "{{count}} agents",
     "toggleLabel": "Enable {{name}}"
   },
+  "agents": {
+    "title": "Found agents",
+    "description": "Agents stay in their original application. Before enabling one, review its model, tools, and where it runs. BitFun asks again if its instructions or these settings change.",
+    "disable": "Disable",
+    "enable": "Enable agent",
+    "reviewTitle": "Review how {{name}} runs",
+    "approvalWarning": "Once enabled, this agent can instruct the selected model to use the tools shown above. BitFun asks again if its instructions, model, tools, or configuration sources change.",
+    "singleRun": "One run only; no follow-up",
+    "modelUnavailable": "Unavailable",
+    "model": "Model: {{model}}",
+    "tools": "Tools: {{tools}}",
+    "executionDomain": "Runs in: this computer and current workspace",
+    "compatibility": "Status: {{state}}",
+    "sources": "Combined from {{count}} configuration sources",
+    "noDescription": "No description provided",
+    "noTools": "No tools"
+  },
+  "agentState": {
+    "approval_required": "Confirmation required",
+    "declined": "Kept disabled",
+    "disabled": "Disabled",
+    "active": "Enabled",
+    "conflict": "Choice required",
+    "blocked": "Not supported yet",
+    "unavailable": "Temporarily unavailable"
+  },
+  "agentChanges": {
+    "unavailable": "{{name}} is no longer available for new tasks ({{state}}). Review its current model, tools, source, or name conflict below.",
+    "unavailableMany": "{{count}} enabled agents are no longer available for new tasks. Review their current settings below.",
+    "removedState": "Source removed"
+  },
+  "agentCompatibility": {
+    "ready": "Supported",
+    "ready_with_degradation": "Supported, but some settings will not apply",
+    "blocked": "Not supported",
+    "invalid": "Configuration error"
+  },
+  "agentDiagnostics": {
+    "activationBlocked": "This agent cannot be enabled yet.",
+    "degradedOnly": "Some settings will not apply in BitFun. Review the details to confirm the resulting behavior is acceptable.",
+    "modelUnavailable": {
+      "reason": "The requested model is not available in BitFun.",
+      "impact": "{{impact}}",
+      "nextStep": "Choose an available model in the source application, or set an available fixed Sub-Agent model in BitFun, then refresh."
+    },
+    "toolUnavailable": {
+      "reason": "One or more requested tools are not available in BitFun.",
+      "impact": "{{impact}}",
+      "nextStep": "Remove or replace the unsupported tools in the source application, then refresh."
+    },
+    "invalidDefinition": {
+      "reason": "The agent settings have an invalid or missing required value.",
+      "impact": "{{impact}}",
+      "nextStep": "Correct the agent settings in the source application, then refresh."
+    },
+    "unsupportedBehavior": {
+      "reason": "This agent requires behavior or settings that BitFun does not support.",
+      "impact": "{{impact}}",
+      "nextStep": "Update the agent in the source application to use supported settings and include all required content, then refresh."
+    },
+    "ignoredOption": {
+      "reason": "BitFun does not apply this setting.",
+      "impact": "{{impact}}",
+      "nextStep": "Before enabling, review the model and tools that will actually be used, and confirm that the result still meets your expectations."
+    }
+  },
+  "agentConflicts": {
+    "title": "Choose between agents with the same name",
+    "description": "BitFun will not choose one for you. Your choice is remembered until one of these agents changes.",
+    "agentName": "Multiple agents are named {{name}}",
+    "disableAll": "Do not use any of these",
+    "pending": "Choose which agent to use for future tasks. Choosing an external agent also confirms the model, tools, and where it runs as shown below.",
+    "selectionApproves": "This choice confirms the model, tools, run location, and configuration sources shown below."
+  },
   "tools": {
-    "title": "Detected tools",
-    "description": "Tool code stays in its original location. Recognition never executes it.",
-    "review": "Review",
-    "details": "Details",
-    "hideDetails": "Hide details",
-    "disable": "Disable module",
+    "title": "Found tools",
+    "description": "Tool code stays in its original location. BitFun does not run it while checking the source.",
+    "review": "Review settings",
+    "disable": "Disable these tools",
     "reviewTitle": "Review {{name}} from {{source}}",
-    "cancelReview": "Close",
     "reason": "Reason: {{reason}}",
     "nextStep": "Next step: {{nextStep}}",
-    "targetScope": "This action applies to every tool exported by this module."
+    "targetScope": "This action applies to every tool provided by this source."
   },
   "toolApprovals": {
-    "title": "Tools waiting for review",
-    "description": "Review the source and execution access before loading code from another application.",
+    "title": "Tools to review",
+    "description": "Before enabling tool code from another application, review where the code comes from and what it can access.",
     "source": "Source: {{location}}",
-    "sourceRoot": "Source root: {{location}}",
-    "modulePath": "Module file: {{location}}",
-    "scope": "Scope: {{scope}}",
-    "executionDomain": "Execution domain: {{domain}}",
-    "runtime": "Runtime: {{runtime}}",
-    "unknown": "Unknown",
-    "workingDirectory": "Working directory: {{location}}",
-    "capabilities": "Direct access: {{capabilities}}",
-    "warning": "Tool code runs with your user permissions and inherited environment variables. It is not an operating-system sandbox, and descendant processes may outlive cancellation.",
+    "sourceRoot": "Source folder: {{location}}",
+    "modulePath": "Code file: {{location}}",
+    "scope": "Applies to: {{scope}}",
+    "executionDomain": "Runs in: {{domain}}",
+    "runtime": "Run with: {{runtime}}",
+    "workingDirectory": "Starts in folder: {{location}}",
+    "capabilities": "Can directly access: {{capabilities}}",
+    "warning": "Tool code runs with your user permissions and inherits your environment variables. It is not isolated by an operating-system sandbox. Processes it starts may keep running after you cancel.",
     "keepDisabled": "Keep disabled",
     "enable": "Enable tools"
   },
@@ -65,37 +159,37 @@
     "environment": "environment variables"
   },
   "toolState": {
-    "approval_required": "Review required",
+    "approval_required": "Confirmation required",
     "disabled": "Disabled",
-    "active": "Active",
+    "active": "Enabled",
     "conflict": "Choice required",
-    "unsupported": "Recognized, unsupported",
-    "runtime_unavailable": "Runtime unavailable",
-    "load_failed": "Load failed"
+    "unsupported": "Not supported yet",
+    "runtime_unavailable": "Run environment unavailable",
+    "load_failed": "Could not load"
   },
   "toolReason": {
-    "approval_required": "The module needs your approval before BitFun loads it.",
-    "disabled": "The target was disabled by user choice.",
-    "active": "The module loaded successfully and is exposed to the current execution domain.",
-    "conflict": "Another implementation uses the same tool name.",
-    "unsupported": "The module uses syntax or behavior this runtime does not support.",
-    "runtime_unavailable": "The required JavaScript runtime is unavailable.",
-    "load_failed": "The tool process could not load this module."
+    "approval_required": "Review this tool file's access before enabling it.",
+    "disabled": "You chose to disable this tool source.",
+    "active": "The tool code is loaded and ready to use.",
+    "conflict": "Another tool has the same name.",
+    "unsupported": "This tool file contains code or operations that BitFun does not support.",
+    "runtime_unavailable": "The required JavaScript run environment is unavailable.",
+    "load_failed": "BitFun could not load this tool file."
   },
   "toolNextStep": {
-    "approval_required": "Review access, then enable the target or keep it disabled.",
-    "disabled": "Enable the target after reviewing its source and access.",
-    "active": "No action is required; disable the module to stop exposing its tools.",
-    "conflict": "Choose a provider below, or disable this target.",
-    "unsupported": "Convert the module to the supported standalone JavaScript subset, then refresh.",
-    "runtime_unavailable": "Restore the required runtime, then refresh.",
-    "load_failed": "Fix the module and refresh, or disable this target."
+    "approval_required": "Review the source and access above, then enable or keep these tools disabled.",
+    "disabled": "Review the source and access above before enabling these tools.",
+    "active": "No action needed. Disable these tools to stop using this source's tools.",
+    "conflict": "Choose which tool to use below, or leave them disabled.",
+    "unsupported": "Change the source to a single JavaScript file supported by BitFun, then refresh.",
+    "runtime_unavailable": "Restore the required JavaScript environment, then refresh.",
+    "load_failed": "Fix the source and refresh, or keep these tools disabled."
   },
   "toolConflicts": {
-    "title": "Tool conflicts need your choice",
-    "description": "An existing local or MCP implementation remains in place when available; otherwise the name stays unavailable. Your choice is remembered until a candidate changes.",
-    "toolName": "{{name}} is provided by multiple implementations",
-    "pending": "Choose the implementation BitFun should expose for matching candidates in this execution domain."
+    "title": "Choose between tools with the same name",
+    "description": "Until you choose, BitFun keeps using an available local or MCP tool. If none is available, this name stays disabled. You will not be asked again unless the available choices change.",
+    "toolName": "Multiple tools are named {{name}}",
+    "pending": "Choose which tool to use when this name is called."
   },
   "toolCandidateKind": {
     "built_in": "Built in",
@@ -103,10 +197,15 @@
     "external": "External"
   },
   "scope": {
-    "user_global": "User",
-    "project": "Project",
-    "remote_user": "Remote user",
-    "remote_project": "Remote project"
+    "user_global": "All workspaces",
+    "project": "Current workspace",
+    "remote_user": "All remote workspaces",
+    "remote_project": "Current remote workspace"
+  },
+  "executionLocation": {
+    "local": "This computer",
+    "remote": "Current remote environment",
+    "unknown": "Unknown"
   },
   "runtime": {
     "java_script": "JavaScript",
@@ -114,18 +213,18 @@
   },
   "lifecycle": {
     "available": "Available",
-    "restricted": "Restricted",
-    "degraded": "Needs attention",
-    "unavailable": "Unavailable",
-    "removed": "Removed",
+    "restricted": "Not supported in this version",
+    "degraded": "Some content unavailable",
+    "unavailable": "Temporarily unavailable",
+    "removed": "Source removed",
     "suppressed": "Disabled",
-    "using_last_valid_version": "Using last valid version"
+    "using_last_valid_version": "Using the last working version"
   },
   "conflicts": {
-    "title": "Needs your choice",
-    "description": "Same-name extensions are not activated silently. Your choice is remembered until a participant changes version.",
-    "commandName": "/{{name}} is provided by multiple sources",
-    "pending": "Choose one available source to make this command available.",
-    "restricted": "Not available in this release"
+    "title": "Choose between commands with the same name",
+    "description": "When multiple sources provide the same command, BitFun will not choose one for you. Your choice is remembered until one of the sources changes.",
+    "commandName": "More than one source provides /{{name}}",
+    "pending": "Choose an available source to use this command.",
+    "restricted": "Not supported in this version"
   }
 }

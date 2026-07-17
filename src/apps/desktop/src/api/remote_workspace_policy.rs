@@ -218,6 +218,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("check_path_exists", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "choose_external_subagent_conflict_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "cleanup_invalid_workspaces",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -725,7 +729,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "list_manageable_subagents",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     ("list_mcp_prompts", RemoteWorkspacePolicy::LegacyUnaudited),
     ("list_mcp_resources", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -740,10 +744,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("list_sessions", RemoteWorkspacePolicy::LegacyUnaudited),
     ("list_skill_market", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("list_subagents", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("list_subagents", RemoteWorkspacePolicy::RemoteRouted),
     (
         "list_visible_subagents",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "load_acp_json_config",
@@ -1365,6 +1369,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "set_external_tool_target_decision_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "set_external_subagent_activation_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),

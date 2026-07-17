@@ -6,10 +6,10 @@
 [能力装配与宿主集成设计](../architecture/extensions/capability-runtime-integration-design.md)。本计划只覆盖外部 OpenCode
 能力进入 BitFun 的渐进导入轨道，不代表 BitFun 能力导出到 OpenCode 已经完成。兼容矩阵是审计库存，不是默认路线图。
 
-PR1 已将基线推进到通用外部来源目录、生命周期协调器和 OpenCode Prompt Command 纵向切片；BitFun 原有受管
-插件包来源确认和 custom tool 静态预览继续保留。后续不沿用“先做一个大而全的 OpenCode Plugin Runtime”路线，
-而是沿用稳定的跨生态来源契约，按 Tool、Subagent 分别交给真实能力 owner。每个 PR 都必须产生用户可直接验证的
-结果，同时不提前承诺尚未执行的生态能力。
+PR1 已建立通用外部来源目录、生命周期协调器和 OpenCode Prompt Command 纵向切片，PR2 已把受支持的单文件
+`.js` standalone Tool 接入现有 Tool Runtime，PR3 已把 Subagent 安全子集交给现有 Subagent owner。BitFun 原有
+受管插件包来源确认和 custom tool 静态预览继续保留，但不等同于 OpenCode package plugin 可执行。三个切片均沿用
+稳定的跨生态来源契约，不建设“大而全的 OpenCode Plugin Runtime”，也不提前承诺尚未执行的生态能力。
 
 ## 1. 稳定架构基线
 
@@ -21,7 +21,7 @@ Product surfaces (Desktop / CLI / TUI)
        -> consumes capability-specific provider contracts
             -> Prompt Command provider contract
             -> Tool provider contract + provider-neutral script runtime port
-            -> future Subagent provider contract
+            -> Subagent provider contract
 
 Same-level ecosystem adapters implement those provider contracts
   -> OpenCode adapter
@@ -35,7 +35,7 @@ Product Assembly registers adapter implementations with the coordinator
   OpenCode/Codex/Claude Code 分支业务行为。
 - 每个生态适配器独立维护自己的路径发现、优先级、格式、参数展开和版本兼容语义；兄弟适配器之间不得依赖、复用
   私有类型或借用对方身份。
-- Product Assembly 是唯一选择具体适配器的地方。Desktop、CLI/TUI、来源目录和能力 owner 只依赖稳定契约。
+- Product Assembly 是唯一选择具体适配器的地方。Desktop、交互式 TUI（ChatMode）、来源目录和能力 owner 只依赖稳定契约。
 - 不建立携带任意 payload 的 `ExtensionAsset`、通用脚本 SDK 或跨生态配置对象。Command、Tool、Subagent 分别走
   类型化贡献接口；新增一种能力不能迫使既有能力改写公共对象。
 - 来源目录按“提供者 + 来源限定身份”协调代次，provider discovery 独立并发且有期限；某个适配器解析失败、升级
@@ -59,9 +59,9 @@ Product Assembly registers adapter implementations with the coordinator
 
 | PR | 用户可观察结果 | 新增能力 owner | 明确不包含 |
 |---|---|---|---|
-| PR1：来源目录 + OpenCode Command | Desktop 可查看、抑制/恢复并刷新全局/项目 OpenCode 来源；CLI/TUI 可列出并执行支持的 `/command`；运行中修改、删除、恢复后自动刷新 | 通用来源目录与生命周期协调器；Prompt Command 契约；OpenCode Command adapter | JS/TS Tool 执行、Hook、MCP、OpenCode Client/Server、Subagent 执行、复制式导入 |
-| PR2：OpenCode standalone Tool | 一个真实、受支持的单文件 `.opencode/tools/` 样例经预览和确认后进入现有 Tool Runtime，可调用、取消、更新和撤下 | 现有 Tool Runtime + 独立 Tool 兼容接口 | package plugin、npm 依赖安装、Hook、TUI renderer、完整 `metadata`/`ask` |
-| PR3：OpenCode Subagent | 全局/项目 agent 定义进入现有 Subagent owner，可选择、调用、更新和撤下；unsupported 字段有明确诊断 | 现有 Subagent owner + 独立 Subagent 兼容接口 | 原始 OpenCode 会话内核、完整 primary-agent 替换、跨产品通用 agent JSON |
+| PR1：来源目录 + OpenCode Command（已实现） | Desktop 可查看、抑制/恢复并刷新全局/项目 OpenCode 来源；交互式 TUI（ChatMode）可列出并执行支持的 `/command`；运行中修改、删除、恢复后自动刷新 | 通用来源目录与生命周期协调器；Prompt Command 契约；OpenCode Command adapter | JS/TS Tool 执行、Hook、MCP、OpenCode Client/Server、Subagent 执行、复制式导入 |
+| PR2：OpenCode standalone Tool（已实现） | 一个真实、受支持的单文件 `.opencode/tools/` 样例经预览和确认后进入现有 Tool Runtime，可调用、取消、更新和撤下 | 现有 Tool Runtime + 独立 Tool 兼容接口 | package plugin、npm 依赖安装、Hook、TUI renderer、完整 `metadata`/`ask` |
+| PR3：OpenCode Subagent（已实现） | 全局/项目 agent 定义经一次非阻塞确认后进入现有 Subagent owner，可选择、单次调用、更新和撤下；同名冲突由用户选择，unsupported 字段有明确诊断 | 现有 Subagent owner + 独立 Subagent 兼容接口 + generation lease | 原始 OpenCode 会话内核、完整 primary-agent 替换、外部 agent 续接、跨产品通用 agent JSON |
 
 Tool 与 Subagent 不复用 Command 的贡献对象，只复用来源身份、状态、代次、诊断和观察生命周期。未来接入 Codex 或
 Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修改 OpenCode adapter 来容纳其他生态。
@@ -78,7 +78,7 @@ Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修
   `template`、`description`。Markdown 已知字段按当前 OpenCode schema 校验，类型错误不得静默丢弃；同时保留
   OpenCode 对未引用冒号值的兼容重试。
 - 保留 OpenCode 生态内部的名称和覆盖顺序；独立 provider 之间或与 BitFun 本地能力同名时不得按适配器优先级静默决胜，
-  必须生成版本敏感的冲突指纹并等待用户选择。候选版本不变时只询问一次，更新后重新询问。CLI/TUI 将跨 provider
+  必须生成版本敏感的冲突指纹并等待用户选择。候选版本不变时只询问一次，更新后重新询问。交互式 TUI（ChatMode）将跨 provider
   候选投影为 `/external:<provider>:<command>` 明确选择项；一次显式选择同时解决同名 BitFun 本地命令，不连续确认。
 - 支持 `$ARGUMENTS` 与 `$1`、`$2` 等位置参数展开。显式选择或输入 `/command ...` 本身就是本次 prompt-only
   命令的用户确认；发现阶段不自动向会话发送内容。
@@ -130,7 +130,7 @@ Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修
 - OpenCode fixture 固定 XDG 全局/项目、`config.json`、单复数目录、JSON/JSONC、Markdown、路径去重、覆盖、参数展开、
   大小/数量上限和受限字段。
 - watcher 覆盖创建、连续写入、原子替换、稳定删除与重新出现；目录切换不阻塞 TUI 输入。
-- CLI/TUI 覆盖列表、跨 provider 候选选择与直接输入、本地同名冲突只询问一次、版本变化后重新询问、受限命令提示
+- 交互式 TUI（ChatMode）覆盖列表、跨 provider 候选选择与直接输入、本地同名冲突只询问一次、版本变化后重新询问、受限命令提示
   和刷新后撤下；首次发现期间未限定别名不误路由，候选删除后不静默切换到剩余外部或内建实现。
 - Desktop 覆盖空状态、部分失败、刷新、抑制/恢复、敏感路径缩略显示及 IPC 摘要不包含模板正文。
 - 通过相关 crate tests、Web focused tests、`type-check:web`、仓库 hygiene 与 core boundary 检查。
@@ -157,7 +157,7 @@ Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCo
 ### 4.2 产品与决策语义
 
 - Desktop 在“外部 AI 应用”中显示来源、文件、工作目录、工具名和直接文件/网络/环境/进程能力，并明确提示当前 worker
-  不是 OS 沙箱。CLI/TUI 使用同一快照：状态栏只做一次非阻塞提醒，`/external-tools` 提供静态预览以及
+  不是 OS 沙箱。交互式 TUI（ChatMode）使用同一快照：状态栏只做一次非阻塞提醒，`/external-tools` 提供静态预览以及
   `enable`、`disable`、`choose`、`refresh` 操作；等待处理不阻塞输入或普通会话。
 - 首次启用键由“来源限定 target + 执行域 + runtime + 能力集合”组成。纯内容更新且能力集合不变时复用已批准
   结果；能力、runtime 或执行域扩大时重新确认。用户选择保持停用后，同一内容版本不再主动询问；来源内容更新后
@@ -166,7 +166,7 @@ Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCo
   身份与内容版本；候选来自静态识别定义而不是成功加载集合。选择前保留已有本地实现，选择后只在候选集合和版本
   不变时复用；任一候选更新、删除或暂不可用后重新询问，已选 external 失效期间不回退同名内置/MCP。
 - Desktop IPC 和 TUI 快照只包含静态摘要与决策 key，不传输模块源码。用户选择落盘使用 PR1 的跨进程锁、锁内
-  合并和原子替换；Desktop 与 CLI/TUI 不分别维护偏好。
+  合并和原子替换；Desktop 与交互式 TUI（ChatMode）不分别维护偏好。
 
 ### 4.3 更新、删除与降级
 
@@ -195,7 +195,7 @@ Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCo
 - 脚本运行时覆盖 load/invoke、内容更新、失败更新撤下、合作式取消、阻塞事件循环硬终止和 dispose。
 - Tool 路由覆盖内置/MCP/多外部候选冲突、按工作区选择、候选更新重问、稳定删除、源级隔离、零 route mux 并发注册
   和 worker-lost 撤路由/单次恢复；首次后台刷新与 catalog 竞态覆盖等待、成功复用和失败重试。
-- Desktop 覆盖非阻塞发现、首次审批、主动重新审核、停用、冲突选择和不可用原因；CLI/TUI 覆盖提示去重、编号到
+- Desktop 覆盖非阻塞发现、首次审批、主动重新审核、停用、冲突选择和不可用原因；交互式 TUI（ChatMode）覆盖提示去重、编号到
   稳定 key 的映射、过期选择拒绝和刷新。通过相关 Rust tests、CLI check/tests、Web focused tests、
   `type-check:web`、i18n audit、repo hygiene 与 desktop/core checks。
 
@@ -208,17 +208,42 @@ Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCo
 - 为来源目录瞬时不可读增加类型化 `unknown/last-good` 状态；只有精确物化内容仍可校验时才继续服务，明确删除、
   停用和权限收紧仍立即撤下。
 - 为保留的零 route mux 增加数量/命中指标；只有证明长期积累后再设计不重新引入注册竞态的安全回收。
-- 统一 Desktop 与 CLI/TUI 的 `load_failed` 恢复文案，并让手动刷新产生的新 diagnostics 保持非阻塞可见；不因此
+- 统一 Desktop 与交互式 TUI（ChatMode）的 `load_failed` 恢复文案，并让手动刷新产生的新 diagnostics 保持非阻塞可见；不因此
   引入跨 GUI/TUI 组件协议。
 
 ## 5. PR3：OpenCode Subagent
 
-PR3 为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 映射 agent Markdown/JSON 定义。它不复用 Tool
+PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 映射 agent Markdown/JSON 定义。它不复用 Tool
 运行时，也不把 OpenCode agent 类型提升为跨生态 DTO。
 
-- 支持的 prompt、description、模式和工具选择进入现有 Subagent 定义；未支持字段显示明确诊断。
-- 全局/项目覆盖、来源抑制、更新和删除复用通用来源生命周期。
-- 选择与执行仍由现有会话/Subagent owner 决定；adapter 不能替换 BitFun Agent Kernel。
+- 支持用户全局、显式配置目录和项目 JSON/JSONC `agent`，以及单复数 agent Markdown 目录；按 OpenCode 稳定
+  顺序深合并并保留有序 provenance。legacy mode 与 primary-only 定义可诊断但不激活。
+- 安全子集为 description、prompt、subagent/all、disable、hidden、可精确解析的 model 和 tool 选择。permission、
+  variant/options、采样参数、steps/maxSteps 等不能等价执行的字段 fail closed，不做“忽略后继续运行”。
+- OpenCode adapter 把 model 解析为类型化的 provider 提示和模型名；Subagent owner 在审批前将其或固定默认项物化为
+  唯一、已启用的 BitFun 模型。继承、歧义、缺失或已停用模型保持不可用，不使用动态回退替代明确审批。
+- 首次启用绑定当前 behavior、provenance、具体模型和工具范围；只有影响展示的 catalog 文案更新不重复询问，
+  行为或能力变化重新确认。与 builtin/user/project 或其他 provider 同名时保持不可用，直到用户选择；候选变化后
+  旧选择失效，即使只剩一个候选也不静默回退。
+- BitFun 模型配置变化会非阻塞重建后续调用的 generation；审批绑定具体配置 ID 和运行配置指纹，同一 ID 下的 provider、
+  模型名或 endpoint 变化也要求重新确认。已物化 ID 不再解释为 `inherit/primary/fast/auto/default` 选择器；旧 lease 保留
+  旧绑定事实，若执行时配置已漂移则安全失败，不静默切换模型。
+- fresh Task 在进入调度前固定不可变 runtime generation，并以 lease 保持到完成、取消、超时或提交失败；来源稳定
+  删除、显式停用或抑制会立即阻止新调用，短暂读取失败最多在有界窗口内沿用 exact last-valid。
+- Desktop 的“外部 AI 应用”设置和 TUI `/external-agents` 使用同一 generation/revision 校验的非阻塞审批与冲突
+  操作；同一工作区的 Agent 决策串行提交，完成后刷新权威状态并说明具体对象。冲突候选在选择前原位展示模型、
+  工具、执行域、安全来源标签、兼容影响和恢复动作，一次点击才原子完成“选择并批准”。Agents 场景只显示已激活的
+  只读 `External · provider`、`Single-run` 投影，并可跳转到统一管理入口；外部 prompt、绝对用户路径和内部行为摘要
+  不进入 IPC 或普通列表摘要。
+- GUI/TUI 只按通用资源类型路由诊断，不识别 `opencode.*` 前缀；产品快照统一生成安全来源位置，界面不解析 `.opencode`
+  等生态私有目录。已启用 Agent 因更新、删除或冲突变为不可用时，Desktop 与 TUI 都给出去重的非阻塞提示。
+- 冲突谱系覆盖 0/1/N 个参与者；参与集合缩减后继续保持逻辑名不可用，等待用户重新选择。自动观察到的新冲突指纹
+  与用户决策使用同一跨进程锁并推进 `preference_revision`，因此其他进程基于旧 revision 的审批或选择必然被拒绝。
+- 当前 Remote 工作区明确不支持外部来源发现与决策，不读取本机同名配置；静态 system prompt 未修改，只有审批后
+  的通用 AgentInfo 动态投影进入现有可用 agent 上下文，且该投影使用 BitFun 自有的稳定描述，不注入来源 catalog 文案。
+
+选择与执行仍由现有会话/Subagent owner 决定；adapter 不能替换 BitFun Agent Kernel。外部 agent 当前只支持 fresh
+单次调用，前台结果不返回续接入口，历史 external runtime session 的 follow-up 会被类型化拒绝。
 
 ## 6. 暂停条件
 

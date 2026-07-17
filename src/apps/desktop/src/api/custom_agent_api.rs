@@ -18,6 +18,22 @@ fn workspace_root_from_request(workspace_path: Option<&str>) -> Option<PathBuf> 
         .map(PathBuf::from)
 }
 
+fn reject_external_agent_mutation(
+    state: &AppState,
+    agent_id: &str,
+    workspace: Option<&std::path::Path>,
+) -> Result<(), String> {
+    if state
+        .agent_registry
+        .is_external_subagent_route(agent_id, workspace)
+    {
+        return Err(
+            "external_subagent_read_only: manage external agents in External AI Apps".to_string(),
+        );
+    }
+    Ok(())
+}
+
 fn validate_agent_id(id: &str) -> Result<(), String> {
     let id = id.trim();
     if id.is_empty() {
@@ -108,6 +124,7 @@ pub async fn get_custom_agent_detail(
     request: GetCustomAgentDetailRequest,
 ) -> Result<CustomAgentDetail, String> {
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    reject_external_agent_mutation(&state, &request.agent_id, workspace.as_deref())?;
     state
         .agent_registry
         .get_custom_agent_detail(&request.agent_id, workspace.as_deref())
@@ -300,6 +317,7 @@ pub async fn update_custom_agent(
     }
 
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    reject_external_agent_mutation(&state, &request.agent_id, workspace.as_deref())?;
     let current = state
         .agent_registry
         .get_custom_agent_detail(&request.agent_id, workspace.as_deref())
@@ -349,6 +367,7 @@ pub async fn update_custom_agent(
 #[serde(rename_all = "camelCase")]
 pub struct DeleteCustomAgentRequest {
     pub agent_id: String,
+    pub workspace_path: Option<String>,
 }
 
 #[tauri::command]
@@ -357,6 +376,8 @@ pub async fn delete_custom_agent(
     request: DeleteCustomAgentRequest,
 ) -> Result<(), String> {
     let agent_id = request.agent_id;
+    let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    reject_external_agent_mutation(&state, &agent_id, workspace.as_deref())?;
 
     if let Some(path) = state
         .agent_registry

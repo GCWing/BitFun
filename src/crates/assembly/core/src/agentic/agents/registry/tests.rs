@@ -1,5 +1,5 @@
 use super::support::merge_dynamic_mcp_tools;
-use super::AgentRegistry;
+use super::{AgentRegistry, ExternalSubagentRegistration, ExternalSubagentRoute};
 use crate::agentic::agents::definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::registry::builtin::default_model_id_for_builtin_agent;
 use crate::agentic::agents::registry::types::{
@@ -17,7 +17,7 @@ use bitfun_agent_runtime::custom_agent::{
     CustomAgentKind, CustomAgentLevel,
 };
 use bitfun_agent_runtime::sdk::{RuntimeAgentRegistry, RuntimeAgentRegistryQuery};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -354,6 +354,7 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
             workspace_root: None,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
+            external_sources_supported: false,
         })
         .await;
     assert!(agentic_visible.iter().any(|agent| agent.id == "Explore"));
@@ -379,6 +380,7 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
             workspace_root: None,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
+            external_sources_supported: false,
         })
         .await;
     assert!(deep_review_visible
@@ -394,6 +396,7 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
             workspace_root: None,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
+            external_sources_supported: false,
         })
         .await;
     assert!(deep_research_visible
@@ -527,6 +530,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
             workspace_root: Some(&workspace),
             list_scope: SubagentListScope::RegistryManagement,
             include_disabled: false,
+            external_sources_supported: false,
         })
         .await;
 
@@ -603,6 +607,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
         workspace_root: Some(&workspace),
         list_scope: SubagentListScope::RegistryManagement,
         include_disabled: true,
+        external_sources_supported: false,
     };
 
     let project_override_key = "project::bitfun::ProjectScout".to_string();
@@ -1065,4 +1070,142 @@ fn unique_suffix() -> String {
         .expect("system time should be after UNIX epoch")
         .as_nanos()
         .to_string()
+}
+
+#[tokio::test]
+async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("C:/workspace/external-agent-registry");
+    let runtime_v1 = "external::candidate::behavior-v1";
+    let agent_v1: Arc<dyn Agent> = Arc::new(TestAgent {
+        id: runtime_v1.to_string(),
+    });
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![ExternalSubagentRegistration {
+            runtime_key: runtime_v1.to_string(),
+            logical_id: "Explore".to_string(),
+            provider_label: "OpenCode".to_string(),
+            model_binding: super::ExternalSubagentModelBinding {
+                model_id: "inherit".to_string(),
+                configuration_fingerprint: "model-config-v1".to_string(),
+            },
+            hidden: false,
+            agent: agent_v1,
+        }],
+        [(
+            "explore".to_string(),
+            ExternalSubagentRoute::External(runtime_v1.to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+
+    let local_only = registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some("agentic"),
+            workspace_root: Some(&workspace),
+            list_scope: SubagentListScope::TaskVisible,
+            include_disabled: false,
+            external_sources_supported: false,
+        })
+        .await;
+    assert!(local_only
+        .iter()
+        .any(|agent| { agent.id == "Explore" && agent.source == AgentSource::Builtin }));
+
+    let external = registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some("agentic"),
+            workspace_root: Some(&workspace),
+            list_scope: SubagentListScope::TaskVisible,
+            include_disabled: false,
+            external_sources_supported: true,
+        })
+        .await;
+    let projected = external
+        .iter()
+        .find(|agent| agent.id == "Explore")
+        .expect("external route replaces the same-name local projection");
+    assert_eq!(projected.source, AgentSource::External);
+    assert_eq!(
+        projected.external_provider_label.as_deref(),
+        Some("OpenCode")
+    );
+    assert_eq!(projected.model.as_deref(), Some("inherit"));
+    assert_eq!(projected.model_is_explicit, Some(true));
+    assert!(!projected.supports_follow_up);
+    assert!(registry.is_external_subagent_route("Explore", Some(&workspace)));
+    assert!(registry.is_external_subagent_route("EXPLORE", Some(&workspace)));
+    assert!(!registry.is_external_subagent_route("Explore", None));
+    assert!(!registry.is_external_subagent_route("Explore", Some(Path::new("C:/workspace/other"))));
+
+    let binding = registry
+        .resolve_subagent_for_fresh_invocation("Explore", Some(&workspace), true)
+        .expect("external invocation binding");
+    assert_eq!(binding.runtime_agent_key, runtime_v1);
+    assert!(!binding.supports_follow_up);
+    let leased_model = binding
+        .lease
+        .as_ref()
+        .expect("external binding keeps a generation lease")
+        .model_binding();
+    assert_eq!(leased_model.model_id, "inherit");
+    assert_eq!(leased_model.configuration_fingerprint, "model-config-v1");
+
+    let runtime_v2 = "external::candidate::behavior-v2";
+    let agent_v2: Arc<dyn Agent> = Arc::new(TestAgent {
+        id: runtime_v2.to_string(),
+    });
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![ExternalSubagentRegistration {
+            runtime_key: runtime_v2.to_string(),
+            logical_id: "Explore".to_string(),
+            provider_label: "OpenCode".to_string(),
+            model_binding: super::ExternalSubagentModelBinding {
+                model_id: "inherit".to_string(),
+                configuration_fingerprint: "model-config-v2".to_string(),
+            },
+            hidden: false,
+            agent: agent_v2,
+        }],
+        [(
+            "explore".to_string(),
+            ExternalSubagentRoute::External(runtime_v2.to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+    assert!(registry.get_agent(runtime_v1, Some(&workspace)).is_some());
+    assert_eq!(
+        binding
+            .lease
+            .as_ref()
+            .expect("old generation remains leased")
+            .model_binding()
+            .configuration_fingerprint,
+        "model-config-v1"
+    );
+
+    registry.install_external_subagent_routes(
+        &workspace,
+        Vec::new(),
+        [("Explore".to_string(), ExternalSubagentRoute::Unavailable)]
+            .into_iter()
+            .collect(),
+    );
+    assert!(registry.get_agent(runtime_v1, Some(&workspace)).is_some());
+    assert!(registry.get_agent(runtime_v2, Some(&workspace)).is_none());
+    assert!(registry
+        .resolve_subagent_for_fresh_invocation("Explore", Some(&workspace), true)
+        .is_none());
+    assert!(registry.is_external_subagent_route("Explore", Some(&workspace)));
+    registry.install_external_subagent_routes(&workspace, Vec::new(), BTreeMap::new());
+    assert!(registry
+        .resolve_subagent_for_fresh_invocation("Explore", Some(&workspace), true)
+        .is_none());
+    assert!(registry.is_external_subagent_route("Explore", Some(&workspace)));
+    drop(binding);
+    assert!(registry.get_agent(runtime_v1, Some(&workspace)).is_none());
 }

@@ -38,7 +38,11 @@ import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils'
 import './AgentsView.scss';
 import './AgentsScene.scss';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
-import { CORE_AGENT_IDS, isAgentInOverviewZone } from './agentVisibility';
+import {
+  CORE_AGENT_IDS,
+  isAgentInOverviewZone,
+  isLocallyManageableSubagent,
+} from './agentVisibility';
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { ModeSkillInfo, SubagentModelSelection } from '@/infrastructure/config/types';
@@ -48,6 +52,8 @@ import {
   type ModelSelectOption,
   useModelSelectPresentation,
 } from '@/infrastructure/config/components/ModelSelectPresentation';
+import { useSceneManager } from '@/app/hooks/useSceneManager';
+import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 
 const UNGROUPED_SKILL_GROUP = '__ungrouped__';
 const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
@@ -203,6 +209,8 @@ function buildSkillGroups(
 const AgentsHomeView: React.FC = () => {
   const { t } = useTranslation('scenes/agents');
   const notification = useNotification();
+  const { openScene } = useSceneManager();
+  const setSettingsTab = useSettingsStore((state) => state.setActiveTab);
   const [deletingAgent, setDeletingAgent] = useState(false);
   const {
     searchQuery,
@@ -230,6 +238,7 @@ const AgentsHomeView: React.FC = () => {
   const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
 
   const {
+    workspacePath,
     allAgents,
     filteredAgents,
     loading,
@@ -309,6 +318,7 @@ const AgentsHomeView: React.FC = () => {
     { key: 'builtin', label: t('filters.builtin'), count: counts.builtin },
     { key: 'user', label: t('filters.user'), count: counts.user },
     { key: 'project', label: t('filters.project'), count: counts.project },
+    { key: 'external', label: t('filters.external'), count: counts.external },
   ] as const;
 
   const typeFilters = [
@@ -324,6 +334,9 @@ const AgentsHomeView: React.FC = () => {
     () => allAgents.find((agent) => agent.id === selectedAgentId) ?? null,
     [allAgents, selectedAgentId],
   );
+  const selectedAgentIsExternal = (
+    selectedAgent?.source ?? selectedAgent?.subagentSource
+  ) === 'external';
   const selectedAgentModeConfig = useMemo(
     () => (selectedAgent?.agentKind === 'mode' ? getModeConfig(selectedAgent.id) : null),
     [getModeConfig, selectedAgent],
@@ -339,6 +352,10 @@ const AgentsHomeView: React.FC = () => {
   const selectedAgentManageableSubagents = useMemo(
     () => (selectedAgent?.agentKind === 'mode' ? getModeManageableSubagents(selectedAgent.id) : []),
     [getModeManageableSubagents, selectedAgent],
+  );
+  const selectedAgentEditableSubagents = useMemo(
+    () => selectedAgentManageableSubagents.filter(isLocallyManageableSubagent),
+    [selectedAgentManageableSubagents],
   );
   const selectedAgentConfiguredTools = useMemo(() => (
     selectedAgent?.agentKind === 'mode'
@@ -437,7 +454,12 @@ const AgentsHomeView: React.FC = () => {
   const handleSubagentModelChange = useCallback(async (
     value: string | number | (string | number)[],
   ) => {
-    if (!selectedAgent || selectedAgent.agentKind !== 'subagent' || savingSubagentModel) {
+    if (
+      !selectedAgent
+      || selectedAgent.agentKind !== 'subagent'
+      || selectedAgentIsExternal
+      || savingSubagentModel
+    ) {
       return;
     }
 
@@ -450,7 +472,7 @@ const AgentsHomeView: React.FC = () => {
     } finally {
       setSavingSubagentModel(false);
     }
-  }, [handleSetSubagentModel, savingSubagentModel, selectedAgent]);
+  }, [handleSetSubagentModel, savingSubagentModel, selectedAgent, selectedAgentIsExternal]);
   const selectedAgentCapabilityTabs = useMemo(() => {
     const tabs: Array<{
       key: CapabilityTab;
@@ -459,7 +481,7 @@ const AgentsHomeView: React.FC = () => {
       count?: string;
     }> = [];
 
-    if (selectedAgent?.agentKind === 'subagent') {
+    if (selectedAgent?.agentKind === 'subagent' && !selectedAgentIsExternal) {
       tabs.push({
         key: 'model',
         icon: Cpu,
@@ -515,6 +537,7 @@ const AgentsHomeView: React.FC = () => {
     pendingSubagentIds,
     pendingTools,
     selectedAgent,
+    selectedAgentIsExternal,
     selectedAgentConfiguredTools,
     selectedAgentEnabledSubagentIds,
     selectedAgentHasSkillTool,
@@ -601,7 +624,9 @@ const AgentsHomeView: React.FC = () => {
 
   const handleDeleteCustomAgent = useCallback(async () => {
     if (!selectedAgent) return;
-    if ((selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin') === 'builtin') {
+    if (['builtin', 'external'].includes(
+      selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin',
+    )) {
       return;
     }
     const id = selectedAgent.id;
@@ -613,7 +638,7 @@ const AgentsHomeView: React.FC = () => {
     if (!ok) return;
     setDeletingAgent(true);
     try {
-      await CustomAgentAPI.deleteCustomAgent(id);
+      await CustomAgentAPI.deleteCustomAgent(id, workspacePath || undefined);
       notification.success(t('agentsOverview.deleteSuccess', { name }));
       closeAgentDetails();
       await loadAgents();
@@ -624,11 +649,13 @@ const AgentsHomeView: React.FC = () => {
     } finally {
       setDeletingAgent(false);
     }
-  }, [selectedAgent, closeAgentDetails, loadAgents, notification, t]);
+  }, [selectedAgent, closeAgentDetails, loadAgents, notification, t, workspacePath]);
 
   const canManageCustomAgent = Boolean(
     selectedAgent
-    && (selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin') !== 'builtin',
+    && !['builtin', 'external'].includes(
+      selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin',
+    ),
   );
 
   return (
@@ -862,6 +889,12 @@ const AgentsHomeView: React.FC = () => {
         meta={selectedAgent ? (
           <>
             <span>{t('agentCard.meta.tools', { count: selectedAgentToolCount })}</span>
+            {selectedAgent.externalProviderLabel ? (
+              <span>{t('agentCard.meta.externalProvider', { provider: selectedAgent.externalProviderLabel })}</span>
+            ) : null}
+            {selectedAgent.supportsFollowUp === false ? (
+              <span>{t('agentCard.meta.singleRun')}</span>
+            ) : null}
             {selectedAgent.agentKind === 'mode' && selectedAgentHasSkillTool ? (
               <span>{t('agentCard.meta.skills', { count: selectedAgentSkills.length })}</span>
             ) : null}
@@ -972,7 +1005,7 @@ const AgentsHomeView: React.FC = () => {
                               try {
                                 const currentEnabledIds = new Set(selectedAgentEnabledSubagentIds);
                                 const defaultEnabledIds = new Set(selectedAgentDefaultEnabledSubagentIds);
-                                const changedSubagents = selectedAgentManageableSubagents.filter((subagent) =>
+                                const changedSubagents = selectedAgentEditableSubagents.filter((subagent) =>
                                   currentEnabledIds.has(subagent.id) !== defaultEnabledIds.has(subagent.id));
 
                                 if (changedSubagents.length === 0) {
@@ -1062,7 +1095,7 @@ const AgentsHomeView: React.FC = () => {
 
                               const nextEnabledIds = new Set(pendingSubagentIds ?? selectedAgentEnabledSubagentIds);
                               const currentEnabledIds = new Set(selectedAgentEnabledSubagentIds);
-                              const changedSubagents = selectedAgentManageableSubagents.filter((subagent) =>
+                              const changedSubagents = selectedAgentEditableSubagents.filter((subagent) =>
                                 currentEnabledIds.has(subagent.id) !== nextEnabledIds.has(subagent.id));
 
                               if (changedSubagents.length === 0) {
@@ -1116,7 +1149,9 @@ const AgentsHomeView: React.FC = () => {
                   ) : null}
                 </div>
 
-                {currentCapabilityTab === 'model' && selectedAgent.agentKind === 'subagent' ? (
+                {currentCapabilityTab === 'model'
+                && selectedAgent.agentKind === 'subagent'
+                && !selectedAgentIsExternal ? (
                   <Select
                     size="small"
                     searchable
@@ -1304,13 +1339,17 @@ const AgentsHomeView: React.FC = () => {
                     <div className="agent-card__token-grid">
                       {selectedAgentManageableSubagents.map((subagent: SubagentInfo) => {
                         const isOn = (pendingSubagentIds ?? selectedAgentEnabledSubagentIds).includes(subagent.id);
+                        const isExternal = !isLocallyManageableSubagent(subagent);
                         return (
                           <button
                             key={subagent.key}
                             type="button"
-                            className={`agent-card__token${isOn ? ' is-on' : ''}`}
-                            title={subagent.description || subagent.name}
-                            onClick={() => {
+                            className={`agent-card__token${isOn ? ' is-on' : ''}${isExternal ? ' is-readonly' : ''}`}
+                            title={isExternal
+                              ? t('agentsOverview.manageExternalAgent')
+                              : (subagent.description || subagent.name)}
+                            disabled={isExternal}
+                            onClick={isExternal ? undefined : () => {
                               setPendingSubagentIds((prev) => {
                                 const current = prev ?? selectedAgentEnabledSubagentIds;
                                 return isOn
@@ -1319,7 +1358,9 @@ const AgentsHomeView: React.FC = () => {
                               });
                             }}
                           >
-                            <span className="agent-card__token-name">{subagent.name}</span>
+                            <span className="agent-card__token-name">
+                              {subagent.name}{isExternal ? ` · ${t('filters.external')}` : ''}
+                            </span>
                           </button>
                         );
                       })}
@@ -1374,6 +1415,29 @@ const AgentsHomeView: React.FC = () => {
                   >
                     <Trash2 size={12} style={{ marginRight: 6 }} />
                     {t('agentsOverview.deleteAgent')}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {(selectedAgent.source ?? selectedAgent.subagentSource) === 'external' ? (
+              <div className="agent-card__section">
+                <div className="agent-card__section-head">
+                  <div className="agent-card__section-title">
+                    <span>{t('agentsOverview.externalActions')}</span>
+                  </div>
+                </div>
+                <div className="agent-card__section-actions">
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => {
+                      setSettingsTab('external-sources');
+                      closeAgentDetails();
+                      openScene('settings');
+                    }}
+                  >
+                    <Puzzle size={12} style={{ marginRight: 6 }} />
+                    {t('agentsOverview.manageExternalAgent')}
                   </Button>
                 </div>
               </div>

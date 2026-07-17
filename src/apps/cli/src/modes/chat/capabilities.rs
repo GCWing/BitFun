@@ -249,6 +249,7 @@ impl ChatMode {
                 workspace_root: Some(workspace.as_path()),
                 list_scope: SubagentListScope::TaskVisible,
                 include_disabled: false,
+                external_sources_supported: true,
             }))
         });
 
@@ -288,16 +289,26 @@ impl ChatMode {
                 workspace_root: Some(workspace.as_path()),
                 list_scope: SubagentListScope::RegistryManagement,
                 include_disabled: true,
+                external_sources_supported: true,
             }))
         });
 
+        let has_external_subagents = subagents
+            .iter()
+            .any(|info| info.subagent_source == Some(SubAgentSource::External));
         let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
+            .filter(|info| info.subagent_source != Some(SubAgentSource::External))
             .map(Self::subagent_item_from_info)
             .collect();
 
         if subagent_items.is_empty() {
-            chat_state.add_system_message("No subagents found.".to_string());
+            chat_state.add_system_message(if has_external_subagents {
+                "No locally manageable subagents found. External agents are read-only here; use /external-agents to review or change them."
+                    .to_string()
+            } else {
+                "No subagents found.".to_string()
+            });
             return;
         }
 
@@ -382,6 +393,7 @@ impl ChatMode {
             Some(SubAgentSource::Builtin) => "builtin",
             Some(SubAgentSource::Project) => "project",
             Some(SubAgentSource::User) => "user",
+            Some(SubAgentSource::External) => "external",
             None => "builtin",
         }
         .to_string();
@@ -395,5 +407,4 @@ impl ChatMode {
             enabled: info.effective_enabled,
         }
     }
-
 }

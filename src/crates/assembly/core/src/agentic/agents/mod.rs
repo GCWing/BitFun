@@ -22,6 +22,7 @@ pub use bitfun_agent_runtime::custom_agent::{
     default_custom_agent_user_context_policy, CustomAgentKind, CustomAgentLevel,
 };
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
+pub(crate) use definitions::external::ExternalProvidedSubagent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
@@ -43,6 +44,7 @@ pub use prompt_builder::{
     UserContextPolicy, UserContextSection,
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
+pub(crate) use registry::external_subagent_runtime_key;
 pub use registry::types::{
     subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentSource, AgentToolPolicy,
     CustomSubagentConfig, SubAgentSource, SubagentListScope, SubagentQueryContext,
@@ -51,7 +53,11 @@ pub use registry::types::{
 pub use registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
-pub use registry::{get_agent_registry, AgentRegistry, CustomAgentDetail, CustomSubagentDetail};
+pub use registry::{
+    get_agent_registry, AgentRegistry, CustomAgentDetail, CustomSubagentDetail,
+    ExternalSubagentGenerationLease, ExternalSubagentInvocationBinding,
+    ExternalSubagentModelBinding, ExternalSubagentRegistration, ExternalSubagentRoute,
+};
 use std::any::Any;
 
 // Include embedded prompts generated at compile time

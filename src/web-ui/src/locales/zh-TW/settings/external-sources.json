@@ -1,60 +1,154 @@
 {
   "title": "外部 AI 應用",
-  "subtitle": "無需複製，即可使用其他 AI 應用中相容的工作內容。",
+  "subtitle": "無需複製檔案，即可使用其他 AI 應用中受支援的命令、工具與 Agent。",
   "loading": "正在檢查外部來源…",
   "checkingNonBlocking": "仍在檢查變更；檢查完成前可以繼續使用目前設定。",
+  "common": {
+    "details": "詳細資料",
+    "hideDetails": "收合詳細資料",
+    "close": "關閉",
+    "unknown": "未知",
+    "technicalDetails": "技術詳細資料"
+  },
   "actions": {
     "refresh": "重新整理",
     "refreshing": "正在重新整理…",
-    "updated": "外部來源設定已更新，請在下方確認目前狀態。"
+    "updated": "已儲存，目前狀態如下。",
+    "waitForUpdate": "另一項變更仍在儲存，請等待完成後再做選擇。",
+    "agentUpdated": "已儲存「{{name}}」的變更並重新整理狀態。"
   },
   "unavailable": {
-    "title": "來源暫不可用",
+    "title": "外部設定暫不可用",
     "desktopOnly": "外部來源目前僅在桌面應用中可用。",
-    "remoteWorkspace": "暫不支援遠端工作區來源，且不會以本機設定代替載入。"
+    "remoteWorkspace": "遠端工作區目前無法使用本機外部設定，BitFun 也不會改為載入本機設定。"
   },
   "errors": {
-    "nonBlocking": "目前的外部來源狀態無法確認；頁面仍顯示最後一次已知狀態，請重新整理並檢查詳細資料後再使用。",
-    "technicalDetails": "技術詳細資料"
+    "loadFailed": "BitFun 無法載入目前的外部設定。請勿假設外部內容可用，並重新整理後重試。",
+    "refreshFailed": "BitFun 無法檢查變更。先前已啟用的內容仍可使用，但可能未包含最近的變化；請重新整理後重試。",
+    "mutationUnknown": "BitFun 無法確認本次變更是否已儲存。請勿假設啟用、停用或來源選擇已經生效，並重新整理以確認目前狀態。"
   },
   "diagnostics": {
-    "summary": "有 {{count}} 條來源資訊需要注意；使用受影響內容前請檢查技術詳細資料。"
+    "summary": "有 {{count}} 項內容需要注意，請查看詳細資料以瞭解影響範圍。",
+    "category": {
+      "confirmationStateUnavailable": "BitFun 無法驗證已儲存的工具確認狀態，因此相關工具保持停用。請檢查 BitFun 設定儲存空間後重新整理。",
+      "conflictHistoryUnavailable": "BitFun 無法儲存衝突資訊，因此相關名稱保持不可用。請檢查 BitFun 設定儲存空間後重新整理。",
+      "checkInProgress": "仍在檢查一個來源，現有內容可以繼續使用。",
+      "checkTimedOut": "檢查一個來源耗時過長，其他內容仍可使用。請重新整理後重試。",
+      "confirmationRequired": "一個來源需要你的確認，BitFun 才能使用其中的內容。",
+      "sourceTooLarge": "來源內容過多，部分檔案已略過。請減少檔案數量或大小後重新整理。",
+      "invalidSettings": "部分設定無法讀取，已被略過。請修正來源設定後重新整理。",
+      "unreadableSource": "BitFun 無法讀取來源中的部分內容。請檢查檔案存取權限後重新整理。",
+      "notSupported": "BitFun 暫不支援此類外部內容，因此沒有載入或執行它。",
+      "checkFailed": "BitFun 未能檢查一個來源，其他來源仍可使用。請重新整理後重試。",
+      "sourceIssue": "BitFun 在一個來源中發現問題，受影響的內容未啟用。請查看技術詳細資料。"
+    }
   },
   "sources": {
-    "title": "已識別來源",
-    "description": "來源保留在原始位置；此頁面開啟期間會自動感知變更。",
-    "globalOnly": "目前僅顯示使用者全域來源；開啟工作區後會同時包含專案來源。",
-    "empty": "未識別到相容的外部來源。",
+    "title": "設定來源",
+    "description": "設定仍保留在原位置；開啟此頁面後會自動檢查變更。",
+    "globalOnly": "目前僅顯示適用於所有工作區的來源；開啟工作區後還會顯示該專案的來源。",
+    "empty": "未發現受支援的外部設定。",
     "commandCount": "{{count}} 個命令",
     "toolCount": "{{count}} 個工具",
+    "agentCount": "{{count}} 個 Agent",
     "toggleLabel": "啟用 {{name}}"
   },
+  "agents": {
+    "title": "發現的 Agent",
+    "description": "Agent 仍保留在原應用程式中。啟用前，請確認下方的模型、工具與執行位置；其指令或這些設定變更後，BitFun 會再次請你確認。",
+    "disable": "停用",
+    "enable": "啟用 Agent",
+    "reviewTitle": "查看 {{name}} 的執行設定",
+    "approvalWarning": "啟用後，此 Agent 可以讓所選模型呼叫上方工具。其指令、模型、工具或設定來源變更時，BitFun 會要求你再次確認。",
+    "singleRun": "單次執行，不支援追問",
+    "modelUnavailable": "無法使用",
+    "model": "模型：{{model}}",
+    "tools": "工具：{{tools}}",
+    "executionDomain": "執行位置：本機與目前工作區",
+    "compatibility": "狀態：{{state}}",
+    "sources": "由 {{count}} 個設定來源共同定義",
+    "noDescription": "未提供說明",
+    "noTools": "無工具"
+  },
+  "agentState": {
+    "approval_required": "待確認",
+    "declined": "保持停用",
+    "disabled": "已停用",
+    "active": "已啟用",
+    "conflict": "需要選擇",
+    "blocked": "暫不支援",
+    "unavailable": "暫時不可用"
+  },
+  "agentChanges": {
+    "unavailable": "{{name}} 已無法用於新任務（{{state}}）。請在下方檢查它目前使用的模型、工具、設定來源或同名衝突。",
+    "unavailableMany": "已有 {{count}} 個已啟用 Agent 無法用於新任務。請在下方檢查它們目前的設定。",
+    "removedState": "設定來源已刪除"
+  },
+  "agentCompatibility": {
+    "ready": "支援",
+    "ready_with_degradation": "支援，但部分設定不會生效",
+    "blocked": "不支援",
+    "invalid": "設定有誤"
+  },
+  "agentDiagnostics": {
+    "activationBlocked": "暫時無法啟用此 Agent。",
+    "degradedOnly": "部分設定在 BitFun 中不會生效。請查看說明，確認實際結果符合預期。",
+    "modelUnavailable": {
+      "reason": "此 Agent 要求的模型在 BitFun 中不可用。",
+      "impact": "{{impact}}",
+      "nextStep": "請在來源應用中改用可用模型，或在 BitFun 中設定可用的固定 Sub-Agent 模型，然後重新整理。"
+    },
+    "toolUnavailable": {
+      "reason": "此 Agent 要求的一個或多個工具在 BitFun 中不可用。",
+      "impact": "{{impact}}",
+      "nextStep": "請在來源應用中移除或替換不支援的工具，然後重新整理。"
+    },
+    "invalidDefinition": {
+      "reason": "此 Agent 的設定缺少必填內容或包含無效內容。",
+      "impact": "{{impact}}",
+      "nextStep": "請在原應用中修正 Agent 設定，然後重新整理。"
+    },
+    "unsupportedBehavior": {
+      "reason": "此 Agent 需要 BitFun 目前不支援的行為或設定。",
+      "impact": "{{impact}}",
+      "nextStep": "請在原應用程式中改用受支援的設定並補齊必填內容，然後重新整理。"
+    },
+    "ignoredOption": {
+      "reason": "BitFun 不會套用這項設定。",
+      "impact": "{{impact}}",
+      "nextStep": "啟用前，請確認上方實際使用的模型與工具，並確認最終結果仍符合預期。"
+    }
+  },
+  "agentConflicts": {
+    "title": "選擇同名 Agent",
+    "description": "BitFun 不會替你決定使用哪一個。你的選擇會保留，直到其中一個 Agent 的設定發生變更。",
+    "agentName": "找到多個名為 {{name}} 的 Agent",
+    "disableAll": "暫不使用任何一個",
+    "pending": "請選擇日後執行任務時使用哪一個 Agent。選擇外部 Agent 時，也會確認下方顯示的模型、工具與執行位置。",
+    "selectionApproves": "選擇後，也表示你確認了下方顯示的模型、工具、執行位置與設定來源。"
+  },
   "tools": {
-    "title": "已識別工具",
-    "description": "工具程式碼保留在原始位置；識別過程不會執行程式碼。",
-    "review": "重新審核",
-    "details": "詳細資料",
-    "hideDetails": "收合詳細資料",
-    "disable": "停用模組",
-    "reviewTitle": "審核來自 {{source}} 的 {{name}}",
-    "cancelReview": "關閉",
+    "title": "發現的工具",
+    "description": "工具程式碼仍保留在原位置；BitFun 檢查來源時不會執行這些程式碼。",
+    "review": "查看設定",
+    "disable": "停用這些工具",
+    "reviewTitle": "查看 {{name}}（來自 {{source}}）",
     "reason": "原因：{{reason}}",
     "nextStep": "下一步：{{nextStep}}",
-    "targetScope": "此操作會套用到該模組匯出的所有工具。"
+    "targetScope": "此操作會同時影響該來源提供的所有工具。"
   },
   "toolApprovals": {
-    "title": "等待審核的工具",
-    "description": "載入其他應用的程式碼前，請確認來源和執行存取範圍。",
+    "title": "待確認的工具",
+    "description": "啟用其他應用程式中的工具程式碼前，請確認程式碼位置以及它可以存取的內容。",
     "source": "來源：{{location}}",
-    "sourceRoot": "來源根目錄：{{location}}",
-    "modulePath": "模組檔案：{{location}}",
-    "scope": "作用域：{{scope}}",
-    "executionDomain": "執行域：{{domain}}",
+    "sourceRoot": "來源資料夾：{{location}}",
+    "modulePath": "程式碼檔案：{{location}}",
+    "scope": "適用範圍：{{scope}}",
+    "executionDomain": "執行位置：{{domain}}",
     "runtime": "執行環境：{{runtime}}",
-    "unknown": "未知",
-    "workingDirectory": "工作目錄：{{location}}",
-    "capabilities": "直接存取：{{capabilities}}",
-    "warning": "工具程式碼會繼承目前使用者權限與環境變數；這不構成作業系統層級沙箱，工具建立的後代程序也可能在取消後繼續執行。",
+    "workingDirectory": "啟動目錄：{{location}}",
+    "capabilities": "可直接存取：{{capabilities}}",
+    "warning": "工具程式碼會使用你的使用者權限並繼承環境變數，且不會在作業系統沙箱中隔離。它啟動的程序可能在你取消後繼續執行。",
     "keepDisabled": "保持停用",
     "enable": "啟用工具"
   },
@@ -65,37 +159,37 @@
     "environment": "環境變數"
   },
   "toolState": {
-    "approval_required": "需要審核",
+    "approval_required": "待確認",
     "disabled": "已停用",
     "active": "已啟用",
     "conflict": "需要選擇",
-    "unsupported": "已識別，暫不支援",
+    "unsupported": "暫不支援",
     "runtime_unavailable": "執行環境不可用",
-    "load_failed": "載入失敗"
+    "load_failed": "無法載入"
   },
   "toolReason": {
-    "approval_required": "BitFun 載入此模組前需要你的核准。",
-    "disabled": "此目標已依使用者選擇停用。",
-    "active": "模組已成功載入，並在目前執行域中提供。",
-    "conflict": "另一個實作使用了相同的工具名稱。",
-    "unsupported": "模組使用目前執行環境不支援的語法或行為。",
+    "approval_required": "啟用前，需要確認此工具檔案的存取範圍。",
+    "disabled": "你已選擇停用此工具來源。",
+    "active": "工具程式碼已載入，可以使用。",
+    "conflict": "另一個工具使用了相同名稱。",
+    "unsupported": "此工具檔案包含 BitFun 目前不支援的語法或操作。",
     "runtime_unavailable": "所需的 JavaScript 執行環境無法使用。",
-    "load_failed": "工具程序無法載入此模組。"
+    "load_failed": "BitFun 無法載入此工具檔案。"
   },
   "toolNextStep": {
-    "approval_required": "審核存取範圍，然後啟用目標或維持停用。",
-    "disabled": "確認來源和存取範圍後啟用目標。",
-    "active": "無需操作；若要停止提供該模組的所有工具，可停用此模組。",
-    "conflict": "在下方選擇提供者，或停用此目標。",
-    "unsupported": "將模組轉換為支援的單一檔案 JavaScript 子集，然後重新整理。",
-    "runtime_unavailable": "恢復所需執行環境，然後重新整理。",
-    "load_failed": "修復模組後重新整理，或停用此目標。"
+    "approval_required": "確認上方來源與存取範圍後，啟用或繼續停用這些工具。",
+    "disabled": "確認上方來源與存取範圍後，再啟用這些工具。",
+    "active": "無需操作。若要停止使用該來源的所有工具，請停用這些工具。",
+    "conflict": "請在下方選擇要使用的工具，或繼續保持停用。",
+    "unsupported": "請將來源改為 BitFun 目前支援的單一 JavaScript 檔案格式，然後重新整理。",
+    "runtime_unavailable": "請恢復所需的 JavaScript 執行環境，然後重新整理。",
+    "load_failed": "請修正來源後重新整理，或繼續停用這些工具。"
   },
   "toolConflicts": {
-    "title": "工具衝突需要選擇",
-    "description": "如有既有本機或 MCP 實作，選擇前會繼續保留；否則該名稱維持不可用。候選內容變化前不會重複詢問。",
-    "toolName": "多個實作都提供了 {{name}}",
-    "pending": "請選擇 BitFun 對此執行域中相同候選集合應公開的實作。"
+    "title": "選擇同名工具",
+    "description": "選擇前，BitFun 會繼續使用目前可用的本機或 MCP 工具；如果沒有可用工具，則暫時停用此名稱。選項發生變更前不會再次詢問。",
+    "toolName": "找到多個名為 {{name}} 的工具",
+    "pending": "請選擇日後呼叫此工具名稱時使用哪一個工具。"
   },
   "toolCandidateKind": {
     "built_in": "內建",
@@ -103,10 +197,15 @@
     "external": "外部"
   },
   "scope": {
-    "user_global": "使用者全域",
-    "project": "專案",
-    "remote_user": "遠端使用者",
-    "remote_project": "遠端專案"
+    "user_global": "所有工作區",
+    "project": "目前工作區",
+    "remote_user": "所有遠端工作區",
+    "remote_project": "目前遠端工作區"
+  },
+  "executionLocation": {
+    "local": "本機",
+    "remote": "目前遠端環境",
+    "unknown": "未知"
   },
   "runtime": {
     "java_script": "JavaScript",
@@ -114,18 +213,18 @@
   },
   "lifecycle": {
     "available": "可用",
-    "restricted": "受限",
-    "degraded": "需要注意",
-    "unavailable": "不可用",
-    "removed": "已移除",
+    "restricted": "目前版本暫不支援",
+    "degraded": "部分內容不可用",
+    "unavailable": "暫時不可用",
+    "removed": "來源已移除",
     "suppressed": "已停用",
-    "using_last_valid_version": "使用上一個有效版本"
+    "using_last_valid_version": "正在使用上次可用的內容"
   },
   "conflicts": {
-    "title": "需要你的選擇",
-    "description": "同名擴充不會被靜默啟用；在參與方版本變化前只需選擇一次。",
-    "commandName": "多個來源都提供了 /{{name}}",
-    "pending": "選擇一個目前可用的來源後，該命令才會變為可用。",
-    "restricted": "目前版本不可用"
+    "title": "選擇同名命令",
+    "description": "多個來源提供同名命令時，BitFun 不會替你選擇。你的選擇會保留，直到其中一個來源發生變更。",
+    "commandName": "多個來源提供了 /{{name}}",
+    "pending": "請選擇使用哪個來源的命令。",
+    "restricted": "目前版本暫不支援"
   }
 }

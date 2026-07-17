@@ -13,7 +13,8 @@ use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
     InternalReminderKind, Message, MessageContent, MessageSemanticKind, ProcessingPhase, Session,
-    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy, SessionState,
+    SessionSummary, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
@@ -242,12 +243,22 @@ pub(crate) struct SubagentExecutionRequest {
     pub(crate) context_mode: SubagentContextMode,
     pub(crate) target_session_id: Option<String>,
     pub(crate) subagent_type: Option<String>,
+    /// Stable user-facing id. External adapters may use a generation-specific
+    /// `subagent_type` internally while keeping this logical id in events and
+    /// persisted relationship metadata.
+    pub(crate) logical_subagent_type: Option<String>,
+    pub(crate) continuation_policy: SessionContinuationPolicy,
+    pub(crate) model_binding_policy: SessionModelBindingPolicy,
     pub(crate) workspace_path: Option<String>,
     pub(crate) model_id: Option<String>,
     pub(crate) subagent_parent_info: SubagentParentInfo,
     pub(crate) context: HashMap<String, String>,
     /// Execution policy for the child subagent session being launched.
     pub(crate) delegation_policy: DelegationPolicy,
+    /// Pins an immutable external generation from Task validation until the
+    /// queued or running invocation reaches a terminal state.
+    pub(crate) external_generation_lease:
+        Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
 }
 
 #[derive(Debug, Clone)]
@@ -421,6 +432,7 @@ fn background_subagent_delivery_metadata(
 fn build_subagent_session_relationship(
     parent_info: Option<&SubagentParentInfo>,
     agent_type: &str,
+    continuation_policy: SessionContinuationPolicy,
 ) -> SessionRelationship {
     SessionRelationship {
         kind: Some(SessionRelationshipKind::Subagent),
@@ -430,7 +442,15 @@ fn build_subagent_session_relationship(
         parent_turn_index: None,
         parent_tool_call_id: parent_info.map(|info| info.tool_call_id.clone()),
         subagent_type: Some(agent_type.to_string()),
+        continuation_policy: Some(continuation_policy),
     }
+}
+
+fn logical_subagent_type_or_runtime(
+    logical_subagent_type: Option<&str>,
+    runtime_type: &str,
+) -> String {
+    logical_subagent_type.unwrap_or(runtime_type).to_string()
 }
 
 fn fork_subagent_system_reminder() -> String {
@@ -458,6 +478,7 @@ pub(crate) struct HiddenSubagentExecutionRequest {
     dialog_turn_id: Option<String>,
     session_name: String,
     agent_type: String,
+    logical_agent_type: String,
     session_config: SessionConfig,
     initial_messages: Vec<Message>,
     user_input_text: String,
@@ -470,6 +491,7 @@ pub(crate) struct HiddenSubagentExecutionRequest {
     session_kind: SessionKind,
     emit_lifecycle_events: bool,
     prepared_session_created: bool,
+    external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
 }
 
 impl HiddenSubagentExecutionRequest {
@@ -481,8 +503,8 @@ impl HiddenSubagentExecutionRequest {
         self.dialog_turn_id = Some(dialog_turn_id);
     }
 
-    pub(super) fn agent_type(&self) -> &str {
-        &self.agent_type
+    pub(super) fn logical_agent_type(&self) -> &str {
+        &self.logical_agent_type
     }
 
     pub(super) fn user_input_text(&self) -> &str {
@@ -4944,6 +4966,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id,
             session_name,
             agent_type,
+            logical_agent_type,
             session_config,
             initial_messages,
             user_input_text,
@@ -4956,8 +4979,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_kind,
             emit_lifecycle_events,
             prepared_session_created,
+            external_generation_lease: _external_generation_lease,
         } = request;
         let prepared_target_session_id = target_session_id.clone();
+        let continuation_policy = session_config.continuation_policy;
 
         let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
         let parent_thread_goal_active = if let Some(parent_info) = subagent_parent_info.as_ref() {
@@ -5130,7 +5155,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .create_hidden_agent_session(
                         None,
                         session_name.clone(),
-                        agent_type.clone(),
+                        logical_agent_type.clone(),
                         session_config.clone(),
                         created_by.clone(),
                         session_kind,
@@ -5179,7 +5204,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .persist_session_lineage(
                 &session_id,
-                build_subagent_session_relationship(subagent_parent_info.as_ref(), &agent_type),
+                build_subagent_session_relationship(
+                    subagent_parent_info.as_ref(),
+                    &logical_agent_type,
+                    continuation_policy,
+                ),
             )
             .await
         {
@@ -5243,7 +5272,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .start_dialog_turn_with_existing_context(
                 &session_id,
-                agent_type.clone(),
+                logical_agent_type.clone(),
                 user_input_text.clone(),
                 Some(requested_dialog_turn_id.clone()),
                 None,
@@ -5269,7 +5298,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     parent_session_id: parent_info.session_id.clone(),
                     parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
                     parent_tool_call_id: parent_info.tool_call_id.clone(),
-                    agent_type: Some(agent_type.clone()),
+                    agent_type: Some(logical_agent_type.clone()),
                     model_id: self
                         .session_manager
                         .get_session(&session_id)
@@ -5521,7 +5550,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         &session_id,
                         &dialog_turn_id,
                         turn_index,
-                        &agent_type,
+                        &logical_agent_type,
                         &user_input_text,
                         subagent_workspace_path.as_deref(),
                         subagent_session_storage_path.as_deref(),
@@ -5608,7 +5637,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     &session_id,
                     &dialog_turn_id,
                     turn_index,
-                    &agent_type,
+                    &logical_agent_type,
                     &user_input_text,
                     subagent_workspace_path.as_deref(),
                     subagent_session_storage_path.as_deref(),
@@ -5679,7 +5708,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             &session_id,
                             &dialog_turn_id,
                             turn_index,
-                            &agent_type,
+                            &logical_agent_type,
                             &user_input_text,
                             subagent_workspace_path.as_deref(),
                             subagent_session_storage_path.as_deref(),
@@ -5733,7 +5762,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         let event = self.session_manager.record_subagent_partial_timeout(
                             &parent_info.session_id,
                             &parent_info.dialog_turn_id,
-                            &agent_type,
+                            &logical_agent_type,
                             &partial_result.text,
                             Some("timeout"),
                         );
@@ -5768,7 +5797,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     &session_id,
                     &dialog_turn_id,
                     turn_index,
-                    &agent_type,
+                    &logical_agent_type,
                     &user_input_text,
                     subagent_workspace_path.as_deref(),
                     subagent_session_storage_path.as_deref(),
@@ -5833,7 +5862,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     &session_id,
                     &dialog_turn_id,
                     turn_index,
-                    &agent_type,
+                    &logical_agent_type,
                     &user_input_text,
                     subagent_workspace_path.as_deref(),
                     subagent_session_storage_path.as_deref(),
@@ -5864,7 +5893,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             &session_id,
             &dialog_turn_id,
             turn_index,
-            &agent_type,
+            &logical_agent_type,
             &user_input_text,
             subagent_workspace_path.as_deref(),
             subagent_session_storage_path.as_deref(),
@@ -6126,17 +6155,29 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             parent_session_id
                         ))
                     })?;
+                let persisted_metadata = self
+                    .session_manager
+                    .load_session_metadata(&binding.session_storage_dir(), target_session_id)
+                    .await?;
+                if persisted_metadata.as_ref().is_some_and(|metadata| {
+                    metadata
+                        .relationship
+                        .as_ref()
+                        .and_then(|relationship| relationship.continuation_policy)
+                        == Some(SessionContinuationPolicy::FreshOnly)
+                }) {
+                    return Err(BitFunError::Validation(
+                        "subagent_follow_up_unsupported: this subagent session is fresh-only; start a new Task invocation"
+                            .to_string(),
+                    ));
+                }
                 if let Some(allow_review_follow_up) = background_allow_review_follow_up {
-                    let metadata = self
-                        .session_manager
-                        .load_session_metadata(&binding.session_storage_dir(), target_session_id)
-                        .await?
-                        .ok_or_else(|| {
-                            BitFunError::NotFound(format!(
-                                "Session metadata not found: {}",
-                                target_session_id
-                            ))
-                        })?;
+                    let metadata = persisted_metadata.ok_or_else(|| {
+                        BitFunError::NotFound(format!(
+                            "Session metadata not found: {}",
+                            target_session_id
+                        ))
+                    })?;
                     if !metadata.is_subagent() {
                         return Err(BitFunError::Validation(format!(
                             "Subagent execution target must be a subagent session: {}",
@@ -6211,6 +6252,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .await?
             }
         };
+
+        if session.config.continuation_policy == SessionContinuationPolicy::FreshOnly {
+            return Err(BitFunError::Validation(
+                "subagent_follow_up_unsupported: this subagent session is fresh-only; start a new Task invocation"
+                    .to_string(),
+            ));
+        }
 
         if session.kind != SessionKind::Subagent {
             return Err(BitFunError::Validation(format!(
@@ -6368,18 +6416,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let defaults = Self::agent_model_defaults().await;
         let registry = get_agent_registry();
         let configured_selection = registry
-            .get_custom_subagent_config(agent_type, Some(Path::new(workspace_path)))
-            .filter(|custom| custom.model_is_explicit)
-            .map(|custom| {
-                if custom.model.trim() == "inherit" {
-                    SubagentModelSelection::Inherit
-                } else {
-                    SubagentModelSelection::fixed(
-                        trimmed_model_id(Some(custom.model.as_str()))
-                            .unwrap_or_else(|| "fast".to_string()),
-                    )
-                }
-            })
+            .get_explicit_subagent_model_selection(agent_type, Some(Path::new(workspace_path)))
             .unwrap_or_else(|| defaults.builtin_subagent_selection(agent_type));
         let parent_model_id = if explicit_model_id.is_none()
             && matches!(&configured_selection, SubagentModelSelection::Inherit)
@@ -6419,6 +6456,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "session-{}",
             request.subagent_parent_info.session_id
         ));
+        let approved_model_binding = request
+            .external_generation_lease
+            .as_ref()
+            .map(|lease| lease.model_binding().clone());
 
         match request.context_mode {
             SubagentContextMode::Fresh => {
@@ -6470,6 +6511,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         dialog_turn_id: None,
                         session_name: session.session_name.clone(),
                         agent_type: session.agent_type.clone(),
+                        logical_agent_type: session.agent_type.clone(),
                         session_config: session.config.clone(),
                         initial_messages,
                         user_input_text: task_description,
@@ -6484,6 +6526,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         session_kind: SessionKind::Subagent,
                         emit_lifecycle_events: true,
                         prepared_session_created: false,
+                        external_generation_lease: request.external_generation_lease,
                     });
                 }
 
@@ -6506,25 +6549,55 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     )
                     .await?;
                 }
-                let resolved_model_id = self
-                    .resolve_fresh_subagent_model_id(
+                let resolved_model_id = if matches!(
+                    request.model_binding_policy,
+                    SessionModelBindingPolicy::ApprovedImmutable
+                ) {
+                    if model_id.is_some() {
+                        return Err(BitFunError::Validation(
+                            "An approved immutable subagent model cannot be overridden".to_string(),
+                        ));
+                    }
+                    approved_model_binding
+                        .as_ref()
+                        .map(|binding| binding.model_id.clone())
+                        .ok_or_else(|| {
+                            BitFunError::Validation(
+                                "Approved immutable subagent generation has no concrete model binding"
+                                    .to_string(),
+                            )
+                        })?
+                } else {
+                    self.resolve_fresh_subagent_model_id(
                         model_id.as_deref(),
                         &agent_type,
                         &workspace_path,
                         &request.subagent_parent_info.session_id,
                     )
-                    .await?;
+                    .await?
+                };
+                let logical_agent_type = logical_subagent_type_or_runtime(
+                    request.logical_subagent_type.as_deref(),
+                    &agent_type,
+                );
+                let mut session_config = Self::build_session_config_for_workspace(
+                    workspace_path,
+                    Some(resolved_model_id),
+                )
+                .await;
+                session_config.continuation_policy = request.continuation_policy;
+                session_config.model_binding_policy = request.model_binding_policy;
+                session_config.model_binding_fingerprint = approved_model_binding
+                    .as_ref()
+                    .map(|binding| binding.configuration_fingerprint.clone());
 
                 Ok(HiddenSubagentExecutionRequest {
                     target_session_id: None,
                     dialog_turn_id: None,
                     session_name: format!("Subagent: {}", task_description),
                     agent_type,
-                    session_config: Self::build_session_config_for_workspace(
-                        workspace_path,
-                        Some(resolved_model_id),
-                    )
-                    .await,
+                    logical_agent_type,
+                    session_config,
                     initial_messages: vec![Message::user(task_description.clone())],
                     user_input_text: task_description,
                     created_by,
@@ -6538,6 +6611,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     session_kind: SessionKind::Subagent,
                     emit_lifecycle_events: true,
                     prepared_session_created: false,
+                    external_generation_lease: request.external_generation_lease,
                 })
             }
             SubagentContextMode::Fork => {
@@ -6604,6 +6678,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     dialog_turn_id: None,
                     session_name: format!("Fork: {}", task_description),
                     agent_type: snapshot.parent_agent_type.clone(),
+                    logical_agent_type: snapshot.parent_agent_type.clone(),
                     session_config,
                     initial_messages,
                     user_input_text: task_description,
@@ -6618,6 +6693,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     session_kind: SessionKind::Subagent,
                     emit_lifecycle_events: true,
                     prepared_session_created: false,
+                    external_generation_lease: request.external_generation_lease,
                 })
             }
         }
@@ -6650,7 +6726,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .create_hidden_agent_session(
                 None,
                 request.session_name.clone(),
-                request.agent_type.clone(),
+                request.logical_agent_type.clone(),
                 request.session_config.clone(),
                 request.created_by.clone(),
                 request.session_kind,
@@ -7006,12 +7082,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "task_description is required when creating an internal agent session".to_string(),
             ));
         }
+        let logical_agent_type = request.agent_type.clone();
 
         let hidden_request = HiddenSubagentExecutionRequest {
             target_session_id: None,
             dialog_turn_id: None,
             session_name: request.session_name,
             agent_type: request.agent_type,
+            logical_agent_type,
             session_config: Self::build_session_config_for_workspace(
                 request.workspace_path,
                 request.model_id,
@@ -7028,6 +7106,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_kind: request.session_kind,
             emit_lifecycle_events: request.emit_lifecycle_events,
             prepared_session_created: false,
+            external_generation_lease: None,
         };
 
         self.execute_hidden_subagent_internal(hidden_request, cancel_token, timeout_seconds)
@@ -7063,7 +7142,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
             })?
             .to_string();
-        let agent_type = request.agent_type.clone();
+        let logical_agent_type = request.logical_agent_type.clone();
         let subagent_parent_info = match request.subagent_parent_info.clone() {
             Some(info) => info,
             None => {
@@ -7197,7 +7276,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     &subagent_session_id_for_delivery,
                     &subagent_dialog_turn_id_for_delivery,
                     parent_requires_tool_confirmation,
-                    &agent_type,
+                    &logical_agent_type,
                     &task_description,
                 );
 
@@ -7331,7 +7410,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 &subagent_session_id_for_delivery,
                 &subagent_dialog_turn_id_for_delivery,
                 parent_requires_tool_confirmation,
-                &agent_type,
+                &logical_agent_type,
                 &task_description,
             );
 
@@ -8344,7 +8423,8 @@ fn merge_prepended_messages_for_turn(
 #[cfg(test)]
 mod tests {
     use super::{
-        background_subagent_delivery_metadata, merge_prepended_messages_for_turn,
+        background_subagent_delivery_metadata, build_subagent_session_relationship,
+        logical_subagent_type_or_runtime, merge_prepended_messages_for_turn,
         normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
         resolve_agent_submission_turn_id, resolve_subagent_model_selection,
         runtime_port_error_preserving_message, should_require_tool_confirmation,
@@ -8354,7 +8434,7 @@ mod tests {
     use crate::agentic::agents::{CustomSubagent, CustomSubagentKind, UserContextPolicy};
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind, Session,
-        SessionConfig, SessionKind,
+        SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
     };
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
@@ -8713,6 +8793,43 @@ mod tests {
         assert!(!non_peer_metadata.contains_key("require_tool_confirmation"));
     }
 
+    #[test]
+    fn external_subagent_surfaces_use_logical_id_instead_of_runtime_generation_key() {
+        let runtime_type = "external_subagent_runtime:generation-hash";
+        let logical_type = logical_subagent_type_or_runtime(Some("Reviewer"), runtime_type);
+
+        assert_eq!(logical_type, "Reviewer");
+        let relationship = build_subagent_session_relationship(
+            None,
+            &logical_type,
+            SessionContinuationPolicy::FreshOnly,
+        );
+        assert_eq!(relationship.subagent_type.as_deref(), Some("Reviewer"));
+        assert_eq!(
+            relationship.continuation_policy,
+            Some(SessionContinuationPolicy::FreshOnly)
+        );
+
+        let parent = SubagentParentInfo {
+            session_id: "parent-session".to_string(),
+            dialog_turn_id: "parent-turn".to_string(),
+            tool_call_id: "tool-call".to_string(),
+        };
+        let metadata = background_subagent_delivery_metadata(
+            "background-task",
+            &parent,
+            "subagent-session",
+            "subagent-turn",
+            false,
+            &logical_type,
+            "Review",
+        );
+        assert_eq!(metadata["subagentType"], serde_json::json!("Reviewer"));
+        assert!(!serde_json::Value::Object(metadata)
+            .to_string()
+            .contains(runtime_type));
+    }
+
     #[tokio::test]
     async fn completed_background_control_cannot_be_claimed_for_late_cancellation() {
         let (coordinator, _) = test_coordinator();
@@ -8818,6 +8935,9 @@ mod tests {
             context_mode: SubagentContextMode::Fresh,
             target_session_id: None,
             subagent_type: Some("CodeReview".to_string()),
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
             model_id: None,
             subagent_parent_info: SubagentParentInfo {
@@ -8827,6 +8947,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let resolved = coordinator
@@ -8866,6 +8987,9 @@ mod tests {
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(review_session.session_id.clone()),
             subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: None,
             subagent_parent_info: SubagentParentInfo {
@@ -8875,6 +8999,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let resolved = coordinator
@@ -8926,6 +9051,9 @@ mod tests {
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(review_session.session_id.clone()),
             subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: Some("fast".to_string()),
             subagent_parent_info: SubagentParentInfo {
@@ -8935,6 +9063,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let error = coordinator
@@ -8998,6 +9127,7 @@ mod tests {
                 tool_call_id: "task-tool".to_string(),
             }),
             "CodeReview",
+            SessionContinuationPolicy::Reusable,
         ));
         session_manager
             .save_session_metadata(&storage_binding.session_storage_dir(), &metadata)
@@ -9010,6 +9140,9 @@ mod tests {
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(review_session_id.clone()),
             subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: Some("fast".to_string()),
             subagent_parent_info: SubagentParentInfo {
@@ -9019,6 +9152,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let error = coordinator
@@ -9080,6 +9214,9 @@ mod tests {
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(review_session_id.clone()),
             subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: None,
             subagent_parent_info: SubagentParentInfo {
@@ -9089,6 +9226,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let error = coordinator
@@ -9189,6 +9327,9 @@ mod tests {
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(review_session_id.clone()),
             subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: None,
             subagent_parent_info: SubagentParentInfo {
@@ -9198,6 +9339,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let error = coordinator
@@ -9243,6 +9385,7 @@ mod tests {
             parent_turn_index: None,
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: None,
         };
 
         assert!(super::session_lineage_matches_parent(
@@ -9683,6 +9826,9 @@ mod tests {
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(subagent_session.session_id.clone()),
             subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: Some("fast".to_string()),
             subagent_parent_info: SubagentParentInfo {
@@ -9692,6 +9838,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let prepared = coordinator
@@ -9749,6 +9896,9 @@ mod tests {
             context_mode: SubagentContextMode::Fork,
             target_session_id: None,
             subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: Some("fast".to_string()),
             subagent_parent_info: SubagentParentInfo {
@@ -9758,6 +9908,7 @@ mod tests {
             },
             context: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
         };
 
         let prepared = coordinator

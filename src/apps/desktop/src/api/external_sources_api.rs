@@ -1,11 +1,13 @@
 //! Desktop host API for ecosystem-neutral external AI application sources.
 
 use bitfun_core::external_sources::{
-    external_source_snapshot, set_external_prompt_command_conflict_choice,
-    set_external_source_enabled, set_external_tool_conflict_choice,
+    choose_external_subagent_conflict, external_source_snapshot,
+    set_external_prompt_command_conflict_choice, set_external_source_enabled,
+    set_external_subagent_activation, set_external_tool_conflict_choice,
     set_external_tool_target_decision, ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot,
-    ExternalSourceDiagnostic, ExternalToolApprovalRequest, ExternalToolCatalogEntry,
-    ExternalToolConflict, PromptCommandAvailability,
+    ExternalSourceDiagnostic, ExternalSubagentConflict, ExternalSubagentSummary,
+    ExternalToolApprovalRequest, ExternalToolCatalogEntry, ExternalToolConflict,
+    PromptCommandAvailability,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_product_domains::external_sources::{PromptCommandConflict, SourceQualifiedCommandId};
@@ -55,6 +57,29 @@ pub struct SetExternalToolConflictChoiceRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalSubagentActivationRequest {
+    pub workspace_path: Option<String>,
+    pub candidate_id: String,
+    pub approved: bool,
+    pub expected_subagent_generation: u64,
+    pub expected_preference_revision: u64,
+    pub decision_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ChooseExternalSubagentConflictRequest {
+    pub workspace_path: Option<String>,
+    pub conflict_key: String,
+    pub candidate_id: String,
+    #[serde(default)]
+    pub approve_external: bool,
+    pub expected_subagent_generation: u64,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceSnapshotResponse {
     pub generation: u64,
     pub discovery_pending: bool,
@@ -68,6 +93,16 @@ pub struct ExternalSourceSnapshotResponse {
     pub tool_approval_requests: Vec<ExternalToolApprovalRequest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_conflicts: Vec<ExternalToolConflict>,
+    #[serde(default)]
+    pub subagent_generation: u64,
+    #[serde(default)]
+    pub preference_revision: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagents: Vec<ExternalSubagentSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_conflicts: Vec<ExternalSubagentConflict>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_subagent_approvals: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<ExternalSourceDiagnostic>,
 }
@@ -111,6 +146,11 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourceSnapshotResponse {
             tools: snapshot.tools,
             tool_approval_requests: snapshot.tool_approval_requests,
             tool_conflicts: snapshot.tool_conflicts,
+            subagent_generation: snapshot.subagent_generation,
+            preference_revision: snapshot.preference_revision,
+            subagents: snapshot.subagents,
+            subagent_conflicts: snapshot.subagent_conflicts,
+            pending_subagent_approvals: snapshot.pending_subagent_approvals,
             diagnostics: snapshot.diagnostics,
         }
     }
@@ -126,7 +166,7 @@ async fn require_local_workspace(workspace_path: Option<&str>) -> Result<Option<
     }
     if is_remote_path(workspace_path).await {
         return Err(
-            "External AI application sources are not available for remote workspaces yet".into(),
+            "unsupported_remote_workspace: External AI application sources are not available for remote workspaces yet".into(),
         );
     }
     Ok(Some(path))
@@ -189,6 +229,40 @@ pub async fn set_external_tool_conflict_choice_command(
     set_external_tool_conflict_choice(workspace, &request.conflict_key, &request.candidate_id)
         .await
         .map(Into::into)
+}
+
+#[tauri::command]
+pub async fn set_external_subagent_activation_command(
+    request: SetExternalSubagentActivationRequest,
+) -> Result<ExternalSourceSnapshotResponse, String> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_subagent_activation(
+        workspace,
+        &request.candidate_id,
+        request.approved,
+        request.expected_subagent_generation,
+        request.expected_preference_revision,
+        &request.decision_key,
+    )
+    .await
+    .map(Into::into)
+}
+
+#[tauri::command]
+pub async fn choose_external_subagent_conflict_command(
+    request: ChooseExternalSubagentConflictRequest,
+) -> Result<ExternalSourceSnapshotResponse, String> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    choose_external_subagent_conflict(
+        workspace,
+        &request.conflict_key,
+        &request.candidate_id,
+        request.approve_external,
+        request.expected_subagent_generation,
+        request.expected_preference_revision,
+    )
+    .await
+    .map(Into::into)
 }
 
 #[cfg(test)]

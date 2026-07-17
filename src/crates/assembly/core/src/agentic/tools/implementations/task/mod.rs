@@ -100,6 +100,7 @@ impl TaskTool {
                 workspace_root,
                 list_scope: SubagentListScope::TaskVisible,
                 include_disabled: false,
+                external_sources_supported: context.is_none_or(|ctx| !ctx.is_remote()),
             })
             .await
     }

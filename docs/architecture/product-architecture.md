@@ -232,9 +232,12 @@ Plugin Runtime P0 只验证了 BitFun 专用插件目录中的来源校验、工
 不能称为“OpenCode 插件运行时”。详细代码事实集中在
 [`plugin-runtime-host-design.md#8-当前实现附录`](extensions/plugin-runtime-host-design.md#8-当前实现附录)。
 
-与 Plugin Runtime 分离的 Prompt Command 基线已经通过能力专属 provider 契约接入：可发现本地用户/项目 OpenCode
-Command，处理跨来源冲突，并在 CLI/TUI 中执行受支持的 prompt-only 模板。该能力不执行 JS/TS，也不能推导 Tool、
-Hook、Subagent 或完整配置兼容已经可用。
+与 Plugin Runtime 分离的三条纵向基线已经通过各自的能力专属 provider 契约接入：Prompt Command 可发现本地
+用户/项目 OpenCode Command、处理跨来源冲突，并在 CLI/TUI 中执行受支持的 prompt-only 模板；standalone Tool
+可把受支持的单文件 `.js` 经确认后接入现有 Tool Runtime；Subagent 可把全局/项目声明的安全子集经确认和同名冲突
+选择后接入现有 Task/Subagent owner，并以 generation lease 固定 fresh single-run 调用。三类贡献对象互不复用，
+主体逻辑不按生态分支。当前仍不表示 package plugin、Hook、primary agent、外部 agent 续接、Remote 来源发现或完整
+配置兼容已经可用。
 
 目标路线不要求 OpenCode 插件作者维护 `bitfun.plugin.json` 或复制到 `.bitfun/plugins`。BitFun 直接发现用户和
 项目的 OpenCode 配置、插件目录、工具目录和软件包来源；低风险内容按用户偏好自动应用或先询问，可执行来源在

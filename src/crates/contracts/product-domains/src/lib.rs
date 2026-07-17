@@ -8,6 +8,9 @@ pub mod canvas;
 #[cfg(feature = "external-sources")]
 pub mod external_sources;
 
+#[cfg(feature = "external-sources")]
+pub mod external_subagents;
+
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;
 

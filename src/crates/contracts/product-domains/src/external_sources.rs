@@ -110,6 +110,23 @@ impl SourceKey {
             self.source_id
         )
     }
+
+    pub fn from_stable_key(value: &str) -> Option<Self> {
+        let (provider, remainder) = take_length_prefixed(value)?;
+        let (source, remainder) = take_length_prefixed(remainder)?;
+        if !remainder.is_empty() {
+            return None;
+        }
+        Self::new(provider, source).ok()
+    }
+}
+
+fn take_length_prefixed(value: &str) -> Option<(&str, &str)> {
+    let separator = value.find(':')?;
+    let length = value[..separator].parse::<usize>().ok()?;
+    let start = separator + 1;
+    let end = start.checked_add(length)?;
+    Some((value.get(start..end)?, value.get(end..)?))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -404,10 +421,23 @@ pub enum ExternalSourceDiagnosticSeverity {
     Error,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ExternalSourceAssetKind {
+    #[default]
+    Source,
+    Command,
+    Tool,
+    Subagent,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceDiagnostic {
     pub severity: ExternalSourceDiagnosticSeverity,
+    #[serde(default)]
+    pub asset_kind: ExternalSourceAssetKind,
     pub code: String,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -422,6 +452,7 @@ impl ExternalSourceDiagnostic {
     ) -> Self {
         Self {
             severity: ExternalSourceDiagnosticSeverity::Warning,
+            asset_kind: ExternalSourceAssetKind::Source,
             code: code.into(),
             message: message.into(),
             source,
@@ -435,10 +466,16 @@ impl ExternalSourceDiagnostic {
     ) -> Self {
         Self {
             severity: ExternalSourceDiagnosticSeverity::Error,
+            asset_kind: ExternalSourceAssetKind::Source,
             code: code.into(),
             message: message.into(),
             source,
         }
+    }
+
+    pub fn with_asset_kind(mut self, asset_kind: ExternalSourceAssetKind) -> Self {
+        self.asset_kind = asset_kind;
+        self
     }
 }
 
@@ -466,6 +503,11 @@ impl ExternalSourceRecord {
             self.execution_domain_id,
             self.key.stable_key()
         )
+    }
+
+    pub fn source_key_from_preference_key(value: &str) -> Option<SourceKey> {
+        let (_, stable_source_key) = take_length_prefixed(value)?;
+        SourceKey::from_stable_key(stable_source_key)
     }
 
     pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
@@ -961,6 +1003,18 @@ pub struct ExternalSourceCatalogSnapshot {
     pub tool_approval_requests: Vec<ExternalToolApprovalRequest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_conflicts: Vec<ExternalToolConflict>,
+    /// Independent catalog generation for subagent row/action stability.
+    #[serde(default)]
+    pub subagent_generation: u64,
+    /// Monotonic persisted-preference revision used by subagent decisions.
+    #[serde(default)]
+    pub preference_revision: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagents: Vec<crate::external_subagents::ExternalSubagentSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_conflicts: Vec<crate::external_subagents::ExternalSubagentConflict>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_subagent_approvals: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<ExternalSourceDiagnostic>,
 }

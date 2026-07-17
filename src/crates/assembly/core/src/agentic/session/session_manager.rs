@@ -5,7 +5,7 @@
 use crate::agentic::core::{
     new_turn_id, CompressionContract, CompressionState, InternalReminderKind, Message,
     MessageContent, MessageRole, MessageSemanticKind, ProcessingPhase, Session, SessionConfig,
-    SessionKind, SessionState, SessionSummary, TurnStats,
+    SessionKind, SessionModelBindingPolicy, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::keyed_lock::{KeyedAsyncLock, KeyedAsyncLockGuard};
@@ -78,6 +78,19 @@ impl Default for SessionManagerConfig {
             prompt_cache_policy: PromptCachePolicy::default(),
         }
     }
+}
+
+fn should_auto_migrate_session_model(
+    binding_policy: SessionModelBindingPolicy,
+    current_model_id: &str,
+    invalidated_model_ids: &HashSet<&str>,
+) -> bool {
+    session_model_allows_automatic_migration(binding_policy)
+        && invalidated_model_ids.contains(current_model_id)
+}
+
+fn session_model_allows_automatic_migration(binding_policy: SessionModelBindingPolicy) -> bool {
+    binding_policy == SessionModelBindingPolicy::Mutable
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1602,7 +1615,14 @@ impl SessionManager {
             .filter_map(|entry| {
                 let session = entry.value();
                 let current = session.config.model_id.as_deref()?.trim().to_string();
-                if invalid.contains(current.as_str()) {
+                // External generations pin the model that the user approved.
+                // If that model disappears, execution must fail closed instead
+                // of silently changing the approved behavior to `auto`.
+                if should_auto_migrate_session_model(
+                    session.config.model_binding_policy,
+                    current.as_str(),
+                    &invalid,
+                ) {
                     Some((session.session_id.clone(), current))
                 } else {
                     None
@@ -3851,7 +3871,9 @@ impl SessionManager {
         // will pick a model via the normal auto/agent/default pipeline.
         if let Some(persisted_model_id) = session.config.model_id.as_deref() {
             let trimmed = persisted_model_id.trim();
-            let needs_migration = if trimmed.is_empty() {
+            let needs_migration = if trimmed.is_empty()
+                || !session_model_allows_automatic_migration(session.config.model_binding_policy)
+            {
                 false
             } else if let Some(ai_config) = ai_config_for_restore.as_ref() {
                 !Self::is_session_model_id_usable(ai_config, trimmed)
@@ -5855,10 +5877,13 @@ impl SessionManager {
 
 #[cfg(test)]
 mod tests {
-    use super::{CoreSessionStorePort, SessionManager, SessionManagerConfig};
+    use super::{
+        should_auto_migrate_session_model, CoreSessionStorePort, SessionManager,
+        SessionManagerConfig,
+    };
     use crate::agentic::core::{
         Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig,
-        SessionState, ToolCall, ToolResult,
+        SessionModelBindingPolicy, SessionState, ToolCall, ToolResult,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
@@ -5905,6 +5930,27 @@ mod tests {
                 self.path.join("user-root"),
             ))
         }
+    }
+
+    #[test]
+    fn invalidated_model_migration_preserves_approved_external_generation_binding() {
+        let invalidated = HashSet::from(["removed-model"]);
+
+        assert!(should_auto_migrate_session_model(
+            SessionModelBindingPolicy::Mutable,
+            "removed-model",
+            &invalidated,
+        ));
+        assert!(!should_auto_migrate_session_model(
+            SessionModelBindingPolicy::ApprovedImmutable,
+            "removed-model",
+            &invalidated,
+        ));
+        assert!(!should_auto_migrate_session_model(
+            SessionModelBindingPolicy::Mutable,
+            "active-model",
+            &invalidated,
+        ));
     }
 
     #[test]
@@ -7028,6 +7074,7 @@ mod tests {
                     parent_turn_index: Some(2),
                     parent_tool_call_id: None,
                     subagent_type: None,
+                    continuation_policy: None,
                 },
             )
             .await
@@ -7049,6 +7096,7 @@ mod tests {
                 parent_turn_index: Some(2),
                 parent_tool_call_id: None,
                 subagent_type: None,
+                continuation_policy: None,
             })
         );
 
@@ -7088,6 +7136,7 @@ mod tests {
             parent_turn_index: Some(2),
             parent_tool_call_id: Some("tool-1".to_string()),
             subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &matched_root)
@@ -7109,6 +7158,7 @@ mod tests {
             parent_turn_index: None,
             parent_tool_call_id: Some("tool-child".to_string()),
             subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &matched_grandchild)
@@ -7130,6 +7180,7 @@ mod tests {
             parent_turn_index: Some(1),
             parent_tool_call_id: Some("tool-2".to_string()),
             subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &unmatched_root)
@@ -7150,6 +7201,7 @@ mod tests {
             parent_turn_index: Some(2),
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: None,
         });
         persistence_manager
             .save_session_metadata(workspace.path(), &visible_review_child)

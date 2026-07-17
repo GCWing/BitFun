@@ -3,9 +3,9 @@
 # OpenCode Adapter
 
 The current crate owns the static OpenCode source preview used by the existing
-managed-package path and the OpenCode-specific implementations of command and
-standalone-tool provider contracts. It preserves OpenCode source discovery,
-precedence, formats, argument expansion, and versioned compatibility semantics.
+managed-package path and the OpenCode-specific implementations of command,
+standalone-tool, and subagent provider contracts. It preserves OpenCode source
+discovery, precedence, formats, argument expansion, and versioned compatibility semantics.
 Shared source catalog, lifecycle coordination, file-watch implementation,
 product policy, UI, credentials, worker supervision, and final effect writes
 belong elsewhere.

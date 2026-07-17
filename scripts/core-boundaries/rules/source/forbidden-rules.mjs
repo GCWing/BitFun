@@ -4117,6 +4117,7 @@ export const forbiddenContentUnderRules = [
           'src/crates/adapters/opencode-adapter/tests/opencode_source_adapter.rs',
           'src/crates/adapters/opencode-adapter/tests/opencode_command_adapter.rs',
           'src/crates/adapters/opencode-adapter/tests/tool_source_contracts.rs',
+          'src/crates/adapters/opencode-adapter/tests/opencode_subagent_adapter.rs',
           'src/crates/assembly/core/src/plugin_runtime.rs',
           'src/crates/assembly/core/src/external_sources.rs',
         ],

@@ -63,6 +63,9 @@ impl AgentRegistry {
             agents: std::sync::RwLock::new(Self::build_builtin_agents()),
             project_subagents: std::sync::RwLock::new(HashMap::new()),
             user_custom_agents_loaded: std::sync::RwLock::new(false),
+            external_subagents: std::sync::Arc::new(
+                super::external::ExternalSubagentRegistryState::new(),
+            ),
         }
     }
 

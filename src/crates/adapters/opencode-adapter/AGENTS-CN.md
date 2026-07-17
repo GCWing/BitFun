@@ -2,8 +2,9 @@
 
 # OpenCode Adapter
 
-当前 crate 负责现有受管包路径使用的 P0 OpenCode 静态来源预览，以及能力专属 provider 契约的 OpenCode
-实现。它保留 OpenCode 来源发现、优先级、格式、参数展开和版本化兼容语义。共享来源目录、生命周期协调、
+当前 crate 负责现有受管包路径使用的 P0 OpenCode 静态来源预览，以及 Command、standalone Tool 和 Subagent
+能力专属 provider 契约的 OpenCode 实现。它保留 OpenCode 来源发现、优先级、格式、参数展开和版本化兼容语义。
+共享来源目录、生命周期协调、
 文件观察实现、产品策略、界面、凭据、worker 监督和最终结果写入均由其他 owner 负责。
 
 ## 产品来源边界

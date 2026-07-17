@@ -38,6 +38,7 @@ pub enum AgentSource {
     Builtin,
     Project,
     User,
+    External,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +104,10 @@ pub struct AgentInfo {
     pub model_is_explicit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visibility: Option<SubagentVisibilitySummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_provider_label: Option<String>,
+    #[serde(default = "default_true")]
+    pub supports_follow_up: bool,
 }
 
 fn default_true() -> bool {
@@ -138,11 +143,13 @@ pub(super) fn subagent_key_for(
             let _custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
             "bitfun"
         }
+        SubAgentSource::External => "external",
     };
     let prefix = match source {
         SubAgentSource::Builtin => "builtin",
         SubAgentSource::Project => "project",
         SubAgentSource::User => "user",
+        SubAgentSource::External => "external",
     };
     Some(format!("{prefix}::{slot}::{}", agent.id()))
 }
@@ -213,6 +220,8 @@ impl AgentInfo {
             model_is_explicit,
             visibility: (entry.category == AgentCategory::SubAgent)
                 .then(|| entry.visibility_policy.summary()),
+            external_provider_label: None,
+            supports_follow_up: true,
         }
     }
 }

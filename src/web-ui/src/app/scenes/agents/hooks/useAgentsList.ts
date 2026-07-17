@@ -21,7 +21,7 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
 import { globalEventBus } from '@/infrastructure/event-bus';
 
-export type FilterLevel = 'all' | 'builtin' | 'user' | 'project';
+export type FilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
 export type FilterType = 'all' | 'mode' | 'subagent';
 
 export interface ToolInfo {
@@ -559,11 +559,13 @@ export function useAgentsList({
     builtin: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'builtin').length,
     user: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'user').length,
     project: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'project').length,
+    external: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'external').length,
     mode: overviewAgents.filter((agent) => agent.agentKind === 'mode').length,
     subagent: overviewAgents.filter((agent) => agent.agentKind === 'subagent').length,
   }), [overviewAgents]);
 
   return {
+    workspacePath,
     allAgents,
     filteredAgents,
     loading,

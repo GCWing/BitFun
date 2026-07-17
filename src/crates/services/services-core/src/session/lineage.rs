@@ -413,6 +413,7 @@ mod tests {
                 parent_turn_index: Some(2),
                 parent_tool_call_id: None,
                 subagent_type: None,
+                continuation_policy: None,
             },
         );
 
@@ -443,6 +444,7 @@ mod tests {
             parent_turn_index: Some(2),
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: None,
         });
 
         let mut grandchild = metadata("grandchild");
@@ -492,6 +494,7 @@ mod tests {
             parent_turn_index: Some(1),
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: None,
         });
         source.todos = Some(json!([{ "id": "todo" }]));
         source.deep_review_run_manifest = Some(json!({ "run": "manifest" }));

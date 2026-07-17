@@ -511,6 +511,22 @@
         background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
       }
     }
+
+    &.is-readonly,
+    &:disabled {
+      cursor: default;
+      opacity: 0.72;
+
+      &:hover:not(.is-on) {
+        border-color: transparent;
+        color: var(--color-text-muted);
+      }
+
+      &.is-on:hover {
+        border-color: var(--color-accent-400);
+        background: var(--color-accent-100);
+      }
+    }
   }
 
   &__token-name {

@@ -38,7 +38,9 @@ use crate::agentic::tools::{
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
-use crate::service::config::types::{ModelCapability, ModelCategory};
+use crate::service::config::types::{
+    model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
@@ -47,6 +49,7 @@ use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
+use bitfun_core_types::SessionModelBindingPolicy;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -886,6 +889,7 @@ impl ExecutionEngine {
 
     async fn resolve_primary_model_context(
         model_id: &str,
+        model_binding_policy: SessionModelBindingPolicy,
         ai_client_model: &str,
         ai_client_api_format: &str,
         unavailable_log_message: &str,
@@ -895,7 +899,16 @@ impl ExecutionEngine {
             let ai_config: crate::service::config::types::AIConfig =
                 service.get_config(Some("ai")).await.unwrap_or_default();
 
-            let resolved_id = Self::resolve_configured_model_id(&ai_config, model_id);
+            let resolved_id = if matches!(
+                model_binding_policy,
+                SessionModelBindingPolicy::ApprovedImmutable
+            ) {
+                ai_config
+                    .resolve_model_reference(model_id)
+                    .unwrap_or_else(|| model_id.to_string())
+            } else {
+                Self::resolve_configured_model_id(&ai_config, model_id)
+            };
             let model_cfg = ai_config.models.iter().find(|m| m.id == resolved_id);
 
             let supports = model_cfg.is_some_and(|m| {
@@ -1221,11 +1234,6 @@ impl ExecutionEngine {
         original_user_input: &str,
         turn_index: usize,
     ) -> BitFunResult<String> {
-        let agent_registry = get_agent_registry();
-        let fallback_model_id = agent_registry
-            .get_model_id_for_agent(agent_type, workspace.map(|binding| binding.root_path()))
-            .await
-            .map_err(|e| BitFunError::AIClient(format!("Failed to get model ID: {}", e)))?;
         let config_service = get_global_config_service().await.map_err(|e| {
             BitFunError::AIClient(format!(
                 "Failed to get config service for model resolution: {}",
@@ -1236,6 +1244,56 @@ impl ExecutionEngine {
             .get_config(Some("ai"))
             .await
             .unwrap_or_default();
+        if matches!(
+            session.config.model_binding_policy,
+            SessionModelBindingPolicy::ApprovedImmutable
+        ) {
+            let model_id = session
+                .config
+                .model_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|model_id| !model_id.is_empty())
+                .ok_or_else(|| {
+                    BitFunError::AIClient(
+                        "Approved immutable session has no concrete model id".to_string(),
+                    )
+                })?;
+            let expected_fingerprint = session
+                .config
+                .model_binding_fingerprint
+                .as_deref()
+                .ok_or_else(|| {
+                    BitFunError::AIClient(
+                        "Approved immutable session has no model binding fingerprint".to_string(),
+                    )
+                })?;
+            let mut matches = ai_config
+                .models
+                .iter()
+                .filter(|model| model.enabled && model.id == model_id);
+            let model = matches.next().ok_or_else(|| {
+                BitFunError::AIClient(format!(
+                    "Approved model configuration is unavailable: {}",
+                    model_id
+                ))
+            })?;
+            if matches.next().is_some()
+                || model_runtime_binding_fingerprint(model) != expected_fingerprint
+            {
+                return Err(BitFunError::AIClient(format!(
+                    "Approved model binding changed before execution: {}",
+                    model_id
+                )));
+            }
+            return Ok(model_id.to_string());
+        }
+
+        let agent_registry = get_agent_registry();
+        let fallback_model_id = agent_registry
+            .get_model_id_for_agent(agent_type, workspace.map(|binding| binding.root_path()))
+            .await
+            .map_err(|e| BitFunError::AIClient(format!("Failed to get model ID: {}", e)))?;
         let configured_model_id = session
             .config
             .model_id
@@ -1770,18 +1828,33 @@ impl ExecutionEngine {
         let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
             BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
         })?;
-        let ai_client = ai_client_factory
-            .get_client_resolved(&model_id)
-            .await
-            .map_err(|e| {
-                BitFunError::AIClient(format!(
-                    "Failed to get AI client (model_id={}): {}",
-                    model_id, e
-                ))
-            })?;
+        let ai_client_result = if matches!(
+            session.config.model_binding_policy,
+            SessionModelBindingPolicy::ApprovedImmutable
+        ) {
+            ai_client_factory
+                .get_client_by_approved_binding(
+                    &model_id,
+                    session
+                        .config
+                        .model_binding_fingerprint
+                        .as_deref()
+                        .unwrap_or_default(),
+                )
+                .await
+        } else {
+            ai_client_factory.get_client_resolved(&model_id).await
+        };
+        let ai_client = ai_client_result.map_err(|e| {
+            BitFunError::AIClient(format!(
+                "Failed to get AI client (model_id={}): {}",
+                model_id, e
+            ))
+        })?;
 
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
+            session.config.model_binding_policy,
             &ai_client.config.model,
             &ai_client.config.format,
             "Config service unavailable, assuming compression model is text-only for image input gating",
@@ -2561,19 +2634,34 @@ impl ExecutionEngine {
         })?;
 
         // Get AI client by model ID
-        let ai_client = ai_client_factory
-            .get_client_resolved(&model_id)
-            .await
-            .map_err(|e| {
-                BitFunError::AIClient(format!(
-                    "Failed to get AI client (model_id={}): {}",
-                    model_id, e
-                ))
-            })?;
+        let ai_client_result = if matches!(
+            session.config.model_binding_policy,
+            SessionModelBindingPolicy::ApprovedImmutable
+        ) {
+            ai_client_factory
+                .get_client_by_approved_binding(
+                    &model_id,
+                    session
+                        .config
+                        .model_binding_fingerprint
+                        .as_deref()
+                        .unwrap_or_default(),
+                )
+                .await
+        } else {
+            ai_client_factory.get_client_resolved(&model_id).await
+        };
+        let ai_client = ai_client_result.map_err(|e| {
+            BitFunError::AIClient(format!(
+                "Failed to get AI client (model_id={}): {}",
+                model_id, e
+            ))
+        })?;
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
+            session.config.model_binding_policy,
             &ai_client.config.model,
             &ai_client.config.format,
             "Config service unavailable, assuming primary model is text-only for image input gating",

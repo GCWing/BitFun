@@ -136,6 +136,10 @@ fn subagent_source_contract_preserves_runtime_kind_and_presentation_order() {
         subagent_source_kind(Some(SubAgentSource::User)),
         SubagentSourceKind::User
     );
+    assert_eq!(
+        subagent_source_kind(Some(SubAgentSource::External)),
+        SubagentSourceKind::External
+    );
     assert_eq!(subagent_source_kind(None), SubagentSourceKind::Unspecified);
 
     assert_eq!(
@@ -150,7 +154,11 @@ fn subagent_source_contract_preserves_runtime_kind_and_presentation_order() {
         subagent_source_presentation_rank(Some(SubAgentSource::User)),
         2
     );
-    assert_eq!(subagent_source_presentation_rank(None), 3);
+    assert_eq!(
+        subagent_source_presentation_rank(Some(SubAgentSource::External)),
+        3
+    );
+    assert_eq!(subagent_source_presentation_rank(None), 4);
 }
 
 #[test]

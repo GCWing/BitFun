@@ -1,6 +1,6 @@
 //! Types for session persistence
 
-use bitfun_core_types::SessionKind;
+use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
 use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
@@ -56,6 +56,8 @@ pub struct SessionRelationship {
         alias = "subagent_type"
     )]
     pub subagent_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_policy: Option<SessionContinuationPolicy>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1019,7 +1021,7 @@ mod tests {
         SessionRelationship, SessionRelationshipKind, TextItemData, ThinkingItemData, ToolItemData,
         UserMessageData,
     };
-    use bitfun_core_types::SessionKind;
+    use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
 
     #[test]
     fn dialog_turn_kind_defaults_to_user_dialog_for_legacy_payloads() {
@@ -1216,6 +1218,7 @@ mod tests {
             parent_turn_index: Some(2),
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: Some(SessionContinuationPolicy::FreshOnly),
         });
 
         let json = serde_json::to_value(&metadata).expect("metadata should serialize");

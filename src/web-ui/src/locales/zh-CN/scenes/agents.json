@@ -23,6 +23,7 @@
     "builtin": "内置",
     "user": "用户",
     "project": "项目",
+    "external": "外部",
     "mode": "Agent",
     "subagent": "Sub-Agent"
   },
@@ -60,6 +61,7 @@
       "subagent": "Sub-Agent",
       "userSubagent": "用户 Sub-Agent",
       "projectSubagent": "项目 Sub-Agent",
+      "externalSubagent": "外部 Sub-Agent",
       "disabled": "已禁用"
     },
     "actions": {
@@ -68,16 +70,18 @@
     "meta": {
       "tools": "{{count}} 个工具",
       "skills": "{{count}} 个 Skills",
-      "subagents": "{{count}} 个 Sub-Agent"
+      "subagents": "{{count}} 个 Sub-Agent",
+      "externalProvider": "外部 · {{provider}}",
+      "singleRun": "单次运行 · 不支持续问"
     },
     "modelSelector": {
       "label": "模型",
-      "default": "使用 Subagent 默认模型",
+      "default": "使用默认 Sub-Agent 模型",
       "inherit": "继承父会话",
       "fast": "快速模型",
       "primary": "主力模型",
       "auto": "自动选择",
-      "updateFailed": "更新 Subagent 模型失败"
+      "updateFailed": "更新 Sub-Agent 模型失败"
     }
   },
   "capabilityCategories": {
@@ -134,6 +138,8 @@
     "customActions": "自定义 Agent",
     "editAgent": "编辑",
     "deleteAgent": "删除",
+    "externalActions": "外部 Agent",
+    "manageExternalAgent": "前往外部 AI 应用管理",
     "deleteConfirm": "确定删除自定义 Agent「{{name}}」？此操作不可恢复。",
     "deleteSuccess": "已删除「{{name}}」",
     "deleteFailed": "删除失败：",
