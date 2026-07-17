@@ -2,8 +2,10 @@
 
 use bitfun_core::external_sources::{
     external_source_snapshot, set_external_prompt_command_conflict_choice,
-    set_external_source_enabled, ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot,
-    ExternalSourceDiagnostic, PromptCommandAvailability,
+    set_external_source_enabled, set_external_tool_conflict_choice,
+    set_external_tool_target_decision, ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot,
+    ExternalSourceDiagnostic, ExternalToolApprovalRequest, ExternalToolCatalogEntry,
+    ExternalToolConflict, PromptCommandAvailability,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_product_domains::external_sources::{PromptCommandConflict, SourceQualifiedCommandId};
@@ -36,6 +38,23 @@ pub struct SetExternalSourceConflictChoiceRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalToolTargetDecisionRequest {
+    pub workspace_path: Option<String>,
+    pub approval_key: String,
+    pub decision_key: String,
+    pub approved: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalToolConflictChoiceRequest {
+    pub workspace_path: Option<String>,
+    pub conflict_key: String,
+    pub candidate_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceSnapshotResponse {
     pub generation: u64,
     pub discovery_pending: bool,
@@ -43,6 +62,12 @@ pub struct ExternalSourceSnapshotResponse {
     pub commands: Vec<ExternalPromptCommandSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command_conflicts: Vec<PromptCommandConflict>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<ExternalToolCatalogEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_approval_requests: Vec<ExternalToolApprovalRequest>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_conflicts: Vec<ExternalToolConflict>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<ExternalSourceDiagnostic>,
 }
@@ -83,6 +108,9 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourceSnapshotResponse {
                 })
                 .collect(),
             command_conflicts: snapshot.command_conflicts,
+            tools: snapshot.tools,
+            tool_approval_requests: snapshot.tool_approval_requests,
+            tool_conflicts: snapshot.tool_conflicts,
             diagnostics: snapshot.diagnostics,
         }
     }
@@ -136,6 +164,31 @@ pub async fn set_external_source_conflict_choice_command(
     )
     .await
     .map(Into::into)
+}
+
+#[tauri::command]
+pub async fn set_external_tool_target_decision_command(
+    request: SetExternalToolTargetDecisionRequest,
+) -> Result<ExternalSourceSnapshotResponse, String> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_tool_target_decision(
+        workspace,
+        &request.approval_key,
+        &request.decision_key,
+        request.approved,
+    )
+    .await
+    .map(Into::into)
+}
+
+#[tauri::command]
+pub async fn set_external_tool_conflict_choice_command(
+    request: SetExternalToolConflictChoiceRequest,
+) -> Result<ExternalSourceSnapshotResponse, String> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_tool_conflict_choice(workspace, &request.conflict_key, &request.candidate_id)
+        .await
+        .map(Into::into)
 }
 
 #[cfg(test)]

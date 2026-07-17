@@ -205,6 +205,7 @@ workspace-search = [
     "thiserror",
     "which",
 ]
+script-tool-runtime = ["async-trait", "bitfun-runtime-ports", "which"]
 web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
@@ -222,6 +223,7 @@ product-full = [
     "remote-ssh",
     "remote-ssh-concrete",
     "review-platform",
+    "script-tool-runtime",
     "web-tools",
     "workspace-search",
 ]
@@ -233,6 +235,10 @@ tempfile = { workspace = true }
 [[test]]
 name = "debug_log_owner_contracts"
 required-features = ["debug-log"]
+
+[[test]]
+name = "script_tool_runtime"
+required-features = ["script-tool-runtime"]
 
 [lints]
 workspace = true

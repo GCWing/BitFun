@@ -107,6 +107,7 @@ aes = "0.8"
 hex = "0.4"
 chardetng = "0.1.17"
 encoding_rs = "0.8.35"
+url = "2"
 
 # HTTP client
 reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "rustls", "json", "stream", "multipart", "query", "form"] }

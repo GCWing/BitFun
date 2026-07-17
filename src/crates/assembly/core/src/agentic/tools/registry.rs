@@ -72,8 +72,13 @@ impl ToolRegistry {
                 );
             }
 
-            self.register_tool(tool);
+            let routed = crate::external_tools::intercept_external_tool_registry_registration(tool);
+            self.inner.register_tool(routed);
             debug!("MCP tool registered: tool_name={}", name);
+        }
+
+        if tool_count > 0 {
+            crate::external_sources::notify_external_tool_registry_changed();
         }
 
         let after_count = self.get_tool_names().len();
@@ -87,6 +92,8 @@ impl ToolRegistry {
 
     /// Remove all tools from the MCP server
     pub fn unregister_mcp_server_tools(&mut self, server_id: &str) {
+        let retained_external_routes =
+            crate::external_tools::detach_external_tool_mcp_server(server_id);
         let removed_tool_names = self
             .get_tool_names()
             .into_iter()
@@ -99,6 +106,14 @@ impl ToolRegistry {
 
         self.inner.unregister_mcp_server_tools(server_id);
 
+        for mux in retained_external_routes.iter().cloned() {
+            self.register_tool_without_external_source_notification(mux);
+        }
+
+        if !retained_external_routes.is_empty() {
+            crate::external_sources::notify_external_tool_registry_changed();
+        }
+
         for key in removed_tool_names {
             info!("Unregistering dynamic tool: tool_name={}", key);
         }
@@ -106,12 +121,31 @@ impl ToolRegistry {
 
     /// Remove all tools whose registry name starts with the given prefix.
     pub fn unregister_tools_by_prefix(&mut self, prefix: &str) -> usize {
+        let retained_muxes = crate::external_tools::retain_external_tool_muxes_for_prefix(prefix);
+        let retained_names = retained_muxes
+            .iter()
+            .map(|tool| tool.name().to_string())
+            .collect::<std::collections::BTreeSet<_>>();
         let removed_tool_names = self
             .get_tool_names()
             .into_iter()
             .filter(|name| name.starts_with(prefix))
             .collect::<Vec<_>>();
-        let count = self.inner.unregister_tools_by_prefix(prefix);
+        let mut count = 0;
+        for name in removed_tool_names
+            .iter()
+            .filter(|name| !retained_names.contains(*name))
+        {
+            count += usize::from(self.inner.unregister_tool(name).is_some());
+        }
+        for mux in retained_muxes.iter().cloned() {
+            self.register_tool_without_external_source_notification(mux);
+            count += 1;
+        }
+
+        if !retained_muxes.is_empty() {
+            crate::external_sources::notify_external_tool_registry_changed();
+        }
 
         for key in removed_tool_names {
             info!("Unregistering dynamic tool: tool_name={}", key);
@@ -120,8 +154,23 @@ impl ToolRegistry {
         count
     }
 
+    /// Remove one exact tool while preserving the displaced implementation for
+    /// a contextual conflict router.
+    pub fn unregister_tool(&mut self, name: &str) -> Option<ToolRef> {
+        self.inner.unregister_tool(name)
+    }
+
     /// Register a single tool
     pub fn register_tool(&mut self, tool: ToolRef) {
+        let is_router = tool.dynamic_provider_id() == Some("external-source-router");
+        let routed = crate::external_tools::intercept_external_tool_registry_registration(tool);
+        self.inner.register_tool(routed);
+        if !is_router {
+            crate::external_sources::notify_external_tool_registry_changed();
+        }
+    }
+
+    pub(crate) fn register_tool_without_external_source_notification(&mut self, tool: ToolRef) {
         self.inner.register_tool(tool);
     }
 
@@ -863,6 +912,22 @@ mod tests {
             registry.get_tool("ComputerUse").is_some(),
             "ComputerUse must be registered as the dedicated desktop automation tool"
         );
+    }
+
+    #[test]
+    fn exact_unregister_returns_the_displaced_tool_and_clears_metadata() {
+        let mut registry = ToolRegistry::new();
+        registry.register_tool(dynamic_tool("external_search", Some("provider-a")));
+        let generation = registry.current_snapshot_generation();
+
+        let removed = registry
+            .unregister_tool("external_search")
+            .expect("registered tool should be returned");
+
+        assert_eq!(removed.name(), "external_search");
+        assert!(registry.get_tool("external_search").is_none());
+        assert!(registry.get_dynamic_tool_info("external_search").is_none());
+        assert!(registry.current_snapshot_generation() > generation);
     }
 
     #[test]

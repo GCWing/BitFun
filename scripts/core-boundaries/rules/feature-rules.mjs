@@ -48,7 +48,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
-        ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'workspace-search'],
+        ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'workspace-search'],
       },
       {
         depName: 'base64',
@@ -56,7 +56,7 @@ export const optionalDependencyFeatureOwnerRules = [
       },
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['deep-research'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'miniapp-runtime', 'plugin-source'] },
-      { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
       {
         depName: 'bitfun-services-core',
         ownerFeatures: ['browser-control', 'git', 'mcp', 'miniapp-runtime', 'remote-connect', 'review-platform', 'workspace-search'],
@@ -96,7 +96,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'tokio-util', ownerFeatures: ['remote-ssh'] },
       { depName: 'urlencoding', ownerFeatures: ['canvas-runtime', 'remote-connect', 'review-platform'] },
       { depName: 'uuid', ownerFeatures: ['canvas-runtime', 'debug-log', 'miniapp-runtime', 'plugin-source', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'which', ownerFeatures: ['miniapp-runtime', 'remote-connect', 'workspace-search'] },
+      { depName: 'which', ownerFeatures: ['miniapp-runtime', 'remote-connect', 'script-tool-runtime', 'workspace-search'] },
       { depName: 'windows', ownerFeatures: ['plugin-source', 'review-platform'] },
       { depName: 'x25519-dalek', ownerFeatures: ['remote-connect'] },
     ],
@@ -189,6 +189,7 @@ export const ownerCrateFeatureAssemblyRules = [
       'remote-ssh',
       'remote-ssh-concrete',
       'review-platform',
+      'script-tool-runtime',
       'web-tools',
       'workspace-search',
     ],

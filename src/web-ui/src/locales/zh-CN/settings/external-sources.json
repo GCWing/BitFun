@@ -2,9 +2,11 @@
   "title": "外部 AI 应用",
   "subtitle": "无需复制，即可使用其他 AI 应用中兼容的工作内容。",
   "loading": "正在检查外部来源…",
+  "checkingNonBlocking": "仍在检查变更；检查完成前可以继续使用当前设置。",
   "actions": {
     "refresh": "刷新",
-    "refreshing": "正在刷新…"
+    "refreshing": "正在刷新…",
+    "updated": "外部来源设置已更新，请在下方确认当前状态。"
   },
   "unavailable": {
     "title": "来源暂不可用",
@@ -12,10 +14,11 @@
     "remoteWorkspace": "暂不支持远程工作区来源，且不会用本地配置代替加载。"
   },
   "errors": {
-    "nonBlocking": "部分外部来源刷新失败，已有的有效命令会继续保留。{{error}}"
+    "nonBlocking": "当前外部来源状态无法确认；页面仍显示最后一次已知状态，请刷新并检查详情后再使用。",
+    "technicalDetails": "技术详情"
   },
   "diagnostics": {
-    "summary": "有 {{count}} 条来源信息需要关注，已有的有效命令会继续保留。"
+    "summary": "有 {{count}} 条来源信息需要关注；使用受影响内容前请检查技术详情。"
   },
   "sources": {
     "title": "已识别来源",
@@ -23,13 +26,91 @@
     "globalOnly": "当前仅显示用户全局来源；打开工作区后会同时包含项目来源。",
     "empty": "未识别到兼容的外部来源。",
     "commandCount": "{{count}} 个命令",
+    "toolCount": "{{count}} 个工具",
     "toggleLabel": "启用 {{name}}"
+  },
+  "tools": {
+    "title": "已识别工具",
+    "description": "工具代码保留在原始位置；识别过程不会执行代码。",
+    "review": "重新审核",
+    "details": "详情",
+    "hideDetails": "收起详情",
+    "disable": "停用模块",
+    "reviewTitle": "审核来自 {{source}} 的 {{name}}",
+    "cancelReview": "关闭",
+    "reason": "原因：{{reason}}",
+    "nextStep": "下一步：{{nextStep}}",
+    "targetScope": "此操作会应用到该模块导出的所有工具。"
+  },
+  "toolApprovals": {
+    "title": "等待审核的工具",
+    "description": "加载其他应用的代码前，请确认来源和执行访问范围。",
+    "source": "来源：{{location}}",
+    "sourceRoot": "来源根目录：{{location}}",
+    "modulePath": "模块文件：{{location}}",
+    "scope": "作用域：{{scope}}",
+    "executionDomain": "执行域：{{domain}}",
+    "runtime": "运行时：{{runtime}}",
+    "unknown": "未知",
+    "workingDirectory": "工作目录：{{location}}",
+    "capabilities": "直接访问：{{capabilities}}",
+    "warning": "工具代码会继承当前用户权限和环境变量；这不构成操作系统级沙箱，工具创建的后代进程也可能在取消后继续运行。",
+    "keepDisabled": "保持停用",
+    "enable": "启用工具"
+  },
+  "capability": {
+    "file_system": "文件",
+    "network": "网络",
+    "process": "进程",
+    "environment": "环境变量"
+  },
+  "toolState": {
+    "approval_required": "需要审核",
+    "disabled": "已停用",
+    "active": "已启用",
+    "conflict": "需要选择",
+    "unsupported": "已识别，暂不支持",
+    "runtime_unavailable": "运行时不可用",
+    "load_failed": "加载失败"
+  },
+  "toolReason": {
+    "approval_required": "BitFun 加载该模块前需要你的批准。",
+    "disabled": "该目标已按用户选择停用。",
+    "active": "模块已成功加载，并在当前执行域中提供。",
+    "conflict": "另一个实现使用了相同的工具名称。",
+    "unsupported": "模块使用了当前运行时不支持的语法或行为。",
+    "runtime_unavailable": "所需的 JavaScript 运行时不可用。",
+    "load_failed": "工具进程无法加载该模块。"
+  },
+  "toolNextStep": {
+    "approval_required": "审核访问范围，然后启用目标或保持停用。",
+    "disabled": "确认来源和访问范围后启用目标。",
+    "active": "无需操作；如需停止提供该模块的全部工具，可停用此模块。",
+    "conflict": "在下方选择提供方，或停用此目标。",
+    "unsupported": "将模块转换为受支持的单文件 JavaScript 子集，然后刷新。",
+    "runtime_unavailable": "恢复所需运行时，然后刷新。",
+    "load_failed": "修复模块后刷新，或停用此目标。"
+  },
+  "toolConflicts": {
+    "title": "工具冲突需要选择",
+    "description": "如有现有本地或 MCP 实现，选择前会继续保留；否则该名称保持不可用。候选内容变化前不会重复询问。",
+    "toolName": "多个实现都提供了 {{name}}",
+    "pending": "请选择 BitFun 对此执行域中相同候选集合应提供的实现。"
+  },
+  "toolCandidateKind": {
+    "built_in": "内置",
+    "mcp": "MCP",
+    "external": "外部"
   },
   "scope": {
     "user_global": "用户全局",
     "project": "项目",
     "remote_user": "远程用户",
     "remote_project": "远程项目"
+  },
+  "runtime": {
+    "java_script": "JavaScript",
+    "type_script": "TypeScript"
   },
   "lifecycle": {
     "available": "可用",

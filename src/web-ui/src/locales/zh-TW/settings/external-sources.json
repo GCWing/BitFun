@@ -2,9 +2,11 @@
   "title": "外部 AI 應用",
   "subtitle": "無需複製，即可使用其他 AI 應用中相容的工作內容。",
   "loading": "正在檢查外部來源…",
+  "checkingNonBlocking": "仍在檢查變更；檢查完成前可以繼續使用目前設定。",
   "actions": {
     "refresh": "重新整理",
-    "refreshing": "正在重新整理…"
+    "refreshing": "正在重新整理…",
+    "updated": "外部來源設定已更新，請在下方確認目前狀態。"
   },
   "unavailable": {
     "title": "來源暫不可用",
@@ -12,10 +14,11 @@
     "remoteWorkspace": "暫不支援遠端工作區來源，且不會以本機設定代替載入。"
   },
   "errors": {
-    "nonBlocking": "部分外部來源重新整理失敗，已有的有效命令會繼續保留。{{error}}"
+    "nonBlocking": "目前的外部來源狀態無法確認；頁面仍顯示最後一次已知狀態，請重新整理並檢查詳細資料後再使用。",
+    "technicalDetails": "技術詳細資料"
   },
   "diagnostics": {
-    "summary": "有 {{count}} 條來源資訊需要注意，已有的有效命令會繼續保留。"
+    "summary": "有 {{count}} 條來源資訊需要注意；使用受影響內容前請檢查技術詳細資料。"
   },
   "sources": {
     "title": "已識別來源",
@@ -23,13 +26,91 @@
     "globalOnly": "目前僅顯示使用者全域來源；開啟工作區後會同時包含專案來源。",
     "empty": "未識別到相容的外部來源。",
     "commandCount": "{{count}} 個命令",
+    "toolCount": "{{count}} 個工具",
     "toggleLabel": "啟用 {{name}}"
+  },
+  "tools": {
+    "title": "已識別工具",
+    "description": "工具程式碼保留在原始位置；識別過程不會執行程式碼。",
+    "review": "重新審核",
+    "details": "詳細資料",
+    "hideDetails": "收合詳細資料",
+    "disable": "停用模組",
+    "reviewTitle": "審核來自 {{source}} 的 {{name}}",
+    "cancelReview": "關閉",
+    "reason": "原因：{{reason}}",
+    "nextStep": "下一步：{{nextStep}}",
+    "targetScope": "此操作會套用到該模組匯出的所有工具。"
+  },
+  "toolApprovals": {
+    "title": "等待審核的工具",
+    "description": "載入其他應用的程式碼前，請確認來源和執行存取範圍。",
+    "source": "來源：{{location}}",
+    "sourceRoot": "來源根目錄：{{location}}",
+    "modulePath": "模組檔案：{{location}}",
+    "scope": "作用域：{{scope}}",
+    "executionDomain": "執行域：{{domain}}",
+    "runtime": "執行環境：{{runtime}}",
+    "unknown": "未知",
+    "workingDirectory": "工作目錄：{{location}}",
+    "capabilities": "直接存取：{{capabilities}}",
+    "warning": "工具程式碼會繼承目前使用者權限與環境變數；這不構成作業系統層級沙箱，工具建立的後代程序也可能在取消後繼續執行。",
+    "keepDisabled": "保持停用",
+    "enable": "啟用工具"
+  },
+  "capability": {
+    "file_system": "檔案",
+    "network": "網路",
+    "process": "程序",
+    "environment": "環境變數"
+  },
+  "toolState": {
+    "approval_required": "需要審核",
+    "disabled": "已停用",
+    "active": "已啟用",
+    "conflict": "需要選擇",
+    "unsupported": "已識別，暫不支援",
+    "runtime_unavailable": "執行環境不可用",
+    "load_failed": "載入失敗"
+  },
+  "toolReason": {
+    "approval_required": "BitFun 載入此模組前需要你的核准。",
+    "disabled": "此目標已依使用者選擇停用。",
+    "active": "模組已成功載入，並在目前執行域中提供。",
+    "conflict": "另一個實作使用了相同的工具名稱。",
+    "unsupported": "模組使用目前執行環境不支援的語法或行為。",
+    "runtime_unavailable": "所需的 JavaScript 執行環境無法使用。",
+    "load_failed": "工具程序無法載入此模組。"
+  },
+  "toolNextStep": {
+    "approval_required": "審核存取範圍，然後啟用目標或維持停用。",
+    "disabled": "確認來源和存取範圍後啟用目標。",
+    "active": "無需操作；若要停止提供該模組的所有工具，可停用此模組。",
+    "conflict": "在下方選擇提供者，或停用此目標。",
+    "unsupported": "將模組轉換為支援的單一檔案 JavaScript 子集，然後重新整理。",
+    "runtime_unavailable": "恢復所需執行環境，然後重新整理。",
+    "load_failed": "修復模組後重新整理，或停用此目標。"
+  },
+  "toolConflicts": {
+    "title": "工具衝突需要選擇",
+    "description": "如有既有本機或 MCP 實作，選擇前會繼續保留；否則該名稱維持不可用。候選內容變化前不會重複詢問。",
+    "toolName": "多個實作都提供了 {{name}}",
+    "pending": "請選擇 BitFun 對此執行域中相同候選集合應公開的實作。"
+  },
+  "toolCandidateKind": {
+    "built_in": "內建",
+    "mcp": "MCP",
+    "external": "外部"
   },
   "scope": {
     "user_global": "使用者全域",
     "project": "專案",
     "remote_user": "遠端使用者",
     "remote_project": "遠端專案"
+  },
+  "runtime": {
+    "java_script": "JavaScript",
+    "type_script": "TypeScript"
   },
   "lifecycle": {
     "available": "可用",

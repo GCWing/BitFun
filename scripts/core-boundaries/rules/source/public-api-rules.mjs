@@ -6,6 +6,7 @@ export const publicApiContractSlices = [
   'plugin-runtime-internal-abi',
   'opencode-adapter-boundary',
   'external-source-command-contract',
+  'external-source-tool-contract',
 ];
 
 const contractSlices = {
@@ -14,6 +15,7 @@ const contractSlices = {
   pluginRuntimeInternalAbi: 'plugin-runtime-internal-abi',
   opencodeAdapterBoundary: 'opencode-adapter-boundary',
   externalSourceCommandContract: 'external-source-command-contract',
+  externalSourceToolContract: 'external-source-tool-contract',
 };
 
 function pluginRuntimeEntry(symbol, p0, consumer, verification, contractSlice, wireImpact = true) {
@@ -182,6 +184,14 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeCommandProviderOptions',
     'OpenCode command adapter fixture tests and explicit environment injection',
   ),
+  opencodeAdapterEntry(
+    'OpenCodeToolProvider',
+    'bitfun-core external source composition root and OpenCode standalone-tool adapter tests',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeToolProviderOptions',
+    'OpenCode standalone-tool adapter fixture tests and explicit environment injection',
+  ),
 ];
 
 function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
@@ -197,6 +207,22 @@ function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
     rationale:
       'PR1 needs typed capability contracts and provider-neutral lifecycle coordination without ecosystem payload leakage',
     exit: 'remove only through a reviewed capability-contract migration with equivalent isolation and product tests',
+  };
+}
+
+function externalToolEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'external tool contract, coordinator, OpenCode adapter, worker runtime, core routing, CLI, and Desktop tests',
+    p0: 'PR2 ecosystem-neutral standalone-tool activation and OpenCode JavaScript vertical slice',
+    contractSlice: contractSlices.externalSourceToolContract,
+    wireImpact,
+    rationale:
+      'PR2 needs typed preview, approval, conflict, activation, and preparation contracts without ecosystem payload leakage',
+    exit: 'remove only through a reviewed tool-capability contract migration with equivalent isolation and product tests',
   };
 }
 
@@ -232,6 +258,36 @@ export const externalSourceContractPublicApiEntries = [
     'ecosystem command providers, external-source coordinator, product composition, and neutral product surfaces',
     true,
   ),
+).concat(
+  [
+    'SourceQualifiedToolTargetId',
+    'SourceQualifiedToolId',
+    'ExternalToolRuntimeKind',
+    'ExternalToolCapability',
+    'ExternalToolStaticStatus',
+    'ExternalToolDefinition',
+    'external_tool_approval_key',
+    'external_tool_conflict_key',
+    'external_tool_decision_key',
+    'ExternalToolProviderIdentity',
+    'ExternalToolProviderSnapshot',
+    'PreparedExternalToolExport',
+    'PreparedExternalToolTarget',
+    'ExternalToolSourceProvider',
+    'ExternalToolActivationState',
+    'ExternalToolCatalogEntry',
+    'ExternalToolApprovalRequest',
+    'ExternalToolConflictCandidateKind',
+    'ExternalToolConflictCandidate',
+    'ExternalToolConflict',
+  ].map((symbol) =>
+    externalToolEntry(
+      symbol,
+      'product-domains external tool contract owner',
+      'ecosystem tool providers, external-tool coordinator, product composition, and neutral product surfaces',
+      true,
+    ),
+  ),
 );
 
 export const externalSourceCoordinatorPublicApiEntries = [
@@ -247,6 +303,18 @@ export const externalSourceCoordinatorPublicApiEntries = [
       'bitfun-core bounded concurrent provider scheduler',
     ),
   ),
+  ...[
+    'ExternalToolCoordinator',
+    'ExternalToolCoordinatorSnapshot',
+    'ExternalToolDiscoveryRequest',
+    'ExternalToolDiscoveryResult',
+  ].map((symbol) =>
+    externalToolEntry(
+      symbol,
+      'external-sources assembly owner',
+      'bitfun-core bounded concurrent external-tool provider scheduler',
+    ),
+  ),
 ];
 
 export const externalSourceCorePublicApiEntries = [
@@ -255,6 +323,7 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalSourceCatalogEntry',
     'ExternalSourceCatalogSnapshot',
     'ExternalSourceDiagnostic',
+    'ExternalSourceDiagnosticSeverity',
     'ExternalSourceLifecycleState',
     'PromptCommandAvailability',
     'PromptCommandCatalogEntry',
@@ -273,6 +342,22 @@ export const externalSourceCorePublicApiEntries = [
     externalSourceEntry(
       symbol,
       'bitfun-core external source composition facade',
+      'bitfun-cli and desktop host APIs',
+    ),
+  ),
+  ...[
+    'ExternalToolActivationState',
+    'ExternalToolApprovalRequest',
+    'ExternalToolCapability',
+    'ExternalToolCatalogEntry',
+    'ExternalToolConflict',
+    'ExternalToolRuntimeKind',
+    'set_external_tool_target_decision',
+    'set_external_tool_conflict_choice',
+  ].map((symbol) =>
+    externalToolEntry(
+      symbol,
+      'bitfun-core external tool composition facade',
       'bitfun-cli and desktop host APIs',
     ),
   ),

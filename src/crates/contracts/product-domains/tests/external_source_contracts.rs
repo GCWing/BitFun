@@ -1,10 +1,12 @@
 use bitfun_product_domains::external_sources::{
-    prompt_command_conflict_key, EcosystemId, ExecutionDomainId, ExpandedPromptCommand,
-    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
-    ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
+    external_tool_approval_key, external_tool_conflict_key, prompt_command_conflict_key,
+    EcosystemId, ExecutionDomainId, ExpandedPromptCommand, ExternalSourceContext,
+    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceProviderError,
+    ExternalSourceRecord, ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition,
+    ExternalToolRuntimeKind, ExternalToolStaticStatus, ExternalWatchRoot,
     PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
     PromptCommandProviderSnapshot, PromptCommandSourceProvider, SourceKey,
-    SourceQualifiedCommandId,
+    SourceQualifiedCommandId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
 };
 use std::path::PathBuf;
 
@@ -214,4 +216,141 @@ fn unavailable_command_must_be_unique_absent_and_source_qualified() {
         .unavailable_command_ids
         .push(invalid.commands[0].id.clone());
     assert!(invalid.validate().is_err());
+}
+
+#[test]
+fn standalone_tool_contract_separates_static_preview_from_executable_source() {
+    let target = SourceQualifiedToolTargetId::new(
+        SourceKey::new("opencode.tools", "project-tools").unwrap(),
+        "weather.js",
+    )
+    .unwrap();
+    let tool = ExternalToolDefinition {
+        id: SourceQualifiedToolId::new(target, "default").unwrap(),
+        name: "weather".to_string(),
+        description_preview: "Get the weather for a location".to_string(),
+        module_path: "/workspace/.opencode/tools/weather.js".to_string(),
+        working_directory: "/workspace".to_string(),
+        runtime_kind: ExternalToolRuntimeKind::JavaScript,
+        capabilities: vec![
+            ExternalToolCapability::FileSystem,
+            ExternalToolCapability::Network,
+            ExternalToolCapability::Process,
+        ],
+        content_version: "sha256:v1".to_string(),
+        static_status: ExternalToolStaticStatus::Ready,
+    };
+
+    let encoded = serde_json::to_value(&tool).expect("serialize tool preview");
+    assert_eq!(encoded["name"], "weather");
+    assert_eq!(encoded["runtimeKind"], "java_script");
+    assert!(encoded.get("moduleSource").is_none());
+    assert!(encoded.get("payload").is_none());
+    tool.validate().expect("valid standalone tool preview");
+}
+
+#[test]
+fn standalone_tool_contract_rejects_names_that_are_not_model_callable() {
+    let target = SourceQualifiedToolTargetId::new(
+        SourceKey::new("fake.tools", "project-tools").unwrap(),
+        "unsafe.js",
+    )
+    .unwrap();
+    let mut tool = ExternalToolDefinition {
+        id: SourceQualifiedToolId::new(target, "default").unwrap(),
+        name: "unsafe tool".to_string(),
+        description_preview: String::new(),
+        module_path: "/workspace/unsafe.js".to_string(),
+        working_directory: "/workspace".to_string(),
+        runtime_kind: ExternalToolRuntimeKind::JavaScript,
+        capabilities: vec![ExternalToolCapability::FileSystem],
+        content_version: "sha256:v1".to_string(),
+        static_status: ExternalToolStaticStatus::Ready,
+    };
+
+    assert!(tool.validate().is_err());
+    tool.name = "safe_tool-1".to_string();
+    tool.validate()
+        .expect("portable tool name should be accepted");
+}
+
+#[test]
+fn tool_approval_is_stable_for_safe_updates_but_changes_with_capabilities_or_domain() {
+    let target = SourceQualifiedToolTargetId::new(
+        SourceKey::new("opencode.tools", "project-tools").unwrap(),
+        "weather.js",
+    )
+    .unwrap();
+    let first = external_tool_approval_key(
+        "local-user",
+        &target,
+        ExternalToolRuntimeKind::JavaScript,
+        [
+            ExternalToolCapability::FileSystem,
+            ExternalToolCapability::Network,
+        ],
+    );
+    let reordered = external_tool_approval_key(
+        "local-user",
+        &target,
+        ExternalToolRuntimeKind::JavaScript,
+        [
+            ExternalToolCapability::Network,
+            ExternalToolCapability::FileSystem,
+        ],
+    );
+    let expanded = external_tool_approval_key(
+        "local-user",
+        &target,
+        ExternalToolRuntimeKind::JavaScript,
+        [
+            ExternalToolCapability::FileSystem,
+            ExternalToolCapability::Network,
+            ExternalToolCapability::Process,
+        ],
+    );
+    let remote = external_tool_approval_key(
+        "remote-user",
+        &target,
+        ExternalToolRuntimeKind::JavaScript,
+        [
+            ExternalToolCapability::FileSystem,
+            ExternalToolCapability::Network,
+        ],
+    );
+
+    assert_eq!(first, reordered);
+    assert_ne!(first, expanded);
+    assert_ne!(first, remote);
+}
+
+#[test]
+fn tool_conflict_choice_is_invalidated_when_name_or_candidate_changes() {
+    let first = external_tool_conflict_key(
+        "local-user",
+        "weather",
+        [
+            ("builtin:weather", "builtin-v1"),
+            ("opencode:weather", "tool-v1"),
+        ],
+    );
+    let reordered = external_tool_conflict_key(
+        "local-user",
+        "WEATHER",
+        [
+            ("opencode:weather", "tool-v1"),
+            ("builtin:weather", "builtin-v1"),
+        ],
+    );
+    let updated = external_tool_conflict_key(
+        "local-user",
+        "weather",
+        [
+            ("builtin:weather", "builtin-v1"),
+            ("opencode:weather", "tool-v2"),
+        ],
+    );
+
+    assert_ne!(first, reordered);
+    assert_ne!(first, updated);
 }

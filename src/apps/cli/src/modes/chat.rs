@@ -9,7 +9,10 @@ use crossterm::event::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{
+    mpsc::{self, Receiver, TryRecvError as MpscTryRecvError},
+    Arc,
+};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
@@ -58,8 +61,11 @@ use bitfun_core::agentic::tools::implementations::skills::{
 use bitfun_core::external_sources::{
     expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
     prompt_command_conflict_key, remember_external_source_conflict_choice,
-    set_external_prompt_command_conflict_choice, subscribe_external_source_updates,
-    ExternalSourceCatalogSnapshot, PromptCommandAvailability,
+    set_external_prompt_command_conflict_choice, set_external_tool_conflict_choice,
+    set_external_tool_target_decision, subscribe_external_source_updates,
+    ExternalSourceCatalogSnapshot, ExternalSourceDiagnosticSeverity, ExternalToolActivationState,
+    ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolRuntimeKind,
+    PromptCommandAvailability,
 };
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::{
@@ -233,6 +239,587 @@ fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, 
                 (available, restricted + 1)
             }
         })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ExternalToolReviewAction {
+    Show,
+    Refresh,
+    Decide {
+        approval_key: String,
+        decision_key: String,
+        approved: bool,
+    },
+    Choose {
+        conflict_key: String,
+        candidate_id: String,
+    },
+}
+
+struct ExternalToolMutationResult {
+    action: ExternalToolReviewAction,
+    result: std::result::Result<ExternalSourceCatalogSnapshot, String>,
+}
+
+struct ExternalToolTargetSummary<'a> {
+    tools: Vec<&'a ExternalToolCatalogEntry>,
+}
+
+impl<'a> ExternalToolTargetSummary<'a> {
+    fn first(&self) -> &'a ExternalToolCatalogEntry {
+        self.tools[0]
+    }
+
+    fn activation(&self) -> &'a ExternalToolActivationState {
+        &self.first().activation
+    }
+
+    fn names(&self) -> String {
+        let mut names = self
+            .tools
+            .iter()
+            .map(|tool| tool.definition.name.as_str())
+            .collect::<Vec<_>>();
+        names.sort_unstable();
+        names.dedup();
+        names.join(", ")
+    }
+}
+
+fn external_tool_target_summaries(
+    snapshot: &ExternalSourceCatalogSnapshot,
+) -> Vec<ExternalToolTargetSummary<'_>> {
+    let mut summaries: Vec<ExternalToolTargetSummary<'_>> = Vec::new();
+    for tool in &snapshot.tools {
+        if let Some(summary) = summaries
+            .iter_mut()
+            .find(|summary| summary.first().definition.id.target == tool.definition.id.target)
+        {
+            summary.tools.push(tool);
+        } else {
+            summaries.push(ExternalToolTargetSummary { tools: vec![tool] });
+        }
+    }
+    summaries
+}
+
+fn external_tool_activation_label(activation: &ExternalToolActivationState) -> &'static str {
+    match activation {
+        ExternalToolActivationState::ApprovalRequired => "approval required",
+        ExternalToolActivationState::Disabled => "disabled",
+        ExternalToolActivationState::Active => "active",
+        ExternalToolActivationState::Conflict => "name conflict",
+        ExternalToolActivationState::Unsupported { .. } => "unsupported",
+        ExternalToolActivationState::RuntimeUnavailable { .. } => "runtime unavailable",
+        ExternalToolActivationState::LoadFailed { .. } => "load failed",
+        _ => "unknown",
+    }
+}
+
+fn external_tool_scope_label(scope: impl std::fmt::Debug) -> &'static str {
+    match format!("{scope:?}").as_str() {
+        "UserGlobal" => "user global",
+        "Project" => "project",
+        "WorkspaceLocal" => "workspace local",
+        "RemoteUser" => "remote user",
+        "RemoteProject" => "remote project",
+        _ => "unknown",
+    }
+}
+
+fn external_tool_user_facing_reason(reason: &str) -> String {
+    reason
+        .replace("PR2 worker", "Tool process")
+        .replace("PR2", "This version")
+}
+
+fn external_tool_reason(summary: &ExternalToolTargetSummary<'_>) -> Option<String> {
+    match summary.activation() {
+        ExternalToolActivationState::Unsupported { reason }
+        | ExternalToolActivationState::RuntimeUnavailable { reason }
+        | ExternalToolActivationState::LoadFailed { reason } => {
+            Some(external_tool_user_facing_reason(reason))
+        }
+        _ => None,
+    }
+}
+
+fn external_tool_next_step(activation: &ExternalToolActivationState) -> &'static str {
+    match activation {
+        ExternalToolActivationState::ApprovalRequired => {
+            "Review access, then enable the target or keep it disabled."
+        }
+        ExternalToolActivationState::Disabled => {
+            "Enable the target after reviewing its source and access."
+        }
+        ExternalToolActivationState::Active => {
+            "No action is required. Disable the target to stop exposing it."
+        }
+        ExternalToolActivationState::Conflict => "Choose a provider below, or disable this target.",
+        ExternalToolActivationState::Unsupported { .. } => {
+            "Convert the module to the supported standalone JavaScript subset, then refresh."
+        }
+        ExternalToolActivationState::RuntimeUnavailable { .. } => {
+            "Restore the required runtime, then refresh."
+        }
+        ExternalToolActivationState::LoadFailed { .. } => {
+            "Refresh to retry. If it still fails, inspect or update the module, or disable this target."
+        }
+        _ => "Refresh to retrieve the current target state.",
+    }
+}
+
+fn external_tool_default_reason(activation: &ExternalToolActivationState) -> &'static str {
+    match activation {
+        ExternalToolActivationState::ApprovalRequired => {
+            "The module needs approval before BitFun loads it."
+        }
+        ExternalToolActivationState::Disabled => "The target was disabled by user choice.",
+        ExternalToolActivationState::Active => {
+            "The module loaded successfully and is exposed in this execution domain."
+        }
+        ExternalToolActivationState::Conflict => "Another implementation uses the same tool name.",
+        ExternalToolActivationState::Unsupported { .. } => {
+            "The module uses unsupported syntax or behavior."
+        }
+        ExternalToolActivationState::RuntimeUnavailable { .. } => {
+            "The required JavaScript runtime is unavailable."
+        }
+        ExternalToolActivationState::LoadFailed { .. } => {
+            "The tool process could not load this module."
+        }
+        _ => "The current state is unavailable.",
+    }
+}
+
+fn external_tool_can_enable(activation: &ExternalToolActivationState) -> bool {
+    matches!(
+        activation,
+        ExternalToolActivationState::ApprovalRequired | ExternalToolActivationState::Disabled
+    )
+}
+
+fn external_tool_can_disable(activation: &ExternalToolActivationState) -> bool {
+    matches!(
+        activation,
+        ExternalToolActivationState::ApprovalRequired
+            | ExternalToolActivationState::Active
+            | ExternalToolActivationState::Conflict
+            | ExternalToolActivationState::LoadFailed { .. }
+    )
+}
+
+fn external_tool_result_is_stale(
+    current: Option<&ExternalSourceCatalogSnapshot>,
+    incoming: &ExternalSourceCatalogSnapshot,
+) -> bool {
+    current.is_some_and(|current| current.generation > incoming.generation)
+}
+
+fn external_tool_pending_notice_key(snapshot: &ExternalSourceCatalogSnapshot) -> Option<String> {
+    let mut decisions = snapshot
+        .tool_approval_requests
+        .iter()
+        .map(|request| format!("approval:{}", request.decision_key))
+        .chain(
+            snapshot
+                .tool_conflicts
+                .iter()
+                .filter(|conflict| conflict.selected_candidate_id.is_none())
+                .map(|conflict| format!("conflict:{}", conflict.conflict_key)),
+        )
+        .collect::<Vec<_>>();
+    decisions.extend(snapshot.diagnostics.iter().filter_map(|diagnostic| {
+        matches!(
+            diagnostic.severity,
+            ExternalSourceDiagnosticSeverity::Warning | ExternalSourceDiagnosticSeverity::Error
+        )
+        .then(|| {
+            format!(
+                "diagnostic:{:?}:{}:{}:{}",
+                diagnostic.severity,
+                diagnostic.code,
+                diagnostic.message,
+                diagnostic
+                    .source
+                    .as_ref()
+                    .map(|source| source.stable_key())
+                    .unwrap_or_default()
+            )
+        })
+    }));
+    if decisions.is_empty() {
+        return None;
+    }
+    decisions.sort_unstable();
+    Some(decisions.join("\n"))
+}
+
+fn external_tool_capability_label(capability: ExternalToolCapability) -> &'static str {
+    match capability {
+        ExternalToolCapability::FileSystem => "filesystem",
+        ExternalToolCapability::Network => "network",
+        ExternalToolCapability::Process => "process",
+        ExternalToolCapability::Environment => "environment variables",
+        _ => "other",
+    }
+}
+
+fn external_tool_runtime_label(runtime: ExternalToolRuntimeKind) -> &'static str {
+    match runtime {
+        ExternalToolRuntimeKind::JavaScript => "JavaScript",
+        ExternalToolRuntimeKind::TypeScript => "TypeScript",
+        _ => "unknown runtime",
+    }
+}
+
+fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -> String {
+    let Some(snapshot) = snapshot else {
+        return "External tools\n\nTool discovery has not completed. Run /external-tools refresh and try again."
+            .to_string();
+    };
+    let mut lines = vec![
+        "External tools".to_string(),
+        String::new(),
+        "No external code ran during discovery. Enabling a tool starts its external module with your user permissions and inherited environment variables; BitFun does not provide an OS sandbox or full descendant-process cleanup in this version."
+            .to_string(),
+    ];
+
+    if snapshot.discovery_pending {
+        lines.push(String::new());
+        lines.push("Discovery is still running. Existing results remain usable.".to_string());
+    }
+
+    lines.push(String::new());
+    lines.push("Targets".to_string());
+    let targets = external_tool_target_summaries(snapshot);
+    if targets.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for (index, target) in targets.iter().enumerate() {
+            let tool = target.first();
+            let source = snapshot
+                .sources
+                .iter()
+                .find(|source| source.record.key == tool.definition.id.target.source);
+            let capabilities = target
+                .tools
+                .iter()
+                .flat_map(|tool| tool.definition.capabilities.iter().copied())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .map(external_tool_capability_label)
+                .collect::<Vec<_>>()
+                .join(", ");
+            lines.push(format!(
+                "  {}. {} - {}",
+                index + 1,
+                target.names(),
+                external_tool_activation_label(target.activation())
+            ));
+            lines.push(format!(
+                "     Source root: {}",
+                source
+                    .map(|source| source.record.location.as_str())
+                    .unwrap_or("unknown")
+            ));
+            lines.push("     Module files:".to_string());
+            let module_paths = target
+                .tools
+                .iter()
+                .map(|tool| tool.definition.module_path.as_str())
+                .collect::<BTreeSet<_>>();
+            for module_path in module_paths {
+                lines.push(format!("       - {module_path}"));
+            }
+            lines.push(format!(
+                "     Scope: {}",
+                source
+                    .map(|source| external_tool_scope_label(source.record.scope))
+                    .unwrap_or("unknown")
+            ));
+            lines.push(format!(
+                "     Execution domain: {}",
+                source
+                    .map(|source| source.record.execution_domain_id.as_str())
+                    .unwrap_or("unknown")
+            ));
+            lines.push(format!(
+                "     Working directory: {}",
+                tool.definition.working_directory
+            ));
+            lines.push(format!(
+                "     Runtime: {}",
+                external_tool_runtime_label(tool.definition.runtime_kind)
+            ));
+            lines.push(format!("     Access: {capabilities}"));
+            if let Some(reason) = external_tool_reason(target) {
+                lines.push(format!("     Reason: {reason}"));
+            } else {
+                lines.push(format!(
+                    "     Reason: {}",
+                    external_tool_default_reason(target.activation())
+                ));
+            }
+            lines.push(format!(
+                "     Next step: {}",
+                external_tool_next_step(target.activation())
+            ));
+            let mut commands = Vec::new();
+            if external_tool_can_enable(target.activation()) {
+                commands.push(format!("/external-tools enable {}", index + 1));
+            }
+            if external_tool_can_disable(target.activation()) {
+                commands.push(format!("/external-tools disable {}", index + 1));
+            }
+            if !commands.is_empty() {
+                lines.push(format!("     Commands: {}", commands.join("  or  ")));
+            }
+        }
+    }
+
+    lines.push(String::new());
+    lines.push("Name conflicts".to_string());
+    let pending_conflicts = snapshot
+        .tool_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+        .collect::<Vec<_>>();
+    if pending_conflicts.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for (conflict_index, conflict) in pending_conflicts.iter().enumerate() {
+            lines.push(format!(
+                "  {}. Tool '{}' requires a provider choice:",
+                conflict_index + 1,
+                conflict.tool_name
+            ));
+            for (candidate_index, candidate) in conflict.candidates.iter().enumerate() {
+                lines.push(format!(
+                    "     {}. {} ({}) - /external-tools choose {} {}",
+                    candidate_index + 1,
+                    candidate.display_name,
+                    candidate.provider_id,
+                    conflict_index + 1,
+                    candidate_index + 1
+                ));
+            }
+            lines.push(
+                "     The choice applies to matching candidates in this execution domain."
+                    .to_string(),
+            );
+        }
+    }
+
+    lines.push(String::new());
+    lines.push("Diagnostics".to_string());
+    if snapshot.diagnostics.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for diagnostic in &snapshot.diagnostics {
+            let severity = match diagnostic.severity {
+                ExternalSourceDiagnosticSeverity::Info => "info",
+                ExternalSourceDiagnosticSeverity::Warning => "warning",
+                ExternalSourceDiagnosticSeverity::Error => "error",
+                _ => "notice",
+            };
+            let source = diagnostic
+                .source
+                .as_ref()
+                .map(|source| format!(" [{}]", source.stable_key()))
+                .unwrap_or_default();
+            lines.push(format!(
+                "  - {severity} [{}]{source}: {}",
+                diagnostic.code,
+                external_tool_user_facing_reason(&diagnostic.message)
+            ));
+        }
+    }
+
+    lines.push(String::new());
+    lines.push(
+        "Use /external-tools refresh after editing, upgrading, or removing external tools."
+            .to_string(),
+    );
+    lines.join("\n")
+}
+
+fn parse_positive_index(value: Option<&str>, label: &str) -> Result<usize, String> {
+    let raw = value.ok_or_else(|| format!("missing {label}"))?;
+    let index = raw
+        .parse::<usize>()
+        .map_err(|_| format!("{label} must be a positive number"))?;
+    if index == 0 {
+        return Err(format!("{label} must be a positive number"));
+    }
+    Ok(index - 1)
+}
+
+fn parse_external_tool_review_action(
+    arguments: &str,
+    current_snapshot: Option<&ExternalSourceCatalogSnapshot>,
+    reviewed_snapshot: Option<&ExternalSourceCatalogSnapshot>,
+) -> Result<ExternalToolReviewAction, String> {
+    let mut parts = arguments.split_whitespace();
+    let Some(command) = parts.next() else {
+        return Ok(ExternalToolReviewAction::Show);
+    };
+    if command.eq_ignore_ascii_case("refresh") {
+        if parts.next().is_some() {
+            return Err("usage: /external-tools refresh".to_string());
+        }
+        return Ok(ExternalToolReviewAction::Refresh);
+    }
+    if command.eq_ignore_ascii_case("help") {
+        return Ok(ExternalToolReviewAction::Show);
+    }
+    // Numbered commands refer to the immutable catalog that produced the
+    // review popup. The backend still validates stable decision/conflict keys,
+    // so a changed target fails closed instead of reusing the same number for
+    // a different tool after a watcher refresh.
+    let snapshot = reviewed_snapshot.or(current_snapshot).ok_or_else(|| {
+        "tool discovery has not completed; run /external-tools refresh".to_string()
+    })?;
+    if command.eq_ignore_ascii_case("enable") || command.eq_ignore_ascii_case("disable") {
+        let index = parse_positive_index(parts.next(), "target number")?;
+        if parts.next().is_some() {
+            return Err(format!("usage: /external-tools {command} <target-number>"));
+        }
+        let targets = external_tool_target_summaries(snapshot);
+        let target = targets.get(index).ok_or_else(|| {
+            "that target is no longer available; reopen /external-tools".to_string()
+        })?;
+        let approved = command.eq_ignore_ascii_case("enable");
+        let allowed = if approved {
+            external_tool_can_enable(target.activation())
+        } else {
+            external_tool_can_disable(target.activation())
+        };
+        if !allowed {
+            return Err(format!(
+                "target {} is {}; reopen /external-tools for its next step",
+                index + 1,
+                external_tool_activation_label(target.activation())
+            ));
+        }
+        let tool = target.first();
+        return Ok(ExternalToolReviewAction::Decide {
+            approval_key: tool.approval_key.clone(),
+            decision_key: tool.decision_key.clone(),
+            approved,
+        });
+    }
+    if command.eq_ignore_ascii_case("choose") {
+        let conflict_index = parse_positive_index(parts.next(), "conflict number")?;
+        let candidate_index = parse_positive_index(parts.next(), "candidate number")?;
+        if parts.next().is_some() {
+            return Err(
+                "usage: /external-tools choose <conflict-number> <candidate-number>".to_string(),
+            );
+        }
+        let conflict = snapshot
+            .tool_conflicts
+            .iter()
+            .filter(|conflict| conflict.selected_candidate_id.is_none())
+            .nth(conflict_index)
+            .ok_or_else(|| {
+                "that conflict is no longer available; reopen /external-tools".to_string()
+            })?;
+        let candidate = conflict.candidates.get(candidate_index).ok_or_else(|| {
+            "that candidate is no longer available; reopen /external-tools".to_string()
+        })?;
+        return Ok(ExternalToolReviewAction::Choose {
+            conflict_key: conflict.conflict_key.clone(),
+            candidate_id: candidate.candidate_id.clone(),
+        });
+    }
+    Err("usage: /external-tools [refresh | enable <number> | disable <number> | choose <conflict-number> <candidate-number>]".to_string())
+}
+
+fn external_tool_mutation_result_label(
+    action: &ExternalToolReviewAction,
+    snapshot: &ExternalSourceCatalogSnapshot,
+) -> String {
+    match action {
+        ExternalToolReviewAction::Refresh => "External tools refreshed".to_string(),
+        ExternalToolReviewAction::Decide {
+            approval_key,
+            decision_key,
+            approved: true,
+        } => {
+            let activations = snapshot
+                .tools
+                .iter()
+                .filter(|tool| {
+                    tool.approval_key == *approval_key && tool.decision_key == *decision_key
+                })
+                .map(|tool| &tool.activation)
+                .collect::<Vec<_>>();
+            if activations.is_empty() {
+                "External tool approval saved; reopen /external-tools to review the changed target"
+                    .to_string()
+            } else if activations
+                .iter()
+                .any(|state| matches!(state, ExternalToolActivationState::LoadFailed { .. }))
+            {
+                "External tool approved, but loading failed".to_string()
+            } else if activations.iter().any(|state| {
+                matches!(
+                    state,
+                    ExternalToolActivationState::RuntimeUnavailable { .. }
+                )
+            }) {
+                "External tool approved, but its runtime is unavailable".to_string()
+            } else if activations
+                .iter()
+                .any(|state| matches!(state, ExternalToolActivationState::Conflict))
+            {
+                "External tool approved; choose a provider before every export is available"
+                    .to_string()
+            } else if activations
+                .iter()
+                .all(|state| matches!(state, ExternalToolActivationState::Active))
+            {
+                "External tool enabled".to_string()
+            } else {
+                "External tool approval saved; reopen /external-tools to review its current state"
+                    .to_string()
+            }
+        }
+        ExternalToolReviewAction::Decide {
+            approval_key,
+            decision_key,
+            approved: false,
+        } => {
+            let disabled = snapshot.tools.iter().any(|tool| {
+                tool.approval_key == *approval_key
+                    && tool.decision_key == *decision_key
+                    && matches!(tool.activation, ExternalToolActivationState::Disabled)
+            });
+            if disabled {
+                "External tool disabled".to_string()
+            } else {
+                "External tool decision saved; reopen /external-tools to review the changed target"
+                    .to_string()
+            }
+        }
+        ExternalToolReviewAction::Choose {
+            conflict_key,
+            candidate_id,
+        } => {
+            let selected = snapshot.tool_conflicts.iter().any(|conflict| {
+                conflict.conflict_key == *conflict_key
+                    && conflict.selected_candidate_id.as_deref() == Some(candidate_id.as_str())
+            });
+            if selected {
+                "External tool provider selected".to_string()
+            } else {
+                "External tool candidates changed; reopen /external-tools before choosing"
+                    .to_string()
+            }
+        }
+        ExternalToolReviewAction::Show => "External tools".to_string(),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -472,6 +1059,9 @@ pub(crate) struct ChatMode {
     external_source_conflict_choices: BTreeMap<String, String>,
     external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
     external_source_conflicted_candidate_ids: BTreeSet<String>,
+    external_tool_notice_key: Option<String>,
+    external_tool_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
+    external_tool_mutation_rx: Option<Receiver<ExternalToolMutationResult>>,
 }
 
 /// Map agent_type to a display name for status messages
@@ -510,6 +1100,9 @@ impl ChatMode {
             external_source_conflict_choices: BTreeMap::new(),
             external_source_conflict_lineage_current_keys: BTreeMap::new(),
             external_source_conflicted_candidate_ids: BTreeSet::new(),
+            external_tool_notice_key: None,
+            external_tool_review_snapshot: None,
+            external_tool_mutation_rx: None,
         }
     }
 
@@ -544,6 +1137,182 @@ impl ChatMode {
             snapshot.discovery_pending,
             builtin_reconfirmation_names(&preferences),
         );
+    }
+
+    fn take_external_tool_notice(
+        &mut self,
+        snapshot: &ExternalSourceCatalogSnapshot,
+    ) -> Option<String> {
+        let next_key = external_tool_pending_notice_key(snapshot);
+        if next_key == self.external_tool_notice_key {
+            return None;
+        }
+        self.external_tool_notice_key = next_key;
+        let approvals = snapshot.tool_approval_requests.len();
+        let conflicts = snapshot
+            .tool_conflicts
+            .iter()
+            .filter(|conflict| conflict.selected_candidate_id.is_none())
+            .count();
+        let diagnostics = snapshot
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                matches!(
+                    diagnostic.severity,
+                    ExternalSourceDiagnosticSeverity::Warning
+                        | ExternalSourceDiagnosticSeverity::Error
+                )
+            })
+            .count();
+        if approvals + conflicts + diagnostics == 0 {
+            None
+        } else {
+            Some(format!(
+                "External tools need attention: {approvals} approvals, {conflicts} name conflicts, {diagnostics} diagnostics - run /external-tools"
+            ))
+        }
+    }
+
+    fn handle_external_tool_review(
+        &mut self,
+        arguments: &str,
+        chat_view: &mut ChatView,
+        chat_state: &ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let action = match parse_external_tool_review_action(
+            arguments,
+            self.external_source_snapshot.as_ref(),
+            self.external_tool_review_snapshot.as_ref(),
+        ) {
+            Ok(action) => action,
+            Err(error) => {
+                chat_view.set_status(Some(error));
+                return;
+            }
+        };
+        if matches!(action, ExternalToolReviewAction::Show) {
+            self.external_tool_review_snapshot = self.external_source_snapshot.clone();
+            chat_view.show_info_popup(external_tool_review_text(
+                self.external_tool_review_snapshot.as_ref(),
+            ));
+            return;
+        }
+
+        if self.external_tool_mutation_rx.is_some() {
+            chat_view.set_status(Some(
+                "An external tool update is already running; input and cancellation remain available."
+                    .to_string(),
+            ));
+            return;
+        }
+
+        let workspace = self.workspace_path_for_sync(chat_state);
+        let pending_status = match &action {
+            ExternalToolReviewAction::Refresh => "Refreshing external tools",
+            ExternalToolReviewAction::Decide { approved: true, .. } => "Enabling external tool",
+            ExternalToolReviewAction::Decide {
+                approved: false, ..
+            } => "Disabling external tool",
+            ExternalToolReviewAction::Choose { .. } => "Selecting external tool provider",
+            ExternalToolReviewAction::Show => unreachable!(),
+        };
+        let task_action = action.clone();
+        let (sender, receiver) = mpsc::channel();
+        rt_handle.spawn(async move {
+            let result = match &task_action {
+                ExternalToolReviewAction::Refresh => {
+                    external_source_snapshot(Some(&workspace), true).await
+                }
+                ExternalToolReviewAction::Decide {
+                    approval_key,
+                    decision_key,
+                    approved,
+                } => {
+                    set_external_tool_target_decision(
+                        Some(&workspace),
+                        approval_key,
+                        decision_key,
+                        *approved,
+                    )
+                    .await
+                }
+                ExternalToolReviewAction::Choose {
+                    conflict_key,
+                    candidate_id,
+                } => {
+                    set_external_tool_conflict_choice(Some(&workspace), conflict_key, candidate_id)
+                        .await
+                }
+                ExternalToolReviewAction::Show => unreachable!(),
+            }
+            .map_err(|error| error.to_string());
+            let _ = sender.send(ExternalToolMutationResult {
+                action: task_action,
+                result,
+            });
+        });
+        self.external_tool_mutation_rx = Some(receiver);
+        chat_view.set_status(Some(format!(
+            "{pending_status}; you can continue typing or cancel other UI work"
+        )));
+    }
+
+    fn poll_external_tool_mutation(&mut self, chat_view: &mut ChatView) -> bool {
+        let outcome = match self
+            .external_tool_mutation_rx
+            .as_ref()
+            .map(Receiver::try_recv)
+        {
+            Some(Ok(outcome)) => outcome,
+            Some(Err(MpscTryRecvError::Empty)) | None => return false,
+            Some(Err(MpscTryRecvError::Disconnected)) => {
+                self.external_tool_mutation_rx = None;
+                chat_view.set_status(Some(
+                    "External tool update stopped before returning a result; reopen /external-tools and retry."
+                        .to_string(),
+                ));
+                return true;
+            }
+        };
+        self.external_tool_mutation_rx = None;
+        match outcome.result {
+            Ok(snapshot) => {
+                if external_tool_result_is_stale(self.external_source_snapshot.as_ref(), &snapshot)
+                {
+                    chat_view.set_status(Some(
+                        "External tool update completed; a newer catalog result is already displayed."
+                            .to_string(),
+                    ));
+                    return true;
+                }
+                self.update_external_source_view(chat_view, &snapshot);
+                self.external_tool_notice_key = external_tool_pending_notice_key(&snapshot);
+                let approvals = snapshot.tool_approval_requests.len();
+                let conflicts = snapshot
+                    .tool_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_none())
+                    .count();
+                let result_label = external_tool_mutation_result_label(&outcome.action, &snapshot);
+                self.external_source_snapshot = Some(snapshot);
+                if approvals + conflicts == 0 {
+                    chat_view.set_status(Some(result_label));
+                } else {
+                    chat_view.set_status(Some(format!(
+                        "{result_label}; {approvals} approvals and {conflicts} conflicts remain - run /external-tools"
+                    )));
+                }
+            }
+            Err(error) => {
+                tracing::warn!("External tool review action failed: {}", error);
+                chat_view.set_status(Some(format!(
+                    "External tool choice was not applied: {error}. Reopen /external-tools to review current results."
+                )));
+            }
+        }
+        true
     }
 
     fn replace_external_conflict_preferences(
@@ -913,12 +1682,15 @@ impl ChatMode {
                     .iter()
                     .filter(|conflict| conflict.selected_candidate_id.is_none())
                     .count();
+                let tool_notice = self.take_external_tool_notice(&snapshot);
                 self.update_external_source_view(&mut chat_view, &snapshot);
                 self.external_source_snapshot = Some(snapshot.clone());
                 if snapshot.discovery_pending {
                     chat_view.set_status(Some(
-                        "Checking compatible commands from external AI applications".to_string(),
+                        "Checking compatible content from external AI applications".to_string(),
                     ));
+                } else if let Some(notice) = tool_notice {
+                    chat_view.set_status(Some(notice));
                 } else if available + restricted > 0 || pending_conflicts > 0 {
                     chat_view.set_status(Some(format!(
                         "External sources: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
@@ -1017,6 +1789,9 @@ impl ChatMode {
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
             }
+            if self.poll_external_tool_mutation(&mut chat_view) {
+                needs_redraw = true;
+            }
 
             let mut external_source_closed = false;
             if let Some(receiver) = external_source_rx.as_mut() {
@@ -1046,12 +1821,14 @@ impl ChatMode {
                     if let Ok(preferences) = preferences {
                         self.replace_external_conflict_preferences(preferences);
                     }
+                    let tool_notice = self.take_external_tool_notice(&snapshot);
                     self.update_external_source_view(&mut chat_view, &snapshot);
                     if snapshot.discovery_pending {
                         chat_view.set_status(Some(
-                            "Checking compatible commands from external AI applications"
-                                .to_string(),
+                            "Checking compatible content from external AI applications".to_string(),
                         ));
+                    } else if let Some(notice) = tool_notice {
+                        chat_view.set_status(Some(notice));
                     } else if discovery_just_finished {
                         let (available, restricted) = external_command_counts(&snapshot);
                         let pending_conflicts = snapshot
@@ -1639,7 +2416,16 @@ impl ChatMode {
 
         // Info popup intercepts all keys when visible
         if chat_view.info_popup_visible() {
-            chat_view.dismiss_info_popup();
+            match key.code {
+                KeyCode::Up => chat_view.info_popup_scroll_up(1),
+                KeyCode::Down => chat_view.info_popup_scroll_down(1),
+                KeyCode::PageUp => chat_view.info_popup_scroll_up(10),
+                KeyCode::PageDown => chat_view.info_popup_scroll_down(10),
+                KeyCode::Home => chat_view.info_popup_scroll_to_start(),
+                KeyCode::End => chat_view.info_popup_scroll_to_end(),
+                KeyCode::Esc => chat_view.dismiss_info_popup(),
+                _ => {}
+            }
             return Ok(None);
         }
 
@@ -2268,7 +3054,22 @@ impl ChatMode {
                 );
             }
         }
+        let builtin_reconfirmation_required = external.is_none()
+            && builtin_reconfirmation
+                .as_ref()
+                .is_some_and(|reconfirmation| !reconfirmation.confirmed);
         let unresolved_candidates = self.external_conflict_projections(command_name);
+        let can_route_external_tool_review = builtin_action
+            .is_some_and(|action| action.handler == ActionHandler::ExternalTools)
+            && qualifier != CommandQualifier::External
+            && (qualifier == CommandQualifier::Builtin
+                || (external.is_none()
+                    && unresolved_candidates.is_empty()
+                    && !builtin_reconfirmation_required));
+        if can_route_external_tool_review {
+            self.handle_external_tool_review(arguments, chat_view, chat_state, rt_handle);
+            return Ok(None);
+        }
         let native_choice_is_active = unresolved_candidates.iter().any(|candidate| {
             candidate
                 .native_collision
@@ -2306,10 +3107,6 @@ impl ChatMode {
             .external_source_snapshot
             .as_ref()
             .is_some_and(|snapshot| snapshot.discovery_pending);
-        let builtin_reconfirmation_required = external.is_none()
-            && builtin_reconfirmation
-                .as_ref()
-                .is_some_and(|reconfirmation| !reconfirmation.confirmed);
         match command_route(
             qualifier,
             builtin_action.is_some(),
@@ -2687,6 +3484,9 @@ impl ChatMode {
             }
             ActionHandler::McpServers => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::ExternalTools => {
+                self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
             }
             ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun-cli"));
@@ -4691,14 +5491,19 @@ mod tests {
 
     use super::{
         agent_event_stream_failure, builtin_command_reconfirmation, command_route,
-        external_command_projections, mark_active_turn_failed, parse_command_token,
+        external_command_projections, external_tool_mutation_result_label,
+        external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
+        mark_active_turn_failed, parse_command_token, parse_external_tool_review_action,
         CommandQualifier, CommandRoute, ExternalSourceConflictPreferences,
+        ExternalToolReviewAction,
     };
     use crate::actions::{ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
-    use bitfun_core::external_sources::ExternalSourceCatalogSnapshot;
+    use bitfun_core::external_sources::{
+        ExternalSourceCatalogSnapshot, ExternalToolActivationState,
+    };
     use std::collections::{BTreeMap, BTreeSet};
 
     fn external_command(
@@ -4722,6 +5527,291 @@ mod tests {
                 selected_candidate_id: selected_candidate_id.map(str::to_string),
             }),
         }
+    }
+
+    fn external_tool_review_snapshot() -> ExternalSourceCatalogSnapshot {
+        serde_json::from_value(serde_json::json!({
+            "generation": 3,
+            "discoveryPending": false,
+            "sources": [{
+                "stableKey": "opencode-tools-project",
+                "record": {
+                    "key": { "providerId": "opencode.tools", "sourceId": "project" },
+                    "ecosystemId": "opencode",
+                    "displayName": "OpenCode project tools",
+                    "sourceKind": "tools",
+                    "scope": "project",
+                    "location": "D:/repo/.opencode/tools",
+                    "executionDomainId": "local:D:/repo",
+                    "health": "available",
+                    "contentVersion": "source-v1"
+                },
+                "lifecycle": "available"
+            }],
+            "commands": [],
+            "tools": [{
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "review.js"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "review",
+                    "descriptionPreview": "Review a change",
+                    "modulePath": "D:/repo/.opencode/tools/review.js",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "java_script",
+                    "capabilities": ["file_system", "network", "environment", "process"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v1",
+                "decisionKey": "decision-v1",
+                "activation": { "state": "approval_required" }
+            }, {
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "weather.js"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "weather",
+                    "descriptionPreview": "Read weather",
+                    "modulePath": "D:/repo/.opencode/tools/weather.js",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "java_script",
+                    "capabilities": ["network"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v2",
+                "decisionKey": "decision-v2",
+                "activation": { "state": "disabled" }
+            }, {
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "deploy.js"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "deploy",
+                    "descriptionPreview": "Deploy a build",
+                    "modulePath": "D:/repo/.opencode/tools/deploy.js",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "java_script",
+                    "capabilities": ["process"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v3",
+                "decisionKey": "decision-v3",
+                "activation": { "state": "active" }
+            }, {
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "broken.ts"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "broken",
+                    "descriptionPreview": "Broken tool",
+                    "modulePath": "D:/repo/.opencode/tools/broken.ts",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "type_script",
+                    "capabilities": ["file_system"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v4",
+                "decisionKey": "decision-v4",
+                "activation": {
+                    "state": "load_failed",
+                    "reason": "PR2 worker could not import the module"
+                }
+            }],
+            "toolApprovalRequests": [{
+                "approvalKey": "approval-v1",
+                "decisionKey": "decision-v1",
+                "targetId": {
+                    "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                    "localId": "review.js"
+                },
+                "sourceDisplayName": "OpenCode project tools",
+                "sourceScope": "project",
+                "sourceLocation": "D:/repo/.opencode/tools/review.js",
+                "workingDirectory": "D:/repo",
+                "runtimeKind": "java_script",
+                "capabilities": ["file_system", "network", "environment", "process"],
+                "contentVersion": "content-v1",
+                "toolNames": ["review"]
+            }],
+            "toolConflicts": [{
+                "conflictKey": "conflict-v1",
+                "toolName": "review",
+                "candidates": [{
+                    "candidateId": "bitfun:review",
+                    "displayName": "BitFun review",
+                    "kind": "built_in",
+                    "providerId": "bitfun",
+                    "contentVersion": "builtin-v1"
+                }, {
+                    "candidateId": "external:review",
+                    "displayName": "OpenCode review",
+                    "kind": "external",
+                    "providerId": "opencode.tools",
+                    "contentVersion": "content-v1",
+                    "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                    "sourceLocation": "D:/repo/.opencode/tools/review.js"
+                }]
+            }],
+            "diagnostics": [{
+                "severity": "warning",
+                "code": "opencode.tool.directory_read_failed",
+                "message": "PR2 worker could not read one tool directory",
+                "source": { "providerId": "opencode.tools", "sourceId": "project" }
+            }]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn external_tool_review_summary_discloses_execution_boundary_and_commands() {
+        let summary = external_tool_review_text(Some(&external_tool_review_snapshot()));
+
+        assert!(summary.contains("No external code ran during discovery"));
+        assert!(summary.contains("filesystem, network, process, environment variables"));
+        assert!(summary.contains("inherited environment variables"));
+        assert!(summary.contains("full descendant-process cleanup"));
+        assert!(summary.contains("/external-tools enable 1"));
+        assert!(summary.contains("/external-tools choose 1 2"));
+        assert!(summary.contains("D:/repo/.opencode/tools/review.js"));
+        assert!(summary.contains("Source root: D:/repo/.opencode/tools"));
+        assert!(summary.contains("Scope: project"));
+        assert!(summary.contains("Execution domain: local:D:/repo"));
+        assert!(summary.contains("disabled"));
+        assert!(summary.contains("active"));
+        assert!(summary.contains("loaded successfully"));
+        assert!(summary.contains("load failed"));
+        assert!(summary.contains("D:/repo/.opencode/tools/broken.ts"));
+        assert!(summary.contains("Diagnostics"));
+        assert!(summary.contains("opencode.tool.directory_read_failed"));
+        assert!(!summary.contains("PR2"));
+    }
+
+    #[test]
+    fn external_tool_review_commands_resolve_indices_to_stable_keys() {
+        let snapshot = external_tool_review_snapshot();
+
+        assert_eq!(
+            parse_external_tool_review_action("enable 2", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v2".to_string(),
+                decision_key: "decision-v2".to_string(),
+                approved: true,
+            }
+        );
+        assert_eq!(
+            parse_external_tool_review_action("disable 3", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v3".to_string(),
+                decision_key: "decision-v3".to_string(),
+                approved: false,
+            }
+        );
+        assert_eq!(
+            parse_external_tool_review_action("disable 4", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v4".to_string(),
+                decision_key: "decision-v4".to_string(),
+                approved: false,
+            }
+        );
+        assert_eq!(
+            parse_external_tool_review_action("choose 1 2", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Choose {
+                conflict_key: "conflict-v1".to_string(),
+                candidate_id: "external:review".to_string(),
+            }
+        );
+        assert!(parse_external_tool_review_action("enable 3", Some(&snapshot), None).is_err());
+    }
+
+    #[test]
+    fn external_tool_review_commands_keep_the_indices_from_the_displayed_review() {
+        let reviewed = external_tool_review_snapshot();
+        let mut current = reviewed.clone();
+        current.tools.swap(0, 1);
+
+        assert_eq!(
+            parse_external_tool_review_action("enable 2", Some(&current), Some(&reviewed)).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v2".to_string(),
+                decision_key: "decision-v2".to_string(),
+                approved: true,
+            }
+        );
+    }
+
+    #[test]
+    fn external_tool_enable_result_reports_the_returned_activation() {
+        let mut snapshot = external_tool_review_snapshot();
+        snapshot.tools[0].activation = ExternalToolActivationState::LoadFailed {
+            reason: "module import failed".to_string(),
+        };
+        let action = ExternalToolReviewAction::Decide {
+            approval_key: "approval-v1".to_string(),
+            decision_key: "decision-v1".to_string(),
+            approved: true,
+        };
+
+        assert_eq!(
+            external_tool_mutation_result_label(&action, &snapshot),
+            "External tool approved, but loading failed"
+        );
+    }
+
+    #[test]
+    fn external_tool_notice_key_changes_for_pending_decisions_or_diagnostics() {
+        let snapshot = external_tool_review_snapshot();
+        let key = external_tool_pending_notice_key(&snapshot).unwrap();
+        let mut generation_only = snapshot.clone();
+        generation_only.generation += 1;
+        assert_eq!(
+            external_tool_pending_notice_key(&generation_only),
+            Some(key.clone())
+        );
+
+        generation_only.tool_approval_requests[0].decision_key = "decision-v2".to_string();
+        assert_ne!(
+            external_tool_pending_notice_key(&generation_only),
+            Some(key.clone())
+        );
+
+        let mut diagnostic_change = snapshot;
+        diagnostic_change.diagnostics[0].message = "different failure".to_string();
+        assert_ne!(
+            external_tool_pending_notice_key(&diagnostic_change),
+            Some(key)
+        );
+    }
+
+    #[test]
+    fn external_tool_mutation_result_does_not_overwrite_a_newer_catalog_generation() {
+        let incoming = external_tool_review_snapshot();
+        let mut current = incoming.clone();
+        current.generation += 1;
+
+        assert!(external_tool_result_is_stale(Some(&current), &incoming));
+        assert!(!external_tool_result_is_stale(Some(&incoming), &current));
+        assert!(!external_tool_result_is_stale(None, &incoming));
     }
 
     #[test]

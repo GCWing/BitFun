@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 mod plugin;
+mod script_tool;
 pub use plugin::{
     validate_plugin_dispatch_response, validate_plugin_runtime_read_response,
     DisabledPluginRuntimeClient, ExtensionCapabilityAvailability, PermissionPromptDenyState,
@@ -27,6 +28,11 @@ pub use plugin::{
     PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest, PluginRuntimeReadResponse,
     PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef, PluginStatusKind,
     PluginStatusSnapshot, PluginTargetRef, PluginTrustLevel, ProjectionOnlyPluginRuntimeClient,
+};
+pub use script_tool::{
+    ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,
+    ScriptToolInvokeResponse, ScriptToolLoadRequest, ScriptToolLoadResponse, ScriptToolRuntime,
+    ScriptToolRuntimeAvailability,
 };
 
 pub type PortResult<T> = Result<T, PortError>;

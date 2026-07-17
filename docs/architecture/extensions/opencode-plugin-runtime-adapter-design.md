@@ -12,8 +12,10 @@
 [`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/plugin/src/tool.ts)
 和实际插件 loader/npm 服务为准；[插件文档](https://opencode.ai/docs/plugins/)用于行为说明。
 
-本文是目标设计。当前实现结束于 BitFun 专用目录来源、启用记录、静态 custom tool 名称预览和诊断，尚未包含脚本执行进程、
-OpenCode 兼容 Client、真实工具调用或稳定钩子执行。
+本文同时区分当前纵向切片与完整目标。当前实现已支持用户/项目 standalone `.js` Tool 的静态发现、非阻塞审批、
+Node worker `load/invoke/cancel/dispose`、现有 Tool Runtime 注册、同名冲突选择与更新/删除撤下；`.ts` 和依赖型 JS
+只显示不支持。固定 Bun、完整 Zod/TypeScript、package plugin、OpenCode 兼容 Client 和稳定 Hook 仍是目标设计，
+不能把 PR2 的 Node 子集写成完整运行时兼容。
 
 ## 1. 核心决策
 
@@ -35,6 +37,10 @@ BitFun 实现自己的插件 Runtime，不启动完整 OpenCode Runtime：
 “BitFun 自有 Runtime”表示 BitFun 自己实现来源发现、依赖准备、worker 监督、OpenCode API 适配、进程通信、
 Rust 能力转发和状态恢复；并不表示重写 Bun，也不表示在后台启动 OpenCode 的 Agent Runtime。插件工厂和钩子
 在 Bun worker 中运行，需要 BitFun 能力时通过兼容接口转发给 Rust 归属模块。
+
+PR2 的 `ScriptToolRuntime` 是 provider-neutral 的窄端口，当前 Node 实现只用于受支持的单文件 JavaScript standalone Tool。
+它不把 Node 固化进 Host ABI，也不承担 OpenCode 格式、审批或冲突规则；后续 Bun 实现可以替换物理执行服务而
+无需修改 Tool owner、产品表面或其他生态 adapter。
 
 “最终由归属模块提交”不是把 OpenCode 可写钩子降级成只读通知。默认策略允许合法钩子变换生效；归属模块只负责
 结构校验、状态一致性和已配置策略，不改变 OpenCode 的正常可观察语义。
@@ -207,14 +213,38 @@ BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 
 
 ### 5.1 Standalone tools
 
-- 扫描项目和用户级 `.opencode/tools/*.ts|js`，兼容 singular 目录；扫描只形成来源清单，首次确认前不 import。
-- 真实加载 default 和多个 named export；按 OpenCode 规则生成 `<file>_<export>` 工具名。
-- 工具的原始 Zod shape、refinement 和 `execute` 留在该工具进程；worker 用原始 Zod `safeParse` 校验调用。
-- worker 只把工具 identity、description 和转换后的 JSON Schema 传给 Rust，不能序列化 Zod 或函数来伪装等价。
-- `ToolContext` 的 session/message/agent/directory/worktree 取真实执行上下文；`abort` 接收 Host 取消信号；
-  `metadata({ title?, metadata? })` 与 `ask()` 通过反向类型化调用更新流式元数据和请求权限。
-- ToolResult 的 title/output/metadata 与 `attachments: { type: "file", mime, url, filename? }[]` 逐项转换；
-  附件 URL 只能指向插件执行域可授权读取的文件或受支持地址，不能把本地路径静默解释为远端文件。
+当前 PR2 边界：
+
+- 扫描用户全局、legacy、显式配置目录和项目层级 `{tool,tools}/*.ts|js`；扫描只形成静态来源/工具清单，首次确认
+  前不 import。`.ts`、非精确 `@opencode-ai/plugin` import、其他 import、动态 import 和 `require` 标记不支持。
+- 受支持的单文件 `.js` 支持 default 和多个 named export，按 `<file>` / `<file>_<export>` 命名；“单文件”是当前
+  loader 兼容边界，不是安全结论。worker 内基础 schema shim 覆盖 string/number/boolean/enum/array/object、
+  description、optional/default，以及按类型映射的 min/max，不宣称等价完整 Zod。
+- worker 只返回 identity、description、JSON Schema 和字符串输出；`directory/worktree/sessionID/abort` 使用真实调用
+  上下文。`metadata`、`ask`、附件和任意对象结果不支持，避免无消费方的泛协议扩张。
+- 每个 target 使用一个持久 worker 并保留其模块单例状态；合作式取消先触发 `AbortSignal`，脚本阻塞事件循环时
+  500 ms 后终止整个 target worker。普通请求 30 秒超时后也终止 worker；更短的产品 Tool 期限丢弃调用 future 时，
+  runtime drop guard 同样终止 worker，并在退出完成前保留单 target 串行许可。不自动重放调用；输出为 1 MiB，单协议帧
+  为 8 MiB，无法认证的 stdout 累计到 1 MiB 后终止 worker。`import.meta.url` 使用已校验的来源 URL。
+- 当前进程不是 OS 沙箱。模块使用独立 VM realm 且协议响应令牌不经 stdin 暴露，只用于降低偶然协议破坏，不能阻止
+  已批准脚本获得当前用户的文件、网络、环境和进程能力，也不构成针对恶意模块的协议认证；获批脚本控制其 target
+  内的执行语义。本阶段没有进程树/Job Object；硬取消只保证直接 worker 退出，其后代进程和已创建系统资源可能
+  存活，必须在 Desktop 与 CLI/TUI 确认详情持续披露。
+- global、project、legacy 或 `OPENCODE_CONFIG_DIR` 任一目录读取失败时记录绑定该 source 的诊断并继续扫描其他目录，
+  不把单目录 I/O 故障升级成整个 OpenCode Tool provider 不可用。
+- invoke 超时、空闲/调用中 worker 退出或 cancel 硬终止会通过带独立加载代次的 runtime health 事件立即撤下 target
+  的全部路由并进入 `load_failed`；旧 generation 的迟到退出不能误伤同内容的新 worker。调用不重放，下一次 Tool
+  Catalog 暴露前只进行一次恢复尝试，失败后等待显式刷新或来源变化。零 route mux 继续作为 registry 稳定拦截点，
+  防止并发内置/MCP 注册绕过同名冲突策略。
+
+完整目标在不改变 provider/owner 边界的前提下继续补齐：
+
+- 固定 Bun 真实加载 JS/TS、依赖、default/具名导出；原始 Zod shape、refinement 和 `execute` 留在 worker，
+  worker 用原始 Zod `safeParse` 校验调用，只把模型可见 JSON Schema 传给 Rust。
+- `ToolContext` 补齐 message/agent 等真实执行上下文；`metadata({ title?, metadata? })` 与 `ask()` 通过反向类型化
+  调用更新流式元数据和请求权限。
+- ToolResult 的 title/output/metadata 与 `attachments: { type: "file", mime, url, filename? }[]` 逐项转换；附件
+  URL 只能指向插件执行域可授权读取的文件或受支持地址，不能把本地路径静默解释为远端文件。
 - 任意语言包装继续由插件代码启动子进程；Host 不另建语言专用工具 ABI。
 
 ### 5.2 服务插件
@@ -249,7 +279,9 @@ BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 
 
 - 运行时新增或缺失工具只更新本次真实贡献和差异诊断。
 - 用户策略对能力类别有限制时，超出上限的贡献被拒绝，其他贡献继续注册。
-- 同名插件工具默认按 OpenCode 语义覆盖内置工具；原工具保留可诊断身份和可选别名。
+- BitFun 产品边界优先于 OpenCode 的静默覆盖顺序：同名外部 Tool、BitFun 内置和 MCP 候选形成包含身份与内容版本
+  的冲突指纹；候选集合来自静态识别定义，不因某个 worker 暂不可用而消失。用户选择前保留当前本地实现；显式选择
+  外部实现后，任一候选变化或加载失败都保持 fail-closed 并要求重选，不静默回退。生态内原始顺序仍由 OpenCode adapter 解释。
 - 产品或组织可保护少量安全关键工具。保护冲突必须在加载状态中可见，不能静默改名或丢弃。
 - 工具调用继续进入现有可调用工具集合、期限、取消和结果类型；不新增只供插件使用的第二套调用状态机。
 
@@ -426,13 +458,16 @@ discovered -> pending-preparation -> preparing -> ready -> pending-activation ->
 - 当前执行版本、依赖缓存和 worker 健康由远端 Runtime Services 管理。
 - 连接中断时调用返回 `temporarily-unavailable`，恢复后重新协商版本和当前注册项。
 
-## 11. 当前实现迁移
+## 11. 当前实现与后续迁移
 
-现有 P0-C.1/P0-C.2 保留以下成果：BitFun 专用包的来源完整性、状态诊断、启停版本校验、主机期限、故障暂停
-和静态名称预览测试。需要纠正：
+PR2 已把 standalone Tool 放在目标分层的正确位置：通用契约位于 product domains/runtime ports，OpenCode 路径与
+格式位于独立 adapter，来源代次位于 external-sources coordinator，审批/冲突/工作区路由位于 Core，物理 Node
+进程位于 script execution service，Desktop/CLI/TUI 只消费快照和操作。后续 adapter 不依赖 OpenCode 私有类型。
+
+当前仍需保留并逐步迁移的边界：
 
 - `bitfun.plugin.json` 不是所有 OpenCode 插件的强制作者格式。
-- 静态候选不是工具真实定义，不能要求运行时集合与字符串扫描完全相同。
+- 静态候选不是完整工具真实定义；PR2 在 load 时核对预期 export 并 fail-closed，完整 Host 后续比较动态贡献差异。
 - 无 custom tool 的插件仍可因 Hook、auth 或 provider 被启用。
 - `client/server facade` 不再一律拒绝；改为插件专用 Compatibility Facade。
 - 可写 Hook 不再一律拒绝；改为依次变换、结构校验和归属模块提交。
@@ -440,6 +475,8 @@ discovered -> pending-preparation -> preparing -> ready -> pending-activation ->
   变化时确认，同一摘要下的内部生命周期不重复询问。
 - 泛 `PluginDispatchEnvelope/PluginEffectCandidate` 不继续扩张承载所有调用；实施时拆成 source lifecycle、
   worker invoke 和 typed hook transform 等窄路径。
+- PR2 原位本地文件没有精确旧物化目录，更新 load 失败会撤下对应 target；只有未来保存摘要匹配的精确字节后，
+  才能实现“健康旧进程继续服务”而不从新源码伪造旧版本。
 
 ## 12. 验证要求
 

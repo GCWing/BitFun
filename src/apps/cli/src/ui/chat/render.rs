@@ -123,7 +123,15 @@ impl ChatView {
 
         // Info popup overlay (topmost)
         if let Some(ref msg) = self.info_popup {
-            super::widgets::render_info_popup(frame, size, msg, self.theme.primary);
+            let (scroll, max_scroll) = super::widgets::render_info_popup_scrolled(
+                frame,
+                size,
+                msg,
+                self.theme.primary,
+                self.info_popup_scroll,
+            );
+            self.info_popup_scroll = scroll;
+            self.info_popup_max_scroll = max_scroll;
         }
     }
 

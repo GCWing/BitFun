@@ -8,6 +8,8 @@ import ExternalSourcesConfig from './ExternalSourcesConfig';
 const getSnapshotMock = vi.hoisted(() => vi.fn());
 const setSourceEnabledMock = vi.hoisted(() => vi.fn());
 const setConflictChoiceMock = vi.hoisted(() => vi.fn());
+const setToolTargetDecisionMock = vi.hoisted(() => vi.fn());
+const setToolConflictChoiceMock = vi.hoisted(() => vi.fn());
 const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project' }));
 
 vi.mock('react-i18next', () => ({
@@ -35,6 +37,8 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     getSnapshot: getSnapshotMock,
     setSourceEnabled: setSourceEnabledMock,
     setConflictChoice: setConflictChoiceMock,
+    setToolTargetDecision: setToolTargetDecisionMock,
+    setToolConflictChoice: setToolConflictChoiceMock,
   },
 }));
 
@@ -86,6 +90,9 @@ const snapshot = {
       availability: { state: 'available' },
     }],
   }],
+  tools: [],
+  toolApprovalRequests: [],
+  toolConflicts: [],
 };
 
 describe('ExternalSourcesConfig', () => {
@@ -104,6 +111,8 @@ describe('ExternalSourcesConfig', () => {
         selectedCandidateId: 'candidate-opencode',
       }],
     });
+    setToolTargetDecisionMock.mockResolvedValue(snapshot);
+    setToolConflictChoiceMock.mockResolvedValue(snapshot);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -145,7 +154,7 @@ describe('ExternalSourcesConfig', () => {
     );
   });
 
-  it('keeps a neutral checking state until initial discovery completes', async () => {
+  it('keeps discovery non-blocking while an initial refresh completes', async () => {
     getSnapshotMock
       .mockResolvedValueOnce({
         ...snapshot,
@@ -160,14 +169,238 @@ describe('ExternalSourcesConfig', () => {
       root.render(<ExternalSourcesConfig />);
       await Promise.resolve();
     });
-    expect(container.textContent).toContain('loading');
+    expect(container.textContent).toContain('checkingNonBlocking');
     expect(container.textContent).not.toContain('sources.empty');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(750);
     });
     expect(container.textContent).toContain('OpenCode project commands');
-    expect(container.textContent).not.toContain('loading');
+    expect(container.textContent).not.toContain('checkingNonBlocking');
+  });
+
+  it('shows source, working directory, and capabilities before enabling tool code', async () => {
+    const approvalSnapshot = {
+      ...snapshot,
+      sources: [{
+        stableKey: 'tool-source',
+        record: {
+          ...snapshot.sources[0].record,
+          key: { providerId: 'opencode.tools', sourceId: 'project' },
+          displayName: 'OpenCode project tools',
+          sourceKind: 'tools',
+          location: 'D:/workspace/project/.opencode/tools',
+          executionDomainId: 'local:D:/workspace/project',
+        },
+        lifecycle: 'available',
+      }],
+      commandConflicts: [],
+      tools: [{
+        definition: {
+          id: {
+            target: {
+              source: { providerId: 'opencode.tools', sourceId: 'project' },
+              localId: 'weather.js',
+            },
+            exportId: 'default',
+          },
+          name: 'weather',
+          descriptionPreview: 'Read the weather',
+          modulePath: 'D:/workspace/project/.opencode/tools/weather.js',
+          workingDirectory: 'D:/workspace/project',
+          runtimeKind: 'java_script',
+          capabilities: ['file_system', 'network', 'environment', 'process'],
+          contentVersion: 'v1',
+          staticStatus: { state: 'ready' },
+        },
+        approvalKey: 'approval-1',
+        decisionKey: 'decision-1',
+        activation: { state: 'approval_required' },
+      }],
+      toolApprovalRequests: [{
+        approvalKey: 'approval-1',
+        decisionKey: 'decision-1',
+        targetId: {
+          source: { providerId: 'opencode.tools', sourceId: 'project' },
+          localId: 'weather.js',
+        },
+        sourceDisplayName: 'OpenCode project tools',
+        sourceScope: 'project',
+        sourceLocation: 'D:/workspace/project/.opencode/tools/weather.js',
+        workingDirectory: 'D:/workspace/project',
+        runtimeKind: 'java_script',
+        capabilities: ['file_system', 'network', 'environment', 'process'],
+        contentVersion: 'v1',
+        toolNames: ['weather'],
+      }],
+    };
+    getSnapshotMock.mockResolvedValue(approvalSnapshot);
+    setToolTargetDecisionMock.mockResolvedValue({
+      ...approvalSnapshot,
+      toolApprovalRequests: [],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('toolApprovals.sourceRoot');
+    expect(container.textContent).toContain('toolApprovals.modulePath');
+    expect(container.textContent).toContain('D:/workspace/project/.opencode/tools/weather.js');
+    expect(container.textContent).toContain('local:D:/workspace/project');
+    expect(container.textContent).toContain('toolApprovals.workingDirectory');
+    expect(container.textContent).toContain('capability.file_system');
+    expect(container.textContent).toContain('capability.environment');
+    const enable = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('toolApprovals.enable'));
+    await act(async () => enable?.click());
+
+    expect(setToolTargetDecisionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'approval-1',
+      'decision-1',
+      true,
+    );
+    const operationStatus = container.querySelector('[role="status"][tabindex="-1"]');
+    expect(operationStatus?.textContent).toContain('actions.updated');
+    expect(document.activeElement).toBe(operationStatus);
+  });
+
+  it('lets a previously declined tool be reviewed and enabled without another automatic prompt', async () => {
+    const disabledSnapshot = {
+      ...snapshot,
+      commandConflicts: [],
+      tools: [{
+        definition: {
+          id: {
+            target: {
+              source: { providerId: 'opencode.tools', sourceId: 'project' },
+              localId: 'weather.js',
+            },
+            exportId: 'default',
+          },
+          name: 'weather',
+          descriptionPreview: 'Read the weather',
+          modulePath: 'D:/workspace/project/.opencode/tools/weather.js',
+          workingDirectory: 'D:/workspace/project',
+          runtimeKind: 'java_script',
+          capabilities: ['file_system', 'network', 'environment', 'process'],
+          contentVersion: 'v1',
+          staticStatus: { state: 'ready' },
+        },
+        approvalKey: 'approval-1',
+        decisionKey: 'decision-1',
+        activation: { state: 'disabled' },
+      }],
+      toolApprovalRequests: [],
+    };
+    getSnapshotMock.mockResolvedValue(disabledSnapshot);
+    setToolTargetDecisionMock.mockResolvedValue({
+      ...disabledSnapshot,
+      tools: [{ ...disabledSnapshot.tools[0], activation: { state: 'active' } }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).not.toContain('toolApprovals.warning');
+    const review = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('tools.details'));
+    await act(async () => review?.click());
+    expect(container.textContent).toContain('toolApprovals.warning');
+    expect(container.textContent).toContain('capability.network');
+
+    const enable = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('toolApprovals.enable'));
+    await act(async () => enable?.click());
+    expect(setToolTargetDecisionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'approval-1',
+      'decision-1',
+      true,
+    );
+  });
+
+  it('shows source, execution scope, failure reason, and next step for every tool state', async () => {
+    const toolSource = {
+      stableKey: 'tool-source',
+      record: {
+        ...snapshot.sources[0].record,
+        key: { providerId: 'opencode.tools', sourceId: 'project' },
+        displayName: 'OpenCode project tools',
+        sourceKind: 'tools',
+        location: 'D:/workspace/project/.opencode/tools',
+        executionDomainId: 'local:D:/workspace/project',
+      },
+      lifecycle: 'available',
+    };
+    const toolDefinition = {
+      id: {
+        target: {
+          source: { providerId: 'opencode.tools', sourceId: 'project' },
+          localId: 'weather.ts',
+        },
+        exportId: 'default',
+      },
+      name: 'weather',
+      descriptionPreview: 'Read the weather',
+      modulePath: 'D:/workspace/project/.opencode/tools/weather.ts',
+      workingDirectory: 'D:/workspace/project',
+      runtimeKind: 'type_script',
+      capabilities: ['file_system', 'network'],
+      contentVersion: 'v1',
+      staticStatus: { state: 'ready' },
+    };
+    const stateSnapshot = {
+      ...snapshot,
+      sources: [toolSource],
+      commandConflicts: [],
+      tools: [
+        {
+          definition: toolDefinition,
+          approvalKey: 'approval-disabled',
+          decisionKey: 'decision-disabled',
+          activation: { state: 'disabled' },
+        },
+        {
+          definition: {
+            ...toolDefinition,
+            id: {
+              ...toolDefinition.id,
+              target: { ...toolDefinition.id.target, localId: 'broken.ts' },
+            },
+            name: 'broken',
+            modulePath: 'D:/workspace/project/.opencode/tools/broken.ts',
+          },
+          approvalKey: 'approval-broken',
+          decisionKey: 'decision-broken',
+          activation: { state: 'load_failed', reason: 'Worker could not import the module.' },
+        },
+      ],
+      toolApprovalRequests: [],
+    };
+    getSnapshotMock.mockResolvedValue(stateSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const detailButtons = Array.from(container.querySelectorAll('button')).filter((button) =>
+      button.textContent?.includes('tools.details'));
+    expect(detailButtons).toHaveLength(2);
+    await act(async () => detailButtons[1]?.click());
+
+    expect(container.textContent).toContain('D:/workspace/project/.opencode/tools/broken.ts');
+    expect(container.textContent).toContain('D:/workspace/project/.opencode/tools');
+    expect(container.textContent).toContain('local:D:/workspace/project');
+    expect(container.textContent).not.toContain('Worker could not import the module.');
+    expect(container.textContent).toContain('toolReason.load_failed');
+    expect(container.textContent).toContain('toolNextStep.load_failed');
+    expect(container.textContent).toContain('tools.targetScope');
   });
 
   it('renders a removed source as disabled and off', async () => {

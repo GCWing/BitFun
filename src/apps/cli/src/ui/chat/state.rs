@@ -191,8 +191,10 @@ pub(crate) struct ChatView {
     /// Pending subagent selector action from mouse click (consumed by caller)
     pending_subagent_action: Option<SubagentSelectorAction>,
 
-    /// Info popup message (rendered as overlay, dismissed by any key)
+    /// Info popup message and vertical scroll position.
     info_popup: Option<String>,
+    info_popup_scroll: u16,
+    info_popup_max_scroll: u16,
 
     /// Hovered thinking block (message_id) for mouse-over highlight
     hovered_thinking_block_id: Option<String>,
@@ -271,6 +273,8 @@ impl ChatView {
             pending_theme_preview: None,
             theme_preview_original: None,
             info_popup: None,
+            info_popup_scroll: 0,
+            info_popup_max_scroll: 0,
             hovered_thinking_block_id: None,
             collapsed_tools: HashSet::new(),
             focused_block_tool: None,

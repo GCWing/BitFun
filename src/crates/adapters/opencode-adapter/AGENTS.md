@@ -2,12 +2,13 @@
 
 # OpenCode Adapter
 
-The current crate owns the P0 static OpenCode source preview used by the existing
-managed-package path and the OpenCode-specific implementations of capability
-provider contracts. It preserves OpenCode source discovery, precedence, formats,
-argument expansion, and versioned compatibility semantics. Shared source catalog,
-lifecycle coordination, file-watch implementation, product policy, UI, credentials,
-worker supervision, and final effect writes belong elsewhere.
+The current crate owns the static OpenCode source preview used by the existing
+managed-package path and the OpenCode-specific implementations of command and
+standalone-tool provider contracts. It preserves OpenCode source discovery,
+precedence, formats, argument expansion, and versioned compatibility semantics.
+Shared source catalog, lifecycle coordination, file-watch implementation,
+product policy, UI, credentials, worker supervision, and final effect writes
+belong elsewhere.
 
 Product-source boundary:
 
@@ -44,6 +45,10 @@ Product-source boundary:
   After activation, the default local runtime policy is compatibility mode.
 - Final tool creation, permission decisions, authoritative state, and audit facts
   stay in their tool, permission, product, and runtime owner paths.
+- Standalone-tool preparation may return only a version-checked, bounded module
+  for an already approved target. It must not spawn a process, install a package,
+  persist approval, or interpret another ecosystem. Static import restrictions
+  describe the current compatibility subset; they are not a security sandbox.
 - The user's local `opencode` CLI installation is unrelated to loading
   OpenCode-compatible plugins. CLI/server interop with an installed OpenCode
   binary belongs to ACP/external-client work, not this adapter boundary.

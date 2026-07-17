@@ -41,7 +41,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
-fn tool_call_needs_permission(registry: &ToolRegistry, tool_call: &ToolCall) -> bool {
+fn tool_call_needs_permission(
+    registry: &ToolRegistry,
+    tool_call: &ToolCall,
+    workspace_root: Option<&std::path::Path>,
+    is_remote: bool,
+) -> bool {
     let invocation = ResolvedToolInvocation::from_wire_call(
         tool_call.tool_name.clone(),
         tool_call.arguments.clone(),
@@ -52,6 +57,12 @@ fn tool_call_needs_permission(registry: &ToolRegistry, tool_call: &ToolCall) -> 
 
     registry
         .get_tool(&invocation.effective_tool_name)
+        .and_then(|tool| {
+            crate::external_tools::resolve_external_tool_for_workspace(
+                tool,
+                crate::external_tools::external_tool_route_root(workspace_root, is_remote),
+            )
+        })
         .map(|tool| tool.needs_permissions(Some(&invocation.effective_arguments)))
         .unwrap_or(false)
 }
@@ -817,10 +828,20 @@ impl RoundExecutor {
                     let registry = get_global_tool_registry();
                     let tool_registry = registry.read().await;
 
-                    stream_result
-                        .tool_calls
-                        .iter()
-                        .any(|tool_call| tool_call_needs_permission(&tool_registry, tool_call))
+                    stream_result.tool_calls.iter().any(|tool_call| {
+                        tool_call_needs_permission(
+                            &tool_registry,
+                            tool_call,
+                            context
+                                .workspace
+                                .as_ref()
+                                .map(|workspace| workspace.root_path()),
+                            context
+                                .workspace
+                                .as_ref()
+                                .is_some_and(|workspace| workspace.is_remote()),
+                        )
+                    })
                 };
                 let needs_confirm =
                     resolve_tool_confirmation_policy_gate(ToolConfirmationPolicyGateFacts {
@@ -1396,7 +1417,7 @@ mod tests {
             recovered_from_truncation: false,
         };
 
-        assert!(tool_call_needs_permission(&registry, &call));
+        assert!(tool_call_needs_permission(&registry, &call, None, false));
     }
 
     fn test_round_context() -> RoundContext {

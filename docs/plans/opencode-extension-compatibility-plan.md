@@ -2,7 +2,9 @@
 
 本文定义 OpenCode 兼容能力的近期交付顺序。完整能力差异保留在
 [兼容矩阵](../architecture/extensions/opencode-extension-compatibility.md)，跨生态来源体验与生命周期见
-[外部 AI 工作内容设计](../architecture/extensions/external-ai-work-sources-design.md)。兼容矩阵是审计库存，不是默认路线图。
+[外部 AI 工作内容设计](../architecture/extensions/external-ai-work-sources-design.md)，通用能力 owner、Generation 与宿主边界见
+[能力装配与宿主集成设计](../architecture/extensions/capability-runtime-integration-design.md)。本计划只覆盖外部 OpenCode
+能力进入 BitFun 的渐进导入轨道，不代表 BitFun 能力导出到 OpenCode 已经完成。兼容矩阵是审计库存，不是默认路线图。
 
 PR1 已将基线推进到通用外部来源目录、生命周期协调器和 OpenCode Prompt Command 纵向切片；BitFun 原有受管
 插件包来源确认和 custom tool 静态预览继续保留。后续不沿用“先做一个大而全的 OpenCode Plugin Runtime”路线，
@@ -18,7 +20,7 @@ Product surfaces (Desktop / CLI / TUI)
   -> External Source Catalog / lifecycle coordinator
        -> consumes capability-specific provider contracts
             -> Prompt Command provider contract
-            -> future Tool provider contract
+            -> Tool provider contract + provider-neutral script runtime port
             -> future Subagent provider contract
 
 Same-level ecosystem adapters implement those provider contracts
@@ -58,7 +60,7 @@ Product Assembly registers adapter implementations with the coordinator
 | PR | 用户可观察结果 | 新增能力 owner | 明确不包含 |
 |---|---|---|---|
 | PR1：来源目录 + OpenCode Command | Desktop 可查看、抑制/恢复并刷新全局/项目 OpenCode 来源；CLI/TUI 可列出并执行支持的 `/command`；运行中修改、删除、恢复后自动刷新 | 通用来源目录与生命周期协调器；Prompt Command 契约；OpenCode Command adapter | JS/TS Tool 执行、Hook、MCP、OpenCode Client/Server、Subagent 执行、复制式导入 |
-| PR2：OpenCode standalone Tool | 一个真实、无外部依赖的 `.opencode/tools/` 样例经预览和确认后进入现有 Tool Runtime，可调用、取消、更新和撤下 | 现有 Tool Runtime + 独立 Tool 兼容接口 | package plugin、npm 依赖安装、Hook、TUI renderer、完整 `metadata`/`ask` |
+| PR2：OpenCode standalone Tool | 一个真实、受支持的单文件 `.opencode/tools/` 样例经预览和确认后进入现有 Tool Runtime，可调用、取消、更新和撤下 | 现有 Tool Runtime + 独立 Tool 兼容接口 | package plugin、npm 依赖安装、Hook、TUI renderer、完整 `metadata`/`ask` |
 | PR3：OpenCode Subagent | 全局/项目 agent 定义进入现有 Subagent owner，可选择、调用、更新和撤下；unsupported 字段有明确诊断 | 现有 Subagent owner + 独立 Subagent 兼容接口 | 原始 OpenCode 会话内核、完整 primary-agent 替换、跨产品通用 agent JSON |
 
 Tool 与 Subagent 不复用 Command 的贡献对象，只复用来源身份、状态、代次、诊断和观察生命周期。未来接入 Codex 或
@@ -135,13 +137,79 @@ Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修
 
 ## 4. PR2：OpenCode standalone Tool
 
-PR2 只在 PR1 的来源限定身份、生命周期和产品状态稳定后启动。它从 workspace/user 官方目录发现 tool，不要求
-`bitfun.plugin.json`，并把一个真实、无外部依赖且不调用 `metadata`/`ask` 的契约样例接入现有 Tool Runtime。
+PR2 在 PR1 的来源目录上新增独立 Tool provider 契约和 provider-neutral 脚本运行时端口。OpenCode adapter 只解释
+OpenCode 路径、命名和模块格式；Core 只消费通用 Tool 快照、审批与冲突契约；脚本服务只负责物理 worker。未来
+Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCode adapter，也不让 Tool Runtime 按生态分支。
 
-- 首次按来源/target/执行域说明代码来源、工作目录和直接文件/网络/进程能力；确认前不 import 或启动 worker。
-- worker 只提供真实 load/invoke/cancel/dispose 和诊断；Tool Runtime 继续负责 schema、权限、排队、审计与结果。
-- 更新只有在来源身份、完整性、执行包络和更新策略仍有效时自动准备；能力扩大进入非阻塞 `action-required`。
-- 删除或撤销立即撤下新调用；失败只影响对应 target，不影响 Command、Subagent 或其他生态。
+### 4.1 本阶段可用范围
+
+- 自动发现用户全局、legacy、`OPENCODE_CONFIG_DIR` 和项目层级的 `{tool,tools}/*.js`、`*.ts`。扫描有文件数与
+  单文件大小上限，且只读取静态摘要；发现阶段不 import 模块、不解析依赖、不启动进程。
+- `.js` 仅支持单文件 loader 子集：默认导出或具名导出的 `tool({...})`/对象定义、基础 schema shim、字符串结果或
+  `{ output: string }`。只允许精确的 `@opencode-ai/plugin` `tool` import；其他静态/动态 import、`require`、
+  package plugin 和依赖安装明确显示为不支持。
+- `.ts` 当前只识别来源、名称和不可用原因，不执行；完整 TypeScript、Bun、Zod refinement、`metadata`、`ask`、
+  附件结果、插件 `tool` map 和 Hook 延后。Node.js 不可用时工具保持可见但不激活。
+- 用户确认后，每个 target 启动独立 Node.js worker，提供 `load/invoke/cancel/dispose`。合作式取消先传递
+  `AbortSignal`；脚本阻塞事件循环时在短宽限期后终止整个 target worker。Tool 的 schema、调用权限、审计和
+  模型暴露继续走现有 Tool Runtime，不建立第二套路由。
+
+### 4.2 产品与决策语义
+
+- Desktop 在“外部 AI 应用”中显示来源、文件、工作目录、工具名和直接文件/网络/环境/进程能力，并明确提示当前 worker
+  不是 OS 沙箱。CLI/TUI 使用同一快照：状态栏只做一次非阻塞提醒，`/external-tools` 提供静态预览以及
+  `enable`、`disable`、`choose`、`refresh` 操作；等待处理不阻塞输入或普通会话。
+- 首次启用键由“来源限定 target + 执行域 + runtime + 能力集合”组成。纯内容更新且能力集合不变时复用已批准
+  结果；能力、runtime 或执行域扩大时重新确认。用户选择保持停用后，同一内容版本不再主动询问；来源内容更新后
+  才形成新 decision key。Desktop 仍允许用户主动重新审核，避免“一次拒绝后永久不可恢复”。
+- 外部 Tool 与 BitFun 内置、MCP 或其他外部 Tool 同名时，不按 adapter 或注册顺序静默覆盖。冲突键包含全部候选
+  身份与内容版本；候选来自静态识别定义而不是成功加载集合。选择前保留已有本地实现，选择后只在候选集合和版本
+  不变时复用；任一候选更新、删除或暂不可用后重新询问，已选 external 失效期间不回退同名内置/MCP。
+- Desktop IPC 和 TUI 快照只包含静态摘要与决策 key，不传输模块源码。用户选择落盘使用 PR1 的跨进程锁、锁内
+  合并和原子替换；Desktop 与 CLI/TUI 不分别维护偏好。
+
+### 4.3 更新、删除与降级
+
+1. watcher 对全局与项目 Tool 目录去抖后重扫；准备前再次发现并核对 target 和内容版本，预览后被替换的文件按
+   stale revision 拒绝，不能执行未确认的新内容。
+2. 已批准 target 在来源身份、runtime 和能力集合不变时后台重载；导出、schema 或 load 校验失败时撤下该 target，
+   显示 `load_failed`，不保留对已变化原位源码的旧 worker。PR2 尚无精确物化旧版本，因此选择安全的 fail-closed，
+   不伪装成“沿用上一版本”。
+3. 稳定删除、来源抑制、主动停用或审批撤销会撤下 Tool Runtime 路由并 dispose worker；在途调用先收到取消，阻塞
+   worker 在宽限期后终止。一个 target 的失败不得清空同来源 Command、其他 target 或其他生态 adapter。
+4. 每 target 持久 worker 的普通请求 30 秒无响应时终止；合作取消在 500 ms 后硬终止，输出限制 1 MiB、协议帧
+   限制 8 MiB；产品配置的更短 Tool 期限丢弃调用 future 时也会终止 worker，并在终止完成前保持串行许可。调用不
+   自动重放。Node 进程仍以当前用户权限运行；VM realm 和隐藏响应令牌不是安全
+   沙箱，本阶段也没有进程树/Job Object，直接创建的后代进程和系统资源不保证被回收，产品必须持续显示残余风险。
+   worker 丢失由带独立加载代次的 runtime health 事件立即撤下路由并显示失败；旧 worker 的迟到事件不能撤下同内容
+   新实例。下一次 catalog 暴露前仅恢复一次，失败后等待显式刷新或来源变化；不回退
+   同名内置/MCP 实现，也不形成自动重启循环。单个来源目录不可读只降级该目录，其他健康目录继续生效。
+5. Remote 工作区在有远端发现、偏好和 worker owner 前明确不支持，catalog、批处理策略和执行解析均 fail-closed，
+   即使远端与本机路径文本相同也不能回退加载本机全局或项目 Tool。
+
+### 4.4 PR2 验证门槛
+
+- 契约测试证明静态快照不携带模块源码，审批只在能力/执行域变化时失效，冲突在任一候选内容变化时失效。
+- OpenCode fixture 覆盖默认全局目录追加 `OPENCODE_CONFIG_DIR`、项目与单复数目录、默认/具名导出、单文件 JS
+  子集、schema 默认值/类型化 min/max、`import.meta.url`、TS/依赖/动态 import 降级、文件上限和“发现不执行代码”。
+- 脚本运行时覆盖 load/invoke、内容更新、失败更新撤下、合作式取消、阻塞事件循环硬终止和 dispose。
+- Tool 路由覆盖内置/MCP/多外部候选冲突、按工作区选择、候选更新重问、稳定删除、源级隔离、零 route mux 并发注册
+  和 worker-lost 撤路由/单次恢复；首次后台刷新与 catalog 竞态覆盖等待、成功复用和失败重试。
+- Desktop 覆盖非阻塞发现、首次审批、主动重新审核、停用、冲突选择和不可用原因；CLI/TUI 覆盖提示去重、编号到
+  稳定 key 的映射、过期选择拒绝和刷新。通过相关 Rust tests、CLI check/tests、Web focused tests、
+  `type-check:web`、i18n audit、repo hygiene 与 desktop/core checks。
+
+### 4.5 后续收敛项
+
+以下改进不回补到 PR2；只有真实故障、指标或下一能力切片证明需要时，才作为独立小 PR 进入，不能借此提前建设
+完整插件主机或通用信任中心：
+
+- 将 route、并发属性和 timeout owner 冻结为单个 invocation plan，消除并发切换期间的二次读取窗口。
+- 为来源目录瞬时不可读增加类型化 `unknown/last-good` 状态；只有精确物化内容仍可校验时才继续服务，明确删除、
+  停用和权限收紧仍立即撤下。
+- 为保留的零 route mux 增加数量/命中指标；只有证明长期积累后再设计不重新引入注册竞态的安全回收。
+- 统一 Desktop 与 CLI/TUI 的 `load_failed` 恢复文案，并让手动刷新产生的新 diagnostics 保持非阻塞可见；不因此
+  引入跨 GUI/TUI 组件协议。
 
 ## 5. PR3：OpenCode Subagent
 

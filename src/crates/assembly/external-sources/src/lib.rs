@@ -4,6 +4,13 @@
 //! branches on ecosystem identity. Concrete provider selection remains in the
 //! product composition root.
 
+mod tool;
+
+pub use tool::{
+    ExternalToolCoordinator, ExternalToolCoordinatorSnapshot, ExternalToolDiscoveryRequest,
+    ExternalToolDiscoveryResult,
+};
+
 use bitfun_product_domains::external_sources::{
     prompt_command_conflict_key, ExpandedPromptCommand, ExternalSourceCatalogEntry,
     ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
@@ -142,6 +149,9 @@ impl ExternalSourceCoordinator {
                 sources: Vec::new(),
                 commands: Vec::new(),
                 command_conflicts: Vec::new(),
+                tools: Vec::new(),
+                tool_approval_requests: Vec::new(),
+                tool_conflicts: Vec::new(),
                 diagnostics: Vec::new(),
             },
         })
@@ -628,6 +638,9 @@ impl ExternalSourceCoordinator {
             sources,
             commands,
             command_conflicts,
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
             diagnostics,
         };
         self.snapshot.clone()

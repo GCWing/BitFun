@@ -572,8 +572,23 @@ impl ToolPipeline {
                     if resolution_error.is_some() {
                         return false;
                     }
+                    let route_root = crate::external_tools::external_tool_route_root(
+                        context
+                            .workspace
+                            .as_ref()
+                            .map(|workspace| workspace.root_path()),
+                        context
+                            .workspace
+                            .as_ref()
+                            .is_some_and(|workspace| workspace.is_remote()),
+                    );
                     let tool_is_concurrency_safe = registry
                         .get_tool(&invocation.effective_tool_name)
+                        .and_then(|tool| {
+                            crate::external_tools::resolve_external_tool_for_workspace(
+                                tool, route_root,
+                            )
+                        })
                         .map(|tool| tool.is_concurrency_safe(Some(&invocation.effective_arguments)))
                         .unwrap_or(false);
                     tool_call_concurrency_safe_for_batch(
@@ -860,7 +875,7 @@ impl ToolPipeline {
             return Err(map_tool_execution_admission_rejection(err));
         }
 
-        let tool = tool.ok_or_else(|| {
+        let registered_tool = tool.ok_or_else(|| {
             let error_msg = format!("Tool '{}' is not registered or enabled.", tool_name);
             error!("{}", error_msg);
             BitFunError::tool(error_msg)
@@ -868,6 +883,10 @@ impl ToolPipeline {
 
         let cancellation_token = CancellationToken::new();
         let tool_context = self.build_tool_use_context(&task, cancellation_token.clone());
+        // Keep the registered mux in the execution path. It rechecks the
+        // persisted conflict choice immediately before dispatch and applies
+        // remote fail-closed routing from the full ToolUseContext.
+        let tool = registered_tool;
         let validation = tool.validate_input(&tool_args, Some(&tool_context)).await;
         if !validation.result {
             let error_msg = validation
@@ -1345,7 +1364,17 @@ impl ToolPipeline {
 
         let execution_future = tool.call(task.effective_arguments(), &tool_context);
 
-        let pipeline_timeout_secs = if tool.manages_own_execution_timeout() {
+        let timeout_owner = crate::external_tools::resolve_external_tool_for_workspace(
+            Arc::clone(&tool),
+            crate::external_tools::external_tool_route_root(
+                tool_context.workspace_root(),
+                tool_context.is_remote(),
+            ),
+        );
+        let pipeline_timeout_secs = if timeout_owner
+            .as_ref()
+            .is_some_and(|selected| selected.manages_own_execution_timeout())
+        {
             None
         } else {
             task.options.timeout_secs
@@ -1630,6 +1659,7 @@ mod tests {
     use crate::agentic::tools::implementations::task::TaskTool;
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use async_trait::async_trait;
     use bitfun_agent_tools::{LoadedDeferredToolSpec, CALL_DEFERRED_TOOL_NAME};
     use bitfun_runtime_ports::{
@@ -1638,6 +1668,7 @@ mod tests {
     };
     use serde_json::json;
     use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
     use tokio::time::{sleep, Duration};
@@ -1868,6 +1899,47 @@ mod tests {
             test_tool_execution_context(),
             ToolExecutionOptions::default(),
         )
+    }
+
+    #[test]
+    fn remote_workspace_route_root_isolated_from_same_local_path() {
+        let pipeline = test_tool_pipeline();
+        let root = std::env::current_dir().expect("absolute test workspace root");
+
+        let mut local_task = test_tool_task("local-route", "Read");
+        local_task.context.workspace = Some(WorkspaceBinding::new(None, root.clone()));
+        let local = pipeline.build_tool_use_context(&local_task, CancellationToken::new());
+
+        let session_identity =
+            crate::service::remote_ssh::workspace_state::workspace_session_identity(
+                root.to_string_lossy().as_ref(),
+                Some("remote-connection"),
+                Some("remote.example"),
+            )
+            .expect("remote workspace identity");
+        let mut remote_task = test_tool_task("remote-route", "Read");
+        remote_task.context.workspace = Some(WorkspaceBinding::new_remote(
+            None,
+            PathBuf::from(&root),
+            "remote-connection".to_string(),
+            "Remote".to_string(),
+            session_identity,
+        ));
+        let remote = pipeline.build_tool_use_context(&remote_task, CancellationToken::new());
+
+        assert_eq!(
+            crate::external_tools::external_tool_route_root(
+                local.workspace_root(),
+                local.is_remote(),
+            ),
+            Some(root.as_path())
+        );
+        let remote_route_root = crate::external_tools::external_tool_route_root(
+            remote.workspace_root(),
+            remote.is_remote(),
+        );
+        assert_eq!(remote_route_root, Some(std::path::Path::new("\0")));
+        assert!(dunce::canonicalize(remote_route_root.expect("remote sentinel")).is_err());
     }
 
     async fn register_static_test_tool(

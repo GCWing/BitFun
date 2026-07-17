@@ -1553,6 +1553,18 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
         count
     }
 
+    /// Remove exactly one registry entry and return the decorated tool that was
+    /// active under that name. This is used by contextual compatibility
+    /// routers that must preserve, rather than silently discard, a displaced
+    /// built-in or dynamic provider.
+    pub fn unregister_tool(&mut self, name: &str) -> Option<ToolRef<Tool>> {
+        let removed = self.tools.shift_remove(name)?;
+        self.dynamic_tools.shift_remove(name);
+        self.static_tool_providers.shift_remove(name);
+        self.snapshot_generation = self.snapshot_generation.saturating_add(1);
+        Some(removed)
+    }
+
     pub fn get_tool(&self, name: &str) -> Option<ToolRef<Tool>> {
         self.tools.get(name).cloned()
     }

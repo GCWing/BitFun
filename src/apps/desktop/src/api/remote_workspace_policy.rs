@@ -1361,6 +1361,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "set_external_source_enabled_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
+    (
+        "set_external_tool_conflict_choice_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "set_external_tool_target_decision_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("set_macos_edit_menu_mode", RemoteWorkspacePolicy::LocalOnly),
     (
         "set_miniapp_draft_storage",

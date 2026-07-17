@@ -7,10 +7,10 @@ use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolDefinition;
 use bitfun_agent_tools::{
-    ContextualToolManifest, ContextualVisibleTools, GetToolSpecCatalogProvider,
-    GetToolSpecDeferredToolSummary, GetToolSpecExecutionError, GetToolSpecRuntime,
-    ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolManifestDefinition,
-    CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
+    resolve_contextual_tool_manifest, resolve_contextual_visible_tools, ContextualToolManifest,
+    ContextualVisibleTools, GetToolSpecCatalogProvider, GetToolSpecDeferredToolSummary,
+    GetToolSpecExecutionError, GetToolSpecRuntime, ToolCatalogRuntime, ToolCatalogSnapshotProvider,
+    ToolManifestDefinition, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
 };
 use serde_json::Value;
 use std::sync::Arc;
@@ -195,9 +195,8 @@ impl ProductToolCatalogProvider {
             &policy.exposure_overrides,
             context,
         );
-        let visible_tools = product_tool_catalog_runtime(self)
-            .visible_tools(&allowed_tools, &exposure_overrides, context)
-            .await;
+        let visible_tools =
+            resolve_product_visible_tools(&allowed_tools, &exposure_overrides, context).await;
         Ok(visible_tools.deferred_tools)
     }
 
@@ -218,9 +217,8 @@ impl ProductToolCatalogProvider {
             &policy.exposure_overrides,
             context,
         );
-        let visible_tools = product_tool_catalog_runtime(self)
-            .visible_tools(&allowed_tools, &exposure_overrides, context)
-            .await;
+        let visible_tools =
+            resolve_product_visible_tools(&allowed_tools, &exposure_overrides, context).await;
         let mut tools = visible_tools.direct_tools;
         tools.extend(visible_tools.deferred_tools);
         Ok(tools)
@@ -244,15 +242,20 @@ pub(crate) async fn resolve_product_visible_tools(
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ContextualVisibleTools<dyn Tool> {
-    let provider = ProductToolCatalogProvider;
     let (allowed_tools, exposure_overrides) = ProductToolCatalogProvider::resolve_manifest_inputs(
         allowed_tools,
         exposure_overrides,
         context,
     );
-    product_tool_catalog_runtime(&provider)
-        .visible_tools(&allowed_tools, &exposure_overrides, context)
-        .await
+    let tool_snapshot = contextual_tool_snapshot(context).await;
+    resolve_contextual_visible_tools(
+        &tool_snapshot,
+        &allowed_tools,
+        &exposure_overrides,
+        context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
 }
 
 pub(crate) async fn resolve_product_tool_manifest(
@@ -260,15 +263,39 @@ pub(crate) async fn resolve_product_tool_manifest(
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ContextualToolManifest<dyn Tool> {
-    let provider = ProductToolCatalogProvider;
     let (allowed_tools, exposure_overrides) = ProductToolCatalogProvider::resolve_manifest_inputs(
         allowed_tools,
         exposure_overrides,
         context,
     );
-    product_tool_catalog_runtime(&provider)
-        .tool_manifest(&allowed_tools, &exposure_overrides, context)
-        .await
+    let tool_snapshot = contextual_tool_snapshot(context).await;
+    resolve_contextual_tool_manifest(
+        &tool_snapshot,
+        &allowed_tools,
+        &exposure_overrides,
+        context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+}
+
+async fn contextual_tool_snapshot(context: &ToolUseContext) -> Vec<ToolRef> {
+    if !context.is_remote() {
+        crate::external_sources::ensure_external_source_workspace_runtime(context.workspace_root())
+            .await;
+    }
+    let route_root = crate::external_tools::external_tool_route_root(
+        context.workspace_root(),
+        context.is_remote(),
+    );
+    let registry = get_global_tool_registry();
+    let tools = registry.read().await.get_all_tools();
+    tools
+        .into_iter()
+        .filter_map(|tool| {
+            crate::external_tools::resolve_external_tool_for_workspace(tool, route_root)
+        })
+        .collect()
 }
 
 pub(crate) async fn resolve_product_resolved_visible_tools(
@@ -328,12 +355,14 @@ mod tests {
     use crate::agentic::tools::registry::create_tool_registry;
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use bitfun_agent_tools::{
         GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, CALL_DEFERRED_TOOL_NAME,
         GET_TOOL_SPEC_TOOL_NAME,
     };
     use serde_json::{json, Value};
     use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     struct DeferredMcpCatalogTool;
@@ -412,6 +441,43 @@ mod tests {
 
     fn context_without_agent_type() -> ToolUseContext {
         tool_context(None)
+    }
+
+    #[test]
+    fn remote_workspace_route_root_isolated_from_same_local_path() {
+        let root = std::env::current_dir().expect("absolute test workspace root");
+        let mut local = tool_context(None);
+        local.workspace = Some(WorkspaceBinding::new(None, root.clone()));
+
+        let session_identity =
+            crate::service::remote_ssh::workspace_state::workspace_session_identity(
+                root.to_string_lossy().as_ref(),
+                Some("remote-connection"),
+                Some("remote.example"),
+            )
+            .expect("remote workspace identity");
+        let mut remote = tool_context(None);
+        remote.workspace = Some(WorkspaceBinding::new_remote(
+            None,
+            PathBuf::from(&root),
+            "remote-connection".to_string(),
+            "Remote".to_string(),
+            session_identity,
+        ));
+
+        assert_eq!(
+            crate::external_tools::external_tool_route_root(
+                local.workspace_root(),
+                local.is_remote(),
+            ),
+            Some(root.as_path())
+        );
+        let remote_route_root = crate::external_tools::external_tool_route_root(
+            remote.workspace_root(),
+            remote.is_remote(),
+        );
+        assert_eq!(remote_route_root, Some(std::path::Path::new("\0")));
+        assert!(dunce::canonicalize(remote_route_root.expect("remote sentinel")).is_err());
     }
 
     #[tokio::test]

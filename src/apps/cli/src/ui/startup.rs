@@ -1103,6 +1103,7 @@ impl StartupPage {
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::ClearConversation
             | ActionHandler::ReloadSkills
+            | ActionHandler::ExternalTools
             | ActionHandler::History
             | ActionHandler::Interrupt
             | ActionHandler::ToggleFocusedTool

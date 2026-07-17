@@ -50,6 +50,7 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "theme",
     "switch_agent",
     "mcp_servers",
+    "external_tools",
     "login",
     "logout",
     "help",

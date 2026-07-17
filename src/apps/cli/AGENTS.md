@@ -40,7 +40,14 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
 - OpenCode Prompt Commands from standard user and project configuration are
   read-only live sources. CLI may execute only the expanded prompt through the
   existing agent owner; it must re-confirm changed conflict participants and
-  must not execute OpenCode plugin code, tools, hooks, or subagents.
+  must not execute shell/file directives that the prompt-command contract marks
+  unsupported.
+- OpenCode standalone JavaScript tools may execute only through the shared
+  external-source approval, conflict, Tool Runtime, and script-worker owners.
+  CLI/TUI consumes typed snapshots and actions; it must not import modules,
+  spawn tool workers, bypass a pending decision, or implement a second approval
+  store. TypeScript, dependency loading, package plugins, hooks, and subagents
+  remain non-executable until their own reviewed capability slice lands.
 - The managed-package OpenCode adapter remains a static-preview path. Other
   OpenCode plugin capabilities, Codex, and Claude remain import/reference sources
   unless their own reviewed adapter design explicitly changes. Never copy

@@ -53,6 +53,38 @@
     }
   }
 
+  &__tool-card {
+    padding: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-bg-secondary);
+    overflow-wrap: anywhere;
+
+    & + & {
+      margin-top: 10px;
+    }
+  }
+
+  &__tool-detail {
+    display: grid;
+    gap: 4px;
+    color: var(--color-text-secondary);
+    font-size: 11px;
+  }
+
+  &__tool-warning {
+    margin-top: 8px;
+    color: var(--color-warning);
+    font-size: 11px;
+  }
+
+  &__tool-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
   &__conflict-title {
     margin-bottom: 8px;
     color: var(--color-text-primary);
