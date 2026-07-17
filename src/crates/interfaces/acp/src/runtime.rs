@@ -10,7 +10,8 @@ use agent_client_protocol::schema::{
 };
 use agent_client_protocol::{Client, ConnectionTo, Error, Result};
 use async_trait::async_trait;
-use bitfun_core::agentic::system::AgenticSystem;
+use bitfun_agent_runtime::sdk::{AgentRuntime, RuntimeError};
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use dashmap::DashMap;
 
 use crate::server::{AcpRuntime, AcpServer};
@@ -25,7 +26,8 @@ mod session;
 mod thinking;
 
 pub struct BitfunAcpRuntime {
-    pub(crate) agentic_system: AgenticSystem,
+    pub(crate) agent_runtime: AgentRuntime,
+    pub(crate) compatibility: CoreAgentRuntimeCompatibility,
     pub(crate) sessions: DashMap<String, AcpSessionState>,
     pub(crate) connections: DashMap<String, ConnectionTo<Client>>,
 }
@@ -42,22 +44,30 @@ pub(crate) struct AcpSessionState {
 }
 
 impl BitfunAcpRuntime {
-    pub fn new(agentic_system: AgenticSystem) -> Self {
+    pub fn new(agent_runtime: AgentRuntime, compatibility: CoreAgentRuntimeCompatibility) -> Self {
         Self {
-            agentic_system,
+            agent_runtime,
+            compatibility,
             sessions: DashMap::new(),
             connections: DashMap::new(),
         }
     }
 
-    pub async fn serve_stdio(agentic_system: AgenticSystem) -> Result<()> {
-        AcpServer::new(Arc::new(Self::new(agentic_system)))
+    pub async fn serve_stdio(
+        agent_runtime: AgentRuntime,
+        compatibility: CoreAgentRuntimeCompatibility,
+    ) -> Result<()> {
+        AcpServer::new(Arc::new(Self::new(agent_runtime, compatibility)))
             .serve_stdio()
             .await
     }
 
     pub(crate) fn internal_error(error: impl std::fmt::Display) -> Error {
         Error::internal_error().data(serde_json::json!(error.to_string()))
+    }
+
+    pub(crate) fn runtime_error(error: RuntimeError) -> Error {
+        Self::internal_error(error.into_message())
     }
 }
 

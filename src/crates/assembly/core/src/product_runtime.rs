@@ -9,7 +9,7 @@ mod runtime_services;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
+use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort, SessionViewRestoreTiming};
 use bitfun_runtime_services::RuntimeServices;
@@ -89,6 +89,24 @@ impl CoreProductAgentRuntime {
             harness_registry,
         )
     }
+
+    /// Build the ACP surface with its protocol requirement that a session
+    /// rejects a second prompt while another turn is active.
+    pub fn build_acp(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        event_source: AgentEventSource,
+        services: RuntimeServices,
+        harness_registry: HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        CoreServiceAgentRuntime::acp_product_agent_runtime(
+            coordinator,
+            scheduler,
+            event_source,
+            services,
+            harness_registry,
+        )
+    }
 }
 
 /// Core-owned compatibility boundary for product operations not yet exposed by
@@ -137,6 +155,16 @@ impl CoreAgentRuntimeCompatibility {
                     ..Default::default()
                 },
             )
+            .await
+    }
+
+    pub async fn update_session_agent_type(
+        &self,
+        session_id: &str,
+        agent_type: &str,
+    ) -> BitFunResult<()> {
+        self.coordinator
+            .update_session_agent_type(session_id, agent_type)
             .await
     }
 
@@ -648,6 +676,7 @@ mod tests {
         }
 
         let _ = build;
+        let _ = CoreProductAgentRuntime::build_acp;
     }
 
     #[test]
@@ -666,6 +695,7 @@ mod tests {
         let _ = CoreAgentRuntimeCompatibility::generate_session_usage_report;
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
+        let _ = CoreAgentRuntimeCompatibility::update_session_agent_type;
         let _ = CoreAgentRuntimeCompatibility::is_turn_processing;
     }
 

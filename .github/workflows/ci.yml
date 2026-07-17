@@ -52,8 +52,8 @@ jobs:
           cache-bin: false
           save-if: ${{ github.event_name != 'pull_request' }}
 
-      - name: Run CLI tests
-        run: cargo test --locked -p bitfun-cli
+      - name: Run CLI, ACP, and agent runtime tests
+        run: cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime
 
   # ── Rust: build check ─────────────────────────────────────────────
   rust-build-check:

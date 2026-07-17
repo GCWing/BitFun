@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_client_protocol::schema::{
     CurrentModeUpdate, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest,
@@ -7,8 +6,10 @@ use agent_client_protocol::schema::{
     SessionMode, SessionModeState, SessionUpdate, SetSessionModeRequest, SetSessionModeResponse,
 };
 use agent_client_protocol::{Client, ConnectionTo, Error, Result};
+use bitfun_agent_runtime::sdk::{
+    AgentSessionCreateRequest, AgentSessionListRequest, SessionStoragePathRequest,
+};
 use bitfun_core::agentic::agents::get_agent_registry;
-use bitfun_core::agentic::core::SessionConfig;
 use chrono::{DateTime, Utc};
 
 use super::events::send_update;
@@ -27,28 +28,27 @@ impl BitfunAcpRuntime {
         let cwd = request.cwd.to_string_lossy().to_string();
         let mcp_servers = request.mcp_servers;
         let session = self
-            .agentic_system
-            .coordinator
-            .create_session(
-                format!(
+            .agent_runtime
+            .create_session(AgentSessionCreateRequest {
+                session_name: format!(
                     "ACP Session - {}",
                     chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
                 ),
-                "agentic".to_string(),
-                SessionConfig {
-                    workspace_path: Some(cwd.clone()),
-                    ..Default::default()
-                },
-            )
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(cwd.clone()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            })
             .await
-            .map_err(Self::internal_error)?;
+            .map_err(Self::runtime_error)?;
 
         let acp_session = AcpSessionState {
             acp_session_id: session.session_id.clone(),
             bitfun_session_id: session.session_id.clone(),
             cwd,
             mode_id: session.agent_type.clone(),
-            model_id: normalize_session_model_id(session.config.model_id.as_deref()),
+            model_id: normalize_session_model_id(None),
             mcp_server_ids: self
                 .provision_mcp_servers(&session.session_id, mcp_servers)
                 .await?,
@@ -79,15 +79,20 @@ impl BitfunAcpRuntime {
         let cwd = request.cwd.to_string_lossy().to_string();
         let session_id = request.session_id.to_string();
         let mcp_servers = request.mcp_servers;
-        // Restore the runtime session *and* the persisted turns in one pass.
-        // The turns are needed to stream the conversation history back to the
-        // client via `session/update` notifications, which the ACP `loadSession`
-        // contract requires of any agent advertising the `loadSession`
-        // capability.
+        // ACP history replay and model selection must come from one persisted
+        // snapshot. Keep this compatibility path until the runtime contract can
+        // return the rich turn data ACP actually projects.
         let (session, turns) = self
-            .agentic_system
-            .coordinator
-            .restore_session_with_turns(Path::new(&cwd), &session_id)
+            .compatibility
+            .restore_session_with_turns_for_workspace(
+                SessionStoragePathRequest {
+                    workspace_path: Path::new(&cwd).to_path_buf(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                },
+                &session_id,
+                false,
+            )
             .await
             .map_err(Self::internal_error)?;
 
@@ -144,19 +149,22 @@ impl BitfunAcpRuntime {
             .and_then(|value| value.parse::<u128>().ok());
 
         let mut summaries = self
-            .agentic_system
-            .coordinator
-            .list_sessions(&cwd)
+            .agent_runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: cwd.to_string_lossy().to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
             .await
-            .map_err(Self::internal_error)?;
-        summaries.sort_by_key(|summary| std::cmp::Reverse(summary.last_activity_at));
+            .map_err(Self::runtime_error)?;
+        summaries.sort_by_key(|summary| std::cmp::Reverse(summary.last_active_at_ms));
 
         let limit = 100usize;
         let filtered = summaries
             .into_iter()
             .filter(|summary| {
                 cursor
-                    .map(|cursor| system_time_to_unix_ms(summary.last_activity_at) < cursor)
+                    .map(|cursor| u128::from(summary.last_active_at_ms) < cursor)
                     .unwrap_or(true)
             })
             .collect::<Vec<_>>();
@@ -170,14 +178,14 @@ impl BitfunAcpRuntime {
                     Path::new(&cwd).to_path_buf(),
                 )
                 .title(summary.session_name.clone())
-                .updated_at(system_time_to_rfc3339(summary.last_activity_at))
+                .updated_at(unix_ms_to_rfc3339(summary.last_active_at_ms))
             })
             .collect::<Vec<_>>();
 
         let next_cursor = if filtered.len() > limit {
             filtered
                 .get(limit - 1)
-                .map(|summary| system_time_to_unix_ms(summary.last_activity_at).to_string())
+                .map(|summary| summary.last_active_at_ms.to_string())
         } else {
             None
         };
@@ -210,8 +218,7 @@ impl BitfunAcpRuntime {
 
         validate_mode_id(mode_id).await?;
 
-        self.agentic_system
-            .coordinator
+        self.compatibility
             .update_session_agent_type(&bitfun_session_id, mode_id)
             .await
             .map_err(Self::internal_error)?;
@@ -273,12 +280,23 @@ async fn validate_mode_id(mode_id: &str) -> Result<()> {
     }
 }
 
-fn system_time_to_unix_ms(time: SystemTime) -> u128 {
-    time.duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or_default()
+fn unix_ms_to_rfc3339(time_ms: u64) -> String {
+    let time_ms = i64::try_from(time_ms).unwrap_or(i64::MAX);
+    DateTime::<Utc>::from_timestamp_millis(time_ms)
+        .unwrap_or(DateTime::<Utc>::UNIX_EPOCH)
+        .to_rfc3339()
 }
 
-fn system_time_to_rfc3339(time: SystemTime) -> String {
-    DateTime::<Utc>::from(time).to_rfc3339()
+#[cfg(test)]
+mod tests {
+    use super::unix_ms_to_rfc3339;
+
+    #[test]
+    fn session_timestamps_remain_rfc3339_after_runtime_projection() {
+        assert_eq!(unix_ms_to_rfc3339(0), "1970-01-01T00:00:00+00:00");
+        assert_eq!(
+            unix_ms_to_rfc3339(1_700_000_000_000),
+            "2023-11-14T22:13:20+00:00"
+        );
+    }
 }

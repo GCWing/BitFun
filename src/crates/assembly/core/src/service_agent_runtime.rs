@@ -6,8 +6,8 @@
 //! implementations until a reviewed port/provider migration proves equivalence.
 
 use bitfun_agent_runtime::sdk::{
-    AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder, AgentSessionRestorePort,
-    RuntimeError,
+    AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
+    AgentSessionRestorePort, RuntimeError,
 };
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
@@ -423,6 +423,23 @@ impl ScheduledSessionManagementPort {
             coordinator,
             scheduler,
         }
+    }
+}
+
+/// ACP accepts one prompt at a time per session. Keep that protocol-specific
+/// admission rule in the product assembly instead of changing the shared
+/// scheduler policy used by GUI, TUI, and remote-control surfaces.
+struct RejectBusyAgentDialogTurnPort(Arc<DialogScheduler>);
+
+#[async_trait::async_trait]
+impl AgentDialogTurnPort for RejectBusyAgentDialogTurnPort {
+    async fn submit_dialog_turn(
+        &self,
+        request: AgentDialogTurnRequest,
+    ) -> bitfun_runtime_ports::PortResult<DialogSubmitOutcome> {
+        self.0
+            .submit_agent_dialog_turn_reject_if_busy(request)
+            .await
     }
 }
 
@@ -894,6 +911,44 @@ impl CoreServiceAgentRuntime {
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        Self::product_agent_runtime_with_dialog_turn(
+            coordinator,
+            scheduler,
+            dialog_turn,
+            None,
+            services,
+            harness_registry,
+        )
+    }
+
+    pub(crate) fn acp_product_agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        event_source: AgentEventSource,
+        services: bitfun_runtime_services::RuntimeServices,
+        harness_registry: bitfun_harness::HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> =
+            Arc::new(RejectBusyAgentDialogTurnPort(scheduler.clone()));
+        Self::product_agent_runtime_with_dialog_turn(
+            coordinator,
+            scheduler,
+            dialog_turn,
+            Some(event_source),
+            services,
+            harness_registry,
+        )
+    }
+
+    fn product_agent_runtime_with_dialog_turn(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        dialog_turn: Arc<dyn AgentDialogTurnPort>,
+        event_source: Option<AgentEventSource>,
+        services: bitfun_runtime_services::RuntimeServices,
+        harness_registry: bitfun_harness::HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
@@ -903,10 +958,9 @@ impl CoreServiceAgentRuntime {
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
-        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
 
-        core_agent_runtime_builder(
+        let builder = core_agent_runtime_builder(
             submission,
             session_management,
             session_restore,
@@ -916,11 +970,16 @@ impl CoreServiceAgentRuntime {
             interaction_response,
         )
         .with_dialog_turn_port(dialog_turn)
-        .with_lifecycle_delivery_port(lifecycle_delivery)
-        .with_services(services)
-        .with_harness_registry(Arc::new(harness_registry))
-        .build()
-        .map_err(|error| error.to_string())
+        .with_lifecycle_delivery_port(lifecycle_delivery);
+        let builder = match event_source {
+            Some(event_source) => builder.with_event_source(event_source),
+            None => builder,
+        };
+        builder
+            .with_services(services)
+            .with_harness_registry(Arc::new(harness_registry))
+            .build()
+            .map_err(|error| error.to_string())
     }
 
     pub(crate) fn global_agent_runtime_with_lifecycle_delivery() -> Result<AgentRuntime, String> {

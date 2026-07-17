@@ -73,8 +73,7 @@ impl BitfunAcpRuntime {
 
         let normalized_model_id = normalize_model_selection(model_id).await?;
 
-        self.agentic_system
-            .coordinator
+        self.compatibility
             .update_session_model(&bitfun_session_id, &normalized_model_id)
             .await
             .map_err(Self::internal_error)?;

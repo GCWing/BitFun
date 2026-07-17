@@ -456,6 +456,9 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
         .context("Failed to initialize agentic system")?;
     tracing::info!("Agentic system initialized");
 
-    bitfun_acp::BitfunAcpRuntime::serve_stdio(agentic_system).await?;
+    let workspace_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let runtime = crate::runtime::AcpRuntimeContext::build(agentic_system, workspace_root)?;
+    let (agent_runtime, compatibility) = runtime.parts();
+    bitfun_acp::BitfunAcpRuntime::serve_stdio(agent_runtime, compatibility).await?;
     Ok(())
 }

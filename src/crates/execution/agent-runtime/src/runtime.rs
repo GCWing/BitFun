@@ -24,6 +24,7 @@ use bitfun_runtime_ports::{
 };
 use bitfun_runtime_services::RuntimeServices;
 
+use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 use crate::post_call_hooks::RuntimeHookRegistry;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -54,6 +55,8 @@ pub enum RuntimeError {
     MissingInteractionResponsePort,
     #[error("runtime event sink is not registered")]
     MissingEventSink,
+    #[error("agent event source is not registered")]
+    MissingEventSource,
     #[error(transparent)]
     Port(#[from] PortError),
 }
@@ -190,6 +193,7 @@ pub struct AgentRuntime {
     interaction_response: Option<Arc<dyn AgentInteractionResponsePort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
+    event_source: Option<AgentEventSource>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
@@ -266,6 +270,10 @@ impl std::fmt::Debug for AgentRuntime {
                 &self.event_stream.as_ref().map(|_| "<AgentEventStream>"),
             )
             .field(
+                "event_source",
+                &self.event_source.as_ref().map(|_| "<AgentEventSource>"),
+            )
+            .field(
                 "tool_registry",
                 &self.tool_registry.as_ref().map(|_| "<RuntimeToolRegistry>"),
             )
@@ -312,6 +320,7 @@ pub struct AgentRuntimeBuilder {
     interaction_response: Option<Arc<dyn AgentInteractionResponsePort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
+    event_source: Option<AgentEventSource>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
@@ -394,6 +403,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_event_source(mut self, source: AgentEventSource) -> Self {
+        self.event_source = Some(source);
+        self
+    }
+
     pub fn with_tool_registry(mut self, registry: Arc<dyn RuntimeToolRegistry>) -> Self {
         self.tool_registry = Some(registry);
         self
@@ -432,6 +446,7 @@ impl AgentRuntimeBuilder {
             interaction_response,
             services,
             event_stream,
+            event_source,
             tool_registry,
             harness_registry,
             hook_registry,
@@ -455,6 +470,7 @@ impl AgentRuntimeBuilder {
             interaction_response,
             services,
             event_stream,
+            event_source,
             tool_registry,
             harness_registry,
             hook_registry,
@@ -561,6 +577,23 @@ pub struct AgentRunHandle {
 }
 
 impl AgentRuntime {
+    pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
+        self.event_source
+            .as_ref()
+            .map(AgentEventSource::subscribe)
+            .ok_or(RuntimeError::MissingEventSource)
+    }
+
+    pub fn subscribe_session_events(
+        &self,
+        session_id: &str,
+    ) -> Result<AgentSessionEventReceiver, RuntimeError> {
+        self.event_source
+            .as_ref()
+            .map(|source| source.subscribe_session(session_id))
+            .ok_or(RuntimeError::MissingEventSource)
+    }
+
     pub fn services(&self) -> Option<&RuntimeServices> {
         self.services.as_ref()
     }
@@ -1629,6 +1662,30 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error, RuntimeError::MissingSessionRestorePort);
+    }
+
+    #[test]
+    fn event_subscription_requires_configured_source() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        assert_eq!(
+            runtime.subscribe_events().unwrap_err(),
+            RuntimeError::MissingEventSource
+        );
+    }
+
+    #[test]
+    fn runtime_error_message_preserves_port_error_text() {
+        let error = RuntimeError::Port(PortError::new(
+            bitfun_runtime_ports::PortErrorKind::Backend,
+            "original backend message",
+        ));
+
+        assert_eq!(error.into_message(), "original backend message");
     }
 
     #[tokio::test]

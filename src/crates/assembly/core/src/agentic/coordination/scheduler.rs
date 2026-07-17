@@ -787,6 +787,7 @@ impl DialogScheduler {
                 delivery.session_id.clone(),
                 resolved_turn_id.clone(),
                 queued_turn,
+                false,
             )
             .await;
         if result.is_err() {
@@ -925,7 +926,7 @@ impl DialogScheduler {
             enqueued_at: SystemTime::now(),
             execution: QueuedTurnExecution::Standard,
         };
-        self.submit_queued_turn(session_id, resolved_turn_id, queued_turn)
+        self.submit_queued_turn(session_id, resolved_turn_id, queued_turn, false)
             .await
     }
 
@@ -979,8 +980,13 @@ impl DialogScheduler {
             }),
         };
 
-        self.submit_queued_turn(session_id.clone(), resolved_turn_id.clone(), queued_turn)
-            .await?;
+        self.submit_queued_turn(
+            session_id.clone(),
+            resolved_turn_id.clone(),
+            queued_turn,
+            false,
+        )
+        .await?;
         Ok(HiddenSubagentSubmitResult {
             receiver: result_rx,
             cancel_handle: HiddenSubagentQueueCancelHandle {
@@ -1070,9 +1076,10 @@ impl DialogScheduler {
         session_id: String,
         resolved_turn_id: String,
         queued_turn: QueuedTurn,
+        reject_if_busy: bool,
     ) -> Result<DialogSubmitOutcome, String> {
         let _operation_guard = self.lock_session_operation(&session_id).await;
-        self.submit_queued_turn_locked(session_id, resolved_turn_id, queued_turn)
+        self.submit_queued_turn_locked(session_id, resolved_turn_id, queued_turn, reject_if_busy)
             .await
     }
 
@@ -1081,6 +1088,7 @@ impl DialogScheduler {
         session_id: String,
         resolved_turn_id: String,
         queued_turn: QueuedTurn,
+        reject_if_busy: bool,
     ) -> Result<DialogSubmitOutcome, String> {
         if let Some(workspace_path) = queued_turn.workspace_path.as_deref() {
             let requested_storage_path = Self::resolve_session_restore_path(
@@ -1109,6 +1117,16 @@ impl DialogScheduler {
             queue_has_items,
             policy: queued_turn.policy,
         });
+
+        if reject_if_busy
+            && matches!(
+                action,
+                DialogSubmitQueueAction::EnqueueThenStartNext
+                    | DialogSubmitQueueAction::EnqueueForActiveTurn
+            )
+        {
+            return Err("Session state does not allow starting new dialog: Processing".to_string());
+        }
 
         match action {
             DialogSubmitQueueAction::StartImmediately => {
@@ -2279,11 +2297,19 @@ fn agent_dialog_turn_prepended_messages(
         .collect()
 }
 
-#[async_trait::async_trait]
-impl AgentDialogTurnPort for DialogScheduler {
-    async fn submit_dialog_turn(
+impl DialogScheduler {
+    pub(crate) async fn submit_agent_dialog_turn_reject_if_busy(
         &self,
         request: AgentDialogTurnRequest,
+    ) -> PortResult<DialogSubmitOutcome> {
+        self.submit_agent_dialog_turn_with_busy_policy(request, true)
+            .await
+    }
+
+    async fn submit_agent_dialog_turn_with_busy_policy(
+        &self,
+        request: AgentDialogTurnRequest,
+        reject_if_busy: bool,
     ) -> PortResult<DialogSubmitOutcome> {
         let image_contexts = agent_dialog_turn_image_contexts(&request.attachments)?;
         let prepended_messages =
@@ -2293,24 +2319,45 @@ impl AgentDialogTurnPort for DialogScheduler {
         } else {
             Some(serde_json::Value::Object(request.metadata))
         };
-
-        self.submit_with_prepended_messages(
-            request.session_id,
-            request.message,
-            request.original_message,
-            request.turn_id,
-            request.agent_type,
-            request.workspace_path,
-            request.remote_connection_id,
-            request.remote_ssh_host,
-            request.policy,
-            request.reply_route,
-            user_message_metadata,
+        let resolved_turn_id = request
+            .turn_id
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let queued_turn = QueuedTurn {
+            user_input: request.message,
+            original_user_input: request.original_message,
             prepended_messages,
+            turn_id: Some(resolved_turn_id.clone()),
+            agent_type: request.agent_type,
+            workspace_path: request.workspace_path,
+            remote_connection_id: request.remote_connection_id,
+            remote_ssh_host: request.remote_ssh_host,
+            policy: request.policy,
+            reply_route: request.reply_route,
+            user_message_metadata,
             image_contexts,
+            enqueued_at: SystemTime::now(),
+            execution: QueuedTurnExecution::Standard,
+        };
+
+        self.submit_queued_turn(
+            request.session_id,
+            resolved_turn_id,
+            queued_turn,
+            reject_if_busy,
         )
         .await
         .map_err(|error| PortError::new(PortErrorKind::Backend, error))
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentDialogTurnPort for DialogScheduler {
+    async fn submit_dialog_turn(
+        &self,
+        request: AgentDialogTurnRequest,
+    ) -> PortResult<DialogSubmitOutcome> {
+        self.submit_agent_dialog_turn_with_busy_policy(request, false)
+            .await
     }
 }
 
@@ -3049,6 +3096,66 @@ mod tests {
                 turn_id: "turn-submitted".to_string(),
             }
         );
+    }
+
+    #[tokio::test]
+    async fn reject_busy_dialog_port_does_not_enqueue_or_replace_the_active_turn() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "acp-session";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "ACP".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create ACP session");
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Processing {
+                    current_turn_id: "active-turn".to_string(),
+                    phase: ProcessingPhase::Thinking,
+                },
+            )
+            .await
+            .expect("mark active turn");
+
+        let error = scheduler
+            .submit_agent_dialog_turn_reject_if_busy(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "second prompt".to_string(),
+                original_message: None,
+                turn_id: Some("rejected-turn".to_string()),
+                agent_type: "agentic".to_string(),
+                workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("busy ACP prompt must be rejected");
+
+        assert_eq!(error.kind, PortErrorKind::Backend);
+        assert!(error.message.contains("Processing"), "{error}");
+        assert_eq!(scheduler.queue_depth(session_id), 0);
+        assert!(matches!(
+            session_manager
+                .get_session(session_id)
+                .expect("session")
+                .state,
+            SessionState::Processing { current_turn_id, .. } if current_turn_id == "active-turn"
+        ));
     }
 
     #[test]

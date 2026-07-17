@@ -35,6 +35,7 @@ impl AgentRuntimeSdkCompatibility {
 }
 
 pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapabilityProfile};
+pub use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 pub use crate::post_call_hooks::{
     RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry,
     RuntimeHookRegistryBuildError,
@@ -61,10 +62,10 @@ pub use bitfun_runtime_ports::{
     AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
     AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
     AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, ClockPort, DialogSubmitOutcome, FileSystemPort, GitPort,
-    McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort, PermissionRequest, PortError,
-    PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
+    AgentTurnCancellationResult, ClockPort, DialogSubmissionPolicy, DialogSubmitOutcome,
+    FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort,
+    PermissionRequest, PortError, PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort,
+    RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
@@ -170,6 +171,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_event_source(mut self, source: AgentEventSource) -> Self {
+        self.inner = self.inner.with_event_source(source);
+        self
+    }
+
     pub fn with_tool_registry(mut self, registry: Arc<dyn RuntimeToolRegistry>) -> Self {
         self.inner = self.inner.with_tool_registry(registry);
         self
@@ -196,6 +202,17 @@ impl AgentRuntimeBuilder {
 }
 
 impl AgentRuntime {
+    pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
+        self.inner.subscribe_events()
+    }
+
+    pub fn subscribe_session_events(
+        &self,
+        session_id: &str,
+    ) -> Result<AgentSessionEventReceiver, RuntimeError> {
+        self.inner.subscribe_session_events(session_id)
+    }
+
     pub fn services(&self) -> Option<&RuntimeServices> {
         self.inner.services()
     }
