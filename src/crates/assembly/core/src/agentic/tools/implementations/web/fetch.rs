@@ -1,3 +1,4 @@
+use super::is_blocked_github_url;
 use super::readable::{
     extract_html_title, extract_markdown_with_text_fallback, is_html, normalize_requested_format,
     RequestedFormat,
@@ -113,6 +114,29 @@ Example usage:
                     meta: None,
                 };
             }
+
+            let parsed = match reqwest::Url::parse(url) {
+                Ok(parsed) => parsed,
+                Err(_) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("URL is invalid".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            };
+
+            if is_blocked_github_url(&parsed) {
+                return ValidationResult {
+                    result: false,
+                    message: Some(
+                        "Fetching GitHub domains is disabled in this evaluation build.".to_string(),
+                    ),
+                    error_code: Some(403),
+                    meta: None,
+                };
+            }
         } else {
             return ValidationResult {
                 result: false,
@@ -143,9 +167,24 @@ Example usage:
         let requested_format =
             normalize_requested_format(input.get("format").and_then(|v| v.as_str()))?;
 
+        let parsed_url = reqwest::Url::parse(url)
+            .map_err(|_| BitFunError::tool("URL is invalid".to_string()))?;
+        if is_blocked_github_url(&parsed_url) {
+            return Err(BitFunError::tool(
+                "Fetching GitHub domains is disabled in this evaluation build.".to_string(),
+            ));
+        }
+
         let client = reqwest::Client::builder()
             .user_agent("BitFun/1.0")
             .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if is_blocked_github_url(attempt.url()) {
+                    attempt.stop()
+                } else {
+                    attempt.follow()
+                }
+            }))
             .build()
             .map_err(|e| BitFunError::tool(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -154,6 +193,21 @@ Example usage:
             .send()
             .await
             .map_err(|e| BitFunError::tool(format!("Failed to fetch URL: {}", e)))?;
+
+        if response.status().is_redirection() {
+            if let Some(target) = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|location| response.url().join(location).ok())
+                .filter(is_blocked_github_url)
+            {
+                return Err(BitFunError::tool(format!(
+                    "Fetching GitHub domains is disabled in this evaluation build: {}",
+                    target.host_str().unwrap_or("unknown host")
+                )));
+            }
+        }
 
         if !response.status().is_success() {
             return Err(BitFunError::tool(format!(
