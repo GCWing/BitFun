@@ -132,6 +132,9 @@ pub enum AgenticEvent {
         parent_tool_call_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         agent_type: Option<String>,
+        /// Resolved model selector stored on the child session.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model_id: Option<String>,
     },
 
     DialogTurnCompleted {
@@ -173,7 +176,10 @@ pub enum AgenticEvent {
     TokenUsageUpdated {
         session_id: String,
         turn_id: String,
-        model_id: String,
+        /// Resolved `AIModelConfig.id` used for this request.
+        model_config_id: String,
+        /// Provider model name sent on the request.
+        effective_model_name: String,
         input_tokens: usize,
         output_tokens: Option<usize>,
         total_tokens: usize,
@@ -228,8 +234,10 @@ pub enum AgenticEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         round_group_id: Option<String>,
         round_index: usize,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        model_id: Option<String>,
+        /// Resolved `AIModelConfig.id` used for this round.
+        model_config_id: String,
+        /// Provider model name sent on the request.
+        effective_model_name: String,
     },
 
     ModelRoundCompleted {
@@ -241,10 +249,10 @@ pub enum AgenticEvent {
         duration_ms: Option<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_id: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        model_id: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        model_alias: Option<String>,
+        /// Resolved `AIModelConfig.id` used for this round.
+        model_config_id: String,
+        /// Provider model name sent on the request.
+        effective_model_name: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         first_chunk_ms: Option<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -663,8 +671,8 @@ mod tests {
             has_tool_calls: false,
             duration_ms: Some(123),
             provider_id: Some("provider".to_string()),
-            model_id: Some("model".to_string()),
-            model_alias: Some("alias".to_string()),
+            model_config_id: "model-config".to_string(),
+            effective_model_name: "provider-model".to_string(),
             first_chunk_ms: Some(10),
             first_visible_output_ms: Some(12),
             stream_duration_ms: Some(100),
@@ -676,21 +684,25 @@ mod tests {
         let json = serde_json::to_value(&event).expect("serialize event");
 
         assert_eq!(json["duration_ms"], 123);
+        assert_eq!(json["model_config_id"], "model-config");
+        assert_eq!(json["effective_model_name"], "provider-model");
         assert_eq!(json["first_chunk_ms"], 10);
         assert_eq!(json["token_details"]["reasoningTokens"], 7);
     }
 
     #[test]
-    fn model_round_completed_deserializes_legacy_payload_without_timing_fields() {
+    fn model_round_completed_deserializes_required_identity_without_timing_fields() {
         let json = serde_json::json!({
             "type": "ModelRoundCompleted",
             "session_id": "session-1",
             "turn_id": "turn-1",
             "round_id": "round-1",
-            "has_tool_calls": false
+            "has_tool_calls": false,
+            "model_config_id": "model-config",
+            "effective_model_name": "provider-model"
         });
 
-        let event: AgenticEvent = serde_json::from_value(json).expect("legacy event");
+        let event: AgenticEvent = serde_json::from_value(json).expect("event");
 
         match event {
             AgenticEvent::ModelRoundCompleted { duration_ms, .. } => {
@@ -705,7 +717,8 @@ mod tests {
         let event = AgenticEvent::TokenUsageUpdated {
             session_id: "session-1".to_string(),
             turn_id: "turn-1".to_string(),
-            model_id: "model".to_string(),
+            model_config_id: "model-config".to_string(),
+            effective_model_name: "provider-model".to_string(),
             input_tokens: 10,
             output_tokens: Some(5),
             total_tokens: 15,
@@ -851,6 +864,7 @@ mod tests {
             parent_dialog_turn_id: "turn-1".to_string(),
             parent_tool_call_id: "tool-1".to_string(),
             agent_type: Some("GeneralPurpose".to_string()),
+            model_id: Some("fast".to_string()),
         };
 
         assert_eq!(event.session_id(), Some("child-session"));
@@ -864,5 +878,6 @@ mod tests {
         assert_eq!(serialized["parent_dialog_turn_id"], "turn-1");
         assert_eq!(serialized["parent_tool_call_id"], "tool-1");
         assert_eq!(serialized["agent_type"], "GeneralPurpose");
+        assert_eq!(serialized["model_id"], "fast");
     }
 }

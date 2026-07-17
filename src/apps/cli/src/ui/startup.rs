@@ -1432,7 +1432,6 @@ impl StartupPage {
     fn show_model_selector(&mut self) {
         self.push_current_popup_to_stack();
 
-        let agent_type = self.agent_type.clone();
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
@@ -1441,12 +1440,8 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let current_model_id = global_config
-                    .ai
-                    .agent_models
-                    .get(&agent_type)
-                    .cloned()
-                    .or_else(|| global_config.ai.default_models.primary.clone());
+                let current_model_id =
+                    crate::model_selection::resolve_mode_model_id(&global_config.ai);
 
                 let model_items: Vec<ModelItem> = models
                     .into_iter()
@@ -1476,7 +1471,6 @@ impl StartupPage {
     fn apply_model_selection(&mut self, selected: &ModelItem) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
-        let modes = self.get_mode_agents();
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -1486,18 +1480,11 @@ impl StartupPage {
                 };
 
                 if let Err(e) = config_service
-                    .set_config("ai.default_models.primary", &selected_id)
+                    .set_config("ai.agent_model_defaults.mode", &selected_id)
                     .await
                 {
-                    tracing::error!("Failed to set default primary model: {}", e);
+                    tracing::error!("Failed to set future mode model: {}", e);
                     return false;
-                }
-
-                for mode in &modes {
-                    let path = format!("ai.agent_models.{}", mode.id);
-                    if let Err(e) = config_service.set_config(&path, &selected_id).await {
-                        tracing::error!("Failed to set model for mode '{}': {}", mode.id, e);
-                    }
                 }
 
                 true
@@ -2280,7 +2267,6 @@ impl StartupPage {
     }
 
     fn load_current_model_name(&mut self) {
-        let agent_type = self.agent_type.clone();
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
@@ -2289,13 +2275,7 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let model_id = global_config
-                    .ai
-                    .agent_models
-                    .get(&agent_type)
-                    .cloned()
-                    .or_else(|| global_config.ai.default_models.primary.clone())
-                    .unwrap_or_else(|| "primary".to_string());
+                let model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai)?;
 
                 fn provider_display_name(
                     model: &bitfun_core::service::config::AIModelConfig,
@@ -2325,18 +2305,10 @@ impl StartupPage {
                     format!("{} / {}", model.model_name, provider_display_name(model))
                 }
 
-                if model_id == "primary" {
-                    let primary_id = global_config.ai.default_models.primary.as_deref()?;
-                    models
-                        .iter()
-                        .find(|m| m.id == primary_id)
-                        .map(model_display_name)
-                } else {
-                    models
-                        .iter()
-                        .find(|m| m.id == model_id)
-                        .map(model_display_name)
-                }
+                models
+                    .iter()
+                    .find(|model| model.id == model_id)
+                    .map(model_display_name)
             })
         });
 

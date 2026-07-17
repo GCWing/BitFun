@@ -41,8 +41,8 @@ export interface SubagentInfo {
   source?: SubagentSource;
   subagentSource?: SubagentSource;
   path?: string;
-   
   model?: string;
+  modelIsExplicit?: boolean;
   visibility?: SubagentVisibilitySummary;
   configProfileId?: string;
   configProfileLabel?: string;
@@ -87,6 +87,7 @@ export interface UpdateSubagentConfigPayload {
   parentAgentType?: string;
   enabled?: boolean;
   model?: string;
+  clearModelOverride?: boolean;
   workspacePath?: string;
 }
 

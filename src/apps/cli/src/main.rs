@@ -16,6 +16,7 @@ mod daemon;
 mod diagnostics;
 mod logging;
 mod management;
+mod model_selection;
 mod modes;
 mod peer_host;
 mod plugin_diagnostics;

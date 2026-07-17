@@ -404,14 +404,12 @@ impl SessionManager {
             return Self::context_window_for_model_selection(ai_config, configured_model_id);
         }
 
-        let agent_model_id = ai_config
-            .agent_models
-            .get(&session.agent_type)
-            .map(String::as_str)
-            .map(str::trim)
+        let fallback_model_id = (session.kind != SessionKind::Subagent)
+            .then(|| ai_config.agent_model_defaults.mode.trim().to_string())
             .filter(|model_id| !Self::is_auto_model_selector(model_id));
 
-        agent_model_id
+        fallback_model_id
+            .as_deref()
             .and_then(|model_id| Self::context_window_for_model_selection(ai_config, model_id))
             .or_else(|| Self::context_window_for_model_selection(ai_config, "primary"))
     }
@@ -4980,8 +4978,8 @@ impl SessionManager {
                             end_time: Some(timestamp),
                             duration_ms: Some(0),
                             provider_id: None,
-                            model_id: None,
-                            model_alias: None,
+                            model_config_id: None,
+                            effective_model_name: None,
                             first_chunk_ms: None,
                             first_visible_output_ms: None,
                             stream_duration_ms: None,
@@ -5143,8 +5141,8 @@ impl SessionManager {
                     end_time: Some(completion_timestamp),
                     duration_ms: Some(0),
                     provider_id: None,
-                    model_id: None,
-                    model_alias: None,
+                    model_config_id: None,
+                    effective_model_name: None,
                     first_chunk_ms: None,
                     first_visible_output_ms: None,
                     stream_duration_ms: None,
@@ -6498,7 +6496,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_session_context_window_resolves_auto_through_agent_model_then_primary() {
+    fn sync_session_context_window_resolves_auto_through_mode_default_then_primary() {
         let mut ai_config = ServiceAIConfig {
             models: vec![
                 test_model("primary-model", 512_000),
@@ -6507,9 +6505,7 @@ mod tests {
             ..Default::default()
         };
         ai_config.default_models.primary = Some("primary-model".to_string());
-        ai_config
-            .agent_models
-            .insert("agentic".to_string(), "agent-model".to_string());
+        ai_config.agent_model_defaults.mode = "agent-model".to_string();
 
         let mut session = Session::new_with_id(
             "session-auto".to_string(),
@@ -6528,8 +6524,39 @@ mod tests {
         assert_eq!(resolved, Some(1_000_000));
         assert_eq!(session.config.max_context_tokens, 1_000_000);
 
-        ai_config.agent_models.clear();
+        ai_config.agent_model_defaults.mode = "auto".to_string();
         session.config.max_context_tokens = 256_000;
+
+        let resolved =
+            SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
+
+        assert_eq!(resolved, Some(512_000));
+        assert_eq!(session.config.max_context_tokens, 512_000);
+    }
+
+    #[test]
+    fn sync_session_context_window_resolves_subagent_auto_through_primary() {
+        let mut ai_config = ServiceAIConfig {
+            models: vec![
+                test_model("primary-model", 512_000),
+                test_model("mode-model", 1_000_000),
+            ],
+            ..Default::default()
+        };
+        ai_config.default_models.primary = Some("primary-model".to_string());
+        ai_config.agent_model_defaults.mode = "mode-model".to_string();
+
+        let mut session = Session::new_with_id(
+            "subagent-auto".to_string(),
+            "Auto subagent".to_string(),
+            "Explore".to_string(),
+            SessionConfig {
+                model_id: Some("auto".to_string()),
+                max_context_tokens: 256_000,
+                ..Default::default()
+            },
+        );
+        session.kind = SessionKind::Subagent;
 
         let resolved =
             SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
@@ -7562,8 +7589,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,

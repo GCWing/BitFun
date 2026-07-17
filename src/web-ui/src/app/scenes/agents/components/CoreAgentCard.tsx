@@ -91,7 +91,6 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
       <div className="core-agent-card__footer">
         <div className="core-agent-card__tags">
           <span className="core-agent-card__tag">
-            {t('coreAgentsZone.roleLabel')}
             <strong>{meta.role}</strong>
           </span>
           {disabledReason ? (
@@ -117,10 +116,12 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
               {subagentCount}
             </span>
           ) : null}
-          <span className="core-agent-card__meta-item">
-            <Cpu size={11} />
-            {agent.model ?? 'primary'}
-          </span>
+          {agent.agentKind === 'subagent' && agent.subagentModelDisplayName ? (
+            <span className="core-agent-card__meta-item">
+              <Cpu size={11} />
+              {agent.subagentModelDisplayName}
+            </span>
+          ) : null}
         </div>
       </div>
     </div>

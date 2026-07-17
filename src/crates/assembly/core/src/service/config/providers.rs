@@ -97,18 +97,6 @@ impl ConfigProvider for AIConfigProvider {
                 }
             }
 
-            for (agent_name, model_id) in &ai_config.agent_models {
-                if !ai_config.models.iter().any(|m| m.id == *model_id)
-                    && model_id != "auto"
-                    && model_id != "primary"
-                    && model_id != "fast"
-                {
-                    return Err(BitFunError::validation(format!(
-                        "Primary Agent '{}' configured model '{}' does not exist",
-                        agent_name, model_id
-                    )));
-                }
-            }
             for (func_agent_name, model_id) in &ai_config.func_agent_models {
                 if !ai_config.models.iter().any(|m| m.id == *model_id)
                     && model_id != "primary"

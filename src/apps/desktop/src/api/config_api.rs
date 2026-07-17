@@ -188,7 +188,7 @@ pub async fn set_config(
         Ok(_) => {
             if request.path.starts_with("ai.models")
                 || request.path.starts_with("ai.default_models")
-                || request.path.starts_with("ai.agent_models")
+                || request.path.starts_with("ai.agent_model_defaults")
                 || request.path.starts_with("ai.stream_idle_timeout_secs")
                 || request.path.starts_with("ai.stream_ttft_timeout_secs")
                 || request.path.starts_with("ai.proxy")

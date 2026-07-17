@@ -83,6 +83,7 @@ pub(crate) async fn print_models() -> Result<()> {
         config_service.get_config(None).await?;
 
     let primary_model_id = global_config.ai.default_models.primary.clone();
+    let mode_model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai);
 
     println!("AI models");
     println!();
@@ -93,12 +94,7 @@ pub(crate) async fn print_models() -> Result<()> {
 
     for model in models {
         let is_primary = primary_model_id.as_deref() == Some(model.id.as_str());
-        let current_modes: Vec<String> = global_config
-            .ai
-            .agent_models
-            .iter()
-            .filter_map(|(mode, model_id)| (model_id == &model.id).then_some(mode.clone()))
-            .collect();
+        let is_mode_default = mode_model_id.as_deref() == Some(model.id.as_str());
 
         println!(
             "- {}{} ({})",
@@ -109,8 +105,8 @@ pub(crate) async fn print_models() -> Result<()> {
         println!("  Name: {}", model.name);
         println!("  Provider: {}", model.provider);
         println!("  Model: {}", model.model_name);
-        if !current_modes.is_empty() {
-            println!("  Used by modes: {}", current_modes.join(", "));
+        if is_mode_default {
+            println!("  Used by modes: all");
         }
     }
 
@@ -170,16 +166,12 @@ pub(crate) async fn print_mcp_servers() -> Result<()> {
 
 pub(crate) async fn set_default_model(model_id: &str) -> Result<()> {
     let config_service = ensure_global_config_service().await?;
-    let agent_registry = get_agent_registry();
-    let modes = agent_registry.get_modes_info().await;
-
     config_service
         .set_config("ai.default_models.primary", model_id)
         .await?;
-    for mode in modes {
-        let path = format!("ai.agent_models.{}", mode.id);
-        config_service.set_config(&path, model_id).await?;
-    }
+    config_service
+        .set_config("ai.agent_model_defaults.mode", model_id)
+        .await?;
 
     println!("Default model set to: {}", model_id);
     Ok(())

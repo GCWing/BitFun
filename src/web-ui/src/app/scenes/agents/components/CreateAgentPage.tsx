@@ -58,10 +58,6 @@ function defaultReadonlyForKind(kind: CustomAgentKind): boolean {
   return kind === 'subagent';
 }
 
-function defaultModelForKind(kind: CustomAgentKind): string {
-  return kind === 'mode' ? 'auto' : 'fast';
-}
-
 function defaultPolicyForKind(kind: CustomAgentKind): UserContextSection[] {
   return kind === 'mode' ? DEFAULT_MODE_POLICY : DEFAULT_SUBAGENT_POLICY;
 }
@@ -100,7 +96,6 @@ const CreateAgentPage: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [readonly, setReadonly] = useState(defaultReadonlyForKind('mode'));
   const [review, setReview] = useState(false);
-  const [model, setModel] = useState(defaultModelForKind('mode'));
   const [toolInfos, setToolInfos] = useState<SubagentEditorToolInfo[]>([]);
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
   const [userContextPolicy, setUserContextPolicy] = useState<Set<UserContextSection>>(
@@ -145,7 +140,6 @@ const CreateAgentPage: React.FC = () => {
     setLevel('user');
     setReadonly(defaultReadonlyForKind(kind));
     setReview(false);
-    setModel(defaultModelForKind(kind));
     setUserContextPolicy(new Set(defaultPolicyForKind(kind)));
     setSelectedTools(defaultSelectedTools(toolInfos, kind, false));
   }, [isEdit, kind, toolInfos]);
@@ -191,7 +185,6 @@ const CreateAgentPage: React.FC = () => {
         setPrompt(detail.prompt);
         setReadonly(detail.readonly);
         setReview(detail.review);
-        setModel(detail.model);
         setSelectedTools(new Set(detail.tools ?? []));
         setUserContextPolicy(new Set(detail.userContextPolicy));
         setAgentIdError(null);
@@ -306,7 +299,6 @@ const CreateAgentPage: React.FC = () => {
   const handleSubmit = useCallback(async () => {
     const nextAgentIdError = validateAgentId(agentId);
     const nextNameError = validateName(name);
-    const shouldSubmitModel = kind === 'subagent';
     setAgentIdError(nextAgentIdError);
     setNameError(nextNameError);
     if (nextAgentIdError || nextNameError) {
@@ -318,10 +310,6 @@ const CreateAgentPage: React.FC = () => {
     }
     if (!prompt.trim()) {
       notification.error(t('agentsOverview.form.promptRequired'));
-      return;
-    }
-    if (shouldSubmitModel && !model.trim()) {
-      notification.error(t('agentsOverview.form.modelRequired'));
       return;
     }
     if (kind === 'subagent' && level === 'project' && !workspacePath) {
@@ -347,7 +335,6 @@ const CreateAgentPage: React.FC = () => {
         prompt: prompt.trim(),
         readonly,
         review: kind === 'subagent' ? review : false,
-        model: shouldSubmitModel ? model.trim() : undefined,
         tools: selectedTools.size > 0 ? Array.from(selectedTools) : undefined,
         userContextPolicy: Array.from(userContextPolicy),
         workspacePath: kind === 'subagent' && level === 'project' ? workspacePath : undefined,
@@ -361,7 +348,6 @@ const CreateAgentPage: React.FC = () => {
           prompt: payload.prompt,
           readonly: payload.readonly,
           review: payload.review,
-          model: payload.model,
           tools: payload.tools,
           userContextPolicy: payload.userContextPolicy,
           workspacePath: payload.workspacePath,
@@ -390,7 +376,6 @@ const CreateAgentPage: React.FC = () => {
     isEdit,
     kind,
     level,
-    model,
     name,
     notification,
     openHome,
@@ -418,8 +403,6 @@ const CreateAgentPage: React.FC = () => {
   const submitLabel = isEdit
     ? t('agentsOverview.form.save')
     : t('agentsOverview.form.submit');
-  const showsModelField = kind === 'subagent';
-
   if (isEdit && detailLoading) {
     return (
       <div className="tv">
@@ -599,18 +582,6 @@ const CreateAgentPage: React.FC = () => {
                 </div>
               ) : null}
             </div>
-
-            {showsModelField ? (
-              <div className="th-create-panel__field">
-                <label className="th-create-panel__label">{t('agentsOverview.form.model')}</label>
-                <Input
-                  value={model}
-                  onChange={(event) => setModel(event.target.value)}
-                  placeholder={t('agentsOverview.form.modelPlaceholder')}
-                  inputSize="small"
-                />
-              </div>
-            ) : null}
 
             {selectableTools.length > 0 ? (
               <div className="th-create-panel__field">

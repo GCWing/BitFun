@@ -20,7 +20,6 @@ import { notificationService } from '@/shared/notification-system';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
-import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { useNurseryStore } from '../nurseryStore';
 
 const log = createLogger('AssistantDefaultsPage');
@@ -629,25 +628,6 @@ const AssistantDefaultsPage: React.FC = () => {
             </div>
 
             <div className="gallery-zones tc-template-shell__zones">
-            <GalleryZone
-              className="tc-template-model-zone"
-              title={t('cards.model')}
-              subtitle={t('nursery.template.sectionModelsSubtitle')}
-              tools={(
-                <div className="tc-model-slot tc-model-slot--header">
-                  <div className="tc-model-slot__select tc-model-slot__select--model-selector">
-                    <ModelSelector
-                      currentMode={ASSISTANT_MODE_ID}
-                      className="tc-model-slot__selector"
-                      dropdownPlacement="bottom"
-                    />
-                  </div>
-                </div>
-              )}
-            >
-              {null}
-            </GalleryZone>
-
             <GalleryZone
               title={t('cards.skills')}
             >

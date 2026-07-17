@@ -27,7 +27,8 @@ impl EventSubscriber for TokenUsageSubscriber {
         if let AgenticEvent::TokenUsageUpdated {
             session_id,
             turn_id,
-            model_id,
+            model_config_id,
+            effective_model_name,
             input_tokens,
             output_tokens,
             total_tokens,
@@ -40,8 +41,9 @@ impl EventSubscriber for TokenUsageSubscriber {
             let output = output_tokens.unwrap_or(0);
 
             debug!(
-                "Recording token usage: model={}, session={}, turn={}, input={}, output={}, total={}, cached_available={}, is_subagent={}",
-                model_id,
+                "Recording token usage: model_config_id={}, effective_model_name={}, session={}, turn={}, input={}, output={}, total={}, cached_available={}, is_subagent={}",
+                model_config_id,
+                effective_model_name,
                 session_id,
                 turn_id,
                 input_tokens,
@@ -54,7 +56,8 @@ impl EventSubscriber for TokenUsageSubscriber {
             if let Err(e) = self
                 .token_usage_service
                 .record_usage(
-                    model_id.clone(),
+                    model_config_id.clone(),
+                    effective_model_name.clone(),
                     session_id.clone(),
                     turn_id.clone(),
                     *input_tokens as u32,

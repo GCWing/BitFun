@@ -97,6 +97,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             parent_dialog_turn_id,
             parent_tool_call_id,
             agent_type,
+            model_id,
         } => Some(AgenticFrontendEvent::new(
             "agentic://subagent-session-linked",
             json!({
@@ -106,6 +107,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "parentDialogTurnId": parent_dialog_turn_id,
                 "parentToolCallId": parent_tool_call_id,
                 "agentType": agent_type,
+                "modelId": model_id,
             }),
         )),
         AgenticEvent::ModelRoundStarted {
@@ -114,7 +116,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             round_id,
             round_group_id,
             round_index,
-            model_id,
+            model_config_id,
+            effective_model_name,
         } => Some(AgenticFrontendEvent::new(
             "agentic://model-round-started",
             json!({
@@ -123,7 +126,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "roundId": round_id,
                 "roundGroupId": round_group_id,
                 "roundIndex": round_index,
-                "modelId": model_id,
+                "modelConfigId": model_config_id,
+                "effectiveModelName": effective_model_name,
             }),
         )),
         AgenticEvent::TextChunk {
@@ -244,7 +248,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
         AgenticEvent::TokenUsageUpdated {
             session_id,
             turn_id,
-            model_id,
+            model_config_id,
+            effective_model_name,
             input_tokens,
             output_tokens,
             total_tokens,
@@ -257,7 +262,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
-                "modelId": model_id,
+                "modelConfigId": model_config_id,
+                "effectiveModelName": effective_model_name,
                 "inputTokens": input_tokens,
                 "outputTokens": output_tokens,
                 "totalTokens": total_tokens,
@@ -388,8 +394,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             has_tool_calls,
             duration_ms,
             provider_id,
-            model_id,
-            model_alias,
+            model_config_id,
+            effective_model_name,
             first_chunk_ms,
             first_visible_output_ms,
             stream_duration_ms,
@@ -405,8 +411,8 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "hasToolCalls": has_tool_calls,
                 "durationMs": duration_ms,
                 "providerId": provider_id,
-                "modelId": model_id,
-                "modelAlias": model_alias,
+                "modelConfigId": model_config_id,
+                "effectiveModelName": effective_model_name,
                 "firstChunkMs": first_chunk_ms,
                 "firstVisibleOutputMs": first_visible_output_ms,
                 "streamDurationMs": stream_duration_ms,
@@ -458,6 +464,41 @@ mod tests {
         assert_eq!(projected.event_name, "agentic://text-chunk");
         assert_eq!(projected.payload["contentType"], "thinking");
         assert_eq!(projected.payload["isThinkingEnd"], true);
+    }
+
+    #[test]
+    fn subagent_session_linked_projects_the_child_model() {
+        let projected = project_agentic_frontend_event(AgenticEvent::SubagentSessionLinked {
+            session_id: "child-session".to_string(),
+            subagent_dialog_turn_id: "child-turn".to_string(),
+            parent_session_id: "parent-session".to_string(),
+            parent_dialog_turn_id: "parent-turn".to_string(),
+            parent_tool_call_id: "task-tool".to_string(),
+            agent_type: Some("Explore".to_string()),
+            model_id: Some("fast".to_string()),
+        })
+        .expect("projected");
+
+        assert_eq!(projected.event_name, "agentic://subagent-session-linked");
+        assert_eq!(projected.payload["sessionId"], "child-session");
+        assert_eq!(projected.payload["modelId"], "fast");
+    }
+
+    #[test]
+    fn model_round_started_projects_distinct_model_identity_fields() {
+        let projected = project_agentic_frontend_event(AgenticEvent::ModelRoundStarted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            round_group_id: None,
+            round_index: 0,
+            model_config_id: "model-config".to_string(),
+            effective_model_name: "provider-model".to_string(),
+        })
+        .expect("projected");
+
+        assert_eq!(projected.payload["modelConfigId"], "model-config");
+        assert_eq!(projected.payload["effectiveModelName"], "provider-model");
     }
 
     #[test]

@@ -130,6 +130,53 @@ fn custom_subagent_definition_from_front_matter_preserves_schema_and_defaults() 
 }
 
 #[test]
+fn custom_subagent_model_presence_distinguishes_default_from_fast_override() {
+    let implicit = build_definition(BuildDefinitionInput(
+        Some("ImplicitModel"),
+        Some("Implicit model"),
+        Some("Uses the shared Subagent default"),
+        None,
+        None,
+        None,
+        None,
+        CustomSubagentKind::User,
+    ))
+    .expect("definition without a model should parse");
+    assert_eq!(implicit.model, "fast");
+    assert!(!implicit.model_is_explicit);
+    assert!(!implicit.should_save_model());
+
+    let explicit_fast = build_definition(BuildDefinitionInput(
+        Some("ExplicitFast"),
+        Some("Explicit fast"),
+        Some("Keeps a fast override"),
+        None,
+        None,
+        None,
+        Some("fast"),
+        CustomSubagentKind::User,
+    ))
+    .expect("definition with fast should parse");
+    assert!(explicit_fast.model_is_explicit);
+    assert!(explicit_fast.should_save_model());
+
+    let dir = TestTempDir::new("bitfun-agent-runtime-explicit-model");
+    let implicit_path = dir.join("implicit.md");
+    let explicit_path = dir.join("explicit.md");
+    custom_subagent_save_markdown_file(&implicit_path, &implicit)
+        .expect("implicit definition should save");
+    custom_subagent_save_markdown_file(&explicit_path, &explicit_fast)
+        .expect("explicit definition should save");
+
+    let implicit_markdown =
+        fs::read_to_string(&implicit_path).expect("implicit markdown should read");
+    let explicit_markdown =
+        fs::read_to_string(&explicit_path).expect("explicit markdown should read");
+    assert!(!implicit_markdown.contains("model:"));
+    assert!(explicit_markdown.contains("model: fast"));
+}
+
+#[test]
 fn custom_subagent_definition_reports_legacy_missing_field_errors() {
     let missing_name = build_definition(BuildDefinitionInput(
         None,

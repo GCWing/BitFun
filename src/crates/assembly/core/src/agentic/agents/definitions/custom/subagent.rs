@@ -80,6 +80,35 @@ impl CustomSubagent {
         model: String,
         user_context_policy: UserContextPolicy,
     ) -> Self {
+        Self::new_with_id_and_model_explicit(
+            id,
+            name,
+            description,
+            tools,
+            prompt,
+            readonly,
+            path,
+            kind,
+            model,
+            true,
+            user_context_policy,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_id_and_model_explicit(
+        id: String,
+        name: String,
+        description: String,
+        tools: Vec<String>,
+        prompt: String,
+        readonly: bool,
+        path: String,
+        kind: CustomSubagentKind,
+        model: String,
+        model_is_explicit: bool,
+        user_context_policy: UserContextPolicy,
+    ) -> Self {
         let definition = CustomAgentDefinition::new(
             id,
             name,
@@ -93,7 +122,9 @@ impl CustomSubagent {
             user_context_policy,
         );
 
-        Self::from_definition(path, definition)
+        let mut subagent = Self::from_definition(path, definition);
+        subagent.data.model_is_explicit = model_is_explicit;
+        subagent
     }
 
     pub fn new(
@@ -106,7 +137,7 @@ impl CustomSubagent {
         kind: CustomSubagentKind,
     ) -> Self {
         let id = name.clone();
-        Self::new_with_id(
+        Self::new_with_id_and_model_explicit(
             id,
             name,
             description,
@@ -116,6 +147,7 @@ impl CustomSubagent {
             path,
             kind,
             "fast".to_string(),
+            false,
             default_custom_agent_user_context_policy(CustomAgentKind::Subagent),
         )
     }
@@ -138,7 +170,15 @@ impl CustomSubagent {
     ///
     /// Fields equal to default values are not saved
     pub fn save_to_file(&self, model: Option<&str>) -> BitFunResult<()> {
-        self.data.save_to_file(model)
+        self.data.save_to_file(model, None)
+    }
+
+    pub fn save_to_file_with_model_override(
+        &self,
+        model: Option<&str>,
+        model_is_explicit: bool,
+    ) -> BitFunResult<()> {
+        self.data.save_to_file(model, Some(model_is_explicit))
     }
 
     pub fn set_review(&mut self, review: bool) {

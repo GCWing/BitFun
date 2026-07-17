@@ -45,6 +45,7 @@ use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, ConversationCoordinator, DialogQueuePriority,
     DialogScheduler, DialogSubmissionPolicy, DialogSubmitOutcome, DialogTriggerSource,
 };
+use crate::agentic::core::{Session, SessionKind};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::workspace::WorkspaceBinding;
@@ -209,6 +210,10 @@ fn normalize_remote_model_selection(
     normalize_remote_model_selection_contract(requested_model_id, |model_id| {
         ai_config.and_then(|config| config.resolve_model_reference(model_id))
     })
+}
+
+fn session_uses_shared_mode_default(session: &Session) -> bool {
+    session.kind == SessionKind::Standard
 }
 
 fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapabilityFact {
@@ -746,45 +751,27 @@ impl CoreServiceAgentRuntime {
             .await
             .map_err(|e| e.to_string())?;
 
-        // Propagate the model choice to every agent type already present in
-        // `ai.agent_models` so that newly created sessions of any type
-        // (including different agent types like Cowork/Claw) inherit it.
-        // Also ensure the current session's agent type is present.  This
-        // covers mobile-web and IM-bot paths; the desktop client handles
-        // its own `ai.agent_models` writing in the frontend.
-        Self::persist_model_for_all_agents(&normalized_model_id, || {
-            coordinator
-                .get_session_manager()
-                .get_session(session_id)
-                .map(|s| s.agent_type.clone())
-        })
-        .await;
+        if coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .is_some_and(|session| session_uses_shared_mode_default(&session))
+        {
+            // New sessions of every mode share one selector. Delegated
+            // subagents intentionally keep their own defaults.
+            Self::persist_mode_model(&normalized_model_id).await;
+        }
 
         Ok(normalized_model_id)
     }
 
-    /// Write `model_id` to `ai.agent_models` for **every** agent type already
-    /// present in the config, plus the current session's agent type if it is
-    /// not yet listed.  This ensures newly created sessions of any type pick
-    /// up the same model without hardcoding a fixed list of agent types.
-    async fn persist_model_for_all_agents<F>(model_id: &str, current_agent_type: F)
-    where
-        F: FnOnce() -> Option<String>,
-    {
+    /// Persist the shared selector used by future mode sessions.
+    async fn persist_mode_model(model_id: &str) {
         let Ok(config_service) = crate::service::config::get_global_config_service().await else {
             return;
         };
-        let mut current: std::collections::HashMap<String, String> = config_service
-            .get_config(Some("ai.agent_models"))
-            .await
-            .unwrap_or_default();
-        for value in current.values_mut() {
-            *value = model_id.to_string();
-        }
-        if let Some(agent_type) = current_agent_type() {
-            current.insert(agent_type, model_id.to_string());
-        }
-        let _ = config_service.set_config("ai.agent_models", &current).await;
+        let _ = config_service
+            .set_config("ai.agent_model_defaults.mode", model_id)
+            .await;
     }
 
     pub(crate) fn remote_control_state_port(
@@ -1818,6 +1805,24 @@ mod tests {
     }
 
     #[test]
+    fn core_service_agent_runtime_only_shares_model_defaults_for_standard_sessions() {
+        let mut session = Session::new_with_id(
+            "session-model-scope".to_string(),
+            "Model scope".to_string(),
+            "agentic".to_string(),
+            Default::default(),
+        );
+
+        assert!(session_uses_shared_mode_default(&session));
+
+        session.kind = SessionKind::Subagent;
+        assert!(!session_uses_shared_mode_default(&session));
+
+        session.kind = SessionKind::EphemeralChild;
+        assert!(!session_uses_shared_mode_default(&session));
+    }
+
+    #[test]
     fn core_service_agent_runtime_owner_preserves_remote_chat_history_shape() {
         let turn = remote_history_test_turn(
             TurnStatus::Completed,
@@ -1976,8 +1981,8 @@ mod tests {
                 end_time: Some(1_200),
                 duration_ms: Some(100),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,

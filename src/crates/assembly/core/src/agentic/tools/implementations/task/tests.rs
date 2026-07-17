@@ -968,6 +968,7 @@ async fn prompt_stability_description_with_context_renders_available_agents_in_s
         SubAgentSource::Project,
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
     register_prompt_order_test_subagent(
@@ -975,6 +976,7 @@ async fn prompt_stability_description_with_context_renders_available_agents_in_s
         SubAgentSource::Project,
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
 

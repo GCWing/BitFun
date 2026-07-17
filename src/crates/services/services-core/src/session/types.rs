@@ -517,14 +517,10 @@ pub struct ModelRoundData {
         alias = "provider_id"
     )]
     pub provider_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "model_id")]
-    pub model_id: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        alias = "model_alias"
-    )]
-    pub model_alias: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_config_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_model_name: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -1287,7 +1283,7 @@ mod tests {
         let legacy_round: ModelRoundData =
             serde_json::from_value(legacy_round_payload).expect("legacy round should deserialize");
         assert_eq!(legacy_round.duration_ms, None);
-        assert_eq!(legacy_round.model_id, None);
+        assert_eq!(legacy_round.model_config_id, None);
         assert_eq!(legacy_round.first_chunk_ms, None);
 
         let round_payload = serde_json::json!({
@@ -1302,8 +1298,8 @@ mod tests {
             "endTime": 121,
             "durationMs": 120,
             "providerId": "provider-a",
-            "modelId": "model-a",
-            "modelAlias": "Model A",
+            "modelConfigId": "model-config-a",
+            "effectiveModelName": "model-a",
             "firstChunkMs": 10,
             "firstVisibleOutputMs": 12,
             "streamDurationMs": 90,
@@ -1317,14 +1313,16 @@ mod tests {
             serde_json::from_value(round_payload).expect("P1 round should deserialize");
         assert_eq!(round.duration_ms, Some(120));
         assert_eq!(round.provider_id.as_deref(), Some("provider-a"));
-        assert_eq!(round.model_id.as_deref(), Some("model-a"));
+        assert_eq!(round.model_config_id.as_deref(), Some("model-config-a"));
+        assert_eq!(round.effective_model_name.as_deref(), Some("model-a"));
         assert_eq!(round.first_visible_output_ms, Some(12));
         assert_eq!(round.attempt_count, Some(2));
         assert_eq!(round.failure_category.as_deref(), Some("rate_limit"));
 
         let encoded = serde_json::to_value(&round).expect("round should serialize");
         assert_eq!(encoded["durationMs"], 120);
-        assert_eq!(encoded["modelId"], "model-a");
+        assert_eq!(encoded["modelConfigId"], "model-config-a");
+        assert_eq!(encoded["effectiveModelName"], "model-a");
         assert_eq!(encoded["firstChunkMs"], 10);
 
         let tool_payload = serde_json::json!({

@@ -27,6 +27,10 @@ const configApiMocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
 }));
 
+const configManagerMocks = vi.hoisted(() => ({
+  getConfigs: vi.fn(),
+}));
+
 const sessionApiMocks = vi.hoisted(() => ({
   archiveSession: vi.fn(),
 }));
@@ -47,6 +51,10 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
 
 vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
   configAPI: configApiMocks,
+}));
+
+vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
+  configManager: configManagerMocks,
 }));
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
@@ -279,6 +287,13 @@ describe('resolveAgentTypeForSessionCreation', () => {
 });
 
 describe('createChatSession', () => {
+  beforeEach(() => {
+    configApiMocks.getConfig.mockResolvedValue(null);
+    configManagerMocks.getConfigs.mockResolvedValue({});
+    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
+    agentApiMocks.createSession.mockResolvedValue({ sessionId: 'created-1' });
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -287,15 +302,10 @@ describe('createChatSession', () => {
     // This keeps the first create suspended in the model config path while the
     // second create enters with the same creation key.
     const modelConfig = createDeferred<Record<string, unknown>>();
-    configApiMocks.getConfig.mockImplementation(async (key: string) => {
-      if (key === 'chat.default_mode') {
-        return null;
-      }
+    configManagerMocks.getConfigs.mockImplementation(async () => {
       await modelConfig.promise;
-      return key === 'ai.models' ? [] : {};
+      return {};
     });
-    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
-    agentApiMocks.createSession.mockResolvedValue({ sessionId: 'created-1' });
 
     const { context } = createContext(createSession({
       workspacePath: '/home/wsp/projects/Test',
@@ -314,6 +324,81 @@ describe('createChatSession', () => {
     ]);
 
     expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('snapshots the current mode model into a newly created session', async () => {
+    configManagerMocks.getConfigs.mockImplementation(async (paths: string[]) => {
+      if (paths.length === 1 && paths[0] === 'ai.agent_model_defaults') {
+        return { 'ai.agent_model_defaults': { mode: 'model-b' } };
+      }
+      return {
+        'ai.agent_model_defaults': { mode: 'model-b' },
+        'ai.models': [{ id: 'model-b', enabled: true, context_window: 64000 }],
+        'ai.default_models': { primary: 'model-b' },
+      };
+    });
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: '/home/wsp/projects/Test',
+    }));
+
+    await createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        modelName: 'model-b',
+        maxContextTokens: 64000,
+      }),
+    }));
+    expect(flowChatStore.createSession).toHaveBeenCalledWith(
+      'created-1',
+      expect.objectContaining({ modelName: 'model-b' }),
+      undefined,
+      expect.any(String),
+      64000,
+      'agentic',
+      '/home/wsp/projects/Test',
+      undefined,
+      undefined,
+      expect.any(Object),
+    );
+  });
+
+  it('preserves an explicit session model instead of applying the mode default', async () => {
+    configManagerMocks.getConfigs.mockResolvedValue({
+      'ai.agent_model_defaults': { mode: 'model-b' },
+      'ai.models': [
+        { id: 'model-a', enabled: true, context_window: 32000 },
+        { id: 'model-b', enabled: true, context_window: 64000 },
+      ],
+      'ai.default_models': { primary: 'model-b' },
+    });
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: '/home/wsp/projects/Test',
+    }));
+
+    await createChatSession(context, {
+      workspacePath: '/home/wsp/projects/Test',
+      modelName: 'model-a',
+    }, 'agentic');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        modelName: 'model-a',
+        maxContextTokens: 32000,
+      }),
+    }));
+    expect(flowChatStore.createSession).toHaveBeenCalledWith(
+      'created-1',
+      expect.objectContaining({ modelName: 'model-a' }),
+      undefined,
+      expect.any(String),
+      32000,
+      'agentic',
+      '/home/wsp/projects/Test',
+      undefined,
+      undefined,
+      expect.any(Object),
+    );
   });
 });
 

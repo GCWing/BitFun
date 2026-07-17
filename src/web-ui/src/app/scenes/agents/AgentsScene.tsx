@@ -12,7 +12,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, IconButton, Search, Switch, confirmDanger } from '@/component-library';
+import { Badge, Button, IconButton, Search, Select, Switch, confirmDanger } from '@/component-library';
 import {
   GalleryDetailModal,
   GalleryEmpty,
@@ -41,11 +41,16 @@ import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefre
 import { CORE_AGENT_IDS, isAgentInOverviewZone } from './agentVisibility';
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { ModeSkillInfo } from '@/infrastructure/config/types';
+import type { ModeSkillInfo, SubagentModelSelection } from '@/infrastructure/config/types';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useNotification } from '@/shared/notification-system';
+import {
+  type ModelSelectOption,
+  useModelSelectPresentation,
+} from '@/infrastructure/config/components/ModelSelectPresentation';
 
 const UNGROUPED_SKILL_GROUP = '__ungrouped__';
+const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
 
 const SKILL_GROUP_ORDER: Record<string, number> = {
   office: 0,
@@ -64,7 +69,27 @@ interface SkillGroup {
   totalCount: number;
 }
 
-type CapabilityTab = 'tools' | 'skills' | 'subagents';
+type CapabilityTab = 'model' | 'tools' | 'skills' | 'subagents';
+
+function normalizeSelectValue(value: string | number | (string | number)[]): string {
+  return String(Array.isArray(value) ? (value[0] ?? '') : value);
+}
+
+function subagentModelOverrideValue(selection: SubagentModelSelection | undefined): string {
+  if (!selection) {
+    return DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE;
+  }
+  return selection.kind === 'inherit' ? 'inherit' : selection.model_id;
+}
+
+function subagentModelSelectionFromValue(value: string): SubagentModelSelection | undefined {
+  if (value === DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE) {
+    return undefined;
+  }
+  return value === 'inherit'
+    ? { kind: 'inherit' }
+    : { kind: 'fixed', model_id: value };
+}
 
 function getConfiguredEnabledSkillKeys(skills: ModeSkillInfo[]): string[] {
   return skills.filter((skill) => skill.effectiveEnabled).map((skill) => skill.key);
@@ -190,7 +215,7 @@ const AgentsHomeView: React.FC = () => {
     openEditAgent,
   } = useAgentsStore();
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
-  const [activeCapabilityTab, setActiveCapabilityTab] = React.useState<CapabilityTab>('tools');
+  const [activeCapabilityTab, setActiveCapabilityTab] = React.useState<CapabilityTab | null>(null);
   const [toolsEditing, setToolsEditing] = React.useState(false);
   const [skillsEditing, setSkillsEditing] = React.useState(false);
   const [subagentsEditing, setSubagentsEditing] = React.useState(false);
@@ -200,13 +225,16 @@ const AgentsHomeView: React.FC = () => {
   const [savingTools, setSavingTools] = React.useState(false);
   const [savingSkills, setSavingSkills] = React.useState(false);
   const [savingSubagents, setSavingSubagents] = React.useState(false);
+  const [savingSubagentModel, setSavingSubagentModel] = React.useState(false);
   const [computerUseEnabled, setComputerUseEnabled] = useState(true);
+  const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
 
   const {
     allAgents,
     filteredAgents,
     loading,
     availableTools,
+    configuredModels = [],
     getModeProfile,
     getModeSkills,
     getModeManageableSubagents,
@@ -219,6 +247,7 @@ const AgentsHomeView: React.FC = () => {
     handleSetSkills,
     handleResetSkills,
     handleSetSubagentEnabled,
+    handleSetSubagentModel,
   } = useAgentsList({
     searchQuery,
     filterLevel: agentFilterLevel,
@@ -384,13 +413,59 @@ const AgentsHomeView: React.FC = () => {
     return agent.toolCount ?? 0;
   }, [getModeConfig]);
   const selectedAgentToolCount = selectedAgent ? getDisplayedToolCount(selectedAgent) : 0;
+  const selectedSubagentModelValue = selectedAgent?.agentKind === 'subagent'
+    ? subagentModelOverrideValue(selectedAgent.subagentModelOverride)
+    : DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE;
+  const subagentModelOptions = useMemo<ModelSelectOption[]>(() => [
+    {
+      label: t('agentCard.modelSelector.default'),
+      value: DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE,
+    },
+    { label: t('agentCard.modelSelector.inherit'), value: 'inherit' },
+    { label: t('agentCard.modelSelector.fast'), value: 'fast' },
+    { label: t('agentCard.modelSelector.primary'), value: 'primary' },
+    { label: t('agentCard.modelSelector.auto'), value: 'auto' },
+    ...configuredModels
+      .filter((model): model is typeof model & { id: string } => (
+        typeof model.id === 'string'
+        && model.id.trim().length > 0
+        && model.enabled !== false
+        && (model.capabilities ?? []).includes('text_chat')
+      ))
+      .map(buildModelOption),
+  ], [buildModelOption, configuredModels, t]);
+  const handleSubagentModelChange = useCallback(async (
+    value: string | number | (string | number)[],
+  ) => {
+    if (!selectedAgent || selectedAgent.agentKind !== 'subagent' || savingSubagentModel) {
+      return;
+    }
+
+    setSavingSubagentModel(true);
+    try {
+      await handleSetSubagentModel(
+        selectedAgent.id,
+        subagentModelSelectionFromValue(normalizeSelectValue(value)),
+      );
+    } finally {
+      setSavingSubagentModel(false);
+    }
+  }, [handleSetSubagentModel, savingSubagentModel, selectedAgent]);
   const selectedAgentCapabilityTabs = useMemo(() => {
     const tabs: Array<{
       key: CapabilityTab;
       icon: typeof Wrench;
       label: string;
-      count: string;
+      count?: string;
     }> = [];
+
+    if (selectedAgent?.agentKind === 'subagent') {
+      tabs.push({
+        key: 'model',
+        icon: Cpu,
+        label: t('agentCard.modelSelector.label'),
+      });
+    }
 
     if (selectedAgentTools.length > 0) {
       const currentToolCount = selectedAgent?.agentKind === 'mode'
@@ -463,7 +538,9 @@ const AgentsHomeView: React.FC = () => {
     ? toolsEditing
     : currentCapabilityTab === 'skills'
       ? skillsEditing
-      : subagentsEditing;
+      : currentCapabilityTab === 'subagents'
+        ? subagentsEditing
+        : false;
   const resetEditState = useCallback(() => {
     setToolsEditing(false);
     setSkillsEditing(false);
@@ -506,19 +583,19 @@ const AgentsHomeView: React.FC = () => {
 
   const openAgentDetails = useCallback((agent: AgentWithCapabilities) => {
     setSelectedAgentId(agent.id);
-    setActiveCapabilityTab('tools');
+    setActiveCapabilityTab(null);
     resetEditState();
   }, [resetEditState]);
 
   const closeAgentDetails = useCallback(() => {
     setSelectedAgentId(null);
-    setActiveCapabilityTab('tools');
+    setActiveCapabilityTab(null);
     resetEditState();
   }, [resetEditState]);
 
   useEffect(() => {
     if (!selectedAgentCapabilityTabs.some((tab) => tab.key === activeCapabilityTab)) {
-      setActiveCapabilityTab(selectedAgentCapabilityTabs[0]?.key ?? 'tools');
+      setActiveCapabilityTab(selectedAgentCapabilityTabs[0]?.key ?? null);
     }
   }, [activeCapabilityTab, selectedAgentCapabilityTabs]);
 
@@ -773,7 +850,6 @@ const AgentsHomeView: React.FC = () => {
                 ).label
               }
             </Badge>
-            {selectedAgent.model ? <Badge variant="neutral">{selectedAgent.model}</Badge> : null}
           </>
         ) : null}
         description={selectedAgent
@@ -858,7 +934,7 @@ const AgentsHomeView: React.FC = () => {
                         >
                           <TabIcon size={12} />
                           <span>{tab.label}</span>
-                          {isActive ? (
+                          {isActive && tab.count ? (
                             <span className="agent-card__tab-count">{tab.count}</span>
                           ) : null}
                         </button>
@@ -1039,6 +1115,21 @@ const AgentsHomeView: React.FC = () => {
                     </div>
                   ) : null}
                 </div>
+
+                {currentCapabilityTab === 'model' && selectedAgent.agentKind === 'subagent' ? (
+                  <Select
+                    size="small"
+                    searchable
+                    className="bitfun-agents-scene__subagent-model-select model-select-presentation__select"
+                    options={subagentModelOptions}
+                    value={selectedSubagentModelValue}
+                    onChange={(value) => void handleSubagentModelChange(value)}
+                    renderOption={renderModelOption}
+                    renderValue={renderModelValue}
+                    disabled={savingSubagentModel}
+                    triggerTestId="agent-detail-subagent-model-select"
+                  />
+                ) : null}
 
                 {currentCapabilityTab === 'tools' ? (
                   selectedAgent.agentKind === 'mode' && toolsEditing ? (

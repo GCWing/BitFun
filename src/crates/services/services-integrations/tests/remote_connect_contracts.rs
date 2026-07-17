@@ -2206,7 +2206,8 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         round_id: "round-1".to_string(),
         round_group_id: None,
         round_index: 3,
-        model_id: None,
+        model_config_id: "model-config".to_string(),
+        effective_model_name: "provider-model".to_string(),
     });
     tracker.handle_agentic_event(&AgenticEvent::ThinkingChunk {
         session_id: "session-1".to_string(),

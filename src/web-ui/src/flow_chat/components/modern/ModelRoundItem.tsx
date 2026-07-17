@@ -606,8 +606,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         data-turn-id={turnId}
         data-round-id={round.id}
         data-status={round.status}
-        data-model-id={round.modelId || ''}
-        data-model-alias={round.modelAlias || ''}
+        data-model-config-id={round.modelConfigId || ''}
+        data-effective-model-name={round.effectiveModelName || ''}
         data-streaming={round.isStreaming ? 'true' : 'false'}
       >
         {renderTraceEnabled && renderTraceStartedAtMs !== null && allGroupSummary && visibleGroupSummary && (

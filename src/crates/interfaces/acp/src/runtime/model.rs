@@ -248,18 +248,14 @@ mod tests {
     }
 
     #[test]
-    fn current_model_resolves_name_to_model_id() {
+    fn current_model_accepts_enabled_canonical_model_id() {
         let mut ai_config = AIConfig::default();
         ai_config.models.push(AIModelConfig {
             id: "model-a".to_string(),
-            name: "Readable Model".to_string(),
             enabled: true,
             ..Default::default()
         });
 
-        assert_eq!(
-            current_model_id(&ai_config, Some("Readable Model")),
-            "model-a"
-        );
+        assert_eq!(current_model_id(&ai_config, Some("model-a")), "model-a");
     }
 }

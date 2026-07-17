@@ -59,6 +59,11 @@ pub struct CustomAgentDefinition {
     pub review: bool,
     pub level: CustomAgentLevel,
     pub model: String,
+    /// Whether front matter explicitly contains a `model` field.
+    ///
+    /// Normal subagents without this field use the shared subagent default,
+    /// while an explicit `fast` remains a real per-subagent override.
+    pub model_is_explicit: bool,
     pub user_context_policy: UserContextPolicy,
 }
 
@@ -122,6 +127,7 @@ impl CustomAgentDefinition {
             review: DEFAULT_CUSTOM_SUBAGENT_REVIEW,
             level,
             model,
+            model_is_explicit: true,
             user_context_policy,
         }
     }
@@ -175,6 +181,7 @@ impl CustomAgentDefinition {
             }
         };
 
+        let model_is_explicit = model.is_some();
         let model = custom_agent_model_or_default(kind, model).to_string();
         let user_context_policy =
             user_context_policy.unwrap_or_else(|| default_custom_agent_user_context_policy(kind));
@@ -191,6 +198,7 @@ impl CustomAgentDefinition {
                 review,
                 level,
                 model,
+                model_is_explicit,
                 user_context_policy,
             },
             metadata: CustomAgentFrontMatterMetadata {
@@ -214,7 +222,10 @@ impl CustomAgentDefinition {
     }
 
     pub fn should_save_model(&self) -> bool {
-        custom_agent_model_should_save(self.kind, &self.model)
+        match self.kind {
+            CustomAgentKind::Mode => custom_agent_model_should_save(self.kind, &self.model),
+            CustomAgentKind::Subagent => self.model_is_explicit,
+        }
     }
 
     pub fn should_save_user_context_policy(&self) -> bool {
@@ -785,6 +796,7 @@ mod tests {
             review: false,
             level: CustomAgentLevel::User,
             model: "auto".to_string(),
+            model_is_explicit: false,
             user_context_policy: UserContextPolicy::empty()
                 .with_workspace_context()
                 .with_workspace_instructions()

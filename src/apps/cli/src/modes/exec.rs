@@ -83,7 +83,7 @@ impl ExecTokenUsage {
     ) -> Option<&'a str> {
         let AgenticEvent::TokenUsageUpdated {
             turn_id,
-            model_id,
+            model_config_id,
             input_tokens,
             output_tokens,
             total_tokens,
@@ -108,7 +108,7 @@ impl ExecTokenUsage {
         } else {
             *aggregate = Some(round);
         }
-        Some(model_id)
+        Some(model_config_id)
     }
 }
 
@@ -760,24 +760,26 @@ impl ExecMode {
 
                 self.emit_stream_envelope(&envelope)?;
 
-                if let Some(model_id) =
+                if let Some(model_config_id) =
                     ExecTokenUsage::accumulate_event(&mut usage, event, &turn_id)
                 {
-                    self.record_resolved_model_id(&session_id, model_id).await;
+                    self.record_resolved_model_config_id(&session_id, model_config_id)
+                        .await;
                 }
 
                 match event {
                     AgenticEvent::ModelRoundStarted {
                         turn_id: event_turn_id,
-                        model_id: Some(model_id),
+                        model_config_id,
                         ..
                     }
                     | AgenticEvent::ModelRoundCompleted {
                         turn_id: event_turn_id,
-                        model_id: Some(model_id),
+                        model_config_id,
                         ..
                     } if event_turn_id == &turn_id => {
-                        self.record_resolved_model_id(&session_id, model_id).await;
+                        self.record_resolved_model_config_id(&session_id, model_config_id)
+                            .await;
                     }
 
                     AgenticEvent::TextChunk {
@@ -1071,15 +1073,15 @@ impl ExecMode {
             .unwrap_or_else(|| Err(anyhow::anyhow!("Execution ended without a terminal event")))
     }
 
-    async fn record_resolved_model_id(&self, session_id: &str, model_id: &str) {
-        let trimmed = model_id.trim();
+    async fn record_resolved_model_config_id(&self, session_id: &str, model_config_id: &str) {
+        let trimmed = model_config_id.trim();
         if trimmed.is_empty() || matches!(trimmed, "auto" | "default" | "primary" | "fast") {
             return;
         }
 
         if let Err(error) = self.agent.update_session_model(session_id, trimmed).await {
             tracing::debug!(
-                "Failed to persist resolved CLI model id: session_id={}, model_id={}, error={}",
+                "Failed to persist resolved CLI model config id: session_id={}, model_config_id={}, error={}",
                 session_id,
                 trimmed,
                 error
@@ -1508,7 +1510,8 @@ mod patch_tests {
             AgenticEvent::TokenUsageUpdated {
                 session_id: "session-1".to_string(),
                 turn_id: "turn-1".to_string(),
-                model_id: "model".to_string(),
+                model_config_id: "model-config".to_string(),
+                effective_model_name: "provider-model".to_string(),
                 input_tokens: 100,
                 output_tokens: Some(25),
                 total_tokens: 125,
@@ -1520,7 +1523,8 @@ mod patch_tests {
             AgenticEvent::TokenUsageUpdated {
                 session_id: "session-1".to_string(),
                 turn_id: "turn-1".to_string(),
-                model_id: "model".to_string(),
+                model_config_id: "model-config".to_string(),
+                effective_model_name: "provider-model".to_string(),
                 input_tokens: 200,
                 output_tokens: Some(50),
                 total_tokens: 250,
@@ -1535,7 +1539,7 @@ mod patch_tests {
         for event in &events {
             assert_eq!(
                 ExecTokenUsage::accumulate_event(&mut usage, event, "turn-1"),
-                Some("model")
+                Some("model-config")
             );
         }
 
@@ -1558,7 +1562,8 @@ mod patch_tests {
             AgenticEvent::TokenUsageUpdated {
                 session_id: "session-1".to_string(),
                 turn_id: "turn-1".to_string(),
-                model_id: "model".to_string(),
+                model_config_id: "model-config".to_string(),
+                effective_model_name: "provider-model".to_string(),
                 input_tokens: 100,
                 output_tokens: None,
                 total_tokens: 100,
@@ -1570,7 +1575,8 @@ mod patch_tests {
             AgenticEvent::TokenUsageUpdated {
                 session_id: "session-1".to_string(),
                 turn_id: "turn-1".to_string(),
-                model_id: "model".to_string(),
+                model_config_id: "model-config".to_string(),
+                effective_model_name: "provider-model".to_string(),
                 input_tokens: 50,
                 output_tokens: Some(10),
                 total_tokens: 60,

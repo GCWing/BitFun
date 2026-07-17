@@ -896,22 +896,7 @@ impl ExecutionEngine {
                 service.get_config(Some("ai")).await.unwrap_or_default();
 
             let resolved_id = Self::resolve_configured_model_id(&ai_config, model_id);
-            let model_cfg = ai_config
-                .models
-                .iter()
-                .find(|m| m.id == resolved_id)
-                .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
-                .or_else(|| {
-                    ai_config
-                        .models
-                        .iter()
-                        .find(|m| m.model_name == resolved_id)
-                })
-                .or_else(|| {
-                    ai_config.models.iter().find(|m| {
-                        m.model_name == ai_client_model && m.provider == ai_client_api_format
-                    })
-                });
+            let model_cfg = ai_config.models.iter().find(|m| m.id == resolved_id);
 
             let supports = model_cfg.is_some_and(|m| {
                 m.capabilities
@@ -1379,7 +1364,8 @@ impl ExecutionEngine {
             available_tools: finalize_tool_names,
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
-            model_name: input.ai_client.config.model.clone(),
+            model_config_id: input.primary_model_facts.model_id.clone(),
+            effective_model_name: input.ai_client.config.model.clone(),
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             context_vars: input.execution_context_vars.clone(),
@@ -3123,7 +3109,8 @@ impl ExecutionEngine {
                 available_tools: available_tools.clone(),
                 deferred_tools: deferred_tools.clone(),
                 loaded_deferred_tool_specs,
-                model_name: ai_client.config.model.clone(),
+                model_config_id: model_id.clone(),
+                effective_model_name: ai_client.config.model.clone(),
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
