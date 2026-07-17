@@ -1,17 +1,36 @@
-//! Portable post-call hook routing decisions.
+//! Portable post-call and lifecycle hook routing decisions.
+//!
+//! Hooks are organized into two tiers:
+//!
+//! - **Per-tool hooks** (`SuccessfulToolPostCall`, `BehaviorGuard`):
+//!   fire after each successful tool call. Fine-grained, single-operation scope.
+//!
+//! - **Turn-level hooks** (`Stop`):
+//!   fire after each dialog round completes. Whole-round scope — can inspect
+//!   the cumulative effect of multiple tool calls in a single round.
+//!
+//! Inspired by cc-haha's Stop hook (used by `/goal` to evaluate progress
+//! after every assistant turn) and the LionBuddy V10 supervisor chain
+//! (Plan→Do→Check→Act with peer review after each stage).
 
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-/// Hook categories that concrete runtime integrations may execute after a
-/// successful tool call.
+/// Hook categories that concrete runtime integrations may execute.
+///
+/// `SuccessfulToolPostCall` / `BehaviorGuard` fire per-tool.
+/// `Stop` fires per-round (after the assistant message and all tool
+/// results for a round are collected).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RuntimeHookKind {
     SuccessfulToolPostCall,
     DeepReviewSharedContextToolUse,
     BehaviorGuard,
+    /// Fires after each dialog round completes (assistant message + tool results).
+    /// Carries round-level context including all tool calls in the round.
+    Stop,
 }
 
 pub const fn successful_tool_post_call_hooks() -> [RuntimeHookKind; 2] {
@@ -203,9 +222,104 @@ where
                 }
             }
             RuntimeHookKind::SuccessfulToolPostCall => {}
+            RuntimeHookKind::Stop => {
+                // Stop hooks are handled by run_stop_hooks() at the round level,
+                // not by the per-tool post-call dispatch.
+            }
         }
     }
     HookResult::Continue
+}
+
+// ── Stop (round-level) hooks ────────────────────────────────────
+
+/// Summary of a single tool call within a round, for Stop hook inspection.
+#[derive(Debug, Clone)]
+pub struct ToolCallSummary {
+    pub tool_name: String,
+    pub is_error: bool,
+}
+
+/// Context passed to Stop hooks after each dialog round completes.
+#[derive(Debug, Clone)]
+pub struct StopHookContext {
+    pub session_id: String,
+    pub turn_id: String,
+    pub round_index: u32,
+    pub tool_calls: Vec<ToolCallSummary>,
+    pub assistant_text_summary: String,
+    pub file_reads: Vec<String>,
+    pub file_edits: Vec<String>,
+    pub round_has_more: bool,
+}
+
+/// Executor for Stop (round-level) hooks.
+///
+/// Implementations provide two handlers that mirror the B01/C01 dual-bee
+/// pattern from LionBuddy V10:
+///
+/// - `context_guard` (B01 提示蜂): checks whether the agent had sufficient
+///   context to make good decisions. May inject supplemental knowledge.
+/// - `behavior_guard` (C01 审查蜂): checks whether the agent violated any
+///   iron rules during the round.
+pub trait StopHookExecutor {
+    /// B01 提示蜂 — context completeness check.
+    fn context_guard(&mut self, _ctx: &StopHookContext) -> HookResult {
+        HookResult::Continue
+    }
+
+    /// C01 审查蜂 — iron-rule violation check.
+    fn behavior_guard(&mut self, _ctx: &StopHookContext) -> HookResult {
+        HookResult::Continue
+    }
+}
+
+/// Aggregate result from running all Stop hook handlers.
+///
+/// Collects the first Abort (if any) and all additional context strings.
+#[derive(Debug, Clone, Default)]
+pub struct StopHookAggregatedResult {
+    pub abort: Option<HookResult>,
+    pub additional_contexts: Vec<String>,
+}
+
+impl StopHookAggregatedResult {
+    pub fn is_abort(&self) -> bool {
+        self.abort.as_ref().is_some_and(|r| r.is_abort())
+    }
+}
+
+/// Run B01 context_guard followed by C01 behavior_guard for a round.
+///
+/// Returns the aggregated result. If behavior_guard returns Abort, the
+/// caller should inject the abort message into the next round.
+pub fn run_stop_hooks<E: StopHookExecutor>(
+    ctx: &StopHookContext,
+    executor: &mut E,
+) -> StopHookAggregatedResult {
+    let mut aggregated = StopHookAggregatedResult::default();
+
+    // B01 提示蜂: context completeness check (informational, non-blocking)
+    match executor.context_guard(ctx) {
+        HookResult::Continue => {}
+        HookResult::Abort {
+            reason,
+            fix_instruction,
+            ..
+        } => {
+            aggregated.additional_contexts.push(format!(
+                "[B01 提示蜂] 上下文不足: {reason} — {fix_instruction}"
+            ));
+        }
+    }
+
+    // C01 审查蜂: iron-rule violation check (blocking on violation)
+    let c01 = executor.behavior_guard(ctx);
+    if c01.is_abort() {
+        aggregated.abort = Some(c01);
+    }
+
+    aggregated
 }
 
 #[derive(Debug, Clone, Copy)]

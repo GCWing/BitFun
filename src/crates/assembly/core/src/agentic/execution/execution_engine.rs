@@ -35,6 +35,8 @@ use crate::agentic::tools::product_runtime::{
 use crate::agentic::tools::{
     resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, ToolRuntimeRestrictions,
 };
+use crate::agentic::tools::post_call_hooks::run_stop_hooks_for_round;
+use bitfun_agent_runtime::post_call_hooks::ToolCallSummary;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
@@ -3232,6 +3234,99 @@ impl ExecutionEngine {
             );
 
             total_tools += round_result.tool_calls.len();
+
+            // ── Stop hook: B01 提示蜂 + C01 审查蜂 ──
+            {
+                let tool_calls: Vec<ToolCallSummary> = round_result
+                    .tool_calls
+                    .iter()
+                    .map(|tc| ToolCallSummary {
+                        tool_name: tc.tool_name.clone(),
+                        is_error: tc.is_error,
+                    })
+                    .collect();
+
+                let assistant_text = match &round_result.assistant_message.content {
+                    MessageContent::Text(t) => t.as_str(),
+                    MessageContent::Multimodal { text, .. } => text.as_str(),
+                    MessageContent::Mixed { text, .. } => text.as_str(),
+                    MessageContent::ToolResult { .. } => "",
+                };
+
+                // Collect file reads/edits from the FILE_READ_TRACKER
+                // For now, extract from round_result tool calls
+                let file_reads: Vec<String> = round_result
+                    .tool_calls
+                    .iter()
+                    .filter(|tc| matches!(tc.tool_name.as_str(), "Read" | "read_file"))
+                    .filter_map(|tc| {
+                        tc.arguments
+                            .get("file_path")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .collect();
+
+                let file_edits: Vec<String> = round_result
+                    .tool_calls
+                    .iter()
+                    .filter(|tc| {
+                        matches!(
+                            tc.tool_name.as_str(),
+                            "Edit" | "Write" | "edit_file" | "write_file"
+                        )
+                    })
+                    .filter_map(|tc| {
+                        tc.arguments
+                            .get("file_path")
+                            .or_else(|| tc.arguments.get("path"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .collect();
+
+                let aggregated = run_stop_hooks_for_round(
+                    &context.session_id,
+                    &context.dialog_turn_id,
+                    round_index as u32,
+                    tool_calls,
+                    assistant_text,
+                    file_reads,
+                    file_edits,
+                    round_result.has_more_rounds,
+                );
+
+                // If C01 detected a violation, inject the abort message
+                if aggregated.is_abort() {
+                    if let Some(abort) = &aggregated.abort {
+                        match abort {
+                            bitfun_agent_runtime::post_call_hooks::HookResult::Abort {
+                                reason,
+                                fix_instruction,
+                                ..
+                            } => {
+                                let guard_message = format!(
+                                    "[ToolGuard Intercepted] {reason}\n\n{fix_instruction}"
+                                );
+                                let msg =
+                                    Message::system(render_system_reminder(&guard_message));
+                                messages.push(msg);
+                                warn!(
+                                    "[Stop Hook] Round {}: Abort — {}",
+                                    round_index, reason
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                // Inject B01 additional contexts
+                for ctx_msg in &aggregated.additional_contexts {
+                    let msg = Message::system(render_system_reminder(ctx_msg));
+                    messages.push(msg);
+                }
+            }
 
             // Track partial recovery reason from the last round
             if round_result.partial_recovery_reason.is_some() {
