@@ -1751,7 +1751,7 @@ export class FlowChatStore {
       if (!session) return prev;
 
       const normalizedModelName = modelName.trim() || 'auto';
-      if ((session.config.modelName || 'auto') === normalizedModelName) {
+      if (session.config.modelName?.trim() === normalizedModelName) {
         return prev;
       }
 
@@ -3223,8 +3223,8 @@ export class FlowChatStore {
             endTime: round.endTime || Date.now(),
             durationMs: round.durationMs,
             providerId: round.providerId,
-            modelId: round.modelId,
-            modelAlias: round.modelAlias,
+            modelConfigId: round.modelConfigId,
+            effectiveModelName: round.effectiveModelName,
             firstChunkMs: round.firstChunkMs,
             firstVisibleOutputMs: round.firstVisibleOutputMs,
             streamDurationMs: round.streamDurationMs,
@@ -4252,7 +4252,7 @@ export class FlowChatStore {
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
-        
+
         const updatedSession = {
           ...session,
           dialogTurns,
@@ -4526,8 +4526,8 @@ export class FlowChatStore {
           endTime: round.endTime,
           durationMs: round.durationMs,
           providerId: round.providerId,
-          modelId: round.modelId,
-          modelAlias: round.modelAlias,
+          modelConfigId: round.modelConfigId,
+          effectiveModelName: round.effectiveModelName,
           firstChunkMs: round.firstChunkMs,
           firstVisibleOutputMs: round.firstVisibleOutputMs,
           streamDurationMs: round.streamDurationMs,

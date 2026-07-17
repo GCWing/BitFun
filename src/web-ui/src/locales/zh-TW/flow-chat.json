@@ -2070,7 +2070,6 @@
     "model": "模型",
     "modelExplanation": "模型說明",
     "modelSelection": "選擇模型",
-    "currentMode": "目前模式",
     "autoModel": "Auto",
     "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",

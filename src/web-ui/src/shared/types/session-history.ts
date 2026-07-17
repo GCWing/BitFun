@@ -198,8 +198,8 @@ export interface ModelRoundData {
   endTime?: number;
   durationMs?: number;
   providerId?: string;
-  modelId?: string;
-  modelAlias?: string;
+  modelConfigId?: string;
+  effectiveModelName?: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;

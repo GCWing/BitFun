@@ -25,6 +25,17 @@ pub struct AIClientFactory {
     client_cache: RwLock<HashMap<String, Arc<AIClient>>>,
 }
 
+fn functional_agent_model_selector<'a>(
+    ai_config: &'a crate::service::config::types::AIConfig,
+    func_agent_name: &str,
+) -> &'a str {
+    ai_config
+        .func_agent_models
+        .get(func_agent_name)
+        .map(String::as_str)
+        .unwrap_or("fast")
+}
+
 impl AIClientFactory {
     fn new(config_service: Arc<ConfigService>) -> Self {
         Self {
@@ -33,31 +44,12 @@ impl AIClientFactory {
         }
     }
 
-    /// Get the main agent's AI client
-    /// Falls back to primary when no dedicated model is configured
-    pub async fn get_client_by_agent(&self, agent_name: &str) -> Result<Arc<AIClient>> {
-        let global_config: crate::service::config::GlobalConfig =
-            self.config_service.get_config(None).await?;
-
-        match global_config.ai.agent_models.get(agent_name) {
-            Some(model_id) => self.get_client_resolved(model_id).await,
-            None => self.get_client_resolved("primary").await,
-        }
-    }
-
-    /// Get a functional agent's AI client
-    /// Prefer func_agent_models, fall back to agent_models (legacy), then fast
+    /// Get a functional agent's AI client using its dedicated mapping or fast.
     pub async fn get_client_by_func_agent(&self, func_agent_name: &str) -> Result<Arc<AIClient>> {
         let global_config: crate::service::config::GlobalConfig =
             self.config_service.get_config(None).await?;
 
-        let model_id = global_config
-            .ai
-            .func_agent_models
-            .get(func_agent_name)
-            .or_else(|| global_config.ai.agent_models.get(func_agent_name))
-            .map(String::as_str)
-            .unwrap_or("fast");
+        let model_id = functional_agent_model_selector(&global_config.ai, func_agent_name);
 
         self.get_client_resolved(model_id).await
     }
@@ -125,6 +117,19 @@ impl AIClientFactory {
             |selector| global_config.ai.resolve_model_selection(selector),
             |model_ref| global_config.ai.resolve_model_reference(model_ref),
         );
+        if global_config
+            .ai
+            .models
+            .iter()
+            .filter(|model| model.id == normalized_model_id)
+            .nth(1)
+            .is_some()
+        {
+            return Err(anyhow!(
+                "Multiple model configurations use the same ID: {}",
+                normalized_model_id
+            ));
+        }
 
         {
             let cache = match self.client_cache.read() {
@@ -142,16 +147,20 @@ impl AIClientFactory {
         }
 
         debug!("Creating new AI client: model_id={}", normalized_model_id);
-        let model_config = global_config
+        let mut matching_models = global_config
             .ai
             .models
             .iter()
-            .find(|m| {
-                m.id == normalized_model_id
-                    || m.name == normalized_model_id
-                    || m.model_name == normalized_model_id
-            })
+            .filter(|m| m.id == normalized_model_id);
+        let model_config = matching_models
+            .next()
             .ok_or_else(|| anyhow!("Model configuration not found: {}", normalized_model_id))?;
+        if matching_models.next().is_some() {
+            return Err(anyhow!(
+                "Multiple model configurations use the same ID: {}",
+                normalized_model_id
+            ));
+        }
 
         if !model_config.enabled {
             return Err(anyhow!(
@@ -334,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_model_reference_supports_id_name_and_model_name() {
+    fn resolve_model_reference_requires_a_config_id() {
         let mut config = GlobalConfig::default();
         config.ai.models = vec![build_model(
             "model-123",
@@ -346,14 +355,15 @@ mod tests {
             config.ai.resolve_model_reference("model-123"),
             Some("model-123".to_string())
         );
-        assert_eq!(
-            config.ai.resolve_model_reference("Primary Chat"),
-            Some("model-123".to_string())
-        );
-        assert_eq!(
-            config.ai.resolve_model_reference("claude-sonnet-4.5"),
-            Some("model-123".to_string())
-        );
+        assert_eq!(config.ai.resolve_model_reference("Primary Chat"), None);
+        assert_eq!(config.ai.resolve_model_reference("claude-sonnet-4.5"), None);
+
+        config.ai.models.push(build_model(
+            "model-123",
+            "Duplicate Config",
+            "claude-sonnet-4.5-duplicate",
+        ));
+        assert_eq!(config.ai.resolve_model_reference("model-123"), None);
     }
 
     #[test]

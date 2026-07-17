@@ -4,7 +4,14 @@ import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentA
 import type { AgentSource } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
-import type { AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
+import type {
+  AgentModelDefaultsConfig,
+  AgentProfileConfigItem,
+  AIModelConfig,
+  DefaultModelsConfig,
+  ModeSkillInfo,
+  SubagentModelSelection,
+} from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import type { AgentWithCapabilities } from '../agentsStore';
@@ -91,6 +98,63 @@ function resolveAgentSource(
   return agent.source ?? agent.subagentSource ?? 'builtin';
 }
 
+function configuredModelName(
+  models: AIModelConfig[],
+  modelId: string | null | undefined,
+): string | undefined {
+  if (!modelId?.trim()) {
+    return undefined;
+  }
+
+  const model = models.find((candidate) => candidate.id === modelId);
+  return model?.model_name?.trim() || model?.name?.trim() || model?.id;
+}
+
+function subagentModelOverride(
+  subagent: SubagentInfo,
+  builtinOverrides: Record<string, SubagentModelSelection>,
+): SubagentModelSelection | undefined {
+  const source = subagent.subagentSource ?? subagent.source;
+  if (source === 'builtin') {
+    return builtinOverrides[subagent.id];
+  }
+
+  if (!subagent.modelIsExplicit || !subagent.model?.trim()) {
+    return undefined;
+  }
+
+  return subagent.model.trim() === 'inherit'
+    ? { kind: 'inherit' }
+    : { kind: 'fixed', model_id: subagent.model.trim() };
+}
+
+function subagentModelDisplayName(
+  selection: SubagentModelSelection | undefined,
+  models: AIModelConfig[],
+  defaultModels: DefaultModelsConfig,
+): string | undefined {
+  if (!selection || selection.kind === 'inherit') {
+    return undefined;
+  }
+
+  const modelId = selection.model_id.trim();
+  if (!modelId) {
+    return undefined;
+  }
+
+  if (modelId === 'primary') {
+    return configuredModelName(models, defaultModels.primary) ?? modelId;
+  }
+
+  if (modelId === 'fast') {
+    return configuredModelName(models, defaultModels.fast)
+      ?? configuredModelName(models, defaultModels.primary)
+      ?? modelId;
+  }
+
+  return configuredModelName(models, modelId) ?? modelId;
+}
+
 export function useAgentsList({
   searchQuery,
   filterLevel,
@@ -102,6 +166,7 @@ export function useAgentsList({
   const [allAgents, setAllAgents] = useState<AgentWithCapabilities[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+  const [configuredModels, setConfiguredModels] = useState<AIModelConfig[]>([]);
   const [modeProfiles, setModeProfiles] = useState<Record<string, ModeProfileEntry>>({});
   const [modeSkills, setModeSkills] = useState<Record<string, ModeSkillInfo[]>>({});
   const [modeConfigs, setModeConfigs] = useState<Record<string, AgentProfileConfigItem>>({});
@@ -125,12 +190,17 @@ export function useAgentsList({
     };
 
     try {
-      const [modes, subagents, tools, configs, reviewTeamDefinition] = await Promise.all([
+      const [modes, subagents, tools, configs, reviewTeamDefinition, modelConfigs] = await Promise.all([
         agentAPI.getAvailableModes().catch(() => []),
         SubagentAPI.listSubagents({ workspacePath: workspacePath || undefined }).catch(() => []),
         fetchTools(),
         configAPI.getAgentProfileConfigs().catch(() => ({})),
         loadDefaultReviewTeamDefinition().catch(() => undefined),
+        configAPI.getConfigs([
+          'ai.models',
+          'ai.default_models',
+          'ai.agent_model_defaults',
+        ]).catch((): Record<string, unknown> => ({})),
       ]);
 
       const profileMap = buildProfileMap(modes);
@@ -160,6 +230,13 @@ export function useAgentsList({
       }
 
       const manageableSubagentsByProfile = Object.fromEntries(manageableSubagentEntries);
+      const models = (modelConfigs['ai.models'] as AIModelConfig[] | undefined) ?? [];
+      const defaultModels = (
+        modelConfigs['ai.default_models'] as DefaultModelsConfig | undefined
+      ) ?? {};
+      const builtinOverrides = (
+        modelConfigs['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined
+      )?.subagents?.builtin ?? {};
 
       const modeAgents: AgentWithCapabilities[] = modes.map((mode) =>
         enrichCapabilities({
@@ -186,16 +263,21 @@ export function useAgentsList({
         }),
       );
 
-      const subAgents: AgentWithCapabilities[] = subagents.map((subagent) =>
-        enrichCapabilities({
+      const subAgents: AgentWithCapabilities[] = subagents.map((subagent) => {
+        const modelOverride = subagentModelOverride(subagent, builtinOverrides);
+
+        return enrichCapabilities({
           ...subagent,
           capabilities: [],
           agentKind: 'subagent',
-        }),
-      );
+          subagentModelOverride: modelOverride,
+          subagentModelDisplayName: subagentModelDisplayName(modelOverride, models, defaultModels),
+        });
+      });
 
       setAllAgents([...modeAgents, ...subAgents]);
       setAvailableTools(tools);
+      setConfiguredModels(models);
       setModeProfiles(profileMap);
       setModeSkills(Object.fromEntries(skillEntries));
       setModeConfigs(buildModeConfigsByProfile(modes, configs as Record<string, AgentProfileConfigItem>));
@@ -427,6 +509,25 @@ export function useAgentsList({
     }
   }, [getModeProfile, notification, t, workspacePath]);
 
+  const handleSetSubagentModel = useCallback(async (
+    subagentId: string,
+    selection: SubagentModelSelection | undefined,
+  ) => {
+    try {
+      await SubagentAPI.updateSubagentConfig({
+        subagentId,
+        model: selection
+          ? (selection.kind === 'inherit' ? 'inherit' : selection.model_id)
+          : undefined,
+        clearModelOverride: !selection,
+        workspacePath: workspacePath || undefined,
+      });
+      await loadAgents();
+    } catch {
+      notification.error(t('agentCard.modelSelector.updateFailed'));
+    }
+  }, [loadAgents, notification, t, workspacePath]);
+
   const filteredAgents = useMemo(() => allAgents.filter((agent) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -467,6 +568,7 @@ export function useAgentsList({
     filteredAgents,
     loading,
     availableTools,
+    configuredModels,
     getModeProfile,
     getModeSkills,
     getModeManageableSubagents,
@@ -479,6 +581,7 @@ export function useAgentsList({
     handleSetSkills,
     handleResetSkills,
     handleSetSubagentEnabled,
+    handleSetSubagentModel,
   };
 }
 

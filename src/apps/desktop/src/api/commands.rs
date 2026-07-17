@@ -1313,50 +1313,6 @@ pub async fn list_ai_models_by_config(
 }
 
 #[tauri::command]
-pub async fn set_agent_model(
-    state: State<'_, AppState>,
-    agent_name: String,
-    model_id: String,
-) -> Result<String, String> {
-    let config_service = &state.config_service;
-    let global_config: bitfun_core::service::config::GlobalConfig = config_service
-        .get_config(None)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !global_config.ai.models.iter().any(|m| m.id == model_id) {
-        return Err(format!("Model does not exist: {}", model_id));
-    }
-
-    let path = format!("ai.agent_models.{}", agent_name);
-    config_service
-        .set_config(&path, model_id.clone())
-        .await
-        .map_err(|e| e.to_string())?;
-
-    state.ai_client_factory.invalidate_cache();
-
-    info!("Agent model set: agent={}, model={}", agent_name, model_id);
-    Ok(format!(
-        "Agent '{}' model has been set to: {}",
-        agent_name, model_id
-    ))
-}
-
-#[tauri::command]
-pub async fn get_agent_models(
-    state: State<'_, AppState>,
-) -> Result<std::collections::HashMap<String, String>, String> {
-    let config_service = &state.config_service;
-    let global_config: bitfun_core::service::config::GlobalConfig = config_service
-        .get_config(None)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(global_config.ai.agent_models)
-}
-
-#[tauri::command]
 pub async fn refresh_model_client(
     state: State<'_, AppState>,
     model_id: String,

@@ -385,7 +385,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "get_acp_session_options",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    ("get_agent_models", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "get_agent_profile_config",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1347,7 +1346,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "set_active_workspace",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    ("set_agent_model", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "set_agent_profile_config",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1748,7 +1746,6 @@ mod tests {
         "get_acp_clients",
         "get_acp_session_commands",
         "get_acp_session_options",
-        "get_agent_models",
         "get_agent_profile_config",
         "get_agent_profile_configs",
         "get_all_modified_files",
@@ -1980,7 +1977,6 @@ mod tests {
         "send_mcp_app_message",
         "set_acp_session_model",
         "set_active_workspace",
-        "set_agent_model",
         "set_agent_profile_config",
         "set_config",
         "set_miniapp_draft_storage",

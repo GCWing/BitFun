@@ -6,7 +6,7 @@ use bitfun_core::agentic::agents::{
 };
 use log::{debug, warn};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use tauri::State;
 
@@ -215,6 +215,10 @@ pub async fn create_custom_agent(
             .readonly
             .unwrap_or(request.kind == CustomAgentKind::Subagent)
     };
+    let model_is_explicit = request
+        .model
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
     let model = request
         .model
         .clone()
@@ -239,7 +243,7 @@ pub async fn create_custom_agent(
             mode.save_to_file(None).map_err(|error| error.to_string())?;
         }
         CustomAgentKind::Subagent => {
-            let mut subagent = CustomSubagent::new_with_id(
+            let mut subagent = CustomSubagent::new_with_id_and_model_explicit(
                 id.clone(),
                 request.name.trim().to_string(),
                 request.description.trim().to_string(),
@@ -249,6 +253,7 @@ pub async fn create_custom_agent(
                 path_str.clone(),
                 level,
                 model.clone(),
+                model_is_explicit,
                 user_context_policy,
             );
             subagent.set_review(review);
@@ -367,22 +372,6 @@ pub async fn delete_custom_agent(
     }
 
     let config_service = &state.config_service;
-
-    let mut agent_models: HashMap<String, String> = config_service
-        .get_config(Some("ai.agent_models"))
-        .await
-        .unwrap_or_default();
-    if agent_models.remove(&agent_id).is_some() {
-        if let Err(error) = config_service
-            .set_config("ai.agent_models", &agent_models)
-            .await
-        {
-            warn!(
-                "Failed to clean up ai.agent_models after custom agent deletion: agent_id={}, error={}",
-                agent_id, error
-            );
-        }
-    }
 
     let mut agent_profiles: serde_json::Map<String, serde_json::Value> = config_service
         .get_config(Some("ai.agent_profiles"))

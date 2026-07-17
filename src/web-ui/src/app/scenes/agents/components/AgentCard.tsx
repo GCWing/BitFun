@@ -35,8 +35,6 @@ const AgentCard: React.FC<AgentCardProps> = ({
   const badge = getAgentBadge(t, agent.agentKind, agent.source ?? agent.subagentSource);
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
-  const isCustomMode = agent.agentKind === 'mode' && agent.source !== 'builtin';
-  const showsModelBadge = Boolean(agent.model) && !isCustomMode;
   const openDetails = () => onOpenDetails(agent);
 
   return (
@@ -72,9 +70,6 @@ const AgentCard: React.FC<AgentCardProps> = ({
                 {agent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
                 {badge.label}
               </Badge>
-              {showsModelBadge ? (
-                <Badge variant="neutral">{agent.model}</Badge>
-              ) : null}
             </div>
           </div>
         </div>
@@ -117,6 +112,12 @@ const AgentCard: React.FC<AgentCardProps> = ({
             <span className="agent-card__meta-item">
               <Bot size={12} />
               {subagentCount}
+            </span>
+          ) : null}
+          {agent.agentKind === 'subagent' && agent.subagentModelDisplayName ? (
+            <span className="agent-card__meta-item">
+              <Cpu size={11} />
+              {agent.subagentModelDisplayName}
             </span>
           ) : null}
         </div>

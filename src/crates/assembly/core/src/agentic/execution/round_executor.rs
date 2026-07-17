@@ -171,7 +171,8 @@ impl RoundExecutor {
                 round_id: round_id.clone(),
                 round_group_id: context.round_group_id.clone(),
                 round_index: context.round_number,
-                model_id: Some(context.model_name.clone()),
+                model_config_id: context.model_config_id.clone(),
+                effective_model_name: context.effective_model_name.clone(),
             },
             EventPriority::High,
         )
@@ -197,7 +198,7 @@ impl RoundExecutor {
             let request_started_at = Instant::now();
             debug!(
                 "Sending request: model={}, messages={}, tools={}, attempt={}/{}",
-                context.model_name,
+                context.effective_model_name,
                 ai_messages.len(),
                 tool_definitions.as_ref().map(|t| t.len()).unwrap_or(0),
                 attempt_index + 1,
@@ -648,8 +649,8 @@ impl RoundExecutor {
                 has_tool_calls: !stream_result.tool_calls.is_empty(),
                 duration_ms: Some(elapsed_ms_u64(round_started_at)),
                 provider_id: None,
-                model_id: Some(context.model_name.clone()),
-                model_alias: Some(context.model_name.clone()),
+                model_config_id: context.model_config_id.clone(),
+                effective_model_name: context.effective_model_name.clone(),
                 first_chunk_ms: stream_result.first_chunk_ms,
                 first_visible_output_ms: stream_result.first_visible_output_ms,
                 stream_duration_ms: Some(stream_processing_ms),
@@ -1077,7 +1078,8 @@ impl RoundExecutor {
             AgenticEvent::TokenUsageUpdated {
                 session_id: context.session_id.clone(),
                 turn_id: context.dialog_turn_id.clone(),
-                model_id: context.model_name.clone(),
+                model_config_id: context.model_config_id.clone(),
+                effective_model_name: context.effective_model_name.clone(),
                 input_tokens: usage.prompt_token_count as usize,
                 output_tokens: Some(usage.candidates_token_count as usize),
                 total_tokens: usage.total_token_count as usize,
@@ -1433,7 +1435,8 @@ mod tests {
             available_tools: Vec::new(),
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
-            model_name: "model-1".to_string(),
+            model_config_id: "model-1".to_string(),
+            effective_model_name: "model-1".to_string(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::new(
                 "model-1", "model-1", "openai", true,
             ),
@@ -1503,7 +1506,8 @@ mod tests {
             crate::agentic::events::AgenticEvent::TokenUsageUpdated {
                 session_id,
                 turn_id,
-                model_id,
+                model_config_id,
+                effective_model_name,
                 input_tokens: 100,
                 output_tokens: Some(20),
                 total_tokens: 120,
@@ -1511,7 +1515,10 @@ mod tests {
                 is_subagent: false,
                 cached_tokens: Some(30),
                 ..
-            } if session_id == "session-1" && turn_id == "turn-1" && model_id == "model-1"
+            } if session_id == "session-1"
+                && turn_id == "turn-1"
+                && model_config_id == "model-1"
+                && effective_model_name == "model-1"
         )));
     }
 

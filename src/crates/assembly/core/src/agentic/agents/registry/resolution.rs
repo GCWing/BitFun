@@ -1,4 +1,5 @@
 use super::builtin::default_model_id_for_builtin_agent;
+use super::types::AgentCategory;
 use super::AgentRegistry;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::GlobalConfig;
@@ -7,54 +8,54 @@ use log::{debug, error, warn};
 use std::path::Path;
 
 impl AgentRegistry {
-    /// get model ID used by agent from agent_models[agent_type] in configuration
-    /// - file-backed custom agent: read model configuration from custom_config cache
-    /// - built-in subagent/mode: read model configuration from global configuration ai.agent_models
+    /// Resolves an execution fallback for an agent whose session has no model.
+    ///
+    /// Delegated subagents receive an explicit resolved model from the
+    /// coordinator. Modes use the shared future-session selector, while custom
+    /// agents retain their portable Markdown model default.
     pub async fn get_model_id_for_agent(
         &self,
         agent_type: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
-        if self.find_agent_entry(agent_type, workspace_root).is_none() {
-            error!("[AgentRegistry] Agent not found: {}", agent_type);
-            return Err(BitFunError::agent(format!(
-                "[AgentRegistry] Agent not found: {}",
-                agent_type
-            )));
-        }
+        let entry = self
+            .find_agent_entry(agent_type, workspace_root)
+            .ok_or_else(|| {
+                error!("[AgentRegistry] Agent not found: {}", agent_type);
+                BitFunError::agent(format!("[AgentRegistry] Agent not found: {}", agent_type))
+            })?;
 
-        if let Some(entry) = self.find_agent_entry(agent_type, workspace_root) {
-            if let Some(config) = entry.custom_config {
-                let model = config.model;
-                if !model.is_empty() {
-                    debug!(
-                        "[AgentRegistry] Custom agent '{}' using model from cache: {}",
-                        agent_type, model
-                    );
-                    return Ok(model);
-                }
-
+        if let Some(config) = entry.custom_config {
+            let model = config.model.trim();
+            if !model.is_empty() && model != "inherit" {
                 debug!(
-                    "[AgentRegistry] Custom agent '{}' has empty cached model, using fallback default",
-                    agent_type
+                    "[AgentRegistry] Custom agent '{}' using model from cache: {}",
+                    agent_type, model
                 );
-                return Ok("fast".to_string());
+                return Ok(model.to_string());
             }
+
+            debug!(
+                "[AgentRegistry] Custom agent '{}' has no standalone model, using fallback default",
+                agent_type
+            );
+            return Ok("fast".to_string());
         }
 
-        if let Ok(config_service) = GlobalConfigManager::get_service().await {
-            let global_config: GlobalConfig = config_service.get_config(None).await?;
-            if let Some(model_id) = global_config.ai.agent_models.get(agent_type) {
+        if entry.category == AgentCategory::Mode {
+            if let Ok(config_service) = GlobalConfigManager::get_service().await {
+                let global_config: GlobalConfig = config_service.get_config(None).await?;
+                let model_id = global_config.ai.agent_model_defaults.mode.trim();
                 if !model_id.is_empty() {
-                    return Ok(model_id.clone());
+                    return Ok(model_id.to_string());
                 }
-            }
-        } else {
-            error!(
+            } else {
+                error!(
                 "[AgentRegistry] Config service not available, cannot get model config for Agent '{}'",
                 agent_type
-            )
-        };
+            );
+            }
+        }
 
         let default_model_id = default_model_id_for_builtin_agent(agent_type);
         warn!(

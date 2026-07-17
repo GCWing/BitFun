@@ -129,7 +129,7 @@
 
     "template": {
       "title":        "助理配置",
-      "subtitle":     "配置助理的模型，技能和工具",
+      "subtitle":     "配置助理的工具和技能",
       "configure":    "修改配置",
       "tokenTitle":   "上下文占用估算",
       "tokenSystemPrompt": "系统提示词",
@@ -138,9 +138,6 @@
       "tokenMemories": "记忆",
       "tokenTotal":   "默认总占用",
       "stats": {
-        "autoDefault":    "自动",
-        "primaryDefault": "主力模型",
-        "fastDefault":    "快速模型",
         "tools":          "{{count}} 个工具",
         "skills":         "{{count}} 个技能"
       },
@@ -152,7 +149,6 @@
       "mcpToolsSection": "MCP 工具",
       "mcpEmptyTitle": "未连接 MCP 服务器",
       "mcpEmptyHint": "在设置中添加 MCP 服务器后，其工具将显示于此",
-      "sectionModelsSubtitle": "助理默认使用的模型",
       "mcpServerNoTools": "该服务器暂无可用工具",
       "closeDetail": "关闭详情",
       "detailPanel": "详情面板",

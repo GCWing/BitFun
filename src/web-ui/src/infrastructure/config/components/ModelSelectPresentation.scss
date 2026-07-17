@@ -1,0 +1,79 @@
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.model-select-presentation {
+  &__select {
+    .select__trigger {
+      min-height: 48px;
+      align-items: flex-start;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+
+    .select__placeholder,
+    .select__suffix {
+      align-self: center;
+    }
+
+    .select__option {
+      padding: 8px 10px;
+      border-radius: 6px;
+    }
+  }
+
+  &__value {
+    min-width: 0;
+    width: 100%;
+
+    &--single-line {
+      align-self: center;
+    }
+  }
+
+  &__value-text,
+  &__option {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: 100%;
+  }
+
+  &__value-title,
+  &__option-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  &__value-name,
+  &__option-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-primary);
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+  }
+
+  &__value-meta,
+  &__option-meta {
+    min-width: 0;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+    font-size: 8px;
+    line-height: 1.4;
+  }
+
+  &__thinking {
+    --model-select-thinking-rgb: 180, 160, 255;
+
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+    color: rgba(var(--model-select-thinking-rgb), 0.9);
+  }
+}

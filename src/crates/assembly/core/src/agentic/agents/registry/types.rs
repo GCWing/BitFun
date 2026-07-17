@@ -26,6 +26,8 @@ use std::sync::Arc;
 pub struct CustomAgentConfig {
     /// used model ID
     pub model: String,
+    /// Whether the custom agent Markdown explicitly overrides the model.
+    pub model_is_explicit: bool,
 }
 
 pub type CustomSubagentConfig = CustomAgentConfig;
@@ -96,6 +98,9 @@ pub struct AgentInfo {
     /// model configuration, only custom subagent has value (read from file)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Whether `model` is an explicit custom Subagent override.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_is_explicit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visibility: Option<SubagentVisibilitySummary>,
 }
@@ -172,6 +177,10 @@ impl AgentInfo {
             .custom_config
             .as_ref()
             .map(|config| config.model.clone());
+        let model_is_explicit = entry
+            .custom_config
+            .as_ref()
+            .map(|config| config.model_is_explicit);
 
         // get path by downcast to CustomSubagent (only custom subagent has path)
         let path = custom_agent_path(agent);
@@ -201,6 +210,7 @@ impl AgentInfo {
             subagent_source: entry.subagent_source,
             path,
             model,
+            model_is_explicit,
             visibility: (entry.category == AgentCategory::SubAgent)
                 .then(|| entry.visibility_policy.summary()),
         }

@@ -17,6 +17,7 @@ import type { DiscoveredCliCredential } from '@/infrastructure/api/service-api/A
 import { useNotification } from '@/shared/notification-system';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
 import DefaultModelConfig from './DefaultModelConfig';
+import SubagentModelConfig from './SubagentModelConfig';
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import { i18nService } from '@/infrastructure/i18n';
@@ -2578,6 +2579,10 @@ const AIModelConfig: React.FC = () => {
           description={tDefault('subtitle')}
         >
           <DefaultModelConfig />
+        </ConfigPageSection>
+
+        <ConfigPageSection title={t('subagentModels.title')}>
+          <SubagentModelConfig />
         </ConfigPageSection>
 
         <ConfigPageSection

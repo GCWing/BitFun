@@ -428,6 +428,98 @@ pub struct DefaultModelsConfig {
     pub speech_recognition: Option<String>,
 }
 
+/// Model choice for a subagent created in the context of a parent session.
+///
+/// `Inherit` is intentionally distinct from a model ID so a user-configured
+/// model named `inherit` can never be interpreted as a control value.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SubagentModelSelection {
+    Fixed { model_id: String },
+    Inherit,
+}
+
+impl SubagentModelSelection {
+    pub fn fixed(model_id: impl Into<String>) -> Self {
+        Self::Fixed {
+            model_id: model_id.into(),
+        }
+    }
+
+    pub fn fixed_model_id(&self) -> Option<&str> {
+        match self {
+            Self::Fixed { model_id } => Some(model_id.as_str()),
+            Self::Inherit => None,
+        }
+    }
+}
+
+impl Default for SubagentModelSelection {
+    fn default() -> Self {
+        Self::Inherit
+    }
+}
+
+/// Model defaults for subagents created through user-visible delegation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SubagentModelDefaultsConfig {
+    /// Shared fallback for normal subagents without an explicit override.
+    #[serde(rename = "default", default = "default_subagent_model_selection")]
+    pub default_selection: SubagentModelSelection,
+    /// Per-builtin defaults and user overrides. Missing entries use `default`.
+    pub builtin: HashMap<String, SubagentModelSelection>,
+    /// Default choice for a child created from the parent's context.
+    pub fork: SubagentModelSelection,
+}
+
+impl Default for SubagentModelDefaultsConfig {
+    fn default() -> Self {
+        Self {
+            default_selection: default_subagent_model_selection(),
+            builtin: HashMap::from([(
+                "GeneralPurpose".to_string(),
+                SubagentModelSelection::fixed("primary"),
+            )]),
+            fork: SubagentModelSelection::Inherit,
+        }
+    }
+}
+
+fn default_subagent_model_selection() -> SubagentModelSelection {
+    SubagentModelSelection::fixed("fast")
+}
+
+/// Defaults used when the product creates an agent session without an explicit
+/// per-session model choice.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AgentModelDefaultsConfig {
+    /// Shared model selector for future mode sessions.
+    pub mode: String,
+    /// User-visible delegated subagent model choices.
+    pub subagents: SubagentModelDefaultsConfig,
+}
+
+impl AgentModelDefaultsConfig {
+    pub fn builtin_subagent_selection(&self, agent_id: &str) -> SubagentModelSelection {
+        self.subagents
+            .builtin
+            .get(agent_id)
+            .cloned()
+            .unwrap_or_else(|| self.subagents.default_selection.clone())
+    }
+}
+
+impl Default for AgentModelDefaultsConfig {
+    fn default() -> Self {
+        Self {
+            mode: "auto".to_string(),
+            subagents: SubagentModelDefaultsConfig::default(),
+        }
+    }
+}
+
 /// Default review-team execution policy and membership configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
@@ -481,10 +573,6 @@ pub struct AIConfig {
     /// All configured models.
     pub models: Vec<AIModelConfig>,
 
-    /// Model mapping for primary agents (e.g. Explore, FileFinder).
-    /// agent_type -> model_id
-    pub agent_models: HashMap<String, String>,
-
     /// Model mapping for functional agents (e.g. startchat-func-agent, session-title-func-agent).
     /// func_agent_name -> model_id
     #[serde(default)]
@@ -493,6 +581,10 @@ pub struct AIConfig {
     /// Default model configuration.
     #[serde(default)]
     pub default_models: DefaultModelsConfig,
+
+    /// Default selectors for future mode and delegated-subagent sessions.
+    #[serde(default)]
+    pub agent_model_defaults: AgentModelDefaultsConfig,
 
     /// Shared agent-profile configuration.
     /// profile_id -> AgentProfileConfig
@@ -626,29 +718,25 @@ pub struct MemoriesConfig {
 }
 
 impl AIConfig {
-    /// Resolves a configured model reference by `id`, `name`, or `model_name`.
+    /// Resolves a canonical configured model ID.
     ///
     /// Returns the model id only when the matched model is `enabled`. This is the
     /// single source of truth for "is this model usable right now?" and is the
     /// variant every runtime path (client factory, execution engine, etc.) should
     /// use. UI / migration code that needs to look up disabled entries should call
     /// [`Self::resolve_model_reference_any`] instead.
-    pub fn resolve_model_reference(&self, model_ref: &str) -> Option<String> {
-        self.models
-            .iter()
-            .find(|m| {
-                m.enabled && (m.id == model_ref || m.name == model_ref || m.model_name == model_ref)
-            })
-            .map(|m| m.id.clone())
+    pub fn resolve_model_reference(&self, model_id: &str) -> Option<String> {
+        let mut matches = self.models.iter().filter(|m| m.enabled && m.id == model_id);
+        let model = matches.next()?;
+        (matches.next().is_none()).then(|| model.id.clone())
     }
 
-    /// Resolves a model reference regardless of `enabled` state. UI / migration
-    /// only — never use this on the runtime model-selection path.
-    pub fn resolve_model_reference_any(&self, model_ref: &str) -> Option<String> {
-        self.models
-            .iter()
-            .find(|m| m.id == model_ref || m.name == model_ref || m.model_name == model_ref)
-            .map(|m| m.id.clone())
+    /// Resolves a canonical configured model ID regardless of `enabled` state.
+    /// UI / migration only — never use this on the runtime model-selection path.
+    pub fn resolve_model_reference_any(&self, model_id: &str) -> Option<String> {
+        let mut matches = self.models.iter().filter(|m| m.id == model_id);
+        let model = matches.next()?;
+        (matches.next().is_none()).then(|| model.id.clone())
     }
 
     /// Returns true if the given reference points to a model that exists and is
@@ -669,9 +757,9 @@ impl AIConfig {
     /// - `primary`: must resolve to a valid (enabled) primary model
     /// - `fast`: first tries the configured fast model, then falls back to primary
     ///
-    /// Regular values are resolved by `id`, `name`, or `model_name`. All lookups
-    /// require the target model to be enabled — disabled models are treated as if
-    /// they did not exist.
+    /// Regular values must be canonical configured model IDs. All lookups require
+    /// the target model to be enabled — disabled models are treated as if they did
+    /// not exist.
     pub fn resolve_model_selection(&self, model_ref: &str) -> Option<String> {
         match model_ref {
             "primary" => self
@@ -697,7 +785,7 @@ impl AIConfig {
 
 /// Shared agent-profile configuration.
 ///
-/// Model mapping has moved to `AIConfig.agent_models`, keyed by agent id.
+/// Tool and skill configuration shared by compatible mode profiles.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AgentProfileConfig {
@@ -1507,9 +1595,9 @@ impl Default for AIConfig {
     fn default() -> Self {
         Self {
             models: vec![],
-            agent_models: std::collections::HashMap::new(),
             func_agent_models: std::collections::HashMap::new(),
             default_models: DefaultModelsConfig::default(),
+            agent_model_defaults: AgentModelDefaultsConfig::default(),
             agent_profiles: std::collections::HashMap::new(),
             review_teams: default_review_team_configs(),
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
@@ -1762,9 +1850,10 @@ impl AIModelConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        AIConfig, AIExperienceConfig, AIModelConfig, AgentProfileConfig, AgentProfileView,
-        AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy, ModelExchangeTracingMode,
-        ReasoningMode, SubagentBatchExecutionPolicy,
+        AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
+        AgentProfileView, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
+        ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
+        SubagentModelSelection,
     };
 
     #[test]
@@ -2097,6 +2186,68 @@ mod tests {
         assert_eq!(review_team.strategy_level, "normal");
         assert!(review_team.member_strategy_overrides.is_empty());
         assert_eq!(config.review_team_rate_limit_status, serde_json::json!({}));
+        assert_eq!(config.agent_model_defaults.mode, "auto");
+        assert_eq!(
+            config.agent_model_defaults.subagents.default_selection,
+            SubagentModelSelection::fixed("fast")
+        );
+        assert_eq!(
+            config
+                .agent_model_defaults
+                .subagents
+                .builtin
+                .get("GeneralPurpose"),
+            Some(&SubagentModelSelection::fixed("primary"))
+        );
+        assert_eq!(
+            config.agent_model_defaults.subagents.fork,
+            SubagentModelSelection::Inherit
+        );
+    }
+
+    #[test]
+    fn subagent_model_selection_uses_a_tagged_persistent_shape() {
+        let selection = SubagentModelSelection::fixed("fast");
+        assert_eq!(
+            serde_json::to_value(selection).expect("selection should serialize"),
+            serde_json::json!({ "kind": "fixed", "model_id": "fast" })
+        );
+
+        let inherited: SubagentModelSelection = serde_json::from_value(serde_json::json!({
+            "kind": "inherit"
+        }))
+        .expect("inherit selection should deserialize");
+        assert_eq!(inherited, SubagentModelSelection::Inherit);
+    }
+
+    #[test]
+    fn builtin_subagent_without_override_uses_the_shared_default() {
+        let mut defaults = AgentModelDefaultsConfig::default();
+        defaults.subagents.default_selection = SubagentModelSelection::fixed("primary");
+
+        assert_eq!(
+            defaults.builtin_subagent_selection("Explore"),
+            SubagentModelSelection::fixed("primary")
+        );
+    }
+
+    #[test]
+    fn general_purpose_uses_primary_unless_explicitly_overridden() {
+        let mut defaults = AgentModelDefaultsConfig::default();
+
+        assert_eq!(
+            defaults.builtin_subagent_selection("GeneralPurpose"),
+            SubagentModelSelection::fixed("primary")
+        );
+
+        defaults.subagents.builtin.insert(
+            "GeneralPurpose".to_string(),
+            SubagentModelSelection::fixed("fast"),
+        );
+        assert_eq!(
+            defaults.builtin_subagent_selection("GeneralPurpose"),
+            SubagentModelSelection::fixed("fast")
+        );
     }
 
     #[test]
@@ -2179,7 +2330,6 @@ mod tests {
     fn deserializes_missing_stream_timeouts_as_generous_defaults() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
@@ -2204,7 +2354,6 @@ mod tests {
     fn deserializes_explicit_null_stream_ttft_timeout_as_none() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
@@ -2238,7 +2387,6 @@ mod tests {
     fn deserializes_explicit_subagent_max_concurrency() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
@@ -2257,7 +2405,6 @@ mod tests {
     fn deserializes_explicit_subagent_batch_execution_policy() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
@@ -2279,7 +2426,6 @@ mod tests {
     fn deserializes_mode_profiles_with_null_entries() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {
@@ -2311,7 +2457,6 @@ mod tests {
     fn deserializes_explicit_default_review_team_config() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
             "agent_profiles": {},
@@ -2368,7 +2513,6 @@ mod tests {
     fn review_team_auxiliary_config_is_not_stored_inside_review_team_map() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
-            "agent_models": {},
             "review_teams": {
                 "default": {
                     "strategy_level": "normal"

@@ -16,6 +16,7 @@ import type {
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
+  ModelRoundStartedEvent,
   ModelRoundCompletedEvent,
   UserSteeringInjectedEvent,
   DeepReviewQueueStateChangedEvent,
@@ -35,7 +36,7 @@ export interface AgenticEventCallbacks {
   onImageAnalysisStarted?: (event: ImageAnalysisEvent) => void;
   onImageAnalysisCompleted?: (event: ImageAnalysisEvent) => void;
   onDialogTurnStarted?: (event: AgenticEvent) => void;
-  onModelRoundStarted?: (event: AgenticEvent) => void;
+  onModelRoundStarted?: (event: ModelRoundStartedEvent) => void;
   onModelRoundCompleted?: (event: ModelRoundCompletedEvent) => void;
   onTextChunk?: (event: TextChunkEvent) => void;
   onToolEvent?: (event: ToolEvent) => void;

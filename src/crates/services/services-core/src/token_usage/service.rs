@@ -133,7 +133,8 @@ impl TokenUsageService {
     #[allow(clippy::too_many_arguments)]
     pub async fn record_usage(
         &self,
-        model_id: String,
+        model_config_id: String,
+        effective_model_name: String,
         session_id: String,
         turn_id: String,
         input_tokens: u32,
@@ -155,7 +156,8 @@ impl TokenUsageService {
             .unwrap_or(0);
 
         let record = TokenUsageRecord {
-            model_id: model_id.clone(),
+            model_config_id: model_config_id.clone(),
+            effective_model_name: effective_model_name.clone(),
             session_id: session_id.clone(),
             turn_id,
             timestamp: now,
@@ -174,8 +176,14 @@ impl TokenUsageService {
         self.persist_record(&record).await?;
 
         debug!(
-            "Recorded token usage: model={}, session={}, input={}, output={}, total={}, is_subagent={}",
-            model_id, session_id, input_tokens, output_tokens, total_tokens, is_subagent
+            "Recorded token usage: model_config_id={}, effective_model_name={}, session={}, input={}, output={}, total={}, is_subagent={}",
+            model_config_id,
+            effective_model_name,
+            session_id,
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            is_subagent
         );
 
         Ok(())
@@ -185,9 +193,9 @@ impl TokenUsageService {
         let mut model_stats = self.model_stats.write().await;
 
         let stats = model_stats
-            .entry(record.model_id.clone())
+            .entry(record.effective_model_name.clone())
             .or_insert_with(|| ModelTokenStats {
-                model_id: record.model_id.clone(),
+                model_id: record.effective_model_name.clone(),
                 ..Default::default()
             });
 
@@ -221,7 +229,7 @@ impl TokenUsageService {
             .entry(record.session_id.clone())
             .or_insert_with(|| SessionTokenStats {
                 session_id: record.session_id.clone(),
-                model_id: record.model_id.clone(),
+                model_id: record.effective_model_name.clone(),
                 total_input: 0,
                 total_output: 0,
                 total_cached: 0,
@@ -401,7 +409,7 @@ impl TokenUsageService {
                     if query
                         .model_id
                         .as_ref()
-                        .is_some_and(|model_id| &record.model_id != model_id)
+                        .is_some_and(|model_id| &record.effective_model_name != model_id)
                     {
                         continue;
                     }
@@ -535,13 +543,12 @@ impl TokenUsageService {
             }
             total_tokens += record.total_tokens as u64;
 
-            let model_stats =
-                by_model
-                    .entry(record.model_id.clone())
-                    .or_insert_with(|| ModelTokenStats {
-                        model_id: record.model_id.clone(),
-                        ..Default::default()
-                    });
+            let model_stats = by_model
+                .entry(record.effective_model_name.clone())
+                .or_insert_with(|| ModelTokenStats {
+                    model_id: record.effective_model_name.clone(),
+                    ..Default::default()
+                });
 
             model_stats.total_input += record.input_tokens as u64;
             model_stats.total_output += record.output_tokens as u64;
@@ -565,7 +572,7 @@ impl TokenUsageService {
                 .entry(record.session_id.clone())
                 .or_insert_with(|| SessionTokenStats {
                     session_id: record.session_id.clone(),
-                    model_id: record.model_id.clone(),
+                    model_id: record.effective_model_name.clone(),
                     total_input: 0,
                     total_output: 0,
                     total_cached: 0,
@@ -668,6 +675,7 @@ mod tests {
             .expect("token usage service");
         service
             .record_usage(
+                "model-config-a".to_string(),
                 "model-a".to_string(),
                 "parent-session".to_string(),
                 "parent-turn".to_string(),
@@ -681,6 +689,7 @@ mod tests {
             .expect("parent record");
         service
             .record_usage(
+                "model-config-b".to_string(),
                 "model-b".to_string(),
                 "unrelated-session".to_string(),
                 "unrelated-turn".to_string(),

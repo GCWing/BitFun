@@ -206,10 +206,23 @@ export interface DefaultModelsConfig {
   image_understanding?: string | null;
 }
 
+export type SubagentModelSelection =
+  | { kind: 'fixed'; model_id: string }
+  | { kind: 'inherit' };
+
+export interface AgentModelDefaultsConfig {
+  mode: string;
+  subagents: {
+    default: SubagentModelSelection;
+    builtin: Record<string, SubagentModelSelection>;
+    fork: SubagentModelSelection;
+  };
+}
+
 export interface AIConfig {
   models: AIModelConfig[];
   default_models: DefaultModelsConfig;
-  agent_models: Record<string, string>;
+  agent_model_defaults: AgentModelDefaultsConfig;
   func_agent_models: Record<string, string>;
   agent_profiles: Record<string, StoredAgentProfileConfigItem>;
   proxy: ProxyConfig;

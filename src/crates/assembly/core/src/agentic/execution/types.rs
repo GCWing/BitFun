@@ -59,7 +59,10 @@ pub struct RoundContext {
     pub available_tools: Vec<String>,
     pub deferred_tools: Vec<String>,
     pub loaded_deferred_tool_specs: Vec<LoadedDeferredToolSpec>,
-    pub model_name: String,
+    /// Resolved `AIModelConfig.id` used to construct the client for this round.
+    pub model_config_id: String,
+    /// Provider model name sent in the request.
+    pub effective_model_name: String,
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,

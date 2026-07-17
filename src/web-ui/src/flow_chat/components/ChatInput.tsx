@@ -4242,6 +4242,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <ModelSelector
                     currentMode={effectiveSendAgentType}
                     sessionId={effectiveTargetSessionId || undefined}
+                    isSubagentSession={isSubagentInputTarget}
                     currentTokens={tokenUsage.current}
                     maxTokens={tokenUsage.max}
                     contextUsageSource={tokenUsage.source}

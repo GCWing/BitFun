@@ -673,6 +673,24 @@ describe('FlowChatStore ACP context usage', () => {
   });
 });
 
+describe('FlowChatStore session model selection', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('stores an explicit auto selector on a legacy session without a model', () => {
+    const session = createSession({ config: { agentType: 'agentic' } });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateSessionModelName(session.sessionId, 'auto');
+
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+  });
+});
+
 describe('FlowChatStore historical session hydration state', () => {
   beforeEach(() => {
     vi.stubGlobal('CustomEvent', class {

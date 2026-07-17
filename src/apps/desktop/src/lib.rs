@@ -951,8 +951,6 @@ pub async fn run() {
             discover_cli_credentials,
             refresh_cli_credential,
             initialize_ai,
-            set_agent_model,
-            get_agent_models,
             refresh_model_client,
             get_app_state,
             update_app_status,
