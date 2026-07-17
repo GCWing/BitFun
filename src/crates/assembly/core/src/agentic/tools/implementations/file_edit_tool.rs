@@ -203,7 +203,7 @@ impl Tool for FileEditTool {
             .get("force")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check(
+        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check_edit(
             context, "Edit", "edit", file_path, force,
         ) {
             return rejection;

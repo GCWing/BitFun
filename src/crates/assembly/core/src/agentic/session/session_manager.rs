@@ -1674,6 +1674,69 @@ impl SessionManager {
         }
     }
 
+    /// Records paths first created through direct agent file tools. This is
+    /// session-persistent provenance used to distinguish temporary agent
+    /// helpers from repository files protected by edit constraints.
+    pub async fn remember_edit_constraint_agent_created_paths(
+        &self,
+        session_id: &str,
+        paths: Vec<String>,
+    ) {
+        let mut state = self.edit_constraint_state(session_id).unwrap_or_default();
+        state.remember_agent_created_paths(paths);
+        self.edit_constraints_store
+            .insert(session_id.to_string(), state.clone());
+
+        if self.should_persist_session_id(session_id) {
+            if let Err(error) = self
+                .merge_session_custom_metadata(
+                    session_id,
+                    json!({
+                        crate::agentic::execution::edit_constraint_guard::EDIT_CONSTRAINT_METADATA_KEY: state,
+                    }),
+                )
+                .await
+            {
+                warn!(
+                    "Failed to persist agent-created file provenance: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        }
+    }
+
+    /// Removes direct-agent provenance after a successful delete. Descendants
+    /// are removed as well so recursive cleanup cannot leave stale records.
+    pub async fn forget_edit_constraint_agent_created_paths_under(
+        &self,
+        session_id: &str,
+        paths: Vec<String>,
+    ) {
+        let Some(mut state) = self.edit_constraint_state(session_id) else {
+            return;
+        };
+        state.forget_agent_created_paths_under(&paths);
+        self.edit_constraints_store
+            .insert(session_id.to_string(), state.clone());
+
+        if self.should_persist_session_id(session_id) {
+            if let Err(error) = self
+                .merge_session_custom_metadata(
+                    session_id,
+                    json!({
+                        crate::agentic::execution::edit_constraint_guard::EDIT_CONSTRAINT_METADATA_KEY: state,
+                    }),
+                )
+                .await
+            {
+                warn!(
+                    "Failed to persist removed agent-created file provenance: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        }
+    }
+
     pub fn edit_constraint_state(
         &self,
         session_id: &str,
@@ -6548,8 +6611,8 @@ mod tests {
     #[tokio::test]
     async fn edit_constraints_are_cached_and_inherited_by_forked_children() {
         use crate::agentic::execution::edit_constraint_guard::{
-            ConstraintExtractionRecord, ConstraintMatcher, ConstraintSource, ExtractedConstraint,
-            ExtractionStatus, ModelExtractionStatus,
+            ConstraintExtractionRecord, ConstraintMatcher, ConstraintOperationScope,
+            ConstraintSource, ExtractedConstraint, ExtractionStatus, ModelExtractionStatus,
         };
 
         let workspace = TestWorkspace::new();
@@ -6563,6 +6626,7 @@ mod tests {
         let constraints = vec![ExtractedConstraint {
             id: "test-files".to_string(),
             description: "don't modify test files".to_string(),
+            operation_scope: ConstraintOperationScope::All,
             matcher: ConstraintMatcher::TestFiles,
             source: ConstraintSource::Legacy,
             source_text: None,
@@ -6616,9 +6680,9 @@ mod tests {
     #[tokio::test]
     async fn edit_constraint_state_persists_across_session_restore() {
         use crate::agentic::execution::edit_constraint_guard::{
-            ConstraintExtractionRecord, ConstraintMatcher, ConstraintRevocation, ConstraintSource,
-            ExtractedConstraint, ExtractionStatus, ModelExtractionStatus,
-            EDIT_CONSTRAINT_METADATA_KEY,
+            ConstraintExtractionRecord, ConstraintMatcher, ConstraintOperationScope,
+            ConstraintRevocation, ConstraintSource, ExtractedConstraint, ExtractionStatus,
+            ModelExtractionStatus, EDIT_CONSTRAINT_METADATA_KEY,
         };
 
         let workspace = TestWorkspace::new();
@@ -6639,6 +6703,7 @@ mod tests {
         let constraint = ExtractedConstraint {
             id: "deterministic:test_files".to_string(),
             description: "do not modify tests".to_string(),
+            operation_scope: ConstraintOperationScope::All,
             matcher: ConstraintMatcher::TestFiles,
             source: ConstraintSource::Deterministic,
             source_text: Some("Do not modify tests.".to_string()),
@@ -6668,6 +6733,12 @@ mod tests {
                     failure: None,
                     response_excerpt: None,
                 },
+            )
+            .await;
+        manager
+            .remember_edit_constraint_agent_created_paths(
+                &session.session_id,
+                vec!["tests/temporary-repro.rs".to_string()],
             )
             .await;
         manager
@@ -6728,6 +6799,10 @@ mod tests {
         assert_eq!(
             restored_state.extractions[1].revoked_constraint_ids,
             vec![constraint.id]
+        );
+        assert_eq!(
+            restored_state.agent_created_paths,
+            vec!["tests/temporary-repro.rs".to_string()]
         );
     }
 

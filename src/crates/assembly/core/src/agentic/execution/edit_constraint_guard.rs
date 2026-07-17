@@ -23,7 +23,7 @@ use crate::util::json_extract::extract_json_from_ai_response;
 use crate::util::types::Message;
 
 pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
-const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 3;
+const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 4;
 const MAX_PROMPT_CHARS: usize = 8_000;
 const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
 const MAX_MODEL_ATTEMPTS: usize = 2;
@@ -42,22 +42,27 @@ You receive the currently active prohibitions and the latest user message.
 - An unrelated message does not revoke anything.
 - Ignore constraints about anything other than *which files may be edited*.
 
-For each added prohibition, classify it into exactly ONE matcher kind:
+For each added prohibition, classify it into exactly ONE matcher kind and one
+operation scope:
 - "test_files": the prohibition is about test files / testing logic in general
 - "path_contains": the prohibition names specific files or keywords (give the literal substrings)
 - "path_under_dir": the prohibition names a specific directory (give the directory names)
 - "extension": the prohibition is about a specific file type (give the extensions, including the dot)
 - "unmatched": you found a prohibition but it doesn't fit any of the above
 
+Use operation_scope "delete_only" only when the user explicitly prohibits
+deleting/removing files, without also prohibiting other edits. Otherwise use
+"all".
+
 Respond with ONLY a fenced ```json code block containing this exact shape:
 ```json
 {
   "additions": [
-    {"description": "<short paraphrase>", "matcher": {"kind": "test_files"}},
-    {"description": "<short paraphrase>", "matcher": {"kind": "path_contains", "substrings": ["..."]}},
-    {"description": "<short paraphrase>", "matcher": {"kind": "path_under_dir", "dirs": ["..."]}},
-    {"description": "<short paraphrase>", "matcher": {"kind": "extension", "exts": [".ext"]}},
-    {"description": "<short paraphrase>", "matcher": {"kind": "unmatched"}}
+    {"description": "<short paraphrase>", "operation_scope": "all", "matcher": {"kind": "test_files"}},
+    {"description": "<short paraphrase>", "operation_scope": "all", "matcher": {"kind": "path_contains", "substrings": ["..."]}},
+    {"description": "<short paraphrase>", "operation_scope": "all", "matcher": {"kind": "path_under_dir", "dirs": ["..."]}},
+    {"description": "<short paraphrase>", "operation_scope": "all", "matcher": {"kind": "extension", "exts": [".ext"]}},
+    {"description": "<short paraphrase>", "operation_scope": "all", "matcher": {"kind": "unmatched"}}
   ],
   "revocations": [
     {"constraint_id": "<exact active constraint id>", "description": "<what the user explicitly relaxed>"}
@@ -82,11 +87,30 @@ pub struct ExtractedConstraint {
     pub id: String,
     /// Human-readable paraphrase shown to the agent in the rejection message.
     pub description: String,
+    #[serde(default)]
+    pub operation_scope: ConstraintOperationScope,
     pub matcher: ConstraintMatcher,
     #[serde(default)]
     pub source: ConstraintSource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConstraintOperationScope {
+    #[default]
+    All,
+    DeleteOnly,
+}
+
+impl ConstraintOperationScope {
+    fn applies_to(self, operation: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::DeleteOnly => matches!(operation, "delete" | "recursive_delete"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -238,6 +262,10 @@ pub struct EditConstraintState {
     pub constraints: Vec<ExtractedConstraint>,
     #[serde(default)]
     pub extractions: Vec<ConstraintExtractionRecord>,
+    /// Paths first created through direct agent file tools in this session.
+    /// They remain distinct from repository files across session restoration.
+    #[serde(default)]
+    pub agent_created_paths: Vec<String>,
 }
 
 impl Default for EditConstraintState {
@@ -246,6 +274,7 @@ impl Default for EditConstraintState {
             schema_version: EDIT_CONSTRAINT_SCHEMA_VERSION,
             constraints: Vec::new(),
             extractions: Vec::new(),
+            agent_created_paths: Vec::new(),
         }
     }
 }
@@ -260,11 +289,10 @@ impl EditConstraintState {
                 .any(|constraint_id| constraint_id == &constraint.id)
         });
         for constraint in &extraction.constraints {
-            if !self
-                .constraints
-                .iter()
-                .any(|existing| existing.matcher == constraint.matcher)
-            {
+            if !self.constraints.iter().any(|existing| {
+                existing.matcher == constraint.matcher
+                    && existing.operation_scope == constraint.operation_scope
+            }) {
                 self.constraints.push(constraint.clone());
             }
         }
@@ -287,6 +315,30 @@ impl EditConstraintState {
         self.constraints
             .iter()
             .any(|constraint| constraint.matcher.enforceable())
+    }
+
+    pub fn remember_agent_created_paths(&mut self, paths: impl IntoIterator<Item = String>) {
+        for path in paths {
+            let normalized = path.replace('\\', "/");
+            if !normalized.is_empty() && !self.agent_created_paths.contains(&normalized) {
+                self.agent_created_paths.push(normalized);
+            }
+        }
+    }
+
+    pub fn forget_agent_created_paths_under(&mut self, paths: &[String]) {
+        self.agent_created_paths.retain(|created| {
+            !paths.iter().any(|path| {
+                let path = path.trim_end_matches('/');
+                created == path || created.starts_with(&format!("{path}/"))
+            })
+        });
+    }
+
+    fn is_agent_created_path(&self, paths: &[String]) -> bool {
+        paths
+            .iter()
+            .any(|path| self.agent_created_paths.contains(path))
     }
 }
 
@@ -342,6 +394,9 @@ fn has_prohibition_signal(message: &str) -> bool {
         "should not",
         "never modify",
         "never change",
+        "do not delete",
+        "don't delete",
+        "must not delete",
         "no need to modify",
         "no need to change",
         "don't have to modify",
@@ -364,7 +419,9 @@ fn has_prohibition_signal(message: &str) -> bool {
         "不要",
         "不得",
         "不能修改",
+        "不能删除",
         "禁止修改",
+        "禁止删除",
         "无需修改",
         "不需要修改",
         "测试文件保持不变",
@@ -404,7 +461,7 @@ fn deterministic_test_constraint(message: &str) -> Option<ExtractedConstraint> {
             || lower.contains("tests")
             || lower.contains("testing logic")
             || lower.contains("测试");
-        let mentions_mutation = [
+        let mentions_non_delete_mutation = [
             "modify",
             "change",
             "edit",
@@ -420,14 +477,30 @@ fn deterministic_test_constraint(message: &str) -> Option<ExtractedConstraint> {
         ]
         .iter()
         .any(|word| lower.contains(word));
+        let mentions_delete = ["delete", "remove", "删除", "移除"]
+            .iter()
+            .any(|word| lower.contains(word));
+        let mentions_mutation = mentions_non_delete_mutation || mentions_delete;
         let prohibits_mutation = has_prohibition_signal(&lower);
 
         (mentions_tests && mentions_mutation && prohibits_mutation).then(|| {
             let source_text = sentence.chars().take(500).collect::<String>();
             ExtractedConstraint {
-                id: "deterministic:test_files".to_string(),
-                description: "The task explicitly says not to modify test files or testing logic"
-                    .to_string(),
+                id: if mentions_delete && !mentions_non_delete_mutation {
+                    "deterministic:test_files:delete_only".to_string()
+                } else {
+                    "deterministic:test_files".to_string()
+                },
+                description: if mentions_delete && !mentions_non_delete_mutation {
+                    "The task explicitly says not to delete test files or testing logic".to_string()
+                } else {
+                    "The task explicitly says not to modify test files or testing logic".to_string()
+                },
+                operation_scope: if mentions_delete && !mentions_non_delete_mutation {
+                    ConstraintOperationScope::DeleteOnly
+                } else {
+                    ConstraintOperationScope::All
+                },
                 matcher: ConstraintMatcher::TestFiles,
                 source: ConstraintSource::Deterministic,
                 source_text: Some(source_text),
@@ -837,9 +910,17 @@ pub fn find_violation<'a>(
     constraints: &'a [ExtractedConstraint],
     file_path: &str,
 ) -> Option<&'a ExtractedConstraint> {
-    constraints
-        .iter()
-        .find(|constraint| constraint.matcher.matches(file_path))
+    find_violation_for_operation(constraints, file_path, "write")
+}
+
+fn find_violation_for_operation<'a>(
+    constraints: &'a [ExtractedConstraint],
+    file_path: &str,
+    operation: &str,
+) -> Option<&'a ExtractedConstraint> {
+    constraints.iter().find(|constraint| {
+        constraint.operation_scope.applies_to(operation) && constraint.matcher.matches(file_path)
+    })
 }
 
 pub fn violation_message(file_path: &str, constraint: &ExtractedConstraint) -> String {
@@ -1001,7 +1082,7 @@ pub fn check(
     let violation = state.as_ref().and_then(|state| {
         paths
             .iter()
-            .find_map(|path| find_violation(&state.constraints, path))
+            .find_map(|path| find_violation_for_operation(&state.constraints, path, operation))
     });
     if let Some(violation) = violation {
         return decision_result(
@@ -1035,6 +1116,154 @@ pub fn check(
         None,
     );
     None
+}
+
+async fn write_target_exists(context: &ToolUseContext, file_path: &str) -> Option<bool> {
+    let resolved = context.resolve_tool_path(file_path).ok()?;
+    if resolved.uses_remote_workspace_backend() {
+        let fs = context.ws_fs()?;
+        // Treat a failed remote inspection as existing so an unavailable
+        // filesystem cannot become a way to overwrite a protected test file.
+        return Some(fs.exists(&resolved.resolved_path).await.unwrap_or(true));
+    }
+
+    Some(Path::new(&resolved.resolved_path).exists())
+}
+
+fn has_only_relaxable_test_file_violations(
+    state: &EditConstraintState,
+    paths: &[String],
+    operation: &str,
+) -> bool {
+    let violations = paths
+        .iter()
+        .flat_map(|path| {
+            state.constraints.iter().filter(move |constraint| {
+                constraint.operation_scope.applies_to(operation) && constraint.matcher.matches(path)
+            })
+        })
+        .collect::<Vec<_>>();
+
+    !violations.is_empty()
+        && violations.iter().all(|constraint| {
+            matches!(&constraint.matcher, ConstraintMatcher::TestFiles)
+                && constraint.operation_scope == ConstraintOperationScope::All
+        })
+}
+
+fn can_mutate_agent_created_test_file(
+    state: Option<&EditConstraintState>,
+    paths: &[String],
+    operation: &str,
+    newly_created: bool,
+) -> bool {
+    state.is_some_and(|state| {
+        (newly_created || state.is_agent_created_path(paths))
+            && has_only_relaxable_test_file_violations(state, paths, operation)
+    })
+}
+
+/// Guard a Write operation while allowing a newly-created test helper.
+///
+/// A task instruction not to modify tests protects the repository's existing
+/// tests from being adjusted to satisfy the task. It does not prohibit an
+/// agent from creating an untracked repro or verification file. Other
+/// constraint kinds retain their strict create-or-modify semantics.
+pub async fn check_write(
+    context: Option<&ToolUseContext>,
+    tool_name: &str,
+    operation: &str,
+    file_path: &str,
+    force_requested: bool,
+) -> Option<ValidationResult> {
+    let state = context
+        .and_then(|value| value.session_id.as_deref())
+        .and_then(|session_id| {
+            get_global_coordinator()?
+                .get_session_manager()
+                .edit_constraint_state(session_id)
+        });
+
+    let is_new_file = if force_requested {
+        false
+    } else if let Some(context) = context {
+        write_target_exists(context, file_path).await == Some(false)
+    } else {
+        false
+    };
+    let paths = candidate_paths(context, file_path);
+
+    if can_mutate_agent_created_test_file(state.as_ref(), &paths, operation, is_new_file) {
+        decision_result(
+            context,
+            tool_name,
+            operation,
+            file_path,
+            if is_new_file {
+                "allow_new_test_file"
+            } else {
+                "allow_agent_created_test_file"
+            },
+            false,
+            state.as_ref(),
+            None,
+            None,
+            None,
+        );
+        return None;
+    }
+
+    check(context, tool_name, operation, file_path, force_requested)
+}
+
+/// Guard an Edit operation while preserving the session provenance of helper
+/// tests the agent created itself.
+pub fn check_edit(
+    context: Option<&ToolUseContext>,
+    tool_name: &str,
+    operation: &str,
+    file_path: &str,
+    force_requested: bool,
+) -> Option<ValidationResult> {
+    let state = context
+        .and_then(|value| value.session_id.as_deref())
+        .and_then(|session_id| {
+            get_global_coordinator()?
+                .get_session_manager()
+                .edit_constraint_state(session_id)
+        });
+    let paths = candidate_paths(context, file_path);
+    if !force_requested
+        && can_mutate_agent_created_test_file(state.as_ref(), &paths, operation, false)
+    {
+        decision_result(
+            context,
+            tool_name,
+            operation,
+            file_path,
+            "allow_agent_created_test_file",
+            false,
+            state.as_ref(),
+            None,
+            None,
+            None,
+        );
+        return None;
+    }
+    check(context, tool_name, operation, file_path, force_requested)
+}
+
+/// Guard a Delete operation while allowing the agent to clean up a test file
+/// it created in this session. A user-authored delete-only prohibition remains
+/// strict and is never relaxed by file provenance.
+pub fn check_delete(
+    context: Option<&ToolUseContext>,
+    tool_name: &str,
+    operation: &str,
+    file_path: &str,
+    force_requested: bool,
+) -> Option<ValidationResult> {
+    check_edit(context, tool_name, operation, file_path, force_requested)
 }
 
 /// Preflight explicit file targets in terminal commands. This covers the
@@ -1173,7 +1402,7 @@ pub async fn check_recursive_delete(
     root_path: &str,
     force_requested: bool,
 ) -> Option<ValidationResult> {
-    if let Some(rejection) = check(
+    if let Some(rejection) = check_delete(
         context,
         "Delete",
         "recursive_delete",
@@ -1278,19 +1507,31 @@ pub async fn check_recursive_delete(
                     Some(413),
                 );
             }
-            if let Some(violation) = find_violation(&state.constraints, &entry.path) {
-                return decision_result(
-                    Some(context),
-                    "Delete",
-                    "recursive_delete",
+            let entry_paths = vec![entry.path.clone()];
+            if !can_mutate_agent_created_test_file(
+                Some(&state),
+                &entry_paths,
+                "recursive_delete",
+                false,
+            ) {
+                if let Some(violation) = find_violation_for_operation(
+                    &state.constraints,
                     &entry.path,
-                    "deny",
-                    false,
-                    Some(&state),
-                    Some(violation),
-                    Some(violation_message(&entry.path, violation)),
-                    Some(403),
-                );
+                    "recursive_delete",
+                ) {
+                    return decision_result(
+                        Some(context),
+                        "Delete",
+                        "recursive_delete",
+                        &entry.path,
+                        "deny",
+                        false,
+                        Some(&state),
+                        Some(violation),
+                        Some(violation_message(&entry.path, violation)),
+                        Some(403),
+                    );
+                }
             }
             if entry.is_dir {
                 pending.push(entry.path);
@@ -1411,19 +1652,31 @@ fn check_local_recursive_delete(
                 );
             }
             let path_string = path.to_string_lossy().to_string();
-            if let Some(violation) = find_violation(&state.constraints, &path_string) {
-                return decision_result(
-                    Some(context),
-                    "Delete",
-                    "recursive_delete",
+            let entry_paths = vec![path_string.clone()];
+            if !can_mutate_agent_created_test_file(
+                Some(state),
+                &entry_paths,
+                "recursive_delete",
+                false,
+            ) {
+                if let Some(violation) = find_violation_for_operation(
+                    &state.constraints,
                     &path_string,
-                    "deny",
-                    false,
-                    Some(state),
-                    Some(violation),
-                    Some(violation_message(&path_string, violation)),
-                    Some(403),
-                );
+                    "recursive_delete",
+                ) {
+                    return decision_result(
+                        Some(context),
+                        "Delete",
+                        "recursive_delete",
+                        &path_string,
+                        "deny",
+                        false,
+                        Some(state),
+                        Some(violation),
+                        Some(violation_message(&path_string, violation)),
+                        Some(403),
+                    );
+                }
             }
             if entry_metadata.is_dir() {
                 pending.push(path);
@@ -1431,6 +1684,64 @@ fn check_local_recursive_delete(
         }
     }
     None
+}
+
+/// Records that a path was first created through a direct agent file tool.
+/// This provenance is persisted with the session so later Write/Edit/Delete
+/// calls can clean up the helper without being confused for repository tests.
+pub async fn remember_agent_created_file(context: &ToolUseContext, file_path: &str) {
+    let Some(session_id) = context.session_id.as_deref() else {
+        return;
+    };
+    let paths = candidate_paths(Some(context), file_path);
+    if let Some(coordinator) = get_global_coordinator() {
+        coordinator
+            .get_session_manager()
+            .remember_edit_constraint_agent_created_paths(session_id, paths.clone())
+            .await;
+    }
+    append_tool_telemetry(
+        context,
+        &json!({
+            "event": "session_file_origin",
+            "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
+            "timestamp_ms": timestamp_ms(),
+            "session_id": context.session_id,
+            "dialog_turn_id": context.dialog_turn_id,
+            "tool_call_id": context.tool_call_id,
+            "requested_path": file_path,
+            "resolved_path": resolved_path(context, file_path),
+            "origin": "agent_created",
+        }),
+    );
+}
+
+/// Clears agent-created provenance after a successful direct delete.
+pub async fn forget_agent_created_file(context: &ToolUseContext, file_path: &str) {
+    let Some(session_id) = context.session_id.as_deref() else {
+        return;
+    };
+    let paths = candidate_paths(Some(context), file_path);
+    if let Some(coordinator) = get_global_coordinator() {
+        coordinator
+            .get_session_manager()
+            .forget_edit_constraint_agent_created_paths_under(session_id, paths.clone())
+            .await;
+    }
+    append_tool_telemetry(
+        context,
+        &json!({
+            "event": "session_file_origin",
+            "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
+            "timestamp_ms": timestamp_ms(),
+            "session_id": context.session_id,
+            "dialog_turn_id": context.dialog_turn_id,
+            "tool_call_id": context.tool_call_id,
+            "requested_path": file_path,
+            "resolved_path": resolved_path(context, file_path),
+            "origin": "removed",
+        }),
+    );
 }
 
 /// Records a successful direct mutation. Offline evaluation can join these
@@ -1473,6 +1784,7 @@ mod tests {
         ExtractedConstraint {
             id: format!("test:{description}"),
             description: description.to_string(),
+            operation_scope: ConstraintOperationScope::All,
             matcher,
             source: ConstraintSource::Legacy,
             source_text: None,
@@ -1770,6 +2082,99 @@ mod tests {
                 .map(|constraint| constraint.description.as_str()),
             Some("don't touch lockfiles")
         );
+    }
+
+    #[test]
+    fn new_files_are_exempt_only_from_test_file_constraints() {
+        let test_only = EditConstraintState {
+            constraints: vec![constraint(
+                "don't touch tests",
+                ConstraintMatcher::TestFiles,
+            )],
+            ..Default::default()
+        };
+        let test_path = vec!["test/repro-test.ts".to_string()];
+        assert!(has_only_relaxable_test_file_violations(
+            &test_only, &test_path, "write"
+        ));
+
+        let stricter = EditConstraintState {
+            constraints: vec![
+                constraint("don't touch tests", ConstraintMatcher::TestFiles),
+                constraint(
+                    "don't modify generated files",
+                    ConstraintMatcher::PathUnderDir {
+                        dirs: vec!["test".to_string()],
+                    },
+                ),
+            ],
+            ..Default::default()
+        };
+        assert!(!has_only_relaxable_test_file_violations(
+            &stricter, &test_path, "write"
+        ));
+    }
+
+    #[test]
+    fn agent_created_test_files_can_be_cleaned_up_but_delete_only_rules_remain_strict() {
+        let path = vec!["test/repro-test.ts".to_string()];
+        let mut state = EditConstraintState {
+            constraints: vec![constraint(
+                "don't modify tests",
+                ConstraintMatcher::TestFiles,
+            )],
+            ..Default::default()
+        };
+        state.remember_agent_created_paths(path.clone());
+        assert!(can_mutate_agent_created_test_file(
+            Some(&state),
+            &path,
+            "edit",
+            false
+        ));
+        assert!(can_mutate_agent_created_test_file(
+            Some(&state),
+            &path,
+            "delete",
+            false
+        ));
+
+        state.constraints.push(ExtractedConstraint {
+            id: "test:do-not-delete".to_string(),
+            description: "don't delete tests".to_string(),
+            operation_scope: ConstraintOperationScope::DeleteOnly,
+            matcher: ConstraintMatcher::TestFiles,
+            source: ConstraintSource::Deterministic,
+            source_text: Some("Do not delete tests.".to_string()),
+        });
+        assert!(
+            find_violation_for_operation(&state.constraints, "test/repro-test.ts", "delete")
+                .is_some()
+        );
+        assert!(
+            find_violation_for_operation(&state.constraints, "test/repro-test.ts", "edit")
+                .is_some()
+        );
+        assert!(!can_mutate_agent_created_test_file(
+            Some(&state),
+            &path,
+            "delete",
+            false
+        ));
+
+        state.forget_agent_created_paths_under(&path);
+        assert!(!state.is_agent_created_path(&path));
+    }
+
+    #[test]
+    fn deterministic_extractor_marks_explicit_test_deletion_as_delete_only() {
+        let constraint = deterministic_test_constraint("Do not delete test files.")
+            .expect("explicit test deletion should be extracted");
+        assert_eq!(
+            constraint.operation_scope,
+            ConstraintOperationScope::DeleteOnly
+        );
+        assert!(constraint.matcher.matches("tests/example.rs"));
     }
 
     #[test]

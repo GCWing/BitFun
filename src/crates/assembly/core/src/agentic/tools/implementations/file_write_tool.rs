@@ -546,9 +546,11 @@ impl Tool for FileWriteTool {
             .get("force")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check(
+        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check_write(
             context, "Write", "write", file_path, force,
-        ) {
+        )
+        .await
+        {
             return rejection;
         }
 
@@ -687,6 +689,13 @@ impl Tool for FileWriteTool {
                 Self::mode_label(mode),
                 &resolved.logical_path,
             );
+            if !file_already_exists {
+                crate::agentic::execution::edit_constraint_guard::remember_agent_created_file(
+                    context,
+                    &resolved.logical_path,
+                )
+                .await;
+            }
 
             let (status, assistant_message) = match (mode, file_already_exists) {
                 (WriteLocalFileMode::Write, true) => (
@@ -757,6 +766,13 @@ impl Tool for FileWriteTool {
             Self::mode_label(mode),
             &resolved.logical_path,
         );
+        if !file_already_exists {
+            crate::agentic::execution::edit_constraint_guard::remember_agent_created_file(
+                context,
+                &resolved.logical_path,
+            )
+            .await;
+        }
 
         let result = Self::write_success_result(
             &resolved.logical_path,
