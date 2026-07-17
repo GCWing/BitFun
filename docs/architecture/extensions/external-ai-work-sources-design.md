@@ -2,7 +2,10 @@
 
 本文定义 BitFun 如何发现、展示和消费 OpenCode、Codex、Claude Code 等外部 AI 应用留下的工作内容。OpenCode
 是第一条完整兼容来源；其他生态只在有稳定格式和真实消费方时接入。各生态的解析、加载顺序和运行语义仍由对应
-适配器负责，本文不建立跨生态通用配置格式或脚本 SDK。
+适配器负责，本文不建立跨生态通用配置格式或脚本 SDK。BitFun 自身能力如何通过 MCP、Skill、Plugin、Hook、
+SDK 或 Server 输出到外部宿主，以及内部 Provider Slot、状态、事件和并发边界，见
+[`capability-runtime-integration-design.md`](capability-runtime-integration-design.md)；两条方向共用适用的身份事实和能力 owner，
+但不共用一个大一统 adapter 或状态模型。
 
 本文同时记录当前可用纵向切片与目标架构。当前 BitFun 已具备通用外部来源目录和生命周期协调器，并通过
 OpenCode Prompt Command 适配器接入本地用户全局/项目来源；Desktop 可查看、刷新、抑制和处理跨来源冲突，

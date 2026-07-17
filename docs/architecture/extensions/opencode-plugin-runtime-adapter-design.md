@@ -8,8 +8,8 @@
 外部来源的产品提示、风险分级和用户选择见
 [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。
 
-冻结接口以 `v1.18.2` 稳定提交的 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/index.ts)、
-[`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/tool.ts)
+冻结接口以 `v1.18.3` 稳定提交的 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/plugin/src/index.ts)、
+[`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/plugin/src/tool.ts)
 和实际插件 loader/npm 服务为准；[插件文档](https://opencode.ai/docs/plugins/)用于行为说明。
 
 本文是目标设计。当前实现结束于 BitFun 专用目录来源、启用记录、静态 custom tool 名称预览和诊断，尚未包含脚本执行进程、
@@ -23,7 +23,7 @@ BitFun 实现自己的插件 Runtime，不启动完整 OpenCode Runtime：
 - 首选执行后端是由 BitFun 固定版本并随产品交付或按需安装的 Bun，而不是自行重写 JavaScript 引擎或用
   Node 兼容层猜测 Bun 行为。Bun 负责 TypeScript、模块执行和 Bun Shell `$`；
   发布前必须完成对应平台的许可证、签名、更新和体积验证。
-- 依赖准备不使用 `bun install` 猜测 OpenCode 行为。`v1.18.2` 兼容模块使用 npm 配置、`@npmcli/arborist`、
+- 依赖准备不使用 `bun install` 猜测 OpenCode 行为。`v1.18.3` 兼容模块使用 npm 配置、`@npmcli/arborist`、
   `package-lock.json` 和 `ignoreScripts: true`；后续 OpenCode 版本改变实现时随兼容版本更新。
 - 执行进程提供 OpenCode 兼容上下文和插件接口；插件无需感知 BitFun Rust 内部类型。
 - OpenCode Adapter 把插件调用、钩子变换和工具结果转换成类型化进程消息。

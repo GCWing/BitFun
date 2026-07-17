@@ -6,7 +6,8 @@
 [`opencode-tui-plugin-adapter-design.md`](opencode-tui-plugin-adapter-design.md)。产品内置扩展与运行时插件的关系见
 [`product-customization-blueprint.md`](../product-customization-blueprint.md)。
 外部来源的产品发现、确认、导入与变更体验见
-[`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。
+[`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)；BitFun 能力输出到外部宿主、Provider Slot 和
+跨宿主状态/事件边界见[`capability-runtime-integration-design.md`](capability-runtime-integration-design.md)。
 
 本文同时描述目标架构和当前实现。标为“当前”的内容只解释现有代码，不构成 OpenCode 插件的长期接入要求。
 
@@ -26,6 +27,8 @@
 - 直接写入权限结果、工具结果、审计事实、会话状态或界面状态。
 - 充当产品入口、公共 SDK 或插件商店。
 - 用一个通用事件对象承载所有未来工具、钩子、客户端和界面调用。
+- 承担 BitFun 能力导出到外部宿主的通用代理。导出 adapter 调用对外能力门面；只有需要运行第三方代码的导入
+  路径才经过插件主机。
 
 默认权限是否开放与主机可靠性是两件事。即使本地默认允许插件使用当前用户的文件、网络和进程能力，主机仍
 必须提供进程隔离、期限、取消、背压、大小限制和崩溃回收。
@@ -166,7 +169,14 @@ sequenceDiagram
 ```
 
 每次调用都必须有唯一请求身份，以便取消、丢弃迟到响应和排查重复响应。需要重试时，由真实调用方根据错误
-类型决定，主机不得默认重复执行有副作用操作，也不把内部请求身份暴露成用户配置概念。
+类型决定，主机不得默认重复执行有副作用操作，也不把内部请求身份暴露成用户配置概念。调用同时绑定来源限定
+实例，以及能力 owner/生命周期协调器下发的 Capability Resolution Generation target fence；Host 只为在途调用
+缓存和校验该派生 fence，不选择、持久化或恢复权威 active generation。切换或退出后的旧代次响应即使结构合法，
+也不能提交到新代次状态。
+
+Host 只产生调用、逻辑 target、队列、错误、取消和 fence 校验等运维事实，并投影脚本执行服务产生的物理进程、
+健康和资源事实；它不成为这些事实的第二 owner。领域事件和产品分析继续由对应 owner 与事件/遥测边界产生；
+Host 不解析 Prompt、Memory 或 Tool 内容自行打点，也不重复计算模型成本。
 
 ### 4.3 停用、变更与恢复
 
@@ -218,9 +228,13 @@ sequenceDiagram
 - 内存、CPU 和子进程数使用平台可执行的 Job Object、cgroup/rlimit 等预算；无法提供硬限制的平台必须显示残余风险，不能仅凭独立进程承诺资源耗尽不会影响其他插件或宿主。
 - 初始化、工具、钩子、客户端代理和清理分别设置期限；清理超时不能阻止产品退出或终端恢复。
 - 请求队列和并发数必须有上限；过载立即返回稳定错误，不无限堆积。
+- target 队列预算必须受产品/进程、执行域/工作区和 session/workflow 上层预算约束；插件或生态 adapter 只能在
+  已准入调用中排序，不能通过创建更多 target 绕过总额度。具体默认数值由首个真实执行切片测量后确定。
 - 心跳与健康检查不能与可能被长任务堵塞的业务队列共用唯一通道。
 - 输入、输出和日志有大小限制；大结果使用现有对象存储引用或流式能力。
 - 取消向执行进程传播；插件不响应时终止对应进程，且不得继续接受其迟到响应。
+- 请求、取消、worker 丢失和响应校验必须保留 correlation/causation 与 Generation，供统一诊断；内容载荷默认不
+  进入运维遥测。
 
 ### 6.2 错误与降级
 

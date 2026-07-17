@@ -14,21 +14,22 @@
 | TUI target、Route、Command、Keymap、Dialog、Slot、Theme、State、KV | [终端界面插件适配](opencode-tui-plugin-adapter-design.md) |
 | SDK、Server、ACP、IDE、Web、GitHub、GitLab、Slack | [外部集成适配](opencode-external-integration-adapter-design.md) |
 | 进程、调用、超时、恢复、状态与 BitFun 归属模块边界 | [插件运行时主机](plugin-runtime-host-design.md) |
+| BitFun 能力输出到外部宿主、Provider Slot、通用状态/事件/并发/冲突边界 | [能力装配与宿主集成](capability-runtime-integration-design.md) |
 | 交付顺序和阶段退出条件 | [粗粒度计划](../../plans/opencode-extension-compatibility-plan.md) |
 
 ## 1. 基线与判断方法
 
 本次清单刷新于 2026-07-16：
 
-- 最新稳定版为 [`v1.18.2`](https://github.com/anomalyco/opencode/releases/tag/v1.18.2)，提交为 [`70b56a0a93d366889cae950379cc9d2537148fa2`](https://github.com/anomalyco/opencode/commit/70b56a0a93d366889cae950379cc9d2537148fa2)。
-- 开发分支前瞻检查记录为提交 [`a27ffb20f0a740823142f7c79706efb81d75d287`](https://github.com/anomalyco/opencode/commit/a27ffb20f0a740823142f7c79706efb81d75d287)。该值会持续变化，只用于发现差异，不计入稳定兼容承诺。
+- 最新稳定版为 [`v1.18.3`](https://github.com/anomalyco/opencode/releases/tag/v1.18.3)，提交为 [`127bdb30784d508cc556c71a0f32b508a3061517`](https://github.com/anomalyco/opencode/commit/127bdb30784d508cc556c71a0f32b508a3061517)。
+- 开发分支前瞻检查记录为提交 [`3a1c6df9e24672f0761a6ced18e1315d89334baf`](https://github.com/anomalyco/opencode/commit/3a1c6df9e24672f0761a6ced18e1315d89334baf)。该值会持续变化，只用于发现差异，不计入稳定兼容承诺。
 - 配置、插件、工具、Agent、Skill、Command、Rule、MCP、LSP、Formatter、Theme、Keybind、开发工具包、Server 和 ACP 以 [OpenCode 官方文档](https://opencode.ai/docs/) 为准。
-- 稳定服务插件接口以 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/index.ts) 为准；
-- custom tool 接口以 [`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/tool.ts) 为准；
-- 终端插件接口以 [`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/tui.ts) 为准；
-- 终端插件行为说明以 [`tui-plugins.md`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/opencode/specs/tui-plugins.md) 为准。
+- 稳定服务插件接口以 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/plugin/src/index.ts) 为准；
+- custom tool 接口以 [`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/plugin/src/tool.ts) 为准；
+- 终端插件接口以 [`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/plugin/src/tui.ts) 为准；
+- 终端插件行为说明以 [`tui-plugins.md`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/opencode/specs/tui-plugins.md) 为准。
 
-稳定兼容只冻结 `v1.18.2` 的公开文档、接口源码和样例；开发提交仅用于发现未来差异，不进入当前承诺。升级时必须
+稳定兼容只冻结 `v1.18.3` 的公开文档、接口源码和样例；开发提交仅用于发现未来差异，不进入当前承诺。升级时必须
 重新比较实际消费的文件和行为，不能沿用本次结论。
 
 ### 1.1 差异类型
@@ -54,6 +55,10 @@
 | 暂不承诺 | 接口不稳定，或实现会复制另一套产品运行时。 |
 
 ## 2. 总体方案
+
+本文件只定义 OpenCode 特有来源、顺序、参数和兼容承诺。跨宿主共用的是 BitFun 能力 owner、类型化贡献、权限/
+副作用事实、Generation 和对外能力门面，不是 OpenCode 原始对象。BitFun 能力作为 MCP、Plugin 或 SDK 能力进入
+OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向，不能用任一方向完成证明另一方向已经兼容。
 
 - BitFun 实现自己的插件运行时编排、脚本执行实现、OpenCode 兼容接口和 Rust 能力转发；不启动完整
   OpenCode Agent Runtime，也不把 Bun 或物理进程拓扑固化进 Host ABI。

@@ -7,10 +7,10 @@
 外部来源的首次确认和变化提示见
 [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。
 
-OpenCode `v1.18.2` 已包含独立终端插件 target，依据稳定版
-[`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/plugin/src/tui.ts)
+OpenCode `v1.18.3` 已包含独立终端插件 target，依据稳定版
+[`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/plugin/src/tui.ts)
 和
-[`packages/opencode/specs/tui-plugins.md`](https://github.com/anomalyco/opencode/blob/70b56a0a93d366889cae950379cc9d2537148fa2/packages/opencode/specs/tui-plugins.md)。
+[`packages/opencode/specs/tui-plugins.md`](https://github.com/anomalyco/opencode/blob/127bdb30784d508cc556c71a0f32b508a3061517/packages/opencode/specs/tui-plugins.md)。
 它没有 experimental 前缀，仓库称其为当前 v1 体系，但公共文档成熟度低，因此 BitFun 必须按 release commit
 锁定样例并监控变化。
 

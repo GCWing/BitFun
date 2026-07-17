@@ -4,9 +4,10 @@
 [产品运行时架构](../architecture/product-architecture.md)，专项细节见
 [Core 迁移](core-decomposition-plan.md)、[CLI/TUI](../architecture/cli-product-line-design.md)、
 [HarmonyOS PC 平台规约](../architecture/platform-portability-design.md)和
-[OpenCode 兼容](opencode-extension-compatibility-plan.md)。专项文档不能用自己的阶段编号扩大本计划范围。
+[OpenCode 兼容](opencode-extension-compatibility-plan.md)；能力 Provider、SDK 和外部宿主双向集成边界见
+[能力装配与宿主集成](../architecture/extensions/capability-runtime-integration-design.md)。专项文档不能用自己的阶段编号扩大本计划范围。
 
-本轮对照的上游基线为 `ecad4f843`（2026-07-16）；本文所在提交记录
+本轮对照的上游基线为 `b22bbdda7`（2026-07-17）；本文所在提交记录
 本轮实现事实。后续事实变化必须随代码显式更新，只有代码、入口消费和对应验证同时成立的项目才标记为完成。
 
 ## 1. 裁决原则
@@ -109,7 +110,27 @@ HarmonyOS 手机 Remote App 不在该平台执行范围内。
 每个入口都必须证明生产行为、错误、取消和恢复等价后再删除旧路径。迁移期间不能在新旧路径同时写同一状态，
 也不能让 Runtime SDK 吸收 CLI keymap、GUI layout、ACP 协议生命周期或 OpenCode 原始类型。
 
-## 8. 依赖与并行关系
+## 8. 工作流六：能力对外复用从一个真实消费者开始
+
+本工作流不与前五项绑定成一次性交付。启动条件是某项现有 BitFun 能力已经有清楚 owner、稳定调用路径，以及
+一个具名仓库外试点消费者、具体用例、验收 owner 和冻结宿主版本；不能为了“未来 SDK”先创建全量 Memory、
+Context、Workflow、Subagent 或 Scheduler 接口。
+
+顺序：
+
+1. 选择一个只读或副作用边界清楚的高价值用例，只暴露该用例需要的请求、结果、状态和错误。
+2. 优先通过 MCP/Skill/sidecar 接入一个宿主；只有该用例确实需要生命周期拦截时，才增加一个版本锁定的 Host Hook/
+   Plugin adapter。
+3. 为该宿主冻结分发单元、注册作用域，以及 install/register、enable、disable、uninstall、升级和失败恢复语义；
+   物理安装状态以宿主为准，BitFun 不伪造成功。
+4. 证明身份映射、权限上限、取消、Generation、事件损失、成本归属和降级后，再评估第二个宿主或第二项能力。
+5. 只有非 `bitfun-core` 嵌入方能在最小依赖下稳定运行，才冻结和发布 Agent Runtime SDK 子接口。
+
+退出条件：外部消费者从注册/安装、启用、调用、停用/卸载到恢复端到端可用；宿主矩阵只把该切片标为
+native/translated/degraded；未实现能力保持 unsupported/experimental；没有引入第二状态 owner、通用服务定位器、
+跨宿主任意 payload 或空 registry。
+
+## 9. 依赖与并行关系
 
 | 工作 | 必须等待 | 可以并行 |
 |---|---|---|
@@ -118,10 +139,11 @@ HarmonyOS 手机 Remote App 不在该平台执行范围内。
 | OpenCode standalone tool | OpenCode adapter 内的单一 source resolver、冻结版本/样例 | CLI action |
 | OpenCode package/Hook/TUI | 前一切片稳定且有真实阻塞样例；TUI action 另等 action registry | 入口迁移 |
 | ACP/Desktop 迁移 | 前一入口行为等价 | OpenCode 深兼容 |
+| 一个能力对外复用 | 现有能力 owner、具名试点/用例/验收 owner、冻结宿主版本和最小权限/取消语义 | OpenCode standalone tool、单入口迁移 |
 
 这些依赖表示开始条件，不要求放在同一个 PR，也不形成统一大版本。
 
-## 9. 验证
+## 10. 验证
 
 | 范围 | 最小证据 |
 |---|---|
@@ -132,8 +154,9 @@ HarmonyOS 手机 Remote App 不在该平台执行范围内。
 | OpenCode tool | 冻结无外部依赖契约样例的 load/execute/context/cancel/timeout/error 端到端；静态预览不会进入工具集合 |
 | HarmonyOS PC | 本计划只检查平台规约没有被实现文档提前展开；各专题启动后独立定义验证。HAP、`hdc shell`、移动 Remote App 与远端代执行不替代 |
 | 入口迁移 | 单入口生产消费、行为等价、旧转发删除和 focused test |
+| 能力对外复用 | 一个外部消费者的注册/安装、启停、请求/结果、权限、取消、Generation、事件损失、宿主降级、卸载和恢复端到端验证 |
 
-## 10. 暂停条件和延期
+## 11. 暂停条件和延期
 
 出现以下情况时停止扩大当前切片：
 
@@ -144,5 +167,6 @@ HarmonyOS 手机 Remote App 不在该平台执行范围内。
 - 为追平竞品数量同时加入全量配置、Hook、renderer、Server 或权限系统；
 - 一次迁移要求重写完整 CLI、Desktop 或 Core，无法独立验收。
 
-明确延期：新权限语言和应用沙箱、全量 OpenCode config/Hook/TUI renderer/Server/Remote plugin、Codex/Claude 插件
-ABI、HarmonyOS PC 具体实现、PC GUI、移动端本地适配，以及 Vim、语音、分享和协作等非核心 TUI 深度功能。
+明确延期：新权限语言和应用沙箱、全量 OpenCode config/Hook/TUI renderer/Server/Remote plugin、完整 Codex/Claude
+插件 ABI、Trae 深层 Hook/SDK 适配、跨宿主会话迁移、HarmonyOS PC 具体实现、PC GUI、移动端本地适配，以及
+Vim、语音、分享和协作等非核心 TUI 深度功能。单个真实外部消费切片不解除这些延期项。
