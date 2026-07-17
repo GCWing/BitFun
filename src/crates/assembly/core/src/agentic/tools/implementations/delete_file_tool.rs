@@ -159,7 +159,7 @@ Important notes:
             )
             .await
         } else {
-            crate::agentic::execution::edit_constraint_guard::check(
+            crate::agentic::execution::edit_constraint_guard::check_delete(
                 context, "Delete", "delete", path_str, force,
             )
         };
@@ -362,6 +362,11 @@ Important notes:
                 },
                 &resolved.logical_path,
             );
+            crate::agentic::execution::edit_constraint_guard::forget_agent_created_file(
+                context,
+                &resolved.logical_path,
+            )
+            .await;
 
             let result_data = json!({
                 "success": true,
@@ -406,6 +411,11 @@ Important notes:
             },
             &resolved.logical_path,
         );
+        crate::agentic::execution::edit_constraint_guard::forget_agent_created_file(
+            context,
+            &resolved.logical_path,
+        )
+        .await;
 
         Ok(vec![ToolResult::Result {
             data: result_data,
