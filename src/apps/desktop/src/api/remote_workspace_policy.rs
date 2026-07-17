@@ -274,6 +274,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("create_directory", RemoteWorkspacePolicy::LegacyUnaudited),
     ("create_file", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "create_legion_preset",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     ("create_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("create_session", RemoteWorkspacePolicy::LegacyUnaudited),
     ("create_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -301,6 +305,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("delete_directory", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_file", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "delete_legion_preset",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     ("delete_mcp_server", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -472,6 +480,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "get_latest_insights",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "get_legion_preset",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("get_mcp_prompt", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -722,6 +734,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "list_directory_files",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "list_legion_presets",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "list_manageable_subagents",
@@ -1519,6 +1535,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("update_cron_job", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "update_legion_preset",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     (
         "update_custom_agent",
         RemoteWorkspacePolicy::LegacyUnaudited,
