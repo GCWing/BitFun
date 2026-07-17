@@ -283,12 +283,6 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
-    pub async fn update_session_model(&self, session_id: &str, model_id: &str) -> BitFunResult<()> {
-        self.coordinator
-            .update_session_model(session_id, model_id)
-            .await
-    }
-
     pub async fn branch_session_at_latest_turn(
         &self,
         workspace_path: &Path,

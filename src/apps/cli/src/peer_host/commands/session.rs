@@ -8,7 +8,9 @@ use serde_json::{json, Value};
 use bitfun_core::agentic::core::{Session, SessionConfig};
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::service::session::SessionStatus;
-use bitfun_runtime_ports::{AgentSessionDeleteRequest, SessionStoragePathRequest};
+use bitfun_runtime_ports::{
+    AgentSessionDeleteRequest, AgentSessionModelUpdateRequest, SessionStoragePathRequest,
+};
 
 use crate::peer_host::args::{get_string, optional_bool, optional_string, request_value};
 use crate::peer_host::state::PeerHostState;
@@ -360,10 +362,13 @@ pub(crate) async fn update_session_model(
     let session_id = validated_session_id(request)?;
     let model_name = get_string(request, "modelName")?;
     state
-        .compatibility
-        .update_session_model(&session_id, &model_name)
+        .agent_runtime
+        .update_session_model(AgentSessionModelUpdateRequest {
+            session_id,
+            model_id: model_name,
+        })
         .await
-        .map_err(|e| format!("Failed to update session model: {e}"))?;
+        .map_err(|error| format!("Failed to update session model: {}", error.into_message()))?;
     Ok(Value::Null)
 }
 

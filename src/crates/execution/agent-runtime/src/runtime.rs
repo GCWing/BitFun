@@ -13,14 +13,14 @@ use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
-    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
-    AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, DialogSubmitOutcome, PluginRuntimeBinding, PortError,
-    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
-    SessionTranscriptRequest, ThreadGoal,
+    AgentSessionManagementPort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSubmitOutcome,
+    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
+    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -184,6 +184,7 @@ pub trait RuntimeAgentRegistry: Send + Sync {
 pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_model: Option<Arc<dyn AgentSessionModelPort>>,
     session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
     session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
@@ -211,6 +212,13 @@ impl std::fmt::Debug for AgentRuntime {
                     .session_management
                     .as_ref()
                     .map(|_| "<dyn AgentSessionManagementPort>"),
+            )
+            .field(
+                "session_model",
+                &self
+                    .session_model
+                    .as_ref()
+                    .map(|_| "<dyn AgentSessionModelPort>"),
             )
             .field(
                 "session_restore",
@@ -311,6 +319,7 @@ where
 pub struct AgentRuntimeBuilder {
     submission: Option<Arc<dyn AgentSubmissionPort>>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_model: Option<Arc<dyn AgentSessionModelPort>>,
     session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
     session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
@@ -343,6 +352,11 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.session_management = Some(port);
+        self
+    }
+
+    pub fn with_session_model_port(mut self, port: Arc<dyn AgentSessionModelPort>) -> Self {
+        self.session_model = Some(port);
         self
     }
 
@@ -437,6 +451,7 @@ impl AgentRuntimeBuilder {
         let Self {
             submission,
             session_management,
+            session_model,
             session_restore,
             session_transcript_reader,
             thread_goal_management,
@@ -461,6 +476,7 @@ impl AgentRuntimeBuilder {
         Ok(AgentRuntime {
             submission: submission.ok_or(RuntimeBuildError::MissingSubmissionPort)?,
             session_management,
+            session_model,
             session_restore,
             session_transcript_reader,
             thread_goal_management,
@@ -720,6 +736,22 @@ impl AgentRuntime {
             .ok_or(RuntimeError::MissingSessionManagementPort)?;
         session_management
             .delete_session(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn update_session_model(
+        &self,
+        request: AgentSessionModelUpdateRequest,
+    ) -> Result<(), RuntimeError> {
+        let session_model = self.session_model.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session model port is not registered",
+            ))
+        })?;
+        session_model
+            .update_session_model(request)
             .await
             .map_err(RuntimeError::from)
     }
