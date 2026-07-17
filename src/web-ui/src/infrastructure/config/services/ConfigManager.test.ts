@@ -331,4 +331,69 @@ describe('ConfigManager', () => {
     expect(migrated[2].metadata.provider_instance_id).not.toBe(firstProviderId);
     expect(configApiMocks.setConfig).toHaveBeenCalledWith('ai.models', migrated);
   });
+
+  it('applyExternalReload notifies listeners only for paths whose value changed', async () => {
+    configApiMocks.getConfig.mockImplementation(async (path?: string) => {
+      if (path === 'editor') return { fontSize: 14 };
+      if (path === 'app.window.mode') return 'compact';
+      return undefined;
+    });
+    await configManager.getConfig('editor');
+    await configManager.getConfig('app.window.mode');
+
+    const changes: Array<{ path: string; oldValue: unknown; newValue: unknown }> = [];
+    const unsubscribe = configManager.onConfigChange((path, oldValue, newValue) => {
+      changes.push({ path, oldValue, newValue });
+    });
+    const watchedPaths: string[] = [];
+    const unwatchKeybindings = configManager.watch('app.keybindings', () => {
+      watchedPaths.push('app.keybindings');
+    });
+    const unwatchEditor = configManager.watch('editor', () => {
+      watchedPaths.push('editor');
+    });
+
+    // Cloud sync changed `editor` only; other tracked paths stay identical.
+    configApiMocks.getConfigs.mockResolvedValueOnce({
+      editor: { fontSize: 16 },
+      'app.window.mode': 'compact',
+      'app.keybindings': undefined,
+    });
+
+    await configManager.applyExternalReload();
+
+    expect(configApiMocks.getConfigs).toHaveBeenCalledTimes(1);
+    expect(changes).toEqual([
+      { path: 'editor', oldValue: { fontSize: 14 }, newValue: { fontSize: 16 } },
+    ]);
+    expect(watchedPaths).toEqual(['editor']);
+    expect(configManager.get('editor')).toEqual({ fontSize: 16 });
+    expect(configManager.get('app.window.mode')).toBe('compact');
+
+    unwatchEditor();
+    unwatchKeybindings();
+    unsubscribe();
+  });
+
+  it('applyExternalReload clears the cache without notifying when the re-read fails', async () => {
+    configApiMocks.getConfig.mockResolvedValueOnce({ fontSize: 14 });
+    await configManager.getConfig('editor');
+
+    const changes: string[] = [];
+    const unsubscribe = configManager.onConfigChange(path => {
+      changes.push(path);
+    });
+
+    configApiMocks.getConfigs.mockRejectedValueOnce(new Error('ipc down'));
+    await configManager.applyExternalReload();
+
+    expect(changes).toEqual([]);
+
+    // Cache was cleared, so the next read fetches the fresh value from the backend.
+    configApiMocks.getConfig.mockResolvedValueOnce({ fontSize: 16 });
+    await expect(configManager.getConfig('editor')).resolves.toEqual({ fontSize: 16 });
+    expect(configApiMocks.getConfig).toHaveBeenCalledWith('editor');
+
+    unsubscribe();
+  });
 });

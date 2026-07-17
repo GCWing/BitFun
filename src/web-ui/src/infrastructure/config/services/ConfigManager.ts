@@ -49,6 +49,34 @@ function legacyProviderGroupSeed(model: Record<string, unknown>, index: number):
   return id ? `id:${id}` : `index:${index}`;
 }
 
+/** Structural equality for JSON-shaped config values. */
+function configValuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) {
+    return true;
+  }
+  if (typeof a !== typeof b || typeof a !== 'object' || a === null || b === null) {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+    return a.every((item, index) => configValuesEqual(item, b[index]));
+  }
+  const aRecord = a as Record<string, unknown>;
+  const bRecord = b as Record<string, unknown>;
+  const aKeys = Object.keys(aRecord);
+  const bKeys = Object.keys(bRecord);
+  return (
+    aKeys.length === bKeys.length &&
+    aKeys.every(
+      key =>
+        Object.prototype.hasOwnProperty.call(bRecord, key) &&
+        configValuesEqual(aRecord[key], bRecord[key])
+    )
+  );
+}
+
 class ConfigManagerImpl implements IConfigManager {
   
   private configCache: Map<string, any> = new Map();
@@ -545,6 +573,46 @@ class ConfigManagerImpl implements IConfigManager {
     } catch (error) {
       log.error('Failed to reload config', error);
       throw error;
+    }
+  }
+
+  /**
+   * Re-read every cached/watched path after the backend applied an external
+   * config change (e.g. account cloud sync), then notify listeners only for
+   * paths whose value actually changed so config-driven UI refreshes.
+   */
+  async applyExternalReload(): Promise<void> {
+    const trackedPaths = new Set<string>([
+      ...this.configCache.keys(),
+      ...this.pathListeners.keys(),
+    ]);
+
+    const previousValues = new Map<string, unknown>();
+    for (const path of trackedPaths) {
+      if (this.configCache.has(path)) {
+        previousValues.set(path, this.configCache.get(path));
+      }
+    }
+
+    this.clearCache();
+
+    if (trackedPaths.size > 0) {
+      try {
+        await this.readConfigs([...trackedPaths]);
+      } catch (error) {
+        // The cache is already cleared, so later reads still pick up fresh
+        // values; only listener notification is skipped.
+        log.error('Failed to re-read config after external change', error);
+        return;
+      }
+    }
+
+    for (const path of trackedPaths) {
+      const oldValue = previousValues.get(path);
+      const newValue = this.configCache.get(path);
+      if (!configValuesEqual(oldValue, newValue)) {
+        this.notifyConfigChange(path, oldValue, newValue);
+      }
     }
   }
 }

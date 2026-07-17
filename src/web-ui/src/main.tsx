@@ -267,6 +267,12 @@ async function initializeAfterRender(): Promise<void> {
       await installFrontendLogLevelConfigWatcher();
     })(),
     (async () => {
+      const { ensureSettingsAppliedListener } = await import(
+        './infrastructure/account/settingsAppliedListener'
+      );
+      ensureSettingsAppliedListener();
+    })(),
+    (async () => {
       const { themeService } = await import('./infrastructure/theme');
       await themeService.ensureUserThemesLoaded();
     })(),
@@ -299,6 +305,7 @@ async function initializeAfterRender(): Promise<void> {
     const names = [
       'EditorConfigPreload',
       'LogLevelConfigWatcher',
+      'SettingsAppliedListener',
       'UserThemes',
       'DefaultContextTypes',
       'RecommendationProviders',
