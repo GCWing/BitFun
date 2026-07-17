@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
+// import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Plus, SquarePen, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import { 
   AIModelConfig as AIModelConfigType, 
@@ -398,7 +399,7 @@ const AIModelConfig: React.FC = () => {
   const [manualModelInput, setManualModelInput] = useState('');
   const [expandedModelCards, setExpandedModelCards] = useState<Set<string>>(new Set());
   const [discoveredCli, setDiscoveredCli] = useState<DiscoveredCliCredential[]>([]);
-  const [isDiscoveringCli, setIsDiscoveringCli] = useState(false);
+  // const [isDiscoveringCli, setIsDiscoveringCli] = useState(false);
   const lastRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const activeRemoteFetchSignatureRef = React.useRef<string | null>(null);
 
@@ -551,14 +552,14 @@ const AIModelConfig: React.FC = () => {
   }, [loadConfig]);
 
   const refreshDiscoveredCli = useCallback(async () => {
-    setIsDiscoveringCli(true);
+    // setIsDiscoveringCli(true);
     try {
       const items = await aiApi.discoverCliCredentials();
       setDiscoveredCli(items);
     } catch (e) {
       log.warn('discover_cli_credentials failed', { error: String(e) });
-    } finally {
-      setIsDiscoveringCli(false);
+    // } finally {
+      // setIsDiscoveringCli(false);
     }
   }, []);
 
@@ -886,47 +887,47 @@ const AIModelConfig: React.FC = () => {
     setCreationMode('selection');
   };
 
-  const handleImportFromCli = useCallback((cred: DiscoveredCliCredential) => {
-    resetRemoteModelDiscovery();
-    setManualModelInput('');
-    setShowApiKey(false);
-    setSelectedProviderId(null);
-    const authType: 'codex_cli' | 'gemini_cli' = cred.kind === 'codex' ? 'codex_cli' : 'gemini_cli';
-    setEditingConfig({
-      name: cred.display_label,
-      provider: cred.suggested_format,
-      base_url: cred.suggested_base_url,
-      // Leave request_url + model_name empty so the user must pick a model
-      // from the live CLI list. We never inject a hard-coded default slug.
-      request_url: '',
-      api_key: '',
-      model_name: '',
-      enabled: true,
-      context_window: 200000,
-      max_tokens: 32000,
-      category: 'general_chat',
-      capabilities: ['text_chat', 'function_calling'],
-      recommended_for: [],
-      metadata: {},
-      inline_think_in_text: true,
-      auth: { type: authType },
-    });
-    setSelectedModelDrafts([]);
-    setEditingProviderModelIds(new Set());
-    setShowAdvancedSettings(false);
-    setCreationMode('form');
-    setIsEditing(true);
-  }, [resetRemoteModelDiscovery]);
+  // const handleImportFromCli = useCallback((cred: DiscoveredCliCredential) => {
+  //   resetRemoteModelDiscovery();
+  //   setManualModelInput('');
+  //   setShowApiKey(false);
+  //   setSelectedProviderId(null);
+  //   const authType: 'codex_cli' | 'gemini_cli' = cred.kind === 'codex' ? 'codex_cli' : 'gemini_cli';
+  //   setEditingConfig({
+  //     name: cred.display_label,
+  //     provider: cred.suggested_format,
+  //     base_url: cred.suggested_base_url,
+  //     // Leave request_url + model_name empty so the user must pick a model
+  //     // from the live CLI list. We never inject a hard-coded default slug.
+  //     request_url: '',
+  //     api_key: '',
+  //     model_name: '',
+  //     enabled: true,
+  //     context_window: 200000,
+  //     max_tokens: 32000,
+  //     category: 'general_chat',
+  //     capabilities: ['text_chat', 'function_calling'],
+  //     recommended_for: [],
+  //     metadata: {},
+  //     inline_think_in_text: true,
+  //     auth: { type: authType },
+  //   });
+  //   setSelectedModelDrafts([]);
+  //   setEditingProviderModelIds(new Set());
+  //   setShowAdvancedSettings(false);
+  //   setCreationMode('form');
+  //   setIsEditing(true);
+  // }, [resetRemoteModelDiscovery]);
 
-  const handleRefreshCli = useCallback(async (kind: 'codex' | 'gemini') => {
-    try {
-      await aiApi.refreshCliCredential(kind);
-      await refreshDiscoveredCli();
-      notification.success(t('cliAuth.refreshSuccess'));
-    } catch (e) {
-      notification.error(t('cliAuth.refreshFailed', { error: String(e) }));
-    }
-  }, [refreshDiscoveredCli, notification, t]);
+  // const handleRefreshCli = useCallback(async (kind: 'codex' | 'gemini') => {
+  //   try {
+  //     await aiApi.refreshCliCredential(kind);
+  //     await refreshDiscoveredCli();
+  //     notification.success(t('cliAuth.refreshSuccess'));
+  //   } catch (e) {
+  //     notification.error(t('cliAuth.refreshFailed', { error: String(e) }));
+  //   }
+  // }, [refreshDiscoveredCli, notification, t]);
 
   
   const handleSelectProvider = (providerId: string) => {
@@ -2619,7 +2620,7 @@ const AIModelConfig: React.FC = () => {
           <DefaultModelConfig />
         </ConfigPageSection>
 
-        <ConfigPageSection
+        {/* <ConfigPageSection
           title={t('cliAuth.sectionTitle')}
           description={t('cliAuth.sectionDescription')}
           extra={(
@@ -2685,7 +2686,7 @@ const AIModelConfig: React.FC = () => {
               })}
             </div>
           )}
-        </ConfigPageSection>
+        </ConfigPageSection> */}
 
         <ConfigPageSection
           title={tDefault('tabs.models')}

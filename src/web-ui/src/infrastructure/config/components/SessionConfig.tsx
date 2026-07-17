@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw, ChevronDown, Info } from 'lucide-react';
+// import { FolderOpen, RefreshCw, ChevronDown, Info } from 'lucide-react';
+import { RefreshCw, ChevronDown, Info } from 'lucide-react';
 import {
   Switch,
   NumberInput,
@@ -28,7 +29,7 @@ import {
   DEFAULT_LANGUAGE_TEMPLATES,
 } from '../types';
 import { ModelSelectionRadio } from './ModelSelectionRadio';
-import { open } from '@tauri-apps/plugin-dialog';
+// import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './AIFeaturesConfig.scss';
 import './DebugConfig.scss';
@@ -286,10 +287,10 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
   // ── Debug config handlers ────────────────────────────────────────────────
 
-  const updateDebugConfig = useCallback((updates: Partial<DebugModeConfig>) => {
-    setDebugConfig(prev => ({ ...prev, ...updates }));
-    setDebugHasChanges(true);
-  }, []);
+  // const updateDebugConfig = useCallback((updates: Partial<DebugModeConfig>) => {
+  //   setDebugConfig(prev => ({ ...prev, ...updates }));
+  //   setDebugHasChanges(true);
+  // }, []);
 
   const saveDebugConfig = async () => {
     try {
@@ -383,23 +384,23 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     });
   }, []);
 
-  const handleSelectLogPath = async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        directory: false,
-        filters: [{ name: tDebug('fileDialog.logFile'), extensions: ['log', 'txt', 'ndjson'] }],
-      });
-      if (selected) {
-        updateDebugConfig({ log_path: selected });
-        notificationService.success(tDebug('messages.logPathUpdated'), { duration: 2000 });
-      }
-    } catch (error) {
-      notificationService.error(
-        `${tDebug('messages.selectFileFailed')}: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  };
+  // const handleSelectLogPath = async () => {
+  //   try {
+  //     const selected = await open({
+  //       multiple: false,
+  //       directory: false,
+  //       filters: [{ name: tDebug('fileDialog.logFile'), extensions: ['log', 'txt', 'ndjson'] }],
+  //     });
+  //     if (selected) {
+  //       updateDebugConfig({ log_path: selected });
+  //       notificationService.success(tDebug('messages.logPathUpdated'), { duration: 2000 });
+  //     }
+  //   } catch (error) {
+  //     notificationService.error(
+  //       `${tDebug('messages.selectFileFailed')}: ${error instanceof Error ? error.message : String(error)}`
+  //     );
+  //   }
+  // };
 
   const getTemplateEntries = useCallback((): [string, LanguageDebugTemplate][] => {
     const entries: [string, LanguageDebugTemplate][] = [];
@@ -611,11 +612,10 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         </ConfigPageSection>
 
         {/* ── Debug mode settings ───────────────────────────────── */}
-        <ConfigPageSection
+        {/* <ConfigPageSection
           title={tDebug('sections.combined')}
           description={tDebug('sections.combinedDescription')}
         >
-          {/* Basic settings: log path + ingest port */}
           <ConfigPageRow
             label={tDebug('settings.logPath.label')}
             description={tDebug('settings.logPath.description')}
@@ -654,7 +654,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             />
           </ConfigPageRow>
 
-          {/* Save / cancel for basic settings changes (not shown while modal is open) */}
           {debugHasChanges && !isTemplatesModalOpen && (
             <ConfigPageRow label={tDebug('actions.save')} align="center">
               <div className="bitfun-debug-config__settings-actions">
@@ -678,7 +677,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </ConfigPageRow>
           )}
 
-          {/* Language templates entry row */}
           <ConfigPageRow
             label={tDebug('sections.templates')}
             description={tDebug('templates.description')}
@@ -692,7 +690,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               {tDebug('templates.configure')}
             </Button>
           </ConfigPageRow>
-        </ConfigPageSection>
+        </ConfigPageSection> */}
 
         {/* ── Language templates modal ───────────────────────────── */}
         <Modal
