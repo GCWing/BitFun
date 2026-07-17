@@ -6,6 +6,7 @@ pub mod computer_use;
 pub mod crash_diagnostics;
 pub mod logging;
 pub mod macos_menubar;
+pub mod runtime;
 pub mod startup_trace;
 pub mod theme;
 pub mod tray;
@@ -384,6 +385,22 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_app_state", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
+    let step_started = Instant::now();
+    let desktop_runtime =
+        match runtime::DesktopRuntimeContext::build(coordinator.clone(), scheduler.clone()) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
+                return;
+            }
+        };
+    startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "initialize_desktop_agent_runtime",
+        step_started,
+    );
+
     let coordinator_state = CoordinatorState {
         coordinator: coordinator.clone(),
     };
@@ -423,6 +440,7 @@ pub async fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
+        .manage(desktop_runtime)
         .manage(coordinator_state)
         .manage(scheduler_state)
         .manage(path_manager)
