@@ -122,7 +122,21 @@ fn service_unit_installed() -> bool {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
+fn ensure_systemd_user_available() -> Result<()> {
+    match run_command("systemctl", &["--user", "show-environment"]) {
+        Ok(output) if output.status.success() => Ok(()),
+        _ => Err(anyhow!(
+            "systemd user session is not available (no user bus; common in containers, WSL, or SSH sessions without systemd --user).\n\
+             Enable a systemd user session for this account, or run the daemon under your own supervisor instead:\n\
+             \x20 bitfun-cli daemon run"
+        )),
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
 fn install_platform_service(executable: &Path) -> Result<String> {
+    ensure_systemd_user_available()?;
+
     let unit_path = systemd_unit_path()?;
     if let Some(parent) = unit_path.parent() {
         std::fs::create_dir_all(parent)

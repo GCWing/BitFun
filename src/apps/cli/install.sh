@@ -251,6 +251,8 @@ echo ""
 echo "=== Install complete ==="
 echo "Run:  bitfun-cli"
 echo "Login (Peer Host): open /login inside the TUI after start."
+echo "Server use: after /login, run \`bitfun-cli daemon install\` to keep this"
+echo "device reachable by your account even after exit or reboot."
 if ! command -v bitfun-cli >/dev/null 2>&1; then
   echo ""
   echo "Note: \`bitfun-cli\` is not yet visible in this shell's command lookup."
