@@ -160,6 +160,17 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     if (st === 'connecting') {
       const timeoutId = window.setTimeout(() => {
         workspaceStatusTimeouts.current.delete(connId);
+
+        // Peer Device Mode: the peer owns SSH connections. Never run the
+        // controller-side timeout removal — it would route removal invokes to
+        // the peer and delete its workspaces.
+        if (isPeerDeviceModeActive()) {
+          setWorkspaceStatuses(prev =>
+            prev[connId] === 'connecting' ? { ...prev, [connId]: 'connected' } : prev
+          );
+          return;
+        }
+
         if (workspaceStatusesRef.current[connId] !== 'connecting') {
           return;
         }
@@ -239,6 +250,15 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   }, []);
 
   const forgetRemoteWorkspace = useCallback(async (workspace: RemoteWorkspace) => {
+    if (isPeerDeviceModeActive()) {
+      // Removal invokes route to the peer while controlling it; the peer owns
+      // its remote workspaces, so the controller must never delete them.
+      log.info('Skipping remote workspace removal while peer device mode is active', {
+        connectionId: workspace.connectionId,
+        remotePath: workspace.remotePath,
+      });
+      return;
+    }
     log.info('Forgetting remote workspace restore entry', {
       connectionId: workspace.connectionId,
       remotePath: workspace.remotePath,
@@ -251,6 +271,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   }, [clearWorkspaceStatus]);
 
   const reportRemoteWorkspaceReconnectFailure = useCallback((workspace: RemoteWorkspace) => {
+    if (isPeerDeviceModeActive()) {
+      return;
+    }
     const path = normalizeRemoteWorkspacePath(workspace.remotePath);
     notificationService.error(
       `Remote workspace could not reconnect within ${RECONNECT_TIMEOUT_SECONDS} seconds and was removed: ${path}`,
@@ -309,6 +332,11 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     return reconnectUntilDeadline({
       totalTimeoutMs: timeoutMs,
       attempt: async (attemptTimeoutMs, attempt) => {
+        if (isPeerDeviceModeActive()) {
+          // Abort controller-side reconnects: connecting now would open an SSH
+          // session on the peer with controller-local credentials.
+          throw new Error('Peer device mode activated');
+        }
         log.info(`Attempting to reconnect (attempt ${attempt})`, {
           connectionId: workspace.connectionId,
           host: reconnectConfig.host,
@@ -637,9 +665,17 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   useEffect(() => {
     const onPeerModeChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ active?: boolean }>).detail;
-      if (detail?.active === true && heartbeatInterval.current) {
-        clearInterval(heartbeatInterval.current);
-        heartbeatInterval.current = null;
+      if (detail?.active === true) {
+        if (heartbeatInterval.current) {
+          clearInterval(heartbeatInterval.current);
+          heartbeatInterval.current = null;
+        }
+        // Cancel pending controller-side reconnect timeouts; the peer owns the
+        // SSH lifecycle now, so these must never fire their removal path.
+        for (const timeoutId of workspaceStatusTimeouts.current.values()) {
+          window.clearTimeout(timeoutId);
+        }
+        workspaceStatusTimeouts.current.clear();
         log.info('Paused SSH heartbeat while peer device mode is active');
       }
     };
@@ -657,7 +693,20 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
         return;
       }
       const connId = workspace.connectionId?.trim();
-      if (connId && !workspaceStatusesRef.current[connId]) {
+      if (!connId) {
+        return;
+      }
+      if (isPeerDeviceModeActive()) {
+        // Peer Device Mode: the peer owns the SSH connection lifecycle. Mirror
+        // its opened remote workspaces as connected and never run the
+        // controller-side reconnect/timeout removal path — those invokes route
+        // to the peer and would delete the peer's workspace.
+        if (workspaceStatusesRef.current[connId] !== 'connected') {
+          setWorkspaceStatus(connId, 'connected');
+        }
+        return;
+      }
+      if (!workspaceStatusesRef.current[connId]) {
         setWorkspaceStatus(connId, 'connecting');
       }
       void checkRemoteWorkspaceRef.current();
