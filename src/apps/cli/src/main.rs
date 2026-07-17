@@ -12,6 +12,7 @@ mod agent;
 #[allow(dead_code)]
 mod chat_state;
 mod config;
+mod daemon;
 mod diagnostics;
 mod logging;
 mod management;
@@ -182,6 +183,16 @@ enum Commands {
 
     /// Health check
     Health,
+
+    /// Manage the always-on account device host daemon
+    ///
+    /// The daemon holds the relay device-routing connection in a headless
+    /// process so this device stays reachable by account peers whenever the
+    /// machine is up, even without an interactive CLI running.
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonAction,
+    },
 
     /// Start or inspect the Agent Client Protocol (ACP) server
     Acp {
@@ -390,6 +401,18 @@ enum ConfigAction {
     Reset,
 }
 
+#[derive(Subcommand)]
+enum DaemonAction {
+    /// Run the daemon in the foreground (used by the service manager)
+    Run,
+    /// Install and start the auto-start service (systemd user unit / LaunchAgent)
+    Install,
+    /// Stop and remove the auto-start service
+    Uninstall,
+    /// Show daemon and auto-start service status
+    Status,
+}
+
 // ======================== System Initialization ========================
 
 /// Return the current project path. CLI session scope is intentionally cwd-only.
@@ -586,10 +609,18 @@ async fn run_interactive(
     if let Some(user_id) = account::try_restore_session().await {
         tracing::info!("Restored account session for user {user_id}");
         // Re-establish device routing so the CLI becomes RPC-controllable.
-        let device =
-            DeviceIdentity::from_current_machine().map_err(|e| anyhow!("detect device: {e}"))?;
-        if let Err(e) = account::restore_device_routing(&device.device_name).await {
-            tracing::warn!("Failed to restore device routing: {e}");
+        // The daemon owns device routing when it is running: same-machine
+        // processes share one device_id and last AuthConnect wins.
+        if daemon::is_daemon_running() {
+            tracing::info!(
+                "CLI daemon is running; skipping in-process device routing (daemon owns it)"
+            );
+        } else {
+            let device = DeviceIdentity::from_current_machine()
+                .map_err(|e| anyhow!("detect device: {e}"))?;
+            if let Err(e) = account::restore_device_routing(&device.device_name).await {
+                tracing::warn!("Failed to restore device routing: {e}");
+            }
         }
     }
 
@@ -678,6 +709,12 @@ async fn run_cli() -> Result<()> {
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    let is_daemon_run = matches!(
+        cli.command,
+        Some(Commands::Daemon {
+            action: DaemonAction::Run,
+        })
+    );
     let file_log_level = logging::default_log_level(cli.verbose);
     let stderr_log_level = if cli.verbose {
         tracing::Level::TRACE
@@ -685,7 +722,7 @@ async fn run_cli() -> Result<()> {
         tracing::Level::ERROR
     };
 
-    if is_tui_mode || is_exec_mode {
+    if is_tui_mode || is_exec_mode || is_daemon_run {
         logging::init_file_logging(file_log_level);
     } else {
         tracing_subscriber::fmt()
@@ -850,6 +887,13 @@ async fn run_cli() -> Result<()> {
         Some(Commands::Health) => {
             root_handlers::handle_health_command()?;
         }
+
+        Some(Commands::Daemon { action }) => match action {
+            DaemonAction::Run => daemon::run_daemon().await?,
+            DaemonAction::Install => daemon::install_service()?,
+            DaemonAction::Uninstall => daemon::uninstall_service()?,
+            DaemonAction::Status => daemon::print_status()?,
+        },
 
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
