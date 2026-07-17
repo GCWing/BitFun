@@ -1681,9 +1681,10 @@ impl SessionManager {
         &self,
         session_id: &str,
         paths: Vec<String>,
+        dialog_turn_id: &str,
     ) {
         let mut state = self.edit_constraint_state(session_id).unwrap_or_default();
-        state.remember_agent_created_paths(paths);
+        state.remember_agent_created_paths(paths, dialog_turn_id);
         self.edit_constraints_store
             .insert(session_id.to_string(), state.clone());
 
@@ -1731,6 +1732,40 @@ impl SessionManager {
             {
                 warn!(
                     "Failed to persist removed agent-created file provenance: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        }
+    }
+
+    /// Rewinds edit constraints and direct-file provenance to the turns that
+    /// remain after a session rollback. This prevents a restriction, explicit
+    /// relaxation, or temporary helper created in discarded future context
+    /// from leaking into the resumed branch.
+    pub async fn rollback_edit_constraint_state_to_turns(
+        &self,
+        session_id: &str,
+        surviving_turn_ids: &std::collections::HashSet<String>,
+    ) {
+        let Some(mut state) = self.edit_constraint_state(session_id) else {
+            return;
+        };
+        state.rollback_to_surviving_turns(surviving_turn_ids);
+        self.edit_constraints_store
+            .insert(session_id.to_string(), state.clone());
+
+        if self.should_persist_session_id(session_id) {
+            if let Err(error) = self
+                .merge_session_custom_metadata(
+                    session_id,
+                    json!({
+                        crate::agentic::execution::edit_constraint_guard::EDIT_CONSTRAINT_METADATA_KEY: state,
+                    }),
+                )
+                .await
+            {
+                warn!(
+                    "Failed to persist rolled-back edit constraint state: session_id={}, error={}",
                     session_id, error
                 );
             }
@@ -3205,8 +3240,8 @@ impl SessionManager {
         // 2) Restore the in-memory context cache.
         self.context_store.replace_context(session_id, messages);
 
-        let last_user_dialog_agent_type = if target_turn == 0 {
-            None
+        let (last_user_dialog_agent_type, surviving_dialog_turn_ids) = if target_turn == 0 {
+            (None, std::collections::HashSet::new())
         } else {
             let surviving_turns = self
                 .persistence_manager
@@ -3220,10 +3255,15 @@ impl SessionManager {
                 .sessions
                 .get(session_id)
                 .map(|session| session.agent_type.clone());
-            Self::derive_last_user_dialog_agent_type_from_turns(
+            let last_agent_type = Self::derive_last_user_dialog_agent_type_from_turns(
                 &kept_turns,
                 fallback_agent_type.as_deref(),
-            )
+            );
+            let turn_ids = kept_turns
+                .iter()
+                .map(|turn| turn.turn_id.clone())
+                .collect::<std::collections::HashSet<_>>();
+            (last_agent_type, turn_ids)
         };
 
         // 3) Truncate session turn list & persist
@@ -3274,6 +3314,8 @@ impl SessionManager {
         }
         self.turn_skill_agent_snapshot_store
             .remove_from(session_id, target_turn);
+        self.rollback_edit_constraint_state_to_turns(session_id, &surviving_dialog_turn_ids)
+            .await;
 
         Ok(())
     }
@@ -5739,6 +5781,12 @@ mod tests {
 
     #[tokio::test]
     async fn rollback_context_deletes_persisted_turns_from_target() {
+        use crate::agentic::execution::edit_constraint_guard::{
+            ConstraintExtractionRecord, ConstraintMatcher, ConstraintOperationScope,
+            ConstraintRevocation, ConstraintSource, ExtractedConstraint, ExtractionStatus,
+            ModelExtractionStatus,
+        };
+
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
@@ -5755,6 +5803,85 @@ mod tests {
             )
             .await
             .expect("session should create");
+        let test_constraint = ExtractedConstraint {
+            id: "deterministic:test_files".to_string(),
+            description: "do not modify tests".to_string(),
+            operation_scope: ConstraintOperationScope::All,
+            matcher: ConstraintMatcher::TestFiles,
+            source: ConstraintSource::Deterministic,
+            source_text: Some("Do not modify tests.".to_string()),
+        };
+        manager
+            .remember_edit_constraint_extraction(
+                &session.session_id,
+                ConstraintExtractionRecord {
+                    message_sha256: "turn-0-hash".to_string(),
+                    dialog_turn_id: Some("turn-0".to_string()),
+                    status: ExtractionStatus::Extracted,
+                    constraints: vec![test_constraint.clone()],
+                    deterministic_constraint_count: 1,
+                    model_attempts: 0,
+                    active_constraint_ids: Vec::new(),
+                    revocation_authorized: true,
+                    model_status: ModelExtractionStatus::NotRun,
+                    model_constraints: Vec::new(),
+                    model_revocations: Vec::new(),
+                    revoked_constraint_ids: Vec::new(),
+                    unmatched_revocation_ids: Vec::new(),
+                    input_chars: 20,
+                    prompt_chars: 20,
+                    input_truncated: false,
+                    latency_ms: 1,
+                    extracted_at_ms: 1,
+                    failure: None,
+                    response_excerpt: None,
+                },
+            )
+            .await;
+        manager
+            .remember_edit_constraint_agent_created_paths(
+                &session.session_id,
+                vec!["tests/kept-repro.rs".to_string()],
+                "turn-0",
+            )
+            .await;
+        manager
+            .remember_edit_constraint_extraction(
+                &session.session_id,
+                ConstraintExtractionRecord {
+                    message_sha256: "turn-1-hash".to_string(),
+                    dialog_turn_id: Some("turn-1".to_string()),
+                    status: ExtractionStatus::Extracted,
+                    constraints: Vec::new(),
+                    deterministic_constraint_count: 0,
+                    model_attempts: 1,
+                    active_constraint_ids: vec![test_constraint.id.clone()],
+                    revocation_authorized: true,
+                    model_status: ModelExtractionStatus::Parsed,
+                    model_constraints: Vec::new(),
+                    model_revocations: vec![ConstraintRevocation {
+                        constraint_id: test_constraint.id.clone(),
+                        description: "tests may now be modified".to_string(),
+                    }],
+                    revoked_constraint_ids: vec![test_constraint.id.clone()],
+                    unmatched_revocation_ids: Vec::new(),
+                    input_chars: 24,
+                    prompt_chars: 24,
+                    input_truncated: false,
+                    latency_ms: 1,
+                    extracted_at_ms: 2,
+                    failure: None,
+                    response_excerpt: None,
+                },
+            )
+            .await;
+        manager
+            .remember_edit_constraint_agent_created_paths(
+                &session.session_id,
+                vec!["tests/future-repro.rs".to_string()],
+                "turn-1",
+            )
+            .await;
 
         for index in 0..3 {
             let mut turn = DialogTurnData::new(
@@ -5830,6 +5957,17 @@ mod tests {
             .await
             .expect("snapshot load should succeed")
             .is_none());
+        assert_eq!(
+            manager.edit_constraints(&session.session_id),
+            Some(vec![test_constraint.clone()])
+        );
+        assert_eq!(
+            manager
+                .edit_constraint_state(&session.session_id)
+                .expect("constraint state should remain cached")
+                .agent_created_paths,
+            vec!["tests/kept-repro.rs".to_string()]
+        );
 
         manager.sessions.remove(&session.session_id);
         let restored = manager
@@ -5855,6 +5993,13 @@ mod tests {
             .expect("metadata should load")
             .expect("metadata should exist");
         assert_eq!(metadata.turn_count, 1);
+        let restored_state = SessionManager::edit_constraint_state_from_metadata(Some(&metadata))
+            .expect("constraint metadata should restore");
+        assert_eq!(restored_state.constraints, vec![test_constraint]);
+        assert_eq!(
+            restored_state.agent_created_paths,
+            vec!["tests/kept-repro.rs".to_string()]
+        );
     }
 
     #[tokio::test]
@@ -6739,6 +6884,7 @@ mod tests {
             .remember_edit_constraint_agent_created_paths(
                 &session.session_id,
                 vec!["tests/temporary-repro.rs".to_string()],
+                "turn-1",
             )
             .await;
         manager

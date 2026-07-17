@@ -6,9 +6,11 @@
 //! file mutation is appended to a session-scoped JSONL telemetry stream.
 
 use log::warn;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
@@ -23,7 +25,7 @@ use crate::util::json_extract::extract_json_from_ai_response;
 use crate::util::types::Message;
 
 pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
-const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 4;
+const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 5;
 const MAX_PROMPT_CHARS: usize = 8_000;
 const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
 const MAX_MODEL_ATTEMPTS: usize = 2;
@@ -266,6 +268,17 @@ pub struct EditConstraintState {
     /// They remain distinct from repository files across session restoration.
     #[serde(default)]
     pub agent_created_paths: Vec<String>,
+    /// Turn-scoped provenance used to rewind helper-file permissions when a
+    /// session is rolled back. `agent_created_paths` remains for backwards
+    /// compatibility and is rebuilt from these records when possible.
+    #[serde(default)]
+    pub agent_created_path_records: Vec<AgentCreatedPathRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentCreatedPathRecord {
+    pub path: String,
+    pub dialog_turn_id: String,
 }
 
 impl Default for EditConstraintState {
@@ -275,6 +288,7 @@ impl Default for EditConstraintState {
             constraints: Vec::new(),
             extractions: Vec::new(),
             agent_created_paths: Vec::new(),
+            agent_created_path_records: Vec::new(),
         }
     }
 }
@@ -317,11 +331,27 @@ impl EditConstraintState {
             .any(|constraint| constraint.matcher.enforceable())
     }
 
-    pub fn remember_agent_created_paths(&mut self, paths: impl IntoIterator<Item = String>) {
+    pub fn remember_agent_created_paths(
+        &mut self,
+        paths: impl IntoIterator<Item = String>,
+        dialog_turn_id: &str,
+    ) {
         for path in paths {
             let normalized = path.replace('\\', "/");
             if !normalized.is_empty() && !self.agent_created_paths.contains(&normalized) {
-                self.agent_created_paths.push(normalized);
+                self.agent_created_paths.push(normalized.clone());
+            }
+            if !normalized.is_empty()
+                && !dialog_turn_id.is_empty()
+                && !self.agent_created_path_records.iter().any(|record| {
+                    record.path == normalized && record.dialog_turn_id == dialog_turn_id
+                })
+            {
+                self.agent_created_path_records
+                    .push(AgentCreatedPathRecord {
+                        path: normalized,
+                        dialog_turn_id: dialog_turn_id.to_string(),
+                    });
             }
         }
     }
@@ -333,12 +363,56 @@ impl EditConstraintState {
                 created == path || created.starts_with(&format!("{path}/"))
             })
         });
+        self.agent_created_path_records.retain(|record| {
+            !paths.iter().any(|path| {
+                let path = path.trim_end_matches('/');
+                record.path == path || record.path.starts_with(&format!("{path}/"))
+            })
+        });
     }
 
     fn is_agent_created_path(&self, paths: &[String]) -> bool {
         paths
             .iter()
             .any(|path| self.agent_created_paths.contains(path))
+    }
+
+    /// Rebuilds the state from events belonging to turns that survive a
+    /// session rollback. Older provenance entries did not carry a turn id, so
+    /// they are deliberately discarded rather than granting a stale exemption
+    /// to a file created only in a rolled-back future turn.
+    pub fn rollback_to_surviving_turns(&mut self, surviving_turn_ids: &HashSet<String>) {
+        let retained_extractions = self
+            .extractions
+            .iter()
+            .filter(|record| {
+                record
+                    .dialog_turn_id
+                    .as_ref()
+                    .is_some_and(|turn_id| surviving_turn_ids.contains(turn_id))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let retained_path_records = self
+            .agent_created_path_records
+            .iter()
+            .filter(|record| surviving_turn_ids.contains(&record.dialog_turn_id))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        self.schema_version = EDIT_CONSTRAINT_SCHEMA_VERSION;
+        self.constraints.clear();
+        self.extractions.clear();
+        for extraction in retained_extractions {
+            self.merge_extraction(extraction);
+        }
+        self.agent_created_paths.clear();
+        self.agent_created_path_records = retained_path_records;
+        for record in &self.agent_created_path_records {
+            if !self.agent_created_paths.contains(&record.path) {
+                self.agent_created_paths.push(record.path.clone());
+            }
+        }
     }
 }
 
@@ -1288,6 +1362,11 @@ pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<Val
 
 fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
     let mut targets = Vec::new();
+    // Python `-c` programs commonly contain semicolons inside the quoted
+    // program. Scan the complete command before shell-level segmentation so a
+    // later `Path(...).write_text()` expression keeps its Python context.
+    push_python_mutation_targets(&mut targets, command);
+    push_node_mutation_targets(&mut targets, command);
     for segment in command
         .split(['\n', ';', '|'])
         .flat_map(|part| part.split("&&"))
@@ -1338,13 +1417,25 @@ fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
                     push_bash_target(&mut targets, argument);
                 }
             }
-            "cp" | "mv" | "install" => {
+            "cp" | "install" => {
                 if let Some(path) = arguments
                     .iter()
                     .rev()
                     .find(|argument| !argument.starts_with('-'))
                 {
                     push_bash_target(&mut targets, path);
+                }
+            }
+            "mv" => {
+                // Moving a protected source removes it from its original
+                // location, so both sides are mutation targets. The previous
+                // destination-only handling let `mv tests/a.rs src/a.rs`
+                // bypass a test-file constraint.
+                for argument in arguments
+                    .iter()
+                    .filter(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(&mut targets, argument);
                 }
             }
             "touch" | "truncate" | "rm" | "rmdir" | "unlink" => {
@@ -1381,10 +1472,99 @@ fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
                     }
                 }
             }
+            "git" => push_git_mutation_targets(&mut targets, arguments),
             _ => {}
         }
     }
     targets
+}
+
+fn push_git_mutation_targets(targets: &mut Vec<String>, arguments: &[&str]) {
+    let Some((subcommand_index, subcommand)) = arguments
+        .iter()
+        .enumerate()
+        .find(|(_, argument)| !argument.starts_with('-'))
+    else {
+        return;
+    };
+    let remaining = &arguments[subcommand_index + 1..];
+    match *subcommand {
+        "mv" | "rm" | "restore" => {
+            for argument in remaining
+                .iter()
+                .filter(|argument| !argument.starts_with('-'))
+            {
+                push_bash_target(targets, argument);
+            }
+        }
+        "checkout" => {
+            // `git checkout <ref>` is not a path mutation by itself. The
+            // pathspec form is unambiguous only after `--`.
+            if let Some(separator) = remaining.iter().position(|argument| *argument == "--") {
+                for argument in remaining[separator + 1..]
+                    .iter()
+                    .filter(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(targets, argument);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn push_python_mutation_targets(targets: &mut Vec<String>, segment: &str) {
+    static OPEN_FOR_WRITE: OnceLock<Regex> = OnceLock::new();
+    static PATH_MUTATION: OnceLock<Regex> = OnceLock::new();
+    let open_for_write = OPEN_FOR_WRITE.get_or_init(|| {
+        Regex::new(r#"(?i)\bopen\s*\(\s*["']([^"']+)["']\s*,\s*["'][wax][^"']*["']"#)
+            .expect("valid Python open-for-write regex")
+    });
+    let path_mutation = PATH_MUTATION.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\bPath\s*\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:write_text|write_bytes|unlink|rename|replace)\s*\("#,
+        )
+        .expect("valid pathlib mutation regex")
+    });
+
+    for captures in open_for_write
+        .captures_iter(segment)
+        .chain(path_mutation.captures_iter(segment))
+    {
+        if let Some(path) = captures.get(1) {
+            push_bash_target(targets, path.as_str());
+        }
+    }
+}
+
+fn push_node_mutation_targets(targets: &mut Vec<String>, segment: &str) {
+    static SINGLE_PATH_MUTATION: OnceLock<Regex> = OnceLock::new();
+    static TWO_PATH_MUTATION: OnceLock<Regex> = OnceLock::new();
+    let single_path_mutation = SINGLE_PATH_MUTATION.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\b(?:fs\s*\.\s*)?(?:writefilesync|appendfilesync|unlinksync|rmsync)\s*\(\s*["']([^"']+)["']"#,
+        )
+        .expect("valid Node single-path mutation regex")
+    });
+    let two_path_mutation = TWO_PATH_MUTATION.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\b(?:fs\s*\.\s*)?(?:renamesync|copyfilesync)\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']"#,
+        )
+        .expect("valid Node two-path mutation regex")
+    });
+
+    for captures in single_path_mutation.captures_iter(segment) {
+        if let Some(path) = captures.get(1) {
+            push_bash_target(targets, path.as_str());
+        }
+    }
+    for captures in two_path_mutation.captures_iter(segment) {
+        for index in [1, 2] {
+            if let Some(path) = captures.get(index) {
+                push_bash_target(targets, path.as_str());
+            }
+        }
+    }
 }
 
 fn push_bash_target(targets: &mut Vec<String>, raw_path: &str) {
@@ -1697,7 +1877,11 @@ pub async fn remember_agent_created_file(context: &ToolUseContext, file_path: &s
     if let Some(coordinator) = get_global_coordinator() {
         coordinator
             .get_session_manager()
-            .remember_edit_constraint_agent_created_paths(session_id, paths.clone())
+            .remember_edit_constraint_agent_created_paths(
+                session_id,
+                paths.clone(),
+                context.dialog_turn_id.as_deref().unwrap_or_default(),
+            )
             .await;
     }
     append_tool_telemetry(
@@ -1896,6 +2080,39 @@ mod tests {
         assert_eq!(
             explicit_bash_mutation_targets("cargo test -p core"),
             Vec::<String>::new()
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets(
+                r#"python3 -c \"open('/app/test/unit/example_test.py', 'w').write('x')\""#
+            ),
+            vec!["/app/test/unit/example_test.py".to_string()]
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets(
+                r#"python -c \"from pathlib import Path; Path('tests/repro_test.py').write_text('x')\""#
+            ),
+            vec!["tests/repro_test.py".to_string()]
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets("mv tests/existing_test.py src/existing.py"),
+            vec![
+                "tests/existing_test.py".to_string(),
+                "src/existing.py".to_string()
+            ]
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets(
+                r#"node -e \"require('fs').writeFileSync('tests/example.test.js', 'x')\""#
+            ),
+            vec!["tests/example.test.js".to_string()]
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets("git mv tests/example.rs src/example.rs"),
+            vec!["tests/example.rs".to_string(), "src/example.rs".to_string()]
+        );
+        assert_eq!(
+            explicit_bash_mutation_targets("git checkout HEAD -- tests/example.rs"),
+            vec!["tests/example.rs".to_string()]
         );
     }
 
@@ -2125,7 +2342,7 @@ mod tests {
             )],
             ..Default::default()
         };
-        state.remember_agent_created_paths(path.clone());
+        state.remember_agent_created_paths(path.clone(), "turn-1");
         assert!(can_mutate_agent_created_test_file(
             Some(&state),
             &path,
@@ -2164,6 +2381,75 @@ mod tests {
 
         state.forget_agent_created_paths_under(&path);
         assert!(!state.is_agent_created_path(&path));
+    }
+
+    #[test]
+    fn rollback_discards_future_constraints_and_helper_provenance() {
+        let initial_constraint = constraint("don't modify tests", ConstraintMatcher::TestFiles);
+        let future_constraint = constraint(
+            "don't modify lockfiles",
+            ConstraintMatcher::Extension {
+                exts: vec![".lock".to_string()],
+            },
+        );
+        let mut state = EditConstraintState::default();
+        state.merge_extraction(ConstraintExtractionRecord {
+            message_sha256: "turn-1-hash".to_string(),
+            dialog_turn_id: Some("turn-1".to_string()),
+            status: ExtractionStatus::Extracted,
+            constraints: vec![initial_constraint.clone()],
+            deterministic_constraint_count: 1,
+            model_attempts: 0,
+            active_constraint_ids: Vec::new(),
+            revocation_authorized: true,
+            model_status: ModelExtractionStatus::NotRun,
+            model_constraints: Vec::new(),
+            model_revocations: Vec::new(),
+            revoked_constraint_ids: Vec::new(),
+            unmatched_revocation_ids: Vec::new(),
+            input_chars: 10,
+            prompt_chars: 10,
+            input_truncated: false,
+            latency_ms: 1,
+            extracted_at_ms: 1,
+            failure: None,
+            response_excerpt: None,
+        });
+        state.remember_agent_created_paths(vec!["tests/kept_repro.rs".to_string()], "turn-1");
+        state.merge_extraction(ConstraintExtractionRecord {
+            message_sha256: "turn-2-hash".to_string(),
+            dialog_turn_id: Some("turn-2".to_string()),
+            status: ExtractionStatus::Extracted,
+            constraints: vec![future_constraint],
+            deterministic_constraint_count: 0,
+            model_attempts: 1,
+            active_constraint_ids: vec![initial_constraint.id.clone()],
+            revocation_authorized: true,
+            model_status: ModelExtractionStatus::Parsed,
+            model_constraints: Vec::new(),
+            model_revocations: Vec::new(),
+            revoked_constraint_ids: vec![initial_constraint.id.clone()],
+            unmatched_revocation_ids: Vec::new(),
+            input_chars: 10,
+            prompt_chars: 10,
+            input_truncated: false,
+            latency_ms: 1,
+            extracted_at_ms: 2,
+            failure: None,
+            response_excerpt: None,
+        });
+        state.remember_agent_created_paths(vec!["tests/future_repro.rs".to_string()], "turn-2");
+
+        state.rollback_to_surviving_turns(&HashSet::from(["turn-1".to_string()]));
+
+        assert_eq!(state.constraints, vec![initial_constraint]);
+        assert_eq!(state.extractions.len(), 1);
+        assert_eq!(
+            state.agent_created_paths,
+            vec!["tests/kept_repro.rs".to_string()]
+        );
+        assert_eq!(state.agent_created_path_records.len(), 1);
+        assert_eq!(state.agent_created_path_records[0].dialog_turn_id, "turn-1");
     }
 
     #[test]

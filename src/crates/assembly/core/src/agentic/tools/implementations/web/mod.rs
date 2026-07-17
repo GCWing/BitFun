@@ -12,6 +12,10 @@ const BLOCKED_GITHUB_DOMAIN_SUFFIXES: &[&str] = &[
     "githubusercontent.com",
     "githubassets.com",
     "git.io",
+    // Sourcegraph can proxy GitHub repository files and history under URLs
+    // such as sourcegraph.com/github.com/<owner>/<repo>/... . In evaluation
+    // builds that is equivalent to fetching GitHub directly.
+    "sourcegraph.com",
 ];
 
 pub(crate) fn is_blocked_github_url(url: &reqwest::Url) -> bool {
@@ -52,6 +56,7 @@ mod tests {
             "https://objects.githubusercontent.com/object",
             "https://github.githubassets.com/assets/app.js",
             "https://git.io/short-link",
+            "https://sourcegraph.com/github.com/org/repo/-/raw/src/lib.rs",
         ] {
             assert!(is_blocked_github_url(
                 &reqwest::Url::parse(url).expect("valid URL")
@@ -158,13 +163,14 @@ mod tests {
             "https://github.com/org/repo",
             "https://api.github.com/repos/org/repo",
             "https://raw.githubusercontent.com/org/repo/main/file.rs",
+            "https://sourcegraph.com/github.com/org/repo/-/raw/file.rs",
         ] {
             let validation = tool.validate_input(&json!({ "url": url }), None).await;
             assert!(!validation.result, "{url} should be blocked");
             assert!(validation
                 .message
                 .as_deref()
-                .is_some_and(|message| message.contains("GitHub domains")));
+                .is_some_and(|message| message.contains("cannot query GitHub")));
         }
     }
 
@@ -279,6 +285,10 @@ Second paragraph.
         let text = r#"Title: GitHub result
 URL: https://github.com/org/repo/pull/1
 Text: This must not reach the agent.
+
+Title: Sourcegraph GitHub proxy
+URL: https://sourcegraph.com/github.com/org/repo/-/blob/src/lib.rs
+Text: This proxy result must not reach the agent either.
 
 Title: Allowed result
 URL: https://docs.example.com/guide
