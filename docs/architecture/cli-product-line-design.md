@@ -106,7 +106,12 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
   同路径恢复仍在使用的绑定；已加载会话只校验身份，不通过完整 restore 重置活动状态。删除路径不能通过
   相对路径、绝对路径或分隔符越出 sessions 根目录。
 - TUI 终端句柄由恢复守卫持有；初始化中途失败、正常返回、错误返回或 panic 展开都会尽力退出 alternate screen、
-  关闭输入捕获、关闭 raw mode 并显示光标。真实 PTY/ConPTY 故障注入仍需独立验收。
+  关闭输入捕获、关闭 raw mode 并显示光标。真实 PTY/ConPTY 启动页进程冒烟测试已验证 resize 后仍可交互、
+  多行输入、空闲 Ctrl+C 和可观察的终端清理序列；resize 渲染正确性、Chat 活动 turn、初始化失败与异常退出等
+  仍需独立验收。
+- Startup 与 Chat 共用 CLI 私有输入读取器；一次读取同时受 256 个事件和 50ms 限制，跨批次仅延续快速文本尾部，
+  短批次普通按键保持原有路由。被识别为粘贴的文本按批次写入输入缓冲，每批只刷新一次命令菜单；粘贴内容中的
+  Tab 明确转换为四个空格。
 - 初始化按入口分级：交互模式启动 Peer Host 与 MCP，`exec` 只启动 MCP；本地 session 管理和 usage 查询不启动
   Peer Host/MCP。该分级不改变 Agentic/Terminal owner，也不等同于管理命令已有独立轻量 Runtime。
 - Peer Host 保持既有 HostInvoke / DeviceEvent wire schema 与 Relay 路由，但执行已接入上述调用级上下文：
@@ -122,7 +127,8 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
   显示警告。不承诺本次变更范围外的 ACK、重放或重连恢复。
 - `doctor` 与 `health` 构造并校验真实 Runtime Parts，区分 assembly-ready、Core compatibility owner 和不可用扩展。
   它们证明必需能力已注册，不把 Core 的 Network/Git/MCP compatibility marker 描述为外部服务实时可用。
-- 独立 CLI 测试与打包工作流；主 CI 的三平台 workspace check 同时覆盖 `bitfun-cli` 编译。
+- 独立 CLI 测试与打包工作流；主 CI 的三平台 workspace check 同时覆盖 `bitfun-cli` 编译，发布归档在上传前校验
+  SHA-256 摘要，并从解压后的目录执行 `--version` / `--help`。
 
 上述切换不等于运行时 owner 已迁移，也不表示 CLI-P0 全部完成。CLI crate 仍以 `bitfun-core/product-full`
 承载协调器、调度器、持久化、工具管线和部分 SDK v1 缺口，但 Peer Host 不再自行构造这些 owner；ACP 的 stdio、
@@ -140,7 +146,7 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 第一条闭环只完成一个无外部依赖的契约样例；取得真实 `execute` 并注册到 Tool Runtime 后才显示可用。 |
 | 当前 CLI 使用 `product-full`，OHOS target 图包含多组未验证的平台依赖 | 不能据依赖可解析、`hdc shell` 或移动 Remote App 推导 PC 本地 CLI/TUI 可用 | 问题与风险统一记录在平台规约；具体工作另立专题，HAP 不作为替代。 |
 | Product Capability 已有，但品牌、资源、默认策略和发行配置没有统一产品定义 | 白标需要修改多处常量和工作流，能力隐藏不等于后端禁用 | 产品定义只在组装/构建边界选择身份、资源、能力包、默认策略和发行事实。 |
-| CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；三平台编译由通用 workspace check 覆盖 | 真实模型审批/取消、Patch I/O 失败、PTY 与常规打包仍可能晚于 PR 发现 | 继续补进程级和 PTY 契约及 package smoke；避免为同一依赖图重复建立三平台编译矩阵。 |
+| CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；Linux 与 Windows 分别运行启动页 PTY/ConPTY 生命周期冒烟，发布归档上传前完成 SHA-256 与解压执行验证 | 真实模型审批/取消、Chat 活动 turn、resize 渲染、Patch I/O 失败和终端故障注入仍可能晚于 PR 发现 | 继续补剩余进程级故障契约；避免为同一依赖图重复建立三平台编译矩阵。 |
 
 ## 3. 分阶段产品需求
 
@@ -149,9 +155,10 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 CLI-P0 的目标是建立后续功能补齐所需的稳定边界，不改变现有用户主路径。
 
 CLI-P0 不是一个统一重构 PR。静态 profile、真实 Runtime Services、Runtime Parts、调用级审批、共享事件源和
-本地 Agent 纵向入口已接入；旧门面仅在后续 owner 迁移的行为等价成立后退出。配置解释、产品定制消费、TUI
-进一步拆分和 package smoke 仍需独立交付。CLI 托管的 ACP 服务端已独立切换到 ACP profile 与组装后的 SDK runtime；
-真实模型、PTY 与权限失败等进程级验收仍需另行完成，不能由本次运行时切换代替。
+本地 Agent 纵向入口已接入；旧门面仅在后续 owner 迁移的行为等价成立后退出。配置解释、产品定制消费和 TUI
+进一步拆分仍需独立交付。CLI 托管的 ACP 服务端已独立切换到 ACP profile 与组装后的 SDK runtime；启动页
+PTY/ConPTY 生命周期冒烟测试与发布归档冒烟测试已存在，真实模型、Chat 活动 turn、resize 渲染、终端故障注入与
+权限失败等完整进程级验收仍需另行完成。
 
 其余工作独立立项，不能与 profile 迁移互相充当完成条件：
 
@@ -589,8 +596,10 @@ CLI Agent 能力加强必须落在共享 Agent Runtime、Tool Runtime 或 Harnes
 | Action/Keymap | registry 唯一性、Slash/Palette/Help/dispatch 一致、配置键位真实输入、冲突来源和终端恢复 fallback |
 
 通用 `cargo check --workspace` 负责三平台 CLI 编译保护；独立 CLI CI 运行
-`cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime`。已落地的 focused 协议契约进入该测试；完整进程/PTY 矩阵与打包 smoke
-仍按对应切片补入门禁，不能由序列化单测代替。
+`cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime`。Linux 启动页 PTY 生命周期冒烟随独立 CLI
+测试运行，Windows 启动页 ConPTY 生命周期冒烟复用通用 Windows job；发布归档在上传前完成 SHA-256 与解压执行
+验证。完整模型、Chat 活动 turn、resize 渲染与故障进程矩阵仍按对应切片补入门禁，不能由序列化单测或基础冒烟
+测试代替。
 
 ### 10.2 阶段退出条件
 

@@ -1753,6 +1753,7 @@ impl ChatMode {
         let mut subagent_parent_tools: HashMap<String, String> = HashMap::new();
         let mut last_spinner_redraw = Instant::now();
         let mut pending_resize_at: Option<Instant> = None;
+        let mut event_reader = crate::ui::input::EventReader::default();
         let mut fatal_event_stream_error: Option<String> = None;
         let spinner_redraw_interval = Duration::from_millis(SPINNER_REDRAW_INTERVAL_MS);
         let resize_redraw_debounce = Duration::from_millis(RESIZE_REDRAW_DEBOUNCE_MS);
@@ -2124,77 +2125,36 @@ impl ChatMode {
             }
 
             // 3. Process terminal input
-            if crossterm::event::poll(Duration::from_millis(16))? {
-                if let Ok(first_event) = crossterm::event::read() {
-                    // Batch-collect all immediately available events (paste detection).
-                    // On Windows, bracketed paste is broken (crossterm #962) and
-                    // pasted text arrives as rapid Key events with Enter mixed in.
-                    let mut events = vec![first_event];
-                    // Short wait to let rapid paste events arrive in the same batch.
-                    // Duration::ZERO would split pastes across loop iterations.
-                    while crossterm::event::poll(Duration::from_millis(5))? {
-                        if let Ok(ev) = crossterm::event::read() {
-                            events.push(ev);
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // Detect if this batch looks like a paste: multiple Key events
-                    // that include at least one Enter and at least one printable char.
-                    let is_paste_batch = if events.len() > 2 {
-                        let mut has_enter = false;
-                        let mut has_char = false;
-                        for ev in &events {
-                            if let Event::Key(k) = ev {
-                                if k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat {
-                                    match k.code {
-                                        KeyCode::Enter => has_enter = true,
-                                        KeyCode::Char(c) if !c.is_control() => has_char = true,
-                                        _ => {}
-                                    }
-                                }
+            if let Some(events) = event_reader.read_event_batch(Duration::from_millis(16))? {
+                for event in events {
+                    match event {
+                        Event::Key(key) => {
+                            if let Some(reason) = self.handle_key_event(
+                                key,
+                                &mut chat_view,
+                                &mut chat_state,
+                                &rt_handle,
+                            )? {
+                                Self::apply_exit_reason(
+                                    reason,
+                                    ChatEventContext {
+                                        this: self,
+                                        chat_view: &mut chat_view,
+                                        chat_state: &mut chat_state,
+                                        session_id: &mut session_id,
+                                        rt_handle: &rt_handle,
+                                        should_quit: &mut should_quit,
+                                        exit_reason: &mut exit_reason,
+                                    },
+                                );
+                            }
+                            if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat {
+                                needs_redraw = true;
                             }
                         }
-                        has_enter && has_char
-                    } else {
-                        false
-                    };
-
-                    if is_paste_batch {
-                        // Treat entire batch as pasted text
-                        let mut paste_buf = String::new();
-                        let mut non_key_events = Vec::new();
-                        for ev in events {
-                            match ev {
-                                Event::Key(k)
-                                    if k.kind == KeyEventKind::Press
-                                        || k.kind == KeyEventKind::Repeat =>
-                                {
-                                    match k.code {
-                                        KeyCode::Char(c) => paste_buf.push(c),
-                                        KeyCode::Enter => paste_buf.push('\n'),
-                                        _ => {}
-                                    }
-                                }
-                                other => non_key_events.push(other),
-                            }
-                        }
-                        if !paste_buf.is_empty() {
-                            let normalized = paste_buf.replace("\r\n", "\n").replace('\r', "\n");
-                            if chat_view.login_form_visible() {
-                                chat_view.login_form_insert_paste(&normalized);
-                            } else {
-                                for c in normalized.chars() {
-                                    chat_view.handle_char(c);
-                                }
-                            }
-                            needs_redraw = true;
-                        }
-                        // Process any non-key events that were mixed in
-                        for ev in non_key_events {
+                        other => {
                             let outcome = Self::handle_non_key_event(
-                                ev,
+                                other,
                                 ChatEventContext {
                                     this: self,
                                     chat_view: &mut chat_view,
@@ -2210,58 +2170,6 @@ impl ChatMode {
                             }
                             if outcome.resize_seen {
                                 pending_resize_at = Some(Instant::now());
-                            }
-                        }
-                    } else {
-                        // Normal single/few events — process each individually
-                        for ev in events {
-                            match ev {
-                                Event::Key(key) => {
-                                    if let Some(reason) = self.handle_key_event(
-                                        key,
-                                        &mut chat_view,
-                                        &mut chat_state,
-                                        &rt_handle,
-                                    )? {
-                                        Self::apply_exit_reason(
-                                            reason,
-                                            ChatEventContext {
-                                                this: self,
-                                                chat_view: &mut chat_view,
-                                                chat_state: &mut chat_state,
-                                                session_id: &mut session_id,
-                                                rt_handle: &rt_handle,
-                                                should_quit: &mut should_quit,
-                                                exit_reason: &mut exit_reason,
-                                            },
-                                        );
-                                    }
-                                    if key.kind == KeyEventKind::Press
-                                        || key.kind == KeyEventKind::Repeat
-                                    {
-                                        needs_redraw = true;
-                                    }
-                                }
-                                other => {
-                                    let outcome = Self::handle_non_key_event(
-                                        other,
-                                        ChatEventContext {
-                                            this: self,
-                                            chat_view: &mut chat_view,
-                                            chat_state: &mut chat_state,
-                                            session_id: &mut session_id,
-                                            rt_handle: &rt_handle,
-                                            should_quit: &mut should_quit,
-                                            exit_reason: &mut exit_reason,
-                                        },
-                                    )?;
-                                    if outcome.request_redraw {
-                                        needs_redraw = true;
-                                    }
-                                    if outcome.resize_seen {
-                                        pending_resize_at = Some(Instant::now());
-                                    }
-                                }
                             }
                         }
                     }
@@ -2882,11 +2790,11 @@ impl ChatMode {
                     context.chat_view.mcp_add_dialog_handle_paste(&text);
                 } else if context.chat_view.login_form_visible() {
                     context.chat_view.login_form_insert_paste(&text);
-                } else {
-                    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-                    for c in normalized.chars() {
-                        context.chat_view.handle_char(c);
-                    }
+                } else if context.chat_state.permission_prompt.is_none()
+                    && context.chat_state.question_prompt.is_none()
+                    && !context.this.any_popup_visible(context.chat_view)
+                {
+                    context.chat_view.insert_paste(&text);
                 }
                 outcome.request_redraw = true;
             }
@@ -3636,10 +3544,7 @@ impl ChatMode {
 
     fn paste_clipboard(&self, chat_view: &mut ChatView) {
         if let Ok(text) = Clipboard::new().and_then(|mut clipboard| clipboard.get_text()) {
-            let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-            for character in normalized.chars() {
-                chat_view.handle_char(character);
-            }
+            chat_view.insert_paste(&text);
         }
     }
 

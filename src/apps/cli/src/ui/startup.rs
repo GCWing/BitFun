@@ -27,7 +27,7 @@ use crate::config::CliConfig;
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -330,6 +330,7 @@ impl StartupPage {
 
     pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
         terminal.clear()?;
+        let mut event_reader = crate::ui::input::EventReader::default();
 
         loop {
             if self.login_form.is_visible() {
@@ -337,81 +338,20 @@ impl StartupPage {
             }
             terminal.draw(|f| self.render(f))?;
 
-            if event::poll(Duration::from_millis(50))? {
-                if let Ok(first_event) = event::read() {
-                    let mut events = vec![first_event];
-                    // Short wait to let rapid paste events arrive in the same batch.
-                    // Duration::ZERO would split pastes across loop iterations.
-                    while event::poll(Duration::from_millis(5))? {
-                        if let Ok(ev) = event::read() {
-                            events.push(ev);
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // Paste detection: multiple key events with Enter + printable chars
-                    let key_count = events
-                        .iter()
-                        .filter(|e| matches!(e, Event::Key(k) if k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat))
-                        .count();
-                    let has_enter = events.iter().any(|e| {
-                        matches!(e, Event::Key(k) if (k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat) && k.code == KeyCode::Enter)
-                    });
-                    let has_printable = events.iter().any(|e| {
-                        matches!(e, Event::Key(k) if (k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat) && matches!(k.code, KeyCode::Char(_)))
-                    });
-                    let is_paste_batch = key_count > 1 && has_enter && has_printable;
-
-                    if is_paste_batch {
-                        let mut paste_buf = String::new();
-                        let mut non_key_events = Vec::new();
-                        for ev in events {
-                            match ev {
-                                Event::Key(k)
-                                    if k.kind == KeyEventKind::Press
-                                        || k.kind == KeyEventKind::Repeat =>
-                                {
-                                    match k.code {
-                                        KeyCode::Char(c) => paste_buf.push(c),
-                                        KeyCode::Enter => paste_buf.push('\n'),
-                                        _ => {}
-                                    }
-                                }
-                                other => non_key_events.push(other),
-                            }
-                        }
-                        if !paste_buf.is_empty() {
-                            if self.login_form.is_visible() {
-                                self.login_form.insert_paste(&paste_buf);
-                            } else {
-                                self.text_input.insert_paste(&paste_buf);
-                                self.refresh_command_menu();
-                            }
-                        }
-                        for ev in non_key_events {
-                            if let Some(result) = self.handle_non_key_event(ev, terminal)? {
+            if let Some(events) = event_reader.read_event_batch(Duration::from_millis(50))? {
+                for event in events {
+                    match event {
+                        Event::Key(key)
+                            if key.kind == KeyEventKind::Press
+                                || key.kind == KeyEventKind::Repeat =>
+                        {
+                            if let Some(result) = self.handle_key(key) {
                                 return Ok(result);
                             }
                         }
-                    } else {
-                        for ev in events {
-                            match ev {
-                                Event::Key(key)
-                                    if key.kind == KeyEventKind::Press
-                                        || key.kind == KeyEventKind::Repeat =>
-                                {
-                                    if let Some(result) = self.handle_key(key) {
-                                        return Ok(result);
-                                    }
-                                }
-                                other => {
-                                    if let Some(result) =
-                                        self.handle_non_key_event(other, terminal)?
-                                    {
-                                        return Ok(result);
-                                    }
-                                }
+                        other => {
+                            if let Some(result) = self.handle_non_key_event(other, terminal)? {
+                                return Ok(result);
                             }
                         }
                     }
@@ -456,7 +396,7 @@ impl StartupPage {
             Event::Paste(text) => {
                 if self.login_form.is_visible() {
                     self.login_form.insert_paste(&text);
-                } else {
+                } else if self.info_popup.is_none() && !self.any_popup_visible() {
                     self.text_input.insert_paste(&text);
                     self.refresh_command_menu();
                 }

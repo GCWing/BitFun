@@ -28,7 +28,7 @@
 | Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v1 preview 门面和 smoke test | 发布边界仍需真实嵌入方证明 |
 | 插件运行时 | 现有路径只覆盖 BitFun 原生包和 OpenCode custom tool 静态名称预览 | 不能据通用 envelope 或静态候选扩张稳定 ABI |
 | Relay | room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router 已归属 `services/relay-service`，standalone 与 embedded 入口同向消费；embedded 宿主逻辑仍在 assembly 兼容路径 | Cargo metadata 门禁覆盖 workspace、独立 manifest、normal/build/dev 依赖及 optional/target 变体；宿主归位是独立后续工作 |
-| CLI CI | 独立 Linux job 运行 CLI test，通用三平台 workspace check 覆盖 CLI 编译；发布工作流负责打包 | 参数/序列化/前置失败和组装已有 focused contract；真实模型/PTY、Patch I/O 失败与常规 package smoke 仍需补齐 |
+| CLI CI | 独立 Linux job 运行 CLI test，通用三平台 workspace check 覆盖 CLI 编译；Linux PTY 与 Windows ConPTY 有启动页生命周期进程冒烟，发布归档上传前校验 SHA-256 并解压执行 | 参数/序列化/前置失败和组装已有 focused contract；真实模型、Chat 活动 turn、resize 渲染、终端故障注入与 Patch I/O 失败仍需补齐 |
 
 ## 3. 目标依赖与归属
 
@@ -74,11 +74,11 @@ Peer Host 的 Runtime 接入和跨 Relay/Desktop/Web 的协议切换保持独立
 
 1. 以真实调用方和行为等价测试补齐 SDK 端口，逐项缩小模型更新、分支、用量、快照和持久化维护兼容面。
 2. 继续迁移 ACP 尚未接入 SDK 的持久化历史、模型/模式和 MCP 操作；ACP stdio 与协议投影生命周期保留在接口入口。
-3. 继续拆分 TUI 副作用边界并补 package smoke，不以大规模重写替代现有回归保护。
+3. 继续按真实故障样例拆分 TUI 副作用边界，不以大规模重写替代现有回归保护。
 
 当前 assembly 切换条件已经满足：CLI 生产入口消费真实组装结果，目标链路没有第二套状态，独立测试与三平台
-编译门禁存在。CLI-P0 整体退出条件尚未满足；真实模型/PTY 协议矩阵、兼容门面退出、ACP/Desktop 切换和
-package smoke 需分别验收。
+编译门禁存在，启动页 PTY/ConPTY 生命周期与发布归档冒烟测试已接入门禁。CLI-P0 整体退出条件尚未满足；
+真实模型交互、Chat 活动 turn、resize 渲染、终端故障注入、兼容门面退出以及 ACP/Desktop 切换仍需分别验收。
 
 ### 4.3 依次切换 ACP 与 Desktop
 

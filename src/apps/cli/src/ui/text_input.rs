@@ -199,9 +199,29 @@ impl TextInput {
     }
 
     pub(super) fn insert_paste(&mut self, text: &str) {
-        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-        for c in normalized.chars() {
-            self.handle_char(c);
+        let mut normalized = String::with_capacity(text.len());
+        let mut characters = text.chars().peekable();
+        while let Some(character) = characters.next() {
+            match character {
+                '\r' => {
+                    if characters.peek() == Some(&'\n') {
+                        characters.next();
+                    }
+                    normalized.push('\n');
+                }
+                '\t' => normalized.push_str("    "),
+                '\n' => normalized.push('\n'),
+                character if !character.is_control() && character != '\u{0}' => {
+                    normalized.push(character);
+                }
+                _ => {}
+            }
+        }
+
+        if !normalized.is_empty() {
+            let byte_pos = self.char_pos_to_byte_pos(self.cursor);
+            self.cursor += normalized.chars().count();
+            self.input.insert_str(byte_pos, &normalized);
         }
     }
 
@@ -435,5 +455,28 @@ mod tests {
     fn available_visual_width_is_always_nonzero() {
         assert_eq!(TextInput::avail_width(0, usize::MAX), 1);
         assert_eq!(TextInput::avail_width(u16::MAX, 0), u16::MAX as usize);
+    }
+
+    #[test]
+    fn paste_normalizes_newlines_and_expands_tabs_without_dropping_text() {
+        let mut input = TextInput::new();
+        input.set_text("ac");
+        input.cursor = 1;
+
+        input.insert_paste("b\t\r\nd");
+
+        assert_eq!(input.text(), "ab    \ndc");
+        assert_eq!(input.cursor, 8);
+    }
+
+    #[test]
+    fn large_paste_is_inserted_without_changing_content() {
+        let mut input = TextInput::new();
+        let pasted = "x".repeat(64 * 1024);
+
+        input.insert_paste(&pasted);
+
+        assert_eq!(input.text(), pasted);
+        assert_eq!(input.cursor, 64 * 1024);
     }
 }

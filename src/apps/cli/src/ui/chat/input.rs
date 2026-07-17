@@ -43,6 +43,11 @@ impl ChatView {
         self.refresh_command_menu();
     }
 
+    pub(crate) fn insert_paste(&mut self, text: &str) {
+        self.text_input.insert_paste(text);
+        self.refresh_command_menu();
+    }
+
     pub(crate) fn handle_newline(&mut self) {
         self.text_input.handle_newline();
         self.refresh_command_menu();

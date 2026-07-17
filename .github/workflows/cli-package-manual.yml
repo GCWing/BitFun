@@ -200,6 +200,30 @@ jobs:
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
           echo "checksum=${ARCHIVE}.sha256" >> "$GITHUB_OUTPUT"
 
+      - name: Smoke test packaged archive
+        shell: bash
+        env:
+          ARCHIVE: ${{ steps.stage.outputs.archive }}
+          CHECKSUM: ${{ steps.stage.outputs.checksum }}
+        run: |
+          set -euo pipefail
+
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum -c "$CHECKSUM"
+          else
+            shasum -a 256 -c "$CHECKSUM"
+          fi
+
+          EXTRACT_DIR="$(mktemp -d)"
+          trap 'rm -rf "$EXTRACT_DIR"' EXIT
+          tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
+
+          shopt -s nullglob
+          BIN_CANDIDATES=("$EXTRACT_DIR"/*/bitfun-cli)
+          [[ "${#BIN_CANDIDATES[@]}" -eq 1 ]]
+          "${BIN_CANDIDATES[0]}" --version
+          "${BIN_CANDIDATES[0]}" --help > /dev/null
+
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
