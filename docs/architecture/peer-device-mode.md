@@ -25,6 +25,13 @@ Do **not** treat cloud session blobs as the Remote data plane. Do **not** merge
 cloud session metadata into local disk on login or periodic pull — that pollutes
 A and conflicts with Peer Mode.
 
+Settings sync is continuous on every logged-in host (Desktop, interactive CLI,
+and the CLI daemon): local changes upload after a ~5s debounce (content-hash
+deduped); cloud changes are pulled at process start and then every ~30s. After
+applying or uploading settings, a host fans out `account://settings-applied`
+to attached controllers; the controller re-emits it locally so the frontend
+config cache and model selectors refresh without reconnecting.
+
 SSH `WorkspaceKind.Remote` remains a separate path (local session mirror + remote
 FS) and must not be mixed with Peer Device Mode.
 
@@ -114,6 +121,11 @@ Still use normal `openWorkspace` / create-workspace flows (not SSH
   webview bridge). Device routing in `src/apps/cli/src/account.rs` special-cases
   `HostInvoke` / `DeviceEvent`. Same machine Desktop+CLI share one `device_id`;
   last `AuthConnect` wins.
+- Shared account settings sync engine:
+  `src/crates/assembly/core/src/service/remote_connect/settings_sync.rs`
+  (debounced push, 30s pull, persisted cursor); app wiring in
+  `src/apps/desktop/src/api/remote_connect_api.rs` and
+  `src/apps/cli/src/account_sync.rs`.
 - Frontend mode + transport: `src/web-ui/src/infrastructure/peer-device/`,
   `adapters/peer-device-adapter.ts`
 - Peer directory picker: `pickWorkspaceDirectory.ts`, `PeerDirectoryBrowser.tsx`,
