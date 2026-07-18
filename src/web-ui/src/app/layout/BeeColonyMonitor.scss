@@ -1,0 +1,102 @@
+// BeeColonyMonitor — floating panel for bee-colony-dag MiniApp
+$panel-width: 380px;
+$panel-height: 560px;
+$trigger-offset-bottom: 80px;
+$trigger-offset-right: 20px;
+
+.bee-monitor {
+  position: fixed;
+  z-index: 700;
+  pointer-events: none;
+  &--open { pointer-events: auto; }
+}
+
+.bee-monitor__button {
+  position: fixed;
+  bottom: $trigger-offset-bottom;
+  right: $trigger-offset-right;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--bitfun-border-subtle);
+  background: var(--bitfun-bg-secondary);
+  color: var(--bitfun-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.30);
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+  pointer-events: auto;
+  z-index: 701;
+  &:hover {
+    background: var(--bitfun-element-hover);
+    color: var(--bitfun-accent);
+    transform: scale(1.08);
+  }
+  .bee-monitor--open & { opacity: 0; pointer-events: none; transform: scale(0.8); }
+}
+
+.bee-monitor__backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 698;
+}
+
+.bee-monitor__panel {
+  position: fixed;
+  bottom: 136px;
+  right: $trigger-offset-right;
+  width: $panel-width;
+  height: $panel-height;
+  background: var(--bitfun-bg);
+  border: 1px solid var(--bitfun-border-subtle);
+  border-radius: 10px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  z-index: 699;
+  overflow: hidden;
+  transform: translateY(16px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.18s ease;
+  &--open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+  &--maximized {
+    top: 40px; left: 40px; right: 40px; bottom: 40px;
+    width: auto; height: auto;
+  }
+}
+
+.bee-monitor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bitfun-border-subtle);
+  flex-shrink: 0;
+  background: var(--bitfun-bg-secondary);
+}
+.bee-monitor__title {
+  font-size: 13px; font-weight: 600;
+  color: var(--bitfun-text);
+}
+.bee-monitor__header-actions { display: flex; gap: 4px; }
+.bee-monitor__header-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: none; background: transparent;
+  color: var(--bitfun-text-secondary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  &:hover { background: var(--bitfun-element-hover); color: var(--bitfun-text); }
+  &--close:hover { background: rgba(239,68,68,0.15); color: var(--bitfun-error); }
+}
+
+.bee-monitor__body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.bee-monitor__loading, .bee-monitor__error {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  padding: 24px; text-align: center;
+  color: var(--bitfun-text-muted); font-size: 13px;
+  small { font-size: 11px; opacity: 0.7; }
+}

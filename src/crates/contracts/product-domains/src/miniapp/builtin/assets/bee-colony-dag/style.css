@@ -1,0 +1,163 @@
+*, *::before, *::after { box-sizing: border-box; }
+body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+:root {
+  /* Surfaces */
+  --dag-bg:        var(--bitfun-bg,            #121214);
+  --dag-surface:   var(--bitfun-bg-secondary,  #1c1c1f);
+  --dag-surface-2: var(--bitfun-element-bg,    rgba(255,255,255,0.06));
+  --dag-border:    var(--bitfun-border-subtle, rgba(255,255,255,0.10));
+
+  /* Text */
+  --dag-text:      var(--bitfun-text,           #e8e8e8);
+  --dag-text-soft: var(--bitfun-text-secondary, #b0b0b0);
+  --dag-text-mute: var(--bitfun-text-muted,     #858585);
+
+  /* Semantic */
+  --dag-accent:    var(--bitfun-accent, #60a5fa);
+  --dag-success:   var(--bitfun-success, #34d399);
+  --dag-error:     var(--bitfun-error,   #ef4444);
+
+  /* Node status */
+  --dag-idle:    #3f3f46;
+  --dag-running: #60a5fa;
+  --dag-done:    #34d399;
+  --dag-failed:  #ef4444;
+
+  --dag-radius: var(--bitfun-radius, 8px);
+  --dag-font:   var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+/* ---- Layout ---- */
+.bee-dag {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--dag-bg);
+  color: var(--dag-text);
+  font-family: var(--dag-font);
+  font-size: 13px;
+  user-select: none;
+}
+
+/* ---- Top bar ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--dag-surface);
+  border-bottom: 1px solid var(--dag-border);
+  flex-shrink: 0;
+}
+
+.topbar__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dag-text);
+  letter-spacing: 0.02em;
+}
+
+.topbar__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--dag-surface-2);
+  color: var(--dag-text-soft);
+  transition: background 0.3s, color 0.3s;
+}
+
+.topbar__badge--running {
+  background: rgba(96,165,250,0.16);
+  color: var(--dag-running);
+}
+
+.topbar__badge--done {
+  background: rgba(52,211,153,0.14);
+  color: var(--dag-done);
+}
+
+.topbar__badge--failed {
+  background: rgba(239,68,68,0.14);
+  color: var(--dag-error);
+}
+
+/* ---- Canvas ---- */
+.canvas-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.dag-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---- Bottom bar ---- */
+.bottombar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  background: var(--dag-surface);
+  border-top: 1px solid var(--dag-border);
+  flex-shrink: 0;
+}
+
+.bottombar__hint {
+  font-size: 11px;
+  color: var(--dag-text-mute);
+  letter-spacing: 0.03em;
+}
+
+/* ---- SVG node animations ---- */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.node--running .dag-node-rect {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* ---- SVG elements ---- */
+.dag-edge {
+  stroke: rgba(255,255,255,0.16);
+  stroke-width: 1.6;
+}
+
+.dag-edge--gate {
+  stroke: rgba(239,68,68,0.40);
+  stroke-dasharray: 6 3;
+}
+
+.dag-node-rect {
+  transition: fill 0.35s ease;
+}
+
+.dag-node-text {
+  fill: var(--dag-text);
+  font-family: var(--dag-font);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dag-node-sub {
+  fill: var(--dag-text-mute);
+  font-family: var(--dag-font);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.dag-gate-dash {
+  fill: none;
+  stroke: rgba(239,68,68,0.45);
+  stroke-width: 1.8;
+  stroke-dasharray: 5 3;
+}

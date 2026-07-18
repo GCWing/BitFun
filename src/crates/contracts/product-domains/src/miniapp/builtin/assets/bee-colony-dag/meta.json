@@ -1,0 +1,35 @@
+{
+  "id": "builtin-bee-colony-dag",
+  "name": "蜂群架构监控",
+  "description": "蜂群八角色 DAG 架构图，实时监控各节点执行状态。Agent 推送状态更新，节点颜色实时变化。",
+  "icon": "GitBranch",
+  "category": "tool",
+  "tags": ["蜂群", "DAG", "监控", "Agent"],
+  "version": 1,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "fs": {
+      "read": ["{appdata}"],
+      "write": ["{appdata}"]
+    },
+    "shell": { "allow": [] },
+    "net": { "allow": [] },
+    "node": { "enabled": false }
+  },
+  "ai_context": null,
+  "i18n": {
+    "locales": {
+      "zh-CN": {
+        "name": "蜂群架构监控",
+        "description": "蜂群八角色 DAG 架构图，实时监控各节点执行状态。",
+        "tags": ["蜂群", "DAG", "监控", "Agent"]
+      },
+      "en-US": {
+        "name": "Bee Colony Monitor",
+        "description": "Bee Colony 8-role DAG architecture with real-time node status monitoring.",
+        "tags": ["bee-colony", "DAG", "monitor", "Agent"]
+      }
+    }
+  }
+}
