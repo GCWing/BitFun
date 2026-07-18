@@ -854,6 +854,9 @@ export function runManifestParserSelfTest({
   const opencodeAdapterPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/adapters/opencode-adapter/src/lib.rs',
   );
+  const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
+  );
   const managedPluginActivationPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/assembly/core/src/plugin_runtime.rs',
   );
@@ -907,6 +910,17 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('public API parser must collect top-level items and re-exports without impl methods');
   }
+  const parsedExternalSubagentIds = collectTopLevelRustPublicSymbols(`
+    external_subagent_id!(ExternalSubagentLocalId, "local");
+    external_subagent_id!(
+      ExternalSubagentBehaviorVersion,
+      "behavior"
+    );
+    pub struct SecretText(String);
+  `);
+  if (parsedExternalSubagentIds.join(',') !== 'ExternalSubagentLocalId,ExternalSubagentBehaviorVersion,SecretText') {
+    throw new Error('public API parser must collect external subagent id macro exports');
+  }
   const pluginPublicApiSymbols = (pluginPublicApiRule?.allowedSymbolEntries || []).map(
     (entry) => entry.symbol,
   );
@@ -955,10 +969,10 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory, command provider, and standalone-tool provider surfaces',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, tool, and subagent providers',
     );
   }
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
@@ -972,6 +986,28 @@ export function runManifestParserSelfTest({
     }
     if (entry.wireImpact !== false) {
       throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
+    }
+  }
+  if (!externalSubagentPublicApiRule) {
+    throw new Error('external subagent contracts must have an independent public API budget rule');
+  }
+  if (!publicApiContractSlices.includes('external-source-subagent-contract')) {
+    throw new Error('external subagent contracts must have an independent contract slice');
+  }
+  for (const requiredSymbol of [
+    'ExternalSubagentDefinition',
+    'ExternalSubagentSourceProvider',
+    'ExternalSubagentSummary',
+    'external_subagent_approval_key',
+    'external_subagent_conflict_key',
+  ]) {
+    if (!externalSubagentPublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-subagent-contract'
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external subagent public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
     }
   }
   if (

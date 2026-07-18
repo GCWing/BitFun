@@ -57,16 +57,16 @@ pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
-    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
-    AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, ClockPort, DialogSubmissionPolicy, DialogSubmitOutcome,
-    FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort,
-    PermissionRequest, PortError, PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort,
-    RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
+    AgentSessionManagementPort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, ClockPort, DialogSubmissionPolicy,
+    DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision,
+    PermissionPort, PermissionRequest, PortError, PortResult, RemoteAssistantWorkspaceFacts,
+    RemoteCapabilityPort, RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
     SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, SessionTranscript,
@@ -111,6 +111,11 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.inner = self.inner.with_session_management_port(port);
+        self
+    }
+
+    pub fn with_session_model_port(mut self, port: Arc<dyn AgentSessionModelPort>) -> Self {
+        self.inner = self.inner.with_session_model_port(port);
         self
     }
 
@@ -260,6 +265,13 @@ impl AgentRuntime {
         request: AgentSessionDeleteRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.delete_session(request).await
+    }
+
+    pub async fn update_session_model(
+        &self,
+        request: AgentSessionModelUpdateRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.update_session_model(request).await
     }
 
     pub async fn restore_session(

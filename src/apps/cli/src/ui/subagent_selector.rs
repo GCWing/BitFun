@@ -20,7 +20,7 @@ pub(crate) struct SubagentItem {
     pub id: String,
     pub name: String,
     pub description: String,
-    pub source: String, // "builtin", "project", or "user"
+    pub source: String, // "builtin", "project", "user", or "external"
     pub enabled: bool,
 }
 
@@ -342,11 +342,13 @@ impl SubagentSelectorState {
             "builtin" => "B",
             "project" => "P",
             "user" => "U",
+            "external" => "E",
             _ => "?",
         };
         let source_style = match subagent.source.as_str() {
             "builtin" => theme.style(StyleKind::Success),
             "project" => theme.style(StyleKind::Info),
+            "external" => theme.style(StyleKind::Warning),
             _ => theme.style(StyleKind::Muted),
         };
         let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);

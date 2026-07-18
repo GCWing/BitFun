@@ -7,6 +7,7 @@ export const publicApiContractSlices = [
   'opencode-adapter-boundary',
   'external-source-command-contract',
   'external-source-tool-contract',
+  'external-source-subagent-contract',
 ];
 
 const contractSlices = {
@@ -16,6 +17,7 @@ const contractSlices = {
   opencodeAdapterBoundary: 'opencode-adapter-boundary',
   externalSourceCommandContract: 'external-source-command-contract',
   externalSourceToolContract: 'external-source-tool-contract',
+  externalSourceSubagentContract: 'external-source-subagent-contract',
 };
 
 function pluginRuntimeEntry(symbol, p0, consumer, verification, contractSlice, wireImpact = true) {
@@ -192,6 +194,14 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeToolProviderOptions',
     'OpenCode standalone-tool adapter fixture tests and explicit environment injection',
   ),
+  opencodeAdapterEntry(
+    'OpenCodeSubagentProvider',
+    'bitfun-core external source composition root and OpenCode subagent adapter tests',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeSubagentProviderOptions',
+    'OpenCode subagent adapter fixture tests and explicit environment injection',
+  ),
 ];
 
 function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
@@ -226,12 +236,30 @@ function externalToolEntry(symbol, owner, consumer, wireImpact = false) {
   };
 }
 
+function externalSubagentEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'external subagent contract, coordinator, OpenCode adapter, product reconciliation, registry lease, TUI, Desktop, and Web tests',
+    p0: 'PR3 ecosystem-neutral fresh subagent activation and OpenCode agent vertical slice',
+    contractSlice: contractSlices.externalSourceSubagentContract,
+    wireImpact,
+    rationale:
+      'PR3 needs typed discovery, approval-envelope, conflict, summary, and fresh-invocation contracts without ecosystem payload leakage',
+    exit:
+      'remove only through a reviewed subagent-capability contract migration with equivalent fail-closed routing and product tests',
+  };
+}
+
 export const externalSourceContractPublicApiEntries = [
   'ExternalSourceContractError',
   'SourceKey',
   'SourceQualifiedCommandId',
   'ExternalSourceScope',
   'ExternalSourceHealth',
+  'ExternalSourceAssetKind',
   'ExternalSourceDiagnosticSeverity',
   'ExternalSourceDiagnostic',
   'ExternalSourceRecord',
@@ -290,6 +318,41 @@ export const externalSourceContractPublicApiEntries = [
   ),
 );
 
+export const externalSubagentContractPublicApiEntries = [
+  'ExternalSubagentLocalId',
+  'ExternalSubagentCandidateId',
+  'ExternalSubagentBehaviorVersion',
+  'SecretText',
+  'ExternalSubagentContributionId',
+  'ExternalSubagentContributionRole',
+  'ExternalSubagentProvenanceRef',
+  'ExternalSubagentProviderIdentity',
+  'ExternalSubagentMode',
+  'ExternalSubagentModelRequest',
+  'ExternalSubagentToolSelector',
+  'ExternalSubagentToolRequest',
+  'ExternalSubagentCompatibilityState',
+  'ExternalSubagentDefinition',
+  'ExternalSubagentDiscoveryInput',
+  'ExternalSubagentProviderSnapshot',
+  'ExternalSubagentSourceProvider',
+  'ExternalSubagentActivationState',
+  'ExternalSubagentDiagnosticSummary',
+  'ExternalSubagentSummary',
+  'ExternalSubagentConflictCandidate',
+  'ExternalSubagentConflict',
+  'external_subagent_candidate_id',
+  'external_subagent_approval_key',
+  'external_subagent_conflict_key',
+].map((symbol) =>
+  externalSubagentEntry(
+    symbol,
+    'product-domains external subagent contract owner',
+    'ecosystem subagent providers, external-subagent coordinator, product reconciliation, and neutral product surfaces',
+    true,
+  ),
+);
+
 export const externalSourceCoordinatorPublicApiEntries = [
   externalSourceEntry(
     'ExternalSourceCoordinator',
@@ -315,6 +378,18 @@ export const externalSourceCoordinatorPublicApiEntries = [
       'bitfun-core bounded concurrent external-tool provider scheduler',
     ),
   ),
+  ...[
+    'ExternalSubagentCoordinator',
+    'ExternalSubagentCoordinatorSnapshot',
+    'ExternalSubagentDiscoveryRequest',
+    'ExternalSubagentDiscoveryResult',
+  ].map((symbol) =>
+    externalSubagentEntry(
+      symbol,
+      'external-sources assembly owner',
+      'bitfun-core bounded concurrent external-subagent provider scheduler',
+    ),
+  ),
 ];
 
 export const externalSourceCorePublicApiEntries = [
@@ -322,6 +397,7 @@ export const externalSourceCorePublicApiEntries = [
     'ExpandedPromptCommand',
     'ExternalSourceCatalogEntry',
     'ExternalSourceCatalogSnapshot',
+    'ExternalSourceAssetKind',
     'ExternalSourceDiagnostic',
     'ExternalSourceDiagnosticSeverity',
     'ExternalSourceLifecycleState',
@@ -358,6 +434,21 @@ export const externalSourceCorePublicApiEntries = [
     externalToolEntry(
       symbol,
       'bitfun-core external tool composition facade',
+      'bitfun-cli and desktop host APIs',
+    ),
+  ),
+  ...[
+    'ExternalSubagentActivationState',
+    'ExternalSubagentCompatibilityState',
+    'ExternalSubagentConflict',
+    'ExternalSubagentConflictCandidate',
+    'ExternalSubagentSummary',
+    'set_external_subagent_activation',
+    'choose_external_subagent_conflict',
+  ].map((symbol) =>
+    externalSubagentEntry(
+      symbol,
+      'bitfun-core external subagent composition facade',
       'bitfun-cli and desktop host APIs',
     ),
   ),
@@ -489,6 +580,12 @@ export const publicApiAllowlistRules = [
     reason:
       'external source contracts must stay capability-specific, ecosystem-neutral, and explicitly consumer-backed',
     allowedSymbolEntries: externalSourceContractPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/external_subagents.rs',
+    reason:
+      'external subagent contracts must stay ecosystem-neutral, fresh-only, and explicitly consumer-backed',
+    allowedSymbolEntries: externalSubagentContractPublicApiEntries,
   },
   {
     path: 'src/crates/assembly/external-sources/src/lib.rs',

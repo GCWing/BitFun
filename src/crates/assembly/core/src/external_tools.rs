@@ -9,11 +9,11 @@ use async_trait::async_trait;
 use bitfun_external_sources::{ExternalToolCoordinator, ExternalToolCoordinatorSnapshot};
 use bitfun_product_domains::external_sources::{
     external_tool_approval_key, external_tool_conflict_key, external_tool_decision_key,
-    ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceScope,
-    ExternalToolActivationState, ExternalToolApprovalRequest, ExternalToolCatalogEntry,
-    ExternalToolConflict, ExternalToolConflictCandidate, ExternalToolConflictCandidateKind,
-    ExternalToolDefinition, ExternalToolStaticStatus, PreparedExternalToolTarget,
-    SourceQualifiedToolTargetId,
+    ExternalSourceAssetKind, ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity,
+    ExternalSourceScope, ExternalToolActivationState, ExternalToolApprovalRequest,
+    ExternalToolCatalogEntry, ExternalToolConflict, ExternalToolConflictCandidate,
+    ExternalToolConflictCandidateKind, ExternalToolDefinition, ExternalToolStaticStatus,
+    PreparedExternalToolTarget, SourceQualifiedToolTargetId,
 };
 use bitfun_runtime_ports::{
     PortErrorKind, ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,
@@ -1643,7 +1643,7 @@ pub(super) async fn reconcile_external_tools(
                     Err(error) => {
                         state.diagnostics.push(tool_diagnostic(
                             "external_tool.load_failed",
-                            format!("Failed to load '{}': {error}", first.module_path),
+                            format!("Failed to load the external tool module: {error}"),
                             Some(target_id.source.clone()),
                         ));
                         for definition in definitions {
@@ -1922,6 +1922,7 @@ fn tool_diagnostic(
 ) -> ExternalSourceDiagnostic {
     ExternalSourceDiagnostic {
         severity: ExternalSourceDiagnosticSeverity::Warning,
+        asset_kind: ExternalSourceAssetKind::Tool,
         code: code.into(),
         message: message.into(),
         source,

@@ -31,7 +31,12 @@ export interface ExternalSourceRecord {
   executionDomainId: string;
   health: 'available' | 'partial' | 'degraded' | 'unavailable';
   contentVersion: string;
-  diagnostics?: Array<{ severity: string; code: string; message: string }>;
+  diagnostics?: Array<{
+    severity: string;
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent';
+    code: string;
+    message: string;
+  }>;
 }
 
 export interface ExternalSourceCatalogSnapshot {
@@ -73,7 +78,57 @@ export interface ExternalSourceCatalogSnapshot {
   tools?: ExternalToolCatalogEntry[];
   toolApprovalRequests?: ExternalToolApprovalRequest[];
   toolConflicts?: ExternalToolConflict[];
-  diagnostics?: Array<{ severity: string; code: string; message: string }>;
+  subagentGeneration?: number;
+  preferenceRevision?: number;
+  subagents?: ExternalSubagentSummary[];
+  subagentConflicts?: ExternalSubagentConflict[];
+  pendingSubagentApprovals?: string[];
+  diagnostics?: Array<{
+    severity: string;
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent';
+    code: string;
+    message: string;
+  }>;
+}
+
+export type ExternalSubagentActivation =
+  | { state: 'approval_required' }
+  | { state: 'declined' }
+  | { state: 'disabled' }
+  | { state: 'active' }
+  | { state: 'conflict' }
+  | { state: 'blocked' }
+  | { state: 'unavailable' };
+
+export interface ExternalSubagentSummary {
+  candidateId: string;
+  logicalId: string;
+  displayName: string;
+  description: string;
+  providerLabel: string;
+  scope: ExternalSourceScope;
+  sourceKeys: Array<{ providerId: string; sourceId: string }>;
+  sourceLocationLabels: string[];
+  sourceCount: number;
+  effectiveModelLabel?: string;
+  effectiveToolLabels: string[];
+  supportsFollowUp: boolean;
+  compatibilityState: 'ready' | 'ready_with_degradation' | 'blocked' | 'invalid';
+  diagnostics: Array<{ code: string; blocksActivation: boolean }>;
+  activationState: ExternalSubagentActivation;
+  decisionKey: string;
+}
+
+export interface ExternalSubagentConflict {
+  conflictKey: string;
+  logicalId: string;
+  selectedCandidateId?: string;
+  candidates: Array<{
+    candidateId: string;
+    displayName: string;
+    sourceLabel: string;
+    external: boolean;
+  }>;
 }
 
 export type ExternalToolCapability = 'file_system' | 'network' | 'process' | 'environment';
@@ -183,6 +238,46 @@ export const externalSourcesAPI = {
   ) {
     return api.invoke<ExternalSourceCatalogSnapshot>('set_external_tool_conflict_choice_command', {
       request: { workspacePath, conflictKey, candidateId },
+    });
+  },
+
+  setSubagentActivation(
+    workspacePath: string | undefined,
+    candidateId: string,
+    approved: boolean,
+    expectedSubagentGeneration: number,
+    expectedPreferenceRevision: number,
+    decisionKey: string,
+  ) {
+    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_subagent_activation_command', {
+      request: {
+        workspacePath,
+        candidateId,
+        approved,
+        expectedSubagentGeneration,
+        expectedPreferenceRevision,
+        decisionKey,
+      },
+    });
+  },
+
+  chooseSubagentConflict(
+    workspacePath: string | undefined,
+    conflictKey: string,
+    candidateId: string,
+    approveExternal: boolean,
+    expectedSubagentGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    return api.invoke<ExternalSourceCatalogSnapshot>('choose_external_subagent_conflict_command', {
+      request: {
+        workspacePath,
+        conflictKey,
+        candidateId,
+        approveExternal,
+        expectedSubagentGeneration,
+        expectedPreferenceRevision,
+      },
     });
   },
 };

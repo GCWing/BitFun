@@ -1,12 +1,22 @@
 use bitfun_product_domains::external_sources::{
     external_tool_approval_key, external_tool_conflict_key, prompt_command_conflict_key,
-    EcosystemId, ExecutionDomainId, ExpandedPromptCommand, ExternalSourceContext,
-    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceProviderError,
-    ExternalSourceRecord, ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition,
-    ExternalToolRuntimeKind, ExternalToolStaticStatus, ExternalWatchRoot,
+    EcosystemId, ExecutionDomainId, ExpandedPromptCommand, ExternalSourceAssetKind,
+    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
+    ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalToolCapability,
+    ExternalToolDefinition, ExternalToolRuntimeKind, ExternalToolStaticStatus, ExternalWatchRoot,
     PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
     PromptCommandProviderSnapshot, PromptCommandSourceProvider, SourceKey,
     SourceQualifiedCommandId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
+};
+use bitfun_product_domains::external_subagents::{
+    external_subagent_approval_key, external_subagent_candidate_id, external_subagent_conflict_key,
+    ExternalSubagentBehaviorVersion, ExternalSubagentCandidateId,
+    ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
+    ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
+    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
+    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentProviderSnapshot, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
+    SecretText,
 };
 use std::path::PathBuf;
 
@@ -180,6 +190,260 @@ fn capability_provider_contract_does_not_require_core_or_an_ecosystem_enum() {
     let snapshot = provider.discover(&context()).expect("discover fake source");
     assert_eq!(snapshot.provider.ecosystem_id.as_str(), "fake.ecosystem");
     assert_eq!(provider.watch_roots(&context()).len(), 1);
+}
+
+#[test]
+fn persisted_source_preference_keys_round_trip_without_path_guessing() {
+    let record = source(
+        "provider.with.dots",
+        "fake.ecosystem",
+        "project/source:agents",
+    );
+    assert_eq!(
+        ExternalSourceRecord::source_key_from_preference_key(&record.preference_key()),
+        Some(record.key)
+    );
+    assert!(ExternalSourceRecord::source_key_from_preference_key("malformed").is_none());
+}
+
+#[test]
+fn external_subagent_identity_preserves_ordered_provenance_and_separate_revisions() {
+    let provider =
+        ExternalSubagentProviderIdentity::new("fake.agents", "fake.ecosystem", "Fake Agents")
+            .unwrap();
+    let first = ExternalSubagentContributionId::new(
+        SourceKey::new("fake.agents", "global-config").unwrap(),
+        ExternalSubagentLocalId::new("review").unwrap(),
+    );
+    let second = ExternalSubagentContributionId::new(
+        SourceKey::new("fake.agents", "project-config").unwrap(),
+        ExternalSubagentLocalId::new("review").unwrap(),
+    );
+    let provenance = vec![
+        ExternalSubagentProvenanceRef {
+            contribution_id: first,
+            role: ExternalSubagentContributionRole::Base,
+        },
+        ExternalSubagentProvenanceRef {
+            contribution_id: second,
+            role: ExternalSubagentContributionRole::Overlay,
+        },
+    ];
+    let candidate_id = external_subagent_candidate_id(&provider.provider_id, "review", &provenance);
+    let reversed = external_subagent_candidate_id(
+        &provider.provider_id,
+        "review",
+        &provenance.iter().cloned().rev().collect::<Vec<_>>(),
+    );
+    assert_ne!(
+        candidate_id, reversed,
+        "provenance order changes behavior identity"
+    );
+
+    let definition = ExternalSubagentDefinition {
+        candidate_id,
+        logical_id: "review".to_string(),
+        provenance,
+        display_name: "Review".to_string(),
+        description: "Reviews a change".to_string(),
+        prompt: SecretText::new("Review carefully"),
+        mode: ExternalSubagentMode::Subagent,
+        disabled: false,
+        hidden: false,
+        requested_model: ExternalSubagentModelRequest::Default,
+        requested_tools: ExternalSubagentToolRequest {
+            selectors: vec![ExternalSubagentToolSelector {
+                source_name: "read".to_string(),
+                canonical_host_name: Some("Read".to_string()),
+                allowed: true,
+            }],
+            uses_conservative_default: false,
+        },
+        compatibility: ExternalSubagentCompatibilityState::Ready,
+        diagnostic_codes: Vec::new(),
+        behavior_version: ExternalSubagentBehaviorVersion::new("behavior-v1").unwrap(),
+    };
+    assert_eq!(definition.prompt.expose(), "Review carefully");
+    assert!(!format!("{definition:?}").contains("Review carefully"));
+
+    let mut invalid_model = definition.clone();
+    invalid_model.requested_model = ExternalSubagentModelRequest::Exact {
+        provider_hint: Some("fake\nprovider".to_string()),
+        model_name: "model".to_string(),
+    };
+    assert!(invalid_model.validate().is_err());
+
+    let mut invalid_tool = definition.clone();
+    invalid_tool.requested_tools.selectors[0].source_name = "read\nsecret".to_string();
+    assert!(invalid_tool.validate().is_err());
+
+    let mut invalid_diagnostic = definition.clone();
+    invalid_diagnostic.diagnostic_codes = vec!["provider.invalid:raw-source-key".to_string()];
+    assert!(invalid_diagnostic.validate().is_err());
+
+    let mut excessive_tools = definition.clone();
+    excessive_tools.requested_tools.selectors = (0..257)
+        .map(|index| ExternalSubagentToolSelector {
+            source_name: format!("tool-{index}"),
+            canonical_host_name: None,
+            allowed: true,
+        })
+        .collect();
+    assert!(excessive_tools.validate().is_err());
+
+    let snapshot = ExternalSubagentProviderSnapshot {
+        provider,
+        sources: vec![
+            source("fake.agents", "fake.ecosystem", "global-config"),
+            source("fake.agents", "fake.ecosystem", "project-config"),
+        ],
+        definitions: vec![definition],
+        diagnostics: Vec::new(),
+    };
+    snapshot
+        .validate()
+        .expect("valid external subagent provider snapshot");
+
+    let source_key = snapshot.sources[0].key.clone();
+    let mut valid_diagnostic = snapshot.clone();
+    valid_diagnostic.diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "fake.agent.degraded",
+            "An optional field is not supported",
+            Some(source_key),
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Subagent),
+    );
+    valid_diagnostic
+        .validate()
+        .expect("bounded provider diagnostics with a known source are valid");
+
+    let mut valid_source_diagnostic = snapshot.clone();
+    let valid_source_key = valid_source_diagnostic.sources[0].key.clone();
+    valid_source_diagnostic.sources[0].diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "fake.agent.source_degraded",
+            "This source has a recoverable warning",
+            Some(valid_source_key),
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Subagent),
+    );
+    valid_source_diagnostic
+        .validate()
+        .expect("source-owned diagnostics use the same provider contract");
+
+    let mut invalid_provider_diagnostic = snapshot.clone();
+    invalid_provider_diagnostic.diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "fake.agent:raw-source",
+            "Invalid diagnostic code",
+            Some(SourceKey::new("other.agents", "project").unwrap()),
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Command),
+    );
+    assert!(invalid_provider_diagnostic.validate().is_err());
+
+    let mut wrong_provider_diagnostic = snapshot.clone();
+    wrong_provider_diagnostic.diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "fake.agent.invalid_source",
+            "Unknown provider source",
+            Some(SourceKey::new("other.agents", "project").unwrap()),
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Subagent),
+    );
+    assert!(wrong_provider_diagnostic.validate().is_err());
+
+    let mut unknown_source_diagnostic = snapshot.clone();
+    unknown_source_diagnostic.diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "fake.agent.unknown_source",
+            "Unknown source",
+            Some(SourceKey::new("fake.agents", "missing").unwrap()),
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Subagent),
+    );
+    assert!(unknown_source_diagnostic.validate().is_err());
+
+    let mut invalid_diagnostic_message = snapshot.clone();
+    invalid_diagnostic_message.diagnostics.push(
+        ExternalSourceDiagnostic::warning("fake.agent.invalid_message", "invalid\nmessage", None)
+            .with_asset_kind(ExternalSourceAssetKind::Subagent),
+    );
+    assert!(invalid_diagnostic_message.validate().is_err());
+
+    let mut wrong_asset_kind = snapshot.clone();
+    wrong_asset_kind.diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "fake.agent.wrong_kind",
+            "Diagnostic belongs to another asset kind",
+            None,
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Tool),
+    );
+    assert!(wrong_asset_kind.validate().is_err());
+
+    let mut excessive_sources = snapshot.clone();
+    excessive_sources.sources = vec![snapshot.sources[0].clone(); 1025];
+    assert!(excessive_sources.validate().is_err());
+
+    let mut excessive_definitions = snapshot.clone();
+    excessive_definitions.definitions = vec![snapshot.definitions[0].clone(); 1025];
+    assert!(excessive_definitions.validate().is_err());
+
+    let mut excessive_diagnostics = snapshot.clone();
+    excessive_diagnostics.diagnostics = vec![
+        ExternalSourceDiagnostic::warning(
+            "fake.agent.degraded",
+            "An optional field is not supported",
+            None,
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Subagent);
+        1025
+    ];
+    assert!(excessive_diagnostics.validate().is_err());
+
+    let mut excessive_provenance = snapshot.clone();
+    excessive_provenance.definitions[0].provenance =
+        vec![snapshot.definitions[0].provenance[0].clone(); 257];
+    assert!(excessive_provenance.validate().is_err());
+
+    let input = ExternalSubagentDiscoveryInput {
+        context: context(),
+        suppressed_sources: [SourceKey::new("fake.agents", "suppressed").unwrap()]
+            .into_iter()
+            .collect(),
+    };
+    assert_eq!(input.suppressed_sources.len(), 1);
+}
+
+#[test]
+fn external_subagent_decision_keys_bind_behavior_but_not_catalog_copy() {
+    let candidate = ExternalSubagentCandidateId::new("candidate-v1").unwrap();
+    let behavior = ExternalSubagentBehaviorVersion::new("behavior-v1").unwrap();
+    let approval = external_subagent_approval_key(&candidate, &behavior, "envelope-v1");
+    let same = external_subagent_approval_key(&candidate, &behavior, "envelope-v1");
+    let changed = external_subagent_approval_key(
+        &candidate,
+        &ExternalSubagentBehaviorVersion::new("behavior-v2").unwrap(),
+        "envelope-v1",
+    );
+    assert_eq!(approval, same);
+    assert_ne!(approval, changed);
+
+    let first = external_subagent_conflict_key(
+        "local-user",
+        "/workspace",
+        "review",
+        [("local", "v1"), (candidate.as_str(), behavior.as_str())],
+    );
+    let reordered = external_subagent_conflict_key(
+        "local-user",
+        "/workspace",
+        "REVIEW",
+        [(candidate.as_str(), behavior.as_str()), ("local", "v1")],
+    );
+    assert_eq!(first, reordered);
 }
 
 #[test]

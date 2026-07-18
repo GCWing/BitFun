@@ -44,3 +44,10 @@ export function isAgentInOverviewZone(
 ): boolean {
   return !hiddenAgentIds.has(agent.id) && !coreAgentIds.has(agent.id);
 }
+
+/** External subagents are visible in the overview but managed by their source adapter. */
+export function isLocallyManageableSubagent(
+  subagent: { source?: string | null; subagentSource?: string | null },
+): boolean {
+  return (subagent.subagentSource ?? subagent.source) !== 'external';
+}

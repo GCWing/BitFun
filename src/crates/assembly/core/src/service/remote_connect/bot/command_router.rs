@@ -418,9 +418,19 @@ async fn select_model(
             );
         }
     };
+    let runtime = match CoreServiceAgentRuntime::agent_runtime(coordinator.clone()) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return result_from_menu(
+                state,
+                MenuView::plain(format!("{}{error}", s.switch_model_failed_prefix,)),
+            );
+        }
+    };
 
     match CoreServiceAgentRuntime::update_remote_session_model(
         coordinator.as_ref(),
+        &runtime,
         &session_id,
         model_id,
     )

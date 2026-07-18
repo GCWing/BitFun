@@ -9,6 +9,7 @@
 pub mod agentic; // Agent system, tool system, and product runtime orchestration
 #[cfg(feature = "product-full")]
 pub mod external_sources;
+mod external_subagents;
 #[cfg(feature = "product-full")]
 mod external_tools;
 #[cfg(feature = "product-domains")]

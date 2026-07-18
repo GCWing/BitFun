@@ -1,4 +1,5 @@
 use super::*;
+use crate::agentic::core::{SessionContinuationPolicy, SessionModelBindingPolicy};
 
 fn build_deep_review_subagent_context(
     role: DeepReviewSubagentRole,
@@ -52,6 +53,9 @@ struct BackgroundTaskStartRequest<'a> {
     context_mode: SubagentContextMode,
     target_session_id: Option<String>,
     subagent_type: Option<String>,
+    logical_subagent_type: Option<String>,
+    continuation_policy: SessionContinuationPolicy,
+    model_binding_policy: SessionModelBindingPolicy,
     effective_workspace_path: Option<String>,
     model_id: Option<String>,
     subagent_context: Option<HashMap<String, String>>,
@@ -61,6 +65,7 @@ struct BackgroundTaskStartRequest<'a> {
     tool_call_id: String,
     session_id: String,
     dialog_turn_id: String,
+    external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
 }
 
 impl TaskTool {
@@ -182,6 +187,11 @@ impl TaskTool {
         let is_auto_retry = is_retry && requested_auto_retry;
         let is_deep_review_parent = Self::is_deep_review_context(Some(context));
 
+        let mut external_generation_lease = None;
+        let mut supports_follow_up = true;
+        let mut logical_subagent_type = None;
+        let mut continuation_policy = SessionContinuationPolicy::Reusable;
+        let mut model_binding_policy = SessionModelBindingPolicy::Mutable;
         let subagent_type = match context_mode {
             SubagentContextMode::Fresh => {
                 if target_session_id.is_some() {
@@ -201,12 +211,44 @@ impl TaskTool {
                             all_agent_types.join(", ")
                         )));
                     }
-                    Some(subagent_type)
+                    let binding = get_agent_registry()
+                        .resolve_subagent_for_fresh_invocation(
+                            &subagent_type,
+                            context.workspace_root(),
+                            !context.is_remote(),
+                        )
+                        .ok_or_else(|| {
+                            BitFunError::tool(format!(
+                                "candidate_unavailable: subagent_type {} changed before the invocation could start",
+                                subagent_type
+                            ))
+                        })?;
+                    supports_follow_up = binding.supports_follow_up;
+                    if !supports_follow_up && model_id.is_some() {
+                        return Err(BitFunError::tool(
+                            "external_subagent_model_override_unsupported: external subagents use the approved model binding"
+                                .to_string(),
+                        ));
+                    }
+                    if !supports_follow_up && allow_review_follow_up {
+                        return Err(BitFunError::tool(
+                            "external_subagent_follow_up_unsupported: external subagents are fresh-only"
+                                .to_string(),
+                        ));
+                    }
+                    logical_subagent_type = Some(binding.logical_id.clone());
+                    continuation_policy = binding.continuation_policy;
+                    model_binding_policy = binding.model_binding_policy;
+                    external_generation_lease = binding.lease;
+                    Some(binding.runtime_agent_key)
                 }
             }
             SubagentContextMode::Fork => None,
         };
-        let delegate_target_label = match subagent_type.as_deref() {
+        let delegate_target_label = match logical_subagent_type
+            .as_deref()
+            .or(subagent_type.as_deref())
+        {
             Some(subagent_type) => format!("subagent '{}'", subagent_type),
             None if target_session_id.is_some() => "existing subagent session".to_string(),
             None => "forked subagent".to_string(),
@@ -546,6 +588,9 @@ impl TaskTool {
                 context_mode,
                 target_session_id,
                 subagent_type,
+                logical_subagent_type,
+                continuation_policy,
+                model_binding_policy,
                 effective_workspace_path,
                 model_id,
                 subagent_context,
@@ -555,6 +600,7 @@ impl TaskTool {
                 tool_call_id,
                 session_id,
                 dialog_turn_id,
+                external_generation_lease,
             })
             .await;
         }
@@ -565,6 +611,9 @@ impl TaskTool {
             context_mode,
             target_session_id,
             subagent_type,
+            logical_subagent_type,
+            continuation_policy,
+            model_binding_policy,
             effective_workspace_path,
             model_id,
             subagent_context,
@@ -583,6 +632,8 @@ impl TaskTool {
             deep_review_effective_policy,
             is_retry,
             start_time,
+            supports_follow_up,
+            external_generation_lease,
         )
         .await
     }
@@ -596,6 +647,9 @@ impl TaskTool {
             context_mode,
             target_session_id,
             subagent_type,
+            logical_subagent_type,
+            continuation_policy,
+            model_binding_policy,
             effective_workspace_path,
             model_id,
             subagent_context,
@@ -605,6 +659,7 @@ impl TaskTool {
             tool_call_id,
             session_id,
             dialog_turn_id,
+            external_generation_lease,
         } = request;
         let parent_info = SubagentParentInfo {
             tool_call_id,
@@ -618,11 +673,15 @@ impl TaskTool {
                     context_mode,
                     target_session_id,
                     subagent_type,
+                    logical_subagent_type,
+                    continuation_policy,
+                    model_binding_policy,
                     workspace_path: effective_workspace_path,
                     model_id,
                     subagent_parent_info: parent_info,
                     context: subagent_context.unwrap_or_default(),
                     delegation_policy: context.delegation_policy().spawn_child(),
+                    external_generation_lease,
                 },
                 timeout_seconds,
                 allow_review_follow_up,
@@ -651,6 +710,9 @@ impl TaskTool {
         context_mode: SubagentContextMode,
         target_session_id: Option<String>,
         subagent_type: Option<String>,
+        logical_subagent_type: Option<String>,
+        continuation_policy: SessionContinuationPolicy,
+        model_binding_policy: SessionModelBindingPolicy,
         effective_workspace_path: Option<String>,
         model_id: Option<String>,
         subagent_context: Option<HashMap<String, String>>,
@@ -669,6 +731,8 @@ impl TaskTool {
         deep_review_effective_policy: Option<DeepReviewExecutionPolicy>,
         is_retry: bool,
         start_time: Instant,
+        supports_follow_up: bool,
+        external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
     ) -> BitFunResult<Vec<ToolResult>> {
         let mut deep_review_active_guard = deep_review_active_guard;
         let mut provider_capacity_retry =
@@ -699,11 +763,15 @@ impl TaskTool {
                         context_mode,
                         target_session_id: target_session_id.clone(),
                         subagent_type: subagent_type.clone(),
+                        logical_subagent_type: logical_subagent_type.clone(),
+                        continuation_policy,
+                        model_binding_policy,
                         workspace_path: effective_workspace_path.clone(),
                         model_id: model_id.clone(),
                         subagent_parent_info: parent_info,
                         context: subagent_context.clone().unwrap_or_default(),
                         delegation_policy: context.delegation_policy().spawn_child(),
+                        external_generation_lease: external_generation_lease.clone(),
                     },
                     context.cancellation_token(),
                     timeout_seconds,
@@ -976,12 +1044,14 @@ impl TaskTool {
                 result.ledger_event_id(),
                 &retry_hint,
             );
-        if let Some(subagent_session_id) = result.session_id() {
-            data["session_id"] = json!(subagent_session_id);
-            result_for_assistant.push_str(&format!(
+        if supports_follow_up {
+            if let Some(subagent_session_id) = result.session_id() {
+                data["session_id"] = json!(subagent_session_id);
+                result_for_assistant.push_str(&format!(
                 "\n<subagent_session id=\"{}\">Use this session_id to continue the same subagent session.</subagent_session>",
                 subagent_session_id
             ));
+            }
         }
 
         Ok(vec![ToolResult::Result {

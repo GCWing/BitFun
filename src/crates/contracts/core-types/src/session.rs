@@ -9,6 +9,24 @@ pub enum SessionKind {
     EphemeralChild,
 }
 
+/// Whether a persisted subagent session may accept another delegated turn.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionContinuationPolicy {
+    #[default]
+    Reusable,
+    FreshOnly,
+}
+
+/// Whether model reconciliation may replace the session's selected model.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionModelBindingPolicy {
+    #[default]
+    Mutable,
+    ApprovedImmutable,
+}
+
 pub fn validate_session_id(session_id: &str) -> Result<(), String> {
     if session_id.is_empty() {
         return Err("session_id cannot be empty".to_string());

@@ -75,6 +75,7 @@ fn resolve_override_layers(
             )
             .map(to_runtime_override_state),
         },
+        Some(SubAgentSource::External) => ResolvedOverrideLayers::default(),
         None => ResolvedOverrideLayers::default(),
     }
 }
@@ -153,6 +154,15 @@ mod tests {
                 "user.md".to_string(),
                 CustomSubagentKind::User,
             )),
+            SubAgentSource::External => Arc::new(CustomSubagent::new(
+                id.to_string(),
+                "External subagent".to_string(),
+                vec!["Read".to_string()],
+                "prompt".to_string(),
+                true,
+                "external.md".to_string(),
+                CustomSubagentKind::User,
+            )),
         };
 
         AgentEntry {
@@ -161,6 +171,7 @@ mod tests {
                 SubAgentSource::Builtin => AgentSource::Builtin,
                 SubAgentSource::Project => AgentSource::Project,
                 SubAgentSource::User => AgentSource::User,
+                SubAgentSource::External => AgentSource::External,
             },
             subagent_source: Some(source),
             agent,

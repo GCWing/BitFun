@@ -108,8 +108,8 @@ export const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'dirs', ownerFeatures: ['miniapp'] },
       { depName: 'log', ownerFeatures: ['function-agents'] },
-      { depName: 'hex', ownerFeatures: ['plugin-source'] },
-      { depName: 'sha2', ownerFeatures: ['miniapp', 'plugin-source'] },
+      { depName: 'hex', ownerFeatures: ['external-sources', 'plugin-source'] },
+      { depName: 'sha2', ownerFeatures: ['external-sources', 'miniapp', 'plugin-source'] },
       { depName: 'which', ownerFeatures: ['miniapp'] },
     ],
   },

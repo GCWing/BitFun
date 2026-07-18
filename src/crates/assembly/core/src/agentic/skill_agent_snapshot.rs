@@ -183,6 +183,7 @@ async fn load_subagent_entries(
             workspace_root,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
+            external_sources_supported: false,
         })
         .await;
 

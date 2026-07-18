@@ -943,7 +943,7 @@ impl DialogScheduler {
             .to_string();
         let resolved_turn_id = format!("subagent-{}", Uuid::new_v4());
         request.set_dialog_turn_id(resolved_turn_id.clone());
-        let agent_type = request.agent_type().to_string();
+        let agent_type = request.logical_agent_type().to_string();
         let user_input = request.user_input_text().to_string();
         let session = self
             .session_manager

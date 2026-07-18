@@ -9,7 +9,7 @@
 | Crate | 职责 | 本地文档 |
 |---|---|---|
 | `ai-adapters` | AI provider 请求/响应 adapter 与 stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
-| `opencode-adapter` | 当前 OpenCode 静态来源探测与诊断；目标为来源协调器和生态适配器 | [AGENTS.md](opencode-adapter/AGENTS.md) |
+| `opencode-adapter` | OpenCode Command、standalone Tool 和 Subagent 实时 provider 的生态语义；受管包静态预览 | [AGENTS.md](opencode-adapter/AGENTS.md) |
 | `transport` | Event transport emitter 与宿主 transport adapter | [AGENTS.md](transport/AGENTS.md) |
 | `webdriver` | Embedded WebDriver protocol 与浏览器自动化 adapter | [AGENTS.md](webdriver/AGENTS.md) |
 

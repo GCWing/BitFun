@@ -1,10 +1,10 @@
 use bitfun_product_domains::external_sources::{
-    EcosystemId, ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
-    ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalToolCapability,
-    ExternalToolDefinition, ExternalToolProviderIdentity, ExternalToolProviderSnapshot,
-    ExternalToolRuntimeKind, ExternalToolSourceProvider, ExternalToolStaticStatus,
-    ExternalWatchRoot, PreparedExternalToolExport, PreparedExternalToolTarget, SourceKey,
-    SourceQualifiedToolId, SourceQualifiedToolTargetId,
+    EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
+    ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
+    ExternalToolCapability, ExternalToolDefinition, ExternalToolProviderIdentity,
+    ExternalToolProviderSnapshot, ExternalToolRuntimeKind, ExternalToolSourceProvider,
+    ExternalToolStaticStatus, ExternalWatchRoot, PreparedExternalToolExport,
+    PreparedExternalToolTarget, SourceKey, SourceQualifiedToolId, SourceQualifiedToolTargetId,
 };
 use regex::Regex;
 use sha2::{Digest, Sha256};
@@ -202,10 +202,7 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                 Err(error) => {
                     diagnostics.push(ExternalSourceDiagnostic::warning(
                         "opencode.tool.directory_metadata_failed",
-                        format!(
-                            "Failed to inspect tool directory '{}': {error}",
-                            directory.path.display()
-                        ),
+                        format!("Failed to inspect {}: {error}", directory.display_name),
                         Some(source_key),
                     ));
                     continue;
@@ -218,10 +215,7 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                 Err(error) => {
                     diagnostics.push(ExternalSourceDiagnostic::warning(
                         "opencode.tool.directory_read_failed",
-                        format!(
-                            "Failed to read tool directory '{}': {error}",
-                            directory.path.display()
-                        ),
+                        format!("Failed to read {}: {error}", directory.display_name),
                         Some(source_key),
                     ));
                     continue;
@@ -235,8 +229,8 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                         diagnostics.push(ExternalSourceDiagnostic::warning(
                             "opencode.tool.directory_entry_failed",
                             format!(
-                                "Failed to read an entry in tool directory '{}': {error}",
-                                directory.path.display()
+                                "Failed to read an entry in {}: {error}",
+                                directory.display_name
                             ),
                             Some(source_key.clone()),
                         ));
@@ -254,7 +248,10 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                         source_has_restrictions = true;
                         diagnostics.push(ExternalSourceDiagnostic::warning(
                             "opencode.tool.file_metadata_failed",
-                            format!("Failed to inspect tool file '{}': {error}", path.display()),
+                            format!(
+                                "Failed to inspect tool file '{}': {error}",
+                                tool_file_label(&path)
+                            ),
                             Some(source_key.clone()),
                         ));
                         continue;
@@ -270,8 +267,8 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                 diagnostics.push(ExternalSourceDiagnostic::warning(
                     "opencode.tool.file_limit",
                     format!(
-                        "Tool directory '{}' contains more than {MAX_TOOL_FILES} supported files; additional files were ignored",
-                        directory.path.display()
+                        "{} contains more than {MAX_TOOL_FILES} supported files; additional files were ignored",
+                        directory.display_name
                     ),
                     Some(source_key.clone()),
                 ));
@@ -287,7 +284,7 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                             "opencode.tool.file_too_large",
                             format!(
                                 "Tool file '{}' exceeds the supported size limit",
-                                path.display()
+                                tool_file_label(&path)
                             ),
                             Some(source_key.clone()),
                         ));
@@ -297,7 +294,7 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                         source_has_restrictions = true;
                         diagnostics.push(ExternalSourceDiagnostic::warning(
                             "opencode.tool.file_read_failed",
-                            format!("Failed to read '{}': {error}", path.display()),
+                            format!("Failed to read '{}': {error}", tool_file_label(&path)),
                             Some(source_key.clone()),
                         ));
                         continue;
@@ -310,7 +307,10 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                     source_has_restrictions = true;
                     diagnostics.push(ExternalSourceDiagnostic::warning(
                         "opencode.tool.export_missing",
-                        format!("Tool file '{}' has no supported exports", path.display()),
+                        format!(
+                            "Tool file '{}' has no supported exports",
+                            tool_file_label(&path)
+                        ),
                         Some(source_key.clone()),
                     ));
                     continue;
@@ -342,7 +342,7 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
                             format!(
                                 "Tool export '{}' in '{}' does not map to a portable tool name",
                                 export_name,
-                                path.display()
+                                tool_file_label(&path)
                             ),
                             Some(source_key.clone()),
                         ));
@@ -391,6 +391,14 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
             }
         }
         tools.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+        for diagnostic in &mut diagnostics {
+            diagnostic.asset_kind = ExternalSourceAssetKind::Tool;
+        }
+        for source in &mut sources {
+            for diagnostic in &mut source.diagnostics {
+                diagnostic.asset_kind = ExternalSourceAssetKind::Tool;
+            }
+        }
         let snapshot = ExternalToolProviderSnapshot {
             provider,
             sources,
@@ -658,6 +666,13 @@ fn normalize_path(path: &Path) -> PathBuf {
     })
 }
 
+fn tool_file_label(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("tool file")
+        .to_string()
+}
+
 fn runtime_kind(path: &Path) -> ExternalToolRuntimeKind {
     match path.extension().and_then(|value| value.to_str()) {
         Some("ts") => ExternalToolRuntimeKind::TypeScript,
@@ -700,8 +715,8 @@ fn file_url(path: &Path) -> Result<String, ExternalSourceProviderError> {
             ExternalSourceProviderError::new(
                 "opencode.tool.module_url_invalid",
                 format!(
-                    "Could not convert '{}' to an absolute file URL",
-                    normalized.display()
+                    "Could not convert tool file '{}' to an absolute file URL",
+                    tool_file_label(&normalized)
                 ),
                 false,
             )
@@ -711,7 +726,7 @@ fn file_url(path: &Path) -> Result<String, ExternalSourceProviderError> {
 fn io_error(code: &str, path: &Path, error: std::io::Error) -> ExternalSourceProviderError {
     ExternalSourceProviderError::new(
         code,
-        format!("Failed to read '{}': {error}", path.display()),
+        format!("Failed to read '{}': {error}", tool_file_label(path)),
         true,
     )
 }
@@ -891,5 +906,9 @@ mod tests {
             .find(|diagnostic| diagnostic.code == "opencode.tool.directory_read_failed")
             .expect("failed directory must produce a diagnostic");
         assert_eq!(diagnostic.source.as_ref(), Some(&failed_source));
+        assert!(diagnostic.message.contains("OpenCode user tools"));
+        assert!(!diagnostic
+            .message
+            .contains(temp.path().to_string_lossy().as_ref()));
     }
 }

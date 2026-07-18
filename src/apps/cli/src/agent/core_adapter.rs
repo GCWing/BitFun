@@ -11,9 +11,9 @@ use tokio::sync::Mutex;
 use super::Agent;
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionListRequest, AgentSessionRestoreRequest, AgentToolConfirmationRequest,
-    AgentToolRejectionRequest, AgentTurnCancellationRequest, AgentUserAnswersRequest,
-    SessionTranscript, SessionTranscriptRequest,
+    AgentSessionListRequest, AgentSessionModelUpdateRequest, AgentSessionRestoreRequest,
+    AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentTurnCancellationRequest,
+    AgentUserAnswersRequest, SessionTranscript, SessionTranscriptRequest,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_core::agentic::persistence::session_branch::SessionBranchResult;
@@ -173,10 +173,13 @@ impl CoreAgentAdapter {
         session_id: &str,
         model_id: &str,
     ) -> Result<()> {
-        self.compatibility
-            .update_session_model(session_id, model_id)
+        self.runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: session_id.to_string(),
+                model_id: model_id.to_string(),
+            })
             .await
-            .map_err(Into::into)
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) async fn branch_session_at_latest_turn(
@@ -539,6 +542,17 @@ mod tests {
     use bitfun_runtime_ports::AgentSessionSummary;
 
     use super::validated_session_summary;
+
+    #[test]
+    fn model_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
+        let source = include_str!("core_adapter.rs");
+        let runtime_update = ["runtime", "\n            .update_session_model"].concat();
+        let compatibility_update =
+            ["compatibility", "\n            .update_session_model"].concat();
+
+        assert!(source.contains(&runtime_update));
+        assert!(!source.contains(&compatibility_update));
+    }
 
     fn session_summary(session_id: &str) -> AgentSessionSummary {
         AgentSessionSummary {

@@ -1,8 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Slide Data → PPTX Build (Stage 2 of 2)
+// EditableSlideScene → PPTX Build
 //
-// buildSlideFromExtracted() takes the slideData from html2pptx-dom-core.js and
-// maps each element to pptxgenjs API calls (addText, addImage, addShape, etc.).
+// buildSlideFromScene() validates and serializes only scene.nodes.
 //
 // Key design decisions:
 //   WIDTH_SAFETY_IN  — text boxes are widened by 0.15" to absorb cross-renderer
@@ -14,14 +13,12 @@
 //   valign — resolved from CSS flex/grid align-items or line-height ratio.
 // ─────────────────────────────────────────────────────────────────────────────
 import pptxgen from 'pptxgenjs';
+import JSZip from 'jszip';
+import { EditableExportError, validateEditableSlideScene } from './editable-slide-scene.js';
 
-const PX_PER_IN = 96;
-const EMU_PER_IN = 914400;
 const SLIDE_W_IN = 13.333;
 const SLIDE_H_IN = 7.5;
-const EDITABLE_TEXT_TYPES = new Set([
-  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'svg-text', 'list', 'merged-text',
-]);
+const OOXML_ROUND_RECT_ADJUSTMENTS = Symbol('ppt-live-round-rect-adjustments');
 
 // PowerPoint and browsers render the same font at the same point size with
 // measurably different glyph widths (different font metric tables / hinting).
@@ -70,209 +67,251 @@ function safeTextBoxGeometry(origX, origW, align, isVerticalText) {
 
 function toImagePayload(src) {
   const raw = String(src || '').trim();
-  if (!raw) return null;
-  if (raw.startsWith('data:')) return { data: raw };
-  if (raw.startsWith('file://')) return { path: raw.replace('file://', '') };
-  return { path: raw };
+  if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/i.test(raw)) {
+    throw new Error('Intentional images must use an inline base64 PNG, JPEG, or WebP data URL');
+  }
+  return { data: raw };
 }
 
-function validateDimensions(bodyDimensions, pres) {
-  const errors = [];
-  const widthInches = bodyDimensions.width / PX_PER_IN;
-  const heightInches = bodyDimensions.height / PX_PER_IN;
-  if (pres.presLayout) {
-    const layoutWidth = pres.presLayout.width / EMU_PER_IN;
-    const layoutHeight = pres.presLayout.height / EMU_PER_IN;
-    if (Math.abs(layoutWidth - widthInches) > 0.1 || Math.abs(layoutHeight - heightInches) > 0.1) {
-      errors.push(
-        `HTML dimensions (${widthInches.toFixed(1)}" × ${heightInches.toFixed(1)}") `
-        + `don't match presentation layout (${layoutWidth.toFixed(1)}" × ${layoutHeight.toFixed(1)}")`,
-      );
+function tableCellBorders(border = {}) {
+  const uniform = border.color
+    ? { color: border.color, width: border.width || 0 }
+    : null;
+  return ['top', 'right', 'bottom', 'left'].map((side) => {
+    const value = border[side] || uniform || { color: '000000', width: 0 };
+    return {
+      type: value.width > 0 ? 'solid' : 'none',
+      color: value.color,
+      pt: value.width,
+    };
+  });
+}
+
+// CSS system / private font names are not installable PowerPoint typefaces.
+// Mapping them to the deck CJK body font keeps <a:ea> usable after export.
+const CSS_SYSTEM_FONT_FACES = new Set([
+  'system-ui',
+  '-apple-system',
+  'blinkmacsystemfont',
+  'ui-sans-serif',
+  'ui-serif',
+  'ui-monospace',
+  'sans-serif',
+  'serif',
+  'monospace',
+  'emoji',
+  'math',
+  'fangsong',
+  '.applesystemuifont',
+  '.sf ns text',
+  '.sf ns display',
+]);
+
+function textHintContainsCjk(textHint) {
+  return /[\u4e00-\u9fff]/.test(String(textHint || ''));
+}
+
+function resolvePptxFontFace(fontFace, textHint = '') {
+  const face = String(fontFace || '').replace(/['"]/g, '').trim();
+  if (!face) return 'PingFang SC';
+  const lower = face.toLowerCase();
+  if (CSS_SYSTEM_FONT_FACES.has(lower) || lower.startsWith('.')) {
+    return 'PingFang SC';
+  }
+  // PptxGenJS writes the same typeface into latin/ea/cs. Latin-only faces such
+  // as Arial therefore lock East-Asian glyphs to tofu after PowerPoint opens
+  // (or repairs) the table. Prefer the deck CJK body font for CJK runs.
+  if (
+    textHintContainsCjk(textHint)
+    && (lower === 'arial' || lower === 'helvetica' || lower === 'times new roman')
+  ) {
+    return 'PingFang SC';
+  }
+  return face;
+}
+
+function withResolvedFontFace(options = {}, textHint = '') {
+  if (!options || typeof options !== 'object') return options;
+  if (options.fontFace == null && options.fontFamily == null) {
+    return textHintContainsCjk(textHint)
+      ? { ...options, fontFace: 'PingFang SC' }
+      : options;
+  }
+  return {
+    ...options,
+    fontFace: resolvePptxFontFace(options.fontFace || options.fontFamily, textHint),
+  };
+}
+
+function resolveTableText(text) {
+  if (!Array.isArray(text)) return text;
+  return text.map((run) => {
+    if (!run || typeof run !== 'object') return run;
+    return {
+      ...run,
+      options: withResolvedFontFace(run.options || {}, run.text),
+    };
+  });
+}
+
+function addEditableTable(table, targetSlide) {
+  const rows = table.rows.map((row) => row.cells.map((cell) => {
+    const style = cell.style || {};
+    const cellTextHint = Array.isArray(cell.text)
+      ? cell.text.map((run) => run?.text || '').join('')
+      : cell.text;
+    const options = {
+      fill: style.fill == null
+        ? { color: 'FFFFFF', transparency: 100 }
+        : style.fill,
+      border: tableCellBorders(style.border),
+      align: style.align,
+      valign: style.valign,
+      fontFace: resolvePptxFontFace(style.fontFamily, cellTextHint),
+      fontSize: style.fontSize,
+      color: style.fontColor,
+      bold: style.bold,
+      margin: Array.isArray(style.padding)
+        ? style.padding.map((inches) => inches * 72)
+        : 0,
+      ...(cell.colspan > 1 ? { colspan: cell.colspan } : {}),
+      ...(cell.rowspan > 1 ? { rowspan: cell.rowspan } : {}),
+    };
+    return { text: resolveTableText(cell.text), options };
+  }));
+  targetSlide.addTable(rows, {
+    x: table.x,
+    y: table.y,
+    w: table.w,
+    h: table.h,
+    colW: table.columnWidths,
+    rowH: table.rows.map((row) => row.height),
+    autoFit: false,
+    autoPage: false,
+  });
+}
+
+function pptxLineStyle(style = {}) {
+  const { dash, ...line } = style;
+  return {
+    ...line,
+    ...(dash ? { dashType: dash } : {}),
+  };
+}
+
+function pptxTextMargin(margin) {
+  if (!Array.isArray(margin)) return Number.isFinite(margin) ? margin * 72 : 0;
+  const [top, right, bottom, left] = margin;
+  // EditableSlideScene uses CSS order. PptxGenJS 4.0.1's text serializer reads
+  // its four-value array as left/right/bottom/top and expects point values.
+  return [left, right, bottom, top].map((inches) => inches * 72);
+}
+
+function pptxTextValue(value) {
+  if (!Array.isArray(value)) return value;
+  return value.map((run) => {
+    const options = withResolvedFontFace({ ...(run.options || {}) }, run.text);
+    if (options.bullet?.type === 'bullet') {
+      const bullet = { ...options.bullet };
+      delete bullet.type;
+      options.bullet = bullet;
     }
-  }
-  return errors;
+    return {
+      ...run,
+      options,
+    };
+  });
 }
 
-function validateTextBoxPosition(slideData, bodyDimensions) {
-  const errors = [];
-  const slideHeightInches = bodyDimensions.height / PX_PER_IN;
-  const minBottomMargin = 0.5;
-  for (const el of slideData.elements) {
-    if (!['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text'].includes(el.type)) continue;
-    const fontSize = el.style?.fontSize || 0;
-    const bottomEdge = el.position.y + el.position.h;
-    const distanceFromBottom = slideHeightInches - bottomEdge;
-    const textValue = (() => {
-      if (typeof el.text === 'string') return el.text;
-      if (Array.isArray(el.text)) return el.text.find((t) => t.text)?.text || '';
-      if (Array.isArray(el.items)) return el.items.find((item) => item.text)?.text || '';
-      return '';
-    })();
-    const isFooter = /^\d{1,2}\s*\/\s*\d{1,2}$/.test(textValue.trim())
-      || /^(Arknights|数据来源|source:)/i.test(textValue.trim());
-    if (isFooter || fontSize <= 11) continue;
-    if (fontSize > 12 && distanceFromBottom < minBottomMargin) {
-      const textPrefix = `${textValue.substring(0, 50)}${textValue.length > 50 ? '...' : ''}`;
-      errors.push(
-        `Text box "${textPrefix}" ends too close to bottom edge `
-        + `(${distanceFromBottom.toFixed(2)}" from bottom, minimum ${minBottomMargin}" required)`,
-      );
-    }
-  }
-  return errors;
-}
-
-async function addBackground(slideData, targetSlide) {
-  if (slideData.background?.type === 'image' && slideData.background.path) {
-    const payload = toImagePayload(slideData.background.path);
-    if (payload) targetSlide.background = payload;
-  } else if (slideData.background?.type === 'color' && slideData.background.value) {
-    targetSlide.background = { color: slideData.background.value };
-  }
-}
-
-function addElements(slideData, targetSlide, pres) {
-  if (slideData.fullPageFallback) {
-    const payload = toImagePayload(
-      slideData.fullPageFallback.data || slideData.fullPageFallback.src,
-    );
-    if (!payload) throw new Error('Full-page fallback has no image payload');
-    targetSlide.addImage({
-      ...payload,
-      x: 0,
-      y: 0,
-      w: SLIDE_W_IN,
-      h: SLIDE_H_IN,
-    });
-    return;
-  }
-  const suppressedNativeVisualIds = new Set([
-    ...(slideData.suppressedNativeVisualIds || []),
-    ...(slideData.fallbackLayers || [])
-      .flatMap((layer) => layer.suppressedNativeVisualIds || []),
-  ]);
-  const paintItems = [
-    ...(slideData.elements || []).map((element, order) => ({
-      type: 'element',
-      item: element,
-      zIndex: element.zIndex ?? 0,
-      order: element.paintOrder ?? order,
-      subOrder: element.subOrder ?? 0,
-      stableOrder: order,
-    })),
-    ...(slideData.fallbackLayers || []).map((layer, order) => ({
-      type: 'fallback',
-      item: layer,
-      zIndex: layer.zIndex ?? 0,
-      order: layer.paintOrder ?? ((slideData.elements || []).length + order),
-      subOrder: layer.subOrder ?? 0,
-      stableOrder: (slideData.elements || []).length + order,
-    })),
-  ].sort((a, b) => (
-    a.zIndex - b.zIndex
-    || a.order - b.order
-    || a.subOrder - b.subOrder
-    || a.stableOrder - b.stableOrder
+function addSceneNodes(slideData, targetSlide, pres) {
+  const paintItems = slideData.nodes.map((item, stableOrder) => ({
+    type: 'element',
+    item,
+    zIndex: item.zIndex ?? 0,
+    order: item.paintOrder ?? stableOrder,
+    subOrder: item.subOrder ?? 0,
+    stableOrder,
+  })).sort((left, right) => (
+    left.zIndex - right.zIndex
+    || left.order - right.order
+    || left.subOrder - right.subOrder
+    || left.stableOrder - right.stableOrder
   ));
   for (const paintItem of paintItems) {
-    if (paintItem.type === 'fallback') {
-      const layer = paintItem.item;
-      const payload = toImagePayload(layer.data || layer.src);
-      const bbox = layer.bbox || {};
-      if (!payload) continue;
-      const fullPageCanvas = layer.canvas === 'full-page';
-      targetSlide.addImage({
-        ...payload,
-        x: fullPageCanvas ? 0 : (bbox.x ?? 0),
-        y: fullPageCanvas ? 0 : (bbox.y ?? 0),
-        w: fullPageCanvas ? SLIDE_W_IN : (bbox.w ?? SLIDE_W_IN),
-        h: fullPageCanvas ? SLIDE_H_IN : (bbox.h ?? SLIDE_H_IN),
-      });
-      continue;
-    }
     const el = paintItem.item;
-    if (suppressedNativeVisualIds.has(el.sourceId) && !EDITABLE_TEXT_TYPES.has(el.type)) {
-      continue;
-    }
-    if (el.type === 'image') {
-      const payload = toImagePayload(el.src);
-      if (!payload) continue;
-      targetSlide.addImage({
-        ...payload,
-        x: el.position.x,
-        y: el.position.y,
-        w: el.position.w,
-        h: el.position.h,
-      });
+    if (el.type === 'table') {
+      addEditableTable(el, targetSlide);
+    } else if (el.type === 'image') {
+      try {
+        const payload = toImagePayload(el.src || el.path || el.data);
+        if (!payload) throw new Error(`Intentional image "${el.sourceId}" has no payload`);
+        targetSlide.addImage({
+          ...payload,
+          x: el.x,
+          y: el.y,
+          w: el.w,
+          h: el.h,
+        });
+      } catch (cause) {
+        throw new EditableExportError({
+          slideNumber: slideData.slideNumber,
+          sourceId: el.sourceId,
+          code: 'pptx_image_serialization',
+          message: `Intentional image "${el.sourceId}" could not be serialized.`,
+          cause,
+        });
+      }
     } else if (el.type === 'line') {
       targetSlide.addShape(pres.ShapeType.line, {
         x: el.x1,
         y: el.y1,
         w: el.x2 - el.x1,
         h: el.y2 - el.y1,
-        line: { color: el.color, width: el.width },
+        line: pptxLineStyle(el.style),
       });
-    } else if (el.type === 'shape' || el.type === 'svg-shape') {
+    } else if (el.type === 'shape') {
       const shapeOptions = {
-        x: el.position.x,
-        y: el.position.y,
-        w: el.position.w,
-        h: el.position.h,
+        x: el.x,
+        y: el.y,
+        w: el.w,
+        h: el.h,
       };
-      const nativeShapeType = {
-        circle: pres.ShapeType.ellipse,
-        ellipse: pres.ShapeType.ellipse,
-        triangle: pres.ShapeType.triangle,
-        diamond: pres.ShapeType.diamond,
-        rect: pres.ShapeType.rect,
-      }[el.svgType];
-      shapeOptions.shape = nativeShapeType
-        || (el.shape.rectRadius > 0 ? pres.ShapeType.roundRect : pres.ShapeType.rect);
-      if (el.shape.fill) {
-        shapeOptions.fill = { color: el.shape.fill };
-        if (el.shape.transparency != null) shapeOptions.fill.transparency = el.shape.transparency;
+      shapeOptions.shape = pres.ShapeType[el.shapeType];
+      if (!shapeOptions.shape) {
+        throw new Error(`Unsupported native shape type "${el.shapeType}"`);
       }
-      if (el.shape.line) shapeOptions.line = el.shape.line;
-      if (el.shape.rectRadius > 0) shapeOptions.rectRadius = el.shape.rectRadius;
-      if (el.shape.shadow) shapeOptions.shadow = el.shape.shadow;
-      if (el.shape.rotate != null) shapeOptions.rotate = el.shape.rotate;
-      if (el.type === 'svg-shape') {
-        targetSlide.addShape(shapeOptions.shape, shapeOptions);
-      } else {
-        targetSlide.addText(el.text || '', shapeOptions);
+      if (el.style.fill) {
+        shapeOptions.fill = { color: el.style.fill };
+        if (el.style.transparency != null) {
+          shapeOptions.fill.transparency = el.style.transparency;
+        }
       }
-    } else if (el.type === 'list' || el.type === 'merged-text') {
-      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.position.x, el.position.w, el.style.align, false);
-      const listOptions = {
-        x: boxX,
-        y: el.position.y,
-        w: boxW,
-        h: Math.min(el.position.h, Math.max(0.15, SLIDE_H_IN - el.position.y - 0.04)),
-        fontSize: el.style.fontSize,
-        fontFace: el.style.fontFace,
-        color: el.style.color,
-        align: el.style.align,
-        valign: 'top',
-        lineSpacing: el.style.lineSpacing,
-        paraSpaceBefore: el.style.paraSpaceBefore,
-        paraSpaceAfter: el.style.paraSpaceAfter,
-        margin: el.style.margin || 0,
-        shrinkText: false,
-        autoFit: false,
-      };
-      if (el.style.transparency != null) listOptions.transparency = el.style.transparency;
-      targetSlide.addText(el.items || el.text, listOptions);
-    } else {
-      const lineHeight = el.style.lineSpacing || el.style.fontSize * 1.2;
+      if (el.style.line) shapeOptions.line = pptxLineStyle(el.style.line);
+      if (el.style.shadow) shapeOptions.shadow = el.style.shadow;
+      if (el.style.rotate != null) shapeOptions.rotate = el.style.rotate;
+      targetSlide.addShape(shapeOptions.shape, shapeOptions);
+      if (el.shapeType === 'roundRect') {
+        const adjustment = Number.isFinite(el.style.radius)
+          ? Math.round((el.style.radius / Math.min(el.w, el.h)) * 100000)
+          : 16667;
+        if (!Array.isArray(pres[OOXML_ROUND_RECT_ADJUSTMENTS])) {
+          pres[OOXML_ROUND_RECT_ADJUSTMENTS] = [];
+        }
+        pres[OOXML_ROUND_RECT_ADJUSTMENTS].push(Math.max(0, Math.min(50000, adjustment)));
+      }
+    } else if (el.type === 'text') {
       const isVerticalText = el.style.vert && el.style.vert !== 'horz';
-      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.position.x, el.position.w, el.style.align, isVerticalText);
+      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.x, el.w, el.style.align, isVerticalText);
       const textOptions = {
         x: boxX,
-        y: el.position.y,
+        y: el.y,
         w: boxW,
-        h: Math.min(el.position.h, Math.max(0.15, SLIDE_H_IN - el.position.y - 0.04)),
+        h: Math.min(el.h, Math.max(0.15, SLIDE_H_IN - el.y - 0.04)),
         fontSize: el.style.fontSize,
-        fontFace: el.style.fontFace,
+        fontFace: resolvePptxFontFace(
+          el.style.fontFace,
+          Array.isArray(el.text) ? el.text.map((run) => run?.text || '').join('') : el.text,
+        ),
         color: el.style.color,
         bold: el.style.bold,
         italic: el.style.italic,
@@ -283,7 +322,7 @@ function addElements(slideData, targetSlide, pres) {
         paraSpaceAfter: el.style.paraSpaceAfter,
         // margin reproduces the element's CSS padding as PPTX internal inset,
         // preventing text from shifting toward the frame's top-left corner.
-        margin: el.style.margin || 0,
+        margin: pptxTextMargin(el.style.margin),
         shrinkText: false,
         autoFit: false,
       };
@@ -293,55 +332,83 @@ function addElements(slideData, targetSlide, pres) {
       if (el.style.transparency != null && el.style.transparency !== undefined) {
         textOptions.transparency = el.style.transparency;
       }
-      targetSlide.addText(el.text, textOptions);
+      targetSlide.addText(pptxTextValue(el.text), textOptions);
     }
   }
 }
 
-export async function buildSlideFromExtracted(slideData, bodyDimensions, pres, options = {}) {
-  // Validation findings (overflow, bottom-margin, dimension mismatch) are
-  // logged as warnings instead of aborting the export: a clipped slide in the
-  // PPTX is always better than a failed export run.
-  const validationWarnings = [];
-  if (bodyDimensions?.errors?.length) validationWarnings.push(...bodyDimensions.errors);
-  validationWarnings.push(...validateDimensions(bodyDimensions, pres));
-  validationWarnings.push(...validateTextBoxPosition(slideData, bodyDimensions));
-  if (slideData?.errors?.length) validationWarnings.push(...slideData.errors);
-  if (validationWarnings.length) {
-    console.warn('[ppt-live-export] slide validation warnings (export continues):', validationWarnings.join('; '));
-  }
-  const diagnostics = [
-    ...(slideData?.diagnostics || []),
-    ...validationWarnings.map((message) => ({
-      severity: 'fallback',
-      code: 'pptx_layout_warning',
-      message,
-      sourceId: null,
-      tag: null,
-    })),
-  ];
+export async function buildSlideFromScene(slideData, pres, options = {}) {
+  validateEditableSlideScene(slideData);
   const targetSlide = options.slide || pres.addSlide();
   try {
-    await addBackground(slideData, targetSlide);
-    addElements(slideData, targetSlide, pres);
+    addSceneNodes(slideData, targetSlide, pres);
   } catch (error) {
+    if (error instanceof EditableExportError) throw error;
     const diagnostic = {
       severity: 'blocking',
       kind: 'blocking',
       code: 'pptx_serialization',
       message: String(error?.message || error || 'PPTX serialization failed.'),
+      slideNumber: slideData.slideNumber,
       sourceId: null,
       tag: null,
+      cause: error,
     };
     error.diagnostic = diagnostic;
-    error.diagnostics = [...diagnostics, diagnostic];
+    error.diagnostics = [diagnostic];
     throw error;
   }
   return {
     slide: targetSlide,
-    placeholders: slideData.placeholders || [],
-    diagnostics,
+    diagnostics: [],
   };
+}
+
+// PptxGenJS 4.0.1 assigns table cNvPr ids with `tableIndex * slideNum + 1`,
+// while shapes use `objectIndex + 2`. On a slide that already has a background
+// shape at id=2, the first table also gets id=2. Duplicate cNvPr ids make
+// Microsoft PowerPoint open the file as "needs repair"; the repair rewrite
+// commonly destroys CJK runs inside a:tbl while leaving non-table text intact.
+function uniquifySlideObjectIds(xml) {
+  let nextId = 1;
+  return xml.replace(/<p:cNvPr id="\d+"/g, () => `<p:cNvPr id="${nextId++}"`);
+}
+
+async function postProcessPptxOutput(output, outputType, adjustments) {
+  if (!['base64', 'nodebuffer'].includes(outputType)) return output;
+  const needsRoundRect = adjustments.length > 0;
+  const zip = await JSZip.loadAsync(output, { base64: outputType === 'base64' });
+  const slidePaths = Object.keys(zip.files)
+    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+    .sort((left, right) => (
+      Number(left.match(/\d+/)?.[0]) - Number(right.match(/\d+/)?.[0])
+    ));
+  let adjustmentIndex = 0;
+  for (const path of slidePaths) {
+    let xml = await zip.file(path).async('string');
+    if (needsRoundRect) {
+      xml = xml.replace(
+        /<a:prstGeom prst="roundRect"><a:avLst(?:\/>|>[\s\S]*?<\/a:avLst>)<\/a:prstGeom>/g,
+        (match) => {
+          const adjustment = adjustments[adjustmentIndex];
+          adjustmentIndex += 1;
+          if (adjustment == null) return match;
+          return '<a:prstGeom prst="roundRect"><a:avLst>'
+            + `<a:gd name="adj" fmla="val ${adjustment}"/>`
+            + '</a:avLst></a:prstGeom>';
+        },
+      );
+    }
+    xml = uniquifySlideObjectIds(xml);
+    zip.file(path, xml);
+  }
+  if (needsRoundRect && adjustmentIndex !== adjustments.length) {
+    throw new Error('Round rectangle OOXML adjustment count did not match serialized shapes');
+  }
+  return zip.generateAsync({
+    type: outputType,
+    compression: 'DEFLATE',
+  });
 }
 
 export function createPptxDeck(deck = {}) {
@@ -356,6 +423,16 @@ export function createPptxDeck(deck = {}) {
     headFontFace: 'PingFang SC',
     bodyFontFace: 'PingFang SC',
     lang: 'zh-CN',
+  };
+  pptx[OOXML_ROUND_RECT_ADJUSTMENTS] = [];
+  const write = pptx.write.bind(pptx);
+  pptx.write = async (options = {}) => {
+    const output = await write(options);
+    return postProcessPptxOutput(
+      output,
+      options.outputType,
+      pptx[OOXML_ROUND_RECT_ADJUSTMENTS],
+    );
   };
   return pptx;
 }

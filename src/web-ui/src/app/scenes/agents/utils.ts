@@ -60,6 +60,8 @@ function getAgentBadge(
   }
 
   switch (source) {
+    case 'external':
+      return { variant: 'neutral', label: t('agentCard.badges.externalSubagent') };
     case 'user':
       return { variant: 'success', label: t('agentCard.badges.userSubagent') };
     case 'project':

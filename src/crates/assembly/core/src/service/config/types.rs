@@ -5,6 +5,7 @@
 use crate::util::errors::*;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 fn deserialize_agent_profiles<'de, D>(
@@ -1237,6 +1238,44 @@ pub struct AIModelConfig {
     /// time and inject the resolved Bearer token / extra headers.
     #[serde(default)]
     pub auth: AuthConfig,
+}
+
+/// Stable identity of the runtime-affecting parts of a concrete model config.
+///
+/// Credentials are deliberately excluded: rotating a secret must not require
+/// the user to approve the same provider/model again. Endpoint, provider,
+/// model, request options, and authentication source remain part of the
+/// identity so an approved binding cannot silently drift to different runtime
+/// behavior while retaining the same config id.
+pub fn model_runtime_binding_fingerprint(model: &AIModelConfig) -> String {
+    let mut value = serde_json::to_value(model).unwrap_or(serde_json::Value::Null);
+    if let serde_json::Value::Object(fields) = &mut value {
+        fields.remove("api_key");
+    }
+
+    fn canonicalize(value: serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(fields) => {
+                let mut entries = fields.into_iter().collect::<Vec<_>>();
+                entries.sort_by(|left, right| left.0.cmp(&right.0));
+                serde_json::Value::Object(
+                    entries
+                        .into_iter()
+                        .map(|(key, value)| (key, canonicalize(value)))
+                        .collect(),
+                )
+            }
+            serde_json::Value::Array(values) => {
+                serde_json::Value::Array(values.into_iter().map(canonicalize).collect())
+            }
+            value => value,
+        }
+    }
+
+    let canonical = serde_json::to_vec(&canonicalize(value)).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(canonical);
+    hex::encode(hasher.finalize())
 }
 
 /// Where to obtain the runtime auth material for an `AIModelConfig`.

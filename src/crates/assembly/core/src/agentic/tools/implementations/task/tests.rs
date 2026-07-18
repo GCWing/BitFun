@@ -62,6 +62,7 @@ fn register_prompt_order_test_subagent(
             SubAgentSource::Builtin => crate::agentic::agents::AgentSource::Builtin,
             SubAgentSource::Project => crate::agentic::agents::AgentSource::Project,
             SubAgentSource::User => crate::agentic::agents::AgentSource::User,
+            SubAgentSource::External => crate::agentic::agents::AgentSource::External,
         },
         Some(source),
         custom_config,

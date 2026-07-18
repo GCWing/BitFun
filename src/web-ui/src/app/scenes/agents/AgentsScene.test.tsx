@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { useAgentsStore } from './agentsStore';
+import { isLocallyManageableSubagent } from './agentVisibility';
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -108,6 +109,14 @@ try {
 }
 
 const describeWithJsdom = JSDOMCtor ? describe : describe.skip;
+
+describe('agent editability', () => {
+  it('keeps external subagents visible but outside local mutations', () => {
+    expect(isLocallyManageableSubagent({ source: 'external' })).toBe(false);
+    expect(isLocallyManageableSubagent({ subagentSource: 'external', source: 'user' })).toBe(false);
+    expect(isLocallyManageableSubagent({ source: 'builtin' })).toBe(true);
+  });
+});
 
 describeWithJsdom('AgentsScene', () => {
   let dom: { window: Window & typeof globalThis };

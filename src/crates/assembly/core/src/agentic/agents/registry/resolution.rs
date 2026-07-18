@@ -3,11 +3,35 @@ use super::types::AgentCategory;
 use super::AgentRegistry;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::GlobalConfig;
+use crate::service::config::SubagentModelSelection;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, warn};
 use std::path::Path;
 
 impl AgentRegistry {
+    /// Returns a source-neutral explicit model selection for a delegated
+    /// subagent. Callers apply product defaults only when this returns `None`.
+    pub fn get_explicit_subagent_model_selection(
+        &self,
+        agent_type: &str,
+        workspace_root: Option<&Path>,
+    ) -> Option<SubagentModelSelection> {
+        let config = self
+            .find_agent_entry(agent_type, workspace_root)?
+            .custom_config?;
+        if !config.model_is_explicit {
+            return None;
+        }
+        let model = config.model.trim();
+        if model.is_empty() {
+            None
+        } else if model == "inherit" {
+            Some(SubagentModelSelection::Inherit)
+        } else {
+            Some(SubagentModelSelection::fixed(model))
+        }
+    }
+
     /// Resolves an execution fallback for an agent whose session has no model.
     ///
     /// Delegated subagents receive an explicit resolved model from the

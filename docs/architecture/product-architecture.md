@@ -232,9 +232,12 @@ Plugin Runtime P0 只验证了 BitFun 专用插件目录中的来源校验、工
 不能称为“OpenCode 插件运行时”。详细代码事实集中在
 [`plugin-runtime-host-design.md#8-当前实现附录`](extensions/plugin-runtime-host-design.md#8-当前实现附录)。
 
-与 Plugin Runtime 分离的 Prompt Command 基线已经通过能力专属 provider 契约接入：可发现本地用户/项目 OpenCode
-Command，处理跨来源冲突，并在 CLI/TUI 中执行受支持的 prompt-only 模板。该能力不执行 JS/TS，也不能推导 Tool、
-Hook、Subagent 或完整配置兼容已经可用。
+与 Plugin Runtime 分离的三条纵向基线已经通过各自的能力专属 provider 契约接入：Prompt Command 可发现本地
+用户/项目 OpenCode Command、处理跨来源冲突，并在 CLI/TUI 中执行受支持的 prompt-only 模板；standalone Tool
+可把受支持的单文件 `.js` 经确认后接入现有 Tool Runtime；Subagent 可把全局/项目声明的安全子集经确认和同名冲突
+选择后接入现有 Task/Subagent owner，并以 generation lease 固定 fresh single-run 调用。三类贡献对象互不复用，
+主体逻辑不按生态分支。当前仍不表示 package plugin、Hook、primary agent、外部 agent 续接、Remote 来源发现或完整
+配置兼容已经可用。
 
 目标路线不要求 OpenCode 插件作者维护 `bitfun.plugin.json` 或复制到 `.bitfun/plugins`。BitFun 直接发现用户和
 项目的 OpenCode 配置、插件目录、工具目录和软件包来源；低风险内容按用户偏好自动应用或先询问，可执行来源在
@@ -257,7 +260,8 @@ flowchart LR
 稳定决策如下：
 
 - 不启动完整 OpenCode Runtime，也不依赖用户安装 OpenCode CLI；BitFun 实现自己的监督、适配和 Rust 转发层。
-  固定版本 Bun 只负责脚本执行，依赖按冻结 OpenCode 版本的 npm/Arborist 语义准备。
+  当前 standalone Tool 子集通过受监督的 Node.js worker 执行且不安装依赖；未来只有冻结的 package plugin 样例证明
+  确有需要时，才单独裁决 Bun、依赖准备和版本兼容方案。
 - 用户全局和项目来源自动发现；低风险内容默认无感应用并显示可撤销摘要，可执行来源首次启用或能力扩大时等待
   非阻塞确认。确认前不得 import module、启动 worker、读取凭据或产生直接脚本副作用。
 - 激活后的本地 target 默认按 OpenCode 语义运行，允许当前用户通常拥有的文件、网络、进程和环境能力；用户、
@@ -319,14 +323,14 @@ flowchart LR
 
 产品形态由产品组装决定，不由插件配置、单个 Cargo feature 或生态适配器临时决定。
 
-| 产品形态 | 当前 P0 插件能力 | 入口行为 |
+| 产品形态 | 当前扩展能力 | 入口行为 |
 |---|---|---|
-| Desktop / product-full | 生产入口仍直接依赖 `bitfun-core/product-full`；当前没有 managed-plugin 管理或 OpenCode 静态预览的生产 UI/调用方 | 共享代码可编译不等于 Desktop 已消费插件能力 |
-| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；只为 BitFun 原生包提供来源审核、启用预览、精确内容确认和停用 | 本地 Agent 与 Peer Host 路径选择 `DeliveryProfile::Cli`，校验必需 Runtime Service 注册并消费同一 Runtime Parts/SDK；SDK 缺口由单一 Core 兼容门面转发。Peer Host 不再构造第二套调度、持久化或事件 owner。部分注册仍是 compatibility marker，不代表实时探活；插件 binding 明确禁用，不执行 OpenCode 插件代码 |
+| Desktop / product-full | 生产入口仍依赖 `bitfun-core/product-full` 作为兼容组装层；“外部 AI 应用”设置已消费 OpenCode Command、standalone Tool 和 Subagent 的统一来源快照、审批、冲突选择与诊断 | 仅本地执行域支持当前三条纵向切片；受管 package plugin 仍只有静态预览，不能据设置页接入宣称完整 OpenCode 插件运行时 |
+| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；交互式 TUI 已可执行受支持的 Prompt Command，并通过 `/external-tools`、`/external-agents` 消费与 Desktop 相同的审批、冲突和刷新状态 | 已批准的 standalone Tool 进入现有 Tool Runtime；已批准的外部 Subagent 只支持 fresh single-run。CLI/TUI 不解析生态文件、不启动第二套 worker/Agent owner；非交互入口和 Remote 未接入时不得借本机 TUI 路径代执行 |
 | HarmonyOS PC 原生 CLI/TUI | 未来平台目标，当前未实现 | 目标、问题和风险见平台规约；具体适配另立专题，HAP、手机 Remote App 与远端代执行均不替代 |
 | HarmonyOS PC GUI | 完整 HarmonyOS PC 支持的另一目标形态，当前未实现 | 与 CLI/TUI 共享稳定能力和 Runtime 语义，但独立设计宿主、界面与发布验证；Web、Remote 或现有 Tauri Desktop 均不能替代 |
 | HarmonyOS 手机 Remote App | `src/apps/mobile/harmonyos` 是 phone-only ArkTS 远程入口，不持有本地 Rust Agent Runtime | 保持当前能力并按移动端专题独立演进；本轮不提前设计移动 Runtime/TUI/GUI，也不能据此宣称 HarmonyOS PC 本地能力 |
-| ACP | CLI 托管的服务端仍以 `bitfun-core/product-full` 作为兼容执行层 | 入口已选择 `DeliveryProfile::Acp` 并消费 Runtime Parts；组装层在入队前原子拒绝忙碌会话，不改变其他产品入口的排队行为；会话恢复、模型/模式、MCP、客户端与协议生命周期仍留在现有 Core/ACP 归属，不据此宣称完整解耦 |
+| ACP | CLI 托管的服务端仍以 `bitfun-core/product-full` 作为兼容执行层 | 入口已选择 `DeliveryProfile::Acp` 并消费 Runtime Parts；组装层在入队前原子拒绝忙碌会话，不改变其他产品入口的排队行为；活动会话模型写入走 SDK，会话恢复、模式、模型目录/提供方配置、MCP、客户端与协议生命周期仍留在现有 Core/ACP 归属，不据此宣称完整解耦 |
 | Server / Remote | 当前生产路由没有插件状态消费闭环；Remote 插件执行未实现 | 不在本地替远端项目发现、准备或执行插件；未接入时返回明确不支持 |
 | Web / Mobile Web | 依赖现有后端入口，不持有插件执行单元 | 对应 profile 当前为空计划或未接入生产，不能据枚举值宣称独立产品能力 |
 | SDK | 仅有 preview 门面、空 profile 计划和测试替身 | 不牵引 `product-full`、具体服务管理器或插件 host ABI；未满足独立嵌入验证前不宣称可发布 |

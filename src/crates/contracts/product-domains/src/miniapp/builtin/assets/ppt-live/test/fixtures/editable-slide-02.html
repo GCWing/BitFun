@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width: 960pt; height: 540pt;
+    font-family: system-ui, -apple-system, "PingFang SC", "Source Han Sans SC", sans-serif;
+    background: #FAFAF7; color: #111111;
+    overflow: hidden; position: relative;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== Title ===== -->
+  <div style="position: absolute; top: 36pt; left: 60pt; right: 60pt;">
+    <h1 style="font-size: 28pt; font-weight: 700; color: #111111; line-height: 1.15;">系统能力全景与关键运维指标</h1>
+    <p style="font-size: 13pt; color: #787774; margin-top: 6pt;">六大模块 · 三十二项能力点 · 2024 年度运行数据</p>
+  </div>
+
+  <!-- ===== LEFT: Dense text (4 sections) ===== -->
+  <div style="position: absolute; top: 108pt; left: 60pt; width: 520pt;">
+
+    <!-- Section A -->
+    <div style="border-left: 3pt solid #0f766e; padding-left: 8pt;">
+      <h3 style="font-size: 13pt; font-weight: 700; color: #1E293B;">核心推理引擎</h3>
+    </div>
+    <ul style="font-size: 11pt; color: #111111; padding-left: 20pt; margin-top: 4pt; line-height: 1.55; list-style: disc;">
+      <li>实时推理支持 50ms 内完成单次请求响应</li>
+      <li>多模态解析覆盖文本、图像、结构化数据三通道</li>
+      <li>动态路由模块按负载自动选择最优计算节点</li>
+    </ul>
+
+    <!-- Section B -->
+    <div style="margin-top: 12pt; border-left: 3pt solid #0f766e; padding-left: 8pt;">
+      <h3 style="font-size: 13pt; font-weight: 700; color: #1E293B;">数据流水线</h3>
+    </div>
+    <p style="font-size: 11pt; color: #111111; margin-top: 4pt; line-height: 1.55;">采集层对接 12 种数据源，日均处理 2.3 亿条记录。清洗阶段执行字段校验、去重、脱敏三步操作，端到端延迟控制在 200ms 以内。</p>
+
+    <!-- Section C -->
+    <div style="margin-top: 12pt; border-left: 3pt solid #0f766e; padding-left: 8pt;">
+      <h3 style="font-size: 13pt; font-weight: 700; color: #1E293B;">安全与合规</h3>
+    </div>
+    <ul style="font-size: 11pt; color: #111111; padding-left: 20pt; margin-top: 4pt; line-height: 1.55; list-style: disc;">
+      <li>全链路 TLS 1.3 加密传输，证书自动轮换</li>
+      <li>细粒度 RBAC 权限模型，支持 256 级角色策略</li>
+      <li>审计日志保留 180 天，支持全文检索与导出</li>
+      <li>数据驻留可选：北京、上海、新加坡三区域</li>
+    </ul>
+
+    <!-- Section D -->
+    <div style="margin-top: 12pt; border-left: 3pt solid #0f766e; padding-left: 8pt;">
+      <h3 style="font-size: 13pt; font-weight: 700; color: #1E293B;">运维指标摘要</h3>
+    </div>
+    <p style="font-size: 11pt; color: #111111; margin-top: 4pt; line-height: 1.55;">SLA 99.95% · P99 延迟 80ms · 月均故障恢复 3.2 分钟 · 季度零安全事件</p>
+
+  </div>
+
+  <!-- ===== RIGHT: SVG bar chart ===== -->
+  <div style="position: absolute; top: 108pt; left: 600pt; width: 300pt; height: 290pt; border: 1pt solid #e5e7eb; border-radius: 8pt; background: #ffffff; padding: 14pt;">
+    <h4 style="font-size: 12pt; font-weight: 600; color: #1E293B;">模块能力评分</h4>
+    <p style="font-size: 9pt; color: #787774; margin-top: 2pt;">满分 100 · 内部评测 · 2024 Q4</p>
+    <svg viewBox="0 0 300 240" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: 215pt; margin-top: 6pt; display: block;" xmlns="http://www.w3.org/2000/svg">
+      <!-- Grid lines -->
+      <line x1="30" y1="60" x2="290" y2="60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="30" y1="100" x2="290" y2="100" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="30" y1="140" x2="290" y2="140" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="30" y1="180" x2="290" y2="180" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <!-- Axes -->
+      <line x1="30" y1="20" x2="30" y2="200" stroke="#787774" stroke-width="1"/>
+      <line x1="30" y1="200" x2="290" y2="200" stroke="#787774" stroke-width="1"/>
+      <!-- Bars (max height 160, bottom y=200) -->
+      <rect x="45"  y="53"  width="28" height="147" fill="#1E293B"/>
+      <rect x="85"  y="64"  width="28" height="136" fill="#1E293B"/>
+      <rect x="125" y="48"  width="28" height="152" fill="#0f766e"/>
+      <rect x="165" y="75"  width="28" height="125" fill="#1E293B"/>
+      <rect x="205" y="59"  width="28" height="141" fill="#1E293B"/>
+      <rect x="245" y="69"  width="28" height="131" fill="#1E293B"/>
+      <!-- X-axis labels -->
+      <text x="59"  y="218" font-size="9" fill="#787774" text-anchor="middle" font-family="sans-serif">推理</text>
+      <text x="99"  y="218" font-size="9" fill="#787774" text-anchor="middle" font-family="sans-serif">管道</text>
+      <text x="139" y="218" font-size="9" fill="#787774" text-anchor="middle" font-family="sans-serif">安全</text>
+      <text x="179" y="218" font-size="9" fill="#787774" text-anchor="middle" font-family="sans-serif">监控</text>
+      <text x="219" y="218" font-size="9" fill="#787774" text-anchor="middle" font-family="sans-serif">网关</text>
+      <text x="259" y="218" font-size="9" fill="#787774" text-anchor="middle" font-family="sans-serif">存储</text>
+      <!-- Values on top of bars -->
+      <text x="59"  y="48"  font-size="9" fill="#1E293B" text-anchor="middle" font-family="sans-serif">92</text>
+      <text x="99"  y="59"  font-size="9" fill="#1E293B" text-anchor="middle" font-family="sans-serif">85</text>
+      <text x="139" y="43"  font-size="9" fill="#0f766e" text-anchor="middle" font-family="sans-serif" font-weight="bold">95</text>
+      <text x="179" y="70"  font-size="9" fill="#1E293B" text-anchor="middle" font-family="sans-serif">78</text>
+      <text x="219" y="54"  font-size="9" fill="#1E293B" text-anchor="middle" font-family="sans-serif">88</text>
+      <text x="259" y="64"  font-size="9" fill="#1E293B" text-anchor="middle" font-family="sans-serif">82</text>
+    </svg>
+  </div>
+
+  <!-- ===== Footer ===== -->
+  <div style="position: absolute; left: 60pt; bottom: 36pt;">
+    <p style="font-size: 9pt; color: #787774;">PPT Live 测试 · 密集文字排版 · 02 / 03</p>
+  </div>
+
+</body>
+</html>

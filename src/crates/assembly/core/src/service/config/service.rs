@@ -100,13 +100,18 @@ impl ConfigService {
             manager.set(path, value).await?;
         }
 
-        if Self::path_touches_models(path) {
+        let model_configuration_changed = Self::path_touches_models(path);
+        if model_configuration_changed {
             if let Err(e) = self.reconcile_models("set_config").await {
                 warn!(
                     "Model reconcile after set_config failed: path={}, error={}",
                     path, e
                 );
             }
+            super::global::GlobalConfigManager::broadcast_update(
+                super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
+            )
+            .await;
         }
 
         Ok(())
@@ -142,6 +147,10 @@ impl ConfigService {
                     path, e
                 );
             }
+            super::global::GlobalConfigManager::broadcast_update(
+                super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
+            )
+            .await;
         }
 
         Ok(())
@@ -190,6 +199,10 @@ impl ConfigService {
                 if let Err(e) = self.reconcile_models("import_config").await {
                     warn!("Model reconcile after import_config failed: {}", e);
                 }
+                super::global::GlobalConfigManager::broadcast_update(
+                    super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
+                )
+                .await;
                 Ok(ConfigImportResult {
                     success: true,
                     errors: Vec::new(),
@@ -273,6 +286,10 @@ impl ConfigService {
         if let Err(e) = self.reconcile_models("reload").await {
             warn!("Model reconcile after reload failed: {}", e);
         }
+        super::global::GlobalConfigManager::broadcast_update(
+            super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
+        )
+        .await;
         Ok(())
     }
 

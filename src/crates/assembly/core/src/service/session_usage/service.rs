@@ -1727,6 +1727,7 @@ mod tests {
             parent_turn_index: Some(0),
             parent_tool_call_id: Some("tool-1".to_string()),
             subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
         });
         let mut grandchild = SessionMetadata::new(
             "grandchild-session".to_string(),
@@ -1742,6 +1743,7 @@ mod tests {
             parent_turn_index: Some(0),
             parent_tool_call_id: Some("child-tool".to_string()),
             subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
         });
 
         let (session_ids, complete) =

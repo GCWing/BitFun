@@ -193,7 +193,8 @@ function writeSandboxIframeDocument(frame, sanitizedHtml) {
 function mountSandboxIframeHtml(frame, html, onMounted) {
   const sanitizedHtml = sanitizeSlideMarkup(normalizeSlideDocument(html));
   frame.setAttribute('sandbox', 'allow-same-origin');
-  frame.srcdoc = sanitizedHtml;
+  // Never use srcdoc here: sandboxed srcdoc iframes render blank in Tauri
+  // WebKit, and the srcdoc navigation would replace the written document.
   frame.src = 'about:blank';
 
   const mount = () => {

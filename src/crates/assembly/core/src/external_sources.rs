@@ -4,29 +4,42 @@
 //! catalog and product surfaces remain provider- and ecosystem-neutral.
 
 pub use bitfun_product_domains::external_sources::{
-    prompt_command_conflict_key, ExpandedPromptCommand, ExternalSourceCatalogEntry,
-    ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity,
-    ExternalSourceLifecycleState, ExternalToolActivationState, ExternalToolApprovalRequest,
-    ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolConflict,
-    ExternalToolRuntimeKind, PromptCommandAvailability, PromptCommandCatalogEntry,
-    PromptCommandDefinition, SourceKey,
+    prompt_command_conflict_key, ExpandedPromptCommand, ExternalSourceAssetKind,
+    ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic,
+    ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState, ExternalToolActivationState,
+    ExternalToolApprovalRequest, ExternalToolCapability, ExternalToolCatalogEntry,
+    ExternalToolConflict, ExternalToolRuntimeKind, PromptCommandAvailability,
+    PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
+};
+pub use bitfun_product_domains::external_subagents::{
+    ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
+    ExternalSubagentConflictCandidate, ExternalSubagentSummary,
 };
 
+use crate::external_subagents::{
+    reconcile_external_subagents, ExternalSubagentDecisions, ExternalSubagentProductState,
+    DISABLED_SUBAGENT_CONFLICT_CHOICE,
+};
 use crate::external_tools::{
     begin_external_tool_workspace_recovery, external_tool_workspace_requires_recovery,
     merge_tool_state, reconcile_external_tools, release_external_tool_workspace,
     reset_external_tool_workspace_recovery_budget, ExternalToolDecisions, ExternalToolProductState,
     TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
+use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 use bitfun_external_sources::{
     ExternalSourceCoordinator, ExternalSourceDiscoveryRequest, ExternalSourceDiscoveryResult,
+    ExternalSubagentCoordinator, ExternalSubagentDiscoveryRequest, ExternalSubagentDiscoveryResult,
     ExternalToolCoordinator, ExternalToolDiscoveryRequest, ExternalToolDiscoveryResult,
 };
-use bitfun_opencode_adapter::{OpenCodeCommandProvider, OpenCodeToolProvider};
+use bitfun_opencode_adapter::{
+    OpenCodeCommandProvider, OpenCodeSubagentProvider, OpenCodeToolProvider,
+};
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalSourceContext, ExternalToolSourceProvider,
+    ExecutionDomainId, ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider,
     PromptCommandSourceProvider,
 };
+use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_services_core::json_store::JsonFileStore;
 use bitfun_services_integrations::file_watch::{FileWatchService, FileWatcherConfig};
 use dashmap::{mapref::entry::Entry, DashMap};
@@ -42,6 +55,7 @@ use tokio::sync::broadcast;
 
 const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";
+const SUBAGENT_CONFLICT_RESELECTION_REQUIRED: &str = "__bitfun_reselection_required__";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -60,6 +74,16 @@ struct ExternalSourcesConfig {
     declined_tool_decisions: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     tool_conflict_choices: BTreeMap<String, String>,
+    #[serde(default)]
+    preference_revision: u64,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    approved_subagent_envelopes: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    declined_subagent_decisions: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    subagent_conflict_choices: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    subagent_conflict_lineage_current_keys: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +127,7 @@ impl ExternalSourcePreferenceStore {
 
 type SharedDiscoveryTask = Shared<BoxFuture<'static, ExternalSourceDiscoveryResult>>;
 type SharedToolDiscoveryTask = Shared<BoxFuture<'static, ExternalToolDiscoveryResult>>;
+type SharedSubagentDiscoveryTask = Shared<BoxFuture<'static, ExternalSubagentDiscoveryResult>>;
 
 struct InFlightDiscovery {
     task: SharedDiscoveryTask,
@@ -114,6 +139,11 @@ struct InFlightToolDiscovery {
     wake_scheduled: bool,
 }
 
+struct InFlightSubagentDiscovery {
+    task: SharedSubagentDiscoveryTask,
+    wake_scheduled: bool,
+}
+
 #[derive(Clone, Copy)]
 enum WorkerRecoveryPolicy {
     Preserve,
@@ -121,10 +151,15 @@ enum WorkerRecoveryPolicy {
     ResetAndAttempt,
 }
 
+fn config_update_refreshes_external_model_bindings(event: &ConfigUpdateEvent) -> bool {
+    matches!(event, ConfigUpdateEvent::ModelConfigurationUpdated)
+}
+
 struct WorkspaceExternalSourceService {
     workspace_root: Option<PathBuf>,
     coordinator: Arc<StdMutex<ExternalSourceCoordinator>>,
     tool_coordinator: Arc<StdMutex<ExternalToolCoordinator>>,
+    subagent_coordinator: Arc<StdMutex<ExternalSubagentCoordinator>>,
     snapshot: StdMutex<ExternalSourceCatalogSnapshot>,
     updates: broadcast::Sender<ExternalSourceCatalogSnapshot>,
     watch_states: tokio::sync::Mutex<BTreeMap<(PathBuf, bool), bool>>,
@@ -136,11 +171,15 @@ struct WorkspaceExternalSourceService {
     tool_discovery_tasks: tokio::sync::Mutex<
         BTreeMap<bitfun_product_domains::external_sources::ProviderId, InFlightToolDiscovery>,
     >,
+    subagent_discovery_tasks: tokio::sync::Mutex<
+        BTreeMap<bitfun_product_domains::external_sources::ProviderId, InFlightSubagentDiscovery>,
+    >,
     initial_refresh_completed: AtomicBool,
     background_refresh_scheduled: AtomicBool,
     initial_refresh_gate: tokio::sync::Mutex<()>,
     keepalive_started: AtomicBool,
     last_access_epoch_seconds: AtomicU64,
+    subagent_expiry_schedule: AtomicU64,
     watcher: Arc<FileWatchService>,
     #[cfg(test)]
     tool_decision_gate_waiting: tokio::sync::Notify,
@@ -160,7 +199,11 @@ impl WorkspaceExternalSourceService {
         let mut coordinator = ExternalSourceCoordinator::new(context.clone(), providers)?;
         let tool_providers: Vec<Arc<dyn ExternalToolSourceProvider>> =
             vec![Arc::new(OpenCodeToolProvider::default())];
-        let mut tool_coordinator = ExternalToolCoordinator::new(context, tool_providers)?;
+        let mut tool_coordinator = ExternalToolCoordinator::new(context.clone(), tool_providers)?;
+        let subagent_providers: Vec<Arc<dyn ExternalSubagentSourceProvider>> =
+            vec![Arc::new(OpenCodeSubagentProvider::default())];
+        let mut subagent_coordinator =
+            ExternalSubagentCoordinator::new(context, subagent_providers)?;
         let preferences = read_external_sources_config().await?;
         let suppressed_sources = preferences
             .suppressed_source_keys
@@ -168,22 +211,26 @@ impl WorkspaceExternalSourceService {
             .cloned()
             .collect::<BTreeSet<_>>();
         coordinator.replace_suppressed_sources(suppressed_sources.clone());
-        tool_coordinator.replace_suppressed_sources(suppressed_sources);
+        tool_coordinator.replace_suppressed_sources(suppressed_sources.clone());
+        subagent_coordinator.replace_suppressed_sources(suppressed_sources);
         coordinator.replace_conflict_choices(preferences.conflict_choices.clone());
         coordinator.replace_conflict_lineage_current_keys(
             preferences.conflict_lineage_current_keys.clone(),
         );
         coordinator.replace_conflicted_candidate_ids(preferences.conflicted_candidate_ids.clone());
-        let initial_snapshot = merge_tool_state(
+        let mut initial_snapshot = merge_tool_state(
             coordinator.snapshot(),
             &tool_coordinator.snapshot(),
             ExternalToolProductState::default(),
         );
+        initial_snapshot.subagent_generation = subagent_coordinator.snapshot().generation;
+        initial_snapshot.preference_revision = preferences.preference_revision;
         let (updates, _) = broadcast::channel(32);
         let service = Arc::new(Self {
             workspace_root,
             coordinator: Arc::new(StdMutex::new(coordinator)),
             tool_coordinator: Arc::new(StdMutex::new(tool_coordinator)),
+            subagent_coordinator: Arc::new(StdMutex::new(subagent_coordinator)),
             snapshot: StdMutex::new(initial_snapshot),
             updates,
             watch_states: tokio::sync::Mutex::new(BTreeMap::new()),
@@ -191,11 +238,13 @@ impl WorkspaceExternalSourceService {
             product_rebuild_gate: tokio::sync::Mutex::new(()),
             discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             tool_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            subagent_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             initial_refresh_completed: AtomicBool::new(false),
             background_refresh_scheduled: AtomicBool::new(false),
             initial_refresh_gate: tokio::sync::Mutex::new(()),
             keepalive_started: AtomicBool::new(false),
             last_access_epoch_seconds: AtomicU64::new(epoch_seconds()),
+            subagent_expiry_schedule: AtomicU64::new(0),
             watcher: Arc::new(FileWatchService::new(FileWatcherConfig::default())),
             #[cfg(test)]
             tool_decision_gate_waiting: tokio::sync::Notify::new(),
@@ -203,6 +252,7 @@ impl WorkspaceExternalSourceService {
             tool_decision_gate_acquired: tokio::sync::Notify::new(),
         });
         service.start_watching().await;
+        service.start_model_config_watching();
         Ok(service)
     }
 
@@ -250,14 +300,24 @@ impl WorkspaceExternalSourceService {
         let scheduled = self.prepare_discovery_tasks(requests).await;
         let tool_requests = lock_tool_coordinator(&self.tool_coordinator).discovery_requests();
         let tool_scheduled = self.prepare_tool_discovery_tasks(tool_requests).await;
-        let (polled, tool_polled) = tokio::join!(
+        let subagent_requests =
+            lock_subagent_coordinator(&self.subagent_coordinator).discovery_requests();
+        let subagent_scheduled = self
+            .prepare_subagent_discovery_tasks(subagent_requests)
+            .await;
+        let (polled, tool_polled, subagent_polled) = tokio::join!(
             poll_discovery_tasks(scheduled, PROVIDER_DISCOVERY_TIMEOUT),
             poll_tool_discovery_tasks(tool_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
+            poll_subagent_discovery_tasks(subagent_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
         );
         let results = self.finish_discovery_poll(polled).await;
         let tool_results = self.finish_tool_discovery_poll(tool_polled).await;
+        let subagent_results = self.finish_subagent_discovery_poll(subagent_polled).await;
         let command_snapshot = lock_coordinator(&self.coordinator).apply_discovery_results(results);
         lock_tool_coordinator(&self.tool_coordinator).apply_discovery_results(tool_results);
+        let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator)
+            .apply_discovery_results(subagent_results);
+        self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
         self.ensure_watch_roots().await;
         let snapshot = self
             .rebuild_product_snapshot_with_worker_recovery(command_snapshot, &recovery_targets)
@@ -311,7 +371,7 @@ impl WorkspaceExternalSourceService {
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
         let _rebuild_guard = self.product_rebuild_gate.lock().await;
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
-        let preferences = read_external_sources_config().await?;
+        let mut preferences = read_external_sources_config().await?;
         let mut state = reconcile_external_tools(
             self.workspace_root.as_deref(),
             "local-user",
@@ -327,6 +387,7 @@ impl WorkspaceExternalSourceService {
         if let Err(error) = persist_observed_tool_conflicts(&state.conflicts).await {
             state.diagnostics.push(ExternalSourceDiagnostic {
                 severity: bitfun_product_domains::external_sources::ExternalSourceDiagnosticSeverity::Warning,
+                asset_kind: bitfun_product_domains::external_sources::ExternalSourceAssetKind::Tool,
                 code: "external_tool.conflict_history_write_failed".to_string(),
                 message: format!(
                     "Could not persist external tool conflict history; the current catalog remains fail-closed: {error}"
@@ -336,7 +397,90 @@ impl WorkspaceExternalSourceService {
         }
         let tool_snapshot = lock_tool_coordinator(&self.tool_coordinator).snapshot();
         let mut snapshot = merge_tool_state(command_snapshot, &tool_snapshot, state);
+        let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator).snapshot();
+        let mut subagent_state = reconcile_external_subagents(
+            self.workspace_root.as_deref(),
+            "local-user",
+            &subagent_snapshot,
+            ExternalSubagentDecisions {
+                approved_envelopes: &preferences.approved_subagent_envelopes,
+                declined_decisions: &preferences.declined_subagent_decisions,
+                conflict_choices: &preferences.subagent_conflict_choices,
+                conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+            },
+        )
+        .await;
+        match persist_observed_subagent_conflicts(
+            &subagent_state.observed_conflict_lineage_current_keys,
+        )
+        .await
+        {
+            Ok((_history_changed, authoritative)) => {
+                let decisions_changed = authoritative.preference_revision
+                    != preferences.preference_revision
+                    || authoritative.approved_subagent_envelopes
+                        != preferences.approved_subagent_envelopes
+                    || authoritative.declined_subagent_decisions
+                        != preferences.declined_subagent_decisions
+                    || authoritative.subagent_conflict_choices
+                        != preferences.subagent_conflict_choices
+                    || authoritative.subagent_conflict_lineage_current_keys
+                        != preferences.subagent_conflict_lineage_current_keys;
+                preferences = authoritative;
+                if decisions_changed {
+                    subagent_state = reconcile_external_subagents(
+                        self.workspace_root.as_deref(),
+                        "local-user",
+                        &subagent_snapshot,
+                        ExternalSubagentDecisions {
+                            approved_envelopes: &preferences.approved_subagent_envelopes,
+                            declined_decisions: &preferences.declined_subagent_decisions,
+                            conflict_choices: &preferences.subagent_conflict_choices,
+                            conflict_lineage_current_keys: &preferences
+                                .subagent_conflict_lineage_current_keys,
+                        },
+                    )
+                    .await;
+                }
+            }
+            Err(error) => {
+                snapshot.diagnostics.push(ExternalSourceDiagnostic::warning(
+                    "external_subagent.conflict_history_write_failed",
+                    format!(
+                        "Could not persist external subagent conflict history; routes remain unavailable: {error}"
+                    ),
+                    None,
+                ).with_asset_kind(ExternalSourceAssetKind::Subagent));
+            }
+        }
+        merge_subagent_state(
+            &mut snapshot,
+            &subagent_snapshot,
+            &subagent_state,
+            preferences.preference_revision,
+        );
+        if let Some(workspace_root) = self.workspace_root.as_deref() {
+            crate::agentic::agents::get_agent_registry().install_external_subagent_routes(
+                workspace_root,
+                subagent_state.registrations,
+                subagent_state.routes,
+            );
+        }
+        sanitize_external_snapshot_locations(&mut snapshot, self.workspace_root.as_deref());
         let mut current = lock_snapshot(&self.snapshot);
+        let subagent_changed = snapshot.subagents != current.subagents
+            || snapshot.subagent_conflicts != current.subagent_conflicts
+            || snapshot.pending_subagent_approvals != current.pending_subagent_approvals
+            || snapshot.preference_revision != current.preference_revision;
+        snapshot.subagent_generation = if subagent_changed {
+            snapshot
+                .subagent_generation
+                .max(current.subagent_generation.saturating_add(1))
+        } else {
+            snapshot
+                .subagent_generation
+                .max(current.subagent_generation)
+        };
         snapshot.generation = snapshot
             .generation
             .max(current.generation.saturating_add(1));
@@ -502,6 +646,86 @@ impl WorkspaceExternalSourceService {
         results
     }
 
+    async fn prepare_subagent_discovery_tasks(
+        &self,
+        requests: Vec<ExternalSubagentDiscoveryRequest>,
+    ) -> Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedSubagentDiscoveryTask,
+        bool,
+    )> {
+        let mut tasks = self.subagent_discovery_tasks.lock().await;
+        requests
+            .into_iter()
+            .map(|request| {
+                let provider_id = request.provider_id().clone();
+                if let Some(in_flight) = tasks.get(&provider_id) {
+                    return (provider_id, in_flight.task.clone(), false);
+                }
+                let task = spawn_subagent_discovery_task(request);
+                tasks.insert(
+                    provider_id.clone(),
+                    InFlightSubagentDiscovery {
+                        task: task.clone(),
+                        wake_scheduled: false,
+                    },
+                );
+                (provider_id, task, true)
+            })
+            .collect()
+    }
+
+    async fn finish_subagent_discovery_poll(
+        self: &Arc<Self>,
+        polled: Vec<SubagentDiscoveryPoll>,
+    ) -> Vec<ExternalSubagentDiscoveryResult> {
+        let mut results = Vec::with_capacity(polled.len());
+        let mut wake_tasks = Vec::new();
+        let mut tasks = self.subagent_discovery_tasks.lock().await;
+        for poll in polled {
+            match poll {
+                SubagentDiscoveryPoll::Complete(result) => {
+                    tasks.remove(&result.provider_id().clone());
+                    results.push(result);
+                }
+                SubagentDiscoveryPoll::InFlight(provider_id) => {
+                    results.push(subagent_discovery_failure(
+                        provider_id,
+                        "external_subagent.discovery_in_progress",
+                        "subagent provider discovery is still running; using its last valid version",
+                    ));
+                }
+                SubagentDiscoveryPoll::TimedOut(provider_id) => {
+                    if let Some(in_flight) = tasks.get_mut(&provider_id) {
+                        if !in_flight.wake_scheduled {
+                            in_flight.wake_scheduled = true;
+                            wake_tasks.push((provider_id.clone(), in_flight.task.clone()));
+                        }
+                    }
+                    results.push(subagent_discovery_failure(
+                        provider_id,
+                        "external_subagent.discovery_timeout",
+                        "subagent provider discovery exceeded the 5 second deadline",
+                    ));
+                }
+            }
+        }
+        drop(tasks);
+        for (provider_id, task) in wake_tasks {
+            let weak = Arc::downgrade(self);
+            tokio::spawn(async move {
+                let result = task.await;
+                let Some(service) = weak.upgrade() else {
+                    return;
+                };
+                service
+                    .complete_deferred_subagent_discovery(provider_id, result)
+                    .await;
+            });
+        }
+        results
+    }
+
     async fn complete_deferred_discovery(
         &self,
         provider_id: bitfun_product_domains::external_sources::ProviderId,
@@ -545,6 +769,60 @@ impl WorkspaceExternalSourceService {
         if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
             let _ = self.updates.send(snapshot);
         }
+    }
+
+    async fn complete_deferred_subagent_discovery(
+        self: &Arc<Self>,
+        provider_id: bitfun_product_domains::external_sources::ProviderId,
+        result: ExternalSubagentDiscoveryResult,
+    ) {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        if self
+            .subagent_discovery_tasks
+            .lock()
+            .await
+            .remove(&provider_id)
+            .is_none()
+        {
+            return;
+        }
+        let subagent_snapshot =
+            lock_subagent_coordinator(&self.subagent_coordinator).apply_discovery_result(result);
+        self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
+        self.ensure_watch_roots().await;
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
+            let _ = self.updates.send(snapshot);
+        }
+    }
+
+    fn schedule_subagent_last_valid_expiry(
+        self: &Arc<Self>,
+        snapshot: &bitfun_external_sources::ExternalSubagentCoordinatorSnapshot,
+    ) {
+        let schedule = self
+            .subagent_expiry_schedule
+            .fetch_add(1, Ordering::AcqRel)
+            .saturating_add(1);
+        let Some(deadline) = snapshot.next_refresh_deadline else {
+            return;
+        };
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)).await;
+            let Some(service) = weak.upgrade() else {
+                return;
+            };
+            if service.subagent_expiry_schedule.load(Ordering::Acquire) != schedule {
+                return;
+            }
+            let _refresh_guard = service.refresh_gate.lock().await;
+            lock_subagent_coordinator(&service.subagent_coordinator).expire_last_valid();
+            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
+                let _ = service.updates.send(snapshot);
+            }
+        });
     }
 
     fn ensure_background_refresh(self: &Arc<Self>) {
@@ -616,6 +894,10 @@ impl WorkspaceExternalSourceService {
                     if should_remove {
                         workspace_services().remove(&key);
                         release_external_tool_workspace(key.as_deref()).await;
+                        if let Some(workspace_root) = key.as_deref() {
+                            crate::agentic::agents::get_agent_registry()
+                                .release_external_subagent_workspace(workspace_root);
+                        }
                     }
                 }
                 break;
@@ -644,7 +926,13 @@ impl WorkspaceExternalSourceService {
             let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
             (previous, known)
         };
-        if !command_known && !tool_known {
+        let (previous_subagents, subagent_known) = {
+            let mut coordinator = lock_subagent_coordinator(&self.subagent_coordinator);
+            let previous = coordinator.suppressed_sources().clone();
+            let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
+            (previous, known)
+        };
+        if !command_known && !tool_known && !subagent_known {
             return Err(format!("unknown external source: {stable_key}"));
         }
         let authoritative = match persist_source_enabled_change(stable_key, enabled).await {
@@ -653,11 +941,15 @@ impl WorkspaceExternalSourceService {
                 lock_coordinator(&self.coordinator).replace_suppressed_sources(previous_commands);
                 lock_tool_coordinator(&self.tool_coordinator)
                     .replace_suppressed_sources(previous_tools);
+                lock_subagent_coordinator(&self.subagent_coordinator)
+                    .replace_suppressed_sources(previous_subagents);
                 return Err(error);
             }
         };
         lock_coordinator(&self.coordinator).replace_suppressed_sources(authoritative.clone());
         lock_tool_coordinator(&self.tool_coordinator)
+            .replace_suppressed_sources(authoritative.clone());
+        lock_subagent_coordinator(&self.subagent_coordinator)
             .replace_suppressed_sources(authoritative.clone());
         propagate_suppressed_sources(&authoritative);
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
@@ -780,6 +1072,126 @@ impl WorkspaceExternalSourceService {
         self.rebuild_product_snapshot(command_snapshot).await
     }
 
+    async fn set_subagent_activation(
+        &self,
+        candidate_id: &str,
+        approved: bool,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+        decision_key: &str,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.subagent_generation != expected_subagent_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(
+                "stale_action: external subagent catalog changed; refresh before retrying"
+                    .to_string(),
+            );
+        }
+        let summary = snapshot
+            .subagents
+            .iter()
+            .find(|summary| {
+                summary.candidate_id == candidate_id && summary.decision_key == decision_key
+            })
+            .ok_or_else(|| {
+                "candidate_unavailable: external subagent candidate is no longer available"
+                    .to_string()
+            })?;
+        if matches!(
+            summary.activation_state,
+            ExternalSubagentActivationState::Blocked
+                | ExternalSubagentActivationState::Unavailable
+                | ExternalSubagentActivationState::Conflict
+        ) {
+            return Err(
+                "unsupported_definition: external subagent cannot be activated in its current state"
+                    .to_string(),
+            );
+        }
+        validate_subagent_decision_value(candidate_id, "candidate id")?;
+        validate_subagent_decision_value(decision_key, "decision key")?;
+        let preferences =
+            persist_subagent_activation(decision_key, approved, expected_preference_revision)
+                .await?;
+        propagate_subagent_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn choose_subagent_conflict(
+        &self,
+        conflict_key: &str,
+        candidate_id: &str,
+        approve_external: bool,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.subagent_generation != expected_subagent_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(
+                "stale_action: external subagent catalog changed; refresh before retrying"
+                    .to_string(),
+            );
+        }
+        let conflict = snapshot
+            .subagent_conflicts
+            .iter()
+            .find(|conflict| conflict.conflict_key == conflict_key)
+            .ok_or_else(|| {
+                "conflict_choice_required: external subagent conflict is stale or unknown"
+                    .to_string()
+            })?;
+        let external = if candidate_id == DISABLED_SUBAGENT_CONFLICT_CHOICE {
+            false
+        } else {
+            conflict
+                .candidates
+                .iter()
+                .find(|candidate| candidate.candidate_id == candidate_id)
+                .map(|candidate| candidate.external)
+                .ok_or_else(|| {
+                    "candidate_unavailable: conflict candidate is no longer available".to_string()
+                })?
+        };
+        let approval_key = if external {
+            let summary = snapshot
+                .subagents
+                .iter()
+                .find(|summary| summary.candidate_id == candidate_id)
+                .ok_or_else(|| {
+                    "candidate_unavailable: external subagent candidate is no longer available"
+                        .to_string()
+                })?;
+            if !approve_external {
+                return Err(
+                    "approval_required: selecting an external subagent must atomically approve its current capability envelope"
+                        .to_string(),
+                );
+            }
+            Some(summary.decision_key.clone())
+        } else {
+            None
+        };
+        validate_subagent_decision_value(conflict_key, "conflict key")?;
+        validate_subagent_decision_value(candidate_id, "candidate id")?;
+        let preferences = persist_subagent_conflict_choice(
+            conflict_key,
+            candidate_id,
+            approval_key.as_deref(),
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_subagent_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
     async fn expand_command(
         self: &Arc<Self>,
         name: &str,
@@ -856,6 +1268,43 @@ impl WorkspaceExternalSourceService {
         });
     }
 
+    fn start_model_config_watching(self: &Arc<Self>) {
+        let Some(mut receiver) = subscribe_config_updates() else {
+            return;
+        };
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            loop {
+                let should_refresh = match receiver.recv().await {
+                    Ok(event) => config_update_refreshes_external_model_bindings(&event),
+                    Err(broadcast::error::RecvError::Lagged(_)) => true,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                };
+                if !should_refresh {
+                    continue;
+                }
+                let Some(service) = weak.upgrade() else {
+                    break;
+                };
+                let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+                match service.rebuild_product_snapshot(command_snapshot).await {
+                    Ok(snapshot) => {
+                        let _ = service.updates.send(snapshot);
+                    }
+                    Err(error) => log::warn!(
+                        "External source model-binding refresh failed for '{}': {}",
+                        service
+                            .workspace_root
+                            .as_deref()
+                            .map(|path| path.display().to_string())
+                            .unwrap_or_else(|| "user-global".to_string()),
+                        error
+                    ),
+                }
+            }
+        });
+    }
+
     async fn ensure_watch_roots(&self) {
         let watch_roots = self.watch_roots();
         let watcher = Arc::clone(&self.watcher);
@@ -894,6 +1343,7 @@ impl WorkspaceExternalSourceService {
             .watch_roots()
             .into_iter()
             .chain(lock_tool_coordinator(&self.tool_coordinator).watch_roots())
+            .chain(lock_subagent_coordinator(&self.subagent_coordinator).watch_roots())
         {
             roots
                 .entry(root.path)
@@ -925,6 +1375,12 @@ enum DiscoveryPoll {
 
 enum ToolDiscoveryPoll {
     Complete(ExternalToolDiscoveryResult),
+    InFlight(bitfun_product_domains::external_sources::ProviderId),
+    TimedOut(bitfun_product_domains::external_sources::ProviderId),
+}
+
+enum SubagentDiscoveryPoll {
+    Complete(ExternalSubagentDiscoveryResult),
     InFlight(bitfun_product_domains::external_sources::ProviderId),
     TimedOut(bitfun_product_domains::external_sources::ProviderId),
 }
@@ -983,6 +1439,33 @@ async fn poll_tool_discovery_tasks(
     .await
 }
 
+async fn poll_subagent_discovery_tasks(
+    scheduled: Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedSubagentDiscoveryTask,
+        bool,
+    )>,
+    timeout: std::time::Duration,
+) -> Vec<SubagentDiscoveryPoll> {
+    join_all(
+        scheduled
+            .into_iter()
+            .map(|(provider_id, task, is_new)| async move {
+                if !is_new {
+                    return match task.clone().now_or_never() {
+                        Some(result) => SubagentDiscoveryPoll::Complete(result),
+                        None => SubagentDiscoveryPoll::InFlight(provider_id),
+                    };
+                }
+                match tokio::time::timeout(timeout, task).await {
+                    Ok(result) => SubagentDiscoveryPoll::Complete(result),
+                    Err(_) => SubagentDiscoveryPoll::TimedOut(provider_id),
+                }
+            }),
+    )
+    .await
+}
+
 fn spawn_discovery_task(request: ExternalSourceDiscoveryRequest) -> SharedDiscoveryTask {
     let provider_id = request.provider_id().clone();
     async move {
@@ -1008,6 +1491,24 @@ fn spawn_tool_discovery_task(request: ExternalToolDiscoveryRequest) -> SharedToo
                 provider_id,
                 "external_tool.discovery_task_failed",
                 &format!("tool provider discovery task failed: {error}"),
+            ),
+        }
+    }
+    .boxed()
+    .shared()
+}
+
+fn spawn_subagent_discovery_task(
+    request: ExternalSubagentDiscoveryRequest,
+) -> SharedSubagentDiscoveryTask {
+    let provider_id = request.provider_id().clone();
+    async move {
+        match tokio::task::spawn_blocking(move || request.execute()).await {
+            Ok(result) => result,
+            Err(error) => subagent_discovery_failure(
+                provider_id,
+                "external_subagent.discovery_task_failed",
+                &format!("subagent provider discovery task failed: {error}"),
             ),
         }
     }
@@ -1041,6 +1542,19 @@ fn tool_discovery_failure(
     )
 }
 
+fn subagent_discovery_failure(
+    provider_id: bitfun_product_domains::external_sources::ProviderId,
+    code: &str,
+    message: &str,
+) -> ExternalSubagentDiscoveryResult {
+    ExternalSubagentDiscoveryResult::failed(
+        provider_id,
+        bitfun_product_domains::external_sources::ExternalSourceProviderError::new(
+            code, message, true,
+        ),
+    )
+}
+
 fn lock_coordinator(
     coordinator: &StdMutex<ExternalSourceCoordinator>,
 ) -> MutexGuard<'_, ExternalSourceCoordinator> {
@@ -1056,6 +1570,15 @@ fn lock_coordinator(
 fn lock_tool_coordinator(
     coordinator: &StdMutex<ExternalToolCoordinator>,
 ) -> MutexGuard<'_, ExternalToolCoordinator> {
+    match coordinator.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn lock_subagent_coordinator(
+    coordinator: &StdMutex<ExternalSubagentCoordinator>,
+) -> MutexGuard<'_, ExternalSubagentCoordinator> {
     match coordinator.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -1096,6 +1619,205 @@ fn normalize_workspace_root(workspace_root: Option<&Path>) -> Result<Option<Path
     Ok(Some(
         dunce::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf()),
     ))
+}
+
+fn relative_display_path(location: &str, root: &Path) -> Option<String> {
+    let normalized_location = location.replace('\\', "/");
+    let normalized_root = root.to_string_lossy().replace('\\', "/");
+    let root = normalized_root.trim_end_matches('/');
+    let prefix = normalized_location.get(..root.len())?;
+    let relative = normalized_location.get(root.len()..)?;
+    (prefix.eq_ignore_ascii_case(root) && relative.starts_with('/'))
+        .then(|| relative.trim_start_matches('/').to_string())
+        .or_else(|| (prefix.eq_ignore_ascii_case(root) && relative.is_empty()).then(String::new))
+}
+
+pub(super) fn safe_external_source_location(
+    scope: ExternalSourceScope,
+    location: &str,
+    workspace_root: Option<&Path>,
+) -> String {
+    let normalized = location.replace('\\', "/");
+    let components = normalized
+        .split('/')
+        .filter(|component| {
+            !component.is_empty()
+                && *component != "."
+                && *component != ".."
+                && !component.ends_with(':')
+        })
+        .collect::<Vec<_>>();
+    let generic_tail = || {
+        components
+            .iter()
+            .position(|component| *component == ".config")
+            .map(|index| components[index..].join("/"))
+            .unwrap_or_else(|| components[components.len().saturating_sub(3)..].join("/"))
+    };
+
+    match scope {
+        ExternalSourceScope::Project | ExternalSourceScope::WorkspaceLocal => {
+            let relative = workspace_root
+                .and_then(|root| relative_display_path(&normalized, root))
+                .unwrap_or_else(generic_tail);
+            format!("<workspace>/{}", relative.trim_start_matches('/'))
+        }
+        ExternalSourceScope::UserGlobal => {
+            let relative = dirs::home_dir()
+                .as_deref()
+                .and_then(|home| relative_display_path(&normalized, home))
+                .unwrap_or_else(generic_tail);
+            format!("~/{}", relative.trim_start_matches('/'))
+        }
+        ExternalSourceScope::RemoteUser | ExternalSourceScope::RemoteProject => {
+            format!("<remote>/{}", generic_tail().trim_start_matches('/'))
+        }
+        _ => format!(
+            "<external-source>/{}",
+            generic_tail().trim_start_matches('/')
+        ),
+    }
+}
+
+fn sanitize_external_snapshot_locations(
+    snapshot: &mut ExternalSourceCatalogSnapshot,
+    workspace_root: Option<&Path>,
+) {
+    let source_scopes = snapshot
+        .sources
+        .iter()
+        .map(|source| (source.record.key.clone(), source.record.scope))
+        .collect::<BTreeMap<_, _>>();
+    let mut replacements = Vec::new();
+    let mut remember_location = |scope: ExternalSourceScope, location: &str| {
+        if location.is_empty() {
+            return;
+        }
+        let safe = safe_external_source_location(scope, location, workspace_root);
+        let safe_prefix = format!("{}/", safe.trim_end_matches('/'));
+        for raw in [
+            location.to_string(),
+            location.replace('\\', "/"),
+            location.replace('/', "\\"),
+        ] {
+            for (raw, safe) in [
+                (format!("{raw}/"), safe_prefix.clone()),
+                (format!("{raw}\\"), safe_prefix.clone()),
+                (raw, safe.clone()),
+            ] {
+                if raw != safe && !replacements.iter().any(|(known, _)| known == &raw) {
+                    replacements.push((raw, safe));
+                }
+            }
+        }
+    };
+    for source in &snapshot.sources {
+        remember_location(source.record.scope, &source.record.location);
+    }
+    for conflict in &snapshot.command_conflicts {
+        for candidate in &conflict.candidates {
+            remember_location(candidate.source_scope, &candidate.source_location);
+        }
+    }
+    for request in &snapshot.tool_approval_requests {
+        remember_location(request.source_scope, &request.source_location);
+        remember_location(request.source_scope, &request.working_directory);
+    }
+    for tool in &snapshot.tools {
+        let scope = source_scopes
+            .get(&tool.definition.id.target.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        remember_location(scope, &tool.definition.module_path);
+        remember_location(scope, &tool.definition.working_directory);
+    }
+    for conflict in &snapshot.tool_conflicts {
+        for candidate in &conflict.candidates {
+            let Some(location) = candidate.source_location.as_deref() else {
+                continue;
+            };
+            let scope = candidate
+                .source
+                .as_ref()
+                .and_then(|source| source_scopes.get(source))
+                .copied()
+                .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+            remember_location(scope, location);
+        }
+    }
+    drop(remember_location);
+    replacements.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
+    let sanitize_message = |message: &mut String| {
+        for (raw, safe) in &replacements {
+            if message.contains(raw) {
+                *message = message.replace(raw, safe);
+            }
+        }
+    };
+    for diagnostic in &mut snapshot.diagnostics {
+        sanitize_message(&mut diagnostic.message);
+    }
+    for source in &mut snapshot.sources {
+        for diagnostic in &mut source.record.diagnostics {
+            sanitize_message(&mut diagnostic.message);
+        }
+    }
+
+    for source in &mut snapshot.sources {
+        source.record.location = safe_external_source_location(
+            source.record.scope,
+            &source.record.location,
+            workspace_root,
+        );
+    }
+    for conflict in &mut snapshot.command_conflicts {
+        for candidate in &mut conflict.candidates {
+            candidate.source_location = safe_external_source_location(
+                candidate.source_scope,
+                &candidate.source_location,
+                workspace_root,
+            );
+        }
+    }
+    for request in &mut snapshot.tool_approval_requests {
+        request.source_location = safe_external_source_location(
+            request.source_scope,
+            &request.source_location,
+            workspace_root,
+        );
+        request.working_directory = safe_external_source_location(
+            request.source_scope,
+            &request.working_directory,
+            workspace_root,
+        );
+    }
+    for tool in &mut snapshot.tools {
+        let scope = source_scopes
+            .get(&tool.definition.id.target.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        tool.definition.module_path =
+            safe_external_source_location(scope, &tool.definition.module_path, workspace_root);
+        tool.definition.working_directory = safe_external_source_location(
+            scope,
+            &tool.definition.working_directory,
+            workspace_root,
+        );
+    }
+    for conflict in &mut snapshot.tool_conflicts {
+        for candidate in &mut conflict.candidates {
+            let Some(location) = candidate.source_location.as_mut() else {
+                continue;
+            };
+            let scope = candidate
+                .source
+                .as_ref()
+                .and_then(|source| source_scopes.get(source))
+                .copied()
+                .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+            *location = safe_external_source_location(scope, location, workspace_root);
+        }
+    }
 }
 
 async fn service_for(
@@ -1201,6 +1923,88 @@ async fn persist_observed_tool_conflicts(conflicts: &[ExternalToolConflict]) -> 
         })
         .await
         .map(|_| ())
+}
+
+async fn persist_observed_subagent_conflicts(
+    observed: &BTreeMap<String, String>,
+) -> Result<(bool, ExternalSourcesConfig), String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    persist_observed_subagent_conflicts_with_store(&store, observed).await
+}
+
+async fn persist_observed_subagent_conflicts_with_store(
+    store: &ExternalSourcePreferenceStore,
+    observed: &BTreeMap<String, String>,
+) -> Result<(bool, ExternalSourcesConfig), String> {
+    if observed.is_empty() {
+        return store.read().await.map(|config| (false, config));
+    }
+    let observed = observed.clone();
+    store
+        .update(move |config| {
+            let mut changed = false;
+            for (lineage, current_key) in observed {
+                let previous_key = config
+                    .subagent_conflict_lineage_current_keys
+                    .get(&lineage)
+                    .cloned();
+                if previous_key.as_deref() == Some(current_key.as_str()) {
+                    continue;
+                }
+                config
+                    .subagent_conflict_lineage_current_keys
+                    .insert(lineage, current_key.clone());
+                changed = true;
+                let previous_choice = previous_key
+                    .as_ref()
+                    .and_then(|previous_key| config.subagent_conflict_choices.remove(previous_key));
+                if previous_choice.is_some() {
+                    let replaced = config.subagent_conflict_choices.insert(
+                        current_key,
+                        SUBAGENT_CONFLICT_RESELECTION_REQUIRED.to_string(),
+                    );
+                    changed |= replaced.as_deref() != Some(SUBAGENT_CONFLICT_RESELECTION_REQUIRED);
+                }
+            }
+            if changed {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            changed
+        })
+        .await
+}
+
+fn merge_subagent_state(
+    snapshot: &mut ExternalSourceCatalogSnapshot,
+    coordinator_snapshot: &bitfun_external_sources::ExternalSubagentCoordinatorSnapshot,
+    state: &ExternalSubagentProductState,
+    preference_revision: u64,
+) {
+    snapshot.generation = snapshot.generation.max(coordinator_snapshot.generation);
+    snapshot.discovery_pending |= coordinator_snapshot.discovery_pending;
+    let known_sources = snapshot
+        .sources
+        .iter()
+        .map(|entry| entry.stable_key.clone())
+        .collect::<BTreeSet<_>>();
+    snapshot.sources.extend(
+        coordinator_snapshot
+            .sources
+            .iter()
+            .filter(|source| !known_sources.contains(&source.stable_key))
+            .cloned(),
+    );
+    snapshot
+        .sources
+        .sort_by(|left, right| left.stable_key.cmp(&right.stable_key));
+    snapshot.subagent_generation = coordinator_snapshot.generation;
+    snapshot.preference_revision = preference_revision;
+    snapshot.subagents = state.summaries.clone();
+    snapshot.subagent_conflicts = state.conflicts.clone();
+    snapshot.pending_subagent_approvals = state.pending_approvals.clone();
+    snapshot
+        .diagnostics
+        .extend(coordinator_snapshot.diagnostics.clone());
 }
 
 fn reconcile_observed_tool_conflict(choices: &mut BTreeMap<String, String>, conflict_key: &str) {
@@ -1331,6 +2135,93 @@ async fn persist_tool_conflict_choice(
         .map(|(_, config)| config)
 }
 
+async fn persist_subagent_activation(
+    approval_key: &str,
+    approved: bool,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let approval_key = approval_key.to_string();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            if approved {
+                config
+                    .approved_subagent_envelopes
+                    .insert(approval_key.clone());
+                config.declined_subagent_decisions.remove(&approval_key);
+            } else {
+                config.approved_subagent_envelopes.remove(&approval_key);
+                config
+                    .declined_subagent_decisions
+                    .insert(approval_key.clone(), approval_key);
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                "stale_action: external subagent preferences changed; refresh before retrying"
+                    .to_string()
+            })
+        })
+}
+
+async fn persist_subagent_conflict_choice(
+    conflict_key: &str,
+    candidate_id: &str,
+    approval_key: Option<&str>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    persist_subagent_conflict_choice_with_store(
+        &store,
+        conflict_key,
+        candidate_id,
+        approval_key,
+        expected_preference_revision,
+    )
+    .await
+}
+
+async fn persist_subagent_conflict_choice_with_store(
+    store: &ExternalSourcePreferenceStore,
+    conflict_key: &str,
+    candidate_id: &str,
+    approval_key: Option<&str>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let conflict_key = conflict_key.to_string();
+    let candidate_id = candidate_id.to_string();
+    let approval_key = approval_key.map(str::to_string);
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            config
+                .subagent_conflict_choices
+                .insert(conflict_key, candidate_id);
+            if let Some(approval_key) = approval_key {
+                config
+                    .approved_subagent_envelopes
+                    .insert(approval_key.clone());
+                config.declined_subagent_decisions.remove(&approval_key);
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                "stale_action: external subagent preferences changed; refresh before retrying"
+                    .to_string()
+            })
+        })
+}
+
 fn reconcile_versioned_tool_conflict_choice(
     choices: &mut BTreeMap<String, String>,
     conflict_key: String,
@@ -1353,6 +2244,8 @@ fn propagate_suppressed_sources(sources: &BTreeSet<String>) {
         };
         lock_coordinator(&service.coordinator).replace_suppressed_sources(sources.clone());
         lock_tool_coordinator(&service.tool_coordinator)
+            .replace_suppressed_sources(sources.clone());
+        lock_subagent_coordinator(&service.subagent_coordinator)
             .replace_suppressed_sources(sources.clone());
         tokio::spawn(async move {
             let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
@@ -1387,6 +2280,20 @@ fn propagate_conflict_preferences(preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
+    for service in workspace_services().iter() {
+        let Some(service) = service.value().upgrade() else {
+            continue;
+        };
+        tokio::spawn(async move {
+            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
+                let _ = service.updates.send(snapshot);
+            }
+        });
+    }
+}
+
+fn propagate_subagent_preferences(_preferences: &ExternalSourcesConfig) {
     for service in workspace_services().iter() {
         let Some(service) = service.value().upgrade() else {
             continue;
@@ -1471,13 +2378,24 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
     let tool_changed = {
         let mut coordinator = lock_tool_coordinator(&service.tool_coordinator);
         if coordinator.suppressed_sources() != &suppressed_sources {
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
+            true
+        } else {
+            false
+        }
+    };
+    let subagent_changed = {
+        let mut coordinator = lock_subagent_coordinator(&service.subagent_coordinator);
+        if coordinator.suppressed_sources() != &suppressed_sources {
             coordinator.replace_suppressed_sources(suppressed_sources);
             true
         } else {
             false
         }
     };
-    if command_changed || tool_changed {
+    let subagent_preferences_changed =
+        service.snapshot().preference_revision != preferences.preference_revision;
+    if command_changed || tool_changed || subagent_changed || subagent_preferences_changed {
         let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
         let snapshot = service.rebuild_product_snapshot(command_snapshot).await?;
         let _ = service.updates.send(snapshot);
@@ -1491,6 +2409,15 @@ fn validate_conflict_preference(conflict_key: &str, candidate_id: &str) -> Resul
     }
     if candidate_id.is_empty() || candidate_id.len() > 512 {
         return Err("external source conflict candidate is invalid".to_string());
+    }
+    Ok(())
+}
+
+fn validate_subagent_decision_value(value: &str, label: &str) -> Result<(), String> {
+    if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
+        return Err(format!(
+            "invalid_request: external subagent {label} is invalid"
+        ));
     }
     Ok(())
 }
@@ -1575,6 +2502,46 @@ pub async fn set_external_tool_conflict_choice(
     service_for(workspace_root)
         .await?
         .set_tool_conflict_choice(conflict_key, candidate_id)
+        .await
+}
+
+pub async fn set_external_subagent_activation(
+    workspace_root: Option<&Path>,
+    candidate_id: &str,
+    approved: bool,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+    decision_key: &str,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_subagent_activation(
+            candidate_id,
+            approved,
+            expected_subagent_generation,
+            expected_preference_revision,
+            decision_key,
+        )
+        .await
+}
+
+pub async fn choose_external_subagent_conflict(
+    workspace_root: Option<&Path>,
+    conflict_key: &str,
+    candidate_id: &str,
+    approve_external: bool,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .choose_subagent_conflict(
+            conflict_key,
+            candidate_id,
+            approve_external,
+            expected_subagent_generation,
+            expected_preference_revision,
+        )
         .await
 }
 
@@ -1673,11 +2640,92 @@ impl ExternalSourceSubscription {
 mod tests {
     use super::*;
     use bitfun_product_domains::external_sources::{
-        ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord,
+        EcosystemId, ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord,
         ExternalSourceScope, PromptCommandAvailability, PromptCommandDefinition,
         PromptCommandProviderIdentity, PromptCommandProviderSnapshot, SourceQualifiedCommandId,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn only_model_configuration_events_refresh_external_model_bindings() {
+        assert!(config_update_refreshes_external_model_bindings(
+            &ConfigUpdateEvent::ModelConfigurationUpdated
+        ));
+        assert!(!config_update_refreshes_external_model_bindings(
+            &ConfigUpdateEvent::ThemeUpdated {
+                theme_id: "dark".to_string(),
+            }
+        ));
+    }
+
+    #[test]
+    fn final_catalog_redacts_known_absolute_paths_from_diagnostics() {
+        let source_key = SourceKey::new("future.tools", "project").unwrap();
+        let raw_root = r"C:\Users\alice\repo\.future-ai\tools";
+        let raw_file = format!(r"{raw_root}\review.js");
+        let mut snapshot = ExternalSourceCatalogSnapshot {
+            generation: 1,
+            discovery_pending: false,
+            sources: vec![ExternalSourceCatalogEntry {
+                stable_key: source_key.stable_key(),
+                record: ExternalSourceRecord {
+                    key: source_key.clone(),
+                    ecosystem_id: EcosystemId::new("future-ai").unwrap(),
+                    display_name: "Future AI project tools".to_string(),
+                    source_kind: "standalone_tools".to_string(),
+                    scope: ExternalSourceScope::Project,
+                    location: raw_root.to_string(),
+                    execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+                    health: ExternalSourceHealth::Partial,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: vec![ExternalSourceDiagnostic::warning(
+                        "future.tool.directory_read_failed",
+                        format!("Failed to read '{raw_root}'"),
+                        Some(source_key.clone()),
+                    )
+                    .with_asset_kind(ExternalSourceAssetKind::Tool)],
+                },
+                lifecycle: ExternalSourceLifecycleState::Degraded,
+            }],
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            subagent_generation: 0,
+            preference_revision: 0,
+            subagents: Vec::new(),
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            diagnostics: vec![ExternalSourceDiagnostic::warning(
+                "future.tool.file_read_failed",
+                format!("Failed to read '{raw_file}'"),
+                Some(source_key),
+            )
+            .with_asset_kind(ExternalSourceAssetKind::Tool)],
+        };
+
+        sanitize_external_snapshot_locations(
+            &mut snapshot,
+            Some(Path::new(r"C:\Users\alice\repo")),
+        );
+
+        assert_eq!(
+            snapshot.sources[0].record.location,
+            "<workspace>/.future-ai/tools"
+        );
+        assert_eq!(
+            snapshot.sources[0].record.diagnostics[0].message,
+            "Failed to read '<workspace>/.future-ai/tools'"
+        );
+        assert_eq!(
+            snapshot.diagnostics[0].message,
+            "Failed to read '<workspace>/.future-ai/tools/review.js'"
+        );
+        let serialized = serde_json::to_string(&snapshot).unwrap();
+        assert!(!serialized.contains("C:\\\\Users\\\\alice"));
+        assert!(!serialized.contains("C:/Users/alice"));
+    }
 
     struct DelayedProvider {
         identity: PromptCommandProviderIdentity,
@@ -1771,7 +2819,8 @@ mod tests {
         };
         let (updates, _) = broadcast::channel(8);
         let coordinator = ExternalSourceCoordinator::new(context.clone(), providers).unwrap();
-        let tool_coordinator = ExternalToolCoordinator::new(context, Vec::new()).unwrap();
+        let tool_coordinator = ExternalToolCoordinator::new(context.clone(), Vec::new()).unwrap();
+        let subagent_coordinator = ExternalSubagentCoordinator::new(context, Vec::new()).unwrap();
         let snapshot = merge_tool_state(
             coordinator.snapshot(),
             &tool_coordinator.snapshot(),
@@ -1781,6 +2830,7 @@ mod tests {
             workspace_root: None,
             coordinator: Arc::new(StdMutex::new(coordinator)),
             tool_coordinator: Arc::new(StdMutex::new(tool_coordinator)),
+            subagent_coordinator: Arc::new(StdMutex::new(subagent_coordinator)),
             snapshot: StdMutex::new(snapshot),
             updates,
             watch_states: tokio::sync::Mutex::new(BTreeMap::new()),
@@ -1788,6 +2838,7 @@ mod tests {
             product_rebuild_gate: tokio::sync::Mutex::new(()),
             discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             tool_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            subagent_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             initial_refresh_completed: AtomicBool::new(false),
             background_refresh_scheduled: AtomicBool::new(false),
             initial_refresh_gate: tokio::sync::Mutex::new(()),
@@ -1796,6 +2847,7 @@ mod tests {
             watcher: Arc::new(FileWatchService::new(FileWatcherConfig::default())),
             tool_decision_gate_waiting: tokio::sync::Notify::new(),
             tool_decision_gate_acquired: tokio::sync::Notify::new(),
+            subagent_expiry_schedule: AtomicU64::new(0),
         })
     }
 
@@ -1842,6 +2894,64 @@ mod tests {
             persisted.conflicted_candidate_ids,
             BTreeSet::from(["candidate-a".to_string(), "candidate-b".to_string()])
         );
+    }
+
+    #[tokio::test]
+    async fn subagent_conflict_history_advances_revision_and_rejects_stale_process_actions() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let process_a = ExternalSourcePreferenceStore::new(path.clone());
+        let process_b = ExternalSourcePreferenceStore::new(path);
+        let lineage = "external_subagent_lineage:local-user:workspace:review";
+        let conflict_v1 = "external_subagent:local-user:workspace:review:v1";
+        let conflict_v2 = "external_subagent:local-user:workspace:review:v2";
+
+        let (changed, observed_v1) = persist_observed_subagent_conflicts_with_store(
+            &process_a,
+            &BTreeMap::from([(lineage.to_string(), conflict_v1.to_string())]),
+        )
+        .await
+        .unwrap();
+        assert!(changed);
+        assert_eq!(observed_v1.preference_revision, 1);
+
+        let selected_v1 = persist_subagent_conflict_choice_with_store(
+            &process_a,
+            conflict_v1,
+            "external_subagent:candidate-v1",
+            None,
+            observed_v1.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(selected_v1.preference_revision, 2);
+
+        let (changed, observed_v2) = persist_observed_subagent_conflicts_with_store(
+            &process_b,
+            &BTreeMap::from([(lineage.to_string(), conflict_v2.to_string())]),
+        )
+        .await
+        .unwrap();
+        assert!(changed);
+        assert_eq!(observed_v2.preference_revision, 3);
+        assert!(!observed_v2
+            .subagent_conflict_choices
+            .contains_key(conflict_v1));
+        assert_eq!(
+            observed_v2.subagent_conflict_choices[conflict_v2],
+            SUBAGENT_CONFLICT_RESELECTION_REQUIRED
+        );
+
+        let error = persist_subagent_conflict_choice_with_store(
+            &process_a,
+            conflict_v1,
+            "external_subagent:candidate-v1",
+            None,
+            selected_v1.preference_revision,
+        )
+        .await
+        .expect_err("the stale process must not overwrite the new conflict generation");
+        assert!(error.starts_with("stale_action:"));
     }
 
     #[tokio::test]

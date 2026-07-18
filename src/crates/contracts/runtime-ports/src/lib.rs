@@ -1019,6 +1019,13 @@ pub struct AgentSessionDeleteRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentSessionModelUpdateRequest {
+    pub session_id: String,
+    pub model_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSessionWorkspaceRequest {
     pub session_id: String,
 }
@@ -1688,6 +1695,12 @@ pub trait AgentSessionManagementPort: Send + Sync {
         &self,
         request: AgentSessionWorkspaceRequest,
     ) -> PortResult<Option<AgentSessionWorkspaceBinding>>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionModelPort: Send + Sync {
+    async fn update_session_model(&self, request: AgentSessionModelUpdateRequest)
+        -> PortResult<()>;
 }
 
 #[async_trait::async_trait]
@@ -2690,6 +2703,10 @@ mod tests {
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
         };
+        let model_request = AgentSessionModelUpdateRequest {
+            session_id: "session_1".to_string(),
+            model_id: "provider/model".to_string(),
+        };
         let workspace_request = AgentSessionWorkspaceRequest {
             session_id: "session_1".to_string(),
         };
@@ -2703,6 +2720,7 @@ mod tests {
         let list_json = serde_json::to_value(list_request).expect("serialize list request");
         let summary_json = serde_json::to_value(summary).expect("serialize summary");
         let delete_json = serde_json::to_value(delete_request).expect("serialize delete request");
+        let model_json = serde_json::to_value(model_request).expect("serialize model request");
         let workspace_json =
             serde_json::to_value(workspace_request).expect("serialize workspace request");
         let binding_json =
@@ -2718,6 +2736,8 @@ mod tests {
         assert_eq!(delete_json["sessionId"], "session_1");
         assert_eq!(delete_json["remoteConnectionId"], "conn-1");
         assert_eq!(delete_json["remoteSshHost"], "host-1");
+        assert_eq!(model_json["sessionId"], "session_1");
+        assert_eq!(model_json["modelId"], "provider/model");
         assert_eq!(workspace_json["sessionId"], "session_1");
         assert_eq!(binding_json["workspaceId"], "workspace_1");
         assert_eq!(binding_json["workspacePath"], "/workspace/project");

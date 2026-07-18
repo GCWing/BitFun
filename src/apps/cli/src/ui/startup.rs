@@ -1044,6 +1044,7 @@ impl StartupPage {
             ActionHandler::ClearConversation
             | ActionHandler::ReloadSkills
             | ActionHandler::ExternalTools
+            | ActionHandler::ExternalAgents
             | ActionHandler::History
             | ActionHandler::Interrupt
             | ActionHandler::ToggleFocusedTool
@@ -1996,6 +1997,7 @@ impl StartupPage {
                     workspace_root: Some(workspace.as_path()),
                     list_scope: SubagentListScope::TaskVisible,
                     include_disabled: false,
+                    external_sources_supported: false,
                 },
             ))
         });
@@ -2032,12 +2034,14 @@ impl StartupPage {
                     workspace_root: Some(workspace.as_path()),
                     list_scope: SubagentListScope::RegistryManagement,
                     include_disabled: true,
+                    external_sources_supported: false,
                 },
             ))
         });
 
         let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
+            .filter(|info| info.subagent_source != Some(SubAgentSource::External))
             .map(Self::subagent_item_from_info)
             .collect();
 
@@ -2103,6 +2107,7 @@ impl StartupPage {
             Some(SubAgentSource::Builtin) => "builtin",
             Some(SubAgentSource::Project) => "project",
             Some(SubAgentSource::User) => "user",
+            Some(SubAgentSource::External) => "external",
             None => "builtin",
         }
         .to_string();

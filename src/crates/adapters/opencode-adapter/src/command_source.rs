@@ -1,9 +1,9 @@
 use bitfun_product_domains::external_sources::{
-    EcosystemId, ExpandedPromptCommand, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
-    ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition,
-    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandSourceProvider,
-    SourceKey, SourceQualifiedCommandId,
+    EcosystemId, ExpandedPromptCommand, ExternalSourceAssetKind, ExternalSourceContext,
+    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceProviderError,
+    ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability,
+    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
+    PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
 };
 use bitfun_services_core::markdown::FrontMatterMarkdown;
 use regex::Regex;
@@ -275,6 +275,14 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
             });
         }
 
+        for diagnostic in &mut diagnostics {
+            diagnostic.asset_kind = ExternalSourceAssetKind::Command;
+        }
+        for source in &mut sources {
+            for diagnostic in &mut source.diagnostics {
+                diagnostic.asset_kind = ExternalSourceAssetKind::Command;
+            }
+        }
         Ok(PromptCommandProviderSnapshot {
             provider: self.identity(),
             sources,
@@ -715,10 +723,7 @@ fn collect_markdown_files(
         Err(error) => {
             diagnostics.push(ExternalSourceDiagnostic::error(
                 "opencode.command.directory_unreadable",
-                format!(
-                    "Failed to inspect OpenCode command directory '{}': {error}",
-                    directory.display()
-                ),
+                format!("Failed to inspect an OpenCode command directory: {error}"),
                 None,
             ));
             return true;
@@ -726,10 +731,7 @@ fn collect_markdown_files(
         Ok(metadata) if !metadata.is_dir() => {
             diagnostics.push(ExternalSourceDiagnostic::error(
                 "opencode.command.directory_invalid",
-                format!(
-                    "OpenCode command directory path '{}' is not a directory",
-                    directory.display()
-                ),
+                "An OpenCode command directory path is not a directory",
                 None,
             ));
             return true;
@@ -741,10 +743,7 @@ fn collect_markdown_files(
         Err(error) => {
             diagnostics.push(ExternalSourceDiagnostic::error(
                 "opencode.command.directory_unreadable",
-                format!(
-                    "Failed to resolve OpenCode command directory '{}': {error}",
-                    directory.display()
-                ),
+                format!("Failed to resolve an OpenCode command directory: {error}"),
                 None,
             ));
             return true;
@@ -758,10 +757,7 @@ fn collect_markdown_files(
         Err(error) => {
             diagnostics.push(ExternalSourceDiagnostic::error(
                 "opencode.command.directory_unreadable",
-                format!(
-                    "Failed to read OpenCode command directory '{}': {error}",
-                    directory.display()
-                ),
+                format!("Failed to read an OpenCode command directory: {error}"),
                 None,
             ));
             return true;
@@ -776,10 +772,7 @@ fn collect_markdown_files(
                 failed = true;
                 diagnostics.push(ExternalSourceDiagnostic::error(
                     "opencode.command.directory_unreadable",
-                    format!(
-                        "Failed to enumerate OpenCode command directory '{}': {error}",
-                        directory.display()
-                    ),
+                    format!("Failed to enumerate an OpenCode command directory: {error}"),
                     None,
                 ));
             }
