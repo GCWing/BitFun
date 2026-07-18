@@ -1,5 +1,6 @@
 use crate::client::utils::elapsed_ms_u64;
 use crate::client::StreamResponse;
+use crate::providers::shared::{self, AIRequestAttemptTelemetry};
 use crate::stream::UnifiedResponse;
 use crate::trace::{ModelExchangeRequestAttempt, ModelExchangeTraceConfig};
 use anyhow::{anyhow, Result};
@@ -102,6 +103,7 @@ fn retry_delay_ms(attempt: usize, headers: &HeaderMap) -> u64 {
 
 pub(crate) async fn execute_sse_request<BuildRequest, SpawnHandler>(
     label: &str,
+    provider: &str,
     url: &str,
     request_body: &serde_json::Value,
     max_tries: usize,
@@ -119,7 +121,16 @@ where
     ),
 {
     let mut last_error = None;
+    let request_id = shared::new_ai_request_id();
     for attempt in 0..max_tries {
+        let telemetry = shared::begin_ai_request_attempt_telemetry(
+            request_id.clone(),
+            provider,
+            url,
+            request_body,
+            attempt + 1,
+        );
+        telemetry.started();
         let trace_handle = if let Some(trace) = trace.as_ref() {
             trace
                 .sink
@@ -156,6 +167,7 @@ where
                             .await;
                     }
                     error!("{} client error {}: {}", label, status, error_text);
+                    telemetry.ended("http_client_error", Some(status.as_u16()));
                     return Err(anyhow!("{} client error {}: {}", label, status, error_text));
                 }
 
@@ -184,6 +196,7 @@ where
                         error
                     );
                     last_error = Some(error);
+                    telemetry.ended("http_retryable_error", Some(status.as_u16()));
                     if let Some(trace) = trace.as_ref() {
                         trace
                             .sink
@@ -224,6 +237,7 @@ where
                     error_msg
                 );
                 last_error = Some(error);
+                telemetry.ended("transport_error", None);
                 if let Some(trace) = trace.as_ref() {
                     trace
                         .sink
@@ -256,6 +270,7 @@ where
                     error_msg
                 );
                 last_error = Some(error);
+                telemetry.ended("ttft_timeout", None);
                 if let Some(trace) = trace.as_ref() {
                     trace
                         .sink
@@ -278,11 +293,15 @@ where
         };
 
         let (tx, rx) = mpsc::unbounded_channel();
+        let (tx_output, rx_output) = mpsc::unbounded_channel();
         let (tx_raw, rx_raw) = mpsc::unbounded_channel();
         spawn_handler(response, tx, Some(tx_raw));
+        forward_stream_with_request_telemetry(rx, tx_output, telemetry);
 
         return Ok(StreamResponse {
-            stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)),
+            stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(
+                rx_output,
+            )),
             raw_sse_rx: Some(rx_raw),
             trace_handle,
         });
@@ -296,6 +315,36 @@ where
     );
     error!("{}", error_msg);
     Err(anyhow!(error_msg))
+}
+
+fn forward_stream_with_request_telemetry(
+    mut rx: mpsc::UnboundedReceiver<Result<UnifiedResponse>>,
+    tx: mpsc::UnboundedSender<Result<UnifiedResponse>>,
+    telemetry: AIRequestAttemptTelemetry,
+) {
+    tokio::spawn(async move {
+        let mut first_token_seen = false;
+        let mut outcome = "completed";
+
+        while let Some(item) = rx.recv().await {
+            if item.is_ok() && !first_token_seen {
+                telemetry.first_token();
+                first_token_seen = true;
+            }
+            if item.is_err() {
+                outcome = "stream_error";
+            }
+            if tx.send(item).is_err() {
+                outcome = "consumer_dropped";
+                break;
+            }
+            if outcome == "stream_error" {
+                break;
+            }
+        }
+
+        telemetry.ended(outcome, None);
+    });
 }
 
 #[cfg(test)]

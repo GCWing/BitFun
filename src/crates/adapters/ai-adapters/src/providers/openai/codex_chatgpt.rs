@@ -172,6 +172,7 @@ pub(crate) async fn send_stream(
 
     execute_sse_request(
         "Codex ChatGPT Responses API",
+        "codex_chatgpt",
         &url,
         &request_body,
         max_tries,
