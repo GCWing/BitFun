@@ -1,8 +1,11 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize};
+mod support;
+
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use support::{CliTestEnvironment, MockOpenAiServer, STREAM_RESIZED_MARKER, STREAM_START_MARKER};
 
 const INITIAL_SIZE: PtySize = PtySize {
     rows: 30,
@@ -16,127 +19,56 @@ const RESIZED_SIZE: PtySize = PtySize {
     pixel_width: 0,
     pixel_height: 0,
 };
+const STARTUP_INPUT: &[u8] = b"exercise active turn resize Q7Z9";
+const STARTUP_INPUT_SENTINEL: &str = "Q7Z9";
+const RECOVERY_INPUT: &[u8] = b"READY_AFTER_CANCEL K4W8";
+const RECOVERY_INPUT_SENTINEL: &str = "K4W8";
 
 #[test]
 fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
-    let storage = tempfile::tempdir().expect("create isolated CLI storage");
-    let user_root = storage.path().join("user-root");
-    let home_root = storage.path().join("home");
-    std::fs::create_dir_all(&user_root).expect("create isolated user root");
-    std::fs::create_dir_all(&home_root).expect("create isolated home root");
+    let environment = CliTestEnvironment::new();
+    let mut process = PtyProcess::spawn(environment.pty_command(), INITIAL_SIZE);
 
-    let pair = native_pty_system()
-        .openpty(INITIAL_SIZE)
-        .expect("open native PTY");
-    let PtyPair { master, slave } = pair;
-
-    let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_bitfun-cli"));
-    command.cwd(storage.path());
-    command.env("BITFUN_E2E_STORAGE_GUARD", "1");
-    command.env("BITFUN_E2E_USER_ROOT", &user_root);
-    command.env("BITFUN_E2E_HOME", &home_root);
-    command.env("HOME", &home_root);
-    command.env("USERPROFILE", &home_root);
-    command.env("TERM", "xterm-256color");
-
-    let mut child = slave
-        .spawn_command(command)
-        .expect("spawn bitfun-cli in native PTY");
-    drop(slave);
-
-    let mut reader = master.try_clone_reader().expect("clone PTY reader");
-    let captured = Arc::new(Mutex::new(Vec::new()));
-    let reader_capture = Arc::clone(&captured);
-    let reader_thread = thread::spawn(move || {
-        let mut chunk = [0_u8; 4096];
-        while let Ok(read) = reader.read(&mut chunk) {
-            if read == 0 {
-                break;
-            }
-            reader_capture
-                .lock()
-                .expect("lock captured PTY output")
-                .extend_from_slice(&chunk[..read]);
-        }
-    });
-
-    wait_for_output(&captured, "\x1b[?2004h", Duration::from_secs(30)).unwrap_or_else(|| {
-        terminate(&mut child);
-        panic!(
-            "interactive startup did not enable bracketed paste; output:\n{}",
-            captured_output(&captured)
-        );
-    });
+    process.expect_output(
+        "\x1b[?2004h",
+        Duration::from_secs(30),
+        "interactive startup did not enable bracketed paste",
+    );
     #[cfg(unix)]
     assert!(
-        captured_output(&captured).contains("\x1b[?1049h"),
+        process.output().contains("\x1b[?1049h"),
         "interactive TUI must enter the alternate screen"
     );
 
-    master.resize(RESIZED_SIZE).expect("resize native PTY");
-    assert_eq!(
-        master.get_size().expect("read resized PTY dimensions"),
-        RESIZED_SIZE
-    );
+    process.resize(RESIZED_SIZE);
 
-    let mut writer = master.take_writer().expect("take PTY writer");
     #[cfg(unix)]
-    writer
-        .write_all(b"\x1b[200~alpha\r\nbeta\x1b[201~")
-        .expect("send bracketed paste");
+    process.write(b"\x1b[200~alpha\r\nbeta\x1b[201~");
     #[cfg(windows)]
     {
         let mut rapid_input = b"alpha".to_vec();
         rapid_input.extend(std::iter::repeat_n(b'a', 251));
         rapid_input.extend_from_slice(b"\rbeta");
-        writer
-            .write_all(&rapid_input)
-            .expect("send rapid multiline key input across the batch boundary");
+        process.write(&rapid_input);
     }
-    writer.flush().expect("flush terminal input");
 
-    wait_for_output(&captured, "alpha", Duration::from_secs(15)).unwrap_or_else(|| {
-        terminate(&mut child);
-        panic!(
-            "interactive startup did not render multiline input; output:\n{}",
-            captured_output(&captured)
-        );
-    });
-    wait_for_output(&captured, "beta", Duration::from_secs(15)).unwrap_or_else(|| {
-        terminate(&mut child);
-        panic!(
-            "interactive startup did not render the multiline input tail; output:\n{}",
-            captured_output(&captured)
-        );
-    });
+    process.expect_output(
+        "alpha",
+        Duration::from_secs(15),
+        "interactive startup did not render multiline input",
+    );
+    process.expect_output(
+        "beta",
+        Duration::from_secs(15),
+        "interactive startup did not render the multiline input tail",
+    );
     assert!(
-        !captured_output(&captured).contains("Welcome to BitFun CLI!"),
+        !process.output().contains("Welcome to BitFun CLI!"),
         "multiline input was submitted instead of remaining in the startup editor"
     );
 
-    writer.write_all(&[0x03]).expect("send Ctrl+C");
-    writer.flush().expect("flush Ctrl+C");
-
-    let deadline = Instant::now() + Duration::from_secs(15);
-    let status = loop {
-        if let Some(status) = child.try_wait().expect("poll bitfun-cli process") {
-            break status;
-        }
-        if Instant::now() >= deadline {
-            terminate(&mut child);
-            panic!(
-                "interactive startup did not exit after Ctrl+C; output:\n{}",
-                captured_output(&captured)
-            );
-        }
-        thread::sleep(Duration::from_millis(25));
-    };
-
-    drop(writer);
-    drop(master);
-    reader_thread.join().expect("join PTY reader");
-
-    let output = captured_output(&captured);
+    process.write(&[0x03]);
+    let (status, output) = process.finish(Duration::from_secs(15));
     assert!(
         status.success(),
         "unexpected process status {status}:\n{output}"
@@ -172,26 +104,213 @@ fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
     );
 }
 
-fn wait_for_output(
-    captured: &Arc<Mutex<Vec<u8>>>,
-    expected: &str,
-    timeout: Duration,
-) -> Option<()> {
-    let deadline = Instant::now() + timeout;
-    while Instant::now() < deadline {
-        if captured_output(captured).contains(expected) {
-            return Some(());
-        }
-        thread::sleep(Duration::from_millis(25));
-    }
-    None
+#[test]
+fn active_turn_resize_can_be_cancelled_and_returns_to_editable_input() {
+    let server = MockOpenAiServer::gated();
+    let environment = CliTestEnvironment::new();
+    environment.initialize_git_repository();
+    environment.configure_mock_model(server.base_url());
+    let mut process = PtyProcess::spawn(environment.pty_command(), INITIAL_SIZE);
+
+    process.expect_output(
+        "\x1b[?2004h",
+        Duration::from_secs(30),
+        "interactive startup did not enable bracketed paste",
+    );
+    process.write(STARTUP_INPUT);
+    process.expect_output(
+        STARTUP_INPUT_SENTINEL,
+        Duration::from_secs(15),
+        "startup prompt sentinel was not rendered before submission",
+    );
+    process.write(b"\r");
+    process.expect_output(
+        STREAM_START_MARKER,
+        Duration::from_secs(30),
+        "active model stream was not rendered",
+    );
+
+    let active_turn_size = PtySize {
+        rows: 24,
+        cols: 52,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+    process.resize(active_turn_size);
+    server.release();
+    process.expect_output(
+        STREAM_RESIZED_MARKER,
+        Duration::from_secs(15),
+        "active model stream did not remain renderable after resize",
+    );
+    process.write(&[0x03]);
+    process.expect_output(
+        "Cancelled",
+        Duration::from_secs(15),
+        "active turn did not reach the cancelled state after resize",
+    );
+    server.expect_stream_disconnect(Duration::from_secs(5));
+
+    process.write(RECOVERY_INPUT);
+    process.expect_output(
+        RECOVERY_INPUT_SENTINEL,
+        Duration::from_secs(15),
+        "recovery input sentinel was not rendered after cancellation",
+    );
+    process.write(&[0x03]);
+
+    let (status, output) = process.finish(Duration::from_secs(15));
+    assert!(
+        status.success(),
+        "unexpected process status {status}:\n{output}"
+    );
+    assert!(output.contains(STREAM_START_MARKER), "{output}");
+    assert!(output.contains(STREAM_RESIZED_MARKER), "{output}");
+    assert!(output.contains("Cancelled"), "{output}");
+    assert!(output.contains(RECOVERY_INPUT_SENTINEL), "{output}");
+    assert!(output.contains("\x1b[?2004l"), "{output}");
+    assert!(output.contains("\x1b[?25h"), "{output}");
+    assert!(output.contains("Goodbye!"), "{output}");
 }
 
 fn captured_output(captured: &Arc<Mutex<Vec<u8>>>) -> String {
     String::from_utf8_lossy(&captured.lock().expect("lock captured PTY output")).into_owned()
 }
 
-fn terminate(child: &mut Box<dyn portable_pty::Child + Send + Sync>) {
-    let _ = child.kill();
-    let _ = child.wait();
+struct PtyProcess {
+    master: Option<Box<dyn portable_pty::MasterPty + Send>>,
+    writer: Option<Box<dyn Write + Send>>,
+    child: Option<Box<dyn portable_pty::Child + Send + Sync>>,
+    captured: Arc<Mutex<Vec<u8>>>,
+    reader_thread: Option<thread::JoinHandle<()>>,
+}
+
+impl PtyProcess {
+    fn spawn(command: CommandBuilder, size: PtySize) -> Self {
+        let pair = native_pty_system().openpty(size).expect("open native PTY");
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .expect("spawn bitfun-cli in native PTY");
+        drop(pair.slave);
+
+        let mut reader = pair.master.try_clone_reader().expect("clone PTY reader");
+        let writer = pair.master.take_writer().expect("take PTY writer");
+        let captured = Arc::new(Mutex::new(Vec::new()));
+        let reader_capture = Arc::clone(&captured);
+        let reader_thread = thread::spawn(move || {
+            let mut chunk = [0_u8; 4096];
+            while let Ok(read) = reader.read(&mut chunk) {
+                if read == 0 {
+                    break;
+                }
+                reader_capture
+                    .lock()
+                    .expect("lock captured PTY output")
+                    .extend_from_slice(&chunk[..read]);
+            }
+        });
+
+        // Detect an immediate startup failure before handing the process to the test.
+        if let Some(status) = child.try_wait().expect("poll initial CLI process") {
+            panic!("bitfun-cli exited during PTY startup: {status}");
+        }
+
+        Self {
+            master: Some(pair.master),
+            writer: Some(writer),
+            child: Some(child),
+            captured,
+            reader_thread: Some(reader_thread),
+        }
+    }
+
+    fn output(&self) -> String {
+        captured_output(&self.captured)
+    }
+
+    fn expect_output(&mut self, expected: &str, timeout: Duration, context: &str) {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if self.output().contains(expected) {
+                return;
+            }
+            if let Some(status) = self
+                .child
+                .as_mut()
+                .expect("PTY process child")
+                .try_wait()
+                .expect("poll bitfun-cli process")
+            {
+                let output = self.output();
+                self.close_io();
+                panic!("{context}; process exited with {status}; output:\n{output}");
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        let output = self.output();
+        self.terminate();
+        panic!("{context}; output:\n{output}");
+    }
+
+    fn resize(&self, size: PtySize) {
+        let master = self.master.as_ref().expect("PTY master");
+        master.resize(size).expect("resize native PTY");
+        assert_eq!(
+            master.get_size().expect("read resized PTY dimensions"),
+            size
+        );
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        let writer = self.writer.as_mut().expect("PTY writer");
+        writer.write_all(bytes).expect("write terminal input");
+        writer.flush().expect("flush terminal input");
+    }
+
+    fn finish(mut self, timeout: Duration) -> (portable_pty::ExitStatus, String) {
+        let deadline = Instant::now() + timeout;
+        let status = loop {
+            if let Some(status) = self
+                .child
+                .as_mut()
+                .expect("PTY process child")
+                .try_wait()
+                .expect("poll bitfun-cli process")
+            {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                let output = self.output();
+                self.terminate();
+                panic!("interactive process did not exit; output:\n{output}");
+            }
+            thread::sleep(Duration::from_millis(25));
+        };
+        self.child.take();
+        self.close_io();
+        (status, self.output())
+    }
+
+    fn close_io(&mut self) {
+        self.writer.take();
+        self.master.take();
+        if let Some(reader_thread) = self.reader_thread.take() {
+            reader_thread.join().expect("join PTY reader");
+        }
+    }
+
+    fn terminate(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        self.close_io();
+    }
+}
+
+impl Drop for PtyProcess {
+    fn drop(&mut self) {
+        self.terminate();
+    }
 }

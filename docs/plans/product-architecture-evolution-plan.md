@@ -29,7 +29,7 @@
 |---|---|---|
 | 编译依赖 | `assembly/core -> apps/relay-server` 已移除；通用检查覆盖 normal/build/dev 依赖及 optional/target 变体 | 后续反向依赖和未知 crate 层级直接失败 |
 | 公开面 | `bitfun-core` 仍有迁移期 re-export；CLI 主会话客户端已仅消费 Runtime SDK，其他产品入口仍保留兼容路径 | 按入口逐项迁移，不做全仓逐 symbol 台账或批量删除 |
-| CLI/TUI | `ShortcutsConfig` 已加载但真实按键分发仍硬编码；Slash、Palette、帮助和执行不是同一来源 | 先统一宿主 action 声明和键位解析，不重写 renderer |
+| CLI/TUI | 宿主 `ACTION_SPECS` 已统一 Slash、Palette、Help、Keymap 与 dispatch；启动页及活动 turn 的 Linux PTY / Windows ConPTY 行为由进程级契约保护 | 保持现有 renderer 与交互规格，只按真实故障样例补可靠性契约；macOS 活动 PTY 另行验收 |
 | OpenCode | Prompt Command、受支持的单文件 JavaScript Tool 和 Subagent 安全子集已分别通过能力专属 provider 接入；受管 package plugin 仍只有静态预览 | 先收敛三条已交付路径的诊断、运行时提示和配置失败语义，再按真实阻塞样例评估下一能力切片 |
 | HarmonyOS PC | 未来平台目标，当前未实现 | 目标、问题、风险和旧设计闭环见平台规约；具体工作后续分别立项 |
 | 入口迁移 | CLI 已消费 Runtime Parts；Desktop 主交互消费由现有 owner 构造的窄口径 Runtime SDK 门面，完整 Desktop Runtime Parts 尚未组装；CLI/ACP/Desktop 仍按需保留 `bitfun-core/product-full` 兼容 owner | 保持单一 owner，按真实端口逐项迁移，不批量删除兼容门面或用桩服务提前声明能力 |
@@ -58,9 +58,12 @@
 - contracts 和 Agent Runtime 不再新增环境或生态来源探测；
 - 本工作流没有新增无调用方端口、空 registry 或第二个 Runtime owner。
 
-## 4. 工作流二：CLI action 与快捷键一致
+## 4. 工作流二：CLI action 与快捷键一致（已完成）
 
 用户结果：持久化快捷键真正生效，Slash、命令面板、帮助、快捷键展示和执行不会互相漂移。
+
+当前状态：CLI 宿主已建立统一 action registry，Slash、Palette、Help、Keymap 与 dispatch 共用同一组稳定条目；
+显式旧快捷键、冲突配置、宿主安全 fallback 和帮助尺寸均有回归保护。后续终端可靠性工作不再重复设计 action 层。
 
 交付：
 

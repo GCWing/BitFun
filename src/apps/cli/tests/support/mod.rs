@@ -1,0 +1,431 @@
+#![allow(dead_code)]
+
+use portable_pty::CommandBuilder;
+use serde_json::json;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+pub(crate) const STREAM_START_MARKER: &str = "ACTIVE_TURN_STREAM_MARKER";
+pub(crate) const STREAM_RESIZED_MARKER: &str = "RESIZED_OK";
+pub(crate) const STREAM_COMPLETED_MARKER: &str = "ACTIVE_TURN_STREAM_COMPLETED";
+
+pub(crate) struct CliTestEnvironment {
+    _temp: tempfile::TempDir,
+    workspace: PathBuf,
+    user_root: PathBuf,
+    home_root: PathBuf,
+    config_root: PathBuf,
+}
+
+impl CliTestEnvironment {
+    pub(crate) fn new() -> Self {
+        let temp = tempfile::tempdir().expect("create isolated CLI environment");
+        let workspace = temp.path().join("workspace");
+        let user_root = temp.path().join("user-root");
+        let home_root = temp.path().join("home");
+        let config_root = temp.path().join("config-root");
+        for path in [&workspace, &user_root, &home_root, &config_root] {
+            std::fs::create_dir_all(path).expect("create isolated CLI directory");
+        }
+
+        Self {
+            _temp: temp,
+            workspace,
+            user_root,
+            home_root,
+            config_root,
+        }
+    }
+
+    pub(crate) fn workspace(&self) -> &Path {
+        &self.workspace
+    }
+
+    pub(crate) fn configure_mock_model(&self, server_base_url: &str) {
+        let config_dir = self.user_root.join("config");
+        std::fs::create_dir_all(&config_dir).expect("create model config directory");
+        let base_url = format!("{}/v1", server_base_url.trim_end_matches('/'));
+        let request_url = format!("{base_url}/chat/completions");
+        let config = json!({
+            "app": {
+                "ai_experience": {
+                    "enable_session_title_generation": false
+                }
+            },
+            "ai": {
+                "models": [{
+                    "id": "cli-e2e-model",
+                    "name": "CLI E2E Model",
+                    "provider": "openai",
+                    "model_name": "cli-e2e-model",
+                    "base_url": base_url,
+                    "request_url": request_url,
+                    "api_key": "cli-e2e-key",
+                    "enabled": true,
+                    "category": "general_chat",
+                    "capabilities": ["text_chat", "function_calling"]
+                }],
+                "default_models": {
+                    "primary": "cli-e2e-model"
+                },
+                "agent_model_defaults": {
+                    "mode": "cli-e2e-model"
+                },
+                "max_rounds": 1,
+                "stream_idle_timeout_secs": 10,
+                "stream_ttft_timeout_secs": 10
+            }
+        });
+        std::fs::write(
+            config_dir.join("app.json"),
+            serde_json::to_vec_pretty(&config).expect("serialize model config"),
+        )
+        .expect("write model config");
+    }
+
+    pub(crate) fn initialize_git_repository(&self) {
+        self.run_git(&["init", "--quiet"]);
+        self.run_git(&["config", "user.email", "cli-tests@example.invalid"]);
+        self.run_git(&["config", "user.name", "CLI Tests"]);
+        std::fs::write(self.workspace.join("seed.txt"), "seed\n").expect("write git seed");
+        self.run_git(&["add", "seed.txt"]);
+        self.run_git(&["commit", "--quiet", "-m", "seed"]);
+    }
+
+    pub(crate) fn std_command(&self) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"));
+        command.current_dir(&self.workspace);
+        self.apply_std_environment(&mut command);
+        command
+    }
+
+    pub(crate) fn pty_command(&self) -> CommandBuilder {
+        let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_bitfun-cli"));
+        command.cwd(&self.workspace);
+        command.env_remove("BITFUN_USER_ROOT");
+        command.env_remove("BITFUN_HOME");
+        command.env("BITFUN_E2E_STORAGE_GUARD", "1");
+        command.env("BITFUN_E2E_USER_ROOT", &self.user_root);
+        command.env("BITFUN_E2E_HOME", &self.home_root);
+        command.env("APPDATA", &self.config_root);
+        command.env("XDG_CONFIG_HOME", &self.config_root);
+        command.env("HOME", &self.home_root);
+        command.env("USERPROFILE", &self.home_root);
+        command.env("TERM", "xterm-256color");
+        command
+    }
+
+    fn apply_std_environment(&self, command: &mut Command) {
+        command
+            .env_remove("BITFUN_USER_ROOT")
+            .env_remove("BITFUN_HOME")
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env("BITFUN_E2E_USER_ROOT", &self.user_root)
+            .env("BITFUN_E2E_HOME", &self.home_root)
+            .env("APPDATA", &self.config_root)
+            .env("XDG_CONFIG_HOME", &self.config_root)
+            .env("HOME", &self.home_root)
+            .env("USERPROFILE", &self.home_root)
+            .env("TERM", "xterm-256color");
+    }
+
+    fn run_git(&self, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(&self.workspace)
+            .output()
+            .expect("run git for CLI test");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+pub(crate) struct MockOpenAiServer {
+    base_url: String,
+    release_stream: mpsc::Sender<()>,
+    stream_disconnected: mpsc::Receiver<()>,
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl MockOpenAiServer {
+    pub(crate) fn gated() -> Self {
+        Self::spawn(true)
+    }
+
+    pub(crate) fn immediate() -> Self {
+        Self::spawn(false)
+    }
+
+    pub(crate) fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    pub(crate) fn release(&self) {
+        let _ = self.release_stream.send(());
+    }
+
+    pub(crate) fn expect_stream_disconnect(&self, timeout: Duration) {
+        self.stream_disconnected
+            .recv_timeout(timeout)
+            .expect("model stream remained connected after cancellation");
+    }
+
+    fn spawn(gated: bool) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock model server");
+        listener
+            .set_nonblocking(true)
+            .expect("configure mock model listener");
+        let address = listener.local_addr().expect("mock model address");
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_for_thread = Arc::clone(&stop);
+        let (release_tx, release_rx) = mpsc::channel();
+        let (disconnect_tx, disconnect_rx) = mpsc::channel();
+        let thread = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(30);
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream
+                            .set_nonblocking(false)
+                            .expect("configure accepted mock model connection");
+                        serve_model_response(&mut stream, gated, &release_rx, &disconnect_tx);
+                        break;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if stop_for_thread.load(Ordering::Relaxed) || Instant::now() >= deadline {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("accept mock model request: {error}"),
+                }
+            }
+        });
+
+        Self {
+            base_url: format!("http://{address}"),
+            release_stream: release_tx,
+            stream_disconnected: disconnect_rx,
+            stop,
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for MockOpenAiServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        self.release();
+        self.release();
+        if let Some(thread) = self.thread.take() {
+            if let Err(panic) = thread.join() {
+                if !std::thread::panicking() {
+                    std::panic::resume_unwind(panic);
+                }
+            }
+        }
+    }
+}
+
+fn serve_model_response(
+    stream: &mut TcpStream,
+    gated: bool,
+    release_stream: &mpsc::Receiver<()>,
+    stream_disconnected: &mpsc::Sender<()>,
+) {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("configure mock request timeout");
+    read_http_request(stream).expect("read mock model request");
+    stream
+        .write_all(
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+        )
+        .expect("write mock response headers");
+
+    write_sse_chunk(
+        stream,
+        &json!({
+            "id": "chatcmpl_cli_e2e",
+            "object": "chat.completion.chunk",
+            "created": 1,
+            "model": "cli-e2e-model",
+            "choices": [{
+                "index": 0,
+                "delta": {"role": "assistant", "content": ""},
+                "finish_reason": null
+            }]
+        })
+        .to_string(),
+    )
+    .expect("write mock role chunk");
+    write_sse_chunk(
+        stream,
+        &json!({
+            "id": "chatcmpl_cli_e2e",
+            "object": "chat.completion.chunk",
+            "created": 2,
+            "model": "cli-e2e-model",
+            "choices": [{
+                "index": 0,
+                "delta": {"content": STREAM_START_MARKER},
+                "finish_reason": null
+            }]
+        })
+        .to_string(),
+    )
+    .expect("write mock streaming marker");
+
+    if gated
+        && release_stream
+            .recv_timeout(Duration::from_secs(30))
+            .is_err()
+    {
+        return;
+    }
+
+    if gated {
+        if write_sse_chunk(
+            stream,
+            &json!({
+                "id": "chatcmpl_cli_e2e",
+                "object": "chat.completion.chunk",
+                "created": 3,
+                "model": "cli-e2e-model",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": STREAM_RESIZED_MARKER},
+                    "finish_reason": null
+                }]
+            })
+            .to_string(),
+        )
+        .is_err()
+        {
+            return;
+        }
+        if !wait_for_release_or_disconnect(stream, release_stream, stream_disconnected) {
+            return;
+        }
+    }
+
+    if write_sse_chunk(
+        stream,
+        &json!({
+            "id": "chatcmpl_cli_e2e",
+            "object": "chat.completion.chunk",
+            "created": 4,
+            "model": "cli-e2e-model",
+            "choices": [{
+                "index": 0,
+                "delta": {"content": STREAM_COMPLETED_MARKER},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
+        })
+        .to_string(),
+    )
+    .is_err()
+    {
+        return;
+    }
+    if write_chunk(stream, b"data: [DONE]\n\n").is_err() {
+        return;
+    }
+    let _ = stream.write_all(b"0\r\n\r\n");
+    let _ = stream.flush();
+}
+
+fn wait_for_release_or_disconnect(
+    stream: &TcpStream,
+    release_stream: &mpsc::Receiver<()>,
+    stream_disconnected: &mpsc::Sender<()>,
+) -> bool {
+    stream
+        .set_read_timeout(Some(Duration::from_millis(25)))
+        .expect("configure mock disconnect observation");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut probe = [0_u8; 1];
+    while Instant::now() < deadline {
+        if release_stream.try_recv().is_ok() {
+            return true;
+        }
+        match stream.peek(&mut probe) {
+            Ok(0) => {
+                let _ = stream_disconnected.send(());
+                return false;
+            }
+            Ok(_) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) => {}
+            Err(_) => {
+                let _ = stream_disconnected.send(());
+                return false;
+            }
+        }
+    }
+    false
+}
+
+fn write_sse_chunk(stream: &mut TcpStream, data: &str) -> std::io::Result<()> {
+    write_chunk(stream, format!("data: {data}\n\n").as_bytes())
+}
+
+fn write_chunk(stream: &mut TcpStream, bytes: &[u8]) -> std::io::Result<()> {
+    write!(stream, "{:X}\r\n", bytes.len())?;
+    stream.write_all(bytes)?;
+    stream.write_all(b"\r\n")?;
+    stream.flush()
+}
+
+fn read_http_request(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 4096];
+    let mut expected_len = None;
+    loop {
+        let read = stream.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        request.extend_from_slice(&buffer[..read]);
+        if expected_len.is_none() {
+            if let Some(header_end) = find_header_end(&request) {
+                let content_length = parse_content_length(&request[..header_end]);
+                expected_len = Some(header_end + 4 + content_length);
+            }
+        }
+        if expected_len.is_some_and(|expected| request.len() >= expected) {
+            break;
+        }
+    }
+    Ok(request)
+}
+
+fn find_header_end(request: &[u8]) -> Option<usize> {
+    request.windows(4).position(|window| window == b"\r\n\r\n")
+}
+
+fn parse_content_length(headers: &[u8]) -> usize {
+    String::from_utf8_lossy(headers)
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then(|| value.trim().parse::<usize>().ok())
+                .flatten()
+        })
+        .unwrap_or_default()
+}
