@@ -9,7 +9,7 @@ PPT Live 的唯一导出链路是 **editable HTML → EditableSlideScene → OOX
 - 每页严格为 **1280px × 720px**。只使用 solid color；不得生成 CSS gradient 或 `background-image`，即使 converter 对部分旧输入有兼容重写能力。
 - HTML 文字只可放在 `<p>`、`<h1>`–`<h6>`、`<li>` 中；`span` 只作这些标签内的文本 run。不得生成 `div` 裸文字。
 - 背景、border、圆角只放在 `div` 等几何容器；文字标签不得承载 background、border 或 shadow。
-- `box-shadow` 只支持单层 outer、非 inset、zero spread；多层、inset、blur+spread 等不支持形态必须 blocking。`text-shadow` 任何非 `none` 形态均必须 blocking。
+- `box-shadow` 只支持单层 outer、非 inset、zero spread 的原生映射；多层 shadow 只取首个可用层，负 spread 按 0 近似，inset 等其余不支持形态导出时自动移除，不得依赖。`text-shadow` 任何非 `none` 形态在导出时一律自动移除，不得依赖其呈现层次。
 - 禁止 CSS `filter`、`mask`、generated content、animation、外部资源和复杂/filled SVG path；禁止任意顶点/非严格对称 polygon，仅允许严格对称 triangle/diamond。
 - 线与曲线优先直接生成 `line` 或 `polyline`；只有确有必要时才写兼容边界所列的 path 子集，且最终仍须成为独立 editable line。
 - Authoring 流程箭头只由 editable line + CSS border triangle，或 SVG line + strict symmetric triangle polygon 构成。
@@ -76,8 +76,8 @@ body {
 ## 3. Solid、Background 与 Border
 
 - 所有 fill、background 和 border 都必须是纯色；禁止 CSS gradient、纹理、图案填充和半透明叠图模拟。
-- 背景、边框和圆角只放在 `<div>` 等几何容器上。`box-shadow` 的精确可编辑子集仅为单层 outer shadow、非 inset、zero spread；多层、inset、blur+spread 或其他不支持形态必须 blocking。converter 可将 legacy hard ring（`0 0 0 Npx`）重写为同心可编辑 shape，但 authoring 不得依赖该 rewrite。
-- 文字标签不得有 background、border、border-radius 或 box-shadow；`text-shadow` 任何非 `none` 形态都必须 blocking，禁止静默丢失。
+- 背景、边框和圆角只放在 `<div>` 等几何容器上。`box-shadow` 的精确可编辑子集为单层 outer shadow、非 inset、zero spread 的原生映射；多层 shadow 只取首个可用层，负 spread 按 0 近似，inset 等其余不支持形态导出时自动移除。converter 可将 legacy hard ring（`0 0 0 Npx`）重写为同心可编辑 shape，但 authoring 不得依赖该 rewrite。
+- 文字标签不得有 background、border、border-radius 或 box-shadow；`text-shadow` 任何非 `none` 形态在导出时一律自动移除，不得依赖其呈现层次。
 - `background-image` 在任何元素上都禁止。
 - 数据条、色带和热力档位用多个离散纯色几何元素表达。
 

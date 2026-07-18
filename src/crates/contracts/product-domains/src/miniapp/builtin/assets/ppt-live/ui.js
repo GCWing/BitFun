@@ -707,11 +707,27 @@ function readGenerationStyleFromPropertyPanel() {
 }
 
 // Interrupted turns are retried as "continue" turns inside the same agent
-// session. One retry is usually enough — if the model is fundamentally stuck
-// (e.g. looping on the same file), more retries in the same session just
-// repeat the failure and burn tokens.
+// session. One retry is usually enough for generic failures — if the model is
+// fundamentally stuck (e.g. looping on the same file), more retries in the
+// same session just repeat the failure and burn tokens.
+// File-contract failures are different: they carry a targeted continuation
+// (fix project.json, write only the missing slides), so each continuation
+// turn is cheap and directly moves the deck toward completion. Give those
+// more attempts instead of abandoning a nearly-finished deck.
 const PPT_BACKEND_MAX_ATTEMPTS = 2;
+const PPT_BACKEND_MAX_CONTRACT_ATTEMPTS = 4;
 const PPT_RETRY_DELAY_MS = 750;
+
+function isContractRecoverableError(error) {
+  if (error?.diagnostic?.continuationPrompt) return true;
+  return /did not produce a readable deck/i.test(String(error?.message || ''));
+}
+
+function maxAttemptsFor(error) {
+  return isContractRecoverableError(error)
+    ? PPT_BACKEND_MAX_CONTRACT_ATTEMPTS
+    : PPT_BACKEND_MAX_ATTEMPTS;
+}
 
 function isRetryableBackendError(error) {
   const raw = String(error?.message || error || '');
@@ -1327,15 +1343,16 @@ async function runCoworkDeckGeneration(operation, instruction) {
 
   try {
     let lastError = null;
-    for (let attempt = 1; attempt <= PPT_BACKEND_MAX_ATTEMPTS; attempt += 1) {
+    let maxAttempts = PPT_BACKEND_MAX_ATTEMPTS;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         if (attempt > 1) {
           addGenerationEvent({
-            title: t('generationRetryAttempt', { attempt, max: PPT_BACKEND_MAX_ATTEMPTS }),
+            title: t('generationRetryAttempt', { attempt, max: maxAttempts }),
             detail: backendErrorDetail(lastError),
             kind: 'start',
           });
-          setStatus(t('generationRetrying', { attempt, max: PPT_BACKEND_MAX_ATTEMPTS }));
+          setStatus(t('generationRetrying', { attempt, max: maxAttempts }));
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs(lastError, attempt)));
         }
         const requestInput = buildDeckRunRequestInput(
@@ -1473,10 +1490,11 @@ async function runCoworkDeckGeneration(operation, instruction) {
         if (error?.diagnostic) projectContractDiagnostic = error.diagnostic;
         if (isUnknownSessionBackendError(error)) retrySession.id = null;
         else if (error?.pptLiveSessionId) retrySession.id = error.pptLiveSessionId;
-        if (!isRetryableBackendError(error) || attempt >= PPT_BACKEND_MAX_ATTEMPTS) throw error;
+        maxAttempts = Math.max(maxAttempts, maxAttemptsFor(error));
+        if (!isRetryableBackendError(error) || attempt >= maxAttempts) throw error;
         runtime().log?.warn?.('PPT Live cowork generation attempt failed, retrying', {
           attempt,
-          maxAttempts: PPT_BACKEND_MAX_ATTEMPTS,
+          maxAttempts,
           continueInSession: Boolean(retrySession.id),
           error: String(error),
         });
@@ -2592,6 +2610,7 @@ function formatExportDiagnostics(summary) {
   if (!summary?.hasWarnings && !summary?.hasBlocking) return '';
   const countLabels = [
     ['rewritten', 'exportDiagnosticsRepaired'],
+    ['degraded', 'exportDiagnosticsDegraded'],
     ['blocking', 'exportDiagnosticsBlocking'],
   ].filter(([countKey]) => summary.counts?.[countKey] > 0)
     .map(([countKey, labelKey]) => t(labelKey, { count: summary.counts[countKey] }));
@@ -2604,7 +2623,9 @@ function formatExportDiagnostics(summary) {
       phase: t(
         location.severity === 'blocking'
           ? 'exportDiagnosticsPhaseBlocking'
-          : 'exportDiagnosticsPhaseRepair',
+          : location.severity === 'degrade'
+            ? 'exportDiagnosticsPhaseDegraded'
+            : 'exportDiagnosticsPhaseRepair',
       ),
       reason: location.reason,
     }));
@@ -2686,11 +2707,15 @@ async function executeExport(format) {
   let result;
   const deckPayload = clone(state);
   if (format === 'pptx') {
+    const exportDegradations = [];
     const scenes = await prepareEditableSlides(slides, {
       onSlideProgress: (pageNumber) => setExportRenderProgress(pageNumber - 1, slides.length, 'pptx'),
+      onDegrade: (record) => exportDegradations.push(record),
     });
-    result = await exportEditablePptx(deckPayload, scenes);
-    result.exportSummary = summarizePptxExportDiagnostics(scenes);
+    result = await exportEditablePptx(deckPayload, scenes, {
+      onDegrade: (record) => exportDegradations.push(record),
+    });
+    result.exportSummary = summarizePptxExportDiagnostics(scenes, exportDegradations);
   } else if (format === 'pdf') {
     const pages = await renderSlidesInHostWebView(slides, 'pdf');
     result = await exportPdfFromBase64Pages(deckPayload, pages.map((page) => page.base64));

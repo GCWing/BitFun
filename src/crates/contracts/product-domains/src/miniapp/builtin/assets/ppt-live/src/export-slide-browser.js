@@ -5,18 +5,25 @@
 //   1. Mount slide HTML in an off-screen shadow-DOM div (1280×720)
 //   2. sanitizeSlideDocumentRoot() — normalize/repair the HTML for export
 //   3. normalizeDocumentToEditableScene() — rewrite DOM into EditableSlideScene
-//   4. Reject any input that cannot be represented as editable native objects
+//   4. Degrade instead of aborting: unsupported styles are stripped and
+//      unrepresentable elements are removed via export-degrade.js; a slide
+//      that still fails is replaced by a simplified editable scene so one bad
+//      page never aborts the whole deck export.
 //
 // The scenes are passed to export-deck-browser.js → pptx-html-build.js.
 // ─────────────────────────────────────────────────────────────────────────────
 import { normalizeSlideDocument, scopeSlideAuthorStyles } from './render.js';
 import { sanitizeSlideDocument, sanitizeSlideMarkup } from './sanitize-slide-markup.js';
 import { sanitizeSlideDocumentRoot } from './sanitize-slide-html.js';
-import { extractSlideDataFromDocument, measureBodyDimensions } from './html2pptx-dom-core.js';
+import { measureBodyDimensions } from './html2pptx-dom-core.js';
 import { buildElementSlideHtml } from './element-model-html.js';
 import { normalizeDocumentToEditableScene } from './editable-slide-normalize.js';
 import { normalizeElementSlideToEditableScene } from './pptx-element-export.js';
-import { auditRawSlideForEditableExport } from './preflight-slide-audit.js';
+import { EditableExportError } from './editable-slide-scene.js';
+import {
+  buildSimplifiedEditableScene,
+  normalizeWithDegradation,
+} from './export-degrade.js';
 
 export { buildElementSlideHtml };
 
@@ -260,22 +267,129 @@ export async function validateSlideForPptxGeneration(html) {
   }
 }
 
-async function prepareHtmlSlide(html, slideNumber) {
+async function prepareHtmlSlide(html, slideNumber, options = {}) {
+  const { onDegrade } = options;
+  const dims = {
+    slideNumber,
+    width: EXPORT_VIEWPORT.width / 96,
+    height: EXPORT_VIEWPORT.height / 96,
+  };
+  const fallbackScene = (doc, error) => {
+    // Last resort: replace this one slide with a simplified editable scene so
+    // a single unconvertible page cannot abort the whole deck export.
+    onDegrade?.({
+      severity: 'degrade',
+      slideNumber,
+      sourceId: error?.sourceId || error?.diagnostic?.sourceId || `slide-${slideNumber}`,
+      code: 'slide_simplified',
+      message: 'The slide contained unconvertible content and was replaced with a simplified editable version.',
+    });
+    if (!(error instanceof EditableExportError)) {
+      // Contract errors are expected degradations; anything else is a bug
+      // that must stay visible in logs instead of being silently masked.
+      console.warn('[ppt-live] slide preparation fell back to a simplified scene', {
+        slideNumber,
+        error: String(error?.message || error),
+      });
+    }
+    if (doc) return buildSimplifiedEditableScene({ doc, ...dims });
+    return buildSimplifiedEditableScene({
+      doc: sanitizeSlideDocument(new DOMParser().parseFromString(String(html || ''), 'text/html')),
+      ...dims,
+    });
+  };
   let exportRoot = null;
   try {
-    auditRawSlideForEditableExport(html, slideNumber);
     const mountedDoc = await loadHtmlInExportRoot(html);
     exportRoot = mountedDoc._exportRoot;
-    sanitizeSlideDocumentRoot(mountedDoc);
+    const { diagnostics: sanitizeDiagnostics = [] } = sanitizeSlideDocumentRoot(mountedDoc);
     await waitForExportPaint();
-    extractSlideDataFromDocument(mountedDoc);
-    return normalizeDocumentToEditableScene(mountedDoc, {
+    // Content the sanitizer already removed or repaired (scripts, iframes,
+    // unsafe resource references, manual bullets) is a degradation, not a
+    // reason to abort the export. Blocking-style findings are re-detected by
+    // the normalizer and flow through the degrade repair loop instead.
+    (mountedDoc._pptxSecurityDiagnostics || []).forEach((diagnostic) => {
+      onDegrade?.({
+        severity: 'degrade',
+        slideNumber,
+        sourceId: diagnostic.sourceId || 'slide-document',
+        code: diagnostic.code || 'active_content_removed',
+        message: diagnostic.message || 'Unsafe active content was removed.',
+      });
+    });
+    sanitizeDiagnostics
+      .filter((diagnostic) => diagnostic?.severity === 'repaired' && diagnostic?.code)
+      .forEach((diagnostic) => {
+        onDegrade?.({
+          severity: 'degrade',
+          slideNumber,
+          sourceId: diagnostic.sourceId || 'slide-document',
+          code: diagnostic.code,
+          message: diagnostic.message || 'Slide content was repaired for editable export.',
+        });
+      });
+    try {
+      return normalizeWithDegradation(
+        normalizeDocumentToEditableScene,
+        mountedDoc,
+        dims,
+        onDegrade,
+      );
+    } catch (error) {
+      return fallbackScene(mountedDoc, error);
+    }
+  } catch (error) {
+    return fallbackScene(null, error);
+  } finally {
+    if (exportRoot) removeExportRoot(exportRoot);
+  }
+}
+
+/**
+ * Element-model slides: normalize strictly, but skip individual elements the
+ * converter rejects (unknown types, invalid payloads) instead of failing the
+ * whole slide. Falls back to a simplified scene when nothing else works.
+ */
+function prepareElementModelSlide(slide, slideNumber, options = {}) {
+  const { onDegrade } = options;
+  const sourceElements = Array.isArray(slide?.elements) ? slide.elements : [];
+  const remaining = [...sourceElements];
+  const attempted = new Set();
+  const fallbackScene = (error) => {
+    onDegrade?.({
+      severity: 'degrade',
+      slideNumber,
+      sourceId: error?.sourceId || `slide-${slideNumber}`,
+      code: 'slide_simplified',
+      message: 'The slide contained unconvertible content and was replaced with a simplified editable version.',
+    });
+    return buildSimplifiedEditableScene({
+      slide,
       slideNumber,
       width: EXPORT_VIEWPORT.width / 96,
       height: EXPORT_VIEWPORT.height / 96,
     });
-  } finally {
-    if (exportRoot) removeExportRoot(exportRoot);
+  };
+  for (;;) {
+    try {
+      return normalizeElementSlideToEditableScene({ ...slide, elements: remaining }, { slideNumber });
+    } catch (error) {
+      if (!(error instanceof EditableExportError)) return fallbackScene(error);
+      const sourceId = String(error.sourceId || '');
+      const index = remaining.findIndex((element, elementIndex) => (
+        String(element?.id || element?.sourceId || `element-${elementIndex + 1}`) === sourceId
+      ));
+      if (index < 0 || attempted.has(sourceId)) return fallbackScene(error);
+      attempted.add(sourceId);
+      remaining.splice(index, 1);
+      onDegrade?.({
+        severity: 'degrade',
+        slideNumber,
+        sourceId,
+        code: 'element_removed',
+        message: 'An element that cannot be represented as an editable object was removed.',
+      });
+    }
   }
 }
 
@@ -287,8 +401,8 @@ export async function prepareEditableSlides(slides, options = {}) {
         options.onSlideProgress(index + 1, slide);
       }
       scenes.push(slide?.html
-        ? await prepareHtmlSlide(slide.html, index + 1)
-        : normalizeElementSlideToEditableScene(slide, { slideNumber: index + 1 }));
+        ? await prepareHtmlSlide(slide.html, index + 1, options)
+        : prepareElementModelSlide(slide, index + 1, options));
     }
     return scenes;
   } catch (error) {

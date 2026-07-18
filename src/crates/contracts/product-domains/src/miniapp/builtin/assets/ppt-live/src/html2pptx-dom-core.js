@@ -351,28 +351,40 @@ export function extractSlideDataFromDocument(doc = document) {
     // Parse CSS box-shadow into either:
     // - { mode: 'outer', shadow } native PowerPoint outer shadow (zero spread)
     // - { mode: 'ring', ring } zero-offset/zero-blur spread ring → concentric shape rewrite
-    // Returns null for none / unsupported (inset, multi-layer, soft+spread, etc.).
-    const parseBoxShadow = (boxShadow) => {
-      if (!boxShadow || boxShadow === 'none') return null;
+    // Returns null for none / fully unsupported values (all layers inset, etc.).
+    //
+    // Multi-layer shadows and spread forms no longer block: the first usable
+    // non-inset layer is mapped to the native outer shadow; a negative or
+    // soft spread is approximated to zero. That approximation is far closer
+    // to the authored visual than dropping the whole export.
+    const splitBoxShadowLayers = (boxShadow) => {
+      const layers = [];
       let nesting = 0;
-      for (const character of boxShadow) {
+      let start = 0;
+      for (let index = 0; index < boxShadow.length; index += 1) {
+        const character = boxShadow[index];
         if (character === '(') nesting += 1;
         else if (character === ')') nesting = Math.max(0, nesting - 1);
-        else if (character === ',' && nesting === 0) return null;
+        else if (character === ',' && nesting === 0) {
+          layers.push(boxShadow.slice(start, index));
+          start = index + 1;
+        }
       }
+      layers.push(boxShadow.slice(start));
+      return layers.map((layer) => layer.trim()).filter(Boolean);
+    };
 
+    const parseBoxShadowLayer = (layer) => {
       // Browser computed style format: "rgba(0, 0, 0, 0.3) 2px 2px 8px 0px [inset]"
       // CSS format: "[inset] 2px 2px 8px 0px rgba(0, 0, 0, 0.3)"
 
-      const insetMatch = boxShadow.match(/inset/);
-
       // IMPORTANT: PptxGenJS/PowerPoint doesn't properly support inset shadows
       // Only process outer shadows to avoid file corruption
-      if (insetMatch) return null;
+      if (/\binset\b/i.test(layer)) return null;
 
       // Extract color first (rgba/rgb/hex); length tokens may be unitless 0.
-      const colorMatch = boxShadow.match(/rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}/);
-      const withoutColor = boxShadow
+      const colorMatch = layer.match(/rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}/);
+      const withoutColor = layer
         .replace(/rgba?\([^)]+\)/g, ' ')
         .replace(/#[0-9a-fA-F]{3,8}/g, ' ');
       // CSS allows unitless 0; browsers often keep "0 0 0 1px" in authored/computed forms.
@@ -398,17 +410,16 @@ export function extractSlideDataFromDocument(doc = document) {
       const color = colorMatch ? rgbToHex(colorMatch[0]) : '000000';
       if (!color) return null;
 
-      // Hard CSS ring: 0 offset, 0 blur, positive > 0 → concentric editable shape.
-      if (spread !== 0) {
-        if (offsetX === 0 && offsetY === 0 && blur === 0 && spread > 0) {
-          return {
-            mode: 'ring',
-            ring: { spreadPx: spread, color, opacity },
-          };
-        }
-        return null;
+      // Hard CSS ring: 0 offset, 0 blur, positive spread > 0 → concentric editable shape.
+      if (spread > 0 && offsetX === 0 && offsetY === 0 && blur === 0) {
+        return {
+          mode: 'ring',
+          ring: { spreadPx: spread, color, opacity },
+        };
       }
 
+      // Native PowerPoint outer shadows have no spread concept. Approximate
+      // negative/positive spread as zero instead of rejecting the shadow.
       // Calculate angle from offsets (in degrees, 0 = right, 90 = down)
       let angle = 0;
       if (offsetX !== 0 || offsetY !== 0) {
@@ -430,6 +441,15 @@ export function extractSlideDataFromDocument(doc = document) {
           opacity,
         },
       };
+    };
+
+    const parseBoxShadow = (boxShadow) => {
+      if (!boxShadow || boxShadow === 'none') return null;
+      for (const layer of splitBoxShadowLayers(boxShadow)) {
+        const parsed = parseBoxShadowLayer(layer);
+        if (parsed) return parsed;
+      }
+      return null;
     };
 
     const outerShadowOf = (effect) => (effect?.mode === 'outer' ? effect.shadow : null);

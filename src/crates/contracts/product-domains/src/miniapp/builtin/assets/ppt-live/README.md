@@ -21,7 +21,7 @@ ppt-live/
     ├── export-deck-host.js       # 导出函数的 re-export 壳（ui.js 通过它引入导出能力）
     ├── export-deck-browser.js    # EditableSlideScene/PDF/PNG 导出实现
     ├── export-slide-browser.js   # 幻灯片预处理编排（挂载 DOM → sanitize → scene）
-    ├── preflight-slide-audit.js  # sanitizer 前可见元素、CSS paint/text-shadow fail-close
+    ├── export-degrade.js         # 导出降级层（剥样式 / 移除元素 / 简化页面，代替阻断）
     ├── editable-slide-normalize.js # HTML/SVG/table → EditableSlideScene
     ├── editable-slide-scene.js   # 可编辑场景契约、校验与结构化错误
     ├── html2pptx-dom-core.js     # DOM 几何与原生元素提取辅助
@@ -109,8 +109,11 @@ PPT Live 只有一条 PPTX 导出管线：HTML 幻灯片和旧 element-model 幻
 映射为 PowerPoint 原生文本、形状、线、表格和有明确用户图片意图的 picture。
 
 `EditableSlideScene` 不接受栅格兜底、整页截图、SVG 图片层或降级成功状态。可确定重写的
-CSS/SVG 构造会转换为原生节点；无法表示的输入会携带页码、source id 和错误码阻止导出。
-表格通过 `addTable` 写为原生 `a:tbl`，生成的几何不得产生 `p:pic` 或媒体关系。
+CSS/SVG 构造会转换为原生节点；其余无法表示的输入由导出降级层（`export-degrade.js`）处理：
+不支持的样式（box-shadow、text-shadow、filter、mask、background-image、动画等）被剥离，
+无法表示的元素被移除，仍失败的页面被替换为简化可编辑场景——所有降级都会记录在导出摘要中，
+单个元素或单页问题不再阻断整个导出。表格通过 `addTable` 写为原生 `a:tbl`，生成的几何不得产生
+`p:pic` 或媒体关系。
 
 DOM 几何来自 `getBoundingClientRect()`（border-box），以 `px / 96` 转换为英寸。
 CSS padding 会成为文本框或表格单元格 inset；垂直对齐由可表示的布局属性推导。
@@ -130,9 +133,13 @@ prepareEditableSlides(slides, options)
   → loadHtmlInExportRoot(html)     // 挂载到离屏 shadow-DOM div (1280×720)
   → sanitizeSlideDocumentRoot(doc) // 净化 HTML
   → waitForExportPaint()           // 等待两帧渲染
-  → normalizeDocumentToEditableScene(doc)
+  → normalizeWithDegradation(...)  // 严格 normalize + 有界降级修复循环
+  → buildSimplifiedEditableScene() // 单页最终兜底（保留页数与文字）
   → 返回 EditableSlideScene[]
 ```
+
+`options.onDegrade(record)` 逐条收集降级记录（剥样式 / 移除元素 / 简化页面），
+由 `summarizePptxExportDiagnostics(scenes, degradations)` 合并进导出摘要展示给用户。
 
 旧 element-model 页面通过 `normalizeElementSlideToEditableScene` 进入同一 scene 契约。
 `exportEditablePptx(deck, scenes)` 逐页调用唯一 serializer 生成最终 PPTX；流程为顺序执行，

@@ -66,14 +66,15 @@ export function buildAgentPrompt(input) {
 
 - **唯一导出链路**：editable HTML → EditableSlideScene → OOXML。每页严格为 **1280px × 720px**。
 - 只使用 solid color；不得生成 CSS gradient 或 \`background-image\`。背景、border、圆角只放在 \`div\` 等几何容器。
-- \`box-shadow\` 只支持单层 outer、非 inset、zero spread；多层、inset、blur+spread 等不支持形态必须 blocking。\`text-shadow\` 任何非 \`none\` 形态均必须 blocking。
+- \`box-shadow\` 只支持单层 outer、非 inset、zero spread 的原生映射；多层 shadow 只取首个可用层，负 spread 按 0 近似，inset 等其余不支持形态导出时自动移除，不得依赖。\`text-shadow\` 任何非 \`none\` 形态在导出时一律自动移除，不得依赖其呈现层次。
 - HTML 文字只可放在 \`<p>\`、\`<h1>\`–\`<h6>\`、\`<li>\` 中；\`span\` 只作文本 run，不得生成 \`div\` 裸文字。
-- 禁止 CSS \`filter\`、\`mask\`、generated content、animation、外部资源和复杂/filled SVG path；禁止任意顶点/非严格对称 polygon，仅允许严格对称 triangle/diamond。
+- 禁止 CSS \`filter\`、\`mask\`、generated content、animation、外部资源和复杂/filled SVG path；禁止任意顶点/非严格对称 polygon，仅允许严格对称 triangle/diamond。导出管线会自动剥离这些构造，依赖它们等于丢失视觉。
 - 线与曲线优先直接生成 \`line\` 或 \`polyline\`；确有必要时才使用下面的兼容 path 子集。
 - Authoring 流程箭头只由 editable line + CSS border triangle，或 SVG line + strict symmetric triangle polygon 构成。
 - 表格必须写真实的 \`<table>\` 并导出为 native \`a:tbl\`；图表、流程箭头、虚线和曲线必须使用支持的可编辑原语。
 - intentional 图片只允许内联 base64 PNG、JPEG、WebP，且不得承载文字、图表或几何；禁止 GIF，因为无法证明其为静态内容。
-- 禁止任何正向 rasterize、screenshot 或 fallback 建议；无法表示时停止生成并报告具体元素。
+- 禁止任何正向 rasterize、screenshot 或 fallback 建议；authoring 时无法用受支持原语表达的内容必须改写为受支持形态。
+- 导出阶段对不支持的内容会自动降级（剥离样式、移除元素或简化整页）而不是阻断导出；严格遵守上述 subset 是保证导出视觉不失真的唯一方式。
 
 ## Converter legacy rewrite boundary（兼容边界，不是生成建议）
 

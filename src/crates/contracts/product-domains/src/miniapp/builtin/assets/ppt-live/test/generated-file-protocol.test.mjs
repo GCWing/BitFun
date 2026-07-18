@@ -382,15 +382,51 @@ test('slide completeness requires html and body opening and closing structure', 
   }
 });
 
-test('bad project JSON returns a repairable same-session diagnostic', async () => {
+test('unrecoverable project JSON returns a repairable same-session diagnostic', async () => {
   await assert.rejects(
-    readProjectPlanWithRetry(async () => '{"status":"complete"', { maxAttempts: 2, delayMs: 0 }),
+    readProjectPlanWithRetry(async () => 'not json, see the slides folder', { maxAttempts: 2, delayMs: 0 }),
     (error) => {
       assert.equal(error.diagnostic.code, 'invalid_project_json');
       assert.match(error.diagnostic.continuationPrompt, /修复 `project\.json` JSON/);
       return true;
     },
   );
+});
+
+test('truncated project JSON is repaired instead of aborting generation', async () => {
+  const truncated = JSON.stringify(validPlan).slice(0, 40);
+  const plan = await readProjectPlanWithRetry(async () => truncated, { maxAttempts: 2, delayMs: 0 });
+  assert.equal(plan.status, 'complete');
+  assert.equal(plan.title, validPlan.title);
+
+  const midOutline = `{"status":"complete","title":"截断","outline":[{"id":"intro","title":"协议先于页面","bullets":[],"slide_id":"slide-01"},{"id":"fin`;
+  const repaired = await readProjectPlanWithRetry(async () => midOutline, { maxAttempts: 1 });
+  assert.equal(repaired.status, 'complete');
+  assert.equal(repaired.outline[0].slide_id, 'slide-01');
+});
+
+test('fenced commented and trailing-comma project JSON parses tolerantly', async () => {
+  const sloppy = `\`\`\`json
+{
+  // agent note
+  "status": "complete",
+  "title": "宽松解析",
+  "outline": [],
+}
+\`\`\``;
+  const plan = await readProjectPlanWithRetry(async () => sloppy, { maxAttempts: 1 });
+  assert.equal(plan.status, 'complete');
+  assert.equal(plan.title, '宽松解析');
+});
+
+test('tolerant parse still rejects non-object roots and empty documents', async () => {
+  for (const raw of ['[1,2,3]', '"text"', '42', '']) {
+    await assert.rejects(
+      readProjectPlanWithRetry(async () => raw, { maxAttempts: 1 }),
+      (error) => ['invalid_project_json', 'missing_project_json'].includes(error.diagnostic.code),
+      raw,
+    );
+  }
 });
 
 test('missing project.json has a distinct targeted diagnostic', async () => {
@@ -739,10 +775,10 @@ test('authoring contracts separate generation rules from converter legacy rewrit
     assert.match(authoring, /HTML 文字.*`?<p>`?.*`?<h1>`?.*`?<h6>`?.*`?<li>`?/s, label);
     assert.match(
       authoring,
-      /box-shadow.*单层.*outer.*非 inset.*zero spread.*不支持.*blocking/is,
+      /box-shadow.*单层.*outer.*非 inset.*zero spread.*不支持.*自动移除/is,
       label,
     );
-    assert.match(authoring, /text-shadow.*blocking/is, label);
+    assert.match(authoring, /text-shadow.*自动移除/is, label);
     assert.match(authoring, /优先.*`?line`?.*`?polyline`?/is, label);
     assert.match(authoring, /base64.*PNG.*JPEG.*WebP.*GIF/s, label);
     assert.match(

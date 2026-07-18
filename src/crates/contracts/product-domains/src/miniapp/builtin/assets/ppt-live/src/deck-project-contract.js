@@ -157,19 +157,182 @@ export function buildDeckRunRequestInput(baseInput, {
   };
 }
 
-function parseProjectJson(raw) {
-  try {
-    const plan = JSON.parse(raw);
-    if (!plan || Array.isArray(plan) || typeof plan !== 'object') throw new Error('root must be an object');
-    return plan;
-  } catch (error) {
-    throw contractError(
-      'invalid_project_json',
-      '`project.json` is not valid JSON.',
-      '修复 `project.json` JSON，使根值为对象；不要重写已有页面。修复后继续完成契约。',
-      { cause: String(error?.message || error) },
-    );
+// ─── Tolerant project.json parsing ───────────────────────────────────────────
+// Agent-written `project.json` frequently fails a strict JSON.parse: markdown
+// fences, // or /* */ comments, trailing commas, or a truncated final write.
+// Aborting the whole generation for those cases is unreasonable, so parsing
+// falls back through a chain of conservative repairs. Contract validation
+// (status/outline/slide_order/slide files) still runs afterwards, so a repair
+// that loses required content surfaces as a targeted continuation diagnostic
+// instead of silently succeeding.
+
+/** Remove JS-style comments outside string literals. */
+function stripJsonComments(text) {
+  let output = '';
+  let quote = null;
+  for (let index = 0; index < text.length;) {
+    const character = text[index];
+    if (quote) {
+      output += character;
+      if (character === '\\' && index + 1 < text.length) {
+        output += text[index + 1];
+        index += 2;
+        continue;
+      }
+      if (character === quote) quote = null;
+      index += 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      output += character;
+      index += 1;
+      continue;
+    }
+    if (character === '/' && text[index + 1] === '/') {
+      while (index < text.length && text[index] !== '\n') index += 1;
+      continue;
+    }
+    if (character === '/' && text[index + 1] === '*') {
+      const end = text.indexOf('*/', index + 2);
+      index = end < 0 ? text.length : end + 2;
+      continue;
+    }
+    output += character;
+    index += 1;
   }
+  return output;
+}
+
+/** Drop commas that directly precede a closing bracket (outside strings). */
+function stripTrailingJsonCommas(text) {
+  let output = '';
+  let quote = null;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quote) {
+      output += character;
+      if (character === '\\' && index + 1 < text.length) {
+        output += text[index + 1];
+        index += 1;
+      } else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      output += character;
+      continue;
+    }
+    if (character === ',') {
+      let lookahead = index + 1;
+      while (lookahead < text.length && /\s/.test(text[lookahead])) lookahead += 1;
+      if (text[lookahead] === '}' || text[lookahead] === ']') continue;
+    }
+    output += character;
+  }
+  return output;
+}
+
+/**
+ * Close a truncated JSON document: terminate an open string, drop trailing
+ * incomplete fragments (dangling key/colon/comma), then append the closers
+ * required by the open bracket stack. Returns null when the text does not
+ * start an object.
+ */
+function closeTruncatedJson(text) {
+  let quote = null;
+  const stack = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quote) {
+      if (character === '\\') index += 1;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === '{' || character === '[') stack.push(character);
+    else if (character === '}' || character === ']') stack.pop();
+  }
+  if (!stack.length || stack[0] !== '{') return null;
+  let trimmed = text.replace(/\s+$/, '');
+  if (quote) trimmed += quote;
+  // Drop trailing incomplete fragments: dangling comma/colon, or a lone key.
+  for (;;) {
+    trimmed = trimmed.replace(/\s+$/, '');
+    if (/[,:]$/.test(trimmed)) {
+      trimmed = trimmed.slice(0, -1);
+      continue;
+    }
+    const bareKey = trimmed.match(/"[^"]*"$/);
+    if (bareKey && /[{,]\s*"[^"]*"$/.test(trimmed)) {
+      trimmed = trimmed.slice(0, trimmed.length - bareKey[0].length);
+      continue;
+    }
+    break;
+  }
+  const closers = stack.map((open) => (open === '{' ? '}' : ']')).reverse().join('');
+  return `${trimmed}${closers}`;
+}
+
+function parseJsonObjectCandidate(candidate) {
+  try {
+    const parsed = JSON.parse(candidate);
+    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') return parsed;
+  } catch {
+    // Try the next candidate.
+  }
+  return null;
+}
+
+/**
+ * Parse agent-written JSON tolerantly. `mode: 'lenient'` also attempts
+ * truncated-document repair; `mode: 'clean'` only applies repairs that never
+ * fabricate structure (fence/comment/trailing-comma stripping) so a file that
+ * is still being written is not accepted early.
+ */
+export function parseJsonObjectTolerant(raw, { mode = 'lenient' } = {}) {
+  const text = String(raw || '').replace(/^\uFEFF/, '').trim();
+  if (!text) return null;
+  const candidates = [text];
+  const fenceStart = text.indexOf('{');
+  const fenceEnd = text.lastIndexOf('}');
+  if (fenceStart > 0 || (fenceEnd >= 0 && fenceEnd < text.length - 1)) {
+    if (fenceStart >= 0 && fenceEnd > fenceStart) candidates.push(text.slice(fenceStart, fenceEnd + 1));
+  }
+  const bases = [...candidates];
+  for (const base of bases) {
+    const uncommented = stripJsonComments(base);
+    if (uncommented !== base) candidates.push(uncommented);
+    const withoutTrailing = stripTrailingJsonCommas(uncommented);
+    if (withoutTrailing !== uncommented) candidates.push(withoutTrailing);
+  }
+  for (const candidate of candidates) {
+    const parsed = parseJsonObjectCandidate(candidate);
+    if (parsed) return parsed;
+  }
+  if (mode !== 'lenient') return null;
+  // Truncated write: progressively shorten to the last complete fragment,
+  // close the bracket stack, and accept only objects with real content.
+  let fragment = stripTrailingJsonCommas(stripJsonComments(text));
+  for (let attempt = 0; attempt < 32 && fragment; attempt += 1) {
+    const closed = closeTruncatedJson(fragment);
+    const parsed = closed ? parseJsonObjectCandidate(closed) : null;
+    if (parsed && Object.keys(parsed).length > 0) return parsed;
+    const cutAt = Math.max(fragment.lastIndexOf(','), fragment.lastIndexOf('},{'));
+    if (cutAt <= 0) break;
+    fragment = fragment.slice(0, cutAt);
+  }
+  return null;
+}
+
+function parseProjectJson(raw) {
+  const plan = parseJsonObjectTolerant(raw, { mode: 'lenient' });
+  if (plan) return plan;
+  throw contractError(
+    'invalid_project_json',
+    '`project.json` is not valid JSON.',
+    '修复 `project.json` JSON，使根值为对象；不要重写已有页面。修复后继续完成契约。',
+  );
 }
 
 export async function readProjectPlanWithRetry(readFile, options = {}) {
@@ -178,15 +341,12 @@ export async function readProjectPlanWithRetry(readFile, options = {}) {
     ...options,
     accept: (raw) => {
       if (!raw.trim()) return false;
-      try {
-        const parsed = JSON.parse(raw);
-        return Boolean(parsed)
-          && !Array.isArray(parsed)
-          && typeof parsed === 'object'
-          && (!requireComplete || parsed.status === 'complete');
-      } catch {
-        return false;
-      }
+      // Accept cheap, structure-preserving repairs immediately (fences,
+      // comments, trailing commas) but not truncated-document repair: a file
+      // that is still being written must keep retrying instead of being
+      // accepted with fabricated closers.
+      const parsed = parseJsonObjectTolerant(raw, { mode: 'clean' });
+      return Boolean(parsed) && (!requireComplete || parsed.status === 'complete');
     },
   });
   if (typeof result === 'string') return parseProjectJson(result);

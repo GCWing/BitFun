@@ -2183,7 +2183,7 @@ test('scene serializer rejects legacy visual metadata before adding slide object
   assert.equal(objectCalls, 0);
 });
 
-test('export summaries count rewrites and blocking evidence only', () => {
+test('export summaries count rewrites degradations and blocking evidence', () => {
   const summary = summarizePptxExportDiagnostics([{
     slideNumber: 3,
     nodes: [{
@@ -2191,10 +2191,17 @@ test('export summaries count rewrites and blocking evidence only', () => {
       sourceId: 'gradient-strip',
       rewrite: 'css_gradient',
     }],
+  }], [{
+    slideNumber: 3,
+    sourceId: 'shadow-card',
+    severity: 'degrade',
+    code: 'box_shadow_removed',
   }]);
-  assert.deepEqual(summary.counts, { rewritten: 1, blocking: 0 });
+  assert.deepEqual(summary.counts, { rewritten: 1, blocking: 0, degraded: 1 });
   assert.equal(summary.hasWarnings, true);
   assert.equal(summary.locations[0].severity, 'rewrite');
+  assert.equal(summary.locations[1].severity, 'degrade');
+  assert.equal(summary.locations[1].code, 'box_shadow_removed');
   assert.equal(Object.hasOwn(summary.counts, 'localPng'), false);
   assert.equal(Object.hasOwn(summary.counts, 'fullPage'), false);
 });

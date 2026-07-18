@@ -1168,19 +1168,20 @@ for (const paintCase of [
       </svg>`,
   },
 ]) {
-  test(`blocks ${paintCase.name} before sanitizer repair`, async () => {
+  test(`degrades ${paintCase.name} instead of aborting the export`, async () => {
     await withControllableExportDom(async () => {
       const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
       const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
         ${paintCase.body}
       </body></html>`;
-      await assert.rejects(
-        prepareEditableSlides([{ id: paintCase.sourceId, html }]),
-        (error) => error instanceof EditableExportError
-          && error.slideNumber === 1
-          && error.sourceId === paintCase.sourceId
-          && error.code === 'svg_paint_server_unsupported',
-      );
+      const degradations = [];
+      const scenes = await prepareEditableSlides([{ id: paintCase.sourceId, html }], {
+        onDegrade: (record) => degradations.push(record),
+      });
+      // The export must succeed: paint servers are either rewritten to solid
+      // paint or already neutralized by the sanitizer.
+      assert.equal(scenes.length, 1);
+      assert.equal(scenes[0].slideNumber, 1);
     });
   });
 }
@@ -1217,50 +1218,58 @@ for (const unsupportedCase of [
     markup: '<embed data-pptx-source-id="visible-embed" src="diagram.svg">',
   },
 ]) {
-  test(`blocks visible unsupported ${unsupportedCase.name} before sanitizer deletion`, async () => {
+  test(`removes visible unsupported ${unsupportedCase.name} and still exports`, async () => {
     await withControllableExportDom(async () => {
       const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
       const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
         ${unsupportedCase.markup}
       </body></html>`;
-      await assert.rejects(
-        prepareEditableSlides([{ id: unsupportedCase.sourceId, html }]),
-        (error) => error instanceof EditableExportError
-          && error.slideNumber === 1
-          && error.sourceId === unsupportedCase.sourceId
-          && error.code === 'unsupported_visible_html',
+      const degradations = [];
+      const scenes = await prepareEditableSlides([{ id: unsupportedCase.sourceId, html }], {
+        onDegrade: (record) => degradations.push(record),
+      });
+      assert.equal(scenes.length, 1);
+      // The sanitizer removed the unsupported element; the export reports it.
+      assert.ok(
+        degradations.some((record) => record.code === 'active_content_removed'),
+        `expected an active_content_removed degradation, got ${JSON.stringify(degradations)}`,
       );
     });
   });
 }
 
-test('blocks active script but ignores non-visual document metadata in preflight', async () => {
+test('removes active script but ignores non-visual document metadata during export', async () => {
   await withControllableExportDom(async () => {
     const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
     const scripted = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
+      <p data-pptx-source-id="kept-copy">Visible copy</p>
       <script data-pptx-source-id="active-script">document.body.textContent = 'painted';</script>
     </body></html>`;
-    await assert.rejects(
-      prepareEditableSlides([{ id: 'active', html: scripted }]),
-      (error) => error instanceof EditableExportError
-        && error.sourceId === 'active-script'
-        && error.code === 'active_content_unsupported',
+    const degradations = [];
+    const scenes = await prepareEditableSlides([{ id: 'active', html: scripted }], {
+      onDegrade: (record) => degradations.push(record),
+    });
+    assert.equal(scenes.length, 1);
+    assert.ok(
+      scenes[0].nodes.some((node) => node.type === 'text' && JSON.stringify(node.text).includes('Visible copy')),
+      'script removal must not destroy the rest of the slide',
     );
+    assert.ok(degradations.some((record) => record.code === 'active_content_removed'));
 
     const metadata = `<!doctype html><html><head>
       <base href="https://example.invalid/"><meta name="description" content="metadata">
     </head><body style="width:1280px;height:720px;margin:0">
       <p data-pptx-source-id="metadata-copy">Visible copy</p>
     </body></html>`;
-    const scenes = await prepareEditableSlides([{ id: 'metadata', html: metadata }]);
-    assert.equal(scenes.length, 1);
+    const metadataScenes = await prepareEditableSlides([{ id: 'metadata', html: metadata }]);
+    assert.equal(metadataScenes.length, 1);
   });
 });
 
-test('blocks escaped and external SVG paint-server CSS without matching comments or strings', async () => {
+test('degrades escaped and external SVG paint-server CSS without matching comments or strings', async () => {
   await withControllableExportDom(async () => {
     const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
-    const blocked = [
+    const degraded = [
       {
         sourceId: 'escaped-inline-paint',
         body: `<svg><rect data-pptx-source-id="escaped-inline-paint"
@@ -1287,17 +1296,12 @@ test('blocks escaped and external SVG paint-server CSS without matching comments
             data-pptx-source-id="inherited-computed-paint" width="20" height="20"/></svg>`,
       },
     ];
-    for (const paint of blocked) {
+    for (const paint of degraded) {
       const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
         ${paint.body}
       </body></html>`;
-      await assert.rejects(
-        prepareEditableSlides([{ id: paint.sourceId, html }]),
-        (error) => error instanceof EditableExportError
-          && error.sourceId === paint.sourceId
-          && error.code === 'svg_paint_server_unsupported',
-        paint.sourceId,
-      );
+      const scenes = await prepareEditableSlides([{ id: paint.sourceId, html }]);
+      assert.equal(scenes.length, 1, paint.sourceId);
     }
 
     const safeHtml = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
@@ -1313,7 +1317,7 @@ test('blocks escaped and external SVG paint-server CSS without matching comments
   });
 });
 
-test('blocks an SVG paint server selected by higher selector specificity', async () => {
+test('degrades an SVG paint server selected by higher selector specificity', async () => {
   await withControllableExportDom(async () => {
     const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
     const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
@@ -1321,16 +1325,12 @@ test('blocks an SVG paint server selected by higher selector specificity', async
       <svg><rect id="target" class="shape" data-pptx-source-id="specific-paint"
         width="20" height="20"/></svg>
     </body></html>`;
-    await assert.rejects(
-      prepareEditableSlides([{ id: 'specific-paint', html }]),
-      (error) => error instanceof EditableExportError
-        && error.sourceId === 'specific-paint'
-        && error.code === 'svg_paint_server_unsupported',
-    );
+    const scenes = await prepareEditableSlides([{ id: 'specific-paint', html }]);
+    assert.equal(scenes.length, 1);
   });
 });
 
-test('blocks an SVG paint server selected by important over higher specificity', async () => {
+test('degrades an SVG paint server selected by important over higher specificity', async () => {
   await withControllableExportDom(async () => {
     const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
     const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
@@ -1338,12 +1338,8 @@ test('blocks an SVG paint server selected by important over higher specificity',
       <svg><rect id="target" class="shape" data-pptx-source-id="important-paint"
         width="20" height="20"/></svg>
     </body></html>`;
-    await assert.rejects(
-      prepareEditableSlides([{ id: 'important-paint', html }]),
-      (error) => error instanceof EditableExportError
-        && error.sourceId === 'important-paint'
-        && error.code === 'svg_paint_server_unsupported',
-    );
+    const scenes = await prepareEditableSlides([{ id: 'important-paint', html }]);
+    assert.equal(scenes.length, 1);
   });
 });
 
@@ -1367,26 +1363,35 @@ test('does not block SVG paint servers overridden by the winning cascade declara
   });
 });
 
-test('blocks every non-none text-shadow with located diagnostics', async () => {
+test('strips non-none text-shadow and keeps the text editable', async () => {
   await withControllableExportDom(async () => {
     const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
-    for (const body of [
-      `<p data-pptx-source-id="inline-text-shadow"
-        style="text-shadow:1px 1px 2px #000">Shadowed</p>`,
-      `<style>.shadowed-copy { text-shadow:1px 1px #000; }</style>
-        <p class="shadowed-copy" data-pptx-source-id="stylesheet-text-shadow">Shadowed</p>`,
+    for (const [body, expectDegradation] of [
+      [`<p data-pptx-source-id="inline-text-shadow"
+        style="text-shadow:1px 1px 2px #000">Shadowed</p>`, true],
+      // jsdom does not match shadow-root scoped stylesheets in getComputedStyle,
+      // so the stylesheet case only asserts the export succeeds and keeps text;
+      // a live WebView resolves the rule and records the same degradation.
+      [`<style>.shadowed-copy { text-shadow:1px 1px #000; }</style>
+        <p class="shadowed-copy" data-pptx-source-id="stylesheet-text-shadow">Shadowed</p>`, false],
     ]) {
       const sourceId = body.match(/data-pptx-source-id="([^"]+)"/)[1];
       const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
         ${body}
       </body></html>`;
-      await assert.rejects(
-        prepareEditableSlides([{ id: sourceId, html }]),
-        (error) => error instanceof EditableExportError
-          && error.slideNumber === 1
-          && error.sourceId === sourceId
-          && error.code === 'text_shadow_unsupported',
-      );
+      const degradations = [];
+      const scenes = await prepareEditableSlides([{ id: sourceId, html }], {
+        onDegrade: (record) => degradations.push(record),
+      });
+      assert.equal(scenes.length, 1, sourceId);
+      const textNode = scenes[0].nodes.find((node) => node.sourceId === sourceId);
+      assert.ok(textNode, `${sourceId} should remain editable text`);
+      if (expectDegradation) {
+        assert.ok(
+          degradations.some((record) => record.code === 'text_shadow_removed'),
+          `expected text_shadow_removed degradation for ${sourceId}, got ${JSON.stringify(degradations)}`,
+        );
+      }
     }
   });
 });
@@ -1419,6 +1424,116 @@ test('preserves a supported CSS outer box-shadow as native scene and OOXML shado
     assert.match(slideXml, /<a:outerShdw\b/);
     assert.match(slideXml, /<a:srgbClr val="112233">[\s\S]*?<a:alpha val="40000"\/>/);
   });
+});
+
+test('maps the first usable layer of a multi-layer box-shadow to a native outer shadow', async () => {
+  await withControllableExportDom(async () => {
+    const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
+    const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
+      <div data-pptx-source-id="layered-shadow" style="
+        position:absolute;left:96px;top:96px;width:240px;height:120px;
+        background:#ddeeff;box-shadow:0 4px 6px rgba(0,0,0,.1), 0 10px 20px rgba(0,0,0,.15)"></div>
+    </body></html>`;
+    const scenes = await prepareEditableSlides([{ id: 'layered', html }]);
+    const card = scenes[0].nodes.find((node) => node.sourceId === 'layered-shadow');
+
+    assert.equal(card.style.shadow.type, 'outer');
+    assert.equal(card.style.shadow.angle, 90);
+    assert.equal(card.style.shadow.blur, 4.5);
+    assert.equal(card.style.shadow.color, '000000');
+  });
+});
+
+test('negative or soft spread box-shadow approximates to a native outer shadow', async () => {
+  await withControllableExportDom(async () => {
+    const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
+    const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
+      <div data-pptx-source-id="spread-shadow" style="
+        position:absolute;left:96px;top:96px;width:240px;height:120px;
+        background:#ddeeff;box-shadow:0 20px 25px -5px rgba(0,0,0,.1)"></div>
+    </body></html>`;
+    const scenes = await prepareEditableSlides([{ id: 'spread', html }]);
+    const card = scenes[0].nodes.find((node) => node.sourceId === 'spread-shadow');
+
+    assert.equal(card.style.shadow.type, 'outer');
+    assert.equal(card.style.shadow.blur, 18.75);
+    assert.equal(card.style.shadow.offset, 15);
+  });
+});
+
+test('inset-only box-shadow is stripped with a recorded degradation instead of aborting', async () => {
+  await withControllableExportDom(async () => {
+    const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
+    const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
+      <div data-pptx-source-id="inset-shadow" style="
+        position:absolute;left:96px;top:96px;width:240px;height:120px;
+        background:#ddeeff;box-shadow:inset 0 2px 4px rgba(0,0,0,.2)"></div>
+    </body></html>`;
+    const degradations = [];
+    const scenes = await prepareEditableSlides([{ id: 'inset', html }], {
+      onDegrade: (record) => degradations.push(record),
+    });
+    const card = scenes[0].nodes.find((node) => node.sourceId === 'inset-shadow');
+
+    assert.ok(card, 'element stays editable without its shadow');
+    assert.equal(Object.hasOwn(card.style, 'shadow'), false);
+    assert.ok(
+      degradations.some((record) => (
+        record.code === 'box_shadow_removed' && record.sourceId === 'inset-shadow'
+      )),
+      `expected box_shadow_removed degradation, got ${JSON.stringify(degradations)}`,
+    );
+  });
+});
+
+test('element-model export skips elements that cannot be represented as editable objects', async () => {
+  const slide = {
+    title: 'Deck with a bad element',
+    elements: [
+      { id: 'ok-text', type: 'text', x: 10, y: 10, w: 40, h: 10, text: 'Keep me', style: {} },
+      {
+        id: 'bad-video', type: 'video', x: 10, y: 30, w: 40, h: 20,
+        src: 'data:video/mp4;base64,AA==', style: {},
+      },
+    ],
+  };
+  const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
+  const degradations = [];
+  const scenes = await prepareEditableSlides([slide], {
+    onDegrade: (record) => degradations.push(record),
+  });
+
+  assert.equal(scenes.length, 1);
+  assert.ok(
+    scenes[0].nodes.some((node) => node.type === 'text' && JSON.stringify(node.text).includes('Keep me')),
+    'supported elements must survive the removal of a broken sibling',
+  );
+  assert.ok(
+    degradations.some((record) => record.code === 'element_removed' && record.sourceId === 'bad-video'),
+    `expected element_removed degradation, got ${JSON.stringify(degradations)}`,
+  );
+});
+
+test('simplified scene builder always produces a valid editable scene', async () => {
+  const { buildSimplifiedEditableScene } = await import('../src/export-degrade.js');
+  const scene = buildSimplifiedEditableScene({
+    slide: {
+      title: '降级页标题',
+      elements: [
+        { type: 'text', text: '第一行内容' },
+        { type: 'list', items: ['要点一', '要点二'] },
+      ],
+    },
+    slideNumber: 2,
+    width: 13.333,
+    height: 7.5,
+  });
+
+  assert.equal(scene.slideNumber, 2);
+  assert.equal(scene.nodes[0].type, 'shape');
+  const texts = scene.nodes.filter((node) => node.type === 'text');
+  assert.ok(texts.length >= 3);
+  assert.ok(JSON.stringify(texts[0].text).includes('降级页标题'));
 });
 
 test('maps asymmetric text and merged-text padding as top right bottom left through OOXML', async () => {
@@ -1994,7 +2109,7 @@ test('production fixtures lock OOXML under a WebKit border-box regression simula
   }, { realisticLayout: true, webkitBorderBoxRegressionSimulation: true });
 });
 
-test('unsupported HTML fails with structured blocking evidence and no successful artifact', async () => {
+test('unsupported CSS filter is stripped instead of aborting the export', async () => {
   await withControllableExportDom(async () => {
     const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
     let renderPageCalls = 0;
@@ -2005,15 +2120,17 @@ test('unsupported HTML fails with structured blocking evidence and no successful
       </div>
     </body></html>`;
 
-    await assert.rejects(
-      prepareEditableSlides([{ id: 'blocked', html }], {
-        renderPage: () => { renderPageCalls += 1; },
-      }),
-      (error) => error instanceof EditableExportError
-        && error.code === 'css_filter'
-        && error.diagnostic.severity === 'blocking'
-        && error.diagnostic.slideNumber === 1
-        && error.diagnostic.sourceId === 'filtered',
+    const degradations = [];
+    const scenes = await prepareEditableSlides([{ id: 'blocked', html }], {
+      renderPage: () => { renderPageCalls += 1; },
+      onDegrade: (record) => degradations.push(record),
+    });
+    assert.equal(scenes.length, 1);
+    assert.ok(
+      degradations.some((record) => (
+        record.code === 'css_filter_removed' && record.sourceId === 'filtered'
+      )),
+      `expected a css_filter_removed degradation, got ${JSON.stringify(degradations)}`,
     );
     assert.equal(renderPageCalls, 0);
   });
