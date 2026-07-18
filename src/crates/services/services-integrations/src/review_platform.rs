@@ -6,7 +6,7 @@
 
 use crate::review_platform_http::{
     send_json as send_review_json, send_json_response as send_review_json_response,
-    send_json_response_bounded as send_review_json_response_bounded, send_text as send_review_text,
+    send_json_response_bounded as send_review_json_response_bounded,
     send_text_bounded as send_review_text_bounded, ReviewHttpClient, ReviewHttpError,
     ReviewHttpHeaders, ReviewHttpRequest, ReviewJsonResponse, ReviewTextResponse,
 };
@@ -46,6 +46,8 @@ const MAX_ISSUE_COMMENTS_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_ISSUE_BODY_CHARS: usize = 128_000;
 const MAX_ISSUE_COMMENT_BODY_CHARS: usize = 32_000;
 const MAX_ISSUE_COMMENTS_AGGREGATE_CHARS: usize = 512_000;
+const DEFAULT_GH_OUTPUT_MAX_BYTES: usize = 16 * 1024 * 1024;
+const GH_ERROR_OUTPUT_MAX_CHARS: usize = 8 * 1024;
 
 static TOKEN_STORE_LOCKS: OnceLock<StdMutex<HashMap<PathBuf, Weak<AsyncMutex<()>>>>> =
     OnceLock::new();
@@ -109,6 +111,7 @@ pub enum ReviewAuthState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewAuthSource {
+    GhCli,
     Env,
     Stored,
     None,
@@ -217,6 +220,7 @@ pub struct ReviewPlatformCiItem {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewPlatformPullRequest {
     pub id: String,
+    pub provider_id: Option<String>,
     pub number: i64,
     pub title: String,
     pub state: ReviewItemState,
@@ -522,11 +526,40 @@ pub struct ReviewPlatformWorkspaceSnapshot {
     pub auth_challenge: Option<ReviewPlatformAuthChallenge>,
 }
 
-/// Classifies workspace paths that must be handled by a product-level remote
-/// runtime before review-platform code probes the local Git repository.
+/// Product-level workspace runtime access for review-platform Git probing.
+///
+/// Review-platform only touches the workspace for repository discovery
+/// (`git rev-parse --show-toplevel`, `git remote -v`); provider data itself is
+/// fetched over HTTP from the host running BitFun. Remote SSH workspaces are
+/// therefore fully supported as long as the product runtime can execute those
+/// Git probes on the remote host, which is what this port injects.
 #[async_trait::async_trait]
 pub trait ReviewPlatformWorkspaceClassifier: Send + Sync {
+    /// True when `path` belongs to a remote workspace whose Git repository is
+    /// not reachable through the local filesystem.
     async fn is_remote_workspace_path(&self, path: &str) -> bool;
+
+    /// Executes a Git command inside a remote workspace and returns stdout.
+    ///
+    /// Only called for paths where [`Self::is_remote_workspace_path`] returned
+    /// `true`. `workspace_path` identifies the remote connection; `current_dir`
+    /// is the remote directory the Git command must run in (it may differ from
+    /// `workspace_path` once the repository root has been resolved).
+    ///
+    /// The default implementation fails loudly so hosts that classify paths as
+    /// remote without wiring remote Git execution surface a clear error instead
+    /// of silently degrading.
+    async fn execute_remote_git_command(
+        &self,
+        workspace_path: &str,
+        current_dir: &str,
+        args: &[&str],
+    ) -> Result<String, ReviewPlatformError> {
+        let _ = (current_dir, args);
+        Err(ReviewPlatformError::InvalidRepository(format!(
+            "Remote workspace Git execution is not wired for {workspace_path}"
+        )))
+    }
 }
 
 #[derive(Clone)]
@@ -534,6 +567,18 @@ pub struct ReviewPlatformService {
     token_store_path: PathBuf,
     token_store_lock: Arc<AsyncMutex<()>>,
     workspace_classifier: Arc<dyn ReviewPlatformWorkspaceClassifier>,
+}
+
+/// Resolved Git execution scope for one workspace path.
+#[derive(Debug, Clone)]
+struct WorkspaceGitScope {
+    /// Original workspace path; identifies the remote connection for remote
+    /// scopes (the repository root may sit above the registered workspace
+    /// root and would not resolve a connection on its own).
+    workspace_path: String,
+    /// Git repository root the probes must run in.
+    repository_root: String,
+    remote: bool,
 }
 
 struct LocalOnlyReviewPlatformWorkspaceClassifier;
@@ -652,13 +697,9 @@ impl ReviewPlatformAuthTokens {
 
     fn registered_platform_for_host(&self, host: &str) -> Option<ReviewPlatformKind> {
         let host = normalize_provider_host(host).ok()?;
-        let mut platforms = [
-            ReviewPlatformKind::Github,
-            ReviewPlatformKind::Gitlab,
-            ReviewPlatformKind::Gitcode,
-        ]
-        .into_iter()
-        .filter(|platform| self.get(*platform, &host).is_some());
+        let mut platforms = [ReviewPlatformKind::Gitlab, ReviewPlatformKind::Gitcode]
+            .into_iter()
+            .filter(|platform| self.get(*platform, &host).is_some());
         let platform = platforms.next()?;
         platforms.next().is_none().then_some(platform)
     }
@@ -713,23 +754,74 @@ impl ReviewPlatformService {
             .await
     }
 
+    /// Resolves how Git probes must run for `repository_path` (local process
+    /// vs. remote execution through the injected workspace runtime).
+    async fn workspace_git_scope(
+        &self,
+        repository_path: &str,
+    ) -> Result<WorkspaceGitScope, ReviewPlatformError> {
+        if self.is_remote_workspace_path(repository_path).await {
+            let output = self
+                .workspace_classifier
+                .execute_remote_git_command(
+                    repository_path,
+                    repository_path,
+                    &["rev-parse", "--show-toplevel"],
+                )
+                .await?;
+            // Remote roots are POSIX paths on the remote host; never apply
+            // local (Windows) path normalization to them.
+            let root = parse_repository_root_output(&output)?;
+            return Ok(WorkspaceGitScope {
+                workspace_path: repository_path.to_string(),
+                repository_root: root,
+                remote: true,
+            });
+        }
+
+        let root = get_repository_root(repository_path).await?;
+        Ok(WorkspaceGitScope {
+            workspace_path: repository_path.to_string(),
+            repository_root: root,
+            remote: false,
+        })
+    }
+
+    async fn execute_scope_git_command(
+        &self,
+        scope: &WorkspaceGitScope,
+        args: &[&str],
+    ) -> Result<String, ReviewPlatformError> {
+        if scope.remote {
+            self.workspace_classifier
+                .execute_remote_git_command(&scope.workspace_path, &scope.repository_root, args)
+                .await
+        } else {
+            execute_git_command(&scope.repository_root, args).await
+        }
+    }
+
     pub async fn discover_remotes(
         &self,
         repository_path: &str,
     ) -> Result<Vec<ReviewPlatformRemote>, ReviewPlatformError> {
         let auth_tokens = self.load_stored_tokens().await?;
-        Self::discover_remotes_with_tokens(repository_path, &auth_tokens).await
+        let scope = self.workspace_git_scope(repository_path).await?;
+        self.discover_remotes_in_scope(&scope, &auth_tokens).await
     }
 
-    async fn discover_remotes_with_tokens(
-        repository_path: &str,
+    async fn discover_remotes_in_scope(
+        &self,
+        scope: &WorkspaceGitScope,
         auth_tokens: &ReviewPlatformAuthTokens,
     ) -> Result<Vec<ReviewPlatformRemote>, ReviewPlatformError> {
-        let root = get_repository_root(repository_path).await?;
-        let output = execute_git_command(&root, &["remote", "-v"]).await?;
+        let output = self
+            .execute_scope_git_command(scope, &["remote", "-v"])
+            .await?;
 
         let mut seen = HashSet::new();
         let mut remotes = Vec::new();
+        let mut gh_auth_by_host: HashMap<String, GhAuthStatus> = HashMap::new();
 
         for line in output.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -745,7 +837,20 @@ impl ReviewPlatformService {
             if !seen.insert(key) {
                 continue;
             }
-            if let Some(remote) = parse_remote(remote_name, remote_url, auth_tokens) {
+            if let Some(mut remote) = parse_remote(remote_name, remote_url, auth_tokens) {
+                if matches!(
+                    remote.platform,
+                    ReviewPlatformKind::Github | ReviewPlatformKind::Unknown
+                ) {
+                    let status = if let Some(status) = gh_auth_by_host.get(&remote.host) {
+                        status.clone()
+                    } else {
+                        let status = gh_auth_status(&remote.host).await;
+                        gh_auth_by_host.insert(remote.host.clone(), status.clone());
+                        status
+                    };
+                    hydrate_github_remote_auth(&mut remote, status);
+                }
                 remotes.push(remote);
             }
         }
@@ -760,19 +865,32 @@ impl ReviewPlatformService {
         page: Option<u32>,
         per_page: Option<u32>,
     ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
-        if self.is_remote_workspace_path(repository_path).await {
-            return Ok(empty_snapshot(
-                Vec::new(),
-                None,
-                None,
-                "Pull request browsing is not available for remote SSH workspaces yet.",
-            ));
-        }
+        self.workspace_snapshot_internal(repository_path, remote_id, page, per_page, true)
+            .await
+    }
 
+    pub async fn workspace_context(
+        &self,
+        repository_path: &str,
+        remote_id: Option<&str>,
+    ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
+        self.workspace_snapshot_internal(repository_path, remote_id, None, None, false)
+            .await
+    }
+
+    async fn workspace_snapshot_internal(
+        &self,
+        repository_path: &str,
+        remote_id: Option<&str>,
+        page: Option<u32>,
+        per_page: Option<u32>,
+        include_pull_requests: bool,
+    ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
         let pagination_request = PullRequestPagination::new(page, per_page);
         let auth_tokens = self.load_stored_tokens().await?;
-        let root = get_repository_root(repository_path).await?;
-        let remotes = Self::discover_remotes_with_tokens(&root, &auth_tokens).await?;
+        let scope = self.workspace_git_scope(repository_path).await?;
+        let root = scope.repository_root.clone();
+        let remotes = self.discover_remotes_in_scope(&scope, &auth_tokens).await?;
         let selected_remote = select_remote(&remotes, remote_id).cloned();
 
         let Some(remote) = selected_remote else {
@@ -807,11 +925,79 @@ impl ReviewPlatformService {
             ));
         }
 
+        if remote.platform == ReviewPlatformKind::Github
+            && remote.auth_state != ReviewAuthState::Connected
+        {
+            let challenge = github_cli_auth_challenge(&remote);
+            let repository = Some(repository_ref(&remote, Some(root)));
+            let account = account_for_remote(&remote);
+            let capabilities = capabilities_for_remote(&remote);
+            return Ok(auth_required_snapshot(
+                remotes,
+                remote,
+                repository,
+                account,
+                capabilities,
+                challenge,
+            ));
+        }
+
+        if include_pull_requests
+            && remote_id.is_none()
+            && remote.platform == ReviewPlatformKind::Github
+        {
+            let page = github_current_user_open_pull_requests_for_remotes(
+                &remotes,
+                &auth_tokens,
+                pagination_request,
+            )
+            .await?;
+            let selected_remote_id = page
+                .items
+                .first()
+                .and_then(|pull_request| pull_request.provider_id.clone())
+                .unwrap_or_else(|| remote.id.clone());
+            let selected_remote = remotes
+                .iter()
+                .find(|candidate| candidate.id == selected_remote_id)
+                .cloned()
+                .unwrap_or_else(|| remote.clone());
+            return Ok(ReviewPlatformWorkspaceSnapshot {
+                remotes,
+                selected_remote_id: Some(selected_remote.id.clone()),
+                accounts: vec![account_for_remote(&selected_remote)],
+                repository: Some(repository_ref(&selected_remote, Some(root))),
+                pull_requests: page.items,
+                pagination: page.pagination,
+                capabilities: capabilities_for_remote(&selected_remote),
+                message: None,
+                auth_challenge: None,
+            });
+        }
+
         let ctx = provider_context(remote.clone(), &auth_tokens)?;
         let provider = provider_for(ctx.remote.platform);
         let repository = Some(repository_ref(&ctx.remote, Some(root)));
         let account = account_for_remote(&ctx.remote);
         let capabilities = capabilities_for_remote(&remote);
+        if !include_pull_requests {
+            return Ok(ReviewPlatformWorkspaceSnapshot {
+                remotes,
+                selected_remote_id: Some(remote.id.clone()),
+                accounts: vec![account],
+                repository,
+                pull_requests: Vec::new(),
+                pagination: ReviewPlatformPagination {
+                    page: DEFAULT_PR_PAGE,
+                    per_page: DEFAULT_PR_PAGE_SIZE,
+                    total: Some(0),
+                    has_next: false,
+                },
+                capabilities,
+                message: None,
+                auth_challenge: None,
+            });
+        }
         match provider.list_pull_requests(&ctx, pagination_request).await {
             Ok(page) => Ok(ReviewPlatformWorkspaceSnapshot {
                 remotes,
@@ -858,15 +1044,9 @@ impl ReviewPlatformService {
         remote_id: &str,
         pull_request_id: &str,
     ) -> Result<ReviewPlatformPullRequestDetail, ReviewPlatformError> {
-        if self.is_remote_workspace_path(repository_path).await {
-            return Err(ReviewPlatformError::UnsupportedPlatform(
-                "remote SSH workspace".to_string(),
-            ));
-        }
-
         let auth_tokens = self.load_stored_tokens().await?;
-        let root = get_repository_root(repository_path).await?;
-        let remotes = Self::discover_remotes_with_tokens(&root, &auth_tokens).await?;
+        let scope = self.workspace_git_scope(repository_path).await?;
+        let remotes = self.discover_remotes_in_scope(&scope, &auth_tokens).await?;
         let remote = remotes
             .into_iter()
             .find(|remote| remote.id == remote_id)
@@ -1148,15 +1328,9 @@ impl ReviewPlatformService {
         repository_path: &str,
         remote_id: Option<&str>,
     ) -> Result<ProviderContext, ReviewPlatformError> {
-        if self.is_remote_workspace_path(repository_path).await {
-            return Err(ReviewPlatformError::UnsupportedPlatform(
-                "remote SSH workspace".to_string(),
-            ));
-        }
-
         let auth_tokens = self.load_stored_tokens().await?;
-        let root = get_repository_root(repository_path).await?;
-        let remotes = Self::discover_remotes_with_tokens(&root, &auth_tokens).await?;
+        let scope = self.workspace_git_scope(repository_path).await?;
+        let remotes = self.discover_remotes_in_scope(&scope, &auth_tokens).await?;
         let remote = select_remote_for_action(&remotes, remote_id)?.clone();
         if !remote.supported {
             return Err(ReviewPlatformError::UnsupportedPlatform(remote.host));
@@ -1206,19 +1380,19 @@ impl ReviewPlatformService {
         host: &str,
         project_path: &str,
     ) -> bool {
-        if self.is_remote_workspace_path(repository_path).await {
-            return false;
-        }
         if !matches!(
             platform,
             ReviewPlatformKind::Github | ReviewPlatformKind::Gitlab
         ) {
             return false;
         }
-        let Ok(root) = get_repository_root(repository_path).await else {
+        let Ok(scope) = self.workspace_git_scope(repository_path).await else {
             return false;
         };
-        let Ok(output) = execute_git_command(&root, &["remote", "-v"]).await else {
+        let Ok(output) = self
+            .execute_scope_git_command(&scope, &["remote", "-v"])
+            .await
+        else {
             return false;
         };
         output.lines().any(|line| {
@@ -1236,6 +1410,12 @@ impl ReviewPlatformService {
         host: &str,
         token: &str,
     ) -> Result<(), ReviewPlatformError> {
+        if platform == ReviewPlatformKind::Github {
+            return Err(ReviewPlatformError::Api(format!(
+                "GitHub tokens are not stored by BitFun. Authenticate the local GitHub CLI with `gh auth login --hostname {}`.",
+                normalize_provider_host(host)?
+            )));
+        }
         let token = token.trim();
         if token.is_empty() {
             return Err(ReviewPlatformError::Api(
@@ -1265,6 +1445,12 @@ impl ReviewPlatformService {
         platform: ReviewPlatformKind,
         host: &str,
     ) -> Result<(), ReviewPlatformError> {
+        if platform == ReviewPlatformKind::Github {
+            return Err(ReviewPlatformError::Api(format!(
+                "GitHub authentication is managed by the local GitHub CLI. Use `gh auth logout --hostname {}` if you want to sign out.",
+                normalize_provider_host(host)?
+            )));
+        }
         let key = token_key(platform, host)
             .ok_or_else(|| ReviewPlatformError::UnsupportedPlatform(host.to_string()))?;
         let _transaction = self.token_store_lock.lock().await;
@@ -1503,27 +1689,17 @@ async fn github_review_target_parts(
     ctx: &ProviderContext,
     pull_request_id: &str,
 ) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
-    let client = http_client()?;
     let base = format!(
         "{}/repos/{}/{}/pulls/{}",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
     );
     let initial_detail =
-        send_bounded_json(github_request(client.clone(), &base, ctx.token.as_deref())).await?;
-    let token = ctx.token.clone();
+        github_api_get_json(ctx, &base, &[], MAX_REVIEW_TARGET_RESPONSE_BYTES).await?;
     let files_url = format!("{}/files", base);
-    let files = fetch_bounded_paginated_array(
-        |page| {
-            let page = page.to_string();
-            github_request(client.clone(), &files_url, token.as_deref())
-                .query(&[("per_page", "100"), ("page", &page)])
-        },
-        github_next_page,
-        MAX_REVIEW_TARGET_LIST_ITEMS,
-    )
-    .await?;
+    let files =
+        fetch_bounded_github_paginated_array(ctx, &files_url, MAX_REVIEW_TARGET_LIST_ITEMS).await?;
     let confirmed_detail =
-        send_bounded_json(github_request(client, &base, ctx.token.as_deref())).await?;
+        github_api_get_json(ctx, &base, &[], MAX_REVIEW_TARGET_RESPONSE_BYTES).await?;
     let initial_pull_request = github_pull_request_from_value(&initial_detail);
     let confirmed_pull_request = github_pull_request_from_value(&confirmed_detail);
     ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
@@ -1542,22 +1718,16 @@ async fn github_review_file_parts(
     file_path: &str,
     file_page_hint: Option<u32>,
 ) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
-    let client = http_client()?;
     let base = format!(
         "{}/repos/{}/{}/pulls/{}",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
     );
     let initial_detail =
-        send_bounded_json(github_request(client.clone(), &base, ctx.token.as_deref())).await?;
-    let token = ctx.token.clone();
+        github_api_get_json(ctx, &base, &[], MAX_REVIEW_TARGET_RESPONSE_BYTES).await?;
     let files_url = format!("{}/files", base);
-    let file = fetch_bounded_paginated_file(
-        |page| {
-            let page = page.to_string();
-            github_request(client.clone(), &files_url, token.as_deref())
-                .query(&[("per_page", "100"), ("page", &page)])
-        },
-        github_next_page,
+    let file = fetch_bounded_github_file(
+        ctx,
+        &files_url,
         file_page_hint.unwrap_or(1),
         if file_page_hint.is_some() {
             100
@@ -1565,11 +1735,10 @@ async fn github_review_file_parts(
             MAX_REVIEW_TARGET_LIST_ITEMS
         },
         file_path,
-        github_file_from_value,
     )
     .await?;
     let confirmed_detail =
-        send_bounded_json(github_request(client, &base, ctx.token.as_deref())).await?;
+        github_api_get_json(ctx, &base, &[], MAX_REVIEW_TARGET_RESPONSE_BYTES).await?;
     let initial_pull_request = github_pull_request_from_value(&initial_detail);
     let confirmed_pull_request = github_pull_request_from_value(&confirmed_detail);
     ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
@@ -1734,41 +1903,7 @@ impl ReviewProvider for GithubProvider {
         ctx: &ProviderContext,
         pagination: PullRequestPagination,
     ) -> Result<ReviewPlatformPullRequestPage, ReviewPlatformError> {
-        let url = format!(
-            "{}/repos/{}/{}/pulls",
-            ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name
-        );
-        let per_page = pagination.per_page.to_string();
-        let page = pagination.page.to_string();
-        let response = send_json_response(
-            github_request(http_client()?, &url, ctx.token.as_deref()).query(&[
-                ("state", "all"),
-                ("per_page", &per_page),
-                ("page", &page),
-            ]),
-        )
-        .await?;
-        let items = response.value.as_array().ok_or_else(|| {
-            ReviewPlatformError::Parse("GitHub pull response was not an array".to_string())
-        })?;
-        let total = pagination_total_from_links(&response.headers, pagination, items.len());
-        let has_next = link_header_has_rel(&response.headers, "next");
-
-        let pull_requests = items
-            .iter()
-            .map(github_pull_request_from_value)
-            .collect::<Vec<_>>();
-        let pull_requests = enrich_github_pull_request_counts(ctx, pull_requests).await;
-
-        Ok(ReviewPlatformPullRequestPage {
-            items: pull_requests,
-            pagination: ReviewPlatformPagination {
-                page: pagination.page,
-                per_page: pagination.per_page,
-                total,
-                has_next,
-            },
-        })
+        github_current_user_open_pull_requests(ctx, pagination).await
     }
 
     async fn pull_request_detail(
@@ -1780,70 +1915,24 @@ impl ReviewProvider for GithubProvider {
             "{}/repos/{}/{}/pulls/{}",
             ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
         );
-        let client = http_client()?;
-        let detail = send_json(github_request(client.clone(), &base, ctx.token.as_deref())).await?;
-        let token = ctx.token.clone();
+        let detail = github_api_get_json(ctx, &base, &[], DEFAULT_GH_OUTPUT_MAX_BYTES).await?;
         let files_url = format!("{}/files", base);
-        let files = fetch_paginated_array(
-            |page| {
-                let page = page.to_string();
-                github_request(client.clone(), &files_url, token.as_deref())
-                    .query(&[("per_page", "100"), ("page", &page)])
-            },
-            github_next_page,
-        )
-        .await?;
-        let token = ctx.token.clone();
+        let files = fetch_github_paginated_array(ctx, &files_url).await?;
         let commits_url = format!("{}/commits", base);
-        let commits = fetch_paginated_array(
-            |page| {
-                let page = page.to_string();
-                github_request(client.clone(), &commits_url, token.as_deref())
-                    .query(&[("per_page", "100"), ("page", &page)])
-            },
-            github_next_page,
-        )
-        .await?;
-        let token = ctx.token.clone();
+        let commits = fetch_github_paginated_array(ctx, &commits_url).await?;
         let reviews_url = format!("{}/reviews", base);
-        let reviews = fetch_paginated_array(
-            |page| {
-                let page = page.to_string();
-                github_request(client.clone(), &reviews_url, token.as_deref())
-                    .query(&[("per_page", "100"), ("page", &page)])
-            },
-            github_next_page,
-        )
-        .await?;
-        let token = ctx.token.clone();
+        let reviews = fetch_github_paginated_array(ctx, &reviews_url).await?;
         let review_comments_url = format!("{}/comments", base);
-        let review_comments = fetch_paginated_array(
-            |page| {
-                let page = page.to_string();
-                github_request(client.clone(), &review_comments_url, token.as_deref())
-                    .query(&[("per_page", "100"), ("page", &page)])
-            },
-            github_next_page,
-        )
-        .await?;
-        let token = ctx.token.clone();
+        let review_comments = fetch_github_paginated_array(ctx, &review_comments_url).await?;
         let issue_comments_url = format!(
             "{}/repos/{}/{}/issues/{}/comments",
             ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
         );
-        let issue_comments = fetch_paginated_array(
-            |page| {
-                let page = page.to_string();
-                github_request(client.clone(), &issue_comments_url, token.as_deref())
-                    .query(&[("per_page", "100"), ("page", &page)])
-            },
-            github_next_page,
-        )
-        .await?;
+        let issue_comments = fetch_github_paginated_array(ctx, &issue_comments_url).await?;
 
         let mut pull_request = github_pull_request_from_value(&detail);
         pull_request.review_decision = github_review_decision(&reviews);
-        let (checks, ci) = github_checks_and_ci(ctx, &client, &detail).await;
+        let (checks, ci) = github_checks_and_ci(ctx, &detail).await;
         pull_request.checks = checks;
 
         Ok(ReviewPlatformPullRequestDetail {
@@ -1920,12 +2009,11 @@ impl ReviewProvider for GithubProvider {
             });
         }
 
-        let client = http_client()?;
         let base = format!(
             "{}/repos/{}/{}/pulls/{}",
             ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
         );
-        let detail = send_json(github_request(client.clone(), &base, ctx.token.as_deref())).await?;
+        let detail = github_api_get_json(ctx, &base, &[], DEFAULT_GH_OUTPUT_MAX_BYTES).await?;
         let sha = nested_string(&detail, &["head", "sha"]);
         if sha.trim().is_empty() {
             return Ok(ReviewPlatformCiLog {
@@ -1937,7 +2025,7 @@ impl ReviewProvider for GithubProvider {
         }
 
         let check_run_id = ci_item_id.strip_prefix("check-run-").unwrap_or(ci_item_id);
-        github_actions_log_for_check_run_item(ctx, &client, check_run_id, ci_item_name, &sha).await
+        github_actions_log_for_check_run_item(ctx, check_run_id, ci_item_name, &sha).await
     }
 
     async fn create_pull_request(
@@ -1945,7 +2033,6 @@ impl ReviewProvider for GithubProvider {
         ctx: &ProviderContext,
         request: &ReviewPlatformCreatePullRequestRequest,
     ) -> Result<ReviewPlatformActionResult, ReviewPlatformError> {
-        let token = require_write_token(ctx, "Creating a pull request")?;
         let url = format!(
             "{}/repos/{}/{}/pulls",
             ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name
@@ -1957,9 +2044,7 @@ impl ReviewProvider for GithubProvider {
             "body": request.body.clone().unwrap_or_default(),
             "draft": request.draft.unwrap_or(false),
         });
-        let value =
-            send_json(github_post_request(http_client()?, &url, Some(token)).json(&payload))
-                .await?;
+        let value = github_api_post_json(ctx, &url, &payload).await?;
         let pull_request = github_pull_request_from_value(&value);
         let web_url = Some(pull_request.web_url.clone());
         Ok(ReviewPlatformActionResult {
@@ -1976,7 +2061,6 @@ impl ReviewProvider for GithubProvider {
         ctx: &ProviderContext,
         request: &ReviewPlatformReplyToThreadRequest,
     ) -> Result<ReviewPlatformActionResult, ReviewPlatformError> {
-        let token = require_write_token(ctx, "Replying to a pull request thread")?;
         let comment_id = parse_provider_comment_id(&request.thread_id).ok_or_else(|| {
             ReviewPlatformError::Api(
                 "GitHub replies require a review comment thread id such as comment-123".to_string(),
@@ -1990,11 +2074,7 @@ impl ReviewProvider for GithubProvider {
             request.pull_request_id,
             comment_id
         );
-        let value = send_json(
-            github_post_request(http_client()?, &url, Some(token))
-                .json(&json!({ "body": request.body })),
-        )
-        .await?;
+        let value = github_api_post_json(ctx, &url, &json!({ "body": request.body })).await?;
         let thread = github_thread_from_review_comment(&value);
         Ok(ReviewPlatformActionResult {
             success: true,
@@ -2056,16 +2136,17 @@ async fn github_submit_review(
     event: &str,
     body: &str,
 ) -> Result<ReviewPlatformActionResult, ReviewPlatformError> {
-    let token = require_write_token(ctx, "Submitting a pull request review")?;
     let url = format!(
         "{}/repos/{}/{}/pulls/{}/reviews",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
     );
-    let value = send_json(
-        github_post_request(http_client()?, &url, Some(token)).json(&json!({
+    let value = github_api_post_json(
+        ctx,
+        &url,
+        &json!({
             "body": body,
             "event": event,
-        })),
+        }),
     )
     .await?;
     Ok(ReviewPlatformActionResult {
@@ -2086,14 +2167,13 @@ async fn github_pull_request_detail_page(
     section: ReviewPlatformDetailSection,
     pagination: PullRequestPagination,
 ) -> Result<ReviewPlatformPullRequestDetailPage, ReviewPlatformError> {
-    let client = http_client()?;
     let base = format!(
         "{}/repos/{}/{}/pulls/{}",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
     );
-    let detail = send_json(github_request(client.clone(), &base, ctx.token.as_deref())).await?;
+    let detail = github_api_get_json(ctx, &base, &[], DEFAULT_GH_OUTPUT_MAX_BYTES).await?;
     let mut pull_request = github_pull_request_from_value(&detail);
-    let (checks, ci_all) = github_checks_and_ci(ctx, &client, &detail).await;
+    let (checks, ci_all) = github_checks_and_ci(ctx, &detail).await;
     pull_request.checks = checks;
 
     let mut files = Vec::new();
@@ -2109,82 +2189,45 @@ async fn github_pull_request_detail_page(
             ci = slice_page(ci_all, pagination);
         }
         ReviewPlatformDetailSection::Files => {
-            let response = fetch_array_page(
-                github_request(
-                    client.clone(),
-                    &format!("{}/files", base),
-                    ctx.token.as_deref(),
-                ),
-                pagination,
-            )
-            .await?;
-            section_pagination = pagination_from_response(&response, pagination);
-            files = array_items(&response.value)
+            let (response, page_info) =
+                github_api_array_page(ctx, &format!("{}/files", base), pagination, &[]).await?;
+            section_pagination = page_info;
+            files = array_items(&response)
                 .iter()
                 .map(github_file_from_value)
                 .collect();
         }
         ReviewPlatformDetailSection::Commits => {
-            let response = fetch_array_page(
-                github_request(
-                    client.clone(),
-                    &format!("{}/commits", base),
-                    ctx.token.as_deref(),
-                ),
-                pagination,
-            )
-            .await?;
-            section_pagination = pagination_from_response(&response, pagination);
-            commits = array_items(&response.value)
+            let (response, page_info) =
+                github_api_array_page(ctx, &format!("{}/commits", base), pagination, &[]).await?;
+            section_pagination = page_info;
+            commits = array_items(&response)
                 .iter()
                 .map(github_commit_from_value)
                 .collect();
         }
         ReviewPlatformDetailSection::Reviews => {
             let reviews_url = format!("{}/reviews", base);
-            let reviews = fetch_array_page(
-                github_request(client.clone(), &reviews_url, ctx.token.as_deref()),
-                pagination,
-            )
-            .await?;
-            let review_comments = fetch_array_page(
-                github_request(
-                    client.clone(),
-                    &format!("{}/comments", base),
-                    ctx.token.as_deref(),
+            let (reviews, reviews_page) =
+                github_api_array_page(ctx, &reviews_url, pagination, &[]).await?;
+            let (review_comments, review_comments_page) =
+                github_api_array_page(ctx, &format!("{}/comments", base), pagination, &[]).await?;
+            let (issue_comments, issue_comments_page) = github_api_array_page(
+                ctx,
+                &format!(
+                    "{}/repos/{}/{}/issues/{}/comments",
+                    ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
                 ),
                 pagination,
+                &[],
             )
             .await?;
-            let issue_comments = fetch_array_page(
-                github_request(
-                    client.clone(),
-                    &format!(
-                        "{}/repos/{}/{}/issues/{}/comments",
-                        ctx.api_base_url,
-                        ctx.remote.owner,
-                        ctx.remote.repository_name,
-                        pull_request_id
-                    ),
-                    ctx.token.as_deref(),
-                ),
-                pagination,
-            )
-            .await?;
-            pull_request.review_decision = github_review_decision(&reviews.value);
+            pull_request.review_decision = github_review_decision(&reviews);
             section_pagination = combine_page_pagination(
                 pagination,
-                &[
-                    pagination_from_response(&reviews, pagination),
-                    pagination_from_response(&review_comments, pagination),
-                    pagination_from_response(&issue_comments, pagination),
-                ],
+                &[reviews_page, review_comments_page, issue_comments_page],
             );
-            threads = github_threads(
-                &reviews.value,
-                &review_comments.value,
-                &issue_comments.value,
-            );
+            threads = github_threads(&reviews, &review_comments, &issue_comments);
         }
     }
 
@@ -3198,10 +3241,6 @@ async fn send_bounded_json_response(
         .map_err(review_http_error)
 }
 
-async fn send_text(request: ReviewHttpRequest) -> Result<ReviewTextResponse, ReviewPlatformError> {
-    send_review_text(request).await.map_err(review_http_error)
-}
-
 async fn send_bounded_text(
     request: ReviewHttpRequest,
     max_bytes: usize,
@@ -3424,37 +3463,6 @@ fn query_param_u32(url: &str, name: &str) -> Option<u32> {
     None
 }
 
-async fn enrich_github_pull_request_counts(
-    ctx: &ProviderContext,
-    pull_requests: Vec<ReviewPlatformPullRequest>,
-) -> Vec<ReviewPlatformPullRequest> {
-    let Ok(client) = http_client() else {
-        return pull_requests;
-    };
-    let futures = pull_requests.into_iter().map(|mut pull_request| {
-        let client = client.clone();
-        let url = format!(
-            "{}/repos/{}/{}/pulls/{}",
-            ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request.id
-        );
-        let token = ctx.token.clone();
-        async move {
-            if let Ok(value) = send_json(github_request(client, &url, token.as_deref())).await {
-                pull_request.additions = value_i64(&value, "additions") as i32;
-                pull_request.deletions = value_i64(&value, "deletions") as i32;
-                pull_request.changed_files = value_i64(&value, "changed_files") as i32;
-                pull_request.comments =
-                    (value_i64(&value, "comments") + value_i64(&value, "review_comments")) as i32;
-            }
-            pull_request
-        }
-    });
-    stream::iter(futures)
-        .buffered(PROVIDER_ENRICH_CONCURRENCY)
-        .collect()
-        .await
-}
-
 async fn enrich_gitlab_pull_request_counts(
     ctx: &ProviderContext,
     pull_requests: Vec<ReviewPlatformPullRequest>,
@@ -3513,34 +3521,6 @@ async fn enrich_gitcode_pull_request_counts(
         .buffered(PROVIDER_ENRICH_CONCURRENCY)
         .collect()
         .await
-}
-
-fn github_request(client: ReviewHttpClient, url: &str, token: Option<&str>) -> ReviewHttpRequest {
-    let mut request = client
-        .get(url)
-        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
-        .header(ACCEPT_HEADER, "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28");
-    if let Some(token) = token {
-        request = request.header(AUTHORIZATION_HEADER, format!("Bearer {}", token));
-    }
-    request
-}
-
-fn github_post_request(
-    client: ReviewHttpClient,
-    url: &str,
-    token: Option<&str>,
-) -> ReviewHttpRequest {
-    let mut request = client
-        .post(url)
-        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
-        .header(ACCEPT_HEADER, "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28");
-    if let Some(token) = token {
-        request = request.header(AUTHORIZATION_HEADER, format!("Bearer {}", token));
-    }
-    request
 }
 
 fn gitlab_request(client: ReviewHttpClient, url: &str, token: Option<&str>) -> ReviewHttpRequest {
@@ -3744,12 +3724,18 @@ fn provider_context_for_identity_with_trust(
 ) -> Result<ProviderContext, ReviewPlatformError> {
     let host = normalize_provider_host(host)?;
     let project_path = normalize_project_path(platform, project_path)?;
-    let stored_token = auth_tokens.get(platform, &host).map(str::to_string);
+    let stored_token = (platform != ReviewPlatformKind::Github)
+        .then(|| auth_tokens.get(platform, &host).map(str::to_string))
+        .flatten();
     let public_anonymous_host = matches!(
         (platform, host.as_str()),
         (ReviewPlatformKind::Github, "github.com") | (ReviewPlatformKind::Gitlab, "gitlab.com")
     );
-    if !public_anonymous_host && stored_token.is_none() && !trusted_remote {
+    if platform != ReviewPlatformKind::Github
+        && !public_anonymous_host
+        && stored_token.is_none()
+        && !trusted_remote
+    {
         return Err(ReviewPlatformError::Api(format!(
             "A stored {} token is required for non-public provider host {}",
             platform_label(platform),
@@ -3761,14 +3747,16 @@ fn provider_context_for_identity_with_trust(
             .then(|| env_token_for_platform(platform))
             .flatten()
     });
-    let auth_source = if stored_token.is_some() {
+    let auth_source = if platform == ReviewPlatformKind::Github {
+        ReviewAuthSource::GhCli
+    } else if stored_token.is_some() {
         ReviewAuthSource::Stored
     } else if token.is_some() {
         ReviewAuthSource::Env
     } else {
         ReviewAuthSource::None
     };
-    let auth_state = if token.is_some() {
+    let auth_state = if platform == ReviewPlatformKind::Github || token.is_some() {
         ReviewAuthState::Connected
     } else {
         ReviewAuthState::NotRequired
@@ -3891,29 +3879,61 @@ async fn acquire_issue_evidence(
     pagination: IssuePagination,
 ) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
     let plan = issue_request_plan(context, identity, pagination)?;
-    let client = http_client()?;
     let page = plan.pagination.page.to_string();
     let per_page = plan.pagination.per_page.to_string();
     match identity.platform {
         ReviewPlatformKind::Github => {
-            let issue = send_review_json_response_bounded(
-                github_request(client.clone(), &plan.issue_url, context.token.as_deref()),
-                MAX_ISSUE_RESPONSE_BYTES,
-            )
-            .await
-            .map_err(|error| review_evidence_http_error(error, "issue_response"))?
-            .value;
+            let issue =
+                github_api_get_json(context, &plan.issue_url, &[], MAX_ISSUE_RESPONSE_BYTES)
+                    .await
+                    .map_err(|error| review_evidence_error(error, "issue_response"))?;
             reject_pull_request_issue_target(identity, &issue)?;
-            let comments = send_review_json_response_bounded(
-                github_request(client, &plan.comments_url, context.token.as_deref())
-                    .query(&[("page", &page), ("per_page", &per_page)]),
+            let comments = github_api_get_json(
+                context,
+                &plan.comments_url,
+                &[
+                    ("page".to_string(), page),
+                    ("per_page".to_string(), per_page),
+                ],
                 MAX_ISSUE_COMMENTS_RESPONSE_BYTES,
             )
             .await
-            .map_err(|error| review_evidence_http_error(error, "issue_comments_response"));
-            map_issue_comments_response(identity, &issue, plan.pagination, comments)
+            .map_err(|error| review_evidence_error(error, "issue_comments_response"));
+            match comments {
+                Ok(comments) => {
+                    let has_next = comments
+                        .as_array()
+                        .is_some_and(|items| items.len() == plan.pagination.per_page as usize);
+                    map_github_issue(
+                        identity,
+                        &issue,
+                        &comments,
+                        plan.pagination,
+                        has_next,
+                        has_next.then(|| plan.pagination.page.saturating_add(1).to_string()),
+                    )
+                }
+                Err(ReviewPlatformError::EvidenceTooLarge { .. }) => {
+                    let mut evidence = map_github_issue(
+                        identity,
+                        &issue,
+                        &Value::Array(Vec::new()),
+                        plan.pagination,
+                        false,
+                        None,
+                    )?;
+                    evidence.completeness = ReviewEvidenceCompleteness::Partial;
+                    evidence
+                        .limitations
+                        .push("issue_comments_response_too_large".to_string());
+                    evidence.fingerprint = issue_fingerprint(&evidence, plan.pagination);
+                    Ok(evidence)
+                }
+                Err(error) => Err(error),
+            }
         }
         ReviewPlatformKind::Gitlab => {
+            let client = http_client()?;
             let issue = send_review_json_response_bounded(
                 gitlab_request(client.clone(), &plan.issue_url, context.token.as_deref()),
                 MAX_ISSUE_RESPONSE_BYTES,
@@ -4045,6 +4065,9 @@ fn token_for_remote(
     remote: &ReviewPlatformRemote,
     auth_tokens: &ReviewPlatformAuthTokens,
 ) -> Option<String> {
+    if remote.platform == ReviewPlatformKind::Github {
+        return None;
+    }
     auth_tokens
         .get(remote.platform, &remote.host)
         .map(str::to_string)
@@ -4053,7 +4076,7 @@ fn token_for_remote(
 
 fn env_token_for_platform(platform: ReviewPlatformKind) -> Option<String> {
     let names: &[&str] = match platform {
-        ReviewPlatformKind::Github => &["GITHUB_TOKEN", "GH_TOKEN"],
+        ReviewPlatformKind::Github => &[],
         ReviewPlatformKind::Gitlab => &["GITLAB_TOKEN", "GITLAB_PRIVATE_TOKEN"],
         ReviewPlatformKind::Gitcode => &["GITCODE_TOKEN"],
         ReviewPlatformKind::Unknown => &[],
@@ -4073,6 +4096,9 @@ fn auth_for_platform_host(
 ) -> (ReviewAuthState, ReviewAuthSource) {
     if platform == ReviewPlatformKind::Unknown {
         return (ReviewAuthState::Unsupported, ReviewAuthSource::Unsupported);
+    }
+    if platform == ReviewPlatformKind::Github {
+        return (ReviewAuthState::NotConnected, ReviewAuthSource::None);
     }
     if auth_tokens.get(platform, host).is_some() {
         return (ReviewAuthState::Connected, ReviewAuthSource::Stored);
@@ -4175,6 +4201,9 @@ fn canonicalize_stored_tokens(
             passthrough.insert(raw_key, entry);
             continue;
         };
+        if canonical_key.starts_with("github:") {
+            continue;
+        }
         entry.token = entry.token.trim().to_string();
         if entry.token.is_empty() {
             continue;
@@ -4202,18 +4231,22 @@ fn canonicalize_stored_tokens(
 
 async fn get_repository_root(repository_path: &str) -> Result<String, ReviewPlatformError> {
     let output = execute_git_command(repository_path, &["rev-parse", "--show-toplevel"]).await?;
-    let root = output
+    let root = parse_repository_root_output(&output)?;
+    Ok(normalize_repository_root(&root))
+}
+
+fn parse_repository_root_output(output: &str) -> Result<String, ReviewPlatformError> {
+    output
         .lines()
         .next()
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .map(str::to_string)
         .ok_or_else(|| {
             ReviewPlatformError::InvalidRepository(
                 "Git repository root was not returned".to_string(),
             )
-        })?;
-
-    Ok(normalize_repository_root(root))
+        })
 }
 
 async fn execute_git_command(
@@ -4249,6 +4282,629 @@ async fn execute_git_command(
         String::from_utf8_lossy(&output.stderr).to_string()
     };
     Err(ReviewPlatformError::InvalidRepository(message))
+}
+
+fn review_evidence_error(error: ReviewPlatformError, resource: &str) -> ReviewPlatformError {
+    match error {
+        ReviewPlatformError::EvidenceTooLarge { limit, .. } => {
+            ReviewPlatformError::EvidenceTooLarge {
+                resource: resource.to_string(),
+                limit,
+            }
+        }
+        error => error,
+    }
+}
+
+fn github_api_endpoint(ctx: &ProviderContext, url: &str) -> Result<String, ReviewPlatformError> {
+    url.strip_prefix(&ctx.api_base_url)
+        .map(|endpoint| endpoint.trim_start_matches('/').to_string())
+        .filter(|endpoint| !endpoint.is_empty())
+        .ok_or_else(|| {
+            ReviewPlatformError::Api(
+                "GitHub API endpoint does not match the selected GitHub host".to_string(),
+            )
+        })
+}
+
+async fn github_api_get_json(
+    ctx: &ProviderContext,
+    url: &str,
+    query: &[(String, String)],
+    max_output_bytes: usize,
+) -> Result<Value, ReviewPlatformError> {
+    let endpoint = github_api_endpoint(ctx, url)?;
+    let mut args = vec![
+        "api".to_string(),
+        "--hostname".to_string(),
+        ctx.remote.host.clone(),
+        "--method".to_string(),
+        "GET".to_string(),
+        "--header".to_string(),
+        "Accept: application/vnd.github+json".to_string(),
+        endpoint,
+    ];
+    for (key, value) in query {
+        args.push("--raw-field".to_string());
+        args.push(format!("{key}={value}"));
+    }
+    let output = execute_gh(&args, None, max_output_bytes).await?;
+    serde_json::from_slice(&output)
+        .map_err(|error| ReviewPlatformError::Parse(format!("Invalid GitHub CLI JSON: {error}")))
+}
+
+async fn github_api_post_json(
+    ctx: &ProviderContext,
+    url: &str,
+    body: &Value,
+) -> Result<Value, ReviewPlatformError> {
+    let endpoint = github_api_endpoint(ctx, url)?;
+    let args = vec![
+        "api".to_string(),
+        "--hostname".to_string(),
+        ctx.remote.host.clone(),
+        "--method".to_string(),
+        "POST".to_string(),
+        "--header".to_string(),
+        "Accept: application/vnd.github+json".to_string(),
+        "--input".to_string(),
+        "-".to_string(),
+        endpoint,
+    ];
+    let input =
+        serde_json::to_vec(body).map_err(|error| ReviewPlatformError::Parse(error.to_string()))?;
+    let output = execute_gh(&args, Some(&input), DEFAULT_GH_OUTPUT_MAX_BYTES).await?;
+    serde_json::from_slice(&output)
+        .map_err(|error| ReviewPlatformError::Parse(format!("Invalid GitHub CLI JSON: {error}")))
+}
+
+async fn github_api_get_text(
+    ctx: &ProviderContext,
+    url: &str,
+    max_output_bytes: usize,
+) -> Result<ReviewTextResponse, ReviewPlatformError> {
+    let endpoint = github_api_endpoint(ctx, url)?;
+    let args = vec![
+        "api".to_string(),
+        "--hostname".to_string(),
+        ctx.remote.host.clone(),
+        "--method".to_string(),
+        "GET".to_string(),
+        endpoint,
+    ];
+    let output = execute_gh(&args, None, max_output_bytes).await?;
+    Ok(ReviewTextResponse {
+        text: String::from_utf8_lossy(&output).to_string(),
+        truncated: false,
+    })
+}
+
+async fn github_current_user_open_pull_requests(
+    ctx: &ProviderContext,
+    pagination: PullRequestPagination,
+) -> Result<ReviewPlatformPullRequestPage, ReviewPlatformError> {
+    let limit = github_pull_request_list_limit(pagination);
+    let items = github_current_user_open_pull_request_values(ctx, limit).await?;
+    Ok(paginate_github_pull_requests(items, pagination))
+}
+
+async fn github_current_user_open_pull_requests_for_remotes(
+    remotes: &[ReviewPlatformRemote],
+    auth_tokens: &ReviewPlatformAuthTokens,
+    pagination: PullRequestPagination,
+) -> Result<ReviewPlatformPullRequestPage, ReviewPlatformError> {
+    let mut seen_repositories = HashSet::new();
+    let contexts = remotes
+        .iter()
+        .filter(|remote| {
+            remote.platform == ReviewPlatformKind::Github
+                && remote.supported
+                && remote.auth_state == ReviewAuthState::Connected
+        })
+        .filter(|remote| {
+            seen_repositories.insert(format!("{}:{}", remote.host, remote.project_path))
+        })
+        .filter_map(|remote| provider_context(remote.clone(), auth_tokens).ok())
+        .collect::<Vec<_>>();
+    let limit = github_pull_request_list_limit(pagination);
+    let results =
+        stream::iter(contexts.into_iter().map(|ctx| async move {
+            github_current_user_open_pull_request_values(&ctx, limit).await
+        }))
+        .buffered(PROVIDER_ENRICH_CONCURRENCY)
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut pull_requests = Vec::new();
+    let mut first_error = None;
+    let mut successful_repositories = 0usize;
+    for result in results {
+        match result {
+            Ok(items) => {
+                successful_repositories += 1;
+                pull_requests.extend(items);
+            }
+            Err(error) => {
+                first_error.get_or_insert(error);
+            }
+        }
+    }
+    if successful_repositories == 0 {
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+    }
+
+    Ok(aggregate_github_pull_requests(pull_requests, pagination))
+}
+
+fn aggregate_github_pull_requests(
+    mut pull_requests: Vec<ReviewPlatformPullRequest>,
+    pagination: PullRequestPagination,
+) -> ReviewPlatformPullRequestPage {
+    pull_requests.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    let mut seen_pull_requests = HashSet::new();
+    pull_requests.retain(|pull_request| seen_pull_requests.insert(pull_request.web_url.clone()));
+    paginate_github_pull_requests(pull_requests, pagination)
+}
+
+fn github_pull_request_list_limit(pagination: PullRequestPagination) -> u32 {
+    pagination
+        .page
+        .saturating_mul(pagination.per_page)
+        .saturating_add(1)
+        .min(1_000)
+}
+
+async fn github_current_user_open_pull_request_values(
+    ctx: &ProviderContext,
+    limit: u32,
+) -> Result<Vec<ReviewPlatformPullRequest>, ReviewPlatformError> {
+    let repository = format!(
+        "{}/{}/{}",
+        ctx.remote.host, ctx.remote.owner, ctx.remote.repository_name
+    );
+    let args = vec![
+        "pr".to_string(),
+        "list".to_string(),
+        "--repo".to_string(),
+        repository,
+        "--author".to_string(),
+        "@me".to_string(),
+        "--state".to_string(),
+        "open".to_string(),
+        "--limit".to_string(),
+        limit.to_string(),
+        "--json".to_string(),
+        [
+            "number",
+            "title",
+            "state",
+            "isDraft",
+            "author",
+            "headRefName",
+            "headRefOid",
+            "baseRefName",
+            "baseRefOid",
+            "updatedAt",
+            "url",
+            "additions",
+            "deletions",
+            "changedFiles",
+            "comments",
+            "reviewDecision",
+            "statusCheckRollup",
+        ]
+        .join(","),
+    ];
+    let output = execute_gh(&args, None, DEFAULT_GH_OUTPUT_MAX_BYTES).await?;
+    let value: Value = serde_json::from_slice(&output)
+        .map_err(|error| ReviewPlatformError::Parse(format!("Invalid GitHub CLI JSON: {error}")))?;
+    let items = value.as_array().ok_or_else(|| {
+        ReviewPlatformError::Parse("GitHub CLI pull response was not an array".to_string())
+    })?;
+    Ok(items
+        .iter()
+        .map(|value| github_pull_request_from_gh_cli_value(value, Some(&ctx.remote.id)))
+        .collect())
+}
+
+fn paginate_github_pull_requests(
+    items: Vec<ReviewPlatformPullRequest>,
+    pagination: PullRequestPagination,
+) -> ReviewPlatformPullRequestPage {
+    let start = pagination
+        .page
+        .saturating_sub(1)
+        .saturating_mul(pagination.per_page) as usize;
+    let end = start.saturating_add(pagination.per_page as usize);
+    let has_next = items.len() > end;
+    let total = (!has_next).then_some(items.len() as u64);
+    let pull_requests = items
+        .into_iter()
+        .skip(start)
+        .take(pagination.per_page as usize)
+        .collect();
+
+    ReviewPlatformPullRequestPage {
+        items: pull_requests,
+        pagination: ReviewPlatformPagination {
+            page: pagination.page,
+            per_page: pagination.per_page,
+            total,
+            has_next,
+        },
+    }
+}
+
+fn github_pull_request_from_gh_cli_value(
+    value: &Value,
+    provider_id: Option<&str>,
+) -> ReviewPlatformPullRequest {
+    let number = value_i64(value, "number");
+    let state = if value_bool(value, "isDraft") {
+        ReviewItemState::Draft
+    } else {
+        match value_string(value, "state").to_ascii_uppercase().as_str() {
+            "MERGED" => ReviewItemState::Merged,
+            "CLOSED" => ReviewItemState::Closed,
+            _ => ReviewItemState::Open,
+        }
+    };
+    let review_decision = match value_string(value, "reviewDecision").as_str() {
+        "APPROVED" => ReviewDecision::Approved,
+        "CHANGES_REQUESTED" => ReviewDecision::ChangesRequested,
+        "COMMENTED" => ReviewDecision::Commented,
+        _ => ReviewDecision::Pending,
+    };
+
+    ReviewPlatformPullRequest {
+        id: number.to_string(),
+        provider_id: provider_id.map(str::to_string),
+        number,
+        title: value_string(value, "title"),
+        state,
+        author: nested_string(value, &["author", "login"]),
+        source_branch: value_string(value, "headRefName"),
+        target_branch: value_string(value, "baseRefName"),
+        base_revision: non_empty_option(value_string(value, "baseRefOid")),
+        head_revision: non_empty_option(value_string(value, "headRefOid")),
+        updated_at: value_string(value, "updatedAt"),
+        web_url: value_string(value, "url"),
+        additions: value_i64(value, "additions") as i32,
+        deletions: value_i64(value, "deletions") as i32,
+        changed_files: value_i64(value, "changedFiles") as i32,
+        comments: value
+            .get("comments")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or_default() as i32,
+        review_decision,
+        checks: github_checks_from_gh_cli_value(value),
+    }
+}
+
+fn github_checks_from_gh_cli_value(value: &Value) -> ReviewChecks {
+    let mut checks = empty_checks();
+    for item in value
+        .get("statusCheckRollup")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+    {
+        let outcome = first_non_empty(&[
+            value_string(item, "conclusion"),
+            value_string(item, "state"),
+            value_string(item, "status"),
+        ])
+        .to_ascii_lowercase();
+        if matches!(outcome.as_str(), "success" | "neutral" | "skipped") {
+            checks.passed += 1;
+        } else if matches!(
+            outcome.as_str(),
+            "failure" | "failed" | "error" | "cancelled" | "timed_out" | "action_required"
+        ) {
+            checks.failed += 1;
+        } else {
+            checks.pending += 1;
+        }
+    }
+    checks.total = checks.passed + checks.failed + checks.pending;
+    checks
+}
+
+async fn github_api_array_page(
+    ctx: &ProviderContext,
+    url: &str,
+    pagination: PullRequestPagination,
+    extra_query: &[(String, String)],
+) -> Result<(Value, ReviewPlatformPagination), ReviewPlatformError> {
+    let mut query = extra_query.to_vec();
+    query.push(("per_page".to_string(), pagination.per_page.to_string()));
+    query.push(("page".to_string(), pagination.page.to_string()));
+    let value = github_api_get_json(ctx, url, &query, DEFAULT_GH_OUTPUT_MAX_BYTES).await?;
+    let item_count = value
+        .as_array()
+        .ok_or_else(|| {
+            ReviewPlatformError::Parse("GitHub paginated response was not an array".to_string())
+        })?
+        .len();
+    Ok((
+        value,
+        ReviewPlatformPagination {
+            page: pagination.page,
+            per_page: pagination.per_page,
+            total: None,
+            has_next: item_count == pagination.per_page as usize,
+        },
+    ))
+}
+
+async fn fetch_github_paginated_array(
+    ctx: &ProviderContext,
+    url: &str,
+) -> Result<Value, ReviewPlatformError> {
+    let mut page = 1u32;
+    let mut values = Vec::new();
+    loop {
+        let query = vec![
+            ("per_page".to_string(), "100".to_string()),
+            ("page".to_string(), page.to_string()),
+        ];
+        let value = github_api_get_json(ctx, url, &query, DEFAULT_GH_OUTPUT_MAX_BYTES).await?;
+        let items = value.as_array().ok_or_else(|| {
+            ReviewPlatformError::Parse("GitHub paginated response was not an array".to_string())
+        })?;
+        let item_count = items.len();
+        values.extend(items.iter().cloned());
+        if item_count < 100 {
+            break;
+        }
+        page = page.saturating_add(1);
+    }
+    Ok(Value::Array(values))
+}
+
+async fn fetch_bounded_github_paginated_array(
+    ctx: &ProviderContext,
+    url: &str,
+    max_items: usize,
+) -> Result<Value, ReviewPlatformError> {
+    let mut page = 1u32;
+    let mut values = Vec::new();
+    while values.len() < max_items {
+        let query = vec![
+            ("per_page".to_string(), "100".to_string()),
+            ("page".to_string(), page.to_string()),
+        ];
+        let value = github_api_get_json(ctx, url, &query, MAX_REVIEW_TARGET_RESPONSE_BYTES).await?;
+        let items = value.as_array().ok_or_else(|| {
+            ReviewPlatformError::Parse("GitHub paginated response was not an array".to_string())
+        })?;
+        let item_count = items.len();
+        values.extend(items.iter().take(max_items - values.len()).cloned());
+        if item_count < 100 || values.len() >= max_items {
+            break;
+        }
+        if page as usize >= MAX_REVIEW_TARGET_PAGES {
+            return Err(ReviewPlatformError::EvidenceTooLarge {
+                resource: "GitHub pagination pages".to_string(),
+                limit: MAX_REVIEW_TARGET_PAGES,
+            });
+        }
+        page = page.saturating_add(1);
+    }
+    Ok(Value::Array(values))
+}
+
+async fn fetch_bounded_github_file(
+    ctx: &ProviderContext,
+    url: &str,
+    start_page: u32,
+    max_items: usize,
+    file_path: &str,
+) -> Result<Option<ReviewPlatformFile>, ReviewPlatformError> {
+    let mut page = start_page.max(1);
+    let mut visited = 0usize;
+    let mut request_count = 0usize;
+    while visited < max_items {
+        let query = vec![
+            ("per_page".to_string(), "100".to_string()),
+            ("page".to_string(), page.to_string()),
+        ];
+        let value = github_api_get_json(ctx, url, &query, MAX_REVIEW_TARGET_RESPONSE_BYTES).await?;
+        request_count += 1;
+        let items = value.as_array().ok_or_else(|| {
+            ReviewPlatformError::Parse("GitHub paginated response was not an array".to_string())
+        })?;
+        for item in items.iter().take(max_items - visited) {
+            let file = github_file_from_value(item);
+            if file.path == file_path || file.old_path.as_deref() == Some(file_path) {
+                return Ok(Some(file));
+            }
+            visited += 1;
+        }
+        if items.len() < 100 || visited >= max_items {
+            break;
+        }
+        if request_count >= MAX_REVIEW_TARGET_PAGES {
+            return Err(ReviewPlatformError::EvidenceTooLarge {
+                resource: "GitHub pagination pages".to_string(),
+                limit: MAX_REVIEW_TARGET_PAGES,
+            });
+        }
+        page = page.saturating_add(1);
+    }
+    Ok(None)
+}
+
+#[derive(Debug, Clone, Default)]
+struct GhAuthStatus {
+    installed: bool,
+    connected: bool,
+    username: Option<String>,
+}
+
+async fn execute_gh(
+    args: &[String],
+    stdin: Option<&[u8]>,
+    max_output_bytes: usize,
+) -> Result<Vec<u8>, ReviewPlatformError> {
+    let mut command = process_manager::create_tokio_command("gh");
+    command
+        .args(args)
+        .env_remove("GH_TOKEN")
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GH_ENTERPRISE_TOKEN")
+        .env_remove("GITHUB_ENTERPRISE_TOKEN");
+    if stdin.is_some() {
+        command.stdin(std::process::Stdio::piped());
+    }
+    command
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = command.spawn().map_err(|error| {
+        ReviewPlatformError::Api(format!(
+            "GitHub CLI is required but could not be started: {error}. Install `gh` and run `gh auth login`."
+        ))
+    })?;
+    if let Some(input) = stdin {
+        let mut child_stdin = child.stdin.take().ok_or_else(|| {
+            ReviewPlatformError::Api("Failed to open GitHub CLI input".to_string())
+        })?;
+        child_stdin.write_all(input).await.map_err(|error| {
+            ReviewPlatformError::Api(format!("Failed to send a request to GitHub CLI: {error}"))
+        })?;
+    }
+    let output = child.wait_with_output().await.map_err(|error| {
+        ReviewPlatformError::Api(format!("Failed to wait for GitHub CLI: {error}"))
+    })?;
+    if output.stdout.len() > max_output_bytes {
+        return Err(ReviewPlatformError::EvidenceTooLarge {
+            resource: "GitHub CLI response".to_string(),
+            limit: max_output_bytes,
+        });
+    }
+    if output.status.success() {
+        return Ok(output.stdout);
+    }
+
+    let raw_message = if output.stderr.is_empty() {
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        String::from_utf8_lossy(&output.stderr).to_string()
+    };
+    let message = sanitize_gh_error(&raw_message);
+    if let Some(status) = gh_http_status(&message) {
+        return Err(ReviewPlatformError::Http {
+            status,
+            message: format!(": {message}"),
+        });
+    }
+    Err(ReviewPlatformError::Api(message))
+}
+
+fn sanitize_gh_error(message: &str) -> String {
+    let message = message.trim();
+    let truncated = message
+        .chars()
+        .take(GH_ERROR_OUTPUT_MAX_CHARS)
+        .collect::<String>();
+    if truncated.is_empty() {
+        "GitHub CLI command failed".to_string()
+    } else {
+        truncated
+    }
+}
+
+fn gh_http_status(message: &str) -> Option<u16> {
+    let marker = "HTTP ";
+    let start = message.find(marker)? + marker.len();
+    message.get(start..start + 3)?.parse().ok()
+}
+
+fn parse_gh_auth_status(host: &str, value: &Value) -> GhAuthStatus {
+    let accounts = value
+        .get("hosts")
+        .and_then(|hosts| hosts.get(host))
+        .and_then(Value::as_array);
+    let active = accounts.and_then(|accounts| {
+        accounts.iter().find(|account| {
+            account.get("active").and_then(Value::as_bool) == Some(true)
+                && account.get("state").and_then(Value::as_str) == Some("success")
+        })
+    });
+    GhAuthStatus {
+        installed: true,
+        connected: active.is_some(),
+        username: active
+            .and_then(|account| account.get("login"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    }
+}
+
+async fn gh_auth_status(host: &str) -> GhAuthStatus {
+    let args = vec![
+        "auth".to_string(),
+        "status".to_string(),
+        "--active".to_string(),
+        "--hostname".to_string(),
+        host.to_string(),
+        "--json".to_string(),
+        "hosts".to_string(),
+    ];
+    match execute_gh(&args, None, 256 * 1024).await {
+        Ok(output) => match serde_json::from_slice::<Value>(&output) {
+            Ok(value) => parse_gh_auth_status(host, &value),
+            Err(_error) => GhAuthStatus {
+                installed: true,
+                ..GhAuthStatus::default()
+            },
+        },
+        Err(error) => GhAuthStatus {
+            installed: !error.to_string().contains("could not be started"),
+            ..GhAuthStatus::default()
+        },
+    }
+}
+
+fn hydrate_github_remote_auth(remote: &mut ReviewPlatformRemote, status: GhAuthStatus) {
+    if remote.platform == ReviewPlatformKind::Unknown && !status.connected {
+        return;
+    }
+    if remote.platform == ReviewPlatformKind::Unknown {
+        remote.platform = ReviewPlatformKind::Github;
+        remote.id = format!(
+            "{}:{}:{}",
+            remote.name,
+            remote.platform.as_str(),
+            remote.project_path.replace('/', "__")
+        );
+        remote.supported = true;
+    }
+    remote.auth_state = if status.connected {
+        ReviewAuthState::Connected
+    } else {
+        ReviewAuthState::NotConnected
+    };
+    remote.auth_source = if status.connected {
+        ReviewAuthSource::GhCli
+    } else {
+        ReviewAuthSource::None
+    };
+    remote.message = if status.connected {
+        status
+            .username
+            .map(|username| format!("Authenticated via GitHub CLI as {username}."))
+    } else if status.installed {
+        Some(format!(
+            "Run `gh auth login --hostname {}` to connect this GitHub host.",
+            remote.host
+        ))
+    } else {
+        Some("Install GitHub CLI, then run `gh auth login` to connect GitHub.".to_string())
+    };
 }
 
 fn normalize_repository_root(root: &str) -> String {
@@ -4422,7 +5078,17 @@ fn select_remote<'a>(
     }
     remotes
         .iter()
-        .find(|remote| remote.supported)
+        .find(|remote| {
+            remote.supported
+                && remote.platform == ReviewPlatformKind::Github
+                && remote.auth_state == ReviewAuthState::Connected
+        })
+        .or_else(|| {
+            remotes
+                .iter()
+                .find(|remote| remote.supported && remote.platform == ReviewPlatformKind::Github)
+        })
+        .or_else(|| remotes.iter().find(|remote| remote.supported))
         .or_else(|| remotes.first())
 }
 
@@ -4553,13 +5219,18 @@ fn account_for_remote(remote: &ReviewPlatformRemote) -> ReviewPlatformAccount {
         id: remote.id.clone(),
         platform: remote.platform,
         label: format!("{} ({})", platform_label(remote.platform), remote.host),
-        username: None,
+        username: remote
+            .message
+            .as_deref()
+            .and_then(|message| message.strip_prefix("Authenticated via GitHub CLI as "))
+            .and_then(|message| message.strip_suffix('.'))
+            .map(str::to_string),
         host: remote.host.clone(),
         auth_state: remote.auth_state,
         auth_source: remote.auth_source,
         scopes: if matches!(
             remote.auth_source,
-            ReviewAuthSource::Env | ReviewAuthSource::Stored
+            ReviewAuthSource::GhCli | ReviewAuthSource::Env | ReviewAuthSource::Stored
         ) {
             vec!["pull_request:read".to_string()]
         } else {
@@ -4607,7 +5278,7 @@ fn platform_label(platform: ReviewPlatformKind) -> &'static str {
 
 fn required_scopes_for_platform(platform: ReviewPlatformKind) -> Vec<String> {
     match platform {
-        ReviewPlatformKind::Github => vec!["repo".to_string(), "pull_requests:read".to_string()],
+        ReviewPlatformKind::Github => vec!["repo".to_string(), "workflow".to_string()],
         ReviewPlatformKind::Gitlab => {
             vec!["read_api".to_string(), "api for write actions".to_string()]
         }
@@ -4639,6 +5310,9 @@ fn auth_challenge_for_remote(
     error: &ReviewPlatformError,
     has_token: bool,
 ) -> ReviewPlatformAuthChallenge {
+    if remote.platform == ReviewPlatformKind::Github {
+        return github_cli_auth_challenge(remote);
+    }
     let status = match error {
         ReviewPlatformError::Http { status, .. } => *status,
         _ => 0,
@@ -4678,6 +5352,21 @@ fn auth_challenge_for_remote(
             reason
         ),
         required_scopes: required_scopes_for_platform(remote.platform),
+    }
+}
+
+fn github_cli_auth_challenge(remote: &ReviewPlatformRemote) -> ReviewPlatformAuthChallenge {
+    ReviewPlatformAuthChallenge {
+        platform: ReviewPlatformKind::Github,
+        host: remote.host.clone(),
+        remote_id: remote.id.clone(),
+        project_path: remote.project_path.clone(),
+        state: ReviewPlatformAuthChallengeState::Missing,
+        message: format!(
+            "Authenticate GitHub with the local CLI, then retry: `gh auth login --hostname {}`.",
+            remote.host
+        ),
+        required_scopes: required_scopes_for_platform(ReviewPlatformKind::Github),
     }
 }
 
@@ -4858,7 +5547,6 @@ fn is_ci_error_line(line: &str) -> bool {
 
 async fn github_checks_and_ci(
     ctx: &ProviderContext,
-    client: &ReviewHttpClient,
     pull_detail: &Value,
 ) -> (ReviewChecks, Vec<ReviewPlatformCiItem>) {
     let sha = nested_string(pull_detail, &["head", "sha"]);
@@ -4871,12 +5559,8 @@ async fn github_checks_and_ci(
         "{}/repos/{}/{}/commits/{}/status",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, sha
     );
-    if let Ok(status) = send_json(github_request(
-        client.clone(),
-        &status_url,
-        ctx.token.as_deref(),
-    ))
-    .await
+    if let Ok(status) =
+        github_api_get_json(ctx, &status_url, &[], DEFAULT_GH_OUTPUT_MAX_BYTES).await
     {
         let statuses = status
             .get("statuses")
@@ -4911,9 +5595,11 @@ async fn github_checks_and_ci(
         "{}/repos/{}/{}/commits/{}/check-runs",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, sha
     );
-    if let Ok(check_runs) = send_json(
-        github_request(client.clone(), &check_runs_url, ctx.token.as_deref())
-            .query(&[("per_page", "100")]),
+    if let Ok(check_runs) = github_api_get_json(
+        ctx,
+        &check_runs_url,
+        &[("per_page".to_string(), "100".to_string())],
+        DEFAULT_GH_OUTPUT_MAX_BYTES,
     )
     .await
     {
@@ -4951,18 +5637,19 @@ async fn github_checks_and_ci(
     (checks, ci_items)
 }
 
-async fn github_actions_jobs_for_head_sha(
-    ctx: &ProviderContext,
-    client: &ReviewHttpClient,
-    sha: &str,
-) -> Vec<Value> {
+async fn github_actions_jobs_for_head_sha(ctx: &ProviderContext, sha: &str) -> Vec<Value> {
     let runs_url = format!(
         "{}/repos/{}/{}/actions/runs",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name
     );
-    let runs = match send_json(
-        github_request(client.clone(), &runs_url, ctx.token.as_deref())
-            .query(&[("head_sha", sha), ("per_page", "100")]),
+    let runs = match github_api_get_json(
+        ctx,
+        &runs_url,
+        &[
+            ("head_sha".to_string(), sha.to_string()),
+            ("per_page".to_string(), "100".to_string()),
+        ],
+        DEFAULT_GH_OUTPUT_MAX_BYTES,
     )
     .await
     {
@@ -4985,9 +5672,11 @@ async fn github_actions_jobs_for_head_sha(
             "{}/repos/{}/{}/actions/runs/{}/jobs",
             ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, run_id
         );
-        if let Ok(value) = send_json(
-            github_request(client.clone(), &jobs_url, ctx.token.as_deref())
-                .query(&[("per_page", "100")]),
+        if let Ok(value) = github_api_get_json(
+            ctx,
+            &jobs_url,
+            &[("per_page".to_string(), "100".to_string())],
+            DEFAULT_GH_OUTPUT_MAX_BYTES,
         )
         .await
         {
@@ -5008,12 +5697,11 @@ async fn github_actions_jobs_for_head_sha(
 
 async fn github_actions_log_for_check_run_item(
     ctx: &ProviderContext,
-    client: &ReviewHttpClient,
     check_run_id: &str,
     check_run_name: &str,
     head_sha: &str,
 ) -> Result<ReviewPlatformCiLog, ReviewPlatformError> {
-    let action_jobs = github_actions_jobs_for_head_sha(ctx, client, head_sha).await;
+    let action_jobs = github_actions_jobs_for_head_sha(ctx, head_sha).await;
     let check_run = action_jobs
         .iter()
         .find(|job| {
@@ -5048,12 +5736,7 @@ async fn github_actions_log_for_check_run_item(
         "{}/repos/{}/{}/actions/jobs/{}/logs",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, job_id
     );
-    let response = send_text(github_request(
-        client.clone(),
-        &logs_url,
-        ctx.token.as_deref(),
-    ))
-    .await?;
+    let response = github_api_get_text(ctx, &logs_url, 1024 * 1024).await?;
     let (log, truncated) = ci_log_value_from_response(response);
     let message = if truncated {
         Some("GitHub Actions job log evidence was truncated to the Review budget.".to_string())
@@ -5741,6 +6424,7 @@ fn github_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
 
     ReviewPlatformPullRequest {
         id: number.to_string(),
+        provider_id: None,
         number,
         title: value_string(value, "title"),
         state,
@@ -5778,6 +6462,7 @@ fn gitlab_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
 
     ReviewPlatformPullRequest {
         id: number.to_string(),
+        provider_id: None,
         number,
         title: value_string(value, "title"),
         state,
@@ -5816,6 +6501,7 @@ fn gitcode_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
     };
     ReviewPlatformPullRequest {
         id: number.to_string(),
+        provider_id: None,
         number,
         title: value_string(value, "title"),
         state,
@@ -6652,6 +7338,44 @@ mod tests {
         }
     }
 
+    /// Remote workspace runtime stub that records routed git commands and
+    /// answers repository probes for a GitLab-hosted remote repository.
+    #[derive(Default)]
+    struct RecordingRemoteGitRuntime {
+        commands: std::sync::Mutex<Vec<(String, String, Vec<String>)>>,
+    }
+
+    #[async_trait::async_trait]
+    impl ReviewPlatformWorkspaceClassifier for RecordingRemoteGitRuntime {
+        async fn is_remote_workspace_path(&self, _path: &str) -> bool {
+            true
+        }
+
+        async fn execute_remote_git_command(
+            &self,
+            workspace_path: &str,
+            current_dir: &str,
+            args: &[&str],
+        ) -> Result<String, ReviewPlatformError> {
+            self.commands.lock().expect("commands lock").push((
+                workspace_path.to_string(),
+                current_dir.to_string(),
+                args.iter().map(|arg| arg.to_string()).collect(),
+            ));
+            match args {
+                ["rev-parse", "--show-toplevel"] => Ok("/srv/projects\n".to_string()),
+                ["remote", "-v"] => Ok(concat!(
+                    "origin\thttps://gitlab.com/example/repo.git (fetch)\n",
+                    "origin\thttps://gitlab.com/example/repo.git (push)\n",
+                )
+                .to_string()),
+                _ => Err(ReviewPlatformError::InvalidRepository(format!(
+                    "unexpected remote git command: {args:?}"
+                ))),
+            }
+        }
+    }
+
     fn temp_token_store_path(name: &str) -> PathBuf {
         let id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -6802,7 +7526,7 @@ mod tests {
         let service = ReviewPlatformService::new_local_only(path.clone());
 
         service
-            .update_auth_token(ReviewPlatformKind::Github, "GitHub.com", " secret-token ")
+            .update_auth_token(ReviewPlatformKind::Gitlab, "GitLab.com", " secret-token ")
             .await
             .expect("token update should write injected store");
 
@@ -6811,12 +7535,78 @@ mod tests {
             .await
             .expect("stored token file should be readable");
         assert_eq!(
-            tokens.get(ReviewPlatformKind::Github, "github.com"),
+            tokens.get(ReviewPlatformKind::Gitlab, "gitlab.com"),
             Some("secret-token")
         );
         assert!(path.exists());
 
         let _ = fs::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn github_token_actions_are_rejected() {
+        let path = temp_token_store_path("github-token-rejected");
+        let service = ReviewPlatformService::new_local_only(path.clone());
+
+        let update = service
+            .update_auth_token(ReviewPlatformKind::Github, "github.com", "secret-token")
+            .await;
+        let clear = service
+            .clear_auth_token(ReviewPlatformKind::Github, "github.com")
+            .await;
+
+        assert!(
+            matches!(update, Err(ReviewPlatformError::Api(message)) if message.contains("gh auth login"))
+        );
+        assert!(
+            matches!(clear, Err(ReviewPlatformError::Api(message)) if message.contains("gh auth logout"))
+        );
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn legacy_github_tokens_are_removed_during_canonicalization() {
+        let (stored, changed) = canonicalize_stored_tokens(StoredReviewPlatformTokens {
+            tokens: HashMap::from([
+                (
+                    "github:github.com".to_string(),
+                    StoredReviewPlatformToken {
+                        token: "legacy-github-token".to_string(),
+                        updated_at: "2026-07-14T00:00:00Z".to_string(),
+                    },
+                ),
+                (
+                    "gitlab:gitlab.com".to_string(),
+                    StoredReviewPlatformToken {
+                        token: "gitlab-token".to_string(),
+                        updated_at: "2026-07-14T00:00:00Z".to_string(),
+                    },
+                ),
+            ]),
+        });
+
+        assert!(changed);
+        assert!(!stored.tokens.contains_key("github:github.com"));
+        assert!(stored.tokens.contains_key("gitlab:gitlab.com"));
+    }
+
+    #[test]
+    fn gh_auth_status_uses_only_the_active_successful_account() {
+        let status = parse_gh_auth_status(
+            "github.com",
+            &json!({
+                "hosts": {
+                    "github.com": [
+                        { "state": "failure", "active": false, "login": "old" },
+                        { "state": "success", "active": true, "login": "octocat" }
+                    ]
+                }
+            }),
+        );
+
+        assert!(status.installed);
+        assert!(status.connected);
+        assert_eq!(status.username.as_deref(), Some("octocat"));
     }
 
     #[tokio::test]
@@ -6827,7 +7617,7 @@ mod tests {
 
         assert_eq!(service.token_store_path(), mixed_path.as_path());
         service
-            .update_auth_token(ReviewPlatformKind::Github, "github.com", "case-token")
+            .update_auth_token(ReviewPlatformKind::Gitlab, "gitlab.com", "case-token")
             .await
             .expect("mixed-case token path should be writable");
         let created_names = std::fs::read_dir(
@@ -6867,7 +7657,7 @@ mod tests {
         let service = ReviewPlatformService::new_local_only(path.clone());
 
         service
-            .update_auth_token(ReviewPlatformKind::Github, " GitHub.COM. ", "secret-token")
+            .update_auth_token(ReviewPlatformKind::Gitlab, " GitLab.COM. ", "secret-token")
             .await
             .expect("normalized token should save");
         let tokens = service
@@ -6875,19 +7665,19 @@ mod tests {
             .await
             .expect("normalized token should load");
         assert_eq!(
-            tokens.get(ReviewPlatformKind::Github, "github.com."),
+            tokens.get(ReviewPlatformKind::Gitlab, "gitlab.com."),
             Some("secret-token")
         );
 
         service
-            .clear_auth_token(ReviewPlatformKind::Github, "GITHUB.COM.")
+            .clear_auth_token(ReviewPlatformKind::Gitlab, "GITLAB.COM.")
             .await
             .expect("normalized token should clear");
         let tokens = service
             .load_stored_tokens()
             .await
             .expect("cleared token store should load");
-        assert_eq!(tokens.get(ReviewPlatformKind::Github, "github.com"), None);
+        assert_eq!(tokens.get(ReviewPlatformKind::Gitlab, "gitlab.com"), None);
         let _ = fs::remove_file(path).await;
     }
 
@@ -6898,7 +7688,7 @@ mod tests {
             &path,
             serde_json::to_vec(&json!({
                 "tokens": {
-                    "github:GitHub.COM.": {
+                    "gitlab:GitLab.COM.": {
                         "token": "legacy-token",
                         "updatedAt": "2026-07-11T00:00:00Z"
                     }
@@ -6916,7 +7706,7 @@ mod tests {
             .expect("legacy token store should load");
 
         assert_eq!(
-            tokens.get(ReviewPlatformKind::Github, "github.com"),
+            tokens.get(ReviewPlatformKind::Gitlab, "gitlab.com"),
             Some("legacy-token")
         );
         let _ = fs::remove_file(path).await;
@@ -6929,11 +7719,11 @@ mod tests {
             &path,
             serde_json::to_vec(&json!({
                 "tokens": {
-                    "github:GitHub.COM.": {
+                    "gitlab:GitLab.COM.": {
                         "token": "legacy-token",
                         "updatedAt": "2026-07-12T00:00:00Z"
                     },
-                    "github:github.com": {
+                    "gitlab:gitlab.com": {
                         "token": "canonical-token",
                         "updatedAt": "2026-07-11T00:00:00Z"
                     }
@@ -6950,7 +7740,7 @@ mod tests {
             .await
             .expect("conflicting token store should migrate");
         assert_eq!(
-            tokens.get(ReviewPlatformKind::Github, "github.com"),
+            tokens.get(ReviewPlatformKind::Gitlab, "gitlab.com"),
             Some("canonical-token")
         );
         let migrated: StoredReviewPlatformTokens = serde_json::from_slice(
@@ -6963,13 +7753,13 @@ mod tests {
         assert_eq!(
             migrated
                 .tokens
-                .get("github:github.com")
+                .get("gitlab:gitlab.com")
                 .map(|entry| entry.token.as_str()),
             Some("canonical-token")
         );
 
         service
-            .update_auth_token(ReviewPlatformKind::Github, "GITHUB.COM.", "new-token")
+            .update_auth_token(ReviewPlatformKind::Gitlab, "GITLAB.COM.", "new-token")
             .await
             .expect("canonical token update should succeed");
         let updated: StoredReviewPlatformTokens = serde_json::from_slice(
@@ -6982,7 +7772,7 @@ mod tests {
         assert_eq!(
             updated
                 .tokens
-                .get("github:github.com")
+                .get("gitlab:gitlab.com")
                 .map(|entry| entry.token.as_str()),
             Some("new-token")
         );
@@ -6995,11 +7785,11 @@ mod tests {
         let first = ReviewPlatformService::new_local_only(path.clone());
         let second = ReviewPlatformService::new_local_only(path.clone());
 
-        let (github, gitlab) = tokio::join!(
-            first.update_auth_token(ReviewPlatformKind::Github, "github.com", "github-token"),
+        let (gitcode, gitlab) = tokio::join!(
+            first.update_auth_token(ReviewPlatformKind::Gitcode, "gitcode.com", "gitcode-token"),
             second.update_auth_token(ReviewPlatformKind::Gitlab, "gitlab.com", "gitlab-token")
         );
-        github.expect("GitHub token update should succeed");
+        gitcode.expect("GitCode token update should succeed");
         gitlab.expect("GitLab token update should succeed");
 
         let stored = first
@@ -7007,8 +7797,8 @@ mod tests {
             .await
             .expect("concurrent token store should load");
         assert_eq!(
-            stored.get(ReviewPlatformKind::Github, "github.com"),
-            Some("github-token")
+            stored.get(ReviewPlatformKind::Gitcode, "gitcode.com"),
+            Some("gitcode-token")
         );
         assert_eq!(
             stored.get(ReviewPlatformKind::Gitlab, "gitlab.com"),
@@ -7023,19 +7813,19 @@ mod tests {
         let first = ReviewPlatformService::new_local_only(path.clone());
         let second = ReviewPlatformService::new_local_only(path.clone());
         first
-            .update_auth_token(ReviewPlatformKind::Github, "github.com", "old-github")
+            .update_auth_token(ReviewPlatformKind::Gitcode, "gitcode.com", "old-gitcode")
             .await
-            .expect("GitHub fixture token should save");
+            .expect("GitCode fixture token should save");
         first
             .update_auth_token(ReviewPlatformKind::Gitlab, "gitlab.com", "old-gitlab")
             .await
             .expect("GitLab fixture token should save");
 
         let (update, clear) = tokio::join!(
-            first.update_auth_token(ReviewPlatformKind::Github, "github.com", "new-github"),
+            first.update_auth_token(ReviewPlatformKind::Gitcode, "gitcode.com", "new-gitcode"),
             second.clear_auth_token(ReviewPlatformKind::Gitlab, "gitlab.com")
         );
-        update.expect("GitHub token update should succeed");
+        update.expect("GitCode token update should succeed");
         clear.expect("GitLab token clear should succeed");
 
         let stored = second
@@ -7043,8 +7833,8 @@ mod tests {
             .await
             .expect("updated token store should load");
         assert_eq!(
-            stored.get(ReviewPlatformKind::Github, "github.com"),
-            Some("new-github")
+            stored.get(ReviewPlatformKind::Gitcode, "gitcode.com"),
+            Some("new-gitcode")
         );
         assert_eq!(stored.get(ReviewPlatformKind::Gitlab, "gitlab.com"), None);
         let temp_prefix = format!(
@@ -7093,21 +7883,126 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn workspace_snapshot_uses_injected_remote_classifier_before_git_probe() {
+    async fn workspace_snapshot_fails_loudly_when_remote_git_execution_is_not_wired() {
         let path = temp_token_store_path("remote-classifier");
         let service = ReviewPlatformService::new(path, Arc::new(AlwaysRemoteWorkspace));
 
-        let snapshot = service
+        let error = service
             .workspace_snapshot("not-a-git-repository", None, None, None)
             .await
-            .expect("remote workspace should return unsupported snapshot");
+            .expect_err("remote workspace without remote git wiring must fail loudly");
+
+        assert!(
+            error
+                .to_string()
+                .contains("Remote workspace Git execution is not wired"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_context_routes_git_probes_through_remote_runtime() {
+        let path = temp_token_store_path("remote-git-routing");
+        let runtime = Arc::new(RecordingRemoteGitRuntime::default());
+        let service = ReviewPlatformService::new(path, runtime.clone());
+
+        let snapshot = service
+            .workspace_context("/srv/projects/bitfun", None)
+            .await
+            .expect("remote workspace context should resolve through remote git");
 
         assert_eq!(
-            snapshot.message.as_deref(),
-            Some("Pull request browsing is not available for remote SSH workspaces yet.")
+            snapshot
+                .repository
+                .as_ref()
+                .map(|repository| repository.project_path.as_str()),
+            Some("example/repo")
         );
-        assert!(snapshot.remotes.is_empty());
+        assert_eq!(
+            snapshot
+                .repository
+                .as_ref()
+                .and_then(|repository| repository.workspace_path.as_deref()),
+            Some("/srv/projects")
+        );
+
+        let commands = runtime.commands.lock().expect("commands lock").clone();
+        assert_eq!(
+            commands,
+            vec![
+                (
+                    "/srv/projects/bitfun".to_string(),
+                    "/srv/projects/bitfun".to_string(),
+                    vec!["rev-parse".to_string(), "--show-toplevel".to_string()],
+                ),
+                (
+                    "/srv/projects/bitfun".to_string(),
+                    "/srv/projects".to_string(),
+                    vec!["remote".to_string(), "-v".to_string()],
+                ),
+            ],
+            "git probes must run through the remote runtime, keyed by the workspace path"
+        );
+    }
+
+    #[tokio::test]
+    async fn repository_trusts_provider_identity_uses_remote_runtime() {
+        let path = temp_token_store_path("remote-trust");
+        let runtime = Arc::new(RecordingRemoteGitRuntime::default());
+        let service = ReviewPlatformService::new(path, runtime);
+
+        assert!(
+            service
+                .repository_trusts_provider_identity(
+                    "/srv/projects/bitfun",
+                    ReviewPlatformKind::Gitlab,
+                    "gitlab.com",
+                    "example/repo",
+                )
+                .await,
+            "remote workspace remotes must participate in provider identity trust"
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_context_discovers_repository_without_listing_pull_requests() {
+        let repository = tempfile::tempdir().expect("temporary repository should be created");
+        let repository_path = repository
+            .path()
+            .to_str()
+            .expect("repository path should be UTF-8");
+        execute_git_command(repository_path, &["init"])
+            .await
+            .expect("temporary repository should initialize");
+        execute_git_command(
+            repository_path,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://gitlab.com/example/repo.git",
+            ],
+        )
+        .await
+        .expect("GitLab remote should be added");
+        let path = temp_token_store_path("workspace-context");
+        let service = ReviewPlatformService::new_local_only(path.clone());
+
+        let snapshot = service
+            .workspace_context(repository_path, None)
+            .await
+            .expect("workspace context should not call the provider list API");
+
         assert!(snapshot.pull_requests.is_empty());
+        assert_eq!(snapshot.pagination.total, Some(0));
+        assert_eq!(
+            snapshot
+                .repository
+                .as_ref()
+                .map(|repository| repository.project_path.as_str()),
+            Some("example/repo")
+        );
+        let _ = fs::remove_file(path).await;
     }
 
     #[tokio::test]
@@ -7128,6 +8023,15 @@ mod tests {
         fs::write(&file, "content")
             .await
             .expect("temporary file should be created");
+        // `git rev-parse --show-toplevel` reports the canonical path (for
+        // example `/private/var/...` instead of `/var/...` on macOS).
+        let root = root
+            .canonicalize()
+            .expect("temporary repository root should canonicalize");
+        let nested = nested
+            .canonicalize()
+            .expect("nested directory should canonicalize");
+        let file = nested.join("tracked.txt");
 
         execute_git_command(
             root.to_str()
@@ -7201,6 +8105,99 @@ mod tests {
             pull_request.head_revision.as_deref(),
             Some("2222222222222222222222222222222222222222")
         );
+    }
+
+    #[test]
+    fn github_cli_pull_request_maps_open_user_list_fields() {
+        let pull_request = github_pull_request_from_gh_cli_value(
+            &json!({
+                "number": 42,
+                "title": "Current user pull request",
+                "state": "OPEN",
+                "isDraft": false,
+                "author": { "login": "octocat" },
+                "headRefName": "feature",
+                "headRefOid": "2222222222222222222222222222222222222222",
+                "baseRefName": "main",
+                "baseRefOid": "1111111111111111111111111111111111111111",
+                "updatedAt": "2026-07-14T00:00:00Z",
+                "url": "https://github.com/example/repo/pull/42",
+                "additions": 12,
+                "deletions": 3,
+                "changedFiles": 2,
+                "comments": [{ "id": "one" }, { "id": "two" }],
+                "reviewDecision": "CHANGES_REQUESTED",
+                "statusCheckRollup": [
+                    { "conclusion": "SUCCESS", "status": "COMPLETED" },
+                    { "conclusion": "FAILURE", "status": "COMPLETED" },
+                    { "conclusion": "", "status": "IN_PROGRESS" }
+                ]
+            }),
+            Some("origin:github:example__repo"),
+        );
+
+        assert_eq!(pull_request.number, 42);
+        assert_eq!(
+            pull_request.provider_id.as_deref(),
+            Some("origin:github:example__repo")
+        );
+        assert_eq!(pull_request.author, "octocat");
+        assert_eq!(pull_request.state, ReviewItemState::Open);
+        assert_eq!(
+            pull_request.review_decision,
+            ReviewDecision::ChangesRequested
+        );
+        assert_eq!(pull_request.comments, 2);
+        assert_eq!(pull_request.checks.total, 3);
+        assert_eq!(pull_request.checks.passed, 1);
+        assert_eq!(pull_request.checks.failed, 1);
+        assert_eq!(pull_request.checks.pending, 1);
+    }
+
+    #[test]
+    fn github_workspace_pull_requests_deduplicate_urls_not_numbers() {
+        let make_pull_request = |provider_id: &str, url: &str, updated_at: &str| {
+            github_pull_request_from_gh_cli_value(
+                &json!({
+                    "number": 42,
+                    "title": provider_id,
+                    "state": "OPEN",
+                    "isDraft": false,
+                    "author": { "login": "octocat" },
+                    "headRefName": "feature",
+                    "baseRefName": "main",
+                    "updatedAt": updated_at,
+                    "url": url,
+                    "comments": [],
+                    "statusCheckRollup": []
+                }),
+                Some(provider_id),
+            )
+        };
+        let page = aggregate_github_pull_requests(
+            vec![
+                make_pull_request(
+                    "fork",
+                    "https://github.com/example/fork/pull/42",
+                    "2026-07-14T01:00:00Z",
+                ),
+                make_pull_request(
+                    "upstream",
+                    "https://github.com/example/upstream/pull/42",
+                    "2026-07-14T02:00:00Z",
+                ),
+                make_pull_request(
+                    "duplicate-upstream",
+                    "https://github.com/example/upstream/pull/42",
+                    "2026-07-14T00:00:00Z",
+                ),
+            ],
+            PullRequestPagination::new(Some(1), Some(10)),
+        );
+
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.items[0].provider_id.as_deref(), Some("upstream"));
+        assert_eq!(page.items[1].provider_id.as_deref(), Some("fork"));
     }
 
     #[test]
@@ -8381,7 +9378,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_self_hosted_github_remote_keeps_token_on_same_authority() {
+    fn existing_self_hosted_github_remote_ignores_stored_tokens() {
         let host = "github.example.internal";
         let mut tokens = ReviewPlatformAuthTokens::default();
         tokens.tokens.insert(
@@ -8394,7 +9391,7 @@ mod tests {
             "example/repo",
             &tokens,
         )
-        .expect("stored token should authorize a self-hosted GitHub context");
+        .expect("GitHub CLI should authorize a self-hosted GitHub context");
 
         let existing_remote_context = provider_context(identity_context.remote, &tokens)
             .expect("existing remote context should remain valid");
@@ -8403,9 +9400,10 @@ mod tests {
             existing_remote_context.api_base_url,
             "https://github.example.internal/api/v3"
         );
+        assert_eq!(existing_remote_context.token, None);
         assert_eq!(
-            existing_remote_context.token.as_deref(),
-            Some("stored-token")
+            existing_remote_context.remote.auth_source,
+            ReviewAuthSource::GhCli
         );
     }
 
@@ -8726,63 +9724,23 @@ mod tests {
         assert!(evidence.next_cursor.is_none());
     }
 
-    #[tokio::test]
-    async fn issue_acquisition_rejects_github_pull_request_before_comments_fetch() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("mock provider should bind");
-        listener
-            .set_nonblocking(true)
-            .expect("mock provider should be nonblocking");
-        let address = listener.local_addr().expect("mock provider address");
-        let server = thread::spawn(move || {
-            let mut request_count = 0usize;
-            let deadline = Instant::now() + Duration::from_millis(500);
-            while Instant::now() < deadline {
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        request_count += 1;
-                        let mut request = [0u8; 4096];
-                        let _ = stream.read(&mut request);
-                        let body = if request_count == 1 {
-                            r#"{"number":42,"pull_request":{"url":"https://api.github.com/repos/example/repo/pulls/42"}}"#
-                        } else {
-                            "[]"
-                        };
-                        let response = format!(
-                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                            body.len(),
-                            body
-                        );
-                        stream
-                            .write_all(response.as_bytes())
-                            .expect("mock response should write");
-                    }
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(10));
-                    }
-                    Err(error) => panic!("mock provider accept failed: {error}"),
-                }
-            }
-            request_count
-        });
+    #[test]
+    fn issue_acquisition_rejects_github_pull_request_payload() {
         let identity = github_issue_identity();
-        let mut context = provider_context_for_identity(
-            identity.platform,
-            &identity.host,
-            &identity.project_path,
-            &ReviewPlatformAuthTokens::default(),
-        )
-        .expect("public GitHub context should be valid");
-        context.api_base_url = format!("http://{address}");
-
-        let result =
-            acquire_issue_evidence(&context, &identity, IssuePagination::new(None, None)).await;
-        let request_count = server.join().expect("mock provider should join");
+        let result = reject_pull_request_issue_target(
+            &identity,
+            &json!({
+                "number": 42,
+                "pull_request": {
+                    "url": "https://api.github.com/repos/example/repo/pulls/42"
+                }
+            }),
+        );
 
         assert!(matches!(
             result,
             Err(ReviewPlatformError::TargetIsPullRequest { .. })
         ));
-        assert_eq!(request_count, 1, "comments must not be requested for a PR");
     }
 
     #[test]

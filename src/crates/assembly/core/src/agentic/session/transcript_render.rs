@@ -1,7 +1,7 @@
 use crate::agentic::core::strip_prompt_markup;
 use crate::service::session::{
     DialogTurnData, ModelRoundData, SessionTranscriptExportOptions, SessionTranscriptIndexEntry,
-    ToolItemData, TranscriptLineRange,
+    ToolItemData, ToolItemIdentityExt, TranscriptLineRange,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde::Serialize;
@@ -53,11 +53,11 @@ pub(crate) fn transcript_value_string(value: &serde_json::Value) -> String {
 }
 
 fn transcript_tool_input(item: &ToolItemData, tool_inputs: bool) -> Option<String> {
-    if !tool_inputs || item.tool_call.input.is_null() {
+    if !tool_inputs || item.effective_input().is_null() {
         return None;
     }
 
-    Some(transcript_value_string(&item.tool_call.input))
+    Some(transcript_value_string(item.effective_input()))
 }
 
 fn transcript_tool_result(item: &ToolItemData) -> Option<String> {
@@ -156,7 +156,7 @@ fn transcript_round_blocks(
                     })
                     .filter(|item| !item.is_subagent_item.unwrap_or(false))
                     .map(|item| TranscriptToolBlock {
-                        tool_name: item.tool_name.clone(),
+                        tool_name: item.effective_name().to_string(),
                         tool_input: transcript_tool_input(item, options.tool_inputs),
                         result: transcript_tool_result(item),
                     })

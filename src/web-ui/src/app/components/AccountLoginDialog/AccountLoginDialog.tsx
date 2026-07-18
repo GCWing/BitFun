@@ -242,19 +242,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         }
       },
     );
-    const unlistenSettings = api.listen('account://settings-applied', async () => {
-      try {
-        await configAPI.reloadConfig();
-        configManager.clearCache();
-      } catch (e) {
-        log.warn('Failed to apply settings-applied event', e);
-      }
-    });
 
     return () => {
       if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
       unlistenPresence();
-      unlistenSettings();
     };
   }, [
     isOpen,

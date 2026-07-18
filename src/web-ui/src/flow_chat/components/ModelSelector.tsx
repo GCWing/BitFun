@@ -3,9 +3,8 @@
  * Shows the active model and allows quick switching.
  *
  * Config linkage:
- * - Model selection is shared across all agent types via ai.agent_models
- *   — switching in one session refreshes every existing agent mapping plus
- *   the current session's agent type, so new sessions of any type inherit it.
+ * - Model selection is shared across all future mode sessions through
+ *   ai.agent_model_defaults.mode. Delegated subagents keep separate defaults.
  * - Supports 'auto' | 'primary' | 'fast' | specific model IDs
  */
 
@@ -19,7 +18,7 @@ import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/servi
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
+import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Tooltip } from '@/component-library';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
@@ -41,8 +40,10 @@ interface ModelSelectorProps {
   className?: string;
   /** Preferred dropdown placement relative to the trigger. */
   dropdownPlacement?: 'top' | 'bottom';
-  /** Current session ID (used to update session mode config). */
+  /** Current session ID (used to update the selected session model). */
   sessionId?: string;
+  /** Whether the active input target is a Task subagent session. */
+  isSubagentSession?: boolean;
   /** Current token count. */
   currentTokens?: number;
   /** Max token capacity. */
@@ -164,6 +165,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   className = '',
   dropdownPlacement = 'top',
   sessionId,
+  isSubagentSession = false,
   currentTokens = 0,
   maxTokens = 0,
   contextUsageSource,
@@ -172,7 +174,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
   const [defaultModels, setDefaultModels] = useState<DefaultModelsConfig>({});
-  const [agentModels, setAgentModels] = useState<Record<string, string>>({}); // mode_id -> model_id
+  const [modeModel, setModeModel] = useState('auto');
   const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -195,6 +197,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     acpClientIdFromAgentType(activeSession?.config.agentType) ??
     acpClientIdFromAgentType(activeSession?.mode);
   const isAcpSession = Boolean(acpClientId && sessionId);
+  const targetIsSubagent = isSubagentSession || activeSession?.sessionKind === 'subagent';
 
   // Load configuration data.
   const loadConfigData = useCallback(async () => {
@@ -202,15 +205,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       const configData = await configManager.getConfigs([
         'ai.models',
         'ai.default_models',
-        'ai.agent_models',
+        'ai.agent_model_defaults',
       ]);
       const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
       const defaultModelsData = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
-      const agentModelsData = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
+      const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
 
       setAllModels(models);
       setDefaultModels(defaultModelsData);
-      setAgentModels(agentModelsData);
+      setModeModel(agentModelDefaults?.mode?.trim() || 'auto');
 
       log.debug('Configuration loaded', {
         modelsCount: models.length
@@ -391,19 +394,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     // Session-owned model takes priority so that each session remembers
     // its own model selection independently.
     const sessionModelName = activeSession?.config.modelName?.trim();
-    if (sessionModelName && sessionModelName !== 'auto') {
-      if (sessionModelName === 'primary' || sessionModelName === 'fast') {
+    if (sessionModelName) {
+      if (isSpecialModel(sessionModelName)) {
+        if (sessionModelName === 'auto') {
+          return 'auto';
+        }
         const actualModelId = defaultModels[sessionModelName];
-        const model = allModels.find(m => m.id === actualModelId);
-        if (model) return sessionModelName;
-      } else {
-        const model = allModels.find(m => m.id === sessionModelName);
-        if (model) return sessionModelName;
+        return allModels.some(model => model.id === actualModelId)
+          ? sessionModelName
+          : 'auto';
       }
+      return allModels.some(model => model.id === sessionModelName)
+        ? sessionModelName
+        : 'auto';
     }
 
-    // Fall back to global per-mode configuration.
-    const configuredModelId = agentModels[currentMode] || 'auto';
+    if (targetIsSubagent) {
+      return 'auto';
+    }
+
+    // Legacy sessions created without a model selector fall back to the current
+    // mode default until they are migrated by the send path.
+    const configuredModelId = modeModel;
     if (configuredModelId === 'auto') return 'auto';
     if (configuredModelId === 'primary' || configuredModelId === 'fast') {
       const actualModelId = defaultModels[configuredModelId];
@@ -412,7 +424,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
     const model = allModels.find(m => m.id === configuredModelId);
     return model ? configuredModelId : 'auto';
-  }, [allModels, currentMode, agentModels, defaultModels, activeSession?.config.modelName]);
+  }, [allModels, modeModel, defaultModels, activeSession?.config.modelName, targetIsSubagent]);
 
   const currentModel = useMemo((): ModelInfo | null => {
     const modelId = getCurrentModelId();
@@ -498,23 +510,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         return;
       }
 
-      const currentAgentModels = await configManager.getConfig<Record<string, string>>('ai.agent_models') || {};
+      const updateTargetSessionModel = async () => {
+        if (!sessionId) return;
 
-      // Refresh **every** agent mapping already present in the config so
-      // all configured agents pick up the new model.  Also ensure the
-      // current session's agent type is included.  No hardcoded list —
-      // any agent type added to the config in the future is covered
-      // automatically.
-      const updatedAgentModels = { ...currentAgentModels };
-      for (const agentType of Object.keys(updatedAgentModels)) {
-        updatedAgentModels[agentType] = modelId;
-      }
-      updatedAgentModels[currentMode] = modelId;
-
-      await configManager.setConfig('ai.agent_models', updatedAgentModels);
-      setAgentModels(updatedAgentModels);
-
-      if (sessionId) {
         const store = FlowChatStore.getInstance();
         // Update the frontend session model immediately so the UI reflects the
         // switch without waiting for the backend IPC round-trip.
@@ -528,7 +526,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             modelName: modelId,
           });
         }
+      };
+
+      if (targetIsSubagent) {
+        await updateTargetSessionModel();
+        log.info('Subagent session model updated', { sessionId, modelId });
+        return;
       }
+
+      await configManager.setConfig('ai.agent_model_defaults.mode', modelId);
+      setModeModel(modelId);
+      await updateTargetSessionModel();
 
       log.info('Mode model updated', { mode: currentMode, modelId });
 
@@ -548,6 +556,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     isAcpSession,
     loading,
     sessionId,
+    targetIsSubagent,
   ]);
   
   const tokenPercentage = useMemo(() => {
@@ -718,9 +727,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         >
           <div className="bitfun-model-selector__dropdown-header">
             <span>{t('modelSelector.modelSelection')}</span>
-            <span className="bitfun-model-selector__dropdown-hint">
-              {t('modelSelector.currentMode')}: {currentMode}
-            </span>
           </div>
 
           <Tooltip content={t('modelSelector.autoModelDesc')} placement="right">

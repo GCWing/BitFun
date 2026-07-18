@@ -89,8 +89,8 @@ fn round(turn_id: &str, text_count: usize, tool_count: usize) -> ModelRoundData 
         end_time: Some(1),
         duration_ms: Some(1),
         provider_id: None,
-        model_id: None,
-        model_alias: None,
+        model_config_id: None,
+        effective_model_name: None,
         first_chunk_ms: None,
         first_visible_output_ms: None,
         stream_duration_ms: None,
@@ -130,6 +130,22 @@ fn finished_turn(
     turn.end_time = Some(end_time);
     turn.duration_ms = Some(end_time.saturating_sub(turn.start_time));
     turn
+}
+
+#[test]
+fn deferred_tool_item_serializes_only_its_wire_invocation() {
+    let mut item = tool_item("deferred");
+    item.tool_name = "CallDeferredTool".to_string();
+    item.tool_call.input = serde_json::json!({
+        "tool_name": "WebFetch",
+        "args": { "url": "https://example.test" }
+    });
+
+    let value = serde_json::to_value(&item).expect("serialize tool item");
+    assert_eq!(value["toolName"], "CallDeferredTool");
+    assert_eq!(value["toolCall"]["input"], item.tool_call.input);
+    assert!(value.get("effectiveToolName").is_none());
+    assert!(value.get("effectiveToolInput").is_none());
 }
 
 #[test]

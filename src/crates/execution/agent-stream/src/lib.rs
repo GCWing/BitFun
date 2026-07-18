@@ -602,10 +602,11 @@ impl StreamProcessor {
                 tool_call.tool_id
             );
 
+            let identity =
+                bitfun_events::ToolEventIdentity::direct(tool_call.tool_id, tool_call.tool_name);
             let tool_event = if is_user_cancellation {
                 ToolEventData::Cancelled {
-                    tool_id: tool_call.tool_id,
-                    tool_name: tool_call.tool_name,
+                    identity,
                     reason: reason.clone(),
                     duration_ms: None,
                     queue_wait_ms: None,
@@ -615,8 +616,7 @@ impl StreamProcessor {
                 }
             } else {
                 ToolEventData::Failed {
-                    tool_id: tool_call.tool_id,
-                    tool_name: tool_call.tool_name,
+                    identity,
                     error: reason.clone(),
                     duration_ms: None,
                     queue_wait_ms: None,
@@ -716,8 +716,10 @@ impl StreamProcessor {
                         attempt_id: Some(ctx.attempt_id.clone()),
                         attempt_index: Some(ctx.attempt_index),
                         tool_event: ToolEventData::EarlyDetected {
-                            tool_id: early_detected.tool_id,
-                            tool_name: early_detected.tool_name,
+                            identity: bitfun_events::ToolEventIdentity::direct(
+                                early_detected.tool_id,
+                                early_detected.tool_name,
+                            ),
                         },
                     },
                     None,
@@ -738,8 +740,10 @@ impl StreamProcessor {
                         attempt_id: Some(ctx.attempt_id.clone()),
                         attempt_index: Some(ctx.attempt_index),
                         tool_event: ToolEventData::ParamsPartial {
-                            tool_id: params_partial.tool_id,
-                            tool_name: params_partial.tool_name,
+                            identity: bitfun_events::ToolEventIdentity::direct(
+                                params_partial.tool_id,
+                                params_partial.tool_name,
+                            ),
                             params: params_partial.params_chunk,
                         },
                     },
@@ -1236,9 +1240,9 @@ mod tests {
         assert!(matches!(
             &events[0],
             AgenticEvent::ToolEvent {
-                tool_event: ToolEventData::Cancelled { tool_id, .. },
+                tool_event: ToolEventData::Cancelled { identity, .. },
                 ..
-            } if tool_id == "tool_1"
+            } if identity.tool_id == "tool_1"
         ));
         assert!(matches!(
             &events[1],

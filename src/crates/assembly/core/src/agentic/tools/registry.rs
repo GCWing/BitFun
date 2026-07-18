@@ -72,8 +72,13 @@ impl ToolRegistry {
                 );
             }
 
-            self.register_tool(tool);
+            let routed = crate::external_tools::intercept_external_tool_registry_registration(tool);
+            self.inner.register_tool(routed);
             debug!("MCP tool registered: tool_name={}", name);
+        }
+
+        if tool_count > 0 {
+            crate::external_sources::notify_external_tool_registry_changed();
         }
 
         let after_count = self.get_tool_names().len();
@@ -87,6 +92,8 @@ impl ToolRegistry {
 
     /// Remove all tools from the MCP server
     pub fn unregister_mcp_server_tools(&mut self, server_id: &str) {
+        let retained_external_routes =
+            crate::external_tools::detach_external_tool_mcp_server(server_id);
         let removed_tool_names = self
             .get_tool_names()
             .into_iter()
@@ -99,6 +106,14 @@ impl ToolRegistry {
 
         self.inner.unregister_mcp_server_tools(server_id);
 
+        for mux in retained_external_routes.iter().cloned() {
+            self.register_tool_without_external_source_notification(mux);
+        }
+
+        if !retained_external_routes.is_empty() {
+            crate::external_sources::notify_external_tool_registry_changed();
+        }
+
         for key in removed_tool_names {
             info!("Unregistering dynamic tool: tool_name={}", key);
         }
@@ -106,12 +121,31 @@ impl ToolRegistry {
 
     /// Remove all tools whose registry name starts with the given prefix.
     pub fn unregister_tools_by_prefix(&mut self, prefix: &str) -> usize {
+        let retained_muxes = crate::external_tools::retain_external_tool_muxes_for_prefix(prefix);
+        let retained_names = retained_muxes
+            .iter()
+            .map(|tool| tool.name().to_string())
+            .collect::<std::collections::BTreeSet<_>>();
         let removed_tool_names = self
             .get_tool_names()
             .into_iter()
             .filter(|name| name.starts_with(prefix))
             .collect::<Vec<_>>();
-        let count = self.inner.unregister_tools_by_prefix(prefix);
+        let mut count = 0;
+        for name in removed_tool_names
+            .iter()
+            .filter(|name| !retained_names.contains(*name))
+        {
+            count += usize::from(self.inner.unregister_tool(name).is_some());
+        }
+        for mux in retained_muxes.iter().cloned() {
+            self.register_tool_without_external_source_notification(mux);
+            count += 1;
+        }
+
+        if !retained_muxes.is_empty() {
+            crate::external_sources::notify_external_tool_registry_changed();
+        }
 
         for key in removed_tool_names {
             info!("Unregistering dynamic tool: tool_name={}", key);
@@ -120,8 +154,23 @@ impl ToolRegistry {
         count
     }
 
+    /// Remove one exact tool while preserving the displaced implementation for
+    /// a contextual conflict router.
+    pub fn unregister_tool(&mut self, name: &str) -> Option<ToolRef> {
+        self.inner.unregister_tool(name)
+    }
+
     /// Register a single tool
     pub fn register_tool(&mut self, tool: ToolRef) {
+        let is_router = tool.dynamic_provider_id() == Some("external-source-router");
+        let routed = crate::external_tools::intercept_external_tool_registry_registration(tool);
+        self.inner.register_tool(routed);
+        if !is_router {
+            crate::external_sources::notify_external_tool_registry_changed();
+        }
+    }
+
+    pub(crate) fn register_tool_without_external_source_notification(&mut self, tool: ToolRef) {
         self.inner.register_tool(tool);
     }
 
@@ -134,12 +183,16 @@ impl ToolRegistry {
         self.inner.get_dynamic_tool_info(name)
     }
 
-    pub fn is_tool_collapsed(&self, name: &str) -> bool {
-        self.inner.is_tool_collapsed(name)
+    pub fn is_tool_deferred(&self, name: &str) -> bool {
+        self.inner.is_tool_deferred(name)
     }
 
-    pub fn get_collapsed_tool_names(&self) -> Vec<String> {
-        self.inner.get_collapsed_tool_names()
+    pub fn get_deferred_tool_names(&self) -> Vec<String> {
+        self.inner.get_deferred_tool_names()
+    }
+
+    pub fn current_snapshot_generation(&self) -> u64 {
+        self.inner.current_snapshot_generation()
     }
 
     /// Get all tool names
@@ -238,6 +291,7 @@ mod tests {
     struct DynamicMetadataTool {
         name: String,
         dynamic_info: Option<DynamicToolInfo>,
+        exposure: crate::agentic::tools::framework::ToolExposure,
     }
 
     #[async_trait]
@@ -256,6 +310,10 @@ mod tests {
 
         fn input_schema(&self) -> Value {
             json!({ "type": "object" })
+        }
+
+        fn default_exposure(&self) -> crate::agentic::tools::framework::ToolExposure {
+            self.exposure
         }
 
         fn dynamic_provider_id(&self) -> Option<&str> {
@@ -298,6 +356,7 @@ mod tests {
                 provider_kind: None,
                 mcp: None,
             }),
+            exposure: crate::agentic::tools::framework::ToolExposure::Direct,
         })
     }
 
@@ -319,6 +378,7 @@ mod tests {
                     tool_name: tool_name.to_string(),
                 }),
             }),
+            exposure: crate::agentic::tools::framework::ToolExposure::Deferred,
         })
     }
 
@@ -416,6 +476,7 @@ mod tests {
             "CreatePlan",
             "submit_code_review",
             "GetToolSpec",
+            "CallDeferredTool",
             "GetFileDiff",
             "CreateCanvas",
             "ReadCanvas",
@@ -425,6 +486,7 @@ mod tests {
             "SessionMessage",
             "SessionHistory",
             "Cron",
+            "LegionControl",
             "WebSearch",
             "WebFetch",
             "ListMCPResources",
@@ -508,9 +570,9 @@ mod tests {
             "runtime assembly must preserve legacy create_tool_registry output"
         );
         assert_eq!(
-            assembled_registry.get_collapsed_tool_names(),
-            compatibility_registry.get_collapsed_tool_names(),
-            "runtime assembly must preserve product collapsed-tool catalog"
+            assembled_registry.get_deferred_tool_names(),
+            compatibility_registry.get_deferred_tool_names(),
+            "runtime assembly must preserve product deferred-tool catalog"
         );
 
         for tool_name in ["Write", "Edit", "Delete"] {
@@ -541,9 +603,9 @@ mod tests {
             "product tool runtime owner must preserve legacy registry output"
         );
         assert_eq!(
-            owner_registry.get_collapsed_tool_names(),
-            compatibility_registry.get_collapsed_tool_names(),
-            "product tool runtime owner must preserve collapsed-tool exposure"
+            owner_registry.get_deferred_tool_names(),
+            compatibility_registry.get_deferred_tool_names(),
+            "product tool runtime owner must preserve deferred-tool exposure"
         );
     }
 
@@ -559,9 +621,9 @@ mod tests {
             "custom decorator assembly must keep provider tool order stable"
         );
         assert_eq!(
-            registry.get_collapsed_tool_names(),
-            compatibility_registry.get_collapsed_tool_names(),
-            "custom decorator assembly must keep collapsed exposure stable"
+            registry.get_deferred_tool_names(),
+            compatibility_registry.get_deferred_tool_names(),
+            "custom decorator assembly must keep deferred exposure stable"
         );
 
         for tool_name in ["Write", "GetToolSpec", "WebFetch"] {
@@ -577,29 +639,26 @@ mod tests {
     }
 
     #[test]
-    fn registry_marks_collapsed_tools_for_get_tool_spec() {
+    fn registry_marks_deferred_tools_for_get_tool_spec() {
         let registry = create_tool_registry();
 
-        assert!(registry.is_tool_collapsed("WebFetch"));
-        assert!(registry.is_tool_collapsed("GetFileDiff"));
-        assert!(!registry.is_tool_collapsed("GetToolSpec"));
-        assert!(registry.is_tool_collapsed("Git"));
-        assert!(registry.is_tool_collapsed("ReviewPlatform"));
-        assert!(!registry.is_tool_collapsed("InitMiniApp"));
+        assert!(registry.is_tool_deferred("WebFetch"));
+        assert!(registry.is_tool_deferred("GetFileDiff"));
+        assert!(!registry.is_tool_deferred("GetToolSpec"));
+        assert!(registry.is_tool_deferred("Git"));
+        assert!(registry.is_tool_deferred("ReviewPlatform"));
+        assert!(!registry.is_tool_deferred("InitMiniApp"));
     }
 
     #[test]
-    fn registry_preserves_collapsed_tool_manifest_for_owner_migration() {
+    fn registry_preserves_deferred_tool_manifest_for_owner_migration() {
         let registry = create_tool_registry();
 
         assert_eq!(
-            registry.get_collapsed_tool_names(),
+            registry.get_deferred_tool_names(),
             vec![
                 "CreatePlan",
                 "GetFileDiff",
-                "SessionControl",
-                "SessionMessage",
-                "SessionHistory",
                 "Cron",
                 "WebSearch",
                 "WebFetch",
@@ -614,7 +673,7 @@ mod tests {
                 "ComputerUse",
                 "Playbook",
             ],
-            "collapsed tool manifest must stay stable before moving registry or manifest ownership"
+            "deferred tool manifest must stay stable before moving registry or manifest ownership"
         );
     }
 
@@ -785,6 +844,7 @@ mod tests {
             .expect("mcp descriptor");
 
         assert_eq!(descriptor.provider_id.as_deref(), Some("github-server-id"));
+        assert!(registry.is_tool_deferred("mcp__github__search_repos"));
         assert_eq!(
             registry
                 .get_dynamic_tool_info("mcp__github__search_repos")
@@ -794,6 +854,50 @@ mod tests {
                 .tool_name,
             "search_repos"
         );
+    }
+
+    #[test]
+    fn mcp_catalog_refresh_advances_generation_and_invalidates_loaded_specs() {
+        let mut registry = ToolRegistry::new();
+        registry.register_tool(mcp_dynamic_tool(
+            "mcp__github__search_repos",
+            None,
+            "github-server-id",
+            "GitHub",
+            "search_repos",
+        ));
+        let loaded_generation = registry.current_snapshot_generation();
+
+        registry.unregister_mcp_server_tools("github-server-id");
+        let removed_generation = registry.current_snapshot_generation();
+        assert!(removed_generation > loaded_generation);
+        assert!(registry.get_tool("mcp__github__search_repos").is_none());
+
+        registry.register_tool(mcp_dynamic_tool(
+            "mcp__github__search_repos",
+            None,
+            "github-server-id",
+            "GitHub",
+            "search_repos",
+        ));
+        let refreshed_generation = registry.current_snapshot_generation();
+
+        assert!(refreshed_generation > removed_generation);
+        let error = bitfun_agent_tools::validate_deferred_tool_usage(
+            "mcp__github__search_repos",
+            true,
+            &["mcp__github__search_repos".to_string()],
+            &[bitfun_agent_tools::LoadedDeferredToolSpec {
+                tool_name: "mcp__github__search_repos".to_string(),
+                catalog_generation: loaded_generation,
+            }],
+            refreshed_generation,
+            bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .expect_err("refresh must invalidate the previously loaded MCP spec");
+
+        assert!(error.to_string().contains("loaded spec for deferred tool"));
+        assert!(error.to_string().contains("is stale"));
     }
     #[test]
     fn registry_exposes_controlhub_and_computer_use() {
@@ -806,6 +910,22 @@ mod tests {
             registry.get_tool("ComputerUse").is_some(),
             "ComputerUse must be registered as the dedicated desktop automation tool"
         );
+    }
+
+    #[test]
+    fn exact_unregister_returns_the_displaced_tool_and_clears_metadata() {
+        let mut registry = ToolRegistry::new();
+        registry.register_tool(dynamic_tool("external_search", Some("provider-a")));
+        let generation = registry.current_snapshot_generation();
+
+        let removed = registry
+            .unregister_tool("external_search")
+            .expect("registered tool should be returned");
+
+        assert_eq!(removed.name(), "external_search");
+        assert!(registry.get_tool("external_search").is_none());
+        assert!(registry.get_dynamic_tool_info("external_search").is_none());
+        assert!(registry.current_snapshot_generation() > generation);
     }
 
     #[test]

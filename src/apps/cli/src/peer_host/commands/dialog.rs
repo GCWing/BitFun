@@ -2,6 +2,9 @@
 
 use serde_json::{json, Value};
 
+use bitfun_agent_runtime::sdk::{
+    AgentToolConfirmationRequest, AgentToolRejectionRequest, RuntimeError,
+};
 use bitfun_runtime_ports::{
     AgentDialogTurnRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
     DialogSubmissionPolicy, DialogTriggerSource,
@@ -10,6 +13,17 @@ use bitfun_runtime_ports::{
 use crate::peer_host::args::{get_string, optional_string, request_value};
 use crate::peer_host::control::{attached_controller_lease, is_controller_lease_current};
 use crate::peer_host::state::{PeerHostState, PeerTurnKey};
+
+fn restore_confirmation_after_runtime_error(
+    turns: &crate::peer_host::state::PeerTurnTracker,
+    tool_id: String,
+    ownership: PeerTurnKey,
+    action: &str,
+    error: RuntimeError,
+) -> String {
+    turns.restore_confirmation(tool_id, ownership);
+    format!("{action} tool failed: {}", error.into_message())
+}
 
 fn peer_dialog_metadata(request: &Value) -> Result<serde_json::Map<String, Value>, String> {
     let mut metadata = match request.get("userMessageMetadata") {
@@ -82,7 +96,10 @@ pub(crate) async fn start_dialog_turn(
         .await;
     if let Err(error) = submit_result {
         state.turns.finish_turn(&turn);
-        return Err(format!("Failed to start dialog turn: {error}"));
+        return Err(format!(
+            "Failed to start dialog turn: {}",
+            error.into_message()
+        ));
     }
     if !state
         .turns
@@ -101,6 +118,7 @@ pub(crate) async fn start_dialog_turn(
             })
             .await;
         if let Err(error) = cancellation {
+            let error = error.into_message();
             return Err(format!(
                 "Peer continuity was lost after dialog submission and cancellation could not be confirmed: session_id={session_id}, turn_id={turn_id}, error={error}"
             ));
@@ -135,7 +153,7 @@ pub(crate) async fn cancel_dialog_turn(
             wait_timeout_ms: Some(1_500),
         })
         .await
-        .map_err(|e| format!("Failed to cancel dialog turn: {e}"))?;
+        .map_err(|error| format!("Failed to cancel dialog turn: {}", error.into_message()))?;
     Ok(json!({ "success": true }))
 }
 
@@ -159,12 +177,20 @@ pub(crate) async fn confirm_tool_execution(
     }
     let updated_input = request.get("updatedInput").cloned();
     if let Err(error) = state
-        .compatibility
-        .confirm_tool(&tool_id, updated_input)
+        .agent_runtime
+        .confirm_tool(AgentToolConfirmationRequest {
+            tool_id: tool_id.clone(),
+            updated_input,
+        })
         .await
     {
-        state.turns.restore_confirmation(tool_id, ownership);
-        return Err(format!("Confirm tool failed: {error}"));
+        return Err(restore_confirmation_after_runtime_error(
+            &state.turns,
+            tool_id,
+            ownership,
+            "Confirm",
+            error,
+        ));
     }
     Ok(Value::Null)
 }
@@ -188,9 +214,21 @@ pub(crate) async fn reject_tool_execution(
         return Err("Tool confirmation session or turn does not match its Peer owner".to_string());
     }
     let reason = optional_string(request, "reason").unwrap_or_else(|| "User rejected".to_string());
-    if let Err(error) = state.compatibility.reject_tool(&tool_id, reason).await {
-        state.turns.restore_confirmation(tool_id, ownership);
-        return Err(format!("Reject tool failed: {error}"));
+    if let Err(error) = state
+        .agent_runtime
+        .reject_tool(AgentToolRejectionRequest {
+            tool_id: tool_id.clone(),
+            reason,
+        })
+        .await
+    {
+        return Err(restore_confirmation_after_runtime_error(
+            &state.turns,
+            tool_id,
+            ownership,
+            "Reject",
+            error,
+        ));
     }
     Ok(Value::Null)
 }
@@ -199,7 +237,8 @@ pub(crate) async fn reject_tool_execution(
 mod tests {
     use serde_json::json;
 
-    use super::peer_dialog_metadata;
+    use super::{peer_dialog_metadata, restore_confirmation_after_runtime_error};
+    use crate::peer_host::state::{PeerTurnKey, PeerTurnTracker};
 
     #[test]
     fn peer_metadata_forces_confirmation_and_cannot_claim_acp_transport() {
@@ -236,6 +275,34 @@ mod tests {
         assert_eq!(metadata.get("kind"), Some(&json!("background_result")));
         assert_eq!(metadata.get("sourceKind"), Some(&json!("subagent")));
         assert_eq!(metadata.get("caller"), Some(&json!("desktop")));
+    }
+
+    #[test]
+    fn runtime_failure_restores_the_exact_peer_confirmation_claim() {
+        let turns = PeerTurnTracker::new();
+        turns.mark_event_stream_ready();
+        let owner = PeerTurnKey::new("session-1", "turn-1");
+        turns.register_root(owner.clone()).expect("register turn");
+        turns
+            .record_confirmation(&owner, "tool-1".to_string())
+            .expect("record confirmation");
+        let claimed = turns
+            .claim_confirmation("tool-1")
+            .expect("claim confirmation");
+
+        let message = restore_confirmation_after_runtime_error(
+            &turns,
+            "tool-1".to_string(),
+            claimed,
+            "Confirm",
+            bitfun_agent_runtime::sdk::RuntimeError::MissingInteractionResponsePort,
+        );
+
+        assert_eq!(
+            message,
+            "Confirm tool failed: agent interaction response port is not registered"
+        );
+        assert_eq!(turns.claim_confirmation("tool-1"), Some(owner));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use crate::agentic::persistence::PersistenceManager;
 use crate::service::session::{
     collect_hidden_subagent_cascade, DialogTurnData, DialogTurnKind, ModelRoundData,
-    SessionMetadata, ToolItemData, TurnStatus,
+    SessionMetadata, ToolItemData, ToolItemIdentityExt, TurnStatus,
 };
 use crate::service::session_usage::classifier::classify_tool_usage;
 use crate::service::session_usage::redaction::{
@@ -702,9 +702,9 @@ fn build_model_breakdown(
     let token_model_ids_by_turn = build_token_model_ids_by_turn(token_records);
     for record in token_records {
         let row = by_model
-            .entry(record.model_id.clone())
+            .entry(record.effective_model_name.clone())
             .or_insert_with(|| UsageModelBreakdown {
-                model_id: record.model_id.clone(),
+                model_id: record.effective_model_name.clone(),
                 call_count: 0,
                 input_tokens: Some(0),
                 output_tokens: Some(0),
@@ -776,7 +776,7 @@ fn build_model_breakdown(
     let mut records_by_model: HashMap<&str, Vec<&TokenUsageRecord>> = HashMap::new();
     for record in token_records {
         records_by_model
-            .entry(record.model_id.as_str())
+            .entry(record.effective_model_name.as_str())
             .or_default()
             .push(record);
     }
@@ -799,7 +799,7 @@ fn build_token_model_ids_by_turn(
         by_turn
             .entry(record.turn_id.clone())
             .or_default()
-            .insert(record.model_id.clone());
+            .insert(record.effective_model_name.clone());
     }
     by_turn
 }
@@ -836,12 +836,14 @@ fn build_tool_breakdown(turns: &[DialogTurnData]) -> Vec<UsageToolBreakdown> {
 
     for turn in turns {
         for tool in iter_turn_tools(turn) {
-            let label = redact_usage_label(&tool.tool_name, 80);
+            let tool_name = tool.effective_name();
+            let tool_input = tool.effective_input();
+            let label = redact_usage_label(tool_name, 80);
             let row = by_tool
                 .entry(label.value.clone())
                 .or_insert_with(|| UsageToolBreakdown {
                     tool_name: label.value.clone(),
-                    category: classify_tool_usage(&tool.tool_name, Some(&tool.tool_call.input)),
+                    category: classify_tool_usage(tool_name, Some(tool_input)),
                     call_count: 0,
                     success_count: 0,
                     error_count: 0,
@@ -1003,7 +1005,7 @@ fn build_file_breakdown_from_tool_inputs(
 
     for turn in turns {
         for tool in iter_turn_tools(turn) {
-            if !is_file_modification_tool(&tool.tool_name) {
+            if !is_file_modification_tool(tool.effective_name()) {
                 continue;
             }
 
@@ -1075,7 +1077,7 @@ fn build_compression_breakdown(turns: &[DialogTurnData]) -> UsageCompressionBrea
         .filter(|turn| turn.kind == DialogTurnKind::ManualCompaction)
         .count() as u64;
     let automatic_compaction_count = iter_tools(turns)
-        .filter(|tool| tool.tool_name.to_lowercase().contains("compaction"))
+        .filter(|tool| tool.effective_name().to_lowercase().contains("compaction"))
         .count() as u64;
 
     UsageCompressionBreakdown {
@@ -1119,7 +1121,7 @@ fn build_error_breakdown(turns: &[DialogTurnData]) -> UsageErrorBreakdown {
                 .as_ref()
                 .is_some_and(|result| !result.success)
         }) {
-            let label = redact_usage_label(&tool.tool_name, 80);
+            let label = redact_usage_label(tool.effective_name(), 80);
             let row = tool_error_counts
                 .entry(label.value.clone())
                 .or_insert_with(|| UsageErrorExample {
@@ -1212,7 +1214,7 @@ fn build_slowest_spans(
         }
 
         for tool in iter_turn_tools(turn) {
-            let label = redact_usage_label(&tool.tool_name, 80);
+            let label = redact_usage_label(tool.effective_name(), 80);
             if let Some(duration_ms) = tool_duration_ms(tool) {
                 spans.push(UsageSlowSpan {
                     label: label.value,
@@ -1287,9 +1289,8 @@ fn model_round_duration_ms(round: &ModelRoundData) -> Option<u64> {
 
 fn model_round_label(round: &ModelRoundData) -> String {
     round
-        .model_id
+        .effective_model_name
         .as_deref()
-        .or(round.model_alias.as_deref())
         .map(|value| redact_usage_label(value, 80).value)
         .unwrap_or_else(|| "unknown_model".to_string())
 }
@@ -1321,7 +1322,7 @@ fn tool_duration_ms(tool: &ToolItemData) -> Option<u64> {
 }
 
 fn tool_input_summary(tool: &ToolItemData) -> Option<String> {
-    let input = tool.tool_call.input.as_object()?;
+    let input = tool.effective_input().as_object()?;
     let command = input
         .get("command")
         .and_then(|value| value.as_str())
@@ -1348,7 +1349,7 @@ fn tool_input_summary(tool: &ToolItemData) -> Option<String> {
 }
 
 fn tool_timeout_seconds(tool: &ToolItemData) -> Option<u64> {
-    let input = tool.tool_call.input.as_object()?;
+    let input = tool.effective_input().as_object()?;
     input
         .get("timeout_seconds")
         .and_then(|value| value.as_u64())
@@ -1474,7 +1475,7 @@ fn is_file_modification_tool(tool_name: &str) -> bool {
 }
 
 fn extract_file_path(tool: &ToolItemData) -> Option<String> {
-    let input = tool.tool_call.input.as_object()?;
+    let input = tool.effective_input().as_object()?;
     ["file_path", "path", "filePath", "target_file", "filename"]
         .into_iter()
         .find_map(|key| input.get(key).and_then(|value| value.as_str()))
@@ -1889,6 +1890,30 @@ mod tests {
     }
 
     #[test]
+    fn report_classifies_deferred_calls_by_effective_identity_and_nested_args() {
+        let request = test_request(None);
+        let tool = test_tool_item_with_input(
+            "tool-deferred",
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            Some(true),
+            120,
+            serde_json::json!({
+                "tool_name": "write_file",
+                "args": { "path": "D:/workspace/bitfun/src/main.rs" }
+            }),
+        );
+        let turn = test_turn_with_tools("turn-1", 0, DialogTurnKind::UserDialog, vec![tool]);
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(report.tools.len(), 1);
+        assert_eq!(report.tools[0].tool_name, "write_file");
+        assert_eq!(report.files.files.len(), 1);
+        assert_eq!(report.files.files[0].path_label, "src/main.rs");
+    }
+
+    #[test]
     fn report_uses_persisted_model_span_facts_without_token_records() {
         let request = test_request(None);
         let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
@@ -1935,8 +1960,8 @@ mod tests {
     fn report_merges_legacy_model_timing_into_token_model_row_for_same_turn() {
         let request = test_request(None);
         let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
-        turn.model_rounds[0].model_id = None;
-        turn.model_rounds[0].model_alias = None;
+        turn.model_rounds[0].model_config_id = None;
+        turn.model_rounds[0].effective_model_name = None;
         turn.model_rounds[0].duration_ms = Some(180);
         let token_record = test_token_record("gpt-5.4", 120, 30, 0);
 
@@ -1971,8 +1996,8 @@ mod tests {
     fn report_uses_clear_label_when_model_identity_is_missing() {
         let request = test_request(None);
         let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
-        turn.model_rounds[0].model_id = None;
-        turn.model_rounds[0].model_alias = None;
+        turn.model_rounds[0].model_config_id = None;
+        turn.model_rounds[0].effective_model_name = None;
         turn.model_rounds[0].duration_ms = Some(180);
 
         let report =
@@ -2062,8 +2087,8 @@ mod tests {
                 "D:/workspace/bitfun/src/main.rs",
             )],
         );
-        failed_turn.model_rounds[0].model_id = Some("model-a".to_string());
-        failed_turn.model_rounds[0].model_alias = Some("model-a".to_string());
+        failed_turn.model_rounds[0].model_config_id = Some("config-model-a".to_string());
+        failed_turn.model_rounds[0].effective_model_name = Some("model-a".to_string());
         failed_turn.model_rounds[0].duration_ms = Some(220);
         let mut model_error_turn =
             test_turn_with_tools("turn-4", 4, DialogTurnKind::UserDialog, vec![]);
@@ -2669,8 +2694,8 @@ mod tests {
                 end_time: Some(1_200 + turn_index as u64),
                 duration_ms: Some(200),
                 provider_id: None,
-                model_id: Some("model-a".to_string()),
-                model_alias: Some("model-a".to_string()),
+                model_config_id: Some("model-config-a".to_string()),
+                effective_model_name: Some("model-a".to_string()),
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,
@@ -2709,8 +2734,8 @@ mod tests {
             end_time: Some(1_000 + round_index as u64 + duration_ms),
             duration_ms: Some(duration_ms),
             provider_id: Some("test-provider".to_string()),
-            model_id: Some(model_id.to_string()),
-            model_alias: Some(model_id.to_string()),
+            model_config_id: Some(format!("config-{}", model_id)),
+            effective_model_name: Some(model_id.to_string()),
             first_chunk_ms: Some(5),
             first_visible_output_ms: Some(8),
             stream_duration_ms: Some(duration_ms.saturating_sub(10)),
@@ -2796,7 +2821,8 @@ mod tests {
         cached_tokens: u32,
     ) -> TokenUsageRecord {
         TokenUsageRecord {
-            model_id: model_id.to_string(),
+            model_config_id: format!("config-{}", model_id),
+            effective_model_name: model_id.to_string(),
             session_id: "session-1".to_string(),
             turn_id: "turn-1".to_string(),
             timestamp: Utc.timestamp_millis_opt(1_778_347_200_000).unwrap(),

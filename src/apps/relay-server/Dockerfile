@@ -1,17 +1,14 @@
-# BitFun Relay Server — standalone Docker build.
-# Build context is relay-server root (Cargo.toml + src/), no workspace needed.
-#
-# Multi-arch: build natively on the deploy host (linux/amd64 or linux/arm64).
-# Do not force --platform unless you intentionally cross-build with qemu.
+# BitFun Relay Server standalone Docker build.
+# The reduced repository-root context contains only the relay app and service.
 
 FROM rust:1-slim AS builder
 
-WORKDIR /build
+WORKDIR /build/src/apps/relay-server
 
-# Optional: limit rustc parallelism on small / low-memory VPS (esp. arm64).
+# Optional: limit rustc parallelism on small or low-memory VPS hosts.
 #   docker compose build --build-arg CARGO_BUILD_JOBS=1
+# Note: empty value must NOT be set as ENV — cargo chokes on empty string.
 ARG CARGO_BUILD_JOBS=
-ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -22,20 +19,30 @@ RUN apt-get update \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY Cargo.toml ./
-RUN mkdir -p src/bin \
-    && echo 'fn main() { println!("placeholder"); }' > src/main.rs \
-    && echo 'fn main() { println!("placeholder"); }' > src/bin/relay_admin.rs
-# Dependency cache layer (placeholder sources). Ignore failure so a toolchain
-# mismatch does not abort before real sources are copied.
-RUN cargo build --release 2>/dev/null || true
+COPY src/apps/relay-server/Cargo.toml ./Cargo.toml
+COPY src/crates/services/relay-service/Cargo.toml ../../crates/services/relay-service/Cargo.toml
 
-RUN rm -rf src target/release/bitfun-relay-server target/release/relay-admin target/release/deps/bitfun*
+# Build placeholders first so unchanged dependencies remain cached.
+RUN mkdir -p src/bin ../../crates/services/relay-service/src \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && printf 'pub use bitfun_relay_service::*;\n' > src/lib.rs \
+    && printf 'fn main() {}\n' > src/bin/relay_admin.rs \
+    && printf '// placeholder\n' > ../../crates/services/relay-service/src/lib.rs \
+    && cargo build --release
 
-COPY src/ src/
+RUN rm -rf src ../../crates/services/relay-service/src \
+    target/release/bitfun-relay-server \
+    target/release/relay-admin \
+    target/release/deps/bitfun_relay_service* \
+    target/release/deps/bitfun_relay_server* \
+    target/release/deps/relay_admin*
 
-RUN cargo build --release \
-    && strip target/release/bitfun-relay-server target/release/relay-admin || true
+COPY src/apps/relay-server/src/ ./src/
+COPY src/crates/services/relay-service/src/ ../../crates/services/relay-service/src/
+
+RUN if [ -n "${CARGO_BUILD_JOBS}" ]; then export CARGO_BUILD_JOBS; fi \
+    && cargo build --release \
+    && (strip target/release/bitfun-relay-server target/release/relay-admin || true)
 
 FROM debian:bookworm-slim
 
@@ -46,8 +53,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /build/target/release/bitfun-relay-server /app/bitfun-relay-server
-COPY --from=builder /build/target/release/relay-admin /app/relay-admin
+COPY --from=builder /build/src/apps/relay-server/target/release/bitfun-relay-server /app/bitfun-relay-server
+COPY --from=builder /build/src/apps/relay-server/target/release/relay-admin /app/relay-admin
 RUN mkdir -p /app/static /app/data /app/room-web
 
 ENV RELAY_PORT=9700

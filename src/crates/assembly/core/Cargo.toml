@@ -85,6 +85,9 @@ bitfun-harness = { path = "../../execution/harness" }
 # Product capability pack contracts
 bitfun-product-capabilities = { path = "../product-capabilities", default-features = false, optional = true }
 
+# Ecosystem-neutral external source lifecycle coordinator
+bitfun-external-sources = { path = "../external-sources", optional = true }
+
 # Agent tool contracts
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 
@@ -129,8 +132,8 @@ tokio-tungstenite = { workspace = true, optional = true }
 # SSH - Remote SSH support (optional feature)
 russh = { workspace = true, optional = true }
 
-# Relay server shared library (embedded relay reuses standalone relay logic)
-bitfun-relay-server = { path = "../../../apps/relay-server", optional = true }
+# Relay runtime shared by embedded and standalone application hosts.
+bitfun-relay-service = { path = "../../services/relay-service", optional = true }
 
 # Event layer dependency (lowest layer)
 bitfun-core-types = { path = "../../contracts/core-types" }
@@ -176,6 +179,7 @@ product-full = [
     "dep:globset",
     "dep:include_dir",
     "dep:bitfun-opencode-adapter",
+    "dep:bitfun-external-sources",
     "dep:bitfun-plugin-runtime-host",
     "dep:indexmap",
     "dep:md5",
@@ -213,7 +217,7 @@ runtime-services = []
 service-integrations = [
     "dep:aes-gcm",
     "dep:axum",
-    "dep:bitfun-relay-server",
+    "dep:bitfun-relay-service",
     "dep:git2",
     "dep:image",
     "dep:md5",

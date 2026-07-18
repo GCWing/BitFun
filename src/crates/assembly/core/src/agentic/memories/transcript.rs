@@ -4,7 +4,7 @@ use crate::agentic::session::transcript_render::{
 };
 use crate::agentic::tools::registry::GET_TOOL_SPEC_TOOL_NAME;
 use crate::service::config::types::MemoryExternalContextPolicy;
-use crate::service::session::{DialogTurnData, ToolItemData};
+use crate::service::session::{DialogTurnData, ToolItemData, ToolItemIdentityExt};
 use crate::util::errors::{BitFunError, BitFunResult};
 use regex::Regex;
 use serde::Serialize;
@@ -120,8 +120,8 @@ fn collect_memory_transcript_items(
                     id: tool_call_id(tool),
                     kind: "function",
                     function: MemoryTranscriptToolFunction {
-                        name: tool.tool_name.clone(),
-                        arguments: serialize_tool_arguments(&tool.tool_call.input),
+                        name: tool.effective_name().to_string(),
+                        arguments: serialize_tool_arguments(tool.effective_input()),
                     },
                 })
                 .collect::<Vec<_>>();
@@ -140,7 +140,7 @@ fn collect_memory_transcript_items(
                 if let Some(result) = tool.tool_result.as_ref() {
                     messages.push(MemoryTranscriptMessage::Tool {
                         role: "tool",
-                        name: tool.tool_name.clone(),
+                        name: tool.effective_name().to_string(),
                         tool_call_id: tool_call_id(tool),
                         content: truncate_middle_tokens(
                             &memory_tool_result_content(
@@ -179,11 +179,11 @@ fn memory_tool_result_content(
     let Some(result) = tool.tool_result.as_ref() else {
         return String::new();
     };
-    if tool.tool_name == GET_TOOL_SPEC_TOOL_NAME {
+    if tool.effective_name() == GET_TOOL_SPEC_TOOL_NAME {
         return "[cleared]".to_string();
     }
     if external_context_policy == MemoryExternalContextPolicy::ClearToolResults
-        && is_external_context_tool_name(&tool.tool_name)
+        && is_external_context_tool_name(tool.effective_name())
     {
         return "[external tool result cleared]".to_string();
     }
@@ -381,8 +381,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn memory_transcript_clears_get_tool_spec_results() {
-        let mut turn = base_turn("load a collapsed tool");
+        let mut turn = base_turn("load a deferred tool");
         let mut round = base_round();
         round.tool_items.push(ToolItemData {
             id: "tool_1".to_string(),
@@ -542,10 +542,13 @@ mod tests {
         let mut round = base_round();
         round.tool_items.push(ToolItemData {
             id: "tool_1".to_string(),
-            tool_name: "WebFetch".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
             tool_call: ToolCallData {
                 id: "call_1".to_string(),
-                input: json!({ "url": "https://example.test/preferences" }),
+                input: json!({
+                    "tool_name": "WebFetch",
+                    "args": { "url": "https://example.test/preferences" }
+                }),
             },
             tool_result: Some(ToolResultData {
                 result: json!({
@@ -588,6 +591,7 @@ mod tests {
         .unwrap();
 
         assert!(transcript.contains("\"function\":{\"name\":\"WebFetch\""));
+        assert!(!transcript.contains(bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME));
         assert!(transcript.contains("https://example.test/preferences"));
         assert!(transcript.contains("\"content\":\"[external tool result cleared]\""));
         assert!(

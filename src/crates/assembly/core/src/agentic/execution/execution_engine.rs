@@ -30,11 +30,13 @@ use crate::agentic::session::{
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
-    collect_product_unlocked_collapsed_tools, GetToolSpecTool,
+    collect_product_loaded_deferred_tool_specs, GetToolSpecTool,
 };
 use crate::agentic::tools::{
     resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, ToolRuntimeRestrictions,
 };
+use crate::agentic::tools::post_call_hooks::run_stop_hooks_for_round;
+use bitfun_agent_runtime::post_call_hooks::ToolCallSummary;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
@@ -50,8 +52,8 @@ use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::Arc;
+use std::path::Path;
 use tokio_util::sync::CancellationToken;
 use tool_runtime::context::PrimaryModelFacts;
 
@@ -896,22 +898,7 @@ impl ExecutionEngine {
                 service.get_config(Some("ai")).await.unwrap_or_default();
 
             let resolved_id = Self::resolve_configured_model_id(&ai_config, model_id);
-            let model_cfg = ai_config
-                .models
-                .iter()
-                .find(|m| m.id == resolved_id)
-                .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
-                .or_else(|| {
-                    ai_config
-                        .models
-                        .iter()
-                        .find(|m| m.model_name == resolved_id)
-                })
-                .or_else(|| {
-                    ai_config.models.iter().find(|m| {
-                        m.model_name == ai_client_model && m.provider == ai_client_api_format
-                    })
-                });
+            let model_cfg = ai_config.models.iter().find(|m| m.id == resolved_id);
 
             let supports = model_cfg.is_some_and(|m| {
                 m.capabilities
@@ -949,9 +936,9 @@ impl ExecutionEngine {
             } else {
                 None
             },
-            collapsed_tool_listing: if has_tool_definition("GetToolSpec") {
-                GetToolSpecTool::build_collapsed_tools_context_section(
-                    &manifest.collapsed_tool_summaries,
+            deferred_tool_listing: if has_tool_definition("GetToolSpec") {
+                GetToolSpecTool::build_deferred_tools_context_section(
+                    &manifest.deferred_tool_summaries,
                 )
             } else {
                 None
@@ -1077,7 +1064,7 @@ impl ExecutionEngine {
         let runtime_context = prompt_builder.build_runtime_context_reminder().await;
 
         PrependedPromptReminders {
-            collapsed_tool_listing: prompt_builder.build_collapsed_tool_listing_reminder(),
+            deferred_tool_listing: prompt_builder.build_deferred_tool_listing_reminder(),
             skill_listing: baseline_tool_sections
                 .as_ref()
                 .and_then(|sections| sections.render_skill_listing_reminder()),
@@ -1183,7 +1170,7 @@ impl ExecutionEngine {
         prepended_prompt_reminders: &PrependedPromptReminders,
     ) {
         debug!(
-            "Turn prompt scaffold resolved: session_id={}, turn_id={}, stage={}, system_prompt_len={} bytes, skill_listing_len={}, agent_listing_len={}, collapsed_tool_listing_len={}, user_context_len={}, runtime_context_len={}",
+            "Turn prompt scaffold resolved: session_id={}, turn_id={}, stage={}, system_prompt_len={} bytes, skill_listing_len={}, agent_listing_len={}, deferred_tool_listing_len={}, user_context_len={}, runtime_context_len={}",
             session_id,
             turn_id,
             stage,
@@ -1199,7 +1186,7 @@ impl ExecutionEngine {
                 .map(|text| text.len())
                 .unwrap_or(0),
             prepended_prompt_reminders
-                .collapsed_tool_listing
+                .deferred_tool_listing
                 .as_ref()
                 .map(|text| text.len())
                 .unwrap_or(0),
@@ -1377,9 +1364,10 @@ impl ExecutionEngine {
             workspace: input.context.workspace.clone(),
             model_exchange_trace_dir,
             available_tools: finalize_tool_names,
-            collapsed_tools: Vec::new(),
-            unlocked_collapsed_tools: Vec::new(),
-            model_name: input.ai_client.config.model.clone(),
+            deferred_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
+            model_config_id: input.primary_model_facts.model_id.clone(),
+            effective_model_name: input.ai_client.config.model.clone(),
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             context_vars: input.execution_context_vars.clone(),
@@ -1865,8 +1853,8 @@ impl ExecutionEngine {
             })
             .unwrap_or_default();
         // Snapshot prompt-visible tool definitions once for this turn. Do not
-        // re-resolve or rewrite them after GetToolSpec unlocks a collapsed tool:
-        // the unlocked detail travels in tool results, while mutating the tool
+        // re-resolve or rewrite them after GetToolSpec loads a deferred tool spec:
+        // the loaded detail travels in tool results, while mutating the tool
         // definitions would change the request prefix and trigger provider
         // prefix/KV cache misses on subsequent rounds.
         let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
@@ -2646,7 +2634,20 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
-        let tool_manifest_context_vars = context.context.clone();
+        let deferred_tool_loading_enabled = match get_global_config_service().await {
+            Ok(service) => service
+                .get_config::<bool>(Some("ai.enable_deferred_tool_loading"))
+                .await
+                .unwrap_or(true),
+            Err(_) => true,
+        };
+        let mut execution_context_vars = context.context.clone();
+        execution_context_vars.insert(
+            "enable_deferred_tool_loading".to_string(),
+            deferred_tool_loading_enabled.to_string(),
+        );
+        execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
+        let tool_manifest_context_vars = execution_context_vars.clone();
 
         let tool_description_context = tool_context_runtime::build_tool_description_context(
             &agent_type,
@@ -2673,9 +2674,9 @@ impl ExecutionEngine {
         } else {
             None
         };
-        let collapsed_tools = tool_manifest
+        let deferred_tools = tool_manifest
             .as_ref()
-            .map(|manifest| manifest.collapsed_tool_names.clone())
+            .map(|manifest| manifest.deferred_tool_names.clone())
             .unwrap_or_default();
         let tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
             Self::build_tool_listing_sections(manifest, &tool_description_context).await
@@ -2708,7 +2709,7 @@ impl ExecutionEngine {
         };
         let final_tool_names = Self::finalize_tool_names(tool_definitions.as_deref());
         debug!(
-            "Primary model and tool manifest resolved: session_id={}, turn_id={}, resolved_primary_model_id={}, primary_model_api_format={}, primary_model_supports_image_inputs={}, final_tool_count={}, final_tool_names={:?}, collapsed_tool_names={:?}",
+            "Primary model and tool manifest resolved: session_id={}, turn_id={}, resolved_primary_model_id={}, primary_model_api_format={}, primary_model_supports_image_inputs={}, final_tool_count={}, final_tool_names={:?}, deferred_tool_names={:?}",
             context.session_id,
             context.dialog_turn_id,
             primary_model_facts.model_id,
@@ -2716,7 +2717,7 @@ impl ExecutionEngine {
             primary_model_facts.supports_image_inputs,
             final_tool_names.len(),
             final_tool_names,
-            collapsed_tools,
+            deferred_tools,
         );
 
         // 4. Resolve the prompt scaffold used by model requests in this turn.
@@ -2786,9 +2787,6 @@ impl ExecutionEngine {
         let enable_context_compression = session.config.enable_context_compression;
         let compression_trigger_budget =
             Self::compression_trigger_budget(context_window, ai_client.config.max_tokens);
-
-        let mut execution_context_vars = context.context.clone();
-        execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
 
         // If the primary model is text-only, do not send image payloads to the provider.
         // Instead, keep a text-only placeholder (including `image_id`).
@@ -3094,8 +3092,8 @@ impl ExecutionEngine {
             if context.skip_tool_confirmation {
                 round_context_vars.insert("skip_tool_confirmation".to_string(), "true".to_string());
             }
-            let unlocked_collapsed_tools =
-                collect_product_unlocked_collapsed_tools(&messages, &collapsed_tools);
+            let loaded_deferred_tool_specs =
+                collect_product_loaded_deferred_tool_specs(&messages, &deferred_tools);
 
             let model_exchange_trace_dir = self
                 .session_manager
@@ -3111,9 +3109,10 @@ impl ExecutionEngine {
                 workspace: context.workspace.clone(),
                 model_exchange_trace_dir,
                 available_tools: available_tools.clone(),
-                collapsed_tools: collapsed_tools.clone(),
-                unlocked_collapsed_tools,
-                model_name: ai_client.config.model.clone(),
+                deferred_tools: deferred_tools.clone(),
+                loaded_deferred_tool_specs,
+                model_config_id: model_id.clone(),
+                effective_model_name: ai_client.config.model.clone(),
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
@@ -3235,6 +3234,167 @@ impl ExecutionEngine {
             );
 
             total_tools += round_result.tool_calls.len();
+
+            // ── Stop hook: B01 提示蜂 + C01 审查蜂 ──
+            {
+                let tool_calls: Vec<ToolCallSummary> = round_result
+                    .tool_calls
+                    .iter()
+                    .map(|tc| {
+                        let preview = serde_json::to_string(&tc.arguments)
+                            .unwrap_or_default();
+                        let preview = if preview.len() > 256 {
+                            format!("{}...", &preview[..253])
+                        } else {
+                            preview
+                        };
+                        ToolCallSummary {
+                            tool_name: tc.tool_name.clone(),
+                            is_error: tc.is_error,
+                            input_preview: preview,
+                        }
+                    })
+                    .collect();
+
+                let assistant_text = match &round_result.assistant_message.content {
+                    MessageContent::Text(t) => t.as_str(),
+                    MessageContent::Multimodal { text, .. } => text.as_str(),
+                    MessageContent::Mixed { text, .. } => text.as_str(),
+                    MessageContent::ToolResult { .. } => "",
+                };
+
+                // Collect file reads/edits from the FILE_READ_TRACKER
+                // For now, extract from round_result tool calls
+                let file_reads: Vec<String> = round_result
+                    .tool_calls
+                    .iter()
+                    .filter(|tc| matches!(tc.tool_name.as_str(), "Read" | "read_file"))
+                    .filter_map(|tc| {
+                        tc.arguments
+                            .get("file_path")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .collect();
+
+                let file_edits: Vec<String> = round_result
+                    .tool_calls
+                    .iter()
+                    .filter(|tc| {
+                        matches!(
+                            tc.tool_name.as_str(),
+                            "Edit" | "Write" | "edit_file" | "write_file"
+                        )
+                    })
+                    .filter_map(|tc| {
+                        tc.arguments
+                            .get("file_path")
+                            .or_else(|| tc.arguments.get("path"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .collect();
+
+                let aggregated = run_stop_hooks_for_round(
+                    &self.session_manager,
+                    &context.session_id,
+                    &context.dialog_turn_id,
+                    round_index as u32,
+                    tool_calls.clone(),
+                    assistant_text,
+                    file_reads.clone(),
+                    file_edits.clone(),
+                    round_result.has_more_rounds,
+                );
+
+                // If C01 detected a violation, inject the abort message
+                if aggregated.is_abort() {
+                    if let Some(abort) = &aggregated.abort {
+                        match abort {
+                            bitfun_agent_runtime::post_call_hooks::HookResult::Abort {
+                                reason,
+                                fix_instruction,
+                                ..
+                            } => {
+                                let guard_message = format!(
+                                    "[ToolGuard Intercepted] {reason}\n\n{fix_instruction}"
+                                );
+                                let msg =
+                                    Message::system(render_system_reminder(&guard_message));
+                                messages.push(msg);
+                                warn!(
+                                    "[Stop Hook] Round {}: Abort — {}",
+                                    round_index, reason
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                // Inject B01 additional contexts
+                for ctx_msg in &aggregated.additional_contexts {
+                    let msg = Message::system(render_system_reminder(ctx_msg));
+                    messages.push(msg);
+                }
+
+                // ── 蜂群审查（cc-haha模式：stop hook → fast LLM → 注入结果）──
+                if !tool_calls.is_empty() {
+                    let tl: Vec<String> = tool_calls.iter()
+                        .map(|tc| format!("{}{}", tc.tool_name, if tc.is_error { "(FAIL)" } else { "" }))
+                        .collect();
+                    let ts: String = assistant_text.chars().take(400).collect();
+                    let fr2: Vec<String> = file_reads.iter().take(5).cloned().collect();
+                    let fe2: Vec<String> = file_edits.iter().take(5).cloned().collect();
+
+                    let review_prompt = format!(
+                        "你是蜂群审查员（书记官+纪律委员+提示蜂）。审查Agent本轮：\n\
+                         工具:[{}] 读取:[{}] 编辑:[{}] 动作:{}\n\n\
+                         ## 书记官（上下文守护）\n\
+                         - 上下文压缩了？提取压缩前的关键决策/进度/用户纠正 → CTX:<要点>\n\
+                         - 轮次>20或token告急？预摘要关键状态 → CTX:<摘要>\n\
+                         - Agent忘记重要信息（重复提问/忽略决策）？→ CTX:<提醒>\n\n\
+                         ## 纪律委员（行为审查）\n\
+                         - 编辑前未Read？→ ABORT:未读即改-<文件>\n\
+                         - 碰了LionHeart库？→ ABORT:受保护路径\n\
+                         - 同工具连续失败？→ ABORT:策略死循环\n\
+                         - PS+中文+JSON？→ ABORT:PS编码风险\n\
+                         - 全部工具失败？→ ABORT:全部失败\n\
+                         - 改完不验证？→ WARN:未验证\n\n\
+                         ## 提示蜂（技能推荐）\n\
+                         - MiniApp相关但没加载miniapp-dev？→ SKILL:miniapp-dev\n\
+                         - 编码但没加载Pair-Programming？→ SKILL:Pair Programming\n\
+                         - 调研但没加载agent-reach？→ SKILL:agent-reach\n\n\
+                         输出（每行一个）：PASS / ABORT:<原因> / WARN:<问题> / CTX:<内容> / SKILL:<名称>\n\
+                         一切正常只回复PASS。",
+                        tl.join(","), fr2.join(","), fe2.join(","), ts
+                    );
+
+                    let sid2 = context.session_id.clone();
+                    std::thread::spawn(move || {
+                        let rt = tokio::runtime::Runtime::new().expect("bee-review");
+                        rt.block_on(async move {
+                            if let Ok(factory) = crate::infrastructure::ai::get_global_ai_client_factory().await {
+                                if let Ok(client) = factory.get_client_resolved("primary").await {
+                                    let msgs = vec![bitfun_core_types::Message::user(review_prompt)];
+                                    if let Ok(mut stream) = client.send_message_stream(msgs, None, None).await {
+                                        use futures::StreamExt;
+                                        let mut result = String::new();
+                                        while let Some(Ok(chunk)) = stream.stream.next().await {
+                                            if let Some(t) = chunk.text { result.push_str(&t); }
+                                        }
+                                        let trimmed = result.trim().to_string();
+                                        if !trimmed.is_empty() && trimmed != "PASS" {
+                                            crate::agentic::tools::post_call_hooks::push_review_result(&sid2, trimmed);
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    });
+                }
+
+            }
 
             // Track partial recovery reason from the last round
             if round_result.partial_recovery_reason.is_some() {
@@ -4347,6 +4507,7 @@ mod tests {
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
             tool_name: "PollStatus".to_string(),
+            effective_tool_name: None,
             result: json!({ "status": "pending", "success": true }),
             result_for_assistant: Some("The job is still pending.".to_string()),
             is_error: false,
@@ -4373,6 +4534,7 @@ mod tests {
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
             tool_name: "Read".to_string(),
+            effective_tool_name: None,
             result: json!({ "success": false, "error": "not found" }),
             result_for_assistant: Some("File not found.".to_string()),
             is_error: true,
@@ -4522,6 +4684,7 @@ mod tests {
         Message::tool_result(ToolResult {
             tool_id: format!("{}-tool", tool_name),
             tool_name: tool_name.to_string(),
+            effective_tool_name: None,
             result: json!({
                 "success": success,
                 "exit_code": exit_code,

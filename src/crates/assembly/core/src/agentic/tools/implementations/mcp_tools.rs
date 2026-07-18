@@ -240,7 +240,7 @@ impl Tool for ListMCPResourcesTool {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {
@@ -358,7 +358,7 @@ impl Tool for ReadMCPResourceTool {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {
@@ -480,7 +480,7 @@ impl Tool for ListMCPPromptsTool {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {
@@ -598,7 +598,7 @@ impl Tool for GetMCPPromptTool {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {

@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 mod plugin;
+mod script_tool;
 pub use plugin::{
     validate_plugin_dispatch_response, validate_plugin_runtime_read_response,
     DisabledPluginRuntimeClient, ExtensionCapabilityAvailability, PermissionPromptDenyState,
@@ -27,6 +28,11 @@ pub use plugin::{
     PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest, PluginRuntimeReadResponse,
     PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef, PluginStatusKind,
     PluginStatusSnapshot, PluginTargetRef, PluginTrustLevel, ProjectionOnlyPluginRuntimeClient,
+};
+pub use script_tool::{
+    ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,
+    ScriptToolInvokeResponse, ScriptToolLoadRequest, ScriptToolLoadResponse, ScriptToolRuntime,
+    ScriptToolRuntimeAvailability,
 };
 
 pub type PortResult<T> = Result<T, PortError>;
@@ -836,6 +842,10 @@ pub struct RemoteRecentWorkspaceFacts {
     pub name: String,
     pub last_opened: String,
     pub kind: RemoteWorkspaceKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -852,6 +862,10 @@ pub struct RemoteAssistantWorkspaceFacts {
 pub struct RemoteWorkspaceUpdate {
     pub path: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -902,7 +916,12 @@ pub struct RemoteFileChunkRange {
 pub trait RemoteWorkspaceRuntimeHost: Send + Sync {
     async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts>;
     async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts>;
-    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
+    async fn open_workspace(
+        &self,
+        path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> Result<RemoteWorkspaceUpdate, String>;
     async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts>;
     async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
 }
@@ -1631,6 +1650,23 @@ pub trait AgentSubmissionPort: Send + Sync {
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult>;
 
+    /// Creates a session with an exact caller-provided identity.
+    ///
+    /// Providers that do not support exact identity creation keep the default
+    /// typed unsupported response. A successful response must preserve
+    /// `session_id` exactly.
+    async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> PortResult<AgentSessionCreateResult> {
+        let _ = (session_id, request);
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "exact session identity creation is not supported by this provider",
+        ))
+    }
+
     async fn submit_message(
         &self,
         request: AgentSubmissionRequest,
@@ -1828,14 +1864,54 @@ pub struct SessionTranscript {
     pub messages: Vec<TranscriptMessage>,
 }
 
+/// Read-only transcript content shared by runtime consumers.
+///
+/// This projection preserves portable history facts without exposing the Core persistence
+/// message type. Multimodal entries report attachment counts rather than transporting image
+/// payloads; callers that need attachment content require a separate, authorized capability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TranscriptContent {
+    Text(String),
+    Multimodal {
+        text: String,
+        image_count: usize,
+    },
+    ToolResult {
+        tool_id: String,
+        tool_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effective_tool_name: Option<String>,
+        result: serde_json::Value,
+        is_error: bool,
+    },
+    Mixed {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_content: Option<String>,
+        text: String,
+        #[serde(default)]
+        tool_calls: Vec<TranscriptToolCall>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptToolCall {
+    pub tool_id: String,
+    pub tool_name: String,
+    #[serde(default)]
+    pub arguments: serde_json::Value,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptMessage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub turn_id: Option<String>,
-    #[serde(default)]
-    pub content: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<u64>,
+    pub content: TranscriptContent,
 }
 
 #[async_trait::async_trait]
@@ -1895,6 +1971,35 @@ impl SubagentContextMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agent_session_create_request_keeps_rust_literal_compatible() {
+        let request = AgentSessionCreateRequest {
+            session_name: "Generated session".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            metadata: serde_json::Map::new(),
+        };
+
+        let json = serde_json::to_value(request).expect("serialize create request");
+
+        assert!(json.get("sessionId").is_none());
+    }
+
+    #[test]
+    fn agent_session_create_request_keeps_legacy_payload_compatible() {
+        let request: AgentSessionCreateRequest = serde_json::from_value(serde_json::json!({
+            "sessionName": "Generated session",
+            "agentType": "agentic",
+            "workspacePath": "/workspace/project"
+        }))
+        .expect("deserialize legacy create request");
+
+        let json = serde_json::to_value(request).expect("serialize create request");
+        assert!(json.get("sessionId").is_none());
+    }
 
     #[test]
     fn port_error_display_keeps_kind_and_message() {
@@ -2669,6 +2774,23 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["turnId"], "turn_1");
         assert!(json.get("fromTurnId").is_none());
+    }
+
+    #[test]
+    fn transcript_contract_keeps_portable_message_identity_and_content() {
+        let message = TranscriptMessage {
+            id: Some("message_1".to_string()),
+            role: "assistant".to_string(),
+            turn_id: Some("turn_1".to_string()),
+            timestamp_ms: Some(3000),
+            content: TranscriptContent::Text("done".to_string()),
+        };
+
+        let message_json = serde_json::to_value(message).expect("serialize transcript message");
+
+        assert_eq!(message_json["id"], "message_1");
+        assert_eq!(message_json["timestampMs"], 3000);
+        assert_eq!(message_json["content"]["Text"], "done");
     }
 
     #[test]

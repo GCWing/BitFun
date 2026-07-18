@@ -51,6 +51,7 @@ export interface FlowThinkingItem extends FlowItem {
 
 export interface FlowToolItem extends FlowItem {
   type: 'tool';
+  /** Provider-facing identity. Deferred calls remain `CallDeferredTool`. */
   toolName: string;
   terminalSessionId?: string;
   interruptionReason?: 'app_restart' | 'retry_superseded';
@@ -95,8 +96,9 @@ export interface FlowToolItem extends FlowItem {
   confirmationWaitMs?: number;
   executionMs?: number;
 
-  /** Subagent model identity captured on the parent Task tool. */
+  /** Resolved subagent AI model configuration ID captured on the parent Task tool. */
   subagentModelId?: string;
+  /** Provider model name used by the subagent's round. */
   subagentModelDisplayName?: string;
 
   /** Child dialog turn produced by this parent Task call. */
@@ -179,8 +181,8 @@ export interface ModelRound {
   endTime?: number;
   durationMs?: number;
   providerId?: string;
-  modelId?: string;
-  modelAlias?: string;
+  modelConfigId?: string;
+  effectiveModelName?: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;

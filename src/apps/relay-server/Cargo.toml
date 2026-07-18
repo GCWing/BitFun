@@ -3,7 +3,7 @@ name = "bitfun-relay-server"
 version = "0.2.13"
 authors = ["BitFun Team"]
 edition = "2021"
-description = "BitFun Relay Server - WebSocket relay for Remote Connect"
+description = "BitFun standalone Remote Connect relay server"
 
 [lib]
 name = "bitfun_relay_server"
@@ -18,56 +18,19 @@ name = "relay-admin"
 path = "src/bin/relay_admin.rs"
 
 [dependencies]
-# NOTE: Dependencies are intentionally inlined rather than inherited from the
-# workspace so that this crate can be built standalone inside its Docker
-# context (src/apps/relay-server/) without copying the whole workspace.
-# Web framework
-axum = { version = "0.8", features = ["json", "ws"] }
-tower-http = { version = "0.6.11", features = ["cors", "fs"] }
-
-# Async runtime
+# Dependencies stay explicit so this application and relay-service can be
+# built from their reduced standalone Docker context.
+bitfun-relay-service = { path = "../../crates/services/relay-service" }
+axum = "0.8"
+tower-http = { version = "0.6.11", features = ["fs"] }
 tokio = { version = "1.52", features = ["full"] }
-futures-util = "0.3.31"
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Error handling
 anyhow = "1.0"
-
-# Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# Utilities
-uuid = { version = "1.0", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde", "clock"] }
-dashmap = "6"
-rand = "0.8"
-base64 = "0.22"
-sha2 = "0.10"
-
-# Account storage (SQLite). The relay stays zero-knowledge: it only stores
-# encrypted blobs and password-derived hashes; it never holds a master key.
-# libsqlite3-sys is pinned to 0.30 to match the workspace's rusqlite 0.32 and
-# avoid duplicate native `sqlite3` links; `bundled` keeps the Docker build
-# self-contained (no system libsqlite3 needed).
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
-libsqlite3-sys = { version = "0.30", features = ["bundled"] }
-
-# Crypto — used only by the `relay-admin` provisioning tool to derive KEK /
-# password hashes and wrap the master key *before* writing to the DB.
-# The relay server runtime itself never touches these crates.
-argon2 = "0.5"
-aes-gcm = "0.10"
-
-# CLI parsing for the admin tool
+chrono = { version = "0.4", features = ["clock"] }
 clap = { version = "4", features = ["derive", "env"] }
 rpassword = "7"
 
-# Lints are inlined (not workspace=true) so the crate still builds inside the
-# standalone Docker context under src/apps/relay-server/.
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
 unexpected_cfgs = "warn"

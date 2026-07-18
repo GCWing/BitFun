@@ -12,6 +12,7 @@ integration, or stable product-domain contracts.
 | Crate | Responsibility | Local doc |
 |---|---|---|
 | `core` | `bitfun-core` compatibility facade and product-full assembly | [AGENTS.md](core/AGENTS.md) |
+| `external-sources` | Ecosystem-neutral source lifecycle coordination over capability-specific provider contracts | inherited |
 | `product-capabilities` | Product capability profiles, tool group facts, service requirements, and harness selections | [AGENTS.md](product-capabilities/AGENTS.md) |
 
 ## Placement Rules
@@ -32,8 +33,10 @@ integration, or stable product-domain contracts.
 
 - `assembly/core` may depend on lower owner layers to assemble the current product
   runtime.
-- Assembly crates must not depend on `src/apps/*`. The existing embedded-relay
-  reverse edge is migration debt, not a precedent for new app dependencies.
+- Assembly crates must not depend on `src/apps/*`. The embedded-relay Cargo
+  reverse edge has been removed. Its TCP binding, static fallback, and task
+  lifecycle remain a compatibility path in assembly and must not be copied or
+  treated as evidence that host ownership has finished migrating.
 - Assembly may depend on adapter and service crates for selected delivery forms,
   but should not implement their protocol serialization, authentication,
   transport, or platform details.

@@ -31,10 +31,7 @@ pub(crate) async fn get_config(args: &Value) -> Result<Value, String> {
         .await
         .map_err(|e| format!("Failed to get config service: {e}"))?;
 
-    match config_service
-        .get_config::<Value>(path.as_deref())
-        .await
-    {
+    match config_service.get_config::<Value>(path.as_deref()).await {
         Ok(config) => Ok(config),
         Err(e) => {
             if skip_retry_on_not_found && is_expected_config_path_not_found(&e, path.as_deref()) {
@@ -67,7 +64,10 @@ pub(crate) async fn get_configs(args: &Value) -> Result<Value, String> {
         if configs.contains_key(&path) {
             continue;
         }
-        match config_service.get_config::<Value>(Some(path.as_str())).await {
+        match config_service
+            .get_config::<Value>(Some(path.as_str()))
+            .await
+        {
             Ok(config) => {
                 configs.insert(path, config);
             }
@@ -103,13 +103,10 @@ pub(crate) async fn set_config(args: &Value) -> Result<Value, String> {
         .await
         .map_err(|e| format!("Failed to get config service: {e}"))?;
 
-    config_service
-        .set_config(&path, value)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to set config: path={path}, error={e}");
-            format!("Failed to set config: {e}")
-        })?;
+    config_service.set_config(&path, value).await.map_err(|e| {
+        tracing::error!("Failed to set config: path={path}, error={e}");
+        format!("Failed to set config: {e}")
+    })?;
 
     Ok(json!("Configuration set successfully"))
 }

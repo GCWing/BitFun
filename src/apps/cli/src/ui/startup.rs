@@ -14,7 +14,10 @@ use super::theme::{
     Appearance, EffectiveColorScheme, Theme,
 };
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
-use crate::commands::STARTUP_COMMAND_SPECS;
+use crate::actions::{
+    action_by_id, action_for_alias, ActionContext, ActionHandler, ActionSpec, ActionState,
+    ResolvedKeymap,
+};
 use crate::config::CliConfig;
 /// Startup page module
 ///
@@ -24,7 +27,7 @@ use crate::config::CliConfig;
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -106,16 +109,6 @@ pub(crate) enum StartupResult {
     Exit,
 }
 
-/// Keyboard shortcuts help text for startup page
-const KEYBOARD_SHORTCUTS_HELP: &str = "\
-Keyboard Shortcuts\n\
-─────────────────────────────────\n\
-Tab / Shift+Tab   Switch Agent\n\
-Ctrl+P            Command Palette\n\
-Esc               Back / Interrupt\n\
-Ctrl+W            Close All Windows\n\
-Ctrl+C            Exit";
-
 /// Random tips shown on the startup page
 const TIPS: &[&str] = &[
     "Type / for slash commands (e.g. /help, /login, /models)",
@@ -173,6 +166,8 @@ pub(crate) struct StartupPage {
     theme: Theme,
     /// CLI config, including persisted theme preference.
     config: CliConfig,
+    /// Resolved host-owned action bindings for the current config.
+    keymap: ResolvedKeymap,
     /// Current tip text
     tip: &'static str,
 
@@ -216,12 +211,12 @@ pub(crate) struct StartupPage {
 
 impl StartupPage {
     pub(crate) fn new(
+        config: CliConfig,
         agent_runtime: AgentRuntime,
         compatibility: CoreAgentRuntimeCompatibility,
         default_agent: String,
         workspace: Option<String>,
     ) -> Self {
-        let config = CliConfig::load().unwrap_or_default();
         let appearance = resolve_appearance(&config.ui.theme);
         let scheme = resolve_effective_color_scheme(&config.ui.color_scheme);
         let base_is_light = appearance.is_light();
@@ -253,12 +248,14 @@ impl StartupPage {
             .as_millis() as usize
             % TIPS.len();
 
+        let keymap = ResolvedKeymap::new(&config.shortcuts);
         let mut page = Self {
             text_input: TextInput::new(),
             theme,
             config,
+            keymap,
             tip: TIPS[tip_index],
-            command_menu: CommandMenuState::new(),
+            command_menu: CommandMenuState::new(ActionState::startup(false)),
             command_palette: CommandPaletteState::new(),
             model_selector: ModelSelectorState::new(),
             agent_selector: AgentSelectorState::new(),
@@ -333,6 +330,7 @@ impl StartupPage {
 
     pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
         terminal.clear()?;
+        let mut event_reader = crate::ui::input::EventReader::default();
 
         loop {
             if self.login_form.is_visible() {
@@ -340,75 +338,20 @@ impl StartupPage {
             }
             terminal.draw(|f| self.render(f))?;
 
-            if event::poll(Duration::from_millis(50))? {
-                if let Ok(first_event) = event::read() {
-                    let mut events = vec![first_event];
-                    // Short wait to let rapid paste events arrive in the same batch.
-                    // Duration::ZERO would split pastes across loop iterations.
-                    while event::poll(Duration::from_millis(5))? {
-                        if let Ok(ev) = event::read() {
-                            events.push(ev);
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // Paste detection: multiple key events with Enter + printable chars
-                    let key_count = events
-                        .iter()
-                        .filter(|e| matches!(e, Event::Key(k) if k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat))
-                        .count();
-                    let has_enter = events.iter().any(|e| {
-                        matches!(e, Event::Key(k) if (k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat) && k.code == KeyCode::Enter)
-                    });
-                    let has_printable = events.iter().any(|e| {
-                        matches!(e, Event::Key(k) if (k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat) && matches!(k.code, KeyCode::Char(_)))
-                    });
-                    let is_paste_batch = key_count > 1 && has_enter && has_printable;
-
-                    if is_paste_batch {
-                        let mut paste_buf = String::new();
-                        let mut non_key_events = Vec::new();
-                        for ev in events {
-                            match ev {
-                                Event::Key(k)
-                                    if k.kind == KeyEventKind::Press
-                                        || k.kind == KeyEventKind::Repeat =>
-                                {
-                                    match k.code {
-                                        KeyCode::Char(c) => paste_buf.push(c),
-                                        KeyCode::Enter => paste_buf.push('\n'),
-                                        _ => {}
-                                    }
-                                }
-                                other => non_key_events.push(other),
+            if let Some(events) = event_reader.read_event_batch(Duration::from_millis(50))? {
+                for event in events {
+                    match event {
+                        Event::Key(key)
+                            if key.kind == KeyEventKind::Press
+                                || key.kind == KeyEventKind::Repeat =>
+                        {
+                            if let Some(result) = self.handle_key(key) {
+                                return Ok(result);
                             }
                         }
-                        if !paste_buf.is_empty() {
-                            if self.login_form.is_visible() {
-                                self.login_form.insert_paste(&paste_buf);
-                            } else {
-                                self.text_input.insert_paste(&paste_buf);
-                                self.refresh_command_menu();
-                            }
-                        }
-                        for ev in non_key_events {
-                            self.handle_non_key_event(ev, terminal)?;
-                        }
-                    } else {
-                        for ev in events {
-                            match ev {
-                                Event::Key(key)
-                                    if key.kind == KeyEventKind::Press
-                                        || key.kind == KeyEventKind::Repeat =>
-                                {
-                                    if let Some(result) = self.handle_key(key) {
-                                        return Ok(result);
-                                    }
-                                }
-                                other => {
-                                    self.handle_non_key_event(other, terminal)?;
-                                }
+                        other => {
+                            if let Some(result) = self.handle_non_key_event(other, terminal)? {
+                                return Ok(result);
                             }
                         }
                     }
@@ -421,13 +364,17 @@ impl StartupPage {
         &mut self,
         ev: Event,
         terminal: &mut Terminal<B>,
-    ) -> Result<()> {
+    ) -> Result<Option<StartupResult>> {
         match ev {
             Event::Mouse(mouse) => {
                 if self.command_palette.captures_mouse(&mouse) {
                     let action = self.command_palette.handle_mouse_event(&mouse);
-                    if let PaletteAction::Execute(id) = action {
-                        let _ = self.handle_palette_action(&id);
+                    match action {
+                        PaletteAction::Execute(id) => {
+                            return Ok(self.handle_palette_action(&id));
+                        }
+                        PaletteAction::Dismiss => self.navigate_back(),
+                        PaletteAction::None => {}
                     }
                 } else if self.theme_selector.captures_mouse(&mouse) {
                     self.theme_selector.handle_mouse_event(&mouse);
@@ -438,12 +385,18 @@ impl StartupPage {
                     if let Some(selection) = self.provider_selector.handle_mouse_event(&mouse) {
                         self.handle_provider_selection(selection);
                     }
+                } else if self.command_menu.captures_mouse(&mouse) {
+                    if let Some(action_id) = self.command_menu.handle_mouse_event(&mouse) {
+                        self.text_input.clear();
+                        self.refresh_command_menu();
+                        return Ok(self.handle_palette_action(&action_id));
+                    }
                 }
             }
             Event::Paste(text) => {
                 if self.login_form.is_visible() {
                     self.login_form.insert_paste(&text);
-                } else {
+                } else if self.info_popup.is_none() && !self.any_popup_visible() {
                     self.text_input.insert_paste(&text);
                     self.refresh_command_menu();
                 }
@@ -454,7 +407,7 @@ impl StartupPage {
             }
             _ => {}
         }
-        Ok(())
+        Ok(None)
     }
 
     // ======================== Rendering ========================
@@ -753,17 +706,23 @@ impl StartupPage {
         // Clear transient status on any key press
         self.status = None;
 
+        let modal_state =
+            ActionState::startup(self.info_popup.is_some() || self.any_popup_visible());
+        if let Some(action) = self.keymap.resolve_modal_safe(key, modal_state) {
+            return self.dispatch_action(action, modal_state);
+        }
+
         // ── Info popup intercepts all keys ──
         if self.info_popup.is_some() {
             self.info_popup = None;
             return None;
         }
 
-        // ── Global popup navigation: Ctrl+W closes all popups ──
+        // Host recovery keys win over configured actions while a popup is open.
         if self.any_popup_visible() {
-            if let (KeyCode::Char('w'), KeyModifiers::CONTROL) = (key.code, key.modifiers) {
-                self.close_all_popups();
-                return None;
+            let state = ActionState::startup(true);
+            if let Some(action) = self.keymap.resolve_reserved(key, state) {
+                return self.dispatch_action(action, state);
             }
         }
 
@@ -940,18 +899,6 @@ impl StartupPage {
                     self.command_menu.move_down();
                     return None;
                 }
-                KeyCode::Enter => {
-                    if let Some(cmd) = self.command_menu.apply_selection() {
-                        return self.handle_command(&cmd);
-                    }
-                    return None;
-                }
-                KeyCode::Esc => {
-                    self.text_input.clear();
-                    self.command_menu
-                        .update_with_commands("", 0, STARTUP_COMMAND_SPECS);
-                    return None;
-                }
                 _ => {
                     // Fall through to normal input handling, which updates the menu
                 }
@@ -960,57 +907,16 @@ impl StartupPage {
 
         // ── Normal key handling ──
 
-        match (key.code, key.modifiers) {
-            (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                return Some(StartupResult::Exit);
-            }
-            (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
-                self.push_current_popup_to_stack();
-                self.command_palette.show();
-                return None;
-            }
-            (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
-                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                    if let Ok(text) = clipboard.get_text() {
-                        self.text_input.insert_paste(&text);
-                        self.refresh_command_menu();
-                    }
-                }
-            }
-            (KeyCode::Enter, m) if m.contains(KeyModifiers::ALT) => {
-                self.text_input.handle_newline();
-                self.refresh_command_menu();
-            }
-            (KeyCode::Enter, _) => {
-                if let Some(cmd) = self.command_menu.apply_selection() {
-                    return self.handle_command(&cmd);
-                }
+        if let Some(action) = self.keymap.resolve(key, ActionState::startup(false)) {
+            return self.dispatch_action(action, ActionState::startup(false));
+        }
 
-                if self.text_input.is_empty() {
-                    return Some(StartupResult::NewSession { prompt: None });
-                }
-                let trimmed = self.text_input.text().trim().to_string();
-                if trimmed == "/exit" || trimmed == "exit" || trimmed == "quit" {
-                    return Some(StartupResult::Exit);
-                }
-                if trimmed.starts_with('/') {
-                    return self.handle_command(&trimmed);
-                }
-                return Some(StartupResult::NewSession {
-                    prompt: Some(trimmed),
-                });
-            }
+        match (key.code, key.modifiers) {
             (KeyCode::Esc, _) => {
                 if !self.text_input.is_empty() {
                     self.text_input.clear();
                     self.refresh_command_menu();
                 }
-            }
-            (KeyCode::Tab, _) => {
-                self.cycle_agent(1);
-            }
-            (KeyCode::BackTab, _) => {
-                self.cycle_agent(-1);
             }
             (KeyCode::Up, KeyModifiers::NONE) => {
                 if !self.text_input.move_cursor_up() {
@@ -1056,65 +962,145 @@ impl StartupPage {
     // ======================== Palette action execution ========================
 
     fn handle_palette_action(&mut self, action_id: &str) -> Option<StartupResult> {
-        match action_id {
-            // Session group
-            "new_session" => {
+        let Some(action) = action_by_id(action_id, ActionContext::Startup) else {
+            self.status = Some(format!("Unknown palette action: {action_id}"));
+            return None;
+        };
+        self.dispatch_action(action, ActionState::startup(false))
+    }
+
+    fn dispatch_action(
+        &mut self,
+        action: &'static ActionSpec,
+        state: ActionState,
+    ) -> Option<StartupResult> {
+        if !action.available(state) {
+            self.status = Some(action.unavailable_message(state));
+            return None;
+        }
+
+        match action.handler {
+            ActionHandler::Help => {
+                self.info_popup = Some(self.keymap.help_text(ActionState::startup(false)));
+            }
+            ActionHandler::Exit => return Some(StartupResult::Exit),
+            ActionHandler::NewSession => {
                 return Some(StartupResult::NewSession { prompt: None });
             }
-            "sessions" => {
-                self.show_session_selector();
-            }
-            "usage" => {
-                self.status = Some("No active session for /usage.".to_string());
-            }
-            // Prompt group
-            "skills" => {
-                self.show_skill_selector();
-            }
-            "subagents" => {
-                self.show_subagent_selector();
-            }
-            // Models group
-            "select_model" => {
-                self.show_model_selector();
-            }
-            "add_model" => {
+            ActionHandler::Sessions => self.show_session_selector(),
+            ActionHandler::SelectModel => self.show_model_selector(),
+            ActionHandler::SelectTheme => self.show_theme_selector(),
+            ActionHandler::AddModel => {
                 self.push_current_popup_to_stack();
                 self.provider_selector.show();
             }
-            // Appearance group
-            "theme" => {
-                self.show_theme_selector();
-            }
-            // Agent group
-            "switch_agent" => {
-                self.show_agent_selector();
-            }
-            // MCP group
-            "mcp_servers" => {
+            ActionHandler::OpenAgentSelector => self.show_agent_selector(),
+            ActionHandler::SwitchAgent => self.cycle_agent(1),
+            ActionHandler::SwitchAgentReverse => self.cycle_agent(-1),
+            ActionHandler::Skills => self.show_skill_selector(),
+            ActionHandler::Subagents => self.show_subagent_selector(),
+            ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
                     prompt: Some("/mcps".to_string()),
                 });
             }
-            // Account group
-            "login" => {
-                self.show_login_form();
+            ActionHandler::AcpHelp => {
+                return Some(StartupResult::NewSession {
+                    prompt: Some("/acp".to_string()),
+                });
             }
-            "logout" => {
-                return self.handle_command("/logout");
+            ActionHandler::Login => self.show_login_form(),
+            ActionHandler::Logout => self.logout(),
+            ActionHandler::Usage => {
+                self.status = Some("No active session for /usage.".to_string());
             }
-            // System group
-            "help" => {
-                self.info_popup = Some(KEYBOARD_SHORTCUTS_HELP.to_string());
+            ActionHandler::Init => match crate::prompts::get_cli_prompt("init") {
+                Some(prompt) => {
+                    return Some(StartupResult::NewSession {
+                        prompt: Some(prompt.to_string()),
+                    });
+                }
+                None => self.status = Some("Init prompt not found".to_string()),
+            },
+            ActionHandler::OpenPalette => {
+                self.push_current_popup_to_stack();
+                self.command_palette.show(ActionState::startup(false));
             }
-            "exit" => {
-                return Some(StartupResult::Exit);
+            ActionHandler::SubmitInput => return self.submit_input(),
+            ActionHandler::InsertNewline => {
+                self.text_input.handle_newline();
+                self.refresh_command_menu();
             }
-            _ => {
-                self.status = Some(format!("Unknown palette action: {}", action_id));
+            ActionHandler::Paste => {
+                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                    if let Ok(text) = clipboard.get_text() {
+                        self.text_input.insert_paste(&text);
+                        self.refresh_command_menu();
+                    }
+                }
+            }
+            ActionHandler::ClosePopups => self.close_all_popups(),
+            ActionHandler::NavigateBack => self.navigate_back(),
+            ActionHandler::ClearConversation
+            | ActionHandler::ReloadSkills
+            | ActionHandler::ExternalTools
+            | ActionHandler::History
+            | ActionHandler::Interrupt
+            | ActionHandler::ToggleFocusedTool
+            | ActionHandler::PreviousTool
+            | ActionHandler::NextTool
+            | ActionHandler::HistoryPrevious
+            | ActionHandler::HistoryNext
+            | ActionHandler::JumpTop
+            | ActionHandler::JumpBottom
+            | ActionHandler::ClearInput
+            | ActionHandler::ToggleBrowse
+            | ActionHandler::ScrollUp
+            | ActionHandler::ScrollDown => {
+                self.status = Some("Action is unavailable on the startup page.".to_string());
             }
         }
         None
+    }
+
+    fn submit_input(&mut self) -> Option<StartupResult> {
+        if let Some(action_id) = self.command_menu.apply_selection() {
+            self.text_input.clear();
+            self.refresh_command_menu();
+            return self.handle_palette_action(&action_id);
+        }
+        if self.text_input.is_empty() {
+            return Some(StartupResult::NewSession { prompt: None });
+        }
+
+        let trimmed = self.text_input.text().trim().to_string();
+        if trimmed == "exit" || trimmed == "quit" {
+            return Some(StartupResult::Exit);
+        }
+        if trimmed.starts_with('/') {
+            return self.handle_command(&trimmed);
+        }
+        Some(StartupResult::NewSession {
+            prompt: Some(trimmed),
+        })
+    }
+
+    fn logout(&mut self) {
+        let logged_in = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
+        });
+        if !logged_in {
+            self.status = Some("Not logged in.".to_string());
+            return;
+        }
+        self.status = Some(
+            match tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(crate::account::logout())
+            }) {
+                Ok(()) => "Logged out.".to_string(),
+                Err(error) => format!("Logout failed: {error}"),
+            },
+        );
     }
 
     // ======================== Command execution ========================
@@ -1124,87 +1110,13 @@ impl StartupPage {
 
         self.text_input.clear();
         self.refresh_command_menu();
-
-        match cmd {
-            "/help" => {
-                self.info_popup = Some(KEYBOARD_SHORTCUTS_HELP.to_string());
-            }
-            "/exit" => {
-                return Some(StartupResult::Exit);
-            }
-            "/sessions" => {
-                self.show_session_selector();
-            }
-            "/models" => {
-                self.show_model_selector();
-            }
-            "/theme" => {
-                self.show_theme_selector();
-            }
-            "/connect" => {
-                self.push_current_popup_to_stack();
-                self.provider_selector.show();
-            }
-            "/agents" => {
-                self.show_agent_selector();
-            }
-            "/skills" => {
-                self.show_skill_selector();
-            }
-            "/subagents" => {
-                self.show_subagent_selector();
-            }
-            "/mcps" => {
-                // Enter chat mode and auto-trigger /mcps command
-                return Some(StartupResult::NewSession {
-                    prompt: Some("/mcps".to_string()),
-                });
-            }
-            "/acp" => {
-                return Some(StartupResult::NewSession {
-                    prompt: Some("/acp".to_string()),
-                });
-            }
-            "/login" => {
-                self.show_login_form();
-            }
-            "/logout" => {
-                let logged_in = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(crate::account::is_logged_in())
-                });
-                if !logged_in {
-                    self.status = Some("Not logged in.".to_string());
-                } else {
-                    match tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(crate::account::logout())
-                    }) {
-                        Ok(()) => self.status = Some("Logged out.".to_string()),
-                        Err(e) => self.status = Some(format!("Logout failed: {e}")),
-                    }
-                }
-            }
-            "/usage" => {
-                self.status = Some("No active session for /usage.".to_string());
-            }
-            "/init" => match crate::prompts::get_cli_prompt("init") {
-                Some(prompt) => {
-                    return Some(StartupResult::NewSession {
-                        prompt: Some(prompt.to_string()),
-                    });
-                }
-                None => {
-                    self.status = Some("Init prompt not found".to_string());
-                }
-            },
-            _ => {
-                self.status = Some(format!(
-                    "Unknown command: {}. Type /help for available commands.",
-                    cmd
-                ));
-            }
-        }
-
-        None
+        let Some(action) = action_for_alias(cmd, ActionContext::Startup) else {
+            self.status = Some(format!(
+                "Unknown command: {cmd}. Type /help for available commands."
+            ));
+            return None;
+        };
+        self.dispatch_action(action, ActionState::startup(false))
     }
 
     // ======================== Selectors ========================
@@ -1460,7 +1372,6 @@ impl StartupPage {
     fn show_model_selector(&mut self) {
         self.push_current_popup_to_stack();
 
-        let agent_type = self.agent_type.clone();
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
@@ -1469,12 +1380,8 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let current_model_id = global_config
-                    .ai
-                    .agent_models
-                    .get(&agent_type)
-                    .cloned()
-                    .or_else(|| global_config.ai.default_models.primary.clone());
+                let current_model_id =
+                    crate::model_selection::resolve_mode_model_id(&global_config.ai);
 
                 let model_items: Vec<ModelItem> = models
                     .into_iter()
@@ -1504,7 +1411,6 @@ impl StartupPage {
     fn apply_model_selection(&mut self, selected: &ModelItem) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
-        let modes = self.get_mode_agents();
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -1514,18 +1420,11 @@ impl StartupPage {
                 };
 
                 if let Err(e) = config_service
-                    .set_config("ai.default_models.primary", &selected_id)
+                    .set_config("ai.agent_model_defaults.mode", &selected_id)
                     .await
                 {
-                    tracing::error!("Failed to set default primary model: {}", e);
+                    tracing::error!("Failed to set future mode model: {}", e);
                     return false;
-                }
-
-                for mode in &modes {
-                    let path = format!("ai.agent_models.{}", mode.id);
-                    if let Err(e) = config_service.set_config(&path, &selected_id).await {
-                        tracing::error!("Failed to set model for mode '{}': {}", mode.id, e);
-                    }
                 }
 
                 true
@@ -2265,6 +2164,7 @@ impl StartupPage {
 
     /// Close all popups and clear the navigation stack
     fn close_all_popups(&mut self) {
+        self.info_popup = None;
         self.command_palette.hide();
         self.model_selector.hide();
         self.agent_selector.hide();
@@ -2307,7 +2207,6 @@ impl StartupPage {
     }
 
     fn load_current_model_name(&mut self) {
-        let agent_type = self.agent_type.clone();
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
@@ -2316,13 +2215,7 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let model_id = global_config
-                    .ai
-                    .agent_models
-                    .get(&agent_type)
-                    .cloned()
-                    .or_else(|| global_config.ai.default_models.primary.clone())
-                    .unwrap_or_else(|| "primary".to_string());
+                let model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai)?;
 
                 fn provider_display_name(
                     model: &bitfun_core::service::config::AIModelConfig,
@@ -2352,18 +2245,10 @@ impl StartupPage {
                     format!("{} / {}", model.model_name, provider_display_name(model))
                 }
 
-                if model_id == "primary" {
-                    let primary_id = global_config.ai.default_models.primary.as_deref()?;
-                    models
-                        .iter()
-                        .find(|m| m.id == primary_id)
-                        .map(model_display_name)
-                } else {
-                    models
-                        .iter()
-                        .find(|m| m.id == model_id)
-                        .map(model_display_name)
-                }
+                models
+                    .iter()
+                    .find(|model| model.id == model_id)
+                    .map(model_display_name)
             })
         });
 
@@ -2376,11 +2261,8 @@ impl StartupPage {
     }
 
     fn refresh_command_menu(&mut self) {
-        self.command_menu.update_with_commands(
-            &self.text_input.input,
-            self.text_input.cursor,
-            STARTUP_COMMAND_SPECS,
-        );
+        self.command_menu
+            .update(&self.text_input.input, self.text_input.cursor);
     }
 }
 

@@ -188,14 +188,21 @@ function registerGlobalErrorHandlers() {
 
 registerGlobalErrorHandlers();
 
-// Disable Tab-key focus traversal globally.
-// Tab still works inside Monaco Editor and xterm terminal where it has semantic meaning.
+// Disable Tab-key focus traversal globally (IDE-style chrome).
+// Allow Tab where it has semantic meaning: Monaco, xterm, and modal/dialog forms
+// (SSH connect, account login, settings dialogs, etc. — Modal focus trap keeps focus inside).
 document.addEventListener(
   'keydown',
   (e: KeyboardEvent) => {
     if (e.key !== 'Tab') return;
     const target = e.target as Element | null;
-    if (target?.closest('.monaco-editor, .xterm')) return;
+    if (
+      target?.closest(
+        '.monaco-editor, .xterm, [role="dialog"], [aria-modal="true"]'
+      )
+    ) {
+      return;
+    }
     e.preventDefault();
   },
   true
@@ -260,6 +267,12 @@ async function initializeAfterRender(): Promise<void> {
       await installFrontendLogLevelConfigWatcher();
     })(),
     (async () => {
+      const { ensureSettingsAppliedListener } = await import(
+        './infrastructure/account/settingsAppliedListener'
+      );
+      ensureSettingsAppliedListener();
+    })(),
+    (async () => {
       const { themeService } = await import('./infrastructure/theme');
       await themeService.ensureUserThemesLoaded();
     })(),
@@ -292,6 +305,7 @@ async function initializeAfterRender(): Promise<void> {
     const names = [
       'EditorConfigPreload',
       'LogLevelConfigWatcher',
+      'SettingsAppliedListener',
       'UserThemes',
       'DefaultContextTypes',
       'RecommendationProviders',

@@ -26,7 +26,7 @@ OpenCode 的外部产品入口，不等同于服务插件或 TUI 插件。总体
 |---|---|---|---|
 | 插件内 `client` | 冻结版本开发工具包方法 | 提供插件专用门面并转发到 BitFun 归属模块 | 按方法主要适配 |
 | 外部开发工具包 | 完整公开 Client 和错误模型 | 只为有真实消费方的方法提供公共兼容服务 | 按方法主要适配，不宣称全量 |
-| Server / OpenAPI / SSE | OpenCode Server、事件和认证 | 显式启动独立兼容服务，复用 api-layer/transport 后端能力 | 可逐步适配；不是插件前置条件 |
+| Server / OpenAPI / SSE | OpenCode Server、事件和认证 | 显式启动独立兼容服务，复用已有能力服务和平台无关事件投影 | 可逐步适配；不是插件前置条件 |
 | ACP | ACP 会话、工具、命令、MCP、权限 | 在现有 ACP 入口转换 OpenCode 可观察字段与错误 | 可主要适配 |
 | IDE 扩展 | 终端启动/聚焦、上下文注入、文件引用、`/tui` endpoint | 提供 BitFun IDE 扩展或兼容启动器；只在明确模式开放必要 `/tui` 子集 | 主要能力可做，原扩展直连需单独验收 |
 | Web / attach | 完整 Server 协议和共享会话 | 优先使用 BitFun Web/Remote；原始客户端直连进入 Server 兼容项目 | 当前明确降级 |
@@ -40,7 +40,7 @@ OpenCode 的外部产品入口，不等同于服务插件或 TUI 插件。总体
 flowchart LR
   Client["IDE / SDK / Web / GitHub / GitLab / Slack / ACP"]
   Protocol["入口专用协议适配器"]
-  Transport["BitFun api-layer / transport"]
+  Transport["BitFun 能力服务 / 事件投影"]
   Owners["Session / Workspace / Tool / Permission 等归属模块"]
   Compat["版本化兼容说明与诊断"]
 
@@ -53,7 +53,7 @@ flowchart LR
 | 部分 | 负责 | 不负责 |
 |---|---|---|
 | 入口专用适配器 | 认证、版本、字段、事件、错误和入口生命周期 | 复制业务状态或直接调用插件进程 |
-| api-layer / transport | 复用 BitFun 已有远程与本地传输能力 | 理解 GitHub、IDE 或 OpenCode 特有格式 |
+| 能力服务 / 事件投影 | 提供稳定能力语义和平台无关事件载荷 | 入口认证、HTTP/SSE/WebSocket 连接生命周期、取消、背压或特有协议格式 |
 | 归属模块 | 最终会话、工具、权限、工作区和回写状态 | 伪造 OpenCode 未实现行为 |
 | 兼容说明 | 列出支持方法、endpoint、事件和降级原因 | 用一个版本号暗示全量兼容 |
 

@@ -63,16 +63,17 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let pool = bitfun_relay_server::db::connect(&cli.db).await?;
+    let pool = bitfun_relay_service::db::connect(&cli.db).await?;
 
     match cli.command {
         Command::AddUser { username, password } => {
             let password = resolve_password(password)?;
-            let user_id = bitfun_relay_server::admin::add_user(&pool, &username, &password).await?;
+            let user_id =
+                bitfun_relay_service::admin::add_user(&pool, &username, &password).await?;
             println!("Created account: username='{username}' user_id={user_id}");
         }
         Command::ListUsers => {
-            let users = bitfun_relay_server::admin::list_users(&pool).await?;
+            let users = bitfun_relay_service::admin::list_users(&pool).await?;
             if users.is_empty() {
                 println!("No accounts found.");
             } else {
@@ -87,12 +88,12 @@ async fn main() -> Result<()> {
             }
         }
         Command::DeleteUser { username } => {
-            bitfun_relay_server::admin::delete_user(&pool, &username).await?;
+            bitfun_relay_service::admin::delete_user(&pool, &username).await?;
             println!("Deleted account: {username}");
         }
         Command::ResetPassword { username, password } => {
             let password = resolve_password(password)?;
-            bitfun_relay_server::admin::reset_password(&pool, &username, &password).await?;
+            bitfun_relay_service::admin::reset_password(&pool, &username, &password).await?;
             println!("Password reset for: {username}");
             println!("NOTE: All previously synced sessions/settings are now unreadable");
             println!("      (they were encrypted with the old master key).");
@@ -101,7 +102,7 @@ async fn main() -> Result<()> {
             username,
             new_username,
         } => {
-            bitfun_relay_server::admin::rename_user(&pool, &username, &new_username).await?;
+            bitfun_relay_service::admin::rename_user(&pool, &username, &new_username).await?;
             println!("Renamed: {username} → {new_username}");
         }
     }

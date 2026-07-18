@@ -71,6 +71,9 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/session-config', key: 'features.workspaceSearch.enable' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionTitle' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionDescription' },
+    { ns: 'settings/session-config', key: 'deferredToolLoading.sectionTitle' },
+    { ns: 'settings/session-config', key: 'deferredToolLoading.sectionDescription' },
+    { ns: 'settings/session-config', key: 'deferredToolLoading.warning' },
     { ns: 'settings/session-config', key: 'computerUse.sectionTitle' },
     { ns: 'settings/session-config', key: 'computerUse.sectionDescription' },
     { ns: 'settings/session-config', key: 'computerUse.enable' },
@@ -122,6 +125,15 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/mcp-tools', key: 'subtitle' },
     { ns: 'settings/mcp', key: 'section.serverList.title' },
     { ns: 'settings/mcp', key: 'section.serverList.description' },
+  ],
+
+  'external-sources': [
+    { ns: 'settings/external-sources', key: 'title' },
+    { ns: 'settings/external-sources', key: 'subtitle' },
+    { ns: 'settings/external-sources', key: 'sources.title' },
+    { ns: 'settings/external-sources', key: 'sources.description' },
+    { ns: 'settings/external-sources', key: 'conflicts.title' },
+    { ns: 'settings/external-sources', key: 'conflicts.description' },
   ],
 
   'acp-agents': [

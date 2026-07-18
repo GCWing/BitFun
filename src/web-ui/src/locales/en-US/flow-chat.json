@@ -2070,7 +2070,6 @@
     "model": "Model",
     "modelExplanation": "Model explanation",
     "modelSelection": "Select Model",
-    "currentMode": "Current Mode",
     "autoModel": "Auto",
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",

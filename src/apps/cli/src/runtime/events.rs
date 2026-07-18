@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
+use bitfun_agent_runtime::sdk::{AgentEventReceiver, AgentEventSource};
 use bitfun_core::agentic::events::EventQueue;
-use bitfun_events::AgenticEventEnvelope;
-use tokio::sync::broadcast;
 
 struct EventQueueDrain {
     task: tokio::task::JoinHandle<()>,
@@ -13,11 +12,7 @@ impl EventQueueDrain {
         let task = tokio::spawn(async move {
             loop {
                 queue.wait_for_events().await;
-                loop {
-                    if queue.dequeue_configured_batch().await.is_empty() {
-                        break;
-                    }
-                }
+                while !queue.dequeue_configured_batch().await.is_empty() {}
             }
         });
         Self { task }
@@ -32,20 +27,24 @@ impl Drop for EventQueueDrain {
 
 #[derive(Clone)]
 pub(crate) struct CliAgentEventSource {
-    queue: Arc<EventQueue>,
+    source: AgentEventSource,
     _drain: Arc<EventQueueDrain>,
 }
 
 impl CliAgentEventSource {
     pub(crate) fn new(queue: Arc<EventQueue>) -> Self {
         Self {
-            _drain: Arc::new(EventQueueDrain::start(queue.clone())),
-            queue,
+            source: AgentEventSource::new(queue.clone()),
+            _drain: Arc::new(EventQueueDrain::start(queue)),
         }
     }
 
-    pub(crate) fn subscribe(&self) -> broadcast::Receiver<AgenticEventEnvelope> {
-        self.queue.subscribe()
+    pub(crate) fn subscribe(&self) -> AgentEventReceiver {
+        self.source.subscribe()
+    }
+
+    pub(crate) fn runtime_source(&self) -> AgentEventSource {
+        self.source.clone()
     }
 }
 

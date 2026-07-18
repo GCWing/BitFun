@@ -9,7 +9,12 @@ use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::runtime::DesktopRuntimeContext;
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_agent_runtime::sdk::{
+    AgentDialogTurnRequest, AgentInputAttachment, AgentSubmissionSource,
+    AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentTurnCancellationRequest,
+};
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
     AssistantBootstrapBlockReason, AssistantBootstrapEnsureOutcome, AssistantBootstrapSkipReason,
@@ -989,10 +994,26 @@ pub async fn ensure_coordinator_session(
 #[tauri::command]
 pub async fn start_dialog_turn(
     _app: AppHandle,
-    _coordinator: State<'_, Arc<ConversationCoordinator>>,
-    scheduler: State<'_, Arc<DialogScheduler>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: StartDialogTurnRequest,
 ) -> Result<StartDialogTurnResponse, String> {
+    let runtime_request = desktop_dialog_turn_request(request)?;
+
+    runtime
+        .agent_runtime()
+        .submit_dialog_turn(runtime_request)
+        .await
+        .map_err(|error| format!("Failed to start dialog turn: {}", error.into_message()))?;
+
+    Ok(StartDialogTurnResponse {
+        success: true,
+        message: "Dialog turn started".to_string(),
+    })
+}
+
+fn desktop_dialog_turn_request(
+    request: StartDialogTurnRequest,
+) -> Result<AgentDialogTurnRequest, String> {
     let StartDialogTurnRequest {
         session_id,
         user_input,
@@ -1007,38 +1028,66 @@ pub async fn start_dialog_turn(
     } = request;
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi);
-    let resolved_images = if let Some(image_contexts) = image_contexts
-        .as_ref()
-        .filter(|images| !images.is_empty())
-        .cloned()
-    {
-        Some(resolve_missing_image_payloads(image_contexts)?)
-    } else {
-        None
+    let attachments = match image_contexts.filter(|images| !images.is_empty()) {
+        Some(images) => resolve_missing_image_payloads(images)?
+            .into_iter()
+            .map(desktop_image_attachment)
+            .collect(),
+        None => Vec::new(),
     };
+    let metadata = desktop_user_message_metadata(user_message_metadata);
 
-    scheduler
-        .submit(
-            session_id,
-            user_input,
-            original_user_input,
-            turn_id,
-            agent_type,
-            workspace_path,
-            remote_connection_id,
-            remote_ssh_host,
-            policy,
-            None,
-            user_message_metadata,
-            resolved_images,
-        )
-        .await
-        .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
-
-    Ok(StartDialogTurnResponse {
-        success: true,
-        message: "Dialog turn started".to_string(),
+    Ok(AgentDialogTurnRequest {
+        session_id,
+        message: user_input,
+        original_message: original_user_input,
+        turn_id,
+        agent_type,
+        workspace_path,
+        remote_connection_id,
+        remote_ssh_host,
+        policy,
+        reply_route: None,
+        prepended_reminders: Vec::new(),
+        attachments,
+        metadata,
     })
+}
+
+fn desktop_user_message_metadata(
+    metadata: Option<serde_json::Value>,
+) -> serde_json::Map<String, serde_json::Value> {
+    match metadata {
+        Some(serde_json::Value::Object(metadata)) => metadata,
+        Some(metadata) => serde_json::Map::from_iter([("raw_metadata".to_string(), metadata)]),
+        None => serde_json::Map::new(),
+    }
+}
+
+fn desktop_image_attachment(image: ImageContextData) -> AgentInputAttachment {
+    let mut metadata = serde_json::Map::new();
+    if let Some(image_path) = image.image_path {
+        metadata.insert(
+            "imagePath".to_string(),
+            serde_json::Value::String(image_path),
+        );
+    }
+    if let Some(data_url) = image.data_url {
+        metadata.insert("dataUrl".to_string(), serde_json::Value::String(data_url));
+    }
+    metadata.insert(
+        "mimeType".to_string(),
+        serde_json::Value::String(image.mime_type),
+    );
+    if let Some(image_metadata) = image.metadata {
+        metadata.insert("metadata".to_string(), image_metadata);
+    }
+
+    AgentInputAttachment {
+        kind: "remote_image".to_string(),
+        id: image.id,
+        metadata,
+    }
 }
 
 #[tauri::command]
@@ -1573,7 +1622,7 @@ fn resolve_missing_image_payloads(
 
 #[tauri::command]
 pub async fn cancel_dialog_turn(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     app_state: State<'_, AppState>,
     request: CancelDialogTurnRequest,
 ) -> Result<(), String> {
@@ -1596,8 +1645,16 @@ pub async fn cancel_dialog_turn(
         }
     }
 
-    coordinator
-        .cancel_dialog_turn(&request.session_id, &request.dialog_turn_id)
+    runtime
+        .agent_runtime()
+        .cancel_turn(AgentTurnCancellationRequest {
+            session_id: request.session_id.clone(),
+            turn_id: Some(request.dialog_turn_id.clone()),
+            source: Some(AgentSubmissionSource::DesktopUi),
+            requester_session_id: None,
+            reason: None,
+            wait_timeout_ms: None,
+        })
         .await
         .map_err(|e| {
             log::error!(
@@ -1606,8 +1663,9 @@ pub async fn cancel_dialog_turn(
                 request.dialog_turn_id,
                 e
             );
-            format!("Failed to cancel dialog turn: {}", e)
+            format!("Failed to cancel dialog turn: {}", e.into_message())
         })
+        .map(|_| ())
 }
 
 #[tauri::command]
@@ -2242,28 +2300,36 @@ pub async fn list_sessions(
 
 #[tauri::command]
 pub async fn confirm_tool_execution(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: ConfirmToolRequest,
 ) -> Result<(), String> {
-    coordinator
-        .confirm_tool(&request.tool_id, request.updated_input)
+    runtime
+        .agent_runtime()
+        .confirm_tool(AgentToolConfirmationRequest {
+            tool_id: request.tool_id,
+            updated_input: request.updated_input,
+        })
         .await
-        .map_err(|e| format!("Confirm tool failed: {}", e))
+        .map_err(|error| format!("Confirm tool failed: {}", error.into_message()))
 }
 
 #[tauri::command]
 pub async fn reject_tool_execution(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: RejectToolRequest,
 ) -> Result<(), String> {
     let reason = request
         .reason
         .unwrap_or_else(|| "User rejected".to_string());
 
-    coordinator
-        .reject_tool(&request.tool_id, reason)
+    runtime
+        .agent_runtime()
+        .reject_tool(AgentToolRejectionRequest {
+            tool_id: request.tool_id,
+            reason,
+        })
         .await
-        .map_err(|e| format!("Reject tool failed: {}", e))
+        .map_err(|error| format!("Reject tool failed: {}", error.into_message()))
 }
 
 #[tauri::command]
@@ -2460,6 +2526,156 @@ mod tests {
     };
     use serde_json::json;
 
+    #[test]
+    fn desktop_dialog_turn_request_preserves_runtime_contract() {
+        let request: StartDialogTurnRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "userInput": "resolved input",
+            "originalUserInput": "original input",
+            "agentType": "agentic",
+            "workspacePath": "/workspace/project",
+            "remoteConnectionId": "connection-1",
+            "remoteSshHost": "host-1",
+            "turnId": "turn-1",
+            "imageContexts": [{
+                "id": "image-1",
+                "image_path": "/workspace/clip.png",
+                "data_url": "data:image/png;base64,abc",
+                "mime_type": "image/png",
+                "metadata": {
+                    "name": "clip.png",
+                    "source": "upload"
+                }
+            }],
+            "userMessageMetadata": {
+                "surface": "flow_chat",
+                "requestId": "request-1"
+            }
+        }))
+        .expect("current Tauri request shape");
+
+        let runtime_request =
+            desktop_dialog_turn_request(request).expect("Desktop runtime request");
+
+        assert_eq!(runtime_request.session_id, "session-1");
+        assert_eq!(runtime_request.message, "resolved input");
+        assert_eq!(
+            runtime_request.original_message.as_deref(),
+            Some("original input")
+        );
+        assert_eq!(runtime_request.turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(runtime_request.agent_type, "agentic");
+        assert_eq!(
+            runtime_request.workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+        assert_eq!(
+            runtime_request.remote_connection_id.as_deref(),
+            Some("connection-1")
+        );
+        assert_eq!(runtime_request.remote_ssh_host.as_deref(), Some("host-1"));
+        assert_eq!(
+            runtime_request.policy.trigger_source,
+            AgentSubmissionSource::DesktopUi
+        );
+        assert_eq!(
+            runtime_request.policy,
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi)
+        );
+        assert!(runtime_request.reply_route.is_none());
+        assert!(runtime_request.prepended_reminders.is_empty());
+        assert_eq!(runtime_request.attachments.len(), 1);
+        let attachment = &runtime_request.attachments[0];
+        assert_eq!(attachment.kind, "remote_image");
+        assert_eq!(attachment.id, "image-1");
+        assert_eq!(
+            attachment.metadata.get("imagePath"),
+            Some(&json!("/workspace/clip.png"))
+        );
+        assert_eq!(
+            attachment.metadata.get("dataUrl"),
+            Some(&json!("data:image/png;base64,abc"))
+        );
+        assert_eq!(
+            attachment.metadata.get("mimeType"),
+            Some(&json!("image/png"))
+        );
+        assert_eq!(
+            attachment
+                .metadata
+                .get("metadata")
+                .and_then(|value| value.get("source")),
+            Some(&json!("upload"))
+        );
+        assert_eq!(
+            runtime_request.metadata.get("surface"),
+            Some(&json!("flow_chat"))
+        );
+        assert_eq!(
+            runtime_request.metadata.get("requestId"),
+            Some(&json!("request-1"))
+        );
+    }
+
+    #[test]
+    fn desktop_interaction_dtos_keep_existing_camel_case_shape() {
+        let cancel: CancelDialogTurnRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "dialogTurnId": "turn-1"
+        }))
+        .expect("cancel request");
+        let confirm: ConfirmToolRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "toolId": "tool-1",
+            "updatedInput": { "path": "updated.txt" }
+        }))
+        .expect("confirm request");
+        let reject: RejectToolRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "toolId": "tool-1",
+            "reason": "Use a read-only path"
+        }))
+        .expect("reject request");
+
+        assert_eq!(cancel.session_id, "session-1");
+        assert_eq!(cancel.dialog_turn_id, "turn-1");
+        assert_eq!(confirm.tool_id, "tool-1");
+        assert_eq!(
+            confirm.updated_input,
+            Some(json!({ "path": "updated.txt" }))
+        );
+        assert_eq!(reject.reason.as_deref(), Some("Use a read-only path"));
+        assert_eq!(
+            serde_json::to_value(StartDialogTurnResponse {
+                success: true,
+                message: "Dialog turn started".to_string(),
+            })
+            .expect("response"),
+            json!({
+                "success": true,
+                "message": "Dialog turn started"
+            })
+        );
+    }
+
+    #[test]
+    fn desktop_dialog_turn_accepts_and_normalizes_legacy_non_object_metadata() {
+        let request = serde_json::from_value::<StartDialogTurnRequest>(json!({
+            "sessionId": "session-1",
+            "userInput": "hello",
+            "agentType": "agentic",
+            "userMessageMetadata": "not-an-object"
+        }))
+        .expect("legacy metadata request");
+        let runtime_request =
+            desktop_dialog_turn_request(request).expect("Desktop runtime request");
+
+        assert_eq!(
+            runtime_request.metadata.get("raw_metadata"),
+            Some(&json!("not-an-object"))
+        );
+    }
+
     fn idempotent_create_request() -> CreateSessionRequest {
         CreateSessionRequest {
             session_id: Some("review_child_request-1".to_string()),
@@ -2649,8 +2865,8 @@ mod tests {
                 end_time: Some(2),
                 duration_ms: Some(1),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,
@@ -2730,8 +2946,8 @@ mod tests {
                 end_time: Some(2),
                 duration_ms: Some(1),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,
@@ -2792,8 +3008,8 @@ mod tests {
                 end_time: Some(2),
                 duration_ms: Some(1),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,

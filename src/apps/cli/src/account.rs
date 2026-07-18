@@ -89,8 +89,7 @@ pub(crate) async fn try_restore_session() -> Option<String> {
 }
 
 /// Whether the relay has reported the account token as expired/invalid.
-/// Intended for the TUI to prompt re-login when account pages open.
-#[allow(dead_code)]
+/// The TUI prompts re-login via this; the daemon exits on it.
 pub(crate) fn is_token_expired() -> bool {
     TOKEN_EXPIRED.load(Ordering::Relaxed)
 }
@@ -159,10 +158,15 @@ pub(crate) async fn login_with_credentials(
 
     TOKEN_EXPIRED.store(false, Ordering::Relaxed);
 
-    let connect_result = spawn_device_routing(relay_url, &device_name).await;
-    let routing_msg = match connect_result {
-        Ok(()) => " Device routing connected (Peer Host ready).".to_string(),
-        Err(e) => format!(" (Warning: device routing failed: {e})"),
+    let routing_msg = if crate::daemon::is_daemon_running() {
+        // The daemon already holds the relay connection; a second connection
+        // from this process would flap the shared device_id registration.
+        " Device routing is handled by the running CLI daemon.".to_string()
+    } else {
+        match spawn_device_routing(relay_url, &device_name).await {
+            Ok(()) => " Device routing connected (Peer Host ready). Tip: `bitfun-cli daemon install` keeps this device reachable after exit or reboot.".to_string(),
+            Err(e) => format!(" (Warning: device routing failed: {e})"),
+        }
     };
 
     Ok(LoginResult {
@@ -270,6 +274,12 @@ async fn is_current_routing_client(client: &Arc<RelayClient>) -> bool {
 /// Log out: tear down routing, revoke the token (best-effort), clear state.
 pub(crate) async fn logout() -> Result<()> {
     stop_device_routing().await;
+    // Take the always-on daemon down with the account: the token is revoked
+    // below, so leaving the daemon connected would keep this device online
+    // with a doomed token until its next reconnect fails.
+    if crate::daemon::request_daemon_shutdown() {
+        tracing::info!("Signalled the CLI daemon to shut down after logout");
+    }
     let result = read_account_context().await;
     if let Ok((session, relay_url)) = result {
         let _ = AccountClient::new()

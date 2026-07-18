@@ -1,8 +1,8 @@
 services:
   relay-server:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../..
+      dockerfile: src/apps/relay-server/Dockerfile
       args:
         # Pass through optional parallelism limit for low-memory hosts:
         #   RELAY_CARGO_BUILD_JOBS=1 docker compose build

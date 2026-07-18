@@ -1471,22 +1471,6 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   padding: 0;
 }
 
-.tc-template-model-panel {
-  min-width: 0;
-}
-
-// Template selector stack
-.tc-template-model-zone {
-  .gallery-zone__header {
-    align-items: flex-start;
-  }
-
-  .gallery-zone__tools {
-    flex: 0 0 min(360px, 100%);
-    width: min(360px, 100%);
-  }
-}
-
 .tc-template-detail {
   display: flex;
   flex-direction: column;
@@ -2226,81 +2210,6 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       border-color: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
       background: color-mix(in srgb, var(--color-purple-500) 7%, transparent);
     }
-  }
-}
-
-// ── Inline model slot (horizontal pair inside tc-hero__models) ─────────────
-
-.tc-model-slot {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: $size-gap-2;
-
-  &--header {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  &__label {
-    flex-shrink: 0;
-    font-size: var(--font-size-sm);
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-secondary);
-  }
-
-  &__select {
-    flex: 1;
-    min-width: 0;
-  }
-
-  &__select--model-selector {
-    display: flex;
-    align-items: center;
-  }
-
-  &__selector {
-    width: 100%;
-
-    .bitfun-model-selector__trigger {
-      width: 100%;
-      justify-content: space-between;
-      min-height: 32px;
-      padding: 0 10px;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-base;
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
-      opacity: 1;
-      font-size: var(--font-size-sm);
-    }
-
-    .bitfun-model-selector__name {
-      max-width: none;
-      flex: 1;
-      text-align: left;
-    }
-  }
-}
-
-@media (max-width: 800px) {
-  .tc-template-model-zone {
-    .gallery-zone__header {
-      align-items: stretch;
-      flex-direction: column;
-    }
-
-    .gallery-zone__tools {
-      width: 100%;
-      flex-basis: auto;
-      margin-left: 0;
-      justify-content: stretch;
-    }
-  }
-
-  .tc-model-slot--header {
-    justify-content: stretch;
   }
 }
 

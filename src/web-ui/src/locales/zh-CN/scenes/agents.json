@@ -72,6 +72,15 @@
       "tools": "{{count}} 个工具",
       "skills": "{{count}} 个 Skills",
       "subagents": "{{count}} 个 Sub-Agent"
+    },
+    "modelSelector": {
+      "label": "模型",
+      "default": "使用 Subagent 默认模型",
+      "inherit": "继承父会话",
+      "fast": "快速模型",
+      "primary": "主力模型",
+      "auto": "自动选择",
+      "updateFailed": "更新 Subagent 模型失败"
     }
   },
   "capabilityCategories": {
@@ -160,7 +169,7 @@
       "promptRequired": "系统提示词不能为空",
       "readonly": "只读模式",
       "model": "模型",
-      "modelPlaceholder": "可填写 auto、fast 或具体模型 ID",
+      "modelPlaceholder": "可填写 inherit、auto、fast 或具体模型 ID",
       "modelRequired": "模型不能为空",
       "tools": "工具",
       "toolsOptional": "可选",

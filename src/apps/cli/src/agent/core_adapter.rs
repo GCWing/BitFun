@@ -11,10 +11,11 @@ use tokio::sync::Mutex;
 use super::Agent;
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionListRequest, AgentTurnCancellationRequest,
+    AgentSessionListRequest, AgentSessionRestoreRequest, AgentToolConfirmationRequest,
+    AgentToolRejectionRequest, AgentTurnCancellationRequest, AgentUserAnswersRequest,
+    SessionTranscript, SessionTranscriptRequest,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
-use bitfun_core::agentic::core::Message;
 use bitfun_core::agentic::persistence::session_branch::SessionBranchResult;
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::session::DialogTurnData;
@@ -101,7 +102,7 @@ impl CoreAgentAdapter {
                 remote_ssh_host: None,
             })
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) async fn list_sessions(&self) -> Result<Vec<AgentSessionSummary>> {
@@ -119,11 +120,18 @@ impl CoreAgentAdapter {
         let sessions = self
             .list_sessions_in_workspace(&effective_workspace)
             .await?;
-        let summary = validated_session_summary(&sessions, session_id, &effective_workspace)?;
+        validated_session_summary(&sessions, session_id, &effective_workspace)?;
 
-        self.compatibility
-            .restore_session(&effective_workspace, session_id)
-            .await?;
+        let restored = self
+            .runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: effective_workspace.to_string_lossy().to_string(),
+                session_id: session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         let mut session_id_guard = self.session_id.lock().await;
         let mut turn_id_guard = self.current_turn_id.lock().await;
@@ -135,7 +143,7 @@ impl CoreAgentAdapter {
         *session_id_guard = Some(session_id.to_string());
         *turn_id_guard = None;
 
-        Ok((summary, effective_workspace))
+        Ok((restored.session, effective_workspace))
     }
 
     pub(crate) async fn delete_session(&self, session_id: &str) -> Result<()> {
@@ -147,14 +155,17 @@ impl CoreAgentAdapter {
                 remote_ssh_host: None,
             })
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
-    pub(crate) async fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
-        self.compatibility
-            .get_messages(session_id)
+    pub(crate) async fn get_transcript(&self, session_id: &str) -> Result<SessionTranscript> {
+        self.runtime
+            .read_session_transcript(SessionTranscriptRequest {
+                session_id: session_id.to_string(),
+                turn_id: None,
+            })
             .await
-            .map_err(Into::into)
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) async fn update_session_model(
@@ -246,14 +257,20 @@ impl CoreAgentAdapter {
             }
         }
 
-        self.compatibility
+        self.runtime
             .create_session_with_id(
                 session_id.to_string(),
-                session_name,
-                effective_agent_type,
-                self.workspace_path_string(),
+                AgentSessionCreateRequest {
+                    session_name,
+                    agent_type: effective_agent_type,
+                    workspace_path: Some(self.workspace_path_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
             )
-            .await?;
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         tracing::info!("Recreated backend session with existing id: {}", session_id);
         Ok(())
@@ -269,22 +286,31 @@ impl CoreAgentAdapter {
             return Ok(());
         }
         match self
-            .compatibility
-            .restore_session(&workspace, session_id)
+            .runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: workspace.to_string_lossy().to_string(),
+                session_id: session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
             .await
         {
             Ok(_) => {
                 tracing::info!("Backend session restored: {}", session_id);
                 Ok(())
             }
-            Err(error) if Self::is_session_not_found_error(&error.to_string()) => {
-                tracing::warn!(
-                    "Session is unavailable, recreating backend session: {}",
-                    session_id
-                );
-                self.recreate_session_with_id(session_id, agent_type).await
+            Err(error) => {
+                let message = error.into_message();
+                if Self::is_session_not_found_error(&message) {
+                    tracing::warn!(
+                        "Session is unavailable, recreating backend session: {}",
+                        session_id
+                    );
+                    self.recreate_session_with_id(session_id, agent_type).await
+                } else {
+                    Err(anyhow::anyhow!(message))
+                }
             }
-            Err(error) => Err(anyhow::anyhow!(error.to_string())),
         }
     }
 
@@ -296,18 +322,24 @@ impl CoreAgentAdapter {
         let mut session_id_guard = self.session_id.lock().await;
 
         let session = self
-            .compatibility
+            .runtime
             .create_session_with_id(
-                session_id.clone(),
-                Self::build_default_session_name(),
-                agent_type.to_string(),
-                self.workspace_path_string(),
+                session_id,
+                AgentSessionCreateRequest {
+                    session_name: Self::build_default_session_name(),
+                    agent_type: agent_type.to_string(),
+                    workspace_path: Some(self.workspace_path_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
             )
-            .await?;
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         let id = session.session_id.clone();
         *session_id_guard = Some(id.clone());
-        tracing::info!("Created core session with fixed id: {}", id);
+        tracing::info!("Created runtime session with fixed id: {}", id);
 
         Ok(id)
     }
@@ -334,7 +366,7 @@ impl Agent for CoreAgentAdapter {
                 metadata: serde_json::Map::new(),
             })
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         let id = session.session_id.clone();
 
@@ -384,20 +416,21 @@ impl Agent for CoreAgentAdapter {
         let start_result = self.runtime.submit_dialog_turn(request.clone()).await;
 
         if let Err(err) = start_result {
-            if Self::is_session_not_found_error(&err.to_string()) {
+            let error_message = err.into_message();
+            if Self::is_session_not_found_error(&error_message) {
                 tracing::warn!(
                     "Session missing when starting turn, attempting recovery and retry: session_id={}, error={}",
                     session_id,
-                    err
+                    error_message
                 );
                 self.ensure_backend_session_alive(&session_id, agent_type)
                     .await?;
                 self.runtime
                     .submit_dialog_turn(request)
                     .await
-                    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                    .map_err(|error| anyhow::anyhow!(error.into_message()))?;
             } else {
-                return Err(anyhow::anyhow!(err.to_string()));
+                return Err(anyhow::anyhow!(error_message));
             }
         }
 
@@ -420,7 +453,7 @@ impl Agent for CoreAgentAdapter {
                     wait_timeout_ms: None,
                 })
                 .await
-                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
             let mut turn_id_guard = self.current_turn_id.lock().await;
             if turn_id_guard.as_deref() == Some(turn_id.as_str()) {
@@ -445,7 +478,7 @@ impl Agent for CoreAgentAdapter {
                 metadata: serde_json::Map::new(),
             })
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
         let id = session.session_id.clone();
 
@@ -467,25 +500,35 @@ impl Agent for CoreAgentAdapter {
         updated_input: Option<serde_json::Value>,
     ) -> Result<()> {
         tracing::info!("Confirming tool execution: {}", tool_id);
-        self.compatibility
-            .confirm_tool(tool_id, updated_input)
+        self.runtime
+            .confirm_tool(AgentToolConfirmationRequest {
+                tool_id: tool_id.to_string(),
+                updated_input,
+            })
             .await
-            .map_err(|e| anyhow::anyhow!("Confirm tool failed: {}", e))
+            .map_err(|e| anyhow::anyhow!("Confirm tool failed: {}", e.into_message()))
     }
 
     async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<()> {
         tracing::info!("Rejecting tool execution: {}, reason: {}", tool_id, reason);
-        self.compatibility
-            .reject_tool(tool_id, reason)
+        self.runtime
+            .reject_tool(AgentToolRejectionRequest {
+                tool_id: tool_id.to_string(),
+                reason,
+            })
             .await
-            .map_err(|e| anyhow::anyhow!("Reject tool failed: {}", e))
+            .map_err(|e| anyhow::anyhow!("Reject tool failed: {}", e.into_message()))
     }
 
     async fn submit_user_answers(&self, tool_id: &str, answers: serde_json::Value) -> Result<()> {
         tracing::info!("Submitting user answers for tool: {}", tool_id);
-        self.compatibility
-            .submit_user_answers(tool_id, answers)
-            .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e))
+        self.runtime
+            .submit_user_answers(AgentUserAnswersRequest {
+                tool_id: tool_id.to_string(),
+                answers,
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e.into_message()))
     }
 }
 

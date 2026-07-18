@@ -70,6 +70,8 @@ export interface StartDialogTurnRequest {
   turnId?: string; 
   agentType: string; 
   workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
   /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */
   imageContexts?: ImageInputContextData[];
   userMessageMetadata?: Record<string, unknown>;
@@ -333,6 +335,7 @@ export interface SubagentSessionLinkedEvent extends AgenticEvent {
   parentDialogTurnId: string;
   parentToolCallId: string;
   agentType?: string;
+  modelId?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -403,8 +406,10 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   hasToolCalls?: boolean;
   durationMs?: number;
   providerId?: string;
-  modelId?: string;
-  modelAlias?: string;
+  /** Resolved AI model configuration ID. */
+  modelConfigId: string;
+  /** Provider model name sent on the request. */
+  effectiveModelName: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
@@ -418,7 +423,10 @@ export interface ModelRoundStartedEvent extends AgenticEvent {
   roundId: string;
   roundGroupId?: string;
   roundIndex: number;
-  modelId?: string;
+  /** Resolved AI model configuration ID. */
+  modelConfigId: string;
+  /** Provider model name sent on the request. */
+  effectiveModelName: string;
 }
 
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {
@@ -884,8 +892,8 @@ export class AgentAPI {
   }
 
    
-  onModelRoundStarted(callback: (event: AgenticEvent) => void): () => void {
-    return api.listen<AgenticEvent>('agentic://model-round-started', callback);
+  onModelRoundStarted(callback: (event: ModelRoundStartedEvent) => void): () => void {
+    return api.listen<ModelRoundStartedEvent>('agentic://model-round-started', callback);
   }
 
   onModelRoundCompleted(callback: (event: ModelRoundCompletedEvent) => void): () => void {

@@ -186,7 +186,10 @@ impl SessionStorePort for CoreSessionStorePort {
         .ok_or_else(|| {
             PortError::new(
                 PortErrorKind::InvalidRequest,
-                "Session workspace_path is required",
+                format!(
+                    "Session workspace_path does not resolve to a local workspace or a \
+                     registered remote workspace: {workspace_path}"
+                ),
             )
         })?;
 

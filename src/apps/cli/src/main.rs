@@ -7,14 +7,16 @@
 mod account;
 mod account_sync;
 mod acp_cli;
+mod actions;
 mod agent;
 #[allow(dead_code)]
 mod chat_state;
-mod commands;
 mod config;
+mod daemon;
 mod diagnostics;
 mod logging;
 mod management;
+mod model_selection;
 mod modes;
 mod peer_host;
 mod plugin_diagnostics;
@@ -182,6 +184,16 @@ enum Commands {
 
     /// Health check
     Health,
+
+    /// Manage the always-on account device host daemon
+    ///
+    /// The daemon holds the relay device-routing connection in a headless
+    /// process so this device stays reachable by account peers whenever the
+    /// machine is up, even without an interactive CLI running.
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonAction,
+    },
 
     /// Start or inspect the Agent Client Protocol (ACP) server
     Acp {
@@ -390,6 +402,18 @@ enum ConfigAction {
     Reset,
 }
 
+#[derive(Subcommand)]
+enum DaemonAction {
+    /// Run the daemon in the foreground (used by the service manager)
+    Run,
+    /// Install and start the auto-start service (systemd user unit / LaunchAgent)
+    Install,
+    /// Stop and remove the auto-start service
+    Uninstall,
+    /// Show daemon and auto-start service status
+    Status,
+}
+
 // ======================== System Initialization ========================
 
 /// Return the current project path. CLI session scope is intentionally cwd-only.
@@ -557,7 +581,7 @@ async fn shutdown_mcp_servers() {
 
 /// Run the full interactive TUI flow: loading screen → startup page → chat
 async fn run_interactive(
-    _config: CliConfig,
+    config: CliConfig,
     default_agent: String,
     _workspace_str: String,
 ) -> Result<()> {
@@ -586,15 +610,24 @@ async fn run_interactive(
     if let Some(user_id) = account::try_restore_session().await {
         tracing::info!("Restored account session for user {user_id}");
         // Re-establish device routing so the CLI becomes RPC-controllable.
-        let device =
-            DeviceIdentity::from_current_machine().map_err(|e| anyhow!("detect device: {e}"))?;
-        if let Err(e) = account::restore_device_routing(&device.device_name).await {
-            tracing::warn!("Failed to restore device routing: {e}");
+        // The daemon owns device routing when it is running: same-machine
+        // processes share one device_id and last AuthConnect wins.
+        if daemon::is_daemon_running() {
+            tracing::info!(
+                "CLI daemon is running; skipping in-process device routing (daemon owns it)"
+            );
+        } else {
+            let device = DeviceIdentity::from_current_machine()
+                .map_err(|e| anyhow!("detect device: {e}"))?;
+            if let Err(e) = account::restore_device_routing(&device.device_name).await {
+                tracing::warn!("Failed to restore device routing: {e}");
+            }
         }
     }
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
+        config,
         runtime.agent_runtime().clone(),
         runtime.compatibility().clone(),
         default_agent,
@@ -677,6 +710,12 @@ async fn run_cli() -> Result<()> {
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    let is_daemon_run = matches!(
+        cli.command,
+        Some(Commands::Daemon {
+            action: DaemonAction::Run,
+        })
+    );
     let file_log_level = logging::default_log_level(cli.verbose);
     let stderr_log_level = if cli.verbose {
         tracing::Level::TRACE
@@ -684,7 +723,7 @@ async fn run_cli() -> Result<()> {
         tracing::Level::ERROR
     };
 
-    if is_tui_mode || is_exec_mode {
+    if is_tui_mode || is_exec_mode || is_daemon_run {
         logging::init_file_logging(file_log_level);
     } else {
         tracing_subscriber::fmt()
@@ -850,6 +889,13 @@ async fn run_cli() -> Result<()> {
             root_handlers::handle_health_command()?;
         }
 
+        Some(Commands::Daemon { action }) => match action {
+            DaemonAction::Run => daemon::run_daemon().await?,
+            DaemonAction::Install => daemon::install_service()?,
+            DaemonAction::Uninstall => daemon::uninstall_service()?,
+            DaemonAction::Status => daemon::print_status()?,
+        },
+
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
         }) => {
@@ -953,7 +999,7 @@ async fn run_interactive_with_session(
             remote_ssh_host: None,
         })
         .await
-        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        .map_err(|error| anyhow::anyhow!(error.into_message()))?;
     let agent_type = sessions
         .iter()
         .find(|session| session.session_id == session_id)
@@ -977,6 +1023,11 @@ async fn run_interactive_with_session(
 }
 
 fn main() {
+    // Install rustls CryptoProvider before any TLS-capable work (relay WS,
+    // reqwest rustls paths, Feishu wss). Required when both ring and aws-lc-rs
+    // are linked: rustls cannot auto-select a provider.
+    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+
     let worker = std::thread::Builder::new()
         .stack_size(16 * 1024 * 1024)
         .spawn(|| {

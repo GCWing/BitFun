@@ -19,8 +19,8 @@ pub use locale::{fmt_count, strings_for, BotLanguage, BotStrings};
 pub use menu::{MenuItem, MenuItemStyle, MenuView};
 pub use state::{
     BotAction, BotActionStyle, BotChatState, BotDisplayMode, BotInteractionHandler,
-    BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption, PendingAction,
-    RemoteDeviceTarget,
+    BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption, BotWorkspaceChoice,
+    BotWorkspaceRef, PendingAction, RemoteDeviceTarget,
 };
 pub use telegram::{TelegramBotApi, TelegramConfig};
 pub use weixin::{WeixinConfig, WeixinProviderClient};

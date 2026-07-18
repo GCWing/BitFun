@@ -3,7 +3,10 @@ use anyhow::{Context, Result};
 use std::io::IsTerminal;
 use std::path::Path;
 
+use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, SessionTranscriptRequest};
+
 use crate::{
+    chat_state::{transcript_message_preview, transcript_role_label},
     config::CliConfig,
     diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind},
     modes::exec::{
@@ -223,55 +226,39 @@ pub(crate) async fn handle_session_action(
             let session_id =
                 resolve_cli_session_id(runtime.agent_runtime(), &workspace_path, &id).await?;
 
-            let session = runtime
-                .compatibility()
-                .restore_session(&workspace_path, &session_id)
-                .await?;
-            let messages = runtime.compatibility().get_messages(&session_id).await?;
+            let restored = runtime
+                .agent_runtime()
+                .restore_session(AgentSessionRestoreRequest {
+                    workspace_path: workspace_path.to_string_lossy().to_string(),
+                    session_id: session_id.clone(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                })
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+            let transcript = runtime
+                .agent_runtime()
+                .read_session_transcript(SessionTranscriptRequest {
+                    session_id: session_id.clone(),
+                    turn_id: None,
+                })
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
             println!("Session Details\n");
-            println!("Name: {}", session.session_name);
-            println!("ID: {}", session.session_id);
-            println!("Agent: {}", session.agent_type);
-            println!("State: {:?}", session.state);
-            println!("Messages: {}", messages.len());
+            println!("Name: {}", restored.session.session_name);
+            println!("ID: {}", restored.session.session_id);
+            println!("Agent: {}", restored.session.agent_type);
+            println!("State: {:?}", restored.state);
+            println!("Messages: {}", transcript.messages.len());
             println!();
 
-            if !messages.is_empty() {
+            if !transcript.messages.is_empty() {
                 println!("Recent messages:");
-                let recent: Vec<_> = messages.iter().rev().take(5).collect();
+                let recent: Vec<_> = transcript.messages.iter().rev().take(5).collect();
                 for msg in recent.iter().rev() {
-                    let role = format!("{:?}", msg.role);
-                    let content_preview = match &msg.content {
-                        bitfun_core::agentic::core::message::MessageContent::Text(text) => {
-                            text.lines().next().unwrap_or("").to_string()
-                        }
-                        bitfun_core::agentic::core::message::MessageContent::Multimodal {
-                            text,
-                            images,
-                        } => {
-                            if text.is_empty() {
-                                format!("[{} images]", images.len())
-                            } else {
-                                text.lines().next().unwrap_or("").to_string()
-                            }
-                        }
-                        bitfun_core::agentic::core::message::MessageContent::Mixed {
-                            text,
-                            tool_calls,
-                            ..
-                        } => {
-                            if text.is_empty() {
-                                format!("[{} tool calls]", tool_calls.len())
-                            } else {
-                                text.lines().next().unwrap_or("").to_string()
-                            }
-                        }
-                        bitfun_core::agentic::core::message::MessageContent::ToolResult {
-                            tool_name,
-                            ..
-                        } => format!("[Tool result: {}]", tool_name),
-                    };
+                    let role = transcript_role_label(&msg.role);
+                    let content_preview = transcript_message_preview(msg);
                     let preview = if content_preview.len() > 80 {
                         truncate_str(&content_preview, 77)
                     } else {
@@ -294,7 +281,7 @@ pub(crate) async fn handle_session_action(
                     remote_ssh_host: None,
                 })
                 .await
-                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
             println!("Deleted session from current project: {}", id);
         }
 
@@ -361,7 +348,7 @@ async fn list_cli_sessions(
             remote_ssh_host: None,
         })
         .await
-        .map_err(|error| anyhow::anyhow!(error.to_string()))
+        .map_err(|error| anyhow::anyhow!(error.into_message()))
 }
 
 pub(crate) fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> {
@@ -469,6 +456,9 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
         .context("Failed to initialize agentic system")?;
     tracing::info!("Agentic system initialized");
 
-    bitfun_acp::BitfunAcpRuntime::serve_stdio(agentic_system).await?;
+    let workspace_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let runtime = crate::runtime::AcpRuntimeContext::build(agentic_system, workspace_root)?;
+    let (agent_runtime, compatibility) = runtime.parts();
+    bitfun_acp::BitfunAcpRuntime::serve_stdio(agent_runtime, compatibility).await?;
     Ok(())
 }

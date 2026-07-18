@@ -7,6 +7,8 @@ export interface BuildMiniAppCustomizationSessionRequestInput {
   sessionId: string;
   sessionName: string;
   workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 export function buildMiniAppCustomizationSessionRequest(
@@ -17,12 +19,16 @@ export function buildMiniAppCustomizationSessionRequest(
     sessionName: input.sessionName,
     agentType: 'agentic',
     workspacePath: input.workspacePath,
+    remoteConnectionId: input.remoteConnectionId,
+    remoteSshHost: input.remoteSshHost,
     sessionKind: 'subagent',
     config: {
       enableTools: true,
       safeMode: true,
       autoCompact: true,
       enableContextCompression: true,
+      remoteConnectionId: input.remoteConnectionId,
+      remoteSshHost: input.remoteSshHost,
     },
   };
 }
@@ -35,6 +41,8 @@ export async function launchMiniAppCustomizationSession(params: {
   appId: string;
   appName: string;
   workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
   sessionName: string;
   prompt: string;
   displayMessage: string;
@@ -52,6 +60,8 @@ export async function launchMiniAppCustomizationSession(params: {
     sessionId: createMiniAppCustomizationSessionId(params.appId),
     sessionName: params.sessionName,
     workspacePath: params.workspacePath,
+    remoteConnectionId: params.remoteConnectionId,
+    remoteSshHost: params.remoteSshHost,
   });
   const created = await agentAPI.createSession(request);
 
@@ -65,6 +75,8 @@ export async function launchMiniAppCustomizationSession(params: {
       isTransient: true,
       agentBackedTransient: true,
     },
+    params.remoteConnectionId,
+    params.remoteSshHost,
   );
 
   await FlowChatManager.getInstance().sendMessage(

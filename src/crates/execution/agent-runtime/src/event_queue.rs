@@ -6,12 +6,82 @@ use bitfun_events::{
     AgenticEvent, AgenticEventEnvelope as EventEnvelope, AgenticEventPriority as EventPriority,
 };
 use log::{debug, trace, warn};
-use std::collections::BinaryHeap;
-use std::sync::Arc;
+use std::collections::{BinaryHeap, HashMap};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, RwLock as StdRwLock, Weak,
+};
 use tokio::sync::{broadcast, Mutex, Notify};
 
 const MIN_EVENT_BROADCAST_BUFFER: usize = 1024;
+// Session-scoped protocol consumers can pause while servicing an RPC. Keep a
+// separate, fixed burst budget instead of inheriting the much larger global
+// event queue capacity for every active session.
+const SESSION_EVENT_BROADCAST_BUFFER: usize = MIN_EVENT_BROADCAST_BUFFER;
 const SLOW_EVENT_QUEUE_LATENCY_MS: u128 = 250;
+
+struct SessionBroadcast {
+    sender: broadcast::Sender<EventEnvelope>,
+}
+
+type SessionBroadcastMap = HashMap<String, Arc<SessionBroadcast>>;
+
+/// Receiver for one session's bounded event stream.
+///
+/// Dropping the last receiver removes the channel immediately so inactive
+/// sessions retain neither their broadcast buffer nor an entry on the enqueue
+/// path.
+pub struct SessionEventReceiver {
+    receiver: Option<broadcast::Receiver<EventEnvelope>>,
+    channel: Weak<SessionBroadcast>,
+    session_id: String,
+    channels: Weak<StdRwLock<SessionBroadcastMap>>,
+    has_channels: Weak<AtomicBool>,
+}
+
+impl std::fmt::Debug for SessionEventReceiver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionEventReceiver")
+            .field("session_id", &self.session_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl SessionEventReceiver {
+    pub async fn recv(&mut self) -> Result<EventEnvelope, broadcast::error::RecvError> {
+        self.receiver
+            .as_mut()
+            .expect("session event receiver used after drop")
+            .recv()
+            .await
+    }
+}
+
+impl Drop for SessionEventReceiver {
+    fn drop(&mut self) {
+        // Decrement the Tokio receiver count before deciding whether this
+        // channel still has an active consumer.
+        drop(self.receiver.take());
+
+        let (Some(channels), Some(channel), Some(has_channels)) = (
+            self.channels.upgrade(),
+            self.channel.upgrade(),
+            self.has_channels.upgrade(),
+        ) else {
+            return;
+        };
+        let mut channels = channels
+            .write()
+            .expect("session event channels lock poisoned");
+        let remove = channels.get(&self.session_id).is_some_and(|current| {
+            Arc::ptr_eq(current, &channel) && current.sender.receiver_count() == 0
+        });
+        if remove {
+            channels.remove(&self.session_id);
+        }
+        has_channels.store(!channels.is_empty(), Ordering::Release);
+    }
+}
 
 /// Event queue configuration
 #[derive(Debug, Clone)]
@@ -53,6 +123,14 @@ pub struct EventQueue {
     /// Broadcast stream for non-consuming subscribers.
     broadcast_tx: broadcast::Sender<EventEnvelope>,
 
+    /// Session-scoped streams for protocol consumers that require isolation
+    /// from traffic produced by other sessions.
+    session_broadcasts: Arc<StdRwLock<SessionBroadcastMap>>,
+
+    /// Avoid locking the session channel map on the common TUI/GUI path when
+    /// no protocol consumer is active.
+    has_session_broadcasts: Arc<AtomicBool>,
+
     /// Configuration
     config: EventQueueConfig,
 
@@ -71,6 +149,8 @@ impl EventQueue {
             queue: Arc::new(Mutex::new(BinaryHeap::new())),
             notify: Arc::new(Notify::new()),
             broadcast_tx,
+            session_broadcasts: Arc::new(StdRwLock::new(HashMap::new())),
+            has_session_broadcasts: Arc::new(AtomicBool::new(false)),
             config,
             stats: Arc::new(Mutex::new(QueueStats::default())),
         }
@@ -102,7 +182,22 @@ impl EventQueue {
 
         // Broadcast delivery is authoritative for non-consuming runtime
         // subscribers and must not depend on capacity in the legacy dequeue
-        // buffer.
+        // buffer. Session-scoped subscribers receive only matching traffic so
+        // an unrelated session cannot consume their bounded backlog.
+        let session_channel = if self.has_session_broadcasts.load(Ordering::Acquire) {
+            envelope.event.session_id().and_then(|session_id| {
+                self.session_broadcasts
+                    .read()
+                    .expect("session event channels lock poisoned")
+                    .get(session_id)
+                    .cloned()
+            })
+        } else {
+            None
+        };
+        if let Some(channel) = session_channel {
+            let _ = channel.sender.send(envelope.clone());
+        }
         let _ = self.broadcast_tx.send(envelope);
 
         {
@@ -180,6 +275,61 @@ impl EventQueue {
     /// Subscribe to events without consuming them from the queue.
     pub fn subscribe(&self) -> broadcast::Receiver<EventEnvelope> {
         self.broadcast_tx.subscribe()
+    }
+
+    /// Subscribe to one session before events enter the bounded receiver.
+    pub fn subscribe_session(&self, session_id: &str) -> SessionEventReceiver {
+        let existing = {
+            let channels = self
+                .session_broadcasts
+                .read()
+                .expect("session event channels lock poisoned");
+            channels.get(session_id).map(|channel| {
+                // Subscribe while holding the read lock so the last previous
+                // receiver cannot remove this channel between lookup and the
+                // Tokio receiver count increment.
+                (channel.clone(), channel.sender.subscribe())
+            })
+        };
+        if let Some((channel, receiver)) = existing {
+            return self.session_receiver(session_id, &channel, receiver);
+        }
+
+        // Allocate outside the map lock. The second check below resolves a
+        // concurrent first subscriber without holding the global enqueue path
+        // while Tokio allocates the bounded channel.
+        let (sender, candidate_receiver) = broadcast::channel(SESSION_EVENT_BROADCAST_BUFFER);
+        let candidate = Arc::new(SessionBroadcast { sender });
+        let (channel, receiver) = {
+            let mut channels = self
+                .session_broadcasts
+                .write()
+                .expect("session event channels lock poisoned");
+            if let Some(channel) = channels.get(session_id).cloned() {
+                let receiver = channel.sender.subscribe();
+                (channel, receiver)
+            } else {
+                channels.insert(session_id.to_string(), candidate.clone());
+                self.has_session_broadcasts.store(true, Ordering::Release);
+                (candidate, candidate_receiver)
+            }
+        };
+        self.session_receiver(session_id, &channel, receiver)
+    }
+
+    fn session_receiver(
+        &self,
+        session_id: &str,
+        channel: &Arc<SessionBroadcast>,
+        receiver: broadcast::Receiver<EventEnvelope>,
+    ) -> SessionEventReceiver {
+        SessionEventReceiver {
+            receiver: Some(receiver),
+            channel: Arc::downgrade(channel),
+            session_id: session_id.to_string(),
+            channels: Arc::downgrade(&self.session_broadcasts),
+            has_channels: Arc::downgrade(&self.has_session_broadcasts),
+        }
     }
 
     /// Clear all events for a session
@@ -353,5 +503,16 @@ mod tests {
             second_ids.push(second.recv().await.expect("second broadcast").id);
         }
         assert_eq!(first_ids, second_ids);
+    }
+
+    #[test]
+    fn dropping_last_session_receiver_releases_its_channel() {
+        let queue = EventQueue::new(EventQueueConfig::default());
+        let receiver = queue.subscribe_session("session");
+        assert_eq!(queue.session_broadcasts.read().unwrap().len(), 1);
+
+        drop(receiver);
+
+        assert!(queue.session_broadcasts.read().unwrap().is_empty());
     }
 }

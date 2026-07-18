@@ -18,6 +18,14 @@ export interface WorkspaceInfo {
   /** Mirrors desktop `WorkspaceKind`: normal project, Claw assistant workspace, or remote SSH. */
   workspace_kind?: 'normal' | 'assistant' | 'remote';
   assistant_id?: string;
+  /** Required to disambiguate multiple SSH hosts that share the same POSIX path. */
+  remote_connection_id?: string;
+  remote_ssh_host?: string;
+}
+
+export interface RemoteWorkspaceIdentity {
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 export interface RecentWorkspaceEntry {
@@ -25,6 +33,8 @@ export interface RecentWorkspaceEntry {
   name: string;
   last_opened: string;
   workspace_kind?: 'normal' | 'assistant' | 'remote';
+  remote_connection_id?: string;
+  remote_ssh_host?: string;
 }
 
 export interface AssistantEntry {
@@ -134,6 +144,8 @@ export interface InitialSyncData {
   git_branch?: string;
   workspace_kind?: 'normal' | 'assistant' | 'remote';
   assistant_id?: string;
+  remote_connection_id?: string;
+  remote_ssh_host?: string;
   sessions: SessionInfo[];
   has_more_sessions: boolean;
   authenticated_user_id?: string;
@@ -149,13 +161,17 @@ export class RemoteSessionManager {
   private async request<T>(cmd: object): Promise<T> {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const cmdWithId = { ...cmd, _request_id: requestId };
-    // When we have a delegated identity (desktop is logged into an account),
-    // route all commands through the relay HTTP RPC API directly to the
-    // paired desktop's device_id. This bypasses the room channel and allows
-    // the mobile to control any same-account device, not just the paired one.
+    // The QR-paired desktop keeps the proven room channel. Only a switched
+    // control target (another same-account device) is reached through the
+    // relay device RPC API using the delegated identity.
+    const targetDeviceId = this.client.pairedDeviceId;
+    const isRemoteTarget =
+      this.client.hasDelegatedIdentity
+      && !!targetDeviceId
+      && targetDeviceId !== this.client.homeDeviceId;
     let resp: T;
-    if (this.client.hasDelegatedIdentity && this.client.pairedDeviceId) {
-      resp = await this.client.sendDeviceRpc<T>(this.client.pairedDeviceId, cmdWithId);
+    if (isRemoteTarget && targetDeviceId) {
+      resp = await this.client.sendDeviceRpc<T>(targetDeviceId, cmdWithId);
     } else {
       resp = await this.client.sendCommand<T>(cmdWithId);
     }
@@ -177,6 +193,8 @@ export class RemoteSessionManager {
       git_branch: resp.git_branch,
       workspace_kind: resp.workspace_kind,
       assistant_id: resp.assistant_id,
+      remote_connection_id: resp.remote_connection_id,
+      remote_ssh_host: resp.remote_ssh_host,
     };
   }
 
@@ -190,13 +208,24 @@ export class RemoteSessionManager {
 
   async setWorkspace(
     path: string,
+    options?: {
+      remoteConnectionId?: string;
+      remoteSshHost?: string;
+    },
   ): Promise<{
     success: boolean;
     path?: string;
     project_name?: string;
+    remote_connection_id?: string;
+    remote_ssh_host?: string;
     error?: string;
   }> {
-    return this.request({ cmd: 'set_workspace', path });
+    return this.request({
+      cmd: 'set_workspace',
+      path,
+      remote_connection_id: options?.remoteConnectionId,
+      remote_ssh_host: options?.remoteSshHost,
+    });
   }
 
   async listAssistants(): Promise<AssistantEntry[]> {
@@ -223,6 +252,7 @@ export class RemoteSessionManager {
     limit = 30,
     offset = 0,
     query?: string,
+    identity?: RemoteWorkspaceIdentity,
   ): Promise<{ sessions: SessionInfo[]; has_more: boolean }> {
     const resp = await this.request<{
       resp: string;
@@ -231,6 +261,8 @@ export class RemoteSessionManager {
     }>({
       cmd: 'list_sessions',
       workspace_path: workspacePath ?? null,
+      remote_connection_id: identity?.remoteConnectionId,
+      remote_ssh_host: identity?.remoteSshHost,
       limit,
       offset,
       query: query?.trim() || null,
@@ -245,12 +277,15 @@ export class RemoteSessionManager {
     agentType?: string,
     sessionName?: string,
     workspacePath?: string,
+    identity?: RemoteWorkspaceIdentity,
   ): Promise<string> {
     const resp = await this.request<{ resp: string; session_id: string }>({
       cmd: 'create_session',
       agent_type: agentType || undefined,
       session_name: sessionName || undefined,
       workspace_path: workspacePath ?? null,
+      remote_connection_id: identity?.remoteConnectionId,
+      remote_ssh_host: identity?.remoteSshHost,
     });
     return resp.session_id;
   }

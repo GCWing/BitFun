@@ -7,20 +7,28 @@ use arboard::Clipboard;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{
+    mpsc::{self, Receiver, TryRecvError as MpscTryRecvError},
+    Arc,
+};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
 use bitfun_events::{AgenticEvent, ToolEventData};
 
+use crate::actions::{
+    action_by_id, action_for_alias, slash_actions, ActionContext, ActionHandler, ActionSpec,
+    ActionState, ResolvedKeymap,
+};
 use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
 use crate::runtime::CliRuntimeContext;
 use crate::ui::agent_selector::AgentItem;
 use crate::ui::chat::{ChatView, MouseGestureOutcome};
+use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
 use crate::ui::command_palette::PaletteAction;
 use crate::ui::login_form::LoginFormAction;
 use crate::ui::mcp_add_dialog::McpAddAction;
@@ -50,32 +58,916 @@ use bitfun_core::agentic::tools::implementations::skills::{
     registry::SkillRegistry,
     ModeSkillInfo, SkillInfo,
 };
+use bitfun_core::external_sources::{
+    expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
+    prompt_command_conflict_key, remember_external_source_conflict_choice,
+    set_external_prompt_command_conflict_choice, set_external_tool_conflict_choice,
+    set_external_tool_target_decision, subscribe_external_source_updates,
+    ExternalSourceCatalogSnapshot, ExternalSourceDiagnosticSeverity, ExternalToolActivationState,
+    ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolRuntimeKind,
+    PromptCommandAvailability,
+};
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::{
     render_usage_report_markdown, SessionUsageReportRequest,
 };
 
-/// Keyboard shortcuts help text
-const KEYBOARD_SHORTCUTS_HELP: &str = "\
-Keyboard Shortcuts\n\
-─────────────────────────────────\n\
-Tab / Shift+Tab   Switch Agent\n\
-Ctrl+P            Command Palette\n\
-Ctrl+J / Ctrl+K   Prev / Next Tool\n\
-Ctrl+O            Expand / Collapse Tool\n\
-Ctrl+E            Toggle Browse Mode\n\
-↑ / ↓             Input History\n\
-PageUp / PageDown Scroll Messages\n\
-Ctrl+Home / End   Jump to Top / Bottom\n\
-Ctrl+U            Clear Input\n\
-Esc               Back / Interrupt\n\
-Ctrl+W            Close All Windows\n\
-Ctrl+C            Quit";
-
 /// Spinner/UI redraw interval while a turn is processing.
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
 /// Coalesce rapid resize bursts to reduce flicker during window drag.
 const RESIZE_REDRAW_DEBOUNCE_MS: u64 = 75;
+
+fn native_command_conflict_key<'a>(
+    execution_domain_id: &str,
+    command_name: &str,
+    candidates: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> String {
+    format!(
+        "native:{}",
+        prompt_command_conflict_key(execution_domain_id, command_name, candidates)
+    )
+}
+
+fn external_command_projections(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    conflict_choices: &BTreeMap<String, String>,
+) -> Vec<ExternalCommandProjection> {
+    let built_in_actions = slash_actions(ActionState::chat(false, false));
+    let mut projections = snapshot
+        .commands
+        .iter()
+        .map(|entry| {
+            let ecosystem = snapshot
+                .sources
+                .iter()
+                .find(|source| source.record.key == entry.definition.id.source)
+                .map(|source| source.record.ecosystem_id.as_str())
+                .unwrap_or("external");
+            let restricted = !matches!(
+                entry.definition.availability,
+                PromptCommandAvailability::Available
+            );
+            let native_collision = built_in_actions.iter().find_map(|action| {
+                if !action
+                    .name
+                    .trim_start_matches('/')
+                    .eq_ignore_ascii_case(&entry.definition.name)
+                {
+                    return None;
+                }
+                let source = snapshot
+                    .sources
+                    .iter()
+                    .find(|source| source.record.key == entry.definition.id.source)?;
+                let native_candidate_id = format!("bitfun.cli:{}", action.id);
+                let external_candidate_id = entry.definition.id.stable_key();
+                let conflict_key = native_command_conflict_key(
+                    source.record.execution_domain_id.as_str(),
+                    &entry.definition.name,
+                    [
+                        (native_candidate_id.as_str(), env!("CARGO_PKG_VERSION")),
+                        (
+                            external_candidate_id.as_str(),
+                            entry.definition.content_version.as_str(),
+                        ),
+                    ],
+                );
+                Some(NativeCommandCollisionProjection {
+                    native_action_id: action.id.to_string(),
+                    native_candidate_id,
+                    external_candidate_id,
+                    selected_candidate_id: conflict_choices.get(&conflict_key).cloned(),
+                    conflict_key,
+                })
+            });
+            ExternalCommandProjection {
+                action_id: format!("external-command:{}", entry.definition.name),
+                command_name: entry.definition.name.clone(),
+                invocation_alias: format!("/{}", entry.definition.name),
+                candidate_id: entry.definition.id.stable_key(),
+                content_version: entry.definition.content_version.clone(),
+                description: format!("{} · {}", entry.definition.description, ecosystem),
+                restricted,
+                provider_conflict_key: None,
+                native_collision,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for conflict in snapshot
+        .command_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+    {
+        let built_in = built_in_actions.iter().find(|action| {
+            action
+                .name
+                .trim_start_matches('/')
+                .eq_ignore_ascii_case(&conflict.command_name)
+        });
+        let native_group = built_in.and_then(|action| {
+            let execution_domain = conflict.candidates.iter().find_map(|candidate| {
+                snapshot
+                    .sources
+                    .iter()
+                    .find(|source| source.record.key == candidate.source)
+                    .map(|source| source.record.execution_domain_id.as_str())
+            })?;
+            let native_candidate_id = format!("bitfun.cli:{}", action.id);
+            let mut candidates = conflict
+                .candidates
+                .iter()
+                .map(|candidate| {
+                    (
+                        candidate.candidate_id.as_str(),
+                        candidate.content_version.as_str(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            candidates.push((native_candidate_id.as_str(), env!("CARGO_PKG_VERSION")));
+            let conflict_key =
+                native_command_conflict_key(execution_domain, &conflict.command_name, candidates);
+            Some((action.id.to_string(), native_candidate_id, conflict_key))
+        });
+        projections.extend(conflict.candidates.iter().map(|candidate| {
+            let native_collision = native_group.as_ref().map(
+                |(native_action_id, native_candidate_id, conflict_key)| {
+                    NativeCommandCollisionProjection {
+                        native_action_id: native_action_id.clone(),
+                        native_candidate_id: native_candidate_id.clone(),
+                        external_candidate_id: candidate.candidate_id.clone(),
+                        selected_candidate_id: conflict_choices.get(conflict_key).cloned(),
+                        conflict_key: conflict_key.clone(),
+                    }
+                },
+            );
+            ExternalCommandProjection {
+                action_id: format!("external-command-candidate:{}", candidate.candidate_id),
+                command_name: conflict.command_name.clone(),
+                invocation_alias: format!(
+                    "/external:{}:{}",
+                    candidate.source.provider_id, conflict.command_name
+                ),
+                candidate_id: candidate.candidate_id.clone(),
+                content_version: candidate.content_version.clone(),
+                description: format!(
+                    "{} · {} · {}",
+                    candidate.command_description,
+                    candidate.source_display_name,
+                    candidate.ecosystem_id
+                ),
+                restricted: !matches!(candidate.availability, PromptCommandAvailability::Available),
+                provider_conflict_key: Some(conflict.conflict_key.clone()),
+                native_collision,
+            }
+        }));
+    }
+    projections
+}
+
+fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, usize) {
+    snapshot
+        .commands
+        .iter()
+        .fold((0, 0), |(available, restricted), entry| {
+            if matches!(
+                entry.definition.availability,
+                PromptCommandAvailability::Available
+            ) {
+                (available + 1, restricted)
+            } else {
+                (available, restricted + 1)
+            }
+        })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ExternalToolReviewAction {
+    Show,
+    Refresh,
+    Decide {
+        approval_key: String,
+        decision_key: String,
+        approved: bool,
+    },
+    Choose {
+        conflict_key: String,
+        candidate_id: String,
+    },
+}
+
+struct ExternalToolMutationResult {
+    action: ExternalToolReviewAction,
+    result: std::result::Result<ExternalSourceCatalogSnapshot, String>,
+}
+
+struct ExternalToolTargetSummary<'a> {
+    tools: Vec<&'a ExternalToolCatalogEntry>,
+}
+
+impl<'a> ExternalToolTargetSummary<'a> {
+    fn first(&self) -> &'a ExternalToolCatalogEntry {
+        self.tools[0]
+    }
+
+    fn activation(&self) -> &'a ExternalToolActivationState {
+        &self.first().activation
+    }
+
+    fn names(&self) -> String {
+        let mut names = self
+            .tools
+            .iter()
+            .map(|tool| tool.definition.name.as_str())
+            .collect::<Vec<_>>();
+        names.sort_unstable();
+        names.dedup();
+        names.join(", ")
+    }
+}
+
+fn external_tool_target_summaries(
+    snapshot: &ExternalSourceCatalogSnapshot,
+) -> Vec<ExternalToolTargetSummary<'_>> {
+    let mut summaries: Vec<ExternalToolTargetSummary<'_>> = Vec::new();
+    for tool in &snapshot.tools {
+        if let Some(summary) = summaries
+            .iter_mut()
+            .find(|summary| summary.first().definition.id.target == tool.definition.id.target)
+        {
+            summary.tools.push(tool);
+        } else {
+            summaries.push(ExternalToolTargetSummary { tools: vec![tool] });
+        }
+    }
+    summaries
+}
+
+fn external_tool_activation_label(activation: &ExternalToolActivationState) -> &'static str {
+    match activation {
+        ExternalToolActivationState::ApprovalRequired => "approval required",
+        ExternalToolActivationState::Disabled => "disabled",
+        ExternalToolActivationState::Active => "active",
+        ExternalToolActivationState::Conflict => "name conflict",
+        ExternalToolActivationState::Unsupported { .. } => "unsupported",
+        ExternalToolActivationState::RuntimeUnavailable { .. } => "runtime unavailable",
+        ExternalToolActivationState::LoadFailed { .. } => "load failed",
+        _ => "unknown",
+    }
+}
+
+fn external_tool_scope_label(scope: impl std::fmt::Debug) -> &'static str {
+    match format!("{scope:?}").as_str() {
+        "UserGlobal" => "user global",
+        "Project" => "project",
+        "WorkspaceLocal" => "workspace local",
+        "RemoteUser" => "remote user",
+        "RemoteProject" => "remote project",
+        _ => "unknown",
+    }
+}
+
+fn external_tool_user_facing_reason(reason: &str) -> String {
+    reason
+        .replace("PR2 worker", "Tool process")
+        .replace("PR2", "This version")
+}
+
+fn external_tool_reason(summary: &ExternalToolTargetSummary<'_>) -> Option<String> {
+    match summary.activation() {
+        ExternalToolActivationState::Unsupported { reason }
+        | ExternalToolActivationState::RuntimeUnavailable { reason }
+        | ExternalToolActivationState::LoadFailed { reason } => {
+            Some(external_tool_user_facing_reason(reason))
+        }
+        _ => None,
+    }
+}
+
+fn external_tool_next_step(activation: &ExternalToolActivationState) -> &'static str {
+    match activation {
+        ExternalToolActivationState::ApprovalRequired => {
+            "Review access, then enable the target or keep it disabled."
+        }
+        ExternalToolActivationState::Disabled => {
+            "Enable the target after reviewing its source and access."
+        }
+        ExternalToolActivationState::Active => {
+            "No action is required. Disable the target to stop exposing it."
+        }
+        ExternalToolActivationState::Conflict => "Choose a provider below, or disable this target.",
+        ExternalToolActivationState::Unsupported { .. } => {
+            "Convert the module to the supported standalone JavaScript subset, then refresh."
+        }
+        ExternalToolActivationState::RuntimeUnavailable { .. } => {
+            "Restore the required runtime, then refresh."
+        }
+        ExternalToolActivationState::LoadFailed { .. } => {
+            "Refresh to retry. If it still fails, inspect or update the module, or disable this target."
+        }
+        _ => "Refresh to retrieve the current target state.",
+    }
+}
+
+fn external_tool_default_reason(activation: &ExternalToolActivationState) -> &'static str {
+    match activation {
+        ExternalToolActivationState::ApprovalRequired => {
+            "The module needs approval before BitFun loads it."
+        }
+        ExternalToolActivationState::Disabled => "The target was disabled by user choice.",
+        ExternalToolActivationState::Active => {
+            "The module loaded successfully and is exposed in this execution domain."
+        }
+        ExternalToolActivationState::Conflict => "Another implementation uses the same tool name.",
+        ExternalToolActivationState::Unsupported { .. } => {
+            "The module uses unsupported syntax or behavior."
+        }
+        ExternalToolActivationState::RuntimeUnavailable { .. } => {
+            "The required JavaScript runtime is unavailable."
+        }
+        ExternalToolActivationState::LoadFailed { .. } => {
+            "The tool process could not load this module."
+        }
+        _ => "The current state is unavailable.",
+    }
+}
+
+fn external_tool_can_enable(activation: &ExternalToolActivationState) -> bool {
+    matches!(
+        activation,
+        ExternalToolActivationState::ApprovalRequired | ExternalToolActivationState::Disabled
+    )
+}
+
+fn external_tool_can_disable(activation: &ExternalToolActivationState) -> bool {
+    matches!(
+        activation,
+        ExternalToolActivationState::ApprovalRequired
+            | ExternalToolActivationState::Active
+            | ExternalToolActivationState::Conflict
+            | ExternalToolActivationState::LoadFailed { .. }
+    )
+}
+
+fn external_tool_result_is_stale(
+    current: Option<&ExternalSourceCatalogSnapshot>,
+    incoming: &ExternalSourceCatalogSnapshot,
+) -> bool {
+    current.is_some_and(|current| current.generation > incoming.generation)
+}
+
+fn external_tool_pending_notice_key(snapshot: &ExternalSourceCatalogSnapshot) -> Option<String> {
+    let mut decisions = snapshot
+        .tool_approval_requests
+        .iter()
+        .map(|request| format!("approval:{}", request.decision_key))
+        .chain(
+            snapshot
+                .tool_conflicts
+                .iter()
+                .filter(|conflict| conflict.selected_candidate_id.is_none())
+                .map(|conflict| format!("conflict:{}", conflict.conflict_key)),
+        )
+        .collect::<Vec<_>>();
+    decisions.extend(snapshot.diagnostics.iter().filter_map(|diagnostic| {
+        matches!(
+            diagnostic.severity,
+            ExternalSourceDiagnosticSeverity::Warning | ExternalSourceDiagnosticSeverity::Error
+        )
+        .then(|| {
+            format!(
+                "diagnostic:{:?}:{}:{}:{}",
+                diagnostic.severity,
+                diagnostic.code,
+                diagnostic.message,
+                diagnostic
+                    .source
+                    .as_ref()
+                    .map(|source| source.stable_key())
+                    .unwrap_or_default()
+            )
+        })
+    }));
+    if decisions.is_empty() {
+        return None;
+    }
+    decisions.sort_unstable();
+    Some(decisions.join("\n"))
+}
+
+fn external_tool_capability_label(capability: ExternalToolCapability) -> &'static str {
+    match capability {
+        ExternalToolCapability::FileSystem => "filesystem",
+        ExternalToolCapability::Network => "network",
+        ExternalToolCapability::Process => "process",
+        ExternalToolCapability::Environment => "environment variables",
+        _ => "other",
+    }
+}
+
+fn external_tool_runtime_label(runtime: ExternalToolRuntimeKind) -> &'static str {
+    match runtime {
+        ExternalToolRuntimeKind::JavaScript => "JavaScript",
+        ExternalToolRuntimeKind::TypeScript => "TypeScript",
+        _ => "unknown runtime",
+    }
+}
+
+fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -> String {
+    let Some(snapshot) = snapshot else {
+        return "External tools\n\nTool discovery has not completed. Run /external-tools refresh and try again."
+            .to_string();
+    };
+    let mut lines = vec![
+        "External tools".to_string(),
+        String::new(),
+        "No external code ran during discovery. Enabling a tool starts its external module with your user permissions and inherited environment variables; BitFun does not provide an OS sandbox or full descendant-process cleanup in this version."
+            .to_string(),
+    ];
+
+    if snapshot.discovery_pending {
+        lines.push(String::new());
+        lines.push("Discovery is still running. Existing results remain usable.".to_string());
+    }
+
+    lines.push(String::new());
+    lines.push("Targets".to_string());
+    let targets = external_tool_target_summaries(snapshot);
+    if targets.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for (index, target) in targets.iter().enumerate() {
+            let tool = target.first();
+            let source = snapshot
+                .sources
+                .iter()
+                .find(|source| source.record.key == tool.definition.id.target.source);
+            let capabilities = target
+                .tools
+                .iter()
+                .flat_map(|tool| tool.definition.capabilities.iter().copied())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .map(external_tool_capability_label)
+                .collect::<Vec<_>>()
+                .join(", ");
+            lines.push(format!(
+                "  {}. {} - {}",
+                index + 1,
+                target.names(),
+                external_tool_activation_label(target.activation())
+            ));
+            lines.push(format!(
+                "     Source root: {}",
+                source
+                    .map(|source| source.record.location.as_str())
+                    .unwrap_or("unknown")
+            ));
+            lines.push("     Module files:".to_string());
+            let module_paths = target
+                .tools
+                .iter()
+                .map(|tool| tool.definition.module_path.as_str())
+                .collect::<BTreeSet<_>>();
+            for module_path in module_paths {
+                lines.push(format!("       - {module_path}"));
+            }
+            lines.push(format!(
+                "     Scope: {}",
+                source
+                    .map(|source| external_tool_scope_label(source.record.scope))
+                    .unwrap_or("unknown")
+            ));
+            lines.push(format!(
+                "     Execution domain: {}",
+                source
+                    .map(|source| source.record.execution_domain_id.as_str())
+                    .unwrap_or("unknown")
+            ));
+            lines.push(format!(
+                "     Working directory: {}",
+                tool.definition.working_directory
+            ));
+            lines.push(format!(
+                "     Runtime: {}",
+                external_tool_runtime_label(tool.definition.runtime_kind)
+            ));
+            lines.push(format!("     Access: {capabilities}"));
+            if let Some(reason) = external_tool_reason(target) {
+                lines.push(format!("     Reason: {reason}"));
+            } else {
+                lines.push(format!(
+                    "     Reason: {}",
+                    external_tool_default_reason(target.activation())
+                ));
+            }
+            lines.push(format!(
+                "     Next step: {}",
+                external_tool_next_step(target.activation())
+            ));
+            let mut commands = Vec::new();
+            if external_tool_can_enable(target.activation()) {
+                commands.push(format!("/external-tools enable {}", index + 1));
+            }
+            if external_tool_can_disable(target.activation()) {
+                commands.push(format!("/external-tools disable {}", index + 1));
+            }
+            if !commands.is_empty() {
+                lines.push(format!("     Commands: {}", commands.join("  or  ")));
+            }
+        }
+    }
+
+    lines.push(String::new());
+    lines.push("Name conflicts".to_string());
+    let pending_conflicts = snapshot
+        .tool_conflicts
+        .iter()
+        .filter(|conflict| conflict.selected_candidate_id.is_none())
+        .collect::<Vec<_>>();
+    if pending_conflicts.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for (conflict_index, conflict) in pending_conflicts.iter().enumerate() {
+            lines.push(format!(
+                "  {}. Tool '{}' requires a provider choice:",
+                conflict_index + 1,
+                conflict.tool_name
+            ));
+            for (candidate_index, candidate) in conflict.candidates.iter().enumerate() {
+                lines.push(format!(
+                    "     {}. {} ({}) - /external-tools choose {} {}",
+                    candidate_index + 1,
+                    candidate.display_name,
+                    candidate.provider_id,
+                    conflict_index + 1,
+                    candidate_index + 1
+                ));
+            }
+            lines.push(
+                "     The choice applies to matching candidates in this execution domain."
+                    .to_string(),
+            );
+        }
+    }
+
+    lines.push(String::new());
+    lines.push("Diagnostics".to_string());
+    if snapshot.diagnostics.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for diagnostic in &snapshot.diagnostics {
+            let severity = match diagnostic.severity {
+                ExternalSourceDiagnosticSeverity::Info => "info",
+                ExternalSourceDiagnosticSeverity::Warning => "warning",
+                ExternalSourceDiagnosticSeverity::Error => "error",
+                _ => "notice",
+            };
+            let source = diagnostic
+                .source
+                .as_ref()
+                .map(|source| format!(" [{}]", source.stable_key()))
+                .unwrap_or_default();
+            lines.push(format!(
+                "  - {severity} [{}]{source}: {}",
+                diagnostic.code,
+                external_tool_user_facing_reason(&diagnostic.message)
+            ));
+        }
+    }
+
+    lines.push(String::new());
+    lines.push(
+        "Use /external-tools refresh after editing, upgrading, or removing external tools."
+            .to_string(),
+    );
+    lines.join("\n")
+}
+
+fn parse_positive_index(value: Option<&str>, label: &str) -> Result<usize, String> {
+    let raw = value.ok_or_else(|| format!("missing {label}"))?;
+    let index = raw
+        .parse::<usize>()
+        .map_err(|_| format!("{label} must be a positive number"))?;
+    if index == 0 {
+        return Err(format!("{label} must be a positive number"));
+    }
+    Ok(index - 1)
+}
+
+fn parse_external_tool_review_action(
+    arguments: &str,
+    current_snapshot: Option<&ExternalSourceCatalogSnapshot>,
+    reviewed_snapshot: Option<&ExternalSourceCatalogSnapshot>,
+) -> Result<ExternalToolReviewAction, String> {
+    let mut parts = arguments.split_whitespace();
+    let Some(command) = parts.next() else {
+        return Ok(ExternalToolReviewAction::Show);
+    };
+    if command.eq_ignore_ascii_case("refresh") {
+        if parts.next().is_some() {
+            return Err("usage: /external-tools refresh".to_string());
+        }
+        return Ok(ExternalToolReviewAction::Refresh);
+    }
+    if command.eq_ignore_ascii_case("help") {
+        return Ok(ExternalToolReviewAction::Show);
+    }
+    // Numbered commands refer to the immutable catalog that produced the
+    // review popup. The backend still validates stable decision/conflict keys,
+    // so a changed target fails closed instead of reusing the same number for
+    // a different tool after a watcher refresh.
+    let snapshot = reviewed_snapshot.or(current_snapshot).ok_or_else(|| {
+        "tool discovery has not completed; run /external-tools refresh".to_string()
+    })?;
+    if command.eq_ignore_ascii_case("enable") || command.eq_ignore_ascii_case("disable") {
+        let index = parse_positive_index(parts.next(), "target number")?;
+        if parts.next().is_some() {
+            return Err(format!("usage: /external-tools {command} <target-number>"));
+        }
+        let targets = external_tool_target_summaries(snapshot);
+        let target = targets.get(index).ok_or_else(|| {
+            "that target is no longer available; reopen /external-tools".to_string()
+        })?;
+        let approved = command.eq_ignore_ascii_case("enable");
+        let allowed = if approved {
+            external_tool_can_enable(target.activation())
+        } else {
+            external_tool_can_disable(target.activation())
+        };
+        if !allowed {
+            return Err(format!(
+                "target {} is {}; reopen /external-tools for its next step",
+                index + 1,
+                external_tool_activation_label(target.activation())
+            ));
+        }
+        let tool = target.first();
+        return Ok(ExternalToolReviewAction::Decide {
+            approval_key: tool.approval_key.clone(),
+            decision_key: tool.decision_key.clone(),
+            approved,
+        });
+    }
+    if command.eq_ignore_ascii_case("choose") {
+        let conflict_index = parse_positive_index(parts.next(), "conflict number")?;
+        let candidate_index = parse_positive_index(parts.next(), "candidate number")?;
+        if parts.next().is_some() {
+            return Err(
+                "usage: /external-tools choose <conflict-number> <candidate-number>".to_string(),
+            );
+        }
+        let conflict = snapshot
+            .tool_conflicts
+            .iter()
+            .filter(|conflict| conflict.selected_candidate_id.is_none())
+            .nth(conflict_index)
+            .ok_or_else(|| {
+                "that conflict is no longer available; reopen /external-tools".to_string()
+            })?;
+        let candidate = conflict.candidates.get(candidate_index).ok_or_else(|| {
+            "that candidate is no longer available; reopen /external-tools".to_string()
+        })?;
+        return Ok(ExternalToolReviewAction::Choose {
+            conflict_key: conflict.conflict_key.clone(),
+            candidate_id: candidate.candidate_id.clone(),
+        });
+    }
+    Err("usage: /external-tools [refresh | enable <number> | disable <number> | choose <conflict-number> <candidate-number>]".to_string())
+}
+
+fn external_tool_mutation_result_label(
+    action: &ExternalToolReviewAction,
+    snapshot: &ExternalSourceCatalogSnapshot,
+) -> String {
+    match action {
+        ExternalToolReviewAction::Refresh => "External tools refreshed".to_string(),
+        ExternalToolReviewAction::Decide {
+            approval_key,
+            decision_key,
+            approved: true,
+        } => {
+            let activations = snapshot
+                .tools
+                .iter()
+                .filter(|tool| {
+                    tool.approval_key == *approval_key && tool.decision_key == *decision_key
+                })
+                .map(|tool| &tool.activation)
+                .collect::<Vec<_>>();
+            if activations.is_empty() {
+                "External tool approval saved; reopen /external-tools to review the changed target"
+                    .to_string()
+            } else if activations
+                .iter()
+                .any(|state| matches!(state, ExternalToolActivationState::LoadFailed { .. }))
+            {
+                "External tool approved, but loading failed".to_string()
+            } else if activations.iter().any(|state| {
+                matches!(
+                    state,
+                    ExternalToolActivationState::RuntimeUnavailable { .. }
+                )
+            }) {
+                "External tool approved, but its runtime is unavailable".to_string()
+            } else if activations
+                .iter()
+                .any(|state| matches!(state, ExternalToolActivationState::Conflict))
+            {
+                "External tool approved; choose a provider before every export is available"
+                    .to_string()
+            } else if activations
+                .iter()
+                .all(|state| matches!(state, ExternalToolActivationState::Active))
+            {
+                "External tool enabled".to_string()
+            } else {
+                "External tool approval saved; reopen /external-tools to review its current state"
+                    .to_string()
+            }
+        }
+        ExternalToolReviewAction::Decide {
+            approval_key,
+            decision_key,
+            approved: false,
+        } => {
+            let disabled = snapshot.tools.iter().any(|tool| {
+                tool.approval_key == *approval_key
+                    && tool.decision_key == *decision_key
+                    && matches!(tool.activation, ExternalToolActivationState::Disabled)
+            });
+            if disabled {
+                "External tool disabled".to_string()
+            } else {
+                "External tool decision saved; reopen /external-tools to review the changed target"
+                    .to_string()
+            }
+        }
+        ExternalToolReviewAction::Choose {
+            conflict_key,
+            candidate_id,
+        } => {
+            let selected = snapshot.tool_conflicts.iter().any(|conflict| {
+                conflict.conflict_key == *conflict_key
+                    && conflict.selected_candidate_id.as_deref() == Some(candidate_id.as_str())
+            });
+            if selected {
+                "External tool provider selected".to_string()
+            } else {
+                "External tool candidates changed; reopen /external-tools before choosing"
+                    .to_string()
+            }
+        }
+        ExternalToolReviewAction::Show => "External tools".to_string(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuiltinCommandReconfirmation {
+    conflict_key: String,
+    candidate_id: String,
+    confirmed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ExternalSourceConflictPreferences {
+    choices: BTreeMap<String, String>,
+    lineage_current_keys: BTreeMap<String, String>,
+    conflicted_candidate_ids: BTreeSet<String>,
+}
+
+impl
+    From<(
+        BTreeMap<String, String>,
+        BTreeMap<String, String>,
+        BTreeSet<String>,
+    )> for ExternalSourceConflictPreferences
+{
+    fn from(
+        (choices, lineage_current_keys, conflicted_candidate_ids): (
+            BTreeMap<String, String>,
+            BTreeMap<String, String>,
+            BTreeSet<String>,
+        ),
+    ) -> Self {
+        Self {
+            choices,
+            lineage_current_keys,
+            conflicted_candidate_ids,
+        }
+    }
+}
+
+fn builtin_command_reconfirmation(
+    action_id: &str,
+    action_name: &str,
+    preferences: &ExternalSourceConflictPreferences,
+) -> Option<BuiltinCommandReconfirmation> {
+    let candidate_id = format!("bitfun.cli:{action_id}");
+    let participated_in_conflict = preferences.conflicted_candidate_ids.contains(&candidate_id);
+    if !participated_in_conflict {
+        return None;
+    }
+    let command_name = action_name.trim_start_matches('/');
+    let conflict_key = native_command_conflict_key(
+        "local-user",
+        command_name,
+        [(candidate_id.as_str(), env!("CARGO_PKG_VERSION"))],
+    );
+    let confirmed = preferences.choices.get(&conflict_key) == Some(&candidate_id);
+    Some(BuiltinCommandReconfirmation {
+        conflict_key,
+        candidate_id,
+        confirmed,
+    })
+}
+
+fn builtin_reconfirmation_names(
+    preferences: &ExternalSourceConflictPreferences,
+) -> BTreeSet<String> {
+    slash_actions(ActionState::chat(false, false))
+        .into_iter()
+        .filter(|action| {
+            builtin_command_reconfirmation(action.id, action.name, preferences)
+                .is_some_and(|reconfirmation| !reconfirmation.confirmed)
+        })
+        .map(|action| action.name.trim_start_matches('/').to_ascii_lowercase())
+        .collect()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommandQualifier {
+    Unqualified,
+    Builtin,
+    External,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommandRoute {
+    Builtin,
+    External,
+    AskForCollisionChoice,
+    WaitForDiscovery,
+    UnknownBuiltin,
+}
+
+fn parse_command_token(token: &str) -> (CommandQualifier, &str) {
+    let requested_name = token.trim_start_matches('/');
+    let Some((qualifier, command_name)) = requested_name.split_once(':') else {
+        return (CommandQualifier::Unqualified, requested_name);
+    };
+    if qualifier.eq_ignore_ascii_case("builtin") {
+        (CommandQualifier::Builtin, command_name)
+    } else if qualifier.eq_ignore_ascii_case("external") {
+        (CommandQualifier::External, command_name)
+    } else {
+        (CommandQualifier::Unqualified, requested_name)
+    }
+}
+
+fn command_route(
+    qualifier: CommandQualifier,
+    has_builtin: bool,
+    external: Option<&ExternalCommandProjection>,
+    discovery_pending: bool,
+    builtin_reconfirmation_required: bool,
+) -> CommandRoute {
+    match qualifier {
+        CommandQualifier::Builtin => {
+            if has_builtin {
+                CommandRoute::Builtin
+            } else {
+                CommandRoute::UnknownBuiltin
+            }
+        }
+        CommandQualifier::External => CommandRoute::External,
+        CommandQualifier::Unqualified => {
+            if builtin_reconfirmation_required {
+                return CommandRoute::AskForCollisionChoice;
+            }
+            if discovery_pending {
+                return CommandRoute::WaitForDiscovery;
+            }
+            if let Some(collision) = external.and_then(|command| command.native_collision.as_ref())
+            {
+                return match collision.selected_candidate_id.as_deref() {
+                    Some(selected) if selected == collision.external_candidate_id => {
+                        CommandRoute::External
+                    }
+                    Some(selected) if selected == collision.native_candidate_id => {
+                        CommandRoute::Builtin
+                    }
+                    _ => CommandRoute::AskForCollisionChoice,
+                };
+            }
+            if has_builtin {
+                CommandRoute::Builtin
+            } else {
+                CommandRoute::External
+            }
+        }
+    }
+}
 
 fn agent_event_stream_failure(error: TryRecvError) -> Option<String> {
     match error {
@@ -149,6 +1041,7 @@ struct ChatEventContext<'a> {
 
 pub(crate) struct ChatMode {
     config: CliConfig,
+    keymap: ResolvedKeymap,
     /// Current agent type (e.g. "agentic", "plan", "debug")
     agent_type: String,
     workspace: Option<String>,
@@ -162,6 +1055,13 @@ pub(crate) struct ChatMode {
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
     pending_mcp_tasks: Vec<PendingMcpTask>,
+    external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
+    external_source_conflict_choices: BTreeMap<String, String>,
+    external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
+    external_source_conflicted_candidate_ids: BTreeSet<String>,
+    external_tool_notice_key: Option<String>,
+    external_tool_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
+    external_tool_mutation_rx: Option<Receiver<ExternalToolMutationResult>>,
 }
 
 /// Map agent_type to a display name for status messages
@@ -184,8 +1084,10 @@ impl ChatMode {
             workspace.clone().map(PathBuf::from),
         ));
 
+        let keymap = ResolvedKeymap::new(&config.shortcuts);
         Self {
             config,
+            keymap,
             agent_type,
             workspace,
             agent,
@@ -194,6 +1096,13 @@ impl ChatMode {
             initial_prompt: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
+            external_source_snapshot: None,
+            external_source_conflict_choices: BTreeMap::new(),
+            external_source_conflict_lineage_current_keys: BTreeMap::new(),
+            external_source_conflicted_candidate_ids: BTreeSet::new(),
+            external_tool_notice_key: None,
+            external_tool_review_snapshot: None,
+            external_tool_mutation_rx: None,
         }
     }
 
@@ -207,6 +1116,212 @@ impl ChatMode {
     pub(crate) fn with_initial_prompt(mut self, prompt: String) -> Self {
         self.initial_prompt = Some(prompt);
         self
+    }
+
+    fn external_conflict_preferences(&self) -> ExternalSourceConflictPreferences {
+        ExternalSourceConflictPreferences {
+            choices: self.external_source_conflict_choices.clone(),
+            lineage_current_keys: self.external_source_conflict_lineage_current_keys.clone(),
+            conflicted_candidate_ids: self.external_source_conflicted_candidate_ids.clone(),
+        }
+    }
+
+    fn update_external_source_view(
+        &self,
+        chat_view: &mut ChatView,
+        snapshot: &ExternalSourceCatalogSnapshot,
+    ) {
+        let preferences = self.external_conflict_preferences();
+        chat_view.set_external_source_state(
+            external_command_projections(snapshot, &preferences.choices),
+            snapshot.discovery_pending,
+            builtin_reconfirmation_names(&preferences),
+        );
+    }
+
+    fn take_external_tool_notice(
+        &mut self,
+        snapshot: &ExternalSourceCatalogSnapshot,
+    ) -> Option<String> {
+        let next_key = external_tool_pending_notice_key(snapshot);
+        if next_key == self.external_tool_notice_key {
+            return None;
+        }
+        self.external_tool_notice_key = next_key;
+        let approvals = snapshot.tool_approval_requests.len();
+        let conflicts = snapshot
+            .tool_conflicts
+            .iter()
+            .filter(|conflict| conflict.selected_candidate_id.is_none())
+            .count();
+        let diagnostics = snapshot
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                matches!(
+                    diagnostic.severity,
+                    ExternalSourceDiagnosticSeverity::Warning
+                        | ExternalSourceDiagnosticSeverity::Error
+                )
+            })
+            .count();
+        if approvals + conflicts + diagnostics == 0 {
+            None
+        } else {
+            Some(format!(
+                "External tools need attention: {approvals} approvals, {conflicts} name conflicts, {diagnostics} diagnostics - run /external-tools"
+            ))
+        }
+    }
+
+    fn handle_external_tool_review(
+        &mut self,
+        arguments: &str,
+        chat_view: &mut ChatView,
+        chat_state: &ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let action = match parse_external_tool_review_action(
+            arguments,
+            self.external_source_snapshot.as_ref(),
+            self.external_tool_review_snapshot.as_ref(),
+        ) {
+            Ok(action) => action,
+            Err(error) => {
+                chat_view.set_status(Some(error));
+                return;
+            }
+        };
+        if matches!(action, ExternalToolReviewAction::Show) {
+            self.external_tool_review_snapshot = self.external_source_snapshot.clone();
+            chat_view.show_info_popup(external_tool_review_text(
+                self.external_tool_review_snapshot.as_ref(),
+            ));
+            return;
+        }
+
+        if self.external_tool_mutation_rx.is_some() {
+            chat_view.set_status(Some(
+                "An external tool update is already running; input and cancellation remain available."
+                    .to_string(),
+            ));
+            return;
+        }
+
+        let workspace = self.workspace_path_for_sync(chat_state);
+        let pending_status = match &action {
+            ExternalToolReviewAction::Refresh => "Refreshing external tools",
+            ExternalToolReviewAction::Decide { approved: true, .. } => "Enabling external tool",
+            ExternalToolReviewAction::Decide {
+                approved: false, ..
+            } => "Disabling external tool",
+            ExternalToolReviewAction::Choose { .. } => "Selecting external tool provider",
+            ExternalToolReviewAction::Show => unreachable!(),
+        };
+        let task_action = action.clone();
+        let (sender, receiver) = mpsc::channel();
+        rt_handle.spawn(async move {
+            let result = match &task_action {
+                ExternalToolReviewAction::Refresh => {
+                    external_source_snapshot(Some(&workspace), true).await
+                }
+                ExternalToolReviewAction::Decide {
+                    approval_key,
+                    decision_key,
+                    approved,
+                } => {
+                    set_external_tool_target_decision(
+                        Some(&workspace),
+                        approval_key,
+                        decision_key,
+                        *approved,
+                    )
+                    .await
+                }
+                ExternalToolReviewAction::Choose {
+                    conflict_key,
+                    candidate_id,
+                } => {
+                    set_external_tool_conflict_choice(Some(&workspace), conflict_key, candidate_id)
+                        .await
+                }
+                ExternalToolReviewAction::Show => unreachable!(),
+            }
+            .map_err(|error| error.to_string());
+            let _ = sender.send(ExternalToolMutationResult {
+                action: task_action,
+                result,
+            });
+        });
+        self.external_tool_mutation_rx = Some(receiver);
+        chat_view.set_status(Some(format!(
+            "{pending_status}; you can continue typing or cancel other UI work"
+        )));
+    }
+
+    fn poll_external_tool_mutation(&mut self, chat_view: &mut ChatView) -> bool {
+        let outcome = match self
+            .external_tool_mutation_rx
+            .as_ref()
+            .map(Receiver::try_recv)
+        {
+            Some(Ok(outcome)) => outcome,
+            Some(Err(MpscTryRecvError::Empty)) | None => return false,
+            Some(Err(MpscTryRecvError::Disconnected)) => {
+                self.external_tool_mutation_rx = None;
+                chat_view.set_status(Some(
+                    "External tool update stopped before returning a result; reopen /external-tools and retry."
+                        .to_string(),
+                ));
+                return true;
+            }
+        };
+        self.external_tool_mutation_rx = None;
+        match outcome.result {
+            Ok(snapshot) => {
+                if external_tool_result_is_stale(self.external_source_snapshot.as_ref(), &snapshot)
+                {
+                    chat_view.set_status(Some(
+                        "External tool update completed; a newer catalog result is already displayed."
+                            .to_string(),
+                    ));
+                    return true;
+                }
+                self.update_external_source_view(chat_view, &snapshot);
+                self.external_tool_notice_key = external_tool_pending_notice_key(&snapshot);
+                let approvals = snapshot.tool_approval_requests.len();
+                let conflicts = snapshot
+                    .tool_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_none())
+                    .count();
+                let result_label = external_tool_mutation_result_label(&outcome.action, &snapshot);
+                self.external_source_snapshot = Some(snapshot);
+                if approvals + conflicts == 0 {
+                    chat_view.set_status(Some(result_label));
+                } else {
+                    chat_view.set_status(Some(format!(
+                        "{result_label}; {approvals} approvals and {conflicts} conflicts remain - run /external-tools"
+                    )));
+                }
+            }
+            Err(error) => {
+                tracing::warn!("External tool review action failed: {}", error);
+                chat_view.set_status(Some(format!(
+                    "External tool choice was not applied: {error}. Reopen /external-tools to review current results."
+                )));
+            }
+        }
+        true
+    }
+
+    fn replace_external_conflict_preferences(
+        &mut self,
+        preferences: ExternalSourceConflictPreferences,
+    ) {
+        self.external_source_conflict_choices = preferences.choices;
+        self.external_source_conflict_lineage_current_keys = preferences.lineage_current_keys;
+        self.external_source_conflicted_candidate_ids = preferences.conflicted_candidate_ids;
     }
 
     fn workspace_path_for_sync(&self, chat_state: &ChatState) -> std::path::PathBuf {
@@ -478,7 +1593,8 @@ impl ChatMode {
             (false, EffectiveColorScheme::Truecolor) => Theme::dark(),
         };
         let theme = self.resolve_configured_theme(base, appearance, scheme);
-        let mut chat_view = ChatView::new(theme);
+        let shortcut_hints = self.keymap.compact_hints(ActionState::chat(false, false));
+        let mut chat_view = ChatView::new(theme, shortcut_hints);
 
         // Create or restore core session
         let rt_handle = tokio::runtime::Handle::current();
@@ -499,20 +1615,25 @@ impl ChatMode {
                         Some(effective_workspace_path.to_string_lossy().to_string());
 
                     // Load historical messages for UI display
-                    let messages = agent.get_messages(&rid).await.unwrap_or_default();
+                    let transcript = agent.get_transcript(&rid).await.unwrap_or_else(|_| {
+                        bitfun_agent_runtime::sdk::SessionTranscript {
+                            session_id: rid.clone(),
+                            messages: Vec::new(),
+                        }
+                    });
 
-                    let state = ChatState::from_core_messages(
+                    let state = ChatState::from_session_transcript(
                         rid.clone(),
                         summary.session_name,
                         summary.agent_type,
                         effective_workspace,
-                        &messages,
+                        &transcript,
                     );
 
                     tracing::info!(
                         "Session restored: {}, {} messages loaded",
                         rid,
-                        messages.len()
+                        transcript.messages.len()
                     );
 
                     Ok::<_, anyhow::Error>((rid, state))
@@ -537,6 +1658,49 @@ impl ChatMode {
         // Keep ChatMode workspace in sync with the session's effective workspace
         self.agent_type = chat_state.agent_type.clone();
         self.workspace = chat_state.workspace.clone();
+
+        let external_workspace = self.agent.workspace_path_buf();
+        let (initial_external_sources, mut external_source_rx, conflict_preferences) =
+            tokio::task::block_in_place(|| {
+                rt_handle.block_on(async {
+                    let updates =
+                        subscribe_external_source_updates(Some(&external_workspace)).await;
+                    let snapshot = external_source_snapshot(Some(&external_workspace), false).await;
+                    let preferences = external_source_conflict_choices().await.map(Into::into);
+                    (snapshot, updates.ok(), preferences)
+                })
+            });
+        match conflict_preferences {
+            Ok(preferences) => self.replace_external_conflict_preferences(preferences),
+            Err(error) => tracing::warn!("External source preferences are unavailable: {}", error),
+        }
+        match initial_external_sources {
+            Ok(snapshot) => {
+                let (available, restricted) = external_command_counts(&snapshot);
+                let pending_conflicts = snapshot
+                    .command_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_none())
+                    .count();
+                let tool_notice = self.take_external_tool_notice(&snapshot);
+                self.update_external_source_view(&mut chat_view, &snapshot);
+                self.external_source_snapshot = Some(snapshot.clone());
+                if snapshot.discovery_pending {
+                    chat_view.set_status(Some(
+                        "Checking compatible content from external AI applications".to_string(),
+                    ));
+                } else if let Some(notice) = tool_notice {
+                    chat_view.set_status(Some(notice));
+                } else if available + restricted > 0 || pending_conflicts > 0 {
+                    chat_view.set_status(Some(format!(
+                        "External sources: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
+                    )));
+                }
+            }
+            Err(error) => {
+                tracing::warn!("External source discovery is unavailable: {}", error);
+            }
+        }
 
         // Load current model name for display
         self.load_current_model_name(&mut chat_state, &rt_handle);
@@ -589,11 +1753,17 @@ impl ChatMode {
         let mut subagent_parent_tools: HashMap<String, String> = HashMap::new();
         let mut last_spinner_redraw = Instant::now();
         let mut pending_resize_at: Option<Instant> = None;
+        let mut event_reader = crate::ui::input::EventReader::default();
         let mut fatal_event_stream_error: Option<String> = None;
         let spinner_redraw_interval = Duration::from_millis(SPINNER_REDRAW_INTERVAL_MS);
         let resize_redraw_debounce = Duration::from_millis(RESIZE_REDRAW_DEBOUNCE_MS);
 
         while !should_quit {
+            chat_view.set_action_state(
+                ActionState::chat(chat_state.is_processing, false),
+                &self.keymap,
+            );
+
             // Coalesce rapid resize bursts before invalidating caches and redrawing.
             if let Some(last_resize_at) = pending_resize_at {
                 if last_resize_at.elapsed() >= resize_redraw_debounce {
@@ -619,6 +1789,64 @@ impl ChatMode {
             // Poll completion of non-blocking MCP operations before rendering.
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
+            }
+            if self.poll_external_tool_mutation(&mut chat_view) {
+                needs_redraw = true;
+            }
+
+            let mut external_source_closed = false;
+            if let Some(receiver) = external_source_rx.as_mut() {
+                let mut latest = None;
+                for _ in 0..4 {
+                    match receiver.try_recv() {
+                        Ok(snapshot) => latest = Some(snapshot),
+                        Err(TryRecvError::Lagged(_)) => continue,
+                        Err(TryRecvError::Empty) => break,
+                        Err(TryRecvError::Closed) => {
+                            external_source_closed = true;
+                            break;
+                        }
+                    }
+                }
+                if let Some(snapshot) = latest {
+                    let discovery_just_finished = self
+                        .external_source_snapshot
+                        .as_ref()
+                        .is_some_and(|previous| previous.discovery_pending)
+                        && !snapshot.discovery_pending;
+                    let preferences = tokio::task::block_in_place(|| {
+                        rt_handle
+                            .block_on(external_source_conflict_choices())
+                            .map(Into::into)
+                    });
+                    if let Ok(preferences) = preferences {
+                        self.replace_external_conflict_preferences(preferences);
+                    }
+                    let tool_notice = self.take_external_tool_notice(&snapshot);
+                    self.update_external_source_view(&mut chat_view, &snapshot);
+                    if snapshot.discovery_pending {
+                        chat_view.set_status(Some(
+                            "Checking compatible content from external AI applications".to_string(),
+                        ));
+                    } else if let Some(notice) = tool_notice {
+                        chat_view.set_status(Some(notice));
+                    } else if discovery_just_finished {
+                        let (available, restricted) = external_command_counts(&snapshot);
+                        let pending_conflicts = snapshot
+                            .command_conflicts
+                            .iter()
+                            .filter(|conflict| conflict.selected_candidate_id.is_none())
+                            .count();
+                        chat_view.set_status(Some(format!(
+                            "External sources ready: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
+                        )));
+                    }
+                    self.external_source_snapshot = Some(snapshot);
+                    needs_redraw = true;
+                }
+            }
+            if external_source_closed {
+                external_source_rx = None;
             }
 
             if chat_view.login_form_visible() {
@@ -794,13 +2022,14 @@ impl ChatMode {
                             );
                             continue;
                         }
-                        if let ToolEventData::ConfirmationNeeded {
-                            tool_id, tool_name, ..
-                        } = tool_event
-                        {
-                            if self.runtime.approval_controller().is_allowed(tool_name) {
+                        if let ToolEventData::ConfirmationNeeded { identity, .. } = tool_event {
+                            if self
+                                .runtime
+                                .approval_controller()
+                                .is_allowed(identity.effective_name())
+                            {
                                 let agent = self.agent.clone();
-                                let tool_id = tool_id.clone();
+                                let tool_id = identity.tool_id.clone();
                                 match tokio::task::block_in_place(|| {
                                     rt_handle.block_on(agent.confirm_tool(&tool_id, None))
                                 }) {
@@ -896,77 +2125,36 @@ impl ChatMode {
             }
 
             // 3. Process terminal input
-            if crossterm::event::poll(Duration::from_millis(16))? {
-                if let Ok(first_event) = crossterm::event::read() {
-                    // Batch-collect all immediately available events (paste detection).
-                    // On Windows, bracketed paste is broken (crossterm #962) and
-                    // pasted text arrives as rapid Key events with Enter mixed in.
-                    let mut events = vec![first_event];
-                    // Short wait to let rapid paste events arrive in the same batch.
-                    // Duration::ZERO would split pastes across loop iterations.
-                    while crossterm::event::poll(Duration::from_millis(5))? {
-                        if let Ok(ev) = crossterm::event::read() {
-                            events.push(ev);
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // Detect if this batch looks like a paste: multiple Key events
-                    // that include at least one Enter and at least one printable char.
-                    let is_paste_batch = if events.len() > 2 {
-                        let mut has_enter = false;
-                        let mut has_char = false;
-                        for ev in &events {
-                            if let Event::Key(k) = ev {
-                                if k.kind == KeyEventKind::Press || k.kind == KeyEventKind::Repeat {
-                                    match k.code {
-                                        KeyCode::Enter => has_enter = true,
-                                        KeyCode::Char(c) if !c.is_control() => has_char = true,
-                                        _ => {}
-                                    }
-                                }
+            if let Some(events) = event_reader.read_event_batch(Duration::from_millis(16))? {
+                for event in events {
+                    match event {
+                        Event::Key(key) => {
+                            if let Some(reason) = self.handle_key_event(
+                                key,
+                                &mut chat_view,
+                                &mut chat_state,
+                                &rt_handle,
+                            )? {
+                                Self::apply_exit_reason(
+                                    reason,
+                                    ChatEventContext {
+                                        this: self,
+                                        chat_view: &mut chat_view,
+                                        chat_state: &mut chat_state,
+                                        session_id: &mut session_id,
+                                        rt_handle: &rt_handle,
+                                        should_quit: &mut should_quit,
+                                        exit_reason: &mut exit_reason,
+                                    },
+                                );
+                            }
+                            if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat {
+                                needs_redraw = true;
                             }
                         }
-                        has_enter && has_char
-                    } else {
-                        false
-                    };
-
-                    if is_paste_batch {
-                        // Treat entire batch as pasted text
-                        let mut paste_buf = String::new();
-                        let mut non_key_events = Vec::new();
-                        for ev in events {
-                            match ev {
-                                Event::Key(k)
-                                    if k.kind == KeyEventKind::Press
-                                        || k.kind == KeyEventKind::Repeat =>
-                                {
-                                    match k.code {
-                                        KeyCode::Char(c) => paste_buf.push(c),
-                                        KeyCode::Enter => paste_buf.push('\n'),
-                                        _ => {}
-                                    }
-                                }
-                                other => non_key_events.push(other),
-                            }
-                        }
-                        if !paste_buf.is_empty() {
-                            let normalized = paste_buf.replace("\r\n", "\n").replace('\r', "\n");
-                            if chat_view.login_form_visible() {
-                                chat_view.login_form_insert_paste(&normalized);
-                            } else {
-                                for c in normalized.chars() {
-                                    chat_view.handle_char(c);
-                                }
-                            }
-                            needs_redraw = true;
-                        }
-                        // Process any non-key events that were mixed in
-                        for ev in non_key_events {
+                        other => {
                             let outcome = Self::handle_non_key_event(
-                                ev,
+                                other,
                                 ChatEventContext {
                                     this: self,
                                     chat_view: &mut chat_view,
@@ -982,58 +2170,6 @@ impl ChatMode {
                             }
                             if outcome.resize_seen {
                                 pending_resize_at = Some(Instant::now());
-                            }
-                        }
-                    } else {
-                        // Normal single/few events — process each individually
-                        for ev in events {
-                            match ev {
-                                Event::Key(key) => {
-                                    if let Some(reason) = self.handle_key_event(
-                                        key,
-                                        &mut chat_view,
-                                        &mut chat_state,
-                                        &rt_handle,
-                                    )? {
-                                        Self::apply_exit_reason(
-                                            reason,
-                                            ChatEventContext {
-                                                this: self,
-                                                chat_view: &mut chat_view,
-                                                chat_state: &mut chat_state,
-                                                session_id: &mut session_id,
-                                                rt_handle: &rt_handle,
-                                                should_quit: &mut should_quit,
-                                                exit_reason: &mut exit_reason,
-                                            },
-                                        );
-                                    }
-                                    if key.kind == KeyEventKind::Press
-                                        || key.kind == KeyEventKind::Repeat
-                                    {
-                                        needs_redraw = true;
-                                    }
-                                }
-                                other => {
-                                    let outcome = Self::handle_non_key_event(
-                                        other,
-                                        ChatEventContext {
-                                            this: self,
-                                            chat_view: &mut chat_view,
-                                            chat_state: &mut chat_state,
-                                            session_id: &mut session_id,
-                                            rt_handle: &rt_handle,
-                                            should_quit: &mut should_quit,
-                                            exit_reason: &mut exit_reason,
-                                        },
-                                    )?;
-                                    if outcome.request_redraw {
-                                        needs_redraw = true;
-                                    }
-                                    if outcome.resize_seen {
-                                        pending_resize_at = Some(Instant::now());
-                                    }
-                                }
                             }
                         }
                     }
@@ -1065,6 +2201,12 @@ impl ChatMode {
     ) -> Result<Option<ChatExitReason>> {
         if key.kind != KeyEventKind::Press && key.kind != KeyEventKind::Repeat {
             return Ok(None);
+        }
+
+        let modal_state =
+            ActionState::chat(chat_state.is_processing, self.any_popup_visible(chat_view));
+        if let Some(action) = self.keymap.resolve_modal_safe(key, modal_state) {
+            return self.dispatch_action(action, modal_state, chat_view, chat_state, rt_handle);
         }
 
         // ── Permission prompt intercepts all keys when active ──
@@ -1172,24 +2314,26 @@ impl ChatMode {
 
         // ── Normal key handling ──
 
-        // Global popup navigation: Ctrl+W closes all popups, Esc navigates back
+        // Host recovery keys win over configured actions while a popup is open.
         if self.any_popup_visible(chat_view) {
-            match (key.code, key.modifiers) {
-                (KeyCode::Char('w'), KeyModifiers::CONTROL) => {
-                    self.close_all_popups(chat_view);
-                    return Ok(None);
-                }
-                (KeyCode::Esc, _) => {
-                    self.navigate_back(chat_view);
-                    return Ok(None);
-                }
-                _ => {}
+            let state = ActionState::chat(chat_state.is_processing, true);
+            if let Some(action) = self.keymap.resolve_reserved(key, state) {
+                return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
             }
         }
 
         // Info popup intercepts all keys when visible
         if chat_view.info_popup_visible() {
-            chat_view.dismiss_info_popup();
+            match key.code {
+                KeyCode::Up => chat_view.info_popup_scroll_up(1),
+                KeyCode::Down => chat_view.info_popup_scroll_down(1),
+                KeyCode::PageUp => chat_view.info_popup_scroll_up(10),
+                KeyCode::PageDown => chat_view.info_popup_scroll_down(10),
+                KeyCode::Home => chat_view.info_popup_scroll_to_start(),
+                KeyCode::End => chat_view.info_popup_scroll_to_end(),
+                KeyCode::Esc => chat_view.dismiss_info_popup(),
+                _ => {}
+            }
             return Ok(None);
         }
 
@@ -1200,7 +2344,8 @@ impl ChatMode {
                 PaletteAction::Execute(id) => {
                     return self.handle_palette_action(&id, chat_view, chat_state, rt_handle);
                 }
-                PaletteAction::Dismiss | PaletteAction::None => {}
+                PaletteAction::Dismiss => self.navigate_back(chat_view),
+                PaletteAction::None => {}
             }
             return Ok(None);
         }
@@ -1401,103 +2546,20 @@ impl ChatMode {
             return self.handle_login_form_action(action, chat_view, chat_state, rt_handle);
         }
 
+        if let Some(action) = self
+            .keymap
+            .resolve(key, ActionState::chat(chat_state.is_processing, false))
+        {
+            return self.dispatch_action(
+                action,
+                ActionState::chat(chat_state.is_processing, false),
+                chat_view,
+                chat_state,
+                rt_handle,
+            );
+        }
+
         match (key.code, key.modifiers) {
-            // Ctrl+V: read clipboard directly (reliable paste on Windows where
-            // bracketed paste is broken — crossterm issue #962)
-            (KeyCode::Char('v'), KeyModifiers::CONTROL) => {
-                match Clipboard::new().and_then(|mut cb| cb.get_text()) {
-                    Ok(text) if !text.is_empty() => {
-                        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-                        for c in normalized.chars() {
-                            chat_view.handle_char(c);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                // If processing, cancel the current turn instead of quitting
-                if chat_state.is_processing {
-                    tracing::info!("User requested cancellation");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some("Cancelling...".to_string()));
-                    return Ok(None);
-                }
-                tracing::info!("User requested quit");
-                return Ok(Some(ChatExitReason::Quit));
-            }
-
-            (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
-                chat_view.show_command_palette();
-                return Ok(None);
-            }
-
-            // Alt+Enter: insert newline in input
-            (KeyCode::Enter, m) if m.contains(KeyModifiers::ALT) => {
-                chat_view.handle_newline();
-            }
-
-            (KeyCode::Enter, _) => {
-                if let Some(cmd) = chat_view.apply_command_menu_selection() {
-                    let cmd_result = self.handle_command(&cmd, chat_view, chat_state, rt_handle)?;
-                    return Ok(cmd_result);
-                }
-
-                if chat_state.is_processing {
-                    let trimmed = chat_view.input_text().trim();
-                    if trimmed.starts_with('/') {
-                        if let Some(input) = chat_view.send_input() {
-                            let cmd_result =
-                                self.handle_command(&input, chat_view, chat_state, rt_handle)?;
-                            return Ok(cmd_result);
-                        }
-                    } else if !trimmed.is_empty() {
-                        chat_view.set_status(Some(
-                            "Currently processing. Type a /command, or press Ctrl+C to cancel."
-                                .to_string(),
-                        ));
-                    }
-                    return Ok(None);
-                }
-
-                if let Some(input) = chat_view.send_input() {
-                    tracing::info!("User input: {}", input);
-
-                    if input.starts_with('/') {
-                        let cmd_result =
-                            self.handle_command(&input, chat_view, chat_state, rt_handle)?;
-                        return Ok(cmd_result);
-                    }
-
-                    // Send message to agent
-                    let display_name = agent_display_name(&self.agent_type);
-                    chat_view.set_status(Some(format!("{} is thinking...", display_name)));
-
-                    let agent = self.agent.clone();
-                    let input_clone = input.clone();
-                    let agent_type = self.agent_type.clone();
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(agent.send_message(input_clone, &agent_type))
-                    }) {
-                        Ok(turn_id) => {
-                            tracing::info!("Started turn: {}", turn_id);
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to send message: {}", e);
-                            chat_view.set_status(Some(format!("Error: {}", e)));
-                        }
-                    }
-                }
-            }
-
             (KeyCode::Backspace, _) => {
                 chat_view.handle_backspace();
             }
@@ -1509,48 +2571,6 @@ impl ChatMode {
                 chat_view.move_cursor_right();
             }
 
-            // Ctrl+O: toggle expand/collapse on focused block tool
-            (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
-                chat_view.toggle_focused_tool_expand(chat_state);
-            }
-
-            // Ctrl+J: focus previous block tool (up)
-            (KeyCode::Char('j'), KeyModifiers::CONTROL) => {
-                chat_view.cycle_block_tool_focus_prev(chat_state);
-            }
-
-            // Ctrl+K: focus next block tool (down)
-            (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
-                chat_view.cycle_block_tool_focus_next(chat_state);
-            }
-
-            // ↑↓: input history only. Conversation scrolling stays on PageUp/PageDown or mouse.
-            (KeyCode::Up, KeyModifiers::NONE) => {
-                if chat_view.command_menu_visible() {
-                    chat_view.command_menu_up();
-                } else {
-                    chat_view.history_prev();
-                }
-            }
-            (KeyCode::Down, KeyModifiers::NONE) => {
-                if chat_view.command_menu_visible() {
-                    chat_view.command_menu_down();
-                } else {
-                    chat_view.history_next();
-                }
-            }
-
-            (KeyCode::Home, KeyModifiers::CONTROL) => {
-                let total = chat_view.count_message_lines(chat_state);
-                chat_view.scroll_to_top(total);
-                chat_view.set_status(Some("Jumped to conversation top".to_string()));
-            }
-
-            (KeyCode::End, KeyModifiers::CONTROL) => {
-                chat_view.scroll_to_bottom();
-                chat_view.set_status(Some("Jumped to conversation bottom".to_string()));
-            }
-
             (KeyCode::Home, _) => {
                 chat_view.set_cursor_home();
             }
@@ -1559,58 +2579,10 @@ impl ChatMode {
                 chat_view.set_cursor_end();
             }
 
-            (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
-                chat_view.clear_input();
-            }
-
-            (KeyCode::Char('e'), KeyModifiers::CONTROL) => {
-                chat_view.toggle_browse_mode();
-                let status_msg = if chat_view.browse_mode {
-                    "Entered browse mode, use PageUp/PageDown or mouse wheel to scroll conversation"
-                } else {
-                    "Exited browse mode"
-                };
-                chat_view.set_status(Some(status_msg.to_string()));
-            }
-
-            (KeyCode::PageUp, _) => {
-                let total = chat_view.count_message_lines(chat_state);
-                chat_view.scroll_up(10, total);
-            }
-
-            (KeyCode::PageDown, _) => {
-                chat_view.scroll_down(10);
-            }
-
             (KeyCode::Esc, _) => {
-                if chat_state.is_processing {
-                    tracing::info!("User requested cancellation (Esc)");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
-                    chat_view.set_status(Some("Cancelling...".to_string()));
-                    return Ok(None);
-                }
                 if chat_view.browse_mode {
                     chat_view.scroll_to_bottom();
                     chat_view.set_status(Some("Exited browse mode".to_string()));
-                }
-            }
-
-            (KeyCode::Tab, _) => {
-                if !chat_state.is_processing {
-                    self.cycle_agent(chat_view, chat_state, rt_handle);
-                }
-            }
-
-            (KeyCode::BackTab, _) => {
-                if !chat_state.is_processing {
-                    self.cycle_agent_reverse(chat_view, chat_state, rt_handle);
                 }
             }
 
@@ -1702,7 +2674,8 @@ impl ChatMode {
                                 );
                             }
                         }
-                        PaletteAction::Dismiss | PaletteAction::None => {}
+                        PaletteAction::Dismiss => context.this.navigate_back(context.chat_view),
+                        PaletteAction::None => {}
                     }
                 } else if context.chat_view.provider_selector_captures_mouse(&mouse) {
                     if let Some(selection) =
@@ -1779,9 +2752,9 @@ impl ChatMode {
                         _ => {}
                     }
                 }
-                if let Some(cmd) = context.chat_view.take_pending_command() {
-                    if let Some(reason) = context.this.handle_command(
-                        &cmd,
+                if let Some(action_id) = context.chat_view.take_pending_command() {
+                    if let Some(reason) = context.this.handle_action_id(
+                        &action_id,
                         context.chat_view,
                         context.chat_state,
                         context.rt_handle,
@@ -1817,11 +2790,11 @@ impl ChatMode {
                     context.chat_view.mcp_add_dialog_handle_paste(&text);
                 } else if context.chat_view.login_form_visible() {
                     context.chat_view.login_form_insert_paste(&text);
-                } else {
-                    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-                    for c in normalized.chars() {
-                        context.chat_view.handle_char(c);
-                    }
+                } else if context.chat_state.permission_prompt.is_none()
+                    && context.chat_state.question_prompt.is_none()
+                    && !context.this.any_popup_visible(context.chat_view)
+                {
+                    context.chat_view.insert_paste(&text);
                 }
                 outcome.request_redraw = true;
             }
@@ -1847,84 +2820,54 @@ impl ChatMode {
         if !keep_in_stack {
             chat_view.hide_command_palette();
         }
+        self.handle_action_id(action_id, chat_view, chat_state, rt_handle)
+    }
 
-        match action_id {
-            // Session group
-            "new_session" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot start a new session while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
-                return Ok(Some(ChatExitReason::NewSession));
-            }
-            "sessions" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot switch sessions while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
-                self.show_session_selector(chat_view, chat_state, rt_handle);
-            }
-            "usage" => {
-                self.show_usage_report(chat_view, chat_state, rt_handle);
-            }
-            // Prompt group
-            "skills" => {
-                self.show_skill_selector(chat_view, chat_state, rt_handle);
-            }
-            "subagents" => {
-                self.show_subagent_selector(chat_view, chat_state, rt_handle);
-            }
-            // Models group
-            "select_model" => {
-                self.show_model_selector(chat_view, chat_state, rt_handle);
-            }
-            "add_model" => {
-                chat_view.show_provider_selector();
-            }
-            // Agent group
-            "switch_agent" => {
-                self.show_agent_selector(chat_view, chat_state, rt_handle);
-            }
-            // MCP group
-            "mcp_servers" => {
-                self.show_mcp_selector(chat_view, chat_state, rt_handle);
-            }
-            // Account group
-            "login" => {
-                return self.handle_command("/login", chat_view, chat_state, rt_handle);
-            }
-            "logout" => {
-                return self.handle_command("/logout", chat_view, chat_state, rt_handle);
-            }
-            // System group
-            "help" => {
-                chat_view.show_info_popup(KEYBOARD_SHORTCUTS_HELP.to_string());
-            }
-            "exit" => {
-                if chat_state.is_processing {
-                    tracing::info!("User requested cancellation via palette exit");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
-                }
-                return Ok(Some(ChatExitReason::Quit));
-            }
-            _ => {
-                chat_view.set_status(Some(format!("Unknown palette action: {}", action_id)));
-            }
+    fn handle_action_id(
+        &mut self,
+        action_id: &str,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if let Some(external) = self.external_command_projection_for_action(action_id) {
+            return self.select_and_handle_external_command(
+                &external, "", chat_view, chat_state, rt_handle,
+            );
         }
-        Ok(None)
+        let Some(action) = action_by_id(action_id, ActionContext::Chat) else {
+            chat_view.set_status(Some(format!("Unknown action: {action_id}")));
+            return Ok(None);
+        };
+        if let Some(collision) = self.native_command_collision_for_action(action.id) {
+            self.remember_native_command_choice(
+                &collision,
+                &collision.native_candidate_id,
+                chat_view,
+                rt_handle,
+            );
+        } else if let Some(reconfirmation) = builtin_command_reconfirmation(
+            action.id,
+            action.name,
+            &self.external_conflict_preferences(),
+        )
+        .filter(|reconfirmation| !reconfirmation.confirmed)
+        {
+            self.remember_command_choice(
+                &reconfirmation.conflict_key,
+                &reconfirmation.candidate_id,
+                vec![reconfirmation.candidate_id.clone()],
+                chat_view,
+                rt_handle,
+            );
+        }
+        self.dispatch_action(
+            action,
+            ActionState::chat(chat_state.is_processing, false),
+            chat_view,
+            chat_state,
+            rt_handle,
+        )
     }
 
     /// Handle shortcut commands
@@ -1940,33 +2883,490 @@ impl ChatMode {
             return Ok(None);
         }
 
-        match parts[0] {
-            "/help" => {
-                chat_view.show_info_popup(KEYBOARD_SHORTCUTS_HELP.to_string());
+        let token = parts[0];
+        let (qualifier, command_name) = parse_command_token(token);
+        let arguments = command
+            .get(token.len()..)
+            .map(str::trim_start)
+            .unwrap_or("");
+        if let Some(candidate) = self.external_conflict_projection_for_alias(token) {
+            return self.select_and_handle_external_command(
+                &candidate, arguments, chat_view, chat_state, rt_handle,
+            );
+        }
+        let builtin_alias = format!("/{command_name}");
+        let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
+        let mut external = self.external_command_projection(command_name);
+        let authoritative_preferences = tokio::task::block_in_place(|| {
+            rt_handle
+                .block_on(external_source_conflict_choices())
+                .map(Into::into)
+        });
+        if let Ok(authoritative_preferences) = authoritative_preferences {
+            if authoritative_preferences != self.external_conflict_preferences() {
+                self.replace_external_conflict_preferences(authoritative_preferences);
+                external = self.external_command_projection(command_name);
+                if let Some(snapshot) = &self.external_source_snapshot {
+                    self.update_external_source_view(chat_view, snapshot);
+                }
             }
-            "/clear" => {
+        }
+        let builtin_reconfirmation = builtin_action.and_then(|action| {
+            builtin_command_reconfirmation(
+                action.id,
+                action.name,
+                &self.external_conflict_preferences(),
+            )
+        });
+        if let Some(collision) = external
+            .as_ref()
+            .and_then(|command| command.native_collision.as_ref())
+            .cloned()
+        {
+            if qualifier == CommandQualifier::External {
+                self.remember_native_command_choice(
+                    &collision,
+                    &collision.external_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            } else if qualifier == CommandQualifier::Builtin {
+                self.remember_native_command_choice(
+                    &collision,
+                    &collision.native_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+        } else if qualifier == CommandQualifier::Builtin {
+            if let Some(reconfirmation) = builtin_reconfirmation
+                .as_ref()
+                .filter(|reconfirmation| !reconfirmation.confirmed)
+            {
+                self.remember_command_choice(
+                    &reconfirmation.conflict_key,
+                    &reconfirmation.candidate_id,
+                    vec![reconfirmation.candidate_id.clone()],
+                    chat_view,
+                    rt_handle,
+                );
+            } else if let Some(collision) = builtin_action
+                .and_then(|action| self.native_command_collision_for_action(action.id))
+            {
+                let native_candidate_id = collision.native_candidate_id.clone();
+                self.remember_native_command_choice(
+                    &collision,
+                    &native_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+        }
+        let builtin_reconfirmation_required = external.is_none()
+            && builtin_reconfirmation
+                .as_ref()
+                .is_some_and(|reconfirmation| !reconfirmation.confirmed);
+        let unresolved_candidates = self.external_conflict_projections(command_name);
+        let can_route_external_tool_review = builtin_action
+            .is_some_and(|action| action.handler == ActionHandler::ExternalTools)
+            && qualifier != CommandQualifier::External
+            && (qualifier == CommandQualifier::Builtin
+                || (external.is_none()
+                    && unresolved_candidates.is_empty()
+                    && !builtin_reconfirmation_required));
+        if can_route_external_tool_review {
+            self.handle_external_tool_review(arguments, chat_view, chat_state, rt_handle);
+            return Ok(None);
+        }
+        let native_choice_is_active = unresolved_candidates.iter().any(|candidate| {
+            candidate
+                .native_collision
+                .as_ref()
+                .is_some_and(|collision| {
+                    collision.selected_candidate_id.as_deref()
+                        == Some(collision.native_candidate_id.as_str())
+                })
+        });
+        if external.is_none()
+            && qualifier != CommandQualifier::Builtin
+            && !unresolved_candidates.is_empty()
+            && !native_choice_is_active
+        {
+            let mut choices = unresolved_candidates
+                .iter()
+                .map(|candidate| {
+                    if candidate.restricted {
+                        format!("{} (restricted)", candidate.invocation_alias)
+                    } else {
+                        candidate.invocation_alias.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            if builtin_action.is_some() {
+                choices.insert(0, format!("/builtin:{command_name}"));
+            }
+            chat_state.add_system_message(format!(
+                "Command /{command_name} is provided by multiple sources. Choose one once: {}. The choice is remembered until a participant changes.",
+                choices.join(", ")
+            ));
+            return Ok(None);
+        }
+        let discovery_pending = self
+            .external_source_snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.discovery_pending);
+        match command_route(
+            qualifier,
+            builtin_action.is_some(),
+            external.as_ref(),
+            discovery_pending,
+            builtin_reconfirmation_required,
+        ) {
+            CommandRoute::Builtin => {
+                let action = builtin_action.expect("route requires an available built-in action");
+                self.dispatch_action(
+                    action,
+                    ActionState::chat(chat_state.is_processing, false),
+                    chat_view,
+                    chat_state,
+                    rt_handle,
+                )
+            }
+            CommandRoute::External => match self.handle_external_command(
+                command_name,
+                arguments,
+                external.as_ref(),
+                chat_view,
+                chat_state,
+                rt_handle,
+            ) {
+                Ok(result) => Ok(result),
+                Err(error) if error.to_string().contains("command not found") => {
+                    chat_state.add_system_message(format!(
+                        "Unknown command: {}\nUse /help or type / to see available commands",
+                        parts[0]
+                    ));
+                    Ok(None)
+                }
+                Err(error) => Err(error),
+            },
+            CommandRoute::AskForCollisionChoice => {
+                if builtin_reconfirmation_required {
+                    chat_state.add_system_message(format!(
+                        "The previous external candidate for /{command_name} changed or was removed. Use /builtin:{command_name} once to confirm the remaining BitFun command."
+                    ));
+                } else {
+                    chat_state.add_system_message(format!(
+                        "Command /{command_name} is provided by BitFun and an external source. Choose /builtin:{command_name} or /external:{command_name}; the choice is remembered until the external command changes."
+                    ));
+                }
+                Ok(None)
+            }
+            CommandRoute::WaitForDiscovery => {
+                let explicit = if builtin_action.is_some() {
+                    format!(" Use /builtin:{command_name} to run the BitFun command now.")
+                } else {
+                    String::new()
+                };
+                chat_state.add_system_message(format!(
+                    "BitFun is still checking compatible external commands.{explicit}"
+                ));
+                Ok(None)
+            }
+            CommandRoute::UnknownBuiltin => {
+                chat_state.add_system_message(format!(
+                    "Unknown built-in command: /builtin:{command_name}\nUse /help or type / to see available commands"
+                ));
+                Ok(None)
+            }
+        }
+    }
+
+    fn external_command_projection(&self, command_name: &str) -> Option<ExternalCommandProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .find(|command| {
+            command.provider_conflict_key.is_none()
+                && command.command_name.eq_ignore_ascii_case(command_name)
+        })
+    }
+
+    fn external_command_projection_for_action(
+        &self,
+        action_id: &str,
+    ) -> Option<ExternalCommandProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .find(|command| command.action_id == action_id)
+    }
+
+    fn external_conflict_projection_for_alias(
+        &self,
+        token: &str,
+    ) -> Option<ExternalCommandProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .find(|command| {
+            command.provider_conflict_key.is_some()
+                && command.invocation_alias.eq_ignore_ascii_case(token)
+        })
+    }
+
+    fn external_conflict_projections(&self, command_name: &str) -> Vec<ExternalCommandProjection> {
+        self.external_source_snapshot
+            .as_ref()
+            .map(|snapshot| {
+                external_command_projections(snapshot, &self.external_source_conflict_choices)
+                    .into_iter()
+                    .filter(|command| {
+                        command.provider_conflict_key.is_some()
+                            && command.command_name.eq_ignore_ascii_case(command_name)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn native_command_collision_for_action(
+        &self,
+        action_id: &str,
+    ) -> Option<NativeCommandCollisionProjection> {
+        external_command_projections(
+            self.external_source_snapshot.as_ref()?,
+            &self.external_source_conflict_choices,
+        )
+        .into_iter()
+        .filter_map(|command| command.native_collision)
+        .find(|collision| collision.native_action_id == action_id)
+    }
+
+    fn remember_native_command_choice(
+        &mut self,
+        collision: &NativeCommandCollisionProjection,
+        candidate_id: &str,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        self.remember_command_choice(
+            &collision.conflict_key,
+            candidate_id,
+            vec![
+                collision.native_candidate_id.clone(),
+                collision.external_candidate_id.clone(),
+            ],
+            chat_view,
+            rt_handle,
+        );
+    }
+
+    fn remember_command_choice(
+        &mut self,
+        conflict_key: &str,
+        candidate_id: &str,
+        participants: Vec<String>,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let persisted = tokio::task::block_in_place(|| {
+            rt_handle.block_on(remember_external_source_conflict_choice(
+                conflict_key,
+                candidate_id,
+                participants.clone(),
+            ))
+        });
+        match persisted {
+            Ok(preferences) => self.replace_external_conflict_preferences(preferences.into()),
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to persist external command conflict choice: {}",
+                    error
+                );
+                chat_view.set_status(Some(
+                    "The command choice could not be saved; this explicit command will run once"
+                        .to_string(),
+                ));
+            }
+        }
+        if let Some(snapshot) = &self.external_source_snapshot {
+            self.update_external_source_view(chat_view, snapshot);
+        }
+    }
+
+    fn select_and_handle_external_command(
+        &mut self,
+        projection: &ExternalCommandProjection,
+        arguments: &str,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if projection.restricted {
+            chat_state.add_system_message(format!(
+                "External command {} is currently restricted and cannot be selected.",
+                projection.invocation_alias
+            ));
+            return Ok(None);
+        }
+        if let Some(provider_conflict_key) = &projection.provider_conflict_key {
+            let workspace = self.agent.workspace_path_buf();
+            let snapshot = tokio::task::block_in_place(|| {
+                rt_handle.block_on(set_external_prompt_command_conflict_choice(
+                    Some(&workspace),
+                    provider_conflict_key,
+                    &projection.candidate_id,
+                ))
+            });
+            let snapshot = match snapshot {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    chat_state.add_system_message(format!(
+                        "Could not select {}: {error}",
+                        projection.invocation_alias
+                    ));
+                    return Ok(None);
+                }
+            };
+            if let Some(collision) = &projection.native_collision {
+                self.remember_native_command_choice(
+                    collision,
+                    &projection.candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+            self.external_source_snapshot = Some(snapshot);
+            let Some(active) = self.external_command_projection(&projection.command_name) else {
+                chat_state.add_system_message(format!(
+                    "Selected external command /{} is no longer available; refresh and choose again.",
+                    projection.command_name
+                ));
+                return Ok(None);
+            };
+            if let Some(collision) = &active.native_collision {
+                self.remember_native_command_choice(
+                    collision,
+                    &active.candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            }
+            if let Some(snapshot) = &self.external_source_snapshot {
+                self.update_external_source_view(chat_view, snapshot);
+            }
+            return self.handle_external_command(
+                &projection.command_name,
+                arguments,
+                Some(&active),
+                chat_view,
+                chat_state,
+                rt_handle,
+            );
+        }
+        if let Some(collision) = &projection.native_collision {
+            self.remember_native_command_choice(
+                collision,
+                &projection.candidate_id,
+                chat_view,
+                rt_handle,
+            );
+        }
+        self.handle_external_command(
+            &projection.command_name,
+            arguments,
+            Some(projection),
+            chat_view,
+            chat_state,
+            rt_handle,
+        )
+    }
+
+    fn handle_external_command(
+        &mut self,
+        command_name: &str,
+        arguments: &str,
+        expected: Option<&ExternalCommandProjection>,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if chat_state.is_processing {
+            chat_view.set_status(Some(
+                "External prompt commands are unavailable while a turn is processing".to_string(),
+            ));
+            return Ok(None);
+        }
+        let workspace = self.agent.workspace_path_buf();
+        let expanded = tokio::task::block_in_place(|| {
+            rt_handle.block_on(expand_external_prompt_command(
+                Some(&workspace),
+                command_name,
+                arguments,
+                expected.map(|command| command.candidate_id.as_str()),
+                expected.map(|command| command.content_version.as_str()),
+            ))
+        });
+        match expanded {
+            Ok(expanded) => {
+                self.send_message_to_agent(expanded.content, chat_view, chat_state, rt_handle);
+                Ok(None)
+            }
+            Err(error) if error.contains("command not found") => Err(anyhow!(error)),
+            Err(error) => {
+                chat_state.add_system_message(format!(
+                    "External command /{command_name} is unavailable: {error}"
+                ));
+                Ok(None)
+            }
+        }
+    }
+
+    fn dispatch_action(
+        &mut self,
+        action: &'static ActionSpec,
+        state: ActionState,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if !action.available(state) {
+            chat_view.set_status(Some(action.unavailable_message(state)));
+            return Ok(None);
+        }
+
+        match action.handler {
+            ActionHandler::Help => {
+                chat_view.show_info_popup(self.keymap.help_text(state));
+            }
+            ActionHandler::ClearConversation => {
                 if chat_state.is_processing {
-                    tracing::info!("User requested cancellation via /clear");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
+                    self.cancel_active_turn(chat_view, rt_handle);
                 }
                 chat_state.clear_messages();
                 chat_view.clear_screen();
                 chat_view.set_status(Some("Conversation cleared".to_string()));
             }
-            "/agents" => {
+            ActionHandler::OpenAgentSelector => {
                 self.show_agent_selector(chat_view, chat_state, rt_handle);
             }
-            "/models" => {
+            ActionHandler::SwitchAgent => {
+                self.cycle_agent(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::SwitchAgentReverse => {
+                self.cycle_agent_reverse(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::SelectModel => {
                 self.show_model_selector(chat_view, chat_state, rt_handle);
             }
-            "/theme" => {
+            ActionHandler::SelectTheme => {
                 let themes = self.list_available_themes();
                 chat_view.begin_theme_preview();
                 chat_view.show_theme_selector(themes, Some(self.config.ui.theme_id.clone()));
@@ -1974,129 +3374,191 @@ impl ChatMode {
                     "Theme selector: ↑↓ preview, Enter apply, Esc cancel".to_string(),
                 ));
             }
-            "/connect" => {
-                chat_view.show_provider_selector();
-            }
-            "/new" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot start a new session while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
+            ActionHandler::AddModel => chat_view.show_provider_selector(),
+            ActionHandler::NewSession => {
                 return Ok(Some(ChatExitReason::NewSession));
             }
-            "/sessions" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Cannot switch sessions while processing. Press Ctrl+C to cancel first."
-                            .to_string(),
-                    ));
-                    return Ok(None);
-                }
+            ActionHandler::Sessions => {
                 self.show_session_selector(chat_view, chat_state, rt_handle);
             }
-            "/mcps" => {
+            ActionHandler::Skills => {
+                self.show_skill_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::ReloadSkills => {
+                self.reload_skills_from_disk(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::Subagents => {
+                self.show_subagent_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::McpServers => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);
             }
-            "/acp" => {
+            ActionHandler::ExternalTools => {
+                self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun-cli"));
                 chat_view.set_status(Some(
                     "ACP setup added to the conversation. You can keep typing.".to_string(),
                 ));
             }
-            "/usage" => {
-                self.show_usage_report(chat_view, chat_state, rt_handle);
-            }
-            "/init" => match crate::prompts::get_cli_prompt("init") {
+            ActionHandler::Init => match crate::prompts::get_cli_prompt("init") {
                 Some(prompt) => {
-                    self.send_message_to_agent(
-                        prompt.to_string(),
-                        chat_view,
-                        chat_state,
-                        rt_handle,
-                    );
+                    self.send_message_to_agent(prompt.to_string(), chat_view, chat_state, rt_handle)
                 }
-                None => {
-                    chat_state.add_system_message(
-                        "Init prompt not found. Please create prompts/init.md in the CLI crate."
-                            .to_string(),
-                    );
-                }
+                None => chat_state.add_system_message(
+                    "Init prompt not found. Please create prompts/init.md in the CLI crate."
+                        .to_string(),
+                ),
             },
-            "/skills" => {
-                self.show_skill_selector(chat_view, chat_state, rt_handle);
-            }
-            "/reload-skills" => {
-                self.reload_skills_from_disk(chat_view, chat_state, rt_handle);
-            }
-            "/subagents" => {
-                self.show_subagent_selector(chat_view, chat_state, rt_handle);
-            }
-            "/history" => {
+            ActionHandler::History => {
                 chat_state.add_system_message(format!(
                     "Current session statistics:\n\
-                             • Messages: {}\n\
-                             • Tool calls: {}\n\
-                             • Tokens: {}",
+                     • Messages: {}\n\
+                     • Tool calls: {}\n\
+                     • Tokens: {}",
                     chat_state.metadata.message_count,
                     chat_state.metadata.tool_calls,
                     chat_state.metadata.total_tokens
                 ));
             }
-            "/exit" => {
+            ActionHandler::Usage => self.show_usage_report(chat_view, chat_state, rt_handle),
+            ActionHandler::Exit => {
                 if chat_state.is_processing {
-                    tracing::info!("User requested cancellation via /exit");
-                    let agent = self.agent.clone();
-                    tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move {
-                            if let Err(e) = agent.cancel_current_turn().await {
-                                tracing::error!("Failed to cancel turn: {}", e);
-                            }
-                        })
-                    });
+                    self.cancel_active_turn(chat_view, rt_handle);
                 }
                 return Ok(Some(ChatExitReason::Quit));
             }
-            "/login" => {
-                if chat_state.is_processing {
-                    chat_view.set_status(Some(
-                        "Wait until the session is idle before using /login.".to_string(),
-                    ));
-                    return Ok(None);
-                }
+            ActionHandler::Login => {
                 self.close_all_popups(chat_view);
                 self.open_login_or_account_panel(chat_view, chat_state, rt_handle);
             }
-            "/logout" => {
-                let logged_in = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(crate::account::is_logged_in())
-                });
-                if !logged_in {
-                    chat_state.add_system_message("Not logged in.".to_string());
+            ActionHandler::Logout => self.logout(chat_state, rt_handle),
+            ActionHandler::OpenPalette => chat_view.show_command_palette(state),
+            ActionHandler::SubmitInput => {
+                return self.submit_input(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::Interrupt => self.cancel_active_turn(chat_view, rt_handle),
+            ActionHandler::ClosePopups => self.close_all_popups(chat_view),
+            ActionHandler::NavigateBack => self.navigate_back(chat_view),
+            ActionHandler::InsertNewline => chat_view.handle_newline(),
+            ActionHandler::Paste => self.paste_clipboard(chat_view),
+            ActionHandler::ToggleFocusedTool => {
+                chat_view.toggle_focused_tool_expand(chat_state);
+            }
+            ActionHandler::PreviousTool => {
+                chat_view.cycle_block_tool_focus_prev(chat_state);
+            }
+            ActionHandler::NextTool => {
+                chat_view.cycle_block_tool_focus_next(chat_state);
+            }
+            ActionHandler::HistoryPrevious => {
+                if chat_view.command_menu_visible() {
+                    chat_view.command_menu_up();
                 } else {
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(crate::account::logout())
-                    }) {
-                        Ok(()) => {
-                            chat_state.add_system_message("Logged out.".to_string());
-                        }
-                        Err(e) => {
-                            chat_state.add_system_message(format!("Logout failed: {e}"));
-                        }
-                    }
+                    chat_view.history_prev();
                 }
             }
-            _ => {
-                chat_state.add_system_message(format!(
-                    "Unknown command: {}\nUse /help to see available commands",
-                    parts[0]
-                ));
+            ActionHandler::HistoryNext => {
+                if chat_view.command_menu_visible() {
+                    chat_view.command_menu_down();
+                } else {
+                    chat_view.history_next();
+                }
             }
+            ActionHandler::JumpTop => {
+                let total = chat_view.count_message_lines(chat_state);
+                chat_view.scroll_to_top(total);
+                chat_view.set_status(Some("Jumped to conversation top".to_string()));
+            }
+            ActionHandler::JumpBottom => {
+                chat_view.scroll_to_bottom();
+                chat_view.set_status(Some("Jumped to conversation bottom".to_string()));
+            }
+            ActionHandler::ClearInput => chat_view.clear_input(),
+            ActionHandler::ToggleBrowse => {
+                chat_view.toggle_browse_mode();
+                let status = if chat_view.browse_mode {
+                    "Entered browse mode, use PageUp/PageDown or mouse wheel to scroll conversation"
+                } else {
+                    "Exited browse mode"
+                };
+                chat_view.set_status(Some(status.to_string()));
+            }
+            ActionHandler::ScrollUp => {
+                let total = chat_view.count_message_lines(chat_state);
+                chat_view.scroll_up(10, total);
+            }
+            ActionHandler::ScrollDown => chat_view.scroll_down(10),
+        }
+        Ok(None)
+    }
+
+    fn submit_input(
+        &mut self,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        if let Some(action_id) = chat_view.apply_command_menu_selection() {
+            return self.handle_action_id(&action_id, chat_view, chat_state, rt_handle);
         }
 
+        if chat_state.is_processing {
+            let trimmed = chat_view.input_text().trim();
+            if trimmed.starts_with('/') {
+                if let Some(input) = chat_view.send_input() {
+                    return self.handle_command(&input, chat_view, chat_state, rt_handle);
+                }
+            } else if !trimmed.is_empty() {
+                chat_view.set_status(Some(
+                    "Currently processing. Type a /command, or use the interrupt shortcut."
+                        .to_string(),
+                ));
+            }
+            return Ok(None);
+        }
+
+        if let Some(input) = chat_view.send_input() {
+            tracing::info!("User input: {}", input);
+            if input.starts_with('/') {
+                return self.handle_command(&input, chat_view, chat_state, rt_handle);
+            }
+            self.send_message_to_agent(input, chat_view, chat_state, rt_handle);
+        }
         Ok(None)
+    }
+
+    fn cancel_active_turn(&self, chat_view: &mut ChatView, rt_handle: &tokio::runtime::Handle) {
+        tracing::info!("User requested cancellation");
+        let agent = self.agent.clone();
+        tokio::task::block_in_place(|| {
+            rt_handle.block_on(async move {
+                if let Err(error) = agent.cancel_current_turn().await {
+                    tracing::error!("Failed to cancel turn: {}", error);
+                }
+            })
+        });
+        chat_view.set_status(Some("Cancelling...".to_string()));
+    }
+
+    fn paste_clipboard(&self, chat_view: &mut ChatView) {
+        if let Ok(text) = Clipboard::new().and_then(|mut clipboard| clipboard.get_text()) {
+            chat_view.insert_paste(&text);
+        }
+    }
+
+    fn logout(&self, chat_state: &mut ChatState, rt_handle: &tokio::runtime::Handle) {
+        let logged_in =
+            tokio::task::block_in_place(|| rt_handle.block_on(crate::account::is_logged_in()));
+        if !logged_in {
+            chat_state.add_system_message("Not logged in.".to_string());
+            return;
+        }
+        match tokio::task::block_in_place(|| rt_handle.block_on(crate::account::logout())) {
+            Ok(()) => chat_state.add_system_message("Logged out.".to_string()),
+            Err(error) => chat_state.add_system_message(format!("Logout failed: {error}")),
+        }
     }
 
     fn show_usage_report(
@@ -2324,7 +3786,6 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let agent_type = self.agent_type.clone();
         let result: Option<String> = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
@@ -2333,14 +3794,7 @@ impl ChatMode {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                // Resolve model ID for the current agent
-                let model_id = global_config
-                    .ai
-                    .agent_models
-                    .get(&agent_type)
-                    .cloned()
-                    .or_else(|| global_config.ai.default_models.primary.clone())
-                    .unwrap_or_else(|| "primary".to_string());
+                let model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai)?;
 
                 fn provider_display_name(
                     model: &bitfun_core::service::config::AIModelConfig,
@@ -2370,20 +3824,10 @@ impl ChatMode {
                     format!("{} / {}", model.model_name, provider_display_name(model))
                 }
 
-                // Find model name
-                let model_name = if model_id == "primary" {
-                    // Resolve primary model
-                    let primary_id = global_config.ai.default_models.primary.as_deref()?;
-                    models
-                        .iter()
-                        .find(|m| m.id == primary_id)
-                        .map(model_display_name)
-                } else {
-                    models
-                        .iter()
-                        .find(|m| m.id == model_id)
-                        .map(model_display_name)
-                };
+                let model_name = models
+                    .iter()
+                    .find(|model| model.id == model_id)
+                    .map(model_display_name);
 
                 model_name
             })
@@ -2401,7 +3845,6 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let agent_type = self.agent_type.clone();
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
                 let config_service = match GlobalConfigManager::get_service().await {
@@ -2417,13 +3860,8 @@ impl ChatMode {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                // Get current model ID
-                let current_model_id = global_config
-                    .ai
-                    .agent_models
-                    .get(&agent_type)
-                    .cloned()
-                    .or_else(|| global_config.ai.default_models.primary.clone());
+                let current_model_id =
+                    crate::model_selection::resolve_mode_model_id(&global_config.ai);
 
                 // Convert to ModelItem list (only enabled models)
                 let model_items: Vec<ModelItem> = models
@@ -2463,10 +3901,19 @@ impl ChatMode {
     ) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
-        let modes = self.get_mode_agents(rt_handle);
+        let session_id = chat_state.core_session_id.clone();
 
         let success = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
+                if let Err(e) = self
+                    .agent
+                    .update_session_model(&session_id, &selected_id)
+                    .await
+                {
+                    tracing::error!("Failed to update current session model: {}", e);
+                    return false;
+                }
+
                 let config_service = match GlobalConfigManager::get_service().await {
                     Ok(s) => s,
                     Err(e) => {
@@ -2475,21 +3922,12 @@ impl ChatMode {
                     }
                 };
 
-                // Update default primary model
                 if let Err(e) = config_service
-                    .set_config("ai.default_models.primary", &selected_id)
+                    .set_config("ai.agent_model_defaults.mode", &selected_id)
                     .await
                 {
-                    tracing::error!("Failed to set default primary model: {}", e);
+                    tracing::error!("Failed to set future mode model: {}", e);
                     return false;
-                }
-
-                // Update agent_models for all modes
-                for mode in &modes {
-                    let path = format!("ai.agent_models.{}", mode.id);
-                    if let Err(e) = config_service.set_config(&path, &selected_id).await {
-                        tracing::error!("Failed to set model for mode '{}': {}", mode.id, e);
-                    }
                 }
 
                 true
@@ -3084,15 +4522,20 @@ impl ChatMode {
                 let effective_workspace =
                     Some(effective_workspace_path.to_string_lossy().to_string());
 
-                // Load historical messages from core.
-                let messages = agent.get_messages(&sid).await.unwrap_or_default();
+                // Load historical messages through the runtime transcript contract.
+                let transcript = agent.get_transcript(&sid).await.unwrap_or_else(|_| {
+                    bitfun_agent_runtime::sdk::SessionTranscript {
+                        session_id: sid.clone(),
+                        messages: Vec::new(),
+                    }
+                });
 
-                let state = ChatState::from_core_messages(
+                let state = ChatState::from_session_transcript(
                     sid.clone(),
                     session_summary.session_name,
                     restored_agent_type.clone(),
                     effective_workspace,
-                    &messages,
+                    &transcript,
                 );
 
                 Ok::<_, anyhow::Error>((state, restored_agent_type))
@@ -3927,8 +5370,514 @@ impl ChatMode {
 mod tests {
     use tokio::sync::broadcast::error::TryRecvError;
 
-    use super::{agent_event_stream_failure, mark_active_turn_failed};
+    use super::{
+        agent_event_stream_failure, builtin_command_reconfirmation, command_route,
+        external_command_projections, external_tool_mutation_result_label,
+        external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
+        mark_active_turn_failed, parse_command_token, parse_external_tool_review_action,
+        CommandQualifier, CommandRoute, ExternalSourceConflictPreferences,
+        ExternalToolReviewAction,
+    };
+    use crate::actions::{ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
+    use crate::config::ShortcutsConfig;
+    use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
+    use bitfun_core::external_sources::{
+        ExternalSourceCatalogSnapshot, ExternalToolActivationState,
+    };
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn external_command(
+        name: &str,
+        selected_candidate_id: Option<&str>,
+    ) -> ExternalCommandProjection {
+        ExternalCommandProjection {
+            action_id: format!("external-command:{name}"),
+            command_name: name.to_string(),
+            invocation_alias: format!("/{name}"),
+            candidate_id: format!("external:{name}"),
+            content_version: "v1".to_string(),
+            description: "External command".to_string(),
+            restricted: false,
+            provider_conflict_key: None,
+            native_collision: Some(NativeCommandCollisionProjection {
+                native_action_id: name.to_string(),
+                native_candidate_id: format!("bitfun.cli:{name}"),
+                external_candidate_id: format!("external:{name}"),
+                conflict_key: "conflict-v1".to_string(),
+                selected_candidate_id: selected_candidate_id.map(str::to_string),
+            }),
+        }
+    }
+
+    fn external_tool_review_snapshot() -> ExternalSourceCatalogSnapshot {
+        serde_json::from_value(serde_json::json!({
+            "generation": 3,
+            "discoveryPending": false,
+            "sources": [{
+                "stableKey": "opencode-tools-project",
+                "record": {
+                    "key": { "providerId": "opencode.tools", "sourceId": "project" },
+                    "ecosystemId": "opencode",
+                    "displayName": "OpenCode project tools",
+                    "sourceKind": "tools",
+                    "scope": "project",
+                    "location": "D:/repo/.opencode/tools",
+                    "executionDomainId": "local:D:/repo",
+                    "health": "available",
+                    "contentVersion": "source-v1"
+                },
+                "lifecycle": "available"
+            }],
+            "commands": [],
+            "tools": [{
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "review.js"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "review",
+                    "descriptionPreview": "Review a change",
+                    "modulePath": "D:/repo/.opencode/tools/review.js",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "java_script",
+                    "capabilities": ["file_system", "network", "environment", "process"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v1",
+                "decisionKey": "decision-v1",
+                "activation": { "state": "approval_required" }
+            }, {
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "weather.js"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "weather",
+                    "descriptionPreview": "Read weather",
+                    "modulePath": "D:/repo/.opencode/tools/weather.js",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "java_script",
+                    "capabilities": ["network"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v2",
+                "decisionKey": "decision-v2",
+                "activation": { "state": "disabled" }
+            }, {
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "deploy.js"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "deploy",
+                    "descriptionPreview": "Deploy a build",
+                    "modulePath": "D:/repo/.opencode/tools/deploy.js",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "java_script",
+                    "capabilities": ["process"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v3",
+                "decisionKey": "decision-v3",
+                "activation": { "state": "active" }
+            }, {
+                "definition": {
+                    "id": {
+                        "target": {
+                            "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                            "localId": "broken.ts"
+                        },
+                        "exportId": "default"
+                    },
+                    "name": "broken",
+                    "descriptionPreview": "Broken tool",
+                    "modulePath": "D:/repo/.opencode/tools/broken.ts",
+                    "workingDirectory": "D:/repo",
+                    "runtimeKind": "type_script",
+                    "capabilities": ["file_system"],
+                    "contentVersion": "content-v1",
+                    "staticStatus": { "state": "ready" }
+                },
+                "approvalKey": "approval-v4",
+                "decisionKey": "decision-v4",
+                "activation": {
+                    "state": "load_failed",
+                    "reason": "PR2 worker could not import the module"
+                }
+            }],
+            "toolApprovalRequests": [{
+                "approvalKey": "approval-v1",
+                "decisionKey": "decision-v1",
+                "targetId": {
+                    "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                    "localId": "review.js"
+                },
+                "sourceDisplayName": "OpenCode project tools",
+                "sourceScope": "project",
+                "sourceLocation": "D:/repo/.opencode/tools/review.js",
+                "workingDirectory": "D:/repo",
+                "runtimeKind": "java_script",
+                "capabilities": ["file_system", "network", "environment", "process"],
+                "contentVersion": "content-v1",
+                "toolNames": ["review"]
+            }],
+            "toolConflicts": [{
+                "conflictKey": "conflict-v1",
+                "toolName": "review",
+                "candidates": [{
+                    "candidateId": "bitfun:review",
+                    "displayName": "BitFun review",
+                    "kind": "built_in",
+                    "providerId": "bitfun",
+                    "contentVersion": "builtin-v1"
+                }, {
+                    "candidateId": "external:review",
+                    "displayName": "OpenCode review",
+                    "kind": "external",
+                    "providerId": "opencode.tools",
+                    "contentVersion": "content-v1",
+                    "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                    "sourceLocation": "D:/repo/.opencode/tools/review.js"
+                }]
+            }],
+            "diagnostics": [{
+                "severity": "warning",
+                "code": "opencode.tool.directory_read_failed",
+                "message": "PR2 worker could not read one tool directory",
+                "source": { "providerId": "opencode.tools", "sourceId": "project" }
+            }]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn external_tool_review_summary_discloses_execution_boundary_and_commands() {
+        let summary = external_tool_review_text(Some(&external_tool_review_snapshot()));
+
+        assert!(summary.contains("No external code ran during discovery"));
+        assert!(summary.contains("filesystem, network, process, environment variables"));
+        assert!(summary.contains("inherited environment variables"));
+        assert!(summary.contains("full descendant-process cleanup"));
+        assert!(summary.contains("/external-tools enable 1"));
+        assert!(summary.contains("/external-tools choose 1 2"));
+        assert!(summary.contains("D:/repo/.opencode/tools/review.js"));
+        assert!(summary.contains("Source root: D:/repo/.opencode/tools"));
+        assert!(summary.contains("Scope: project"));
+        assert!(summary.contains("Execution domain: local:D:/repo"));
+        assert!(summary.contains("disabled"));
+        assert!(summary.contains("active"));
+        assert!(summary.contains("loaded successfully"));
+        assert!(summary.contains("load failed"));
+        assert!(summary.contains("D:/repo/.opencode/tools/broken.ts"));
+        assert!(summary.contains("Diagnostics"));
+        assert!(summary.contains("opencode.tool.directory_read_failed"));
+        assert!(!summary.contains("PR2"));
+    }
+
+    #[test]
+    fn external_tool_review_commands_resolve_indices_to_stable_keys() {
+        let snapshot = external_tool_review_snapshot();
+
+        assert_eq!(
+            parse_external_tool_review_action("enable 2", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v2".to_string(),
+                decision_key: "decision-v2".to_string(),
+                approved: true,
+            }
+        );
+        assert_eq!(
+            parse_external_tool_review_action("disable 3", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v3".to_string(),
+                decision_key: "decision-v3".to_string(),
+                approved: false,
+            }
+        );
+        assert_eq!(
+            parse_external_tool_review_action("disable 4", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v4".to_string(),
+                decision_key: "decision-v4".to_string(),
+                approved: false,
+            }
+        );
+        assert_eq!(
+            parse_external_tool_review_action("choose 1 2", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Choose {
+                conflict_key: "conflict-v1".to_string(),
+                candidate_id: "external:review".to_string(),
+            }
+        );
+        assert!(parse_external_tool_review_action("enable 3", Some(&snapshot), None).is_err());
+    }
+
+    #[test]
+    fn external_tool_review_commands_keep_the_indices_from_the_displayed_review() {
+        let reviewed = external_tool_review_snapshot();
+        let mut current = reviewed.clone();
+        current.tools.swap(0, 1);
+
+        assert_eq!(
+            parse_external_tool_review_action("enable 2", Some(&current), Some(&reviewed)).unwrap(),
+            ExternalToolReviewAction::Decide {
+                approval_key: "approval-v2".to_string(),
+                decision_key: "decision-v2".to_string(),
+                approved: true,
+            }
+        );
+    }
+
+    #[test]
+    fn external_tool_enable_result_reports_the_returned_activation() {
+        let mut snapshot = external_tool_review_snapshot();
+        snapshot.tools[0].activation = ExternalToolActivationState::LoadFailed {
+            reason: "module import failed".to_string(),
+        };
+        let action = ExternalToolReviewAction::Decide {
+            approval_key: "approval-v1".to_string(),
+            decision_key: "decision-v1".to_string(),
+            approved: true,
+        };
+
+        assert_eq!(
+            external_tool_mutation_result_label(&action, &snapshot),
+            "External tool approved, but loading failed"
+        );
+    }
+
+    #[test]
+    fn external_tool_notice_key_changes_for_pending_decisions_or_diagnostics() {
+        let snapshot = external_tool_review_snapshot();
+        let key = external_tool_pending_notice_key(&snapshot).unwrap();
+        let mut generation_only = snapshot.clone();
+        generation_only.generation += 1;
+        assert_eq!(
+            external_tool_pending_notice_key(&generation_only),
+            Some(key.clone())
+        );
+
+        generation_only.tool_approval_requests[0].decision_key = "decision-v2".to_string();
+        assert_ne!(
+            external_tool_pending_notice_key(&generation_only),
+            Some(key.clone())
+        );
+
+        let mut diagnostic_change = snapshot;
+        diagnostic_change.diagnostics[0].message = "different failure".to_string();
+        assert_ne!(
+            external_tool_pending_notice_key(&diagnostic_change),
+            Some(key)
+        );
+    }
+
+    #[test]
+    fn external_tool_mutation_result_does_not_overwrite_a_newer_catalog_generation() {
+        let incoming = external_tool_review_snapshot();
+        let mut current = incoming.clone();
+        current.generation += 1;
+
+        assert!(external_tool_result_is_stale(Some(&current), &incoming));
+        assert!(!external_tool_result_is_stale(Some(&incoming), &current));
+        assert!(!external_tool_result_is_stale(None, &incoming));
+    }
+
+    #[test]
+    fn explicit_builtin_never_falls_through_to_an_external_command() {
+        let external = external_command("review", None);
+        assert_eq!(
+            command_route(
+                CommandQualifier::Builtin,
+                false,
+                Some(&external),
+                false,
+                false,
+            ),
+            CommandRoute::UnknownBuiltin
+        );
+    }
+
+    #[test]
+    fn command_qualifiers_are_ascii_case_insensitive() {
+        assert_eq!(
+            parse_command_token("/BUILTIN:help"),
+            (CommandQualifier::Builtin, "help")
+        );
+        assert_eq!(
+            parse_command_token("/External:review"),
+            (CommandQualifier::External, "review")
+        );
+    }
+
+    #[test]
+    fn unresolved_provider_conflicts_expose_explicit_cli_choices() {
+        let snapshot: ExternalSourceCatalogSnapshot = serde_json::from_value(serde_json::json!({
+            "generation": 1,
+            "discoveryPending": false,
+            "sources": [
+                {
+                    "stableKey": "first",
+                    "record": {
+                        "key": { "providerId": "first.commands", "sourceId": "global" },
+                        "ecosystemId": "first",
+                        "displayName": "First commands",
+                        "sourceKind": "prompt_commands",
+                        "scope": "user_global",
+                        "location": "/first",
+                        "executionDomainId": "local-user",
+                        "health": "available",
+                        "contentVersion": "source-v1"
+                    },
+                    "lifecycle": "available"
+                },
+                {
+                    "stableKey": "second",
+                    "record": {
+                        "key": { "providerId": "second.commands", "sourceId": "global" },
+                        "ecosystemId": "second",
+                        "displayName": "Second commands",
+                        "sourceKind": "prompt_commands",
+                        "scope": "user_global",
+                        "location": "/second",
+                        "executionDomainId": "local-user",
+                        "health": "available",
+                        "contentVersion": "source-v1"
+                    },
+                    "lifecycle": "available"
+                }
+            ],
+            "commands": [],
+            "commandConflicts": [{
+                "conflictKey": "provider-conflict-v1",
+                "commandName": "review",
+                "candidates": [
+                    {
+                        "candidateId": "first-candidate",
+                        "source": { "providerId": "first.commands", "sourceId": "global" },
+                        "sourceDisplayName": "First commands",
+                        "ecosystemId": "first",
+                        "contentVersion": "command-v1",
+                        "commandDescription": "First review",
+                        "sourceScope": "user_global",
+                        "sourceLocation": "/first",
+                        "availability": { "state": "available" }
+                    },
+                    {
+                        "candidateId": "second-candidate",
+                        "source": { "providerId": "second.commands", "sourceId": "global" },
+                        "sourceDisplayName": "Second commands",
+                        "ecosystemId": "second",
+                        "contentVersion": "command-v1",
+                        "commandDescription": "Second review",
+                        "sourceScope": "user_global",
+                        "sourceLocation": "/second",
+                        "availability": { "state": "available" }
+                    }
+                ]
+            }]
+        }))
+        .unwrap();
+
+        let projections = external_command_projections(&snapshot, &BTreeMap::new());
+
+        assert_eq!(projections.len(), 2);
+        assert!(projections.iter().all(|projection| {
+            projection.provider_conflict_key.as_deref() == Some("provider-conflict-v1")
+        }));
+        assert!(projections
+            .iter()
+            .any(|projection| projection.invocation_alias == "/external:first.commands:review"));
+        assert!(projections
+            .iter()
+            .any(|projection| projection.invocation_alias == "/external:second.commands:review"));
+    }
+
+    #[test]
+    fn native_collision_requires_one_choice_and_then_reuses_it() {
+        let unresolved = external_command("help", None);
+        assert_eq!(
+            command_route(
+                CommandQualifier::Unqualified,
+                true,
+                Some(&unresolved),
+                false,
+                false,
+            ),
+            CommandRoute::AskForCollisionChoice
+        );
+        let selected = external_command("help", Some("external:help"));
+        assert_eq!(
+            command_route(
+                CommandQualifier::Unqualified,
+                true,
+                Some(&selected),
+                false,
+                false,
+            ),
+            CommandRoute::External
+        );
+    }
+
+    #[test]
+    fn discovery_pending_requires_an_explicit_command_qualifier() {
+        assert_eq!(
+            command_route(CommandQualifier::Unqualified, true, None, true, false,),
+            CommandRoute::WaitForDiscovery
+        );
+        assert_eq!(
+            command_route(CommandQualifier::Builtin, true, None, true, false),
+            CommandRoute::Builtin
+        );
+    }
+
+    #[test]
+    fn removed_external_candidate_requires_builtin_reconfirmation() {
+        assert_eq!(
+            command_route(CommandQualifier::Unqualified, true, None, false, true,),
+            CommandRoute::AskForCollisionChoice
+        );
+        assert_eq!(
+            command_route(CommandQualifier::Builtin, true, None, false, true),
+            CommandRoute::Builtin
+        );
+    }
+
+    #[test]
+    fn persisted_collision_history_detects_a_removed_external_candidate() {
+        let action =
+            crate::actions::action_for_alias("/help", crate::actions::ActionContext::Chat).unwrap();
+        let mut preferences = ExternalSourceConflictPreferences {
+            choices: BTreeMap::new(),
+            lineage_current_keys: BTreeMap::new(),
+            conflicted_candidate_ids: BTreeSet::from([
+                "bitfun.cli:help".to_string(),
+                "external:help".to_string(),
+            ]),
+        };
+
+        let pending = builtin_command_reconfirmation(action.id, action.name, &preferences).unwrap();
+        assert!(!pending.confirmed);
+
+        preferences
+            .choices
+            .insert(pending.conflict_key.clone(), pending.candidate_id.clone());
+        let confirmed =
+            builtin_command_reconfirmation(action.id, action.name, &preferences).unwrap();
+        assert!(confirmed.confirmed);
+    }
 
     #[test]
     fn agent_event_stream_failure_ignores_empty_queue() {
@@ -3964,5 +5913,14 @@ mod tests {
         ));
         assert_eq!(state.current_turn_id(), None);
         assert!(!state.is_processing);
+    }
+
+    #[test]
+    fn shortcut_registry_contract_help_uses_resolved_keymap() {
+        let keymap = ResolvedKeymap::new(&ShortcutsConfig::default());
+
+        let help = keymap.help_text(ActionState::chat(false, false));
+        assert!(help.contains("Ctrl+P"));
+        assert!(help.contains("Command Palette"));
     }
 }

@@ -312,10 +312,10 @@ impl PromptBuilder {
             .render_agent_listing_reminder()
     }
 
-    pub fn build_collapsed_tool_listing_reminder(&self) -> Option<String> {
+    pub fn build_deferred_tool_listing_reminder(&self) -> Option<String> {
         self.context
             .tool_listing_sections
-            .render_collapsed_tool_listing_reminder()
+            .render_deferred_tool_listing_reminder()
     }
 
     pub async fn build_user_context_reminder(&self, policy: &UserContextPolicy) -> Option<String> {
@@ -391,7 +391,7 @@ impl PromptBuilder {
         user_context_policy: &UserContextPolicy,
     ) -> PrependedPromptReminders {
         PrependedPromptReminders {
-            collapsed_tool_listing: self.build_collapsed_tool_listing_reminder(),
+            deferred_tool_listing: self.build_deferred_tool_listing_reminder(),
             skill_listing: self.build_skill_listing_reminder(),
             agent_listing: self.build_agent_listing_reminder(),
             runtime_context: self.build_runtime_context_reminder().await,
@@ -617,8 +617,8 @@ mod tests {
         let tool_sections = ToolListingSections {
             skill_listing: Some("<available_skills>\n- pdf\n</available_skills>".to_string()),
             agent_listing: Some("<available_agents>\n- Explore\n</available_agents>".to_string()),
-            collapsed_tool_listing: Some(
-                "<collapsed_tools>\n- WebFetch\n</collapsed_tools>".to_string(),
+            deferred_tool_listing: Some(
+                "<deferred_tools>\n- WebFetch\n</deferred_tools>".to_string(),
             ),
         };
         let context = PromptBuilderContext::new(r"workspace\root", None, None)
@@ -640,9 +640,9 @@ mod tests {
         let agent_listing = reminders
             .agent_listing
             .expect("agent listing reminder should build");
-        let collapsed_tool_listing = reminders
-            .collapsed_tool_listing
-            .expect("collapsed tool listing reminder should build");
+        let deferred_tool_listing = reminders
+            .deferred_tool_listing
+            .expect("deferred tool listing reminder should build");
         let user_context = reminders.user_context.expect("user context should build");
         let runtime_context = reminders
             .runtime_context
@@ -655,9 +655,10 @@ mod tests {
         assert!(!skill_listing.contains("# Agent Listing"));
         assert!(agent_listing.contains("# Agent Listing"));
         assert!(agent_listing.contains("<available_agents>"));
-        assert!(!agent_listing.contains("# Collapsed Tool Listing"));
-        assert!(collapsed_tool_listing.contains("# Collapsed Tool Listing"));
-        assert!(collapsed_tool_listing.contains("<collapsed_tools>"));
+        assert!(!agent_listing.contains("# Tool Calling Guide"));
+        assert!(deferred_tool_listing.contains("# Tool Calling Guide"));
+        assert!(deferred_tool_listing.contains("## Deferred Tool Listing"));
+        assert!(deferred_tool_listing.contains("<deferred_tools>"));
         assert!(user_context.contains("# User Context"));
         assert!(user_context.contains("As you answer the user's questions"));
         assert!(user_context.contains("Current Working Directory: workspace/root"));
@@ -671,7 +672,7 @@ mod tests {
         assert_eq!(
             ordered_reminders,
             vec![
-                collapsed_tool_listing.as_str(),
+                deferred_tool_listing.as_str(),
                 skill_listing.as_str(),
                 agent_listing.as_str(),
                 runtime_context.as_str(),
@@ -689,7 +690,7 @@ mod tests {
 
         assert_eq!(reminders.skill_listing, None);
         assert_eq!(reminders.agent_listing, None);
-        assert_eq!(reminders.collapsed_tool_listing, None);
+        assert_eq!(reminders.deferred_tool_listing, None);
         assert_eq!(reminders.user_context, None);
         assert_eq!(reminders.runtime_context, None);
     }

@@ -601,7 +601,7 @@ export function runManifestParserSelfTest({
     'rmcp',
     'image',
     'tool-runtime',
-    'bitfun-relay-server',
+    'bitfun-relay-service',
     'htmd',
     'legible',
     'readability-js',
@@ -635,7 +635,7 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-service']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
@@ -652,11 +652,7 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerDeps = new Set(
     servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
-  const servicesIntegrationsDefaultOnlyGuardDeps = new Set(['bitfun-relay-server']);
   for (const dep of servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
-    if (servicesIntegrationsDefaultOnlyGuardDeps.has(dep)) {
-      continue;
-    }
     if (!servicesOptionalOwnerDeps.has(dep)) {
       throw new Error(
         `services-integrations optional dependency owner rule must cover forbidden dependency ${dep}`,
@@ -959,9 +955,11 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions'
   ) {
-    throw new Error('OpenCode adapter public API budget must stay limited to one reviewed factory');
+    throw new Error(
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory, command provider, and standalone-tool provider surfaces',
+    );
   }
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
     for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
@@ -1180,7 +1178,6 @@ export function runManifestParserSelfTest({
   const agentToolsRuntimeForbiddenContracts = [
     'GetToolSpecTool',
     'manifest_resolver',
-    'unlocked_collapsed_tools',
     'ToolUseContext',
   ];
   const agentToolsManifestRuleText = agentToolsManifestRule.patterns
@@ -1204,7 +1201,7 @@ export function runManifestParserSelfTest({
     'GetToolSpecTool',
     'GET_TOOL_SPEC_TOOL_NAME',
     'manifest_resolver',
-    'unlocked_collapsed_tools',
+    'loaded_deferred_tool_specs',
     'ToolExposure',
   ];
   for (const contract of toolPacksManifestContracts) {
@@ -1630,32 +1627,12 @@ export function runManifestParserSelfTest({
       contracts: [
         'AgenticFrontendEvent',
         'project_agentic_frontend_event',
-        'legacy_flat_message',
         'deep_review_queue_projection_preserves_camel_case_contract',
-        'legacy_flat_message_keeps_projection_type_authoritative',
-        'legacy_flat_dialog_turn_started_preserves_existing_shape',
-      ],
-    },
-    {
-      path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
-      contracts: [
-        'AGENTIC_EVENT_PROJECTION_MANIFEST',
-        'public_agentic_event_projection_manifest',
-        'is_legacy_websocket_agentic_event_type',
-        'public_event_projection_manifest_describes_projected_events_and_websocket_allowlist',
       ],
     },
     {
       path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
       contracts: ['project_agentic_frontend_event', 'projected.event_name.as_str()'],
-    },
-    {
-      path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
-      contracts: [
-        'project_agentic_frontend_event',
-        'is_legacy_websocket_agentic_event_type',
-        'websocket_keeps_legacy_agentic_event_allowlist',
-      ],
     },
     {
       path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
@@ -2608,7 +2585,6 @@ export function runManifestParserSelfTest({
         'resolve_tool_manifest_policy',
         'default_exposure',
         'build_tool_manifest_policy_tools',
-        'build_collapsed_tool_stub_definition',
         'PromptVisibleToolManifestItem',
         'build_prompt_visible_tool_manifest_definitions',
         'ContextualToolManifestItem',
@@ -2623,9 +2599,9 @@ export function runManifestParserSelfTest({
         'build_get_tool_spec_catalog_description_from_provider',
         'resolve_get_tool_spec_detail_from_provider',
         'build_get_tool_spec_description',
-        'GetToolSpecCollapsedToolSummary',
+        'GetToolSpecDeferredToolSummary',
         'GetToolSpecDetail',
-        'summarize_get_tool_spec_collapsed_tools',
+        'summarize_get_tool_spec_deferred_tools',
         'resolve_get_tool_spec_detail',
         'build_get_tool_spec_catalog_description',
         'get_tool_spec_input_schema',
@@ -2645,14 +2621,14 @@ export function runManifestParserSelfTest({
         'GetToolSpecRuntime',
         'call_results',
         'GetToolSpecLoadObservation',
-        'collect_loaded_collapsed_tool_names',
-        'CollapsedToolUsageError',
+        'collect_loaded_deferred_tool_specs',
+        'DeferredToolUsageError',
         'ToolExecutionAccessError',
         'validate_tool_allowed_by_list',
-        'validate_collapsed_tool_usage',
+        'validate_deferred_tool_usage',
         'sort_tool_manifest_definitions',
-        'is_tool_collapsed',
-        'get_collapsed_tool_names',
+        'is_tool_deferred',
+        'get_deferred_tool_names',
       ],
     },
     {
@@ -3025,7 +3001,7 @@ export function runManifestParserSelfTest({
         'from_inner',
         'ProductToolDecoratorRef',
         'ProductToolRuntime',
-        'get_collapsed_tool_names',
+        'get_deferred_tool_names',
         'resolve_product_readonly_enabled_tools',
       ],
     },
@@ -3065,7 +3041,7 @@ export function runManifestParserSelfTest({
         'resolve_product_tool_manifest',
         'resolve_product_readonly_enabled_tools',
         'resolve_product_get_tool_spec_results',
-        'unlocked_collapsed_tools',
+        'loaded_deferred_tool_specs',
         'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
         'product_resolved_manifest_owner_matches_legacy_shape',
         'GetToolSpec requires agent type context',
@@ -3191,14 +3167,14 @@ export function runManifestParserSelfTest({
         'GET_TOOL_SPEC_TOOL_NAME',
         'resolve_product_resolved_visible_tools',
         'resolve_product_resolved_tool_manifest',
-        'collapsed_tool_names',
+        'deferred_tool_names',
       ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
       contracts: [
         'GetToolSpecTool',
-        'build_collapsed_tools_context_section',
+        'build_deferred_tools_context_section',
         'product_get_tool_spec_runtime',
         'with_runtime',
         'resolve_product_get_tool_spec_results',
@@ -3225,7 +3201,7 @@ export function runManifestParserSelfTest({
         'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
         'customData',
         'cancellationToken',
-        'unlocked_collapsed_tools',
+        'loaded_deferred_tool_specs',
         'impl ToolUseContext',
         'record_light_checkpoint',
         'build_runtime_light_checkpoint',
@@ -3250,7 +3226,7 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
         'validate_tool_execution_admission',
-        'unlocked_collapsed_tools',
+        'loaded_deferred_tool_specs',
         'GetToolSpec',
         'render_tool_result_for_assistant',
         'build_tool_execution_error_presentation',
@@ -3261,21 +3237,21 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/execution/execution_engine.rs',
       contracts: [
-        'collect_product_unlocked_collapsed_tools',
-        'unlocked_collapsed_tools',
-        'collapsed_tool_names',
+        'collect_product_loaded_deferred_tool_specs',
+        'loaded_deferred_tool_specs',
+        'deferred_tool_names',
         'GetToolSpec',
         'should_post_process_research_report',
         'bitfun_services_integrations::deep_research::run_for_session_workspace',
       ],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/unlock_state.rs',
+      path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/loaded_spec_state.rs',
       contracts: [
-        'collect_product_unlocked_collapsed_tools',
+        'collect_product_loaded_deferred_tool_specs',
         'GetToolSpecLoadObservation',
-        'collect_loaded_collapsed_tool_names',
-        'product_unlock_state_dedupes_and_filters_runtime_unlocks',
+        'collect_loaded_deferred_tool_specs',
+        'product_loaded_spec_state_dedupes_and_filters_results',
       ],
     },
     {

@@ -10,6 +10,7 @@ import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
 import { normalizeParamsPartialFragment } from '../EventBatcher';
+import { effectiveToolInvocation } from '../../utils/toolInvocationIdentity';
 import type {
   CancelledToolEvent,
   CompletedToolEvent,
@@ -62,6 +63,8 @@ export function processToolEvent(
     log.debug('Dialog turn not found (processToolEvent)', { turnId });
     return;
   }
+
+  reconcileToolEventWireIdentity(store, sessionId, turnId, toolEvent);
 
   switch (toolEvent.event_type) {
     case 'EarlyDetected': {
@@ -124,10 +127,56 @@ export function processToolEvent(
       handleProgress(store, sessionId, turnId, toolEvent);
       break;
     }
+
+    case 'Streaming': {
+      updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
+        status: 'streaming',
+        isParamsStreaming: false,
+      });
+      break;
+    }
+
+    case 'Confirmed': {
+      updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
+        status: 'confirmed',
+        userConfirmed: true,
+        requiresConfirmation: false,
+      });
+      break;
+    }
+
+    case 'StreamChunk': {
+      break;
+    }
     
     default:
       break;
   }
+
+}
+
+function reconcileToolEventWireIdentity(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  toolEvent: FlowToolEvent,
+): void {
+  const existing = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+  if (!existing || existing.type !== 'tool') {
+    return;
+  }
+
+  const updates: Partial<FlowToolItem> = { toolName: toolEvent.tool_name };
+  if (toolEvent.event_type === 'Started' || toolEvent.event_type === 'ConfirmationNeeded') {
+    updates.toolCall = {
+      input: toolEvent.params,
+      id: toolEvent.tool_id,
+      ...('timeout_seconds' in toolEvent && typeof toolEvent.timeout_seconds === 'number'
+        ? { timeout_seconds: toolEvent.timeout_seconds }
+        : {}),
+    };
+  }
+  store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, updates);
 }
 
 function flushPendingBatchedEvents(context: FlowChatContext): void {
@@ -198,8 +247,11 @@ function applyParamsPartial(
   if (existingItem && existingItem.type === 'tool') {
     const existingToolItem = existingItem as FlowToolItem;
     const prevBuffer = existingToolItem._paramsBuffer || '';
-    const isWriteTool = isWriteLikeToolName(toolEvent.tool_name);
-    if (shouldIgnoreParamsPartial(existingToolItem.status, toolEvent.tool_name)) {
+    const currentEffectiveName = effectiveToolInvocation(
+      existingToolItem.toolName,
+      existingToolItem.toolCall?.input,
+    ).toolName;
+    if (shouldIgnoreParamsPartial(existingToolItem.status, currentEffectiveName)) {
       return;
     }
 
@@ -215,30 +267,36 @@ function applyParamsPartial(
     } catch {
     }
 
+    const effective = effectiveToolInvocation(toolEvent.tool_name, parsedParams);
+    const effectiveToolName = toolEvent.effective_tool_name || effective.toolName;
+    const effectiveParams = effective.input && typeof effective.input === 'object'
+      ? effective.input as Record<string, any>
+      : {};
+    const isWriteTool = isWriteLikeToolName(effectiveToolName);
+
     if (isWriteTool) {
-      const combinedParts = splitFilePathAndContent(parsedParams.payload);
+      const combinedParts = splitFilePathAndContent(effectiveParams.payload);
       if (combinedParts) {
-        parsedParams = {
-          ...parsedParams,
+        Object.assign(effectiveParams, {
           file_path: combinedParts.filePath,
           content: combinedParts.content,
-        };
+        });
       } else {
-        if (typeof parsedParams.payload === 'string') {
-          parsedParams = { ...parsedParams, content: parsedParams.payload };
+        if (typeof effectiveParams.payload === 'string') {
+          effectiveParams.content = effectiveParams.payload;
         }
         const extractedPath = extractFilePathFromJsonBuffer(newBuffer);
         const hasPath = ['file_path', 'filePath', 'filepath', 'target_file', 'targetFile', 'path', 'filename']
-          .some((key) => typeof parsedParams[key] === 'string' && parsedParams[key].length > 0);
+          .some((key) => typeof effectiveParams[key] === 'string' && effectiveParams[key].length > 0);
         if (extractedPath && !hasPath) {
-          parsedParams = { ...parsedParams, file_path: extractedPath };
+          effectiveParams.file_path = extractedPath;
         }
       }
     }
     
-    const isEditTool = ['edit', 'search_replace', 'Edit'].includes(toolEvent.tool_name);
-    const hasContentField = parsedParams && ('content' in parsedParams || 'contents' in parsedParams);
-    const hasNewString = parsedParams && 'new_string' in parsedParams;
+    const isEditTool = ['edit', 'search_replace', 'Edit'].includes(effectiveToolName);
+    const hasContentField = 'content' in effectiveParams || 'contents' in effectiveParams;
+    const hasNewString = 'new_string' in effectiveParams;
     
     let status: 'streaming' | 'receiving' = 'streaming';
     if ((isWriteTool && hasContentField) || (isEditTool && hasNewString)) {
@@ -246,6 +304,7 @@ function applyParamsPartial(
     }
     
     updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
+      toolName: toolEvent.tool_name,
       toolCall: {
         input: parsedParams,
         id: toolEvent.tool_id
@@ -254,7 +313,7 @@ function applyParamsPartial(
       _paramsBuffer: newBuffer,
       status,
       isParamsStreaming: true,
-      _contentSize: isWriteTool && hasContentField ? ((parsedParams.content || parsedParams.contents || '').length) : undefined
+      _contentSize: isWriteTool && hasContentField ? ((effectiveParams.content || effectiveParams.contents || '').length) : undefined
     }, silent);
     applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id, silent);
     applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
@@ -416,6 +475,7 @@ function handleStarted(
 
   if (existingItem) {
     store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+      toolName: toolEvent.tool_name,
       toolCall: toolCallData,
       status: 'running',
       isParamsStreaming: false,
@@ -469,7 +529,8 @@ function handleCompleted(
   options?: ToolEventOptions,
   onTodoWriteResult?: (sessionId: string, turnId: string, result: any) => void
 ): void {
-  if (!options?.isSubagent && toolEvent.tool_name === 'TodoWrite' && isTodoWriteSuccessResult(toolEvent.result)) {
+  const effectiveToolName = toolEvent.effective_tool_name || toolEvent.tool_name;
+  if (!options?.isSubagent && effectiveToolName === 'TodoWrite' && isTodoWriteSuccessResult(toolEvent.result)) {
     onTodoWriteResult?.(sessionId, turnId, toolEvent.result);
   }
   
@@ -608,6 +669,11 @@ function handleConfirmationNeeded(
   toolEvent: ConfirmationNeededToolEvent
 ): void {
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+    toolName: toolEvent.tool_name,
+    toolCall: {
+      input: toolEvent.params,
+      id: toolEvent.tool_id,
+    },
     requiresConfirmation: true,
     status: 'pending_confirmation',
     confirmationTimeoutAt: typeof toolEvent.timeout_at === 'number' ? toolEvent.timeout_at : undefined,

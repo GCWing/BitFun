@@ -65,6 +65,7 @@ fn test_project_entry(id: &str, model: &str) -> AgentEntry {
         visibility_policy: SubagentVisibilityPolicy::public(),
         custom_config: Some(CustomSubagentConfig {
             model: model.to_string(),
+            model_is_explicit: true,
         }),
     }
 }
@@ -89,6 +90,7 @@ fn test_project_custom_entry(id: &str, review: bool) -> AgentEntry {
         visibility_policy: SubagentVisibilityPolicy::public(),
         custom_config: Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     }
 }
@@ -502,6 +504,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
     registry.register_agent(
@@ -513,6 +516,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
     registry.set_user_custom_agents_loaded(true);
@@ -562,6 +566,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
     registry.set_user_custom_agents_loaded(true);
@@ -585,6 +590,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
             visibility_policy: SubagentVisibilityPolicy::public(),
             custom_config: Some(CustomSubagentConfig {
                 model: "fast".to_string(),
+                model_is_explicit: true,
             }),
         },
     );
@@ -829,7 +835,12 @@ async fn updating_custom_mode_model_persists_and_keeps_mode_category() {
         .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
         .await;
     registry
-        .update_and_save_custom_agent_config("PlannerPlus", Some("primary".to_string()), None)
+        .update_and_save_custom_agent_config(
+            "PlannerPlus",
+            Some("primary".to_string()),
+            false,
+            None,
+        )
         .expect("mode model update should save");
 
     let mode = registry

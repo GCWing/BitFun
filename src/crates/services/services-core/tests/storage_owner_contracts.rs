@@ -199,6 +199,7 @@ async fn token_usage_service_persists_records_and_filters_subagents_by_default()
 
     service
         .record_usage(
+            "model-config-a".to_string(),
             "model-a".to_string(),
             "session-a".to_string(),
             "turn-a".to_string(),
@@ -212,6 +213,7 @@ async fn token_usage_service_persists_records_and_filters_subagents_by_default()
         .expect("record main");
     service
         .record_usage(
+            "model-config-a".to_string(),
             "model-a".to_string(),
             "session-a".to_string(),
             "turn-sub".to_string(),
@@ -263,6 +265,7 @@ async fn token_usage_clear_does_not_replay_cached_record_batches() {
 
     service
         .record_usage(
+            "model-config-old".to_string(),
             "model-old".to_string(),
             "session-old".to_string(),
             "turn-old".to_string(),
@@ -277,6 +280,7 @@ async fn token_usage_clear_does_not_replay_cached_record_batches() {
     service.clear_all_stats().await.expect("clear usage");
     service
         .record_usage(
+            "model-config-new".to_string(),
             "model-new".to_string(),
             "session-new".to_string(),
             "turn-new".to_string(),
@@ -324,6 +328,7 @@ async fn token_usage_all_range_ignores_non_date_record_files() {
 
     service
         .record_usage(
+            "model-config-a".to_string(),
             "model-a".to_string(),
             "session-a".to_string(),
             "turn-a".to_string(),

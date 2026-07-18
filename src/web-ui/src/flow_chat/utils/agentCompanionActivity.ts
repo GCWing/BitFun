@@ -9,6 +9,7 @@ import {
   findPendingAskUserQuestion,
   TRANSIENT_TURN_STATUSES,
 } from './askUserQuestionState';
+import { effectiveToolInvocation } from './toolInvocationIdentity';
 
 export type AgentCompanionTaskState =
   | 'running'
@@ -126,12 +127,12 @@ function latestAssistantSnippet(turn: DialogTurn | undefined): string | undefine
 }
 
 function extractAskUserQuestionText(tool: FlowToolItem): string | undefined {
-  const input = tool.toolCall?.input;
+  const input = effectiveToolInvocation(tool.toolName, tool.toolCall?.input).input;
   if (!input || typeof input !== 'object') {
     return undefined;
   }
 
-  const questions = input.questions;
+  const questions = (input as Record<string, unknown>).questions;
   if (!Array.isArray(questions) || questions.length === 0) {
     return undefined;
   }

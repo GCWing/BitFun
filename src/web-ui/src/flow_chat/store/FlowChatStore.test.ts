@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowChatStore } from './FlowChatStore';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
+import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 
 const apiMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
@@ -486,6 +487,61 @@ describe('FlowChatStore round attempts', () => {
       attemptIndex: 1,
     });
   });
+
+  it('restores a persisted deferred call as its canonical wire invocation', () => {
+    const [restoredTurn] = (flowChatStore as any).convertToDialogTurns([{
+      turnId: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'fetch docs',
+        timestamp: 1000,
+        metadata: {},
+      },
+      modelRounds: [{
+        id: 'round-1',
+        index: 0,
+        status: 'completed',
+        timestamp: 1000,
+        textItems: [],
+        thinkingItems: [],
+        toolItems: [{
+          id: 'tool-1',
+          toolName: 'CallDeferredTool',
+          toolCall: {
+            id: 'tool-1',
+            input: {
+              tool_name: 'WebFetch',
+              args: { url: 'https://example.test' },
+            },
+          },
+          toolResult: { result: { content: 'docs' }, success: true },
+          startTime: 1100,
+          endTime: 1200,
+          status: 'completed',
+        }],
+      }],
+      status: 'completed',
+      timestamp: 1000,
+    }]);
+
+    const tool = restoredTurn.modelRounds[0].items[0];
+    expect(tool).toMatchObject({
+      type: 'tool',
+      toolName: 'CallDeferredTool',
+      toolCall: {
+        id: 'tool-1',
+        input: {
+          tool_name: 'WebFetch',
+          args: { url: 'https://example.test' },
+        },
+      },
+    });
+    expect(projectEffectiveToolItem(tool as any)).toMatchObject({
+      toolName: 'WebFetch',
+      toolCall: { id: 'tool-1', input: { url: 'https://example.test' } },
+    });
+  });
 });
 
 describe('FlowChatStore local usage reports', () => {
@@ -614,6 +670,24 @@ describe('FlowChatStore ACP context usage', () => {
       cost: { amount: 0.12, currency: 'USD' },
     });
     expect(stored?.currentTokenUsage).toBeUndefined();
+  });
+});
+
+describe('FlowChatStore session model selection', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('stores an explicit auto selector on a legacy session without a model', () => {
+    const session = createSession({ config: { agentType: 'agentic' } });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateSessionModelName(session.sessionId, 'auto');
+
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
   });
 });
 

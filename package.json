@@ -25,6 +25,7 @@
     "i18n:generate": "node scripts/generate-i18n-contract.mjs",
     "i18n:contract:test": "node --test scripts/i18n-contract.test.mjs",
     "i18n:contract:test:ci": "cross-env BITFUN_I18N_CONTRACT_TEST_PROFILE=ci node --test scripts/i18n-contract.test.mjs",
+    "test:ppt-live": "node --test src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/test/*.test.mjs",
     "i18n:audit": "node scripts/i18n-audit.mjs",
     "theme:color-audit": "node scripts/audit-theme-colors.mjs",
     "theme:color-audit:mobile": "node scripts/audit-theme-colors.mjs --root src/mobile-web/src --baseline scripts/theme-color-governance-baseline.mobile-web.json",
@@ -106,6 +107,8 @@
   },
   "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b",
   "dependencies": {
+    "jszip": "^3.10.1",
+    "pdf-lib": "^1.17.1",
     "pnpm": "^10.32.1",
     "pptxgenjs": "^4.0.1"
   }

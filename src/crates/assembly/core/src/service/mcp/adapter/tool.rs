@@ -3,7 +3,8 @@
 //! Wraps MCP tools as implementations of BitFun's `Tool` trait.
 
 use crate::agentic::tools::framework::{
-    DynamicToolInfo, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    DynamicToolInfo, Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext,
+    ValidationResult,
 };
 use crate::service::mcp::protocol::{MCPTool, MCPToolResult};
 use crate::service::mcp::server::MCPConnection;
@@ -21,6 +22,8 @@ use bitfun_services_integrations::mcp::adapter::{
 use log::{debug, error, info, warn};
 use serde_json::Value;
 use std::sync::Arc;
+
+const MCP_TOOL_DEFAULT_EXPOSURE: ToolExposure = ToolExposure::Deferred;
 
 /// MCP tool wrapper that adapts an MCP tool to BitFun's `Tool`.
 struct MCPToolWrapper {
@@ -74,6 +77,10 @@ impl Tool for MCPToolWrapper {
             self.mcp_tool.description.as_deref(),
             &self.descriptor.tool_info.server_name,
         )
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        MCP_TOOL_DEFAULT_EXPOSURE
     }
 
     fn input_schema(&self) -> Value {
@@ -272,5 +279,15 @@ impl MCPToolAdapter {
 impl Default for MCPToolAdapter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ToolExposure, MCP_TOOL_DEFAULT_EXPOSURE};
+
+    #[test]
+    fn mcp_tool_wrapper_defaults_to_deferred_exposure() {
+        assert_eq!(MCP_TOOL_DEFAULT_EXPOSURE, ToolExposure::Deferred);
     }
 }

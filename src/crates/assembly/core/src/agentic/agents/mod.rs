@@ -69,8 +69,8 @@ pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides 
     // WebSearch/WebFetch expanded so models do not need a GetToolSpec
     // unlock round-trip when switching between those modes.
     let mut overrides = AgentToolPolicyOverrides::default();
-    overrides.insert("WebSearch".to_string(), ToolExposure::Expanded);
-    overrides.insert("WebFetch".to_string(), ToolExposure::Expanded);
+    overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
+    overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
     overrides
 }
 
@@ -125,6 +125,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "AskUserQuestion".to_string(),
         "CreatePlan".to_string(),
         "Git".to_string(),
+        "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
         "SessionMessage".to_string(),
@@ -293,6 +294,13 @@ mod tests {
     }
 
     #[test]
+    fn shared_coding_mode_tools_include_review_platform() {
+        let tools = shared_coding_mode_tools();
+
+        assert!(tools.contains(&"ReviewPlatform".to_string()));
+    }
+
+    #[test]
     fn shared_coding_mode_tools_include_canvas_provider_tools() {
         let tools = shared_coding_mode_tools();
 
@@ -300,6 +308,16 @@ mod tests {
         assert!(tools.contains(&"ReadCanvas".to_string()));
         assert!(tools.contains(&"UpdateCanvas".to_string()));
         assert!(tools.contains(&"PatchCanvas".to_string()));
+    }
+
+    #[test]
+    fn shared_coding_modes_share_default_tools() {
+        let shared_tools = shared_coding_mode_tools();
+
+        assert_eq!(AgenticMode::new().default_tools(), shared_tools);
+        assert_eq!(MultitaskMode::new().default_tools(), shared_tools);
+        assert_eq!(PlanMode::new().default_tools(), shared_tools);
+        assert_eq!(DebugMode::new().default_tools(), shared_tools);
     }
 
     #[test]

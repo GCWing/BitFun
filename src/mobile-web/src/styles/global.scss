@@ -83,11 +83,6 @@ body {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
-@keyframes cubeRotate {
-  0% { transform: rotateX(-20deg) rotateY(0deg); }
-  100% { transform: rotateX(-20deg) rotateY(360deg); }
-}
-
 @keyframes focusBorderFlow {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }

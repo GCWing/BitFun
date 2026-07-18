@@ -128,21 +128,6 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
-    patterns: [
-      {
-        regex: /\bAgenticEvent::[A-Z]/,
-        message:
-          'WebSocket transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
-      },
-      {
-        regex: /\bfn\s+is_legacy_websocket_agentic_event_type\b/,
-        message:
-          'WebSocket transport adapter must not own the agentic event allowlist; use bitfun-events event manifest',
-      },
-    ],
-  },
-  {
     path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
     patterns: [
       {
@@ -2900,17 +2885,17 @@ export const forbiddenContentRules = [
       {
         regex: /\bGetToolSpecLoadObservation\b/,
         message:
-          'execution engine must not own collapsed-tool unlock observation details; use product_runtime unlock state owner',
+          'execution engine must not own deferred-tool loaded-spec observation details; use product_runtime loaded-spec state owner',
       },
       {
-        regex: /\bcollect_loaded_collapsed_tool_names\b/,
+        regex: /\bcollect_loaded_deferred_tool_specs\b/,
         message:
-          'execution engine must not call generic collapsed-tool collector directly; use product_runtime unlock state owner',
+          'execution engine must not call generic deferred-tool collector directly; use product_runtime loaded-spec state owner',
       },
       {
-        regex: /\bfn\s+collect_unlocked_collapsed_tools\b/,
+        regex: /\bfn\s+collect_loaded_deferred_tool_specs\b/,
         message:
-          'execution engine must not own collapsed-tool unlock collection; use product_runtime unlock state owner',
+          'execution engine must not own deferred-tool loaded-spec collection; use product_runtime loaded-spec state owner',
       },
     ],
   },
@@ -4130,10 +4115,13 @@ export const forbiddenContentUnderRules = [
           /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
         allowPaths: [
           'src/crates/adapters/opencode-adapter/tests/opencode_source_adapter.rs',
+          'src/crates/adapters/opencode-adapter/tests/opencode_command_adapter.rs',
+          'src/crates/adapters/opencode-adapter/tests/tool_source_contracts.rs',
           'src/crates/assembly/core/src/plugin_runtime.rs',
+          'src/crates/assembly/core/src/external_sources.rs',
         ],
         message:
-          'only a reviewed product composition root may import bitfun-opencode-adapter and inject it into Plugin Runtime Host',
+          'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',
       },
     ],
   },
@@ -4229,7 +4217,7 @@ export const forbiddenContentUnderRules = [
   {
     path: 'src/crates/execution/tool-contracts/src',
     reason:
-      'agent-tools may own pure tool manifest contracts, but not product manifest runtime or GetToolSpec execution without an approved provider migration',
+      'agent-tools may own pure tool manifest and deferred-tool state contracts, but not product manifest runtime or concrete GetToolSpec execution',
     patterns: [
       {
         regex: /\bGetToolSpecTool\b/,
@@ -4238,10 +4226,6 @@ export const forbiddenContentUnderRules = [
       {
         regex: /\bmanifest_resolver\b/,
         message: 'tool manifest resolution stays in core product tool runtime',
-      },
-      {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'collapsed-tool unlock state stays in core ToolUseContext/runtime',
       },
       {
         regex: /\bToolUseContext\b/,
@@ -4267,12 +4251,12 @@ export const forbiddenContentUnderRules = [
         message: 'tool manifest resolution stays in core product tool runtime',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'collapsed-tool unlock state stays in core ToolUseContext/runtime',
+        regex: /\bloaded_deferred_tool_specs\b/,
+        message: 'deferred-tool loaded-spec state stays in core ToolUseContext/runtime',
       },
       {
         regex: /\bToolExposure\b/,
-        message: 'expanded/collapsed exposure policy stays in core until provider migration',
+        message: 'direct/deferred exposure policy stays in core until provider migration',
       },
     ],
   },
@@ -4301,8 +4285,8 @@ export const forbiddenContentUnderRules = [
         message: 'runtime-restriction admission must stay behind validate_tool_execution_admission',
       },
       {
-        regex: /\bvalidate_collapsed_tool_usage\s*\(/,
-        message: 'collapsed-tool admission must stay behind validate_tool_execution_admission',
+        regex: /\bvalidate_deferred_tool_usage\s*\(/,
+        message: 'deferred-tool admission must stay behind validate_tool_execution_admission',
       },
     ],
   },

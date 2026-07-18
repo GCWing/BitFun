@@ -16,38 +16,43 @@
   position: absolute;
   top: var(--size-gap-4);
   right: var(--size-gap-4);
+  display: flex;
+  align-items: center;
+  gap: var(--size-gap-2);
 }
 
-// 3D Cube Logo
-.pairing-page__cube {
-  perspective: 200px;
-  width: 48px;
-  height: 48px;
+.pairing-page__theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--element-bg-subtle);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--easing-standard);
+
+  &:active {
+    transform: scale(0.96);
+    color: var(--color-text-primary);
+    background: var(--element-bg-base);
+  }
+}
+
+.pairing-page__logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
   margin-bottom: var(--size-gap-2);
+  animation: pairingLogoBreathe 3.2s var(--easing-standard) infinite;
 }
 
-.pairing-page__cube-inner {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  animation: cubeRotate 4s linear infinite;
-}
-
-.pairing-page__cube-face {
-  position: absolute;
-  width: 48px;
-  height: 48px;
-  border: 2px solid var(--color-accent-400);
-  background: var(--color-accent-100);
-  border-radius: var(--size-radius-sm);
-
-  &--front  { transform: translateZ(24px); }
-  &--back   { transform: rotateY(180deg) translateZ(24px); }
-  &--right  { transform: rotateY(90deg) translateZ(24px); }
-  &--left   { transform: rotateY(-90deg) translateZ(24px); }
-  &--top    { transform: rotateX(90deg) translateZ(24px); }
-  &--bottom { transform: rotateX(-90deg) translateZ(24px); }
+@keyframes pairingLogoBreathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.88; }
 }
 
 .pairing-page__brand {
@@ -149,7 +154,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pairing-page,
-  .pairing-page__cube-inner {
+  .pairing-page__logo {
     animation: none;
   }
 }

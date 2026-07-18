@@ -5,6 +5,10 @@
 //! Host adapter plus typed dispatch targets. The adapter does not execute
 //! JavaScript, install npm packages, or depend on a user-local `opencode` CLI.
 
+mod command_source;
 mod source_adapter;
+mod tool_source;
 
+pub use command_source::{OpenCodeCommandProvider, OpenCodeCommandProviderOptions};
 pub use source_adapter::load_opencode_package_adapter;
+pub use tool_source::{OpenCodeToolProvider, OpenCodeToolProviderOptions};

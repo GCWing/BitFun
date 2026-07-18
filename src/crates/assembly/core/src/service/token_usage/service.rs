@@ -35,7 +35,8 @@ impl TokenUsageService {
     #[allow(clippy::too_many_arguments)]
     pub async fn record_usage(
         &self,
-        model_id: String,
+        model_config_id: String,
+        effective_model_name: String,
         session_id: String,
         turn_id: String,
         input_tokens: u32,
@@ -46,7 +47,8 @@ impl TokenUsageService {
     ) -> Result<()> {
         self.inner
             .record_usage(
-                model_id,
+                model_config_id,
+                effective_model_name,
                 session_id,
                 turn_id,
                 input_tokens,

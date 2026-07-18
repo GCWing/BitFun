@@ -171,10 +171,12 @@ const PATH_TAG_RULES: PathTagRule[] = [
     evidence: 'Desktop API surface may affect frontend invoke contract',
   },
   {
-    id: 'api-layer-contract',
+    // Keep retired-path changes classified for deletion and historical-branch
+    // review; this is path compatibility, not a live module claim.
+    id: 'retired-api-layer-contract',
     tags: ['api_layer', 'frontend_contract'],
     match: { pathPrefixes: ['src/crates/adapters/api-layer/'] },
-    evidence: 'API layer may affect frontend/backend contract',
+    evidence: 'Retired API layer path changed; verify deletion or historical compatibility',
   },
   {
     id: 'server-contract',

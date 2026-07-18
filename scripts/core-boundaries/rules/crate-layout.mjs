@@ -17,14 +17,15 @@ export const crateLayoutRules = [
   { crateName: 'tool-runtime', layer: 'execution', path: 'src/crates/execution/tool-execution' },
 
   { crateName: 'product-capabilities', layer: 'assembly', path: 'src/crates/assembly/product-capabilities' },
+  { crateName: 'external-sources', layer: 'assembly', path: 'src/crates/assembly/external-sources' },
 
   { crateName: 'services-core', layer: 'services', path: 'src/crates/services/services-core' },
   { crateName: 'services-integrations', layer: 'services', path: 'src/crates/services/services-integrations' },
+  { crateName: 'relay-service', layer: 'services', path: 'src/crates/services/relay-service' },
   { crateName: 'terminal', layer: 'services', path: 'src/crates/services/terminal' },
 
   { crateName: 'acp', layer: 'interfaces', path: 'src/crates/interfaces/acp' },
   { crateName: 'ai-adapters', layer: 'adapters', path: 'src/crates/adapters/ai-adapters' },
-  { crateName: 'api-layer', layer: 'adapters', path: 'src/crates/adapters/api-layer' },
   { crateName: 'opencode-adapter', layer: 'adapters', path: 'src/crates/adapters/opencode-adapter' },
   { crateName: 'transport', layer: 'adapters', path: 'src/crates/adapters/transport' },
   { crateName: 'webdriver', layer: 'adapters', path: 'src/crates/adapters/webdriver' },

@@ -16,6 +16,7 @@ export type ConfigTab =
   | 'review'
   | 'memories'
   | 'mcp-tools'
+  | 'external-sources'
   | 'acp-agents'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
@@ -209,6 +210,21 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'rollout',
           'learning',
           'knowledge',
+        ],
+      },
+      {
+        id: 'external-sources',
+        labelKey: 'configCenter.tabs.externalSources',
+        descriptionKey: 'configCenter.tabDescriptions.externalSources',
+        keywords: [
+          'external ai applications',
+          'import work',
+          'extensions',
+          'commands',
+          'opencode',
+          'claude code',
+          'codex',
+          'compatibility',
         ],
       },
       {

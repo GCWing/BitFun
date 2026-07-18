@@ -270,7 +270,7 @@ pub(crate) async fn delete_session(state: &PeerHostState, args: &Value) -> Resul
             remote_ssh_host: optional_string(request, "remoteSshHost"),
         })
         .await
-        .map_err(|error| format!("Failed to delete session: {error}"))?;
+        .map_err(|error| format!("Failed to delete session: {}", error.into_message()))?;
     Ok(Value::Null)
 }
 

@@ -35,14 +35,17 @@ impl AgentRuntimeSdkCompatibility {
 }
 
 pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapabilityProfile};
+pub use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 pub use crate::post_call_hooks::{
     RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry,
     RuntimeHookRegistryBuildError,
 };
 pub use crate::runtime::{
-    AgentEventStream, AgentRunHandle, AgentRunRequest, RuntimeAgentRegistry,
-    RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
-    SessionSelector,
+    AgentEventStream, AgentInteractionResponsePort, AgentRunHandle, AgentRunRequest,
+    AgentSessionRestorePort, AgentSessionRestoreRequest, AgentSessionRestoreResult,
+    AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentUserAnswersRequest,
+    RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError,
+    RuntimeToolRegistry, SessionSelector,
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
@@ -59,15 +62,16 @@ pub use bitfun_runtime_ports::{
     AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
     AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
     AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, ClockPort, DialogSubmitOutcome, FileSystemPort, GitPort,
-    McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort, PermissionRequest, PortError,
-    PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
+    AgentTurnCancellationResult, ClockPort, DialogSubmissionPolicy, DialogSubmitOutcome,
+    FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort,
+    PermissionRequest, PortError, PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort,
+    RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
-    SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, TerminalPort,
-    ThreadGoal, ThreadGoalStatus, WorkspacePort,
+    SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, SessionTranscript,
+    SessionTranscriptReader, SessionTranscriptRequest, TerminalPort, ThreadGoal, ThreadGoalStatus,
+    TranscriptContent, TranscriptMessage, TranscriptToolCall, WorkspacePort,
 };
 pub use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,
@@ -110,6 +114,19 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_session_restore_port(mut self, port: Arc<dyn AgentSessionRestorePort>) -> Self {
+        self.inner = self.inner.with_session_restore_port(port);
+        self
+    }
+
+    pub fn with_session_transcript_reader(
+        mut self,
+        reader: Arc<dyn SessionTranscriptReader>,
+    ) -> Self {
+        self.inner = self.inner.with_session_transcript_reader(reader);
+        self
+    }
+
     pub fn with_thread_goal_management_port(
         mut self,
         port: Arc<dyn AgentThreadGoalManagementPort>,
@@ -136,6 +153,14 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_interaction_response_port(
+        mut self,
+        port: Arc<dyn AgentInteractionResponsePort>,
+    ) -> Self {
+        self.inner = self.inner.with_interaction_response_port(port);
+        self
+    }
+
     pub fn with_services(mut self, services: RuntimeServices) -> Self {
         self.inner = self.inner.with_services(services);
         self
@@ -143,6 +168,11 @@ impl AgentRuntimeBuilder {
 
     pub fn with_event_stream(mut self, events: AgentEventStream) -> Self {
         self.inner = self.inner.with_event_stream(events);
+        self
+    }
+
+    pub fn with_event_source(mut self, source: AgentEventSource) -> Self {
+        self.inner = self.inner.with_event_source(source);
         self
     }
 
@@ -172,6 +202,17 @@ impl AgentRuntimeBuilder {
 }
 
 impl AgentRuntime {
+    pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
+        self.inner.subscribe_events()
+    }
+
+    pub fn subscribe_session_events(
+        &self,
+        session_id: &str,
+    ) -> Result<AgentSessionEventReceiver, RuntimeError> {
+        self.inner.subscribe_session_events(session_id)
+    }
+
     pub fn services(&self) -> Option<&RuntimeServices> {
         self.inner.services()
     }
@@ -199,6 +240,14 @@ impl AgentRuntime {
         self.inner.create_session(request).await
     }
 
+    pub async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        self.inner.create_session_with_id(session_id, request).await
+    }
+
     pub async fn list_sessions(
         &self,
         request: AgentSessionListRequest,
@@ -211,6 +260,20 @@ impl AgentRuntime {
         request: AgentSessionDeleteRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.delete_session(request).await
+    }
+
+    pub async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> Result<AgentSessionRestoreResult, RuntimeError> {
+        self.inner.restore_session(request).await
+    }
+
+    pub async fn read_session_transcript(
+        &self,
+        request: SessionTranscriptRequest,
+    ) -> Result<SessionTranscript, RuntimeError> {
+        self.inner.read_session_transcript(request).await
     }
 
     pub async fn resolve_session_workspace_binding(
@@ -281,6 +344,27 @@ impl AgentRuntime {
         request: AgentTurnCancellationRequest,
     ) -> Result<AgentTurnCancellationResult, RuntimeError> {
         self.inner.cancel_turn(request).await
+    }
+
+    pub async fn confirm_tool(
+        &self,
+        request: AgentToolConfirmationRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.confirm_tool(request).await
+    }
+
+    pub async fn reject_tool(
+        &self,
+        request: AgentToolRejectionRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.reject_tool(request).await
+    }
+
+    pub async fn submit_user_answers(
+        &self,
+        request: AgentUserAnswersRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.submit_user_answers(request).await
     }
 
     pub async fn publish_event(&self, event: RuntimeEventEnvelope) -> Result<(), RuntimeError> {

@@ -77,7 +77,8 @@ terms:
 - User-visible copy should use the project i18n flow; do not share Web UI
   locale catalogs with smaller surfaces.
 - Shared core must stay platform-agnostic. Desktop/Tauri details belong in app
-  adapters and flow back through transport/API layers.
+  adapters and flow through typed capability interfaces; use the production
+  transport adapter when event delivery is needed.
 - Tauri commands use `snake_case` command names and structured `request`
   payloads.
 - Product architecture, feature-boundary, dependency-boundary, and build-speed

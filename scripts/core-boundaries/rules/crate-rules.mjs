@@ -17,10 +17,10 @@ export const noCoreDependencyCrates = [
   'tool-packs',
   'product-domains',
   'opencode-adapter',
+  'external-sources',
   'terminal',
   'tool-runtime',
   'transport',
-  'api-layer',
   'webdriver',
 ];
 
@@ -36,7 +36,7 @@ export const forbiddenManifestDependencyRules = [
     reason:
       'OpenCode adapter production dependencies are limited to the reviewed product composition root',
     message:
-      'only bitfun-core product-full assembly may inject bitfun-opencode-adapter through the Plugin Runtime Host boundary',
+      'only bitfun-core product-full assembly may register bitfun-opencode-adapter through reviewed capability composition roots',
   },
 ];
 
@@ -276,7 +276,7 @@ export const dependencyProfileRules = [
       'aes-gcm',
       'bitfun-product-capabilities',
       'bitfun-product-domains',
-      'bitfun-relay-server',
+      'bitfun-relay-service',
       'bitfun-tool-packs',
       'chrono-tz',
       'cron',
@@ -557,7 +557,6 @@ export const dependencyProfileRules = [
       'tokio-tungstenite',
       'uuid',
       'which',
-      'bitfun-relay-server',
     ],
   },
 ];

@@ -27,6 +27,7 @@ use super::text_input::TextInput;
 use super::theme::{StyleKind, Theme};
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use super::widgets::Spinner;
+use crate::actions::{ActionState, ResolvedKeymap};
 use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
 
 /// Types of popups that can be shown in the ChatView
@@ -118,6 +119,8 @@ pub(crate) struct ChatView {
     command_menu: CommandMenuState,
     /// Command palette state (Ctrl+P)
     command_palette: CommandPaletteState,
+    /// Footer hints derived from the resolved CLI action bindings.
+    shortcut_hints: Vec<(String, &'static str)>,
     /// List scroll state
     list_state: ListState,
     /// Whether to auto-scroll to bottom
@@ -188,8 +191,10 @@ pub(crate) struct ChatView {
     /// Pending subagent selector action from mouse click (consumed by caller)
     pending_subagent_action: Option<SubagentSelectorAction>,
 
-    /// Info popup message (rendered as overlay, dismissed by any key)
+    /// Info popup message and vertical scroll position.
     info_popup: Option<String>,
+    info_popup_scroll: u16,
+    info_popup_max_scroll: u16,
 
     /// Hovered thinking block (message_id) for mouse-over highlight
     hovered_thinking_block_id: Option<String>,
@@ -233,15 +238,16 @@ pub(crate) struct ChatView {
 
 impl ChatView {
     /// Create new Chat view
-    pub(crate) fn new(theme: Theme) -> Self {
+    pub(crate) fn new(theme: Theme, shortcut_hints: Vec<(String, &'static str)>) -> Self {
         let markdown_renderer = MarkdownRenderer::new(theme.clone());
         Self {
             spinner: Spinner::new(theme.style(StyleKind::Primary)),
             markdown_renderer,
             theme,
             text_input: TextInput::new(),
-            command_menu: CommandMenuState::new(),
+            command_menu: CommandMenuState::new(ActionState::chat(false, false)),
             command_palette: CommandPaletteState::new(),
+            shortcut_hints,
             list_state: ListState::default(),
             auto_scroll: true,
             status: None,
@@ -267,6 +273,8 @@ impl ChatView {
             pending_theme_preview: None,
             theme_preview_original: None,
             info_popup: None,
+            info_popup_scroll: 0,
+            info_popup_max_scroll: 0,
             hovered_thinking_block_id: None,
             collapsed_tools: HashSet::new(),
             focused_block_tool: None,
@@ -287,6 +295,15 @@ impl ChatView {
             cached_width: 0,
             lines_cache_dirty: true,
             render_cache: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn set_action_state(&mut self, state: ActionState, keymap: &ResolvedKeymap) {
+        self.shortcut_hints = keymap.compact_hints(state);
+        self.command_palette.set_action_state(state);
+        if self.command_menu.set_action_state(state) {
+            self.command_menu
+                .update(&self.text_input.input, self.text_input.cursor);
         }
     }
 }

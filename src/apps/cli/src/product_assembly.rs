@@ -7,14 +7,27 @@ use bitfun_runtime_services::RuntimeServices;
 pub(crate) fn assemble_cli_runtime_parts(
     services: RuntimeServices,
 ) -> Result<ProductRuntimeParts, ProductAssemblyError> {
-    ProductAssembler::new().assemble(ProductAssemblyInput::new(DeliveryProfile::Cli, services))
+    assemble_runtime_parts(DeliveryProfile::Cli, services)
+}
+
+pub(crate) fn assemble_acp_runtime_parts(
+    services: RuntimeServices,
+) -> Result<ProductRuntimeParts, ProductAssemblyError> {
+    assemble_runtime_parts(DeliveryProfile::Acp, services)
+}
+
+fn assemble_runtime_parts(
+    profile: DeliveryProfile,
+    services: RuntimeServices,
+) -> Result<ProductRuntimeParts, ProductAssemblyError> {
+    ProductAssembler::new().assemble(ProductAssemblyInput::new(profile, services))
 }
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use super::assemble_cli_runtime_parts;
+    use super::{assemble_acp_runtime_parts, assemble_cli_runtime_parts};
     use crate::runtime::{
         approval::{CliApprovalPolicy, CliPermissionService},
         services::{CliClock, CliRuntimeEventSink, CliRuntimeServicesProvider},
@@ -83,6 +96,36 @@ mod tests {
             parts.plugin_runtime().availability(),
             PluginRuntimeAvailability::Disabled {
                 reason: PluginRuntimeUnavailableReason::NotBuilt
+            }
+        ));
+        assert!(!parts.harness_registry().provider_ids().is_empty());
+    }
+
+    #[test]
+    fn acp_product_assembly_uses_acp_profile_and_production_services() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let services = CliRuntimeServicesProvider::new(
+            workspace.path(),
+            Arc::new(CliPermissionService::new(CliApprovalPolicy::Ask)),
+            Arc::new(CliRuntimeEventSink::new(8)),
+            Arc::new(CliClock),
+        )
+        .expect("provider")
+        .build()
+        .expect("runtime services");
+
+        let parts = assemble_acp_runtime_parts(services).expect("ACP product runtime parts");
+
+        assert_eq!(parts.plan().profile(), DeliveryProfile::Acp);
+        assert!(parts.missing_service_requirements().is_empty());
+        assert!(parts
+            .service_availability()
+            .iter()
+            .all(|entry| entry.status() == ProductServiceCapabilityStatus::Available));
+        assert!(matches!(
+            parts.plugin_runtime().availability(),
+            PluginRuntimeAvailability::Disabled {
+                reason: PluginRuntimeUnavailableReason::UnsupportedProfile
             }
         ));
         assert!(!parts.harness_registry().provider_ids().is_empty());

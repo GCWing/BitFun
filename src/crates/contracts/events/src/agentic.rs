@@ -132,6 +132,9 @@ pub enum AgenticEvent {
         parent_tool_call_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         agent_type: Option<String>,
+        /// Resolved model selector stored on the child session.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model_id: Option<String>,
     },
 
     DialogTurnCompleted {
@@ -173,7 +176,10 @@ pub enum AgenticEvent {
     TokenUsageUpdated {
         session_id: String,
         turn_id: String,
-        model_id: String,
+        /// Resolved `AIModelConfig.id` used for this request.
+        model_config_id: String,
+        /// Provider model name sent on the request.
+        effective_model_name: String,
         input_tokens: usize,
         output_tokens: Option<usize>,
         total_tokens: usize,
@@ -228,8 +234,10 @@ pub enum AgenticEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         round_group_id: Option<String>,
         round_index: usize,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        model_id: Option<String>,
+        /// Resolved `AIModelConfig.id` used for this round.
+        model_config_id: String,
+        /// Provider model name sent on the request.
+        effective_model_name: String,
     },
 
     ModelRoundCompleted {
@@ -241,10 +249,10 @@ pub enum AgenticEvent {
         duration_ms: Option<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_id: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        model_id: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        model_alias: Option<String>,
+        /// Resolved `AIModelConfig.id` used for this round.
+        model_config_id: String,
+        /// Provider model name sent on the request.
+        effective_model_name: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         first_chunk_ms: Option<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -336,69 +344,111 @@ pub enum AgenticEvent {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ToolEventIdentity {
+    pub tool_id: String,
+    /// Provider-facing name. Deferred calls remain `CallDeferredTool`.
+    pub tool_name: String,
+    /// Runtime target when it differs from the provider-facing name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_tool_name: Option<String>,
+}
+
+impl ToolEventIdentity {
+    pub fn direct(tool_id: impl Into<String>, tool_name: impl Into<String>) -> Self {
+        Self {
+            tool_id: tool_id.into(),
+            tool_name: tool_name.into(),
+            effective_tool_name: None,
+        }
+    }
+
+    pub fn resolved(
+        tool_id: impl Into<String>,
+        tool_name: impl Into<String>,
+        effective_tool_name: impl Into<String>,
+    ) -> Self {
+        let tool_name = tool_name.into();
+        let effective_tool_name = effective_tool_name.into();
+        Self {
+            tool_id: tool_id.into(),
+            effective_tool_name: (tool_name != effective_tool_name).then_some(effective_tool_name),
+            tool_name,
+        }
+    }
+
+    pub fn effective_name(&self) -> &str {
+        self.effective_tool_name
+            .as_deref()
+            .unwrap_or(&self.tool_name)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event_type")]
 pub enum ToolEventData {
     EarlyDetected {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
     },
     ParamsPartial {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         params: String,
     },
     Queued {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         position: usize,
     },
     Waiting {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         dependencies: Vec<String>,
     },
     Started {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
+        /// Complete provider-facing input. Effective input is derived by consumers.
         params: serde_json::Value,
         #[serde(skip_serializing_if = "Option::is_none")]
         timeout_seconds: Option<u64>,
     },
     Progress {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         message: String,
         percentage: f32,
     },
     Streaming {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         chunks_received: usize,
     },
     StreamChunk {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         data: serde_json::Value,
     },
     ConfirmationNeeded {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
+        /// Complete provider-facing input. Effective input is derived by consumers.
         params: serde_json::Value,
         #[serde(skip_serializing_if = "Option::is_none")]
         timeout_at: Option<u64>,
     },
     Confirmed {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
     },
     Rejected {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
     },
     Completed {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         result: serde_json::Value,
         #[serde(skip_serializing_if = "Option::is_none")]
         result_for_assistant: Option<String>,
@@ -413,8 +463,8 @@ pub enum ToolEventData {
         execution_ms: Option<u64>,
     },
     Failed {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         error: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
@@ -428,8 +478,8 @@ pub enum ToolEventData {
         execution_ms: Option<u64>,
     },
     Cancelled {
-        tool_id: String,
-        tool_name: String,
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
         reason: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
@@ -553,6 +603,37 @@ impl AgenticEvent {
 }
 
 impl ToolEventData {
+    pub fn identity(&self) -> &ToolEventIdentity {
+        match self {
+            Self::EarlyDetected { identity }
+            | Self::ParamsPartial { identity, .. }
+            | Self::Queued { identity, .. }
+            | Self::Waiting { identity, .. }
+            | Self::Started { identity, .. }
+            | Self::Progress { identity, .. }
+            | Self::Streaming { identity, .. }
+            | Self::StreamChunk { identity, .. }
+            | Self::ConfirmationNeeded { identity, .. }
+            | Self::Confirmed { identity }
+            | Self::Rejected { identity }
+            | Self::Completed { identity, .. }
+            | Self::Failed { identity, .. }
+            | Self::Cancelled { identity, .. } => identity,
+        }
+    }
+
+    pub fn tool_id(&self) -> &str {
+        &self.identity().tool_id
+    }
+
+    pub fn wire_tool_name(&self) -> &str {
+        &self.identity().tool_name
+    }
+
+    pub fn effective_tool_name(&self) -> &str {
+        self.identity().effective_name()
+    }
+
     /// Get the default priority for a specific tool event variant.
     pub fn default_priority(&self) -> AgenticEventPriority {
         match self {
@@ -590,8 +671,8 @@ mod tests {
             has_tool_calls: false,
             duration_ms: Some(123),
             provider_id: Some("provider".to_string()),
-            model_id: Some("model".to_string()),
-            model_alias: Some("alias".to_string()),
+            model_config_id: "model-config".to_string(),
+            effective_model_name: "provider-model".to_string(),
             first_chunk_ms: Some(10),
             first_visible_output_ms: Some(12),
             stream_duration_ms: Some(100),
@@ -603,21 +684,25 @@ mod tests {
         let json = serde_json::to_value(&event).expect("serialize event");
 
         assert_eq!(json["duration_ms"], 123);
+        assert_eq!(json["model_config_id"], "model-config");
+        assert_eq!(json["effective_model_name"], "provider-model");
         assert_eq!(json["first_chunk_ms"], 10);
         assert_eq!(json["token_details"]["reasoningTokens"], 7);
     }
 
     #[test]
-    fn model_round_completed_deserializes_legacy_payload_without_timing_fields() {
+    fn model_round_completed_deserializes_required_identity_without_timing_fields() {
         let json = serde_json::json!({
             "type": "ModelRoundCompleted",
             "session_id": "session-1",
             "turn_id": "turn-1",
             "round_id": "round-1",
-            "has_tool_calls": false
+            "has_tool_calls": false,
+            "model_config_id": "model-config",
+            "effective_model_name": "provider-model"
         });
 
-        let event: AgenticEvent = serde_json::from_value(json).expect("legacy event");
+        let event: AgenticEvent = serde_json::from_value(json).expect("event");
 
         match event {
             AgenticEvent::ModelRoundCompleted { duration_ms, .. } => {
@@ -632,7 +717,8 @@ mod tests {
         let event = AgenticEvent::TokenUsageUpdated {
             session_id: "session-1".to_string(),
             turn_id: "turn-1".to_string(),
-            model_id: "model".to_string(),
+            model_config_id: "model-config".to_string(),
+            effective_model_name: "provider-model".to_string(),
             input_tokens: 10,
             output_tokens: Some(5),
             total_tokens: 15,
@@ -651,8 +737,7 @@ mod tests {
     #[test]
     fn completed_tool_reports_total_and_execution_duration() {
         let event = ToolEventData::Completed {
-            tool_id: "tool-1".to_string(),
-            tool_name: "write_file".to_string(),
+            identity: ToolEventIdentity::direct("tool-1", "write_file"),
             result: serde_json::json!({ "ok": true }),
             result_for_assistant: None,
             duration_ms: 120,
@@ -669,10 +754,33 @@ mod tests {
     }
 
     #[test]
+    fn deferred_started_event_preserves_wire_invocation_and_effective_name() {
+        let params = serde_json::json!({
+            "tool_name": "CreatePlan",
+            "args": { "name": "Plan" }
+        });
+        let event = ToolEventData::Started {
+            identity: ToolEventIdentity::resolved("tool-1", "CallDeferredTool", "CreatePlan"),
+            params: params.clone(),
+            timeout_seconds: None,
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize deferred event");
+        assert_eq!(json["tool_id"], "tool-1");
+        assert_eq!(json["tool_name"], "CallDeferredTool");
+        assert_eq!(json["effective_tool_name"], "CreatePlan");
+        assert_eq!(json["params"], params);
+
+        let decoded: ToolEventData =
+            serde_json::from_value(json).expect("deserialize deferred event");
+        assert_eq!(decoded.wire_tool_name(), "CallDeferredTool");
+        assert_eq!(decoded.effective_tool_name(), "CreatePlan");
+    }
+
+    #[test]
     fn failed_tool_reports_best_effort_total_duration() {
         let event = ToolEventData::Failed {
-            tool_id: "tool-1".to_string(),
-            tool_name: "write_file".to_string(),
+            identity: ToolEventIdentity::direct("tool-1", "write_file"),
             error: "failed".to_string(),
             duration_ms: Some(120),
             queue_wait_ms: Some(10),
@@ -690,8 +798,7 @@ mod tests {
     #[test]
     fn cancelled_tool_reports_best_effort_total_duration() {
         let event = ToolEventData::Cancelled {
-            tool_id: "tool-1".to_string(),
-            tool_name: "write_file".to_string(),
+            identity: ToolEventIdentity::direct("tool-1", "write_file"),
             reason: "cancelled".to_string(),
             duration_ms: Some(120),
             queue_wait_ms: Some(10),
@@ -757,6 +864,7 @@ mod tests {
             parent_dialog_turn_id: "turn-1".to_string(),
             parent_tool_call_id: "tool-1".to_string(),
             agent_type: Some("GeneralPurpose".to_string()),
+            model_id: Some("fast".to_string()),
         };
 
         assert_eq!(event.session_id(), Some("child-session"));
@@ -770,5 +878,6 @@ mod tests {
         assert_eq!(serialized["parent_dialog_turn_id"], "turn-1");
         assert_eq!(serialized["parent_tool_call_id"], "tool-1");
         assert_eq!(serialized["agent_type"], "GeneralPurpose");
+        assert_eq!(serialized["model_id"], "fast");
     }
 }

@@ -49,6 +49,9 @@ use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::{
+    get_global_config_service, AgentModelDefaultsConfig, SubagentModelSelection,
+};
 use crate::service::remote_ssh::normalize_remote_workspace_path;
 use crate::service::session::{SessionMemoryMode, SessionRelationship, SessionRelationshipKind};
 use crate::service::workspace::{
@@ -86,6 +89,76 @@ const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY: usize = 5;
 const MAX_SUBAGENT_MAX_CONCURRENCY: usize = 64;
 const SUBAGENT_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(10);
+
+fn trimmed_model_id(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn snapshot_normal_session_model(config: &mut SessionConfig, defaults: &AgentModelDefaultsConfig) {
+    config.model_id = trimmed_model_id(config.model_id.as_deref())
+        .or_else(|| trimmed_model_id(Some(defaults.mode.as_str())))
+        .or_else(|| Some(AgentModelDefaultsConfig::default().mode));
+}
+
+#[cfg(test)]
+tokio::task_local! {
+    static TEST_AGENT_MODEL_DEFAULTS: AgentModelDefaultsConfig;
+}
+
+async fn normalize_model_selection(model_id: &str) -> BitFunResult<String> {
+    let requested_model_id = model_id.trim();
+    match requested_model_id {
+        "" | "auto" | "default" => Ok("auto".to_string()),
+        "primary" | "fast" => Ok(requested_model_id.to_string()),
+        model_config_id => {
+            let config_service = get_global_config_service().await.map_err(|error| {
+                BitFunError::AIClient(format!(
+                    "Failed to load AI configuration for model update: {error}"
+                ))
+            })?;
+            let ai_config: crate::service::config::types::AIConfig = config_service
+                .get_config(Some("ai"))
+                .await
+                .map_err(|error| {
+                    BitFunError::AIClient(format!(
+                        "Failed to read AI configuration for model update: {error}"
+                    ))
+                })?;
+            ai_config
+                .resolve_model_reference(model_config_id)
+                .ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Unknown or disabled model configuration ID: {model_config_id}"
+                    ))
+                })
+        }
+    }
+}
+
+fn resolve_subagent_model_selection(
+    explicit_model_id: Option<&str>,
+    configured_selection: &SubagentModelSelection,
+    parent_model_id: Option<&str>,
+) -> BitFunResult<String> {
+    if let Some(model_id) = trimmed_model_id(explicit_model_id) {
+        return Ok(model_id);
+    }
+
+    match configured_selection {
+        SubagentModelSelection::Fixed { model_id } => trimmed_model_id(Some(model_id)).ok_or_else(|| {
+            BitFunError::Validation("Configured subagent model must not be empty".to_string())
+        }),
+        SubagentModelSelection::Inherit => trimmed_model_id(parent_model_id).ok_or_else(|| {
+            BitFunError::Validation(
+                "Subagent model is configured to inherit, but the parent session has no model selection"
+                    .to_string(),
+            )
+        }),
+    }
+}
 
 fn is_review_agent_type(agent_type: &str) -> bool {
     matches!(
@@ -1156,8 +1229,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             end_time: Some(completed_at),
             duration_ms: Some(outcome.duration_ms),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,
@@ -1231,8 +1304,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             end_time: Some(timestamp),
             duration_ms: Some(0),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,
@@ -1408,15 +1481,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     pub async fn update_session_model(&self, session_id: &str, model_id: &str) -> BitFunResult<()> {
-        let normalized_model_id = model_id.trim();
-        let normalized_model_id = if normalized_model_id.is_empty() {
-            "auto"
-        } else {
-            normalized_model_id
-        };
+        let normalized_model_id = normalize_model_selection(model_id).await?;
 
         self.session_manager
-            .update_session_model_id(session_id, normalized_model_id)
+            .update_session_model_id(session_id, &normalized_model_id)
             .await?;
 
         info!(
@@ -1427,7 +1495,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(())
     }
 
-    /// Create a new session with explicit creator identity.
+    /// Common creation entry point for normal persisted sessions.
+    ///
+    /// Delegated subagent sessions use the hidden-subagent creation path instead.
     pub async fn create_session_with_workspace_and_creator(
         &self,
         session_id: Option<String>,
@@ -1441,6 +1511,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // consistently restore the correct workspace regardless of the entry point.
         config.workspace_path = Some(workspace_path.clone());
         config.workspace_id = Self::resolve_workspace_id_for_config(&config).await;
+        let defaults = Self::agent_model_defaults().await;
+        snapshot_normal_session_model(&mut config, &defaults);
         let agent_type = Self::normalize_agent_type(&agent_type);
         let session = self
             .session_manager
@@ -5198,6 +5270,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
                     parent_tool_call_id: parent_info.tool_call_id.clone(),
                     agent_type: Some(agent_type.clone()),
+                    model_id: self
+                        .session_manager
+                        .get_session(&session_id)
+                        .and_then(|session| session.config.model_id.clone()),
                 })
                 .await;
             }
@@ -6244,6 +6320,83 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(context_messages)
     }
 
+    async fn agent_model_defaults() -> AgentModelDefaultsConfig {
+        #[cfg(test)]
+        if let Ok(defaults) = TEST_AGENT_MODEL_DEFAULTS.try_with(|defaults| defaults.clone()) {
+            return defaults;
+        }
+
+        let Ok(config_service) = GlobalConfigManager::get_service().await else {
+            return AgentModelDefaultsConfig::default();
+        };
+
+        config_service
+            .get_config(Some("ai.agent_model_defaults"))
+            .await
+            .unwrap_or_default()
+    }
+
+    fn parent_model_selection(
+        &self,
+        parent_session_id: &str,
+        defaults: &AgentModelDefaultsConfig,
+    ) -> BitFunResult<String> {
+        let parent_session = self
+            .session_manager
+            .get_session(parent_session_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Parent session not found: {}", parent_session_id))
+            })?;
+
+        trimmed_model_id(parent_session.config.model_id.as_deref())
+            .or_else(|| trimmed_model_id(Some(defaults.mode.as_str())))
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Parent session has no model selection: {}",
+                    parent_session_id
+                ))
+            })
+    }
+
+    async fn resolve_fresh_subagent_model_id(
+        &self,
+        explicit_model_id: Option<&str>,
+        agent_type: &str,
+        workspace_path: &str,
+        parent_session_id: &str,
+    ) -> BitFunResult<String> {
+        let defaults = Self::agent_model_defaults().await;
+        let registry = get_agent_registry();
+        let configured_selection = registry
+            .get_custom_subagent_config(agent_type, Some(Path::new(workspace_path)))
+            .filter(|custom| custom.model_is_explicit)
+            .map(|custom| {
+                if custom.model.trim() == "inherit" {
+                    SubagentModelSelection::Inherit
+                } else {
+                    SubagentModelSelection::fixed(
+                        trimmed_model_id(Some(custom.model.as_str()))
+                            .unwrap_or_else(|| "fast".to_string()),
+                    )
+                }
+            })
+            .unwrap_or_else(|| defaults.builtin_subagent_selection(agent_type));
+        let parent_model_id = if explicit_model_id.is_none()
+            && matches!(&configured_selection, SubagentModelSelection::Inherit)
+        {
+            Some(self.parent_model_selection(parent_session_id, &defaults)?)
+        } else {
+            None
+        };
+
+        let model_selection = resolve_subagent_model_selection(
+            explicit_model_id,
+            &configured_selection,
+            parent_model_id.as_deref(),
+        )?;
+        normalize_model_selection(&model_selection).await
+    }
+
     async fn resolve_hidden_subagent_execution_request(
         &self,
         request: SubagentExecutionRequest,
@@ -6292,9 +6445,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         )
                         .await?;
                     if let Some(model_id) = model_id.as_deref() {
+                        let model_id = normalize_model_selection(model_id).await?;
                         let session_id = session.session_id.clone();
                         self.session_manager
-                            .update_session_model_id(&session_id, model_id)
+                            .update_session_model_id(&session_id, &model_id)
                             .await?;
                         session =
                             self.session_manager
@@ -6352,6 +6506,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     )
                     .await?;
                 }
+                let resolved_model_id = self
+                    .resolve_fresh_subagent_model_id(
+                        model_id.as_deref(),
+                        &agent_type,
+                        &workspace_path,
+                        &request.subagent_parent_info.session_id,
+                    )
+                    .await?;
 
                 Ok(HiddenSubagentExecutionRequest {
                     target_session_id: None,
@@ -6360,7 +6522,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     agent_type,
                     session_config: Self::build_session_config_for_workspace(
                         workspace_path,
-                        model_id,
+                        Some(resolved_model_id),
                     )
                     .await,
                     initial_messages: vec![Message::user(task_description.clone())],
@@ -6405,10 +6567,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     )
                     .await?;
                 }
+                let defaults = Self::agent_model_defaults().await;
+                let parent_model_id = if model_id.is_none()
+                    && matches!(&defaults.subagents.fork, SubagentModelSelection::Inherit)
+                {
+                    Some(
+                        trimmed_model_id(snapshot.session_model_id.as_deref())
+                            .or_else(|| trimmed_model_id(Some(defaults.mode.as_str())))
+                            .ok_or_else(|| {
+                                BitFunError::Validation(format!(
+                                    "Fork parent session has no model selection: {}",
+                                    snapshot.parent_session_id
+                                ))
+                            })?,
+                    )
+                } else {
+                    None
+                };
+                let model_selection = resolve_subagent_model_selection(
+                    model_id.as_deref(),
+                    &defaults.subagents.fork,
+                    parent_model_id.as_deref(),
+                )?;
+                let resolved_model_id = normalize_model_selection(&model_selection).await?;
                 let mut session_config = snapshot.build_child_session_config(None);
-                if let Some(model_id) = model_id {
-                    session_config.model_id = Some(model_id);
-                }
+                session_config.model_id = Some(resolved_model_id);
                 let mut initial_messages = snapshot.messages.clone();
                 initial_messages.push(Message::internal_reminder(
                     InternalReminderKind::ForkSubagent,
@@ -7474,46 +7657,78 @@ fn resolve_agent_session_create_created_by(
         .map(ToOwned::to_owned)
 }
 
+fn runtime_port_backend_error(error: BitFunError) -> bitfun_runtime_ports::PortError {
+    bitfun_runtime_ports::PortError::new(
+        bitfun_runtime_ports::PortErrorKind::Backend,
+        error.to_string(),
+    )
+}
+
+async fn create_agent_session_from_runtime_request(
+    coordinator: &ConversationCoordinator,
+    session_id: Option<String>,
+    request: bitfun_runtime_ports::AgentSessionCreateRequest,
+    map_core_error: fn(BitFunError) -> bitfun_runtime_ports::PortError,
+) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
+    let workspace_path = request.workspace_path.clone().ok_or_else(|| {
+        bitfun_runtime_ports::PortError::new(
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+            "workspace_path is required to create an agent session",
+        )
+    })?;
+    let created_by = resolve_agent_session_create_created_by(&request.metadata);
+    let session = coordinator
+        .create_session_with_workspace_and_creator(
+            session_id,
+            request.session_name,
+            request.agent_type,
+            SessionConfig {
+                workspace_path: Some(workspace_path.clone()),
+                remote_connection_id: request.remote_connection_id,
+                remote_ssh_host: request.remote_ssh_host,
+                ..Default::default()
+            },
+            workspace_path,
+            created_by,
+        )
+        .await
+        .map_err(map_core_error)?;
+
+    Ok(bitfun_runtime_ports::AgentSessionCreateResult {
+        session_id: session.session_id,
+        session_name: session.session_name,
+        agent_type: session.agent_type,
+    })
+}
+
 #[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
     async fn create_session(
         &self,
         request: bitfun_runtime_ports::AgentSessionCreateRequest,
     ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
-        let workspace_path = request.workspace_path.clone().ok_or_else(|| {
+        create_agent_session_from_runtime_request(self, None, request, runtime_port_backend_error)
+            .await
+    }
+
+    async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: bitfun_runtime_ports::AgentSessionCreateRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
+        bitfun_core_types::validate_session_id(&session_id).map_err(|message| {
             bitfun_runtime_ports::PortError::new(
                 bitfun_runtime_ports::PortErrorKind::InvalidRequest,
-                "workspace_path is required to create an agent session",
+                message,
             )
         })?;
-
-        let session = self
-            .create_session_with_workspace_and_creator(
-                None,
-                request.session_name,
-                request.agent_type,
-                SessionConfig {
-                    workspace_path: Some(workspace_path.clone()),
-                    remote_connection_id: request.remote_connection_id.clone(),
-                    remote_ssh_host: request.remote_ssh_host.clone(),
-                    ..Default::default()
-                },
-                workspace_path,
-                resolve_agent_session_create_created_by(&request.metadata),
-            )
-            .await
-            .map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
-                    error.to_string(),
-                )
-            })?;
-
-        Ok(bitfun_runtime_ports::AgentSessionCreateResult {
-            session_id: session.session_id,
-            session_name: session.session_name,
-            agent_type: session.agent_type,
-        })
+        create_agent_session_from_runtime_request(
+            self,
+            Some(session_id),
+            request,
+            runtime_port_error_from_bitfun,
+        )
+        .await
     }
 
     async fn submit_message(
@@ -7651,6 +7866,27 @@ fn runtime_port_error_from_bitfun(error: BitFunError) -> bitfun_runtime_ports::P
     bitfun_runtime_ports::PortError::new(kind, message)
 }
 
+fn runtime_port_error_preserving_message(error: BitFunError) -> bitfun_runtime_ports::PortError {
+    let message = error.to_string();
+    let mut port_error = runtime_port_error_from_bitfun(error);
+    port_error.message = message;
+    port_error
+}
+
+fn user_input_port_error(
+    error: bitfun_agent_runtime::user_questions::UserInputSendError,
+) -> bitfun_runtime_ports::PortError {
+    let kind = match &error {
+        bitfun_agent_runtime::user_questions::UserInputSendError::MissingChannel { .. } => {
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        }
+        bitfun_agent_runtime::user_questions::UserInputSendError::ChannelClosed { .. } => {
+            bitfun_runtime_ports::PortErrorKind::Cancelled
+        }
+    };
+    bitfun_runtime_ports::PortError::new(kind, format!("Tool error: {error}"))
+}
+
 #[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinator {
     async fn list_sessions(
@@ -7729,6 +7965,75 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
             .resolve_session_workspace_binding(&request.session_id)
             .await
             .map(runtime_session_workspace_binding))
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordinator {
+    async fn restore_session(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionRestoreRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_agent_runtime::sdk::AgentSessionRestoreResult>
+    {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        let session = self
+            .restore_session_for_workspace(
+                SessionStoragePathRequest {
+                    workspace_path: PathBuf::from(request.workspace_path),
+                    remote_connection_id: request.remote_connection_id,
+                    remote_ssh_host: request.remote_ssh_host,
+                },
+                &request.session_id,
+            )
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+
+        Ok(bitfun_agent_runtime::sdk::AgentSessionRestoreResult {
+            session: bitfun_runtime_ports::AgentSessionSummary {
+                session_id: session.session_id,
+                session_name: session.session_name,
+                agent_type: session.agent_type,
+                turn_count: session.dialog_turn_ids.len(),
+                created_at_ms: runtime_session_time_ms(session.created_at),
+                last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
+            },
+            state: session.state,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_agent_runtime::sdk::AgentInteractionResponsePort for ConversationCoordinator {
+    async fn confirm_tool(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentToolConfirmationRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.confirm_tool(&request.tool_id, request.updated_input)
+            .await
+            .map_err(runtime_port_error_preserving_message)
+    }
+
+    async fn reject_tool(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentToolRejectionRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.reject_tool(&request.tool_id, request.reason)
+            .await
+            .map_err(runtime_port_error_preserving_message)
+    }
+
+    async fn submit_user_answers(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentUserAnswersRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        crate::agentic::tools::user_input_manager::get_user_input_manager()
+            .send_answer(&request.tool_id, request.answers)
+            .map_err(user_input_port_error)
     }
 }
 
@@ -7875,12 +8180,7 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
         let messages = self
             .get_messages(&request.session_id)
             .await
-            .map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
-                    error.to_string(),
-                )
-            })?;
+            .map_err(runtime_port_error_preserving_message)?;
 
         let messages = messages
             .into_iter()
@@ -7897,10 +8197,54 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
                 }
                 .to_string();
 
+                let content = match message.content {
+                    MessageContent::Text(text) => {
+                        bitfun_runtime_ports::TranscriptContent::Text(text)
+                    }
+                    MessageContent::Multimodal { text, images } => {
+                        bitfun_runtime_ports::TranscriptContent::Multimodal {
+                            text,
+                            image_count: images.len(),
+                        }
+                    }
+                    MessageContent::ToolResult {
+                        tool_id,
+                        tool_name,
+                        effective_tool_name,
+                        result,
+                        is_error,
+                        ..
+                    } => bitfun_runtime_ports::TranscriptContent::ToolResult {
+                        tool_id,
+                        tool_name,
+                        effective_tool_name,
+                        result,
+                        is_error,
+                    },
+                    MessageContent::Mixed {
+                        reasoning_content,
+                        text,
+                        tool_calls,
+                    } => bitfun_runtime_ports::TranscriptContent::Mixed {
+                        reasoning_content,
+                        text,
+                        tool_calls: tool_calls
+                            .into_iter()
+                            .map(|tool_call| bitfun_runtime_ports::TranscriptToolCall {
+                                tool_id: tool_call.tool_id,
+                                tool_name: tool_call.tool_name,
+                                arguments: tool_call.arguments,
+                            })
+                            .collect(),
+                    },
+                };
+
                 bitfun_runtime_ports::TranscriptMessage {
+                    id: Some(message.id),
                     role,
                     turn_id: message.metadata.turn_id,
-                    content: serde_json::to_value(message.content).unwrap_or_default(),
+                    timestamp_ms: Some(runtime_session_time_ms(message.timestamp)),
+                    content,
                 }
             })
             .collect();
@@ -7990,9 +8334,10 @@ mod tests {
     use super::{
         background_subagent_delivery_metadata, merge_prepended_messages_for_turn,
         normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
-        resolve_agent_submission_turn_id, should_require_tool_confirmation,
+        resolve_agent_submission_turn_id, resolve_subagent_model_selection,
+        runtime_port_error_preserving_message, should_require_tool_confirmation,
         turn_review_manifest_for_agent, validate_background_subagent_delivery,
-        ConversationCoordinator, SubagentExecutionRequest,
+        ConversationCoordinator, SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::agents::{CustomSubagent, CustomSubagentKind, UserContextPolicy};
     use crate::agentic::core::{
@@ -8015,6 +8360,7 @@ mod tests {
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::TurnSkillAgentSnapshot;
     use crate::infrastructure::PathManager;
+    use crate::service::config::{AgentModelDefaultsConfig, SubagentModelSelection};
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use crate::service::session::SessionMetadata;
     use bitfun_runtime_ports::{
@@ -8025,9 +8371,109 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
+
+    #[test]
+    fn migrated_runtime_ports_preserve_existing_core_error_messages() {
+        let error = runtime_port_error_preserving_message(
+            crate::util::errors::BitFunError::Validation("invalid session id".to_string()),
+        );
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        assert_eq!(error.message, "Validation error: invalid session id");
+    }
+
+    #[tokio::test]
+    async fn interaction_response_port_uses_core_owners_and_typed_stale_errors() {
+        use bitfun_agent_runtime::sdk::{
+            AgentInteractionResponsePort, AgentToolConfirmationRequest, AgentToolRejectionRequest,
+            AgentUserAnswersRequest,
+        };
+
+        let (coordinator, _) = test_coordinator();
+        let answer_tool_id = format!("answer-{}", uuid::Uuid::new_v4());
+        let (sender, receiver) = tokio::sync::oneshot::channel::<
+            bitfun_agent_runtime::user_questions::UserInputResponse,
+        >();
+        crate::agentic::tools::user_input_manager::get_user_input_manager()
+            .register_channel(answer_tool_id.clone(), sender);
+
+        AgentInteractionResponsePort::submit_user_answers(
+            &coordinator,
+            AgentUserAnswersRequest {
+                tool_id: answer_tool_id.clone(),
+                answers: serde_json::json!({ "0": "continue" }),
+            },
+        )
+        .await
+        .expect("deliver user answers through the Core-owned channel");
+        assert_eq!(
+            receiver.await.expect("receive user answers").answers,
+            serde_json::json!({ "0": "continue" })
+        );
+
+        let stale_answer = AgentInteractionResponsePort::submit_user_answers(
+            &coordinator,
+            AgentUserAnswersRequest {
+                tool_id: answer_tool_id.clone(),
+                answers: serde_json::json!({ "0": "continue" }),
+            },
+        )
+        .await
+        .expect_err("consumed answer channel must be reported as stale");
+        assert_eq!(
+            stale_answer.kind,
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        );
+        assert_eq!(
+            stale_answer.message,
+            format!("Tool error: Waiting channel not found: {answer_tool_id}")
+        );
+
+        let missing_tool_id = format!("tool-{}", uuid::Uuid::new_v4());
+        let confirmation = AgentInteractionResponsePort::confirm_tool(
+            &coordinator,
+            AgentToolConfirmationRequest {
+                tool_id: missing_tool_id.clone(),
+                updated_input: Some(serde_json::json!({ "path": "updated.txt" })),
+            },
+        )
+        .await
+        .expect_err("missing confirmation task");
+        assert_eq!(
+            confirmation.kind,
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        );
+        assert_eq!(
+            confirmation.message,
+            format!("Not found: Tool task not found: {missing_tool_id}")
+        );
+
+        let rejection = AgentInteractionResponsePort::reject_tool(
+            &coordinator,
+            AgentToolRejectionRequest {
+                tool_id: missing_tool_id.clone(),
+                reason: "Use a read-only path".to_string(),
+            },
+        )
+        .await
+        .expect_err("missing rejection task");
+        assert_eq!(
+            rejection.kind,
+            bitfun_runtime_ports::PortErrorKind::NotFound
+        );
+        assert_eq!(
+            rejection.message,
+            format!("Not found: Tool task not found: {missing_tool_id}")
+        );
+    }
     use tokio::sync::RwLock as TokioRwLock;
 
-    fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
+    fn test_coordinator_with_max_active_sessions(
+        max_active_sessions: usize,
+    ) -> (ConversationCoordinator, Arc<SessionManager>) {
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
         let session_manager = Arc::new(SessionManager::new(
             Arc::new(SessionContextStore::new()),
@@ -8036,7 +8482,7 @@ mod tests {
                     .expect("persistence manager"),
             ),
             SessionManagerConfig {
-                max_active_sessions: 100,
+                max_active_sessions,
                 session_idle_timeout: Duration::from_secs(3600),
                 auto_save_interval: Duration::from_secs(300),
                 enable_persistence: false,
@@ -8074,6 +8520,10 @@ mod tests {
         );
 
         (coordinator, session_manager)
+    }
+
+    fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
+        test_coordinator_with_max_active_sessions(100)
     }
 
     #[test]
@@ -8891,6 +9341,195 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn agent_submission_create_session_preserves_v1_backend_error_classification() {
+        let (coordinator, _) = test_coordinator_with_max_active_sessions(0);
+        let error = AgentSubmissionPort::create_session(
+            &coordinator,
+            AgentSessionCreateRequest {
+                session_name: "Over capacity".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect_err("v1 create should preserve its backend error classification");
+
+        assert_eq!(error.kind, bitfun_runtime_ports::PortErrorKind::Backend);
+    }
+
+    #[tokio::test]
+    async fn agent_submission_create_session_preserves_requested_session_id() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-agent-session-fixed-id-port-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+
+        let result = AgentSubmissionPort::create_session_with_id(
+            &coordinator,
+            "fixed-session-id".to_string(),
+            AgentSessionCreateRequest {
+                session_name: "Fixed worker".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect("fixed-id session creation should succeed");
+
+        assert_eq!(result.session_id, "fixed-session-id");
+        assert!(session_manager.get_session("fixed-session-id").is_some());
+
+        let duplicate_error = AgentSubmissionPort::create_session_with_id(
+            &coordinator,
+            "fixed-session-id".to_string(),
+            AgentSessionCreateRequest {
+                session_name: "Duplicate worker".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect_err("duplicate fixed session id should be rejected");
+        assert_eq!(
+            duplicate_error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        assert!(duplicate_error.message.contains("already exists"));
+        assert_eq!(
+            session_manager
+                .get_session("fixed-session-id")
+                .expect("original fixed-id session should remain")
+                .session_name,
+            "Fixed worker"
+        );
+    }
+
+    #[tokio::test]
+    async fn normal_sessions_keep_the_mode_default_snapshotted_at_creation() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-normal-session-model-snapshot-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let workspace_path_string = workspace_path.to_string_lossy().into_owned();
+
+        let first = TEST_AGENT_MODEL_DEFAULTS
+            .scope(
+                AgentModelDefaultsConfig {
+                    mode: "model-a".to_string(),
+                    ..Default::default()
+                },
+                coordinator.create_session_with_workspace(
+                    None,
+                    "First".to_string(),
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path_string.clone()),
+                        ..Default::default()
+                    },
+                    workspace_path_string.clone(),
+                ),
+            )
+            .await
+            .expect("first normal session should be created");
+
+        let second = TEST_AGENT_MODEL_DEFAULTS
+            .scope(
+                AgentModelDefaultsConfig {
+                    mode: "model-b".to_string(),
+                    ..Default::default()
+                },
+                coordinator.create_session_with_workspace(
+                    None,
+                    "Second".to_string(),
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path_string.clone()),
+                        ..Default::default()
+                    },
+                    workspace_path_string.clone(),
+                ),
+            )
+            .await
+            .expect("second normal session should be created");
+
+        assert_eq!(
+            session_manager
+                .get_session(&first.session_id)
+                .and_then(|session| session.config.model_id.clone())
+                .as_deref(),
+            Some("model-a")
+        );
+        assert_eq!(
+            session_manager
+                .get_session(&second.session_id)
+                .and_then(|session| session.config.model_id.clone())
+                .as_deref(),
+            Some("model-b")
+        );
+
+        let explicit = TEST_AGENT_MODEL_DEFAULTS
+            .scope(
+                AgentModelDefaultsConfig {
+                    mode: "model-c".to_string(),
+                    ..Default::default()
+                },
+                coordinator.create_session_with_workspace(
+                    None,
+                    "Explicit".to_string(),
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path_string.clone()),
+                        model_id: Some("explicit-model".to_string()),
+                        ..Default::default()
+                    },
+                    workspace_path_string,
+                ),
+            )
+            .await
+            .expect("explicit-model normal session should be created");
+        assert_eq!(explicit.config.model_id.as_deref(), Some("explicit-model"));
+
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn agent_submission_create_session_rejects_invalid_requested_session_id() {
+        let (coordinator, _) = test_coordinator();
+        let error = AgentSubmissionPort::create_session_with_id(
+            &coordinator,
+            "../other-session".to_string(),
+            AgentSessionCreateRequest {
+                session_name: "Invalid worker".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect_err("invalid fixed session id should be rejected");
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+    }
+
+    #[tokio::test]
     async fn subagent_session_config_preserves_registered_remote_workspace_identity() {
         let manager = init_remote_workspace_manager();
         manager
@@ -9324,6 +9963,37 @@ mod tests {
                 Some(InternalReminderKind::RemoteFileDelivery),
                 Some(InternalReminderKind::ScheduledJob),
             ]
+        );
+    }
+
+    #[test]
+    fn subagent_model_resolution_prioritizes_explicit_fixed_and_inherited_values() {
+        assert_eq!(
+            resolve_subagent_model_selection(
+                Some("explicit-model"),
+                &SubagentModelSelection::fixed("configured-model"),
+                Some("parent-model"),
+            )
+            .expect("explicit model should win"),
+            "explicit-model"
+        );
+        assert_eq!(
+            resolve_subagent_model_selection(
+                None,
+                &SubagentModelSelection::fixed("configured-model"),
+                Some("parent-model"),
+            )
+            .expect("configured model should win"),
+            "configured-model"
+        );
+        assert_eq!(
+            resolve_subagent_model_selection(None, &SubagentModelSelection::Inherit, Some("auto"),)
+                .expect("inherit should preserve the parent selector"),
+            "auto"
+        );
+        assert!(
+            resolve_subagent_model_selection(None, &SubagentModelSelection::Inherit, None,)
+                .is_err()
         );
     }
 

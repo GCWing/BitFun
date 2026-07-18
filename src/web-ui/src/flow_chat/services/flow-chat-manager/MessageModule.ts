@@ -6,7 +6,7 @@
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
+import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { notificationService } from '../../../shared/notification-system';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
@@ -57,7 +57,7 @@ function normalizeModelSelection(
   return matchedModel ? value : 'auto';
 }
 
-async function syncSessionModelSelection(
+export async function syncSessionModelSelection(
   context: FlowChatContext,
   sessionId: string,
   agentType: string,
@@ -67,46 +67,37 @@ async function syncSessionModelSelection(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
 
-  const currentModelId = (session.config.modelName || 'auto').trim() || 'auto';
+  const sessionModelId = session.config.modelName?.trim();
 
-  // When the session already has an explicit model selected, keep it —
-  // do not overwrite with the global per-mode default.  Still sync to
-  // the backend in case a previous update_session_model call silently
-  // failed (e.g. the session had been evicted from memory on the Rust
-  // side and the restore path did not have a workspace index entry).
-  if (currentModelId !== 'auto') {
-    const desiredMaxContextTokens = await getModelMaxTokens(currentModelId, agentType);
+  // Any stored selector, including "auto", belongs to the session. Still sync
+  // it to the backend in case the restored runtime session lost that state.
+  if (sessionModelId) {
+    const desiredMaxContextTokens = await getModelMaxTokens(sessionModelId, agentType);
     if (session.maxContextTokens !== desiredMaxContextTokens) {
       context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
     }
     await agentAPI.updateSessionModel({
       sessionId,
-      modelName: currentModelId,
+      modelName: sessionModelId,
     });
     return;
   }
 
   const configData = await configManager.getConfigs([
-    'ai.agent_models',
+    'ai.agent_model_defaults',
     'ai.models',
     'ai.default_models',
   ]);
-  const agentModels = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
+  const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
   const allModels = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
   const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
 
-  const desiredModelId = normalizeModelSelection(agentModels[agentType], allModels, defaultModels);
+  const desiredModelId = normalizeModelSelection(agentModelDefaults?.mode, allModels, defaultModels);
   const shouldForceAutoSync = desiredModelId === 'auto';
   const desiredMaxContextTokens = await getModelMaxTokens(desiredModelId, agentType);
   const shouldSyncContextWindow = session.maxContextTokens !== desiredMaxContextTokens;
 
-  if (!shouldForceAutoSync && desiredModelId === currentModelId && !shouldSyncContextWindow) {
-    return;
-  }
-
-  if (currentModelId !== desiredModelId) {
-    context.flowChatStore.updateSessionModelName(sessionId, desiredModelId);
-  }
+  context.flowChatStore.updateSessionModelName(sessionId, desiredModelId);
   if (shouldSyncContextWindow) {
     context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
   }
@@ -118,7 +109,7 @@ async function syncSessionModelSelection(
   log.info('Session model synchronized before send', {
     sessionId,
     agentType,
-    previousModelId: currentModelId,
+    previousModelId: null,
     nextModelId: desiredModelId,
     forcedAutoSync: shouldForceAutoSync,
   });
@@ -352,6 +343,8 @@ export async function sendMessage(
           turnId: dialogTurnId,
           agentType: currentAgentType,
           workspacePath,
+          remoteConnectionId: updatedSession.remoteConnectionId,
+          remoteSshHost: updatedSession.remoteSshHost,
           imageContexts: options?.imageContexts,
           userMessageMetadata: options?.userMessageMetadata,
         });
@@ -372,6 +365,8 @@ export async function sendMessage(
             turnId: dialogTurnId,
             agentType: currentAgentType,
             workspacePath,
+            remoteConnectionId: updatedSession.remoteConnectionId,
+            remoteSshHost: updatedSession.remoteSshHost,
             imageContexts: options?.imageContexts,
             userMessageMetadata: options?.userMessageMetadata,
           });

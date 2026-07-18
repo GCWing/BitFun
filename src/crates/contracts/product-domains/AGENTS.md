@@ -22,7 +22,7 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
 - Preserve existing core import paths with re-export or wrapper facades until
   downstream call sites are intentionally migrated.
 - Feature-gated additions must remain narrow. `plugin-source`, `miniapp`,
-  `function-agents`, and `product-full` should only enable their declared
+  `function-agents`, `external-sources`, and `product-full` should only enable their declared
   product-domain feature groups.
 
 ## Ownership Boundary
@@ -35,6 +35,10 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
 - `plugin-source` may own BitFun package manifest shapes, source identity,
   fixed package input data, workspace trust records, and pure trust epoch
   transitions.
+- `external-sources` may own open ecosystem/source identifiers, typed
+  capability-provider ports, catalog DTOs, and version-sensitive conflict
+  fingerprints. Provider refresh, filesystem watching, persistence, and
+  lifecycle coordination belong to assembly, services, or adapters.
 - Concrete filesystem writes, marker IO, host dispatch, worker side effects,
   compile orchestration, `PathManager` integration, concrete Git/AI services,
   provider acquisition, and transport error mapping must stay outside

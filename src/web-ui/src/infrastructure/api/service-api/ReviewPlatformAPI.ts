@@ -6,7 +6,7 @@ const log = createLogger('ReviewPlatformAPI');
 
 export type ReviewPlatformKind = 'github' | 'gitlab' | 'gitcode' | 'unknown';
 export type ReviewAuthState = 'not_connected' | 'not_required' | 'connected' | 'expired' | 'error' | 'unsupported';
-export type ReviewAuthSource = 'env' | 'stored' | 'none' | 'unsupported';
+export type ReviewAuthSource = 'gh_cli' | 'env' | 'stored' | 'none' | 'unsupported';
 export type ReviewAuthChallengeState = 'missing' | 'invalid' | 'insufficient_scope';
 export type ReviewItemState = 'open' | 'merged' | 'closed' | 'draft';
 export type ReviewDecision = 'approved' | 'changes_requested' | 'commented' | 'pending';
@@ -87,6 +87,7 @@ export interface ReviewPlatformCiItem {
 
 export interface ReviewPlatformPullRequest {
   id: string;
+  providerId?: string | null;
   number: number;
   title: string;
   state: ReviewItemState;
@@ -240,6 +241,11 @@ export interface ReviewPlatformWorkspaceSnapshotRequest {
   perPage?: number;
 }
 
+export interface ReviewPlatformWorkspaceContextRequest {
+  repositoryPath: string;
+  remoteId?: string | null;
+}
+
 export interface ReviewPlatformPullRequestDetailRequest {
   repositoryPath: string;
   remoteId: string;
@@ -304,6 +310,23 @@ export class ReviewPlatformAPI {
         remoteId,
         page,
         perPage,
+      });
+    }
+  }
+
+  async getWorkspaceContext(
+    repositoryPath: string,
+    remoteId?: string | null,
+  ): Promise<ReviewPlatformWorkspaceSnapshot> {
+    try {
+      return await api.invoke('review_platform_get_workspace_context', {
+        request: { repositoryPath, remoteId },
+      });
+    } catch (error) {
+      log.error('Failed to load review platform workspace context', { repositoryPath, remoteId, error });
+      throw createTauriCommandError('review_platform_get_workspace_context', error, {
+        repositoryPath,
+        remoteId,
       });
     }
   }

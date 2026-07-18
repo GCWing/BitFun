@@ -50,12 +50,15 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
     await loadRecentWorkspaces();
   };
 
-  const handleSelectWorkspace = useCallback(async (path: string) => {
+  const handleSelectWorkspace = useCallback(async (workspace: RecentWorkspaceEntry) => {
     if (switching) return;
     setSwitching(true);
     setError(null);
     try {
-      const result = await sessionMgr.setWorkspace(path);
+      const result = await sessionMgr.setWorkspace(workspace.path, {
+        remoteConnectionId: workspace.remote_connection_id,
+        remoteSshHost: workspace.remote_ssh_host,
+      });
       if (result.success) {
         await loadWorkspaceInfo();
         setShowRecent(false);
@@ -142,9 +145,9 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
               <div className="workspace-page__recent-list">
                 {recentWorkspaces.map((ws) => (
                   <button
-                    key={ws.path}
+                    key={`${ws.remote_connection_id ?? 'local'}:${ws.path}`}
                     className="workspace-page__recent-item"
-                    onClick={() => handleSelectWorkspace(ws.path)}
+                    onClick={() => handleSelectWorkspace(ws)}
                     disabled={switching}
                   >
                     <div className="workspace-page__recent-item-name">{ws.name}</div>

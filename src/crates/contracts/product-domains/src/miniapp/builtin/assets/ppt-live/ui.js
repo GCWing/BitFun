@@ -34,6 +34,7 @@ import { getAllStylePresets, getStylePreset, DEFAULT_STYLE_PRESET, resolveStyleP
 import { enhanceFlatSelect, refreshFlatSelect } from './src/flat-select.js';
 import { applyI18n, readInputs, readStyleInputs, renderAll, renderInspector, renderSlideCanvas, renderGeneration, renderGenerationOverlay, renderThumbs, slideHtml, hydrateHtmlSlideIframes, fitSlideCanvas, fitHtmlSlideFrame, buildExportPreviewStage, fitExportPreviewFrame, fitThumbPreviews, normalizeSlideDocument, observeThumbPreviews, ensureCanvasFitted, syncDensitySlider, syncFontFamilyToggle, syncColorModeToggle, syncStylePanelFromState } from './src/render.js';
 import {
+  buildElementSlideHtml,
   prepareSlidesForPptxExport,
   slideExportHtml,
   EXPORT_VIEWPORT,
@@ -50,6 +51,18 @@ import {
   installBitFunBackendAdapter,
   PPT_DESIGN_SKILL_KEY,
 } from './src/bitfun-backend-adapter.js';
+import {
+  DeckProjectContractError,
+  buildDeckRunRequestInput,
+  createDeckProjectSeed,
+  persistDeckProjectSeed,
+  readDeckProjectContract,
+  readProjectPlanWithRetry,
+} from './src/deck-project-contract.js';
+import {
+  localizeExportDiagnosticLocations,
+  summarizePptxExportDiagnostics,
+} from './src/export-diagnostics.js';
 
 let state = createInitialState();
 let busy = false;
@@ -832,20 +845,15 @@ async function readDeckProjectFile(project, relPath) {
   return await fs.readFile(`${project.dir}/${relPath}`);
 }
 
-/** Parsed JSON project artifact, or null when missing or not yet valid JSON. */
-async function tryReadDeckJsonFile(project, relPath) {
+/** Parsed `project.json`, or null after bounded transient-visibility retries. */
+async function tryReadDeckPlanFile(project) {
   try {
-    const raw = String(await readDeckProjectFile(project, relPath) || '');
-    if (!raw.trim()) return null;
-    return extractBackendJson(raw);
+    return await readProjectPlanWithRetry(
+      (relPath) => readDeckProjectFile(project, relPath),
+    );
   } catch {
     return null;
   }
-}
-
-/** Parsed `project.json`, or null when missing or not yet valid JSON. */
-async function tryReadDeckPlanFile(project) {
-  return await tryReadDeckJsonFile(project, 'project.json');
 }
 
 /** Complete slide HTML from disk, or null when missing or incomplete. */
@@ -877,28 +885,16 @@ async function tryReadDeckSlideFileWithRetry(project, slideNumber, maxAttempts =
  * design, slides }` shaped for `applyDeckPayload`.
  */
 async function readDeckFromProjectFiles(project) {
-  const plan = await tryReadDeckPlanFile(project);
-  if (!plan) throw new Error('PPT Live agent finished without a valid project.json');
-  const slideOrder = Array.isArray(plan.slide_order) && plan.slide_order.length
-    ? plan.slide_order
-    : (Array.isArray(plan.outline) ? plan.outline.map((_, index) => `slide-${String(index + 1).padStart(2, '0')}`) : []);
-  const slides = [];
-  for (let index = 0; index < slideOrder.length; index += 1) {
-    const slideId = String(slideOrder[index] || `slide-${String(index + 1).padStart(2, '0')}`);
-    const slideNumber = index + 1;
-    const html = await tryReadDeckSlideFile(project, slideNumber);
-    const outlineEntry = plan.outline?.[index];
-    const title = typeof outlineEntry === 'string' ? outlineEntry : (outlineEntry?.title || `${t('newSlideTitle')} ${slideNumber}`);
-    if (html) {
-      slides.push({
-        id: `ppt-live-slide-${slideNumber}`,
-        slideNumber,
-        title,
-        html,
-      });
-    }
-  }
-  if (!slides.length) throw new Error('PPT Live agent did not produce any slide files');
+  const result = await readDeckProjectContract(
+    (relPath) => readDeckProjectFile(project, relPath),
+  );
+  const { plan } = result;
+  const slides = result.slides.map((slide) => ({
+    id: `ppt-live-slide-${slide.slideNumber}`,
+    slideNumber: slide.slideNumber,
+    title: slide.outlineEntry?.title || `${t('newSlideTitle')} ${slide.slideNumber}`,
+    html: slide.html,
+  }));
   return {
     title: resolveDeckTitle({ plan, slides }),
     language: plan.language || '',
@@ -910,39 +906,40 @@ async function readDeckFromProjectFiles(project) {
 }
 
 /**
- * Best-effort: write the current deck's slides into a fresh project directory
- * so the cowork agent can read unchanged pages from disk during edits and only
- * rewrite the ones it changes. Skips slides without HTML content.
+ * Seed the current deck into the cowork project directory before the agent runs.
+ * Failures carry a continuation diagnostic so the same session can repair files.
  */
 async function seedDeckProjectFromState(project) {
   const fs = runtime().fs;
-  if (!project || !fs?.writeFile || !state.slides?.length) return;
+  if (!project || !fs?.writeFile || !fs?.mkdir) {
+    throw new DeckProjectContractError({
+      code: 'seed_fs_unavailable',
+      summary: 'Deck project filesystem is unavailable.',
+      continuationPrompt: '请在同一会话中重新创建 deck 项目目录和 slides 子目录，然后继续生成。',
+      missingPaths: [`${project?.dir || 'deck-project'}/slides`],
+    });
+  }
   const hasExistingProject = await tryReadDeckPlanFile(project);
   if (hasExistingProject) return; // directory already has files from a prior run
   try {
-    const outline = state.slides.map((slide, index) => ({
-      id: `slide-${String(index + 1).padStart(2, '0')}`,
-      title: String(slide.title || ''),
-      bullets: [],
-      slide_id: `slide-${String(index + 1).padStart(2, '0')}`,
-    }));
-    const projectJson = {
-      title: state.title || '',
+    const seed = createDeckProjectSeed({
+      hasExistingDeck: hasUsableDeckForRevision(),
+      title: isEphemeralDeckTitle(state.title) ? '' : state.title,
       language: getLocale(),
-      outline,
-      slide_order: outline.map((item) => item.slide_id),
       style: buildGenerationStyle(),
-    };
-    await fs.writeFile(`${project.dir}/project.json`, `${JSON.stringify(projectJson, null, 2)}\n`);
-    for (let index = 0; index < state.slides.length; index += 1) {
-      const slide = state.slides[index];
-      if (slide.html) {
-        await fs.writeFile(`${project.dir}/${deckSlideFileName(index + 1)}`, slide.html);
-      }
-    }
-  } catch {
-    // Seeding is best-effort; the agent can still work from the currentDeck
-    // snapshot in the prompt if disk seeding fails.
+      slides: state.slides,
+      serializeElementSlide: buildElementSlideHtml,
+    });
+    await persistDeckProjectSeed(fs, project.dir, seed);
+  } catch (error) {
+    if (error instanceof DeckProjectContractError) throw error;
+    throw new DeckProjectContractError({
+      code: 'seed_fs_write_failed',
+      summary: 'Deck project seed files could not be written.',
+      continuationPrompt: '请在同一会话中创建缺失的 slides 目录并重写失败的 seed 文件，然后继续生成。',
+      missingPaths: [`${project.dir}/slides`],
+      cause: String(error?.message || error),
+    });
   }
 }
 
@@ -1297,12 +1294,23 @@ async function runCoworkDeckGeneration(operation, instruction) {
   // appdata storage, following the ppt-design skill's native project.json +
   // slides/slide-NN.html layout.
   const project = backendUsesFileProtocol() ? (currentDeckProject() || newDeckProject()) : null;
+  let projectContractDiagnostic = null;
   if (project && !state.agentSession?.workspaceSubdir) {
     await pruneOldDeckProjects(project.runId);
     // For edits of an existing deck, seed the project directory with the
     // current slides so the agent can read unchanged pages from disk and
     // only rewrite the ones it changes.
-    await seedDeckProjectFromState(project);
+    try {
+      await seedDeckProjectFromState(project);
+    } catch (error) {
+      if (!(error instanceof DeckProjectContractError)) throw error;
+      projectContractDiagnostic = error.diagnostic;
+      addGenerationEvent({
+        title: t('generationStageAudit'),
+        detail: error.diagnostic.continuationPrompt,
+        kind: 'start',
+      });
+    }
   }
   const retrySession = {
     id: state.agentSession?.id || null,
@@ -1331,10 +1339,13 @@ async function runCoworkDeckGeneration(operation, instruction) {
           setStatus(t('generationRetrying', { attempt, max: PPT_BACKEND_MAX_ATTEMPTS }));
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs(lastError, attempt)));
         }
-        const requestInput = {
-          ...buildBackendRequestBase(operation, instruction),
-          ...(retrySession?.id ? { continueAfterInterruption: true } : {}),
-        };
+        const requestInput = buildDeckRunRequestInput(
+          buildBackendRequestBase(operation, instruction),
+          {
+            sessionId: retrySession?.id,
+            projectContractDiagnostic,
+          },
+        );
         // Only attach currentDeck context for edit operations on an existing
         // deck. For first-pass generation, sending an empty/irrelevant
         // currentDeck wastes hundreds of tokens in the prompt's Input JSON.
@@ -1460,6 +1471,7 @@ async function runCoworkDeckGeneration(operation, instruction) {
         break;
       } catch (error) {
         lastError = error;
+        if (error?.diagnostic) projectContractDiagnostic = error.diagnostic;
         if (isUnknownSessionBackendError(error)) retrySession.id = null;
         else if (error?.pptLiveSessionId) retrySession.id = error.pptLiveSessionId;
         if (!isRetryableBackendError(error) || attempt >= PPT_BACKEND_MAX_ATTEMPTS) throw error;
@@ -2577,6 +2589,69 @@ function getExportLabels(format) {
   return labels[format] || null;
 }
 
+function formatExportDiagnostics(summary) {
+  if (!summary?.hasWarnings && !summary?.hasBlocking) return '';
+  const countLabels = [
+    ['repaired', 'exportDiagnosticsRepaired'],
+    ['svgImage', 'exportDiagnosticsSvg'],
+    ['localPng', 'exportDiagnosticsLocalPng'],
+    ['pageVisual', 'exportDiagnosticsPageVisual'],
+    ['fullPage', 'exportDiagnosticsFullPage'],
+    ['blocking', 'exportDiagnosticsBlocking'],
+  ].filter(([countKey]) => summary.counts?.[countKey] > 0)
+    .map(([countKey, labelKey]) => t(labelKey, { count: summary.counts[countKey] }));
+  const phaseKeys = {
+    'local-svg': 'exportDiagnosticsPhaseSvg',
+    'local-visual': 'exportDiagnosticsPhaseLocalPng',
+    'page-visual': 'exportDiagnosticsPhasePageVisual',
+    'full-page': 'exportDiagnosticsPhaseFullPage',
+  };
+  const locations = localizeExportDiagnosticLocations(summary.locations || [], getLocale())
+    .filter((location) => location.sourceId)
+    .slice(0, 3)
+    .map((location) => t('exportDiagnosticsLocation', {
+      slide: location.slideNumber,
+      source: location.sourceId,
+      phase: t(
+        phaseKeys[location.phase]
+          || (location.severity === 'blocking'
+            ? 'exportDiagnosticsPhaseBlocking'
+            : 'exportDiagnosticsPhaseRepair'),
+      ),
+      reason: location.reason,
+    }));
+  return t('exportDiagnosticsSummary', {
+    counts: countLabels.join(', '),
+    locations: locations.join('; '),
+  });
+}
+
+function formatBlockingExportDiagnostics(diagnostics) {
+  const blocking = Array.isArray(diagnostics)
+    ? diagnostics.filter((diagnostic) => diagnostic?.severity === 'blocking')
+    : [];
+  if (!blocking.length) return '';
+  return formatExportDiagnostics({
+    counts: {
+      repaired: 0,
+      svgImage: 0,
+      localPng: 0,
+      pageVisual: 0,
+      fullPage: 0,
+      blocking: blocking.length,
+    },
+    locations: blocking.map((diagnostic) => ({
+      slideNumber: diagnostic.slideNumber || '?',
+      sourceId: diagnostic.sourceId || '?',
+      phase: diagnostic.phase || null,
+      severity: 'blocking',
+      code: diagnostic.code,
+    })),
+    hasWarnings: false,
+    hasBlocking: true,
+  });
+}
+
 function setExportRenderProgress(index, total, format) {
   const labels = getExportLabels(format === 'pptx' ? 'pptx' : format);
   if (!labels || total <= 0) return;
@@ -2647,6 +2722,7 @@ async function executeExport(format) {
         onRasterProgress: (index) => setExportRenderProgress(index, slides.length, 'pptx'),
       });
       result = await exportPptxPrepared(deckPayload, preparedSlides);
+      result.exportSummary = summarizePptxExportDiagnostics(preparedSlides);
     } else {
       result = await exportPptxFromDeck(deckPayload);
     }
@@ -2670,7 +2746,7 @@ async function executeExport(format) {
     filename,
     result.mimeType || 'application/octet-stream',
   );
-  return { filename };
+  return { filename, exportSummary: result?.exportSummary || null };
 }
 
 let exportInFlight = false;
@@ -3329,16 +3405,22 @@ async function confirmExportFromModal() {
   const previewFrame = $('exportPreviewFrame');
   const previewSnapshot = previewFrame?.innerHTML || '';
   try {
-    const { filename } = await executeExport(format);
+    const { filename, exportSummary } = await executeExport(format);
     const savedMessage = t('exportSavedTo', { path: filename });
+    const diagnosticMessage = formatExportDiagnostics(exportSummary);
+    const completedMessage = diagnosticMessage
+      ? `${savedMessage} ${diagnosticMessage}`
+      : savedMessage;
     $('exportOverlay')?.classList.remove('is-exporting');
-    setExportModalFeedback('success', savedMessage);
-    setExportStatus(savedMessage);
+    setExportModalFeedback('success', completedMessage);
+    setExportStatus(completedMessage);
     revealDownloadFolder();
     await new Promise((resolve) => setTimeout(resolve, 1600));
     closeExportModal();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const localizedDiagnostics = formatBlockingExportDiagnostics(error?.diagnostics);
+    const message = localizedDiagnostics
+      || (error instanceof Error ? error.message : String(error));
     runtime().log?.error?.(`PPT Live ${format} export failed`, { error: message });
     $('exportOverlay')?.classList.remove('is-exporting');
     setExportModalFeedback('error', `${labels.failed} ${message}`);

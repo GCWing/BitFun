@@ -1638,6 +1638,8 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
             name: workspace.name.clone(),
             last_opened: "2026-05-25T00:00:00Z".to_string(),
             kind: workspace.kind,
+            remote_connection_id: workspace.remote_connection_id.clone(),
+            remote_ssh_host: workspace.remote_ssh_host.clone(),
         },
     ]))
     .expect("serialize recent workspaces");
@@ -1647,6 +1649,11 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
         recent_json["workspaces"][0]["last_opened"],
         "2026-05-25T00:00:00Z"
     );
+    assert_eq!(
+        recent_json["workspaces"][0]["remote_connection_id"],
+        "ssh-1"
+    );
+    assert_eq!(recent_json["workspaces"][0]["remote_ssh_host"], "dev-host");
 
     let assistant_json = serde_json::to_value(remote_assistant_list_response(vec![
         RemoteAssistantWorkspaceFacts {
@@ -1666,11 +1673,15 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
         remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
             path: "D:/workspace/project".to_string(),
             name: "project".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
         })),
         RemoteResponse::WorkspaceUpdated {
             success: true,
             path: Some("D:/workspace/project".to_string()),
             project_name: Some("project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
             error: None,
         }
     );
@@ -1946,6 +1957,26 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(poll["since_version"], 7);
     assert_eq!(poll["known_msg_count"], 3);
     assert_eq!(poll["known_model_catalog_version"], 11);
+
+    let get_identity = serde_json::to_value(RemoteCommand::GetDelegatedIdentity)
+        .expect("serialize get delegated identity command");
+    assert_eq!(get_identity["cmd"], "get_delegated_identity");
+    let parsed: RemoteCommand = serde_json::from_str(r#"{"cmd":"get_delegated_identity"}"#)
+        .expect("parse get delegated identity command");
+    assert_eq!(parsed, RemoteCommand::GetDelegatedIdentity);
+
+    let identity = serde_json::to_value(RemoteResponse::DelegateIdentity {
+        token: "token-1".to_string(),
+        user_id: "user-1".to_string(),
+        master_key: "bWFzdGVyLWtleQ==".to_string(),
+        device_id: "device-1".to_string(),
+    })
+    .expect("serialize delegate identity response");
+    assert_eq!(identity["resp"], "delegate_identity");
+    assert_eq!(identity["token"], "token-1");
+    assert_eq!(identity["user_id"], "user-1");
+    assert_eq!(identity["master_key"], "bWFzdGVyLWtleQ==");
+    assert_eq!(identity["device_id"], "device-1");
 }
 
 #[test]
@@ -2175,7 +2206,8 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         round_id: "round-1".to_string(),
         round_group_id: None,
         round_index: 3,
-        model_id: None,
+        model_config_id: "model-config".to_string(),
+        effective_model_name: "provider-model".to_string(),
     });
     tracker.handle_agentic_event(&AgenticEvent::ThinkingChunk {
         session_id: "session-1".to_string(),
@@ -2264,9 +2296,15 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         attempt_id: None,
         attempt_index: None,
         tool_event: ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "AskUserQuestion".to_string(),
-            params: serde_json::json!({ "questions": [] }),
+            identity: bitfun_events::ToolEventIdentity::resolved(
+                "tool-1",
+                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+                "AskUserQuestion",
+            ),
+            params: serde_json::json!({
+                "tool_name": "AskUserQuestion",
+                "args": { "questions": [] }
+            }),
             timeout_seconds: None,
         },
     });
@@ -2283,7 +2321,7 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         } => {
             assert_eq!(tool_id, "tool-1");
             assert_eq!(tool_name, "AskUserQuestion");
-            assert!(params.is_some());
+            assert_eq!(params, Some(serde_json::json!({ "questions": [] })));
         }
         other => panic!("unexpected event: {other:?}"),
     }

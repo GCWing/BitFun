@@ -9,7 +9,6 @@
 | Crate | 职责 | 本地文档 |
 |---|---|---|
 | `ai-adapters` | AI provider 请求/响应 adapter 与 stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
-| `api-layer` | 产品宿主共用的后端 API adapter surface | [AGENTS.md](api-layer/AGENTS.md) |
 | `opencode-adapter` | 当前 OpenCode 静态来源探测与诊断；目标为来源协调器和生态适配器 | [AGENTS.md](opencode-adapter/AGENTS.md) |
 | `transport` | Event transport emitter 与宿主 transport adapter | [AGENTS.md](transport/AGENTS.md) |
 | `webdriver` | Embedded WebDriver protocol 与浏览器自动化 adapter | [AGENTS.md](webdriver/AGENTS.md) |
@@ -19,6 +18,7 @@
 - 协议序列化、transport projection、外部 provider 请求整形、宿主通信 adapter 放在这里。
 - OS、filesystem、terminal、MCP、remote、git、watch 等可复用实现放在 `services`，除非代码只是协议转换。
 - 交付 profile 选择和 adapter 注册属于 `assembly`。
+- 不要为单一宿主或未来协议预建共享 API crate。宿主协议 DTO 应留在入口，直到当前生产消费方证明需要共享且可版本化的边界。
 
 ## 依赖边界
 

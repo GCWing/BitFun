@@ -64,6 +64,14 @@ slices that are outside pure product logic but still platform-neutral.
   trust-file locking, and atomic persistence. Product path selection stays in
   assembly; ecosystem parsing and
   Plugin Runtime Host behavior stay in their adapter and execution owners.
+- Script-tool runtime integration owns provider-neutral process supervision,
+  bounded framing/output, target load/invoke/cancel/dispose, timeout, and worker
+  health behind `script-tool-runtime`. It must not parse OpenCode source paths,
+  decide approval/conflicts, register product tools, or claim OS sandboxing.
+  Approved modules run in target child processes separated from the Rust host for
+  failure containment, not as a security or protocol-authentication boundary.
+  Target process trees and OS resource containment remain an explicit product
+  risk until a platform process-tree boundary is implemented.
 - Announcement remote fetch/cache lives here; product assembly supplies config
   values such as endpoint, locale, version, platform, and cache path.
 - DeepResearch report IO here may own report/citation sidecar filesystem work;

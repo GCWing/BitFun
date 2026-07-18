@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tauri::State;
 
+use bitfun_agent_runtime::sdk::AgentUserAnswersRequest;
 use bitfun_core::agentic::{
     tools::framework::ToolUseContext,
     tools::{get_all_tools, get_readonly_tools},
@@ -17,6 +19,8 @@ use bitfun_core::service::remote_ssh::workspace_state::{
     get_remote_workspace_manager, lookup_remote_connection, workspace_session_identity,
 };
 use bitfun_core::util::elapsed_ms_u64;
+
+use crate::runtime::DesktopRuntimeContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -429,19 +433,49 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
 
 #[tauri::command]
 pub async fn submit_user_answers(
+    runtime: State<'_, DesktopRuntimeContext>,
     tool_id: String,
     answers: serde_json::Value,
 ) -> Result<(), String> {
-    use bitfun_core::agentic::tools::user_input_manager::get_user_input_manager;
-    let manager = get_user_input_manager();
+    runtime
+        .agent_runtime()
+        .submit_user_answers(AgentUserAnswersRequest {
+            tool_id: tool_id.clone(),
+            answers,
+        })
+        .await
+        .map_err(|error| {
+            let error = desktop_user_answers_error_message(error.into_message());
+            error!(
+                "Failed to send user answer: tool_id={}, error={}",
+                tool_id, error
+            );
+            error
+        })
+}
 
-    manager.send_answer(&tool_id, answers).map_err(|e| {
-        error!(
-            "Failed to send user answer: tool_id={}, error={}",
-            tool_id, e
+fn desktop_user_answers_error_message(message: String) -> String {
+    message
+        .strip_prefix("Tool error: ")
+        .unwrap_or(&message)
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::desktop_user_answers_error_message;
+
+    #[test]
+    fn user_answers_errors_keep_the_existing_desktop_text() {
+        assert_eq!(
+            desktop_user_answers_error_message(
+                "Tool error: Waiting channel not found: tool-1".to_string(),
+            ),
+            "Waiting channel not found: tool-1"
         );
-        e
-    })?;
-
-    Ok(())
+        assert_eq!(
+            desktop_user_answers_error_message("Runtime unavailable".to_string()),
+            "Runtime unavailable"
+        );
+    }
 }

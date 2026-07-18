@@ -14,6 +14,11 @@ name = "plugin_source_contracts"
 path = "tests/plugin_source_contracts.rs"
 required-features = ["plugin-source"]
 
+[[test]]
+name = "external_source_contracts"
+path = "tests/external_source_contracts.rs"
+required-features = ["external-sources"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,7 +33,8 @@ default = []
 plugin-source = ["hex", "sha2"]
 miniapp = ["dirs", "sha2", "which"]
 function-agents = ["log"]
-product-full = ["plugin-source", "miniapp", "function-agents"]
+external-sources = []
+product-full = ["plugin-source", "miniapp", "function-agents", "external-sources"]
 
 [dev-dependencies]
 tokio = { workspace = true }

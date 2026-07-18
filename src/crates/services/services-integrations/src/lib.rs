@@ -48,6 +48,9 @@ pub mod review_platform;
 #[cfg(feature = "review-platform")]
 pub(crate) mod review_platform_http;
 
+#[cfg(feature = "script-tool-runtime")]
+pub mod script_tool;
+
 #[cfg(feature = "workspace-search")]
 pub mod workspace_search;
 

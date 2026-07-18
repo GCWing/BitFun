@@ -14,6 +14,7 @@ pub mod dialog_turn;
 pub mod event_bus;
 pub mod event_queue;
 pub mod event_router;
+pub mod event_source;
 pub mod events;
 pub mod evidence_ledger;
 pub mod file_read_state;

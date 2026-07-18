@@ -8,6 +8,85 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
+const INFO_POPUP_DISMISS_HINT: &str = " Up/Down or PgUp/PgDn to scroll - Esc to dismiss ";
+const INFO_POPUP_NARROW_DISMISS_HINT: &str = " Esc close ";
+
+fn info_popup_dismiss_hint(width: u16) -> &'static str {
+    if INFO_POPUP_DISMISS_HINT.width() <= usize::from(width) {
+        INFO_POPUP_DISMISS_HINT
+    } else {
+        INFO_POPUP_NARROW_DISMISS_HINT
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InfoPopupLayout {
+    area: Rect,
+    scroll: u16,
+    max_scroll: u16,
+}
+
+fn wrapped_line_count(message: &str, width: u16) -> u16 {
+    let width = usize::from(width.max(1));
+    message
+        .lines()
+        .map(|line| {
+            let line_width = line.width().max(1);
+            line_width.div_ceil(width).min(usize::from(u16::MAX)) as u16
+        })
+        .fold(0_u16, u16::saturating_add)
+        .max(1)
+}
+
+fn info_popup_layout(area: Rect, message: &str, requested_scroll: u16) -> InfoPopupLayout {
+    if area.width == 0 || area.height == 0 {
+        return InfoPopupLayout {
+            area,
+            scroll: 0,
+            max_scroll: 0,
+        };
+    }
+
+    let horizontal_margin: u16 = if area.width >= 8 { 2 } else { 0 };
+    let max_width = area
+        .width
+        .saturating_sub(horizontal_margin.saturating_mul(2))
+        .max(1);
+    let max_line_width = message
+        .lines()
+        .map(|line| line.width().min(usize::from(u16::MAX)) as u16)
+        .max()
+        .unwrap_or(20);
+    let minimum_width = 30.min(max_width);
+    let popup_width = max_line_width
+        .saturating_add(4)
+        .clamp(minimum_width, max_width);
+
+    let hint_height = u16::from(area.height >= 4);
+    let max_height = area.height.saturating_sub(hint_height).max(1);
+    let unwrapped_height = message.lines().count().min(usize::from(u16::MAX)) as u16;
+    let minimum_height = 3.min(max_height);
+    let popup_height = unwrapped_height
+        .saturating_add(2)
+        .clamp(minimum_height, max_height);
+    let content_width = popup_width.saturating_sub(2).max(1);
+    let visible_lines = popup_height.saturating_sub(2).max(1);
+    let max_scroll = wrapped_line_count(message, content_width).saturating_sub(visible_lines);
+    let scroll = requested_scroll.min(max_scroll);
+
+    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
+    let popup_y = area.y
+        + area
+            .height
+            .saturating_sub(popup_height.saturating_add(hint_height))
+            / 2;
+    InfoPopupLayout {
+        area: Rect::new(popup_x, popup_y, popup_width, popup_height),
+        scroll,
+        max_scroll,
+    }
+}
+
 pub(super) struct Spinner {
     frame: usize,
 }
@@ -28,8 +107,18 @@ impl Spinner {
     }
 }
 
-/// Render a centered info popup overlay. Press any key to dismiss.
+/// Render a centered info popup overlay. Esc always dismisses it.
 pub(super) fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, accent: Color) {
+    let _ = render_info_popup_scrolled(frame, area, message, accent, 0);
+}
+
+pub(super) fn render_info_popup_scrolled(
+    frame: &mut Frame,
+    area: Rect,
+    message: &str,
+    accent: Color,
+    requested_scroll: u16,
+) -> (u16, u16) {
     let lines: Vec<Line> = message
         .lines()
         .map(|l| {
@@ -40,28 +129,8 @@ pub(super) fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, ac
         })
         .collect();
 
-    let line_count = lines.len() as u16;
-    let max_line_width = message
-        .lines()
-        .map(|l| l.width() as u16)
-        .max()
-        .unwrap_or(20);
-
-    // +2 for border, +2 for padding; +1 for hint line below popup
-    let popup_width = (max_line_width + 4)
-        .min(area.width.saturating_sub(4))
-        .max(30);
-    let popup_height = (line_count + 2).min(area.height.saturating_sub(3));
-
-    let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
-    let popup_y = area.y + (area.height.saturating_sub(popup_height + 1)) / 2;
-
-    let popup_area = Rect {
-        x: popup_x,
-        y: popup_y,
-        width: popup_width,
-        height: popup_height,
-    };
+    let layout = info_popup_layout(area, message, requested_scroll);
+    let popup_area = layout.area;
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -71,7 +140,8 @@ pub(super) fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, ac
 
     let text = Paragraph::new(lines)
         .block(block)
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((layout.scroll, 0));
 
     frame.render_widget(Clear, popup_area);
     frame.render_widget(text, popup_area);
@@ -86,9 +156,40 @@ pub(super) fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, ac
             height: 1,
         };
         let hint = Paragraph::new(Line::from(Span::styled(
-            " Press any key to dismiss ",
+            info_popup_dismiss_hint(hint_area.width),
             Style::default().fg(Color::DarkGray),
         )));
         frame.render_widget(hint, hint_area);
+    }
+    (layout.scroll, layout.max_scroll)
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::layout::Rect;
+    use unicode_width::UnicodeWidthStr;
+
+    use super::{info_popup_dismiss_hint, info_popup_layout, INFO_POPUP_DISMISS_HINT};
+
+    #[test]
+    fn info_popup_names_the_modal_safe_dismiss_key() {
+        assert!(INFO_POPUP_DISMISS_HINT.contains("Esc"));
+        assert!(!INFO_POPUP_DISMISS_HINT.contains("any key"));
+    }
+
+    #[test]
+    fn info_popup_layout_stays_inside_a_narrow_viewport() {
+        let viewport = Rect::new(7, 11, 18, 8);
+        let layout = info_popup_layout(viewport, "a very long line that must wrap", u16::MAX);
+
+        assert!(layout.area.x >= viewport.x);
+        assert!(layout.area.y >= viewport.y);
+        assert!(layout.area.right() <= viewport.right());
+        assert!(layout.area.bottom() <= viewport.bottom());
+        assert!(layout.max_scroll > 0);
+        assert_eq!(layout.scroll, layout.max_scroll);
+        let hint = info_popup_dismiss_hint(layout.area.width);
+        assert!(hint.contains("Esc"));
+        assert!(hint.width() <= usize::from(layout.area.width));
     }
 }

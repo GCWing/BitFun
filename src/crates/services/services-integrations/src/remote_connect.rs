@@ -896,6 +896,8 @@ pub fn remote_recent_workspaces_response(
                 name: workspace.name,
                 last_opened: workspace.last_opened,
                 workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+                remote_connection_id: workspace.remote_connection_id,
+                remote_ssh_host: workspace.remote_ssh_host,
             })
             .collect(),
     }
@@ -924,12 +926,16 @@ pub fn remote_workspace_updated_response(
             success: true,
             path: Some(update.path),
             project_name: Some(update.name),
+            remote_connection_id: update.remote_connection_id,
+            remote_ssh_host: update.remote_ssh_host,
             error: None,
         },
         Err(message) => RemoteResponse::WorkspaceUpdated {
             success: false,
             path: None,
             project_name: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
             error: Some(message),
         },
     }
@@ -1052,9 +1058,18 @@ where
         RemoteCommand::ListRecentWorkspaces => {
             remote_recent_workspaces_response(host.recent_workspaces().await)
         }
-        RemoteCommand::SetWorkspace { path } => {
-            remote_workspace_updated_response(host.open_workspace(path).await)
-        }
+        RemoteCommand::SetWorkspace {
+            path,
+            remote_connection_id,
+            remote_ssh_host,
+        } => remote_workspace_updated_response(
+            host.open_workspace(
+                path,
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await,
+        ),
         RemoteCommand::ListAssistants => {
             remote_assistant_list_response(host.assistant_workspaces().await)
         }
@@ -1982,6 +1997,10 @@ pub struct RecentWorkspaceEntry {
     pub last_opened: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2026,6 +2045,10 @@ pub enum RemoteCommand {
     ListRecentWorkspaces,
     SetWorkspace {
         path: String,
+        #[serde(default)]
+        remote_connection_id: Option<String>,
+        #[serde(default)]
+        remote_ssh_host: Option<String>,
     },
     ListAssistants,
     SetAssistant {
@@ -2116,6 +2139,11 @@ pub enum RemoteCommand {
         path: String,
         session_id: Option<String>,
     },
+    /// Ask the paired desktop to delegate its logged-in account identity
+    /// (token + master_key) to this room-channel client so it can call the
+    /// relay device APIs directly. Answered by the host runtime; other hosts
+    /// return an error response.
+    GetDelegatedIdentity,
     Ping,
 
     // ── Device-to-device distributed control ──────────────────────────────
@@ -2188,6 +2216,10 @@ pub enum RemoteResponse {
         success: bool,
         path: Option<String>,
         project_name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
         error: Option<String>,
     },
     AssistantList {
@@ -2306,6 +2338,12 @@ pub enum RemoteResponse {
     DeviceInfo {
         device_name: Option<String>,
         workspace_path: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_kind: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
         session_count: Option<usize>,
     },
     /// Result of a HostInvoke proxy call (JSON-compatible with local invoke).
@@ -2318,6 +2356,14 @@ pub enum RemoteResponse {
     },
     /// Event already delivered out-of-band; ack only.
     DeviceEventAccepted,
+    /// Delegated account identity for a paired room-channel client.
+    /// `master_key` is base64-encoded; `device_id` is the delegating host.
+    DelegateIdentity {
+        token: String,
+        user_id: String,
+        master_key: String,
+        device_id: String,
+    },
     Error {
         message: String,
     },
@@ -2438,6 +2484,13 @@ where
             })
             .await,
         ),
+
+        // Answered by the host runtime (which owns the delegated identity
+        // provider) before dispatch reaches this router; this is the fallback
+        // for hosts that cannot delegate an account identity.
+        RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
+            message: "Delegated identity is not available on this host".to_string(),
+        },
 
         RemoteCommand::SendSessionToDevice { .. }
         | RemoteCommand::ExecuteOnDevice { .. }
@@ -2840,22 +2893,26 @@ impl RemoteSessionStateTracker {
                 }
             }
             AE::ToolEvent { tool_event, .. } => {
+                let tool_id = tool_event.tool_id().to_string();
+                let tool_name = tool_event.effective_tool_name().to_string();
+                let effective_params = match tool_event {
+                    bitfun_events::ToolEventData::Started {
+                        identity, params, ..
+                    }
+                    | bitfun_events::ToolEventData::ConfirmationNeeded {
+                        identity, params, ..
+                    } => Some(
+                        bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params)
+                            .1
+                            .clone(),
+                    ),
+                    _ => None,
+                };
                 if let Ok(value) = serde_json::to_value(tool_event) {
                     let event_type = value
                         .get("event_type")
                         .and_then(|value| value.as_str())
                         .unwrap_or("");
-                    let tool_id = value
-                        .get("tool_id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let tool_name = value
-                        .get("tool_name")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("")
-                        .to_string();
-
                     let mut state = self.state.write().unwrap();
                     let allow_name_fallback = tool_id.is_empty() && !tool_name.is_empty();
                     let mut pending_tool_event: Option<TrackerEvent> = None;
@@ -2872,7 +2929,7 @@ impl RemoteSessionStateTracker {
                             );
                         }
                         "ConfirmationNeeded" => {
-                            let params = value.get("params").cloned();
+                            let params = effective_params.clone();
                             let input_preview = params.as_ref().and_then(make_slim_tool_params);
                             Self::upsert_active_tool(
                                 &mut state,
@@ -2885,7 +2942,7 @@ impl RemoteSessionStateTracker {
                             );
                         }
                         "Started" => {
-                            let params = value.get("params").cloned();
+                            let params = effective_params.clone();
                             let input_preview = params.as_ref().and_then(make_slim_tool_params);
                             let tool_input = if tool_name == "AskUserQuestion"
                                 || tool_name == "Task"
@@ -3304,13 +3361,22 @@ mod tests {
                 name: "project".to_string(),
                 last_opened: "2026-05-29T00:00:00Z".to_string(),
                 kind: RemoteWorkspaceKind::Normal,
+                remote_connection_id: None,
+                remote_ssh_host: None,
             }]
         }
 
-        async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        async fn open_workspace(
+            &self,
+            path: &str,
+            _remote_connection_id: Option<&str>,
+            _remote_ssh_host: Option<&str>,
+        ) -> Result<RemoteWorkspaceUpdate, String> {
             Ok(RemoteWorkspaceUpdate {
                 path: path.to_string(),
                 name: "opened".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
         }
 
@@ -3329,6 +3395,8 @@ mod tests {
             Ok(RemoteWorkspaceUpdate {
                 path: path.to_string(),
                 name: "assistant".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
         }
     }
@@ -3356,6 +3424,8 @@ mod tests {
                 &host,
                 &RemoteCommand::SetWorkspace {
                     path: "/workspace/next".to_string(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
                 },
             )
             .await,
@@ -3363,6 +3433,8 @@ mod tests {
                 success: true,
                 path: Some("/workspace/next".to_string()),
                 project_name: Some("opened".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 error: None,
             }
         );

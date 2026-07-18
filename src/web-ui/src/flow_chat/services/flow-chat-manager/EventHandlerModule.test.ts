@@ -94,54 +94,13 @@ describe('mergeParamsPartialEventData', () => {
 
 });
 
-describe('subagent model display helpers', () => {
+describe('subagent parent helpers', () => {
   beforeEach(() => {
     resetFlowChatStore();
   });
 
   afterEach(() => {
     resetFlowChatStore();
-  });
-
-  it('resolves model refs to configured request model names', () => {
-    const models = [
-      {
-        id: 'model-primary',
-        name: 'Primary Config',
-        model_name: 'gpt-primary',
-      },
-      {
-        id: 'model-fast',
-        name: 'Fast Config',
-        model_name: 'gpt-fast',
-      },
-      {
-        id: 'model-custom',
-        name: 'Custom Config',
-        model_name: 'gpt-custom',
-      },
-    ] as any[];
-
-    expect(__test_only__.resolveModelDisplayNameFromConfig(
-      'primary',
-      models,
-      { primary: 'model-primary', fast: 'model-fast' },
-    )).toBe('gpt-primary');
-    expect(__test_only__.resolveModelDisplayNameFromConfig(
-      'fast',
-      models,
-      { primary: 'model-primary', fast: 'model-fast' },
-    )).toBe('gpt-fast');
-    expect(__test_only__.resolveModelDisplayNameFromConfig(
-      'Custom Config',
-      models,
-      { primary: 'model-primary', fast: 'model-fast' },
-    )).toBe('gpt-custom');
-    expect(__test_only__.resolveModelDisplayNameFromConfig(
-      'missing-model',
-      models,
-      { primary: 'model-primary', fast: 'model-fast' },
-    )).toBe('missing-model');
   });
 
   it('finds the parent task card by subagent session and dialog turn', () => {

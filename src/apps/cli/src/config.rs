@@ -58,15 +58,18 @@ pub(crate) struct WorkspaceConfig {
     pub exclude_patterns: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub(crate) struct ShortcutsConfig {
-    /// Send message
-    pub send_message: String,
-    /// Interrupt
-    pub interrupt: String,
-    /// Menu
-    pub menu: String,
+    /// Explicit legacy override for sending the current input.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub send_message: Option<String>,
+    /// Explicit legacy override for interrupting the active turn.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interrupt: Option<String>,
+    /// Explicit legacy override for opening the command palette.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub menu: Option<String>,
 }
 
 impl Default for UiConfig {
@@ -105,17 +108,19 @@ impl Default for WorkspaceConfig {
     }
 }
 
-impl Default for ShortcutsConfig {
-    fn default() -> Self {
-        Self {
-            send_message: "Ctrl+D".to_string(),
-            interrupt: "Ctrl+C".to_string(),
-            menu: "Esc".to_string(),
+impl CliConfig {
+    fn normalize_legacy_shortcuts(&mut self) {
+        // Older releases generated these values on first launch even though the
+        // runtime did not dispatch through them. Only the complete generated
+        // tuple is identifiable as legacy output; mixed values are user choices.
+        if self.shortcuts.send_message.as_deref() == Some("Ctrl+D")
+            && self.shortcuts.interrupt.as_deref() == Some("Ctrl+C")
+            && self.shortcuts.menu.as_deref() == Some("Esc")
+        {
+            self.shortcuts = ShortcutsConfig::default();
         }
     }
-}
 
-impl CliConfig {
     fn resolve_config_dir() -> Result<PathBuf> {
         let e2e_storage_guard = matches!(
             std::env::var("BITFUN_E2E_STORAGE_GUARD").ok().as_deref(),
@@ -149,13 +154,12 @@ impl CliConfig {
 
         if !config_path.exists() {
             tracing::info!("Config file not found, using defaults");
-            let config = Self::default();
-            config.save()?;
-            return Ok(config);
+            return Ok(Self::default());
         }
 
         let content = fs::read_to_string(&config_path)?;
-        let config: Self = toml::from_str(&content)?;
+        let mut config: Self = toml::from_str(&content)?;
+        config.normalize_legacy_shortcuts();
         tracing::info!("Loaded config: {:?}", config_path);
         Ok(config)
     }
@@ -204,8 +208,59 @@ mod tests {
             config.workspace.exclude_patterns,
             ["node_modules", ".git", "target", "dist"]
         );
-        assert_eq!(config.shortcuts.send_message, "Ctrl+D");
-        assert_eq!(config.shortcuts.interrupt, "Ctrl+C");
-        assert_eq!(config.shortcuts.menu, "Esc");
+        assert_eq!(config.shortcuts.send_message, None);
+        assert_eq!(config.shortcuts.interrupt, None);
+        assert_eq!(config.shortcuts.menu, None);
+    }
+
+    #[test]
+    fn missing_shortcut_fields_are_not_user_choices() {
+        let config: CliConfig = toml::from_str("[shortcuts]\n").unwrap();
+
+        assert_eq!(config.shortcuts.send_message, None);
+        assert_eq!(config.shortcuts.interrupt, None);
+        assert_eq!(config.shortcuts.menu, None);
+    }
+
+    #[test]
+    fn legacy_generated_shortcuts_are_not_treated_as_user_choices() {
+        let mut config: CliConfig = toml::from_str(
+            "[shortcuts]\nsend_message = \"Ctrl+D\"\ninterrupt = \"Ctrl+C\"\nmenu = \"Esc\"\n",
+        )
+        .unwrap();
+
+        config.normalize_legacy_shortcuts();
+
+        assert_eq!(config.shortcuts.send_message, None);
+        assert_eq!(config.shortcuts.interrupt, None);
+        assert_eq!(config.shortcuts.menu, None);
+    }
+
+    #[test]
+    fn partial_legacy_shortcut_values_remain_explicit_user_choices() {
+        let mut config: CliConfig = toml::from_str(
+            "[shortcuts]\nsend_message = \"Ctrl+D\"\ninterrupt = \"Ctrl+X\"\nmenu = \"Esc\"\n",
+        )
+        .unwrap();
+
+        config.normalize_legacy_shortcuts();
+
+        assert_eq!(config.shortcuts.send_message.as_deref(), Some("Ctrl+D"));
+        assert_eq!(config.shortcuts.interrupt.as_deref(), Some("Ctrl+X"));
+        assert_eq!(config.shortcuts.menu.as_deref(), Some("Esc"));
+    }
+
+    #[test]
+    fn legacy_shortcut_values_that_deviate_from_generated_defaults_are_preserved() {
+        let mut config: CliConfig = toml::from_str(
+            "[shortcuts]\nsend_message = \"Ctrl+S\"\ninterrupt = \"Ctrl+X\"\nmenu = \"Alt+M\"\n",
+        )
+        .unwrap();
+
+        config.normalize_legacy_shortcuts();
+
+        assert_eq!(config.shortcuts.send_message.as_deref(), Some("Ctrl+S"));
+        assert_eq!(config.shortcuts.interrupt.as_deref(), Some("Ctrl+X"));
+        assert_eq!(config.shortcuts.menu.as_deref(), Some("Alt+M"));
     }
 }

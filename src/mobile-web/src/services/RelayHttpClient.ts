@@ -24,8 +24,10 @@ export class RelayHttpClient {
   /** Delegated account identity (token + master_key) from the paired desktop. */
   public delegatedToken: string | null = null;
   public delegatedMasterKey: Uint8Array | null = null;
-  /** The paired desktop's device_id (for sendDeviceRpc when in relay mode). */
+  /** The current control-target device_id (for sendDeviceRpc). */
   public pairedDeviceId: string | null = null;
+  /** The QR-paired desktop's device_id (the "home" device of this session). */
+  public homeDeviceId: string | null = null;
 
   constructor(relayUrl: string, roomId: string) {
     this.relayUrl = relayUrl.replace(/\/$/, '');
@@ -115,23 +117,39 @@ export class RelayHttpClient {
     if (parsed?.resp === 'error') {
       throw new Error(parsed?.message || 'Pairing rejected');
     }
-    // Intercept delegated account identity from the paired desktop.
-    // The desktop sends this when the user is logged into their account —
-    // it allows the mobile-web to call /api/devices and /api/devices/:id/rpc
-    // directly, without needing Argon2id key derivation.
-    if (parsed?.resp === 'delegate_identity' && parsed.token && parsed.master_key) {
-      this.delegatedToken = parsed.token;
-      this.delegatedMasterKey = fromB64(parsed.master_key);
-      if (parsed.device_id) {
-        this.pairedDeviceId = parsed.device_id;
-      }
-      // Return a minimal initial_sync so the UI continues normally
-      return {
-        authenticated_user_id: parsed.user_id,
-        has_workspace: false,
-      } as any;
-    }
     return parsed;
+  }
+
+  /**
+   * Ask the paired desktop to delegate its logged-in account identity
+   * (token + master_key). Allows this client to call /api/devices and
+   * /api/devices/:id/rpc directly and control any same-account device.
+   *
+   * Returns true when an identity was delegated; false when the desktop is
+   * not logged into an account (or delegation failed). Never throws for the
+   * not-logged-in case.
+   */
+  async requestDelegatedIdentity(): Promise<boolean> {
+    if (this.hasDelegatedIdentity) return true;
+    const resp = await this.sendCommand<{
+      resp: string;
+      token?: string;
+      master_key?: string;
+      device_id?: string;
+      message?: string;
+    }>({ cmd: 'get_delegated_identity' });
+    if (resp?.resp === 'delegate_identity' && resp.token && resp.master_key) {
+      this.delegatedToken = resp.token;
+      this.delegatedMasterKey = fromB64(resp.master_key);
+      if (resp.device_id) {
+        this.homeDeviceId = resp.device_id;
+        if (!this.pairedDeviceId) {
+          this.pairedDeviceId = resp.device_id;
+        }
+      }
+      return true;
+    }
+    return false;
   }
 
   /**

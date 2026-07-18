@@ -6,6 +6,7 @@ pub mod computer_use;
 pub mod crash_diagnostics;
 pub mod logging;
 pub mod macos_menubar;
+pub mod runtime;
 pub mod startup_trace;
 pub mod theme;
 pub mod tray;
@@ -41,6 +42,7 @@ use api::custom_agent_api::{
     update_custom_agent,
 };
 use api::diff_api::*;
+use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
 use api::i18n_api::*;
@@ -85,6 +87,7 @@ static MAIN_WINDOW_HIDDEN_ON_MACOS: AtomicBool = AtomicBool::new(false);
 static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
 
 const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
+const BROWSER_WEBVIEW_PAGE_LOAD_EVENT: &str = "browser-webview-page-load";
 const CRON_DESKTOP_START_FALLBACK_DELAY: Duration = Duration::from_secs(120);
 
 #[cfg(target_os = "macos")]
@@ -280,7 +283,6 @@ pub async fn run() {
     // Install the rustls ring CryptoProvider as the process-level default early,
     // so that all subsequent TLS operations (relay_client, reqwest, tokio-tungstenite)
     // reuse the same provider instead of each attempting their own install_default().
-    // This is a no-op on non-Windows platforms where tokio-tungstenite handles it.
     bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
 
     eprintln!("=== BitFun Desktop Starting ===");
@@ -383,6 +385,22 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_app_state", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
+    let step_started = Instant::now();
+    let desktop_runtime =
+        match runtime::DesktopRuntimeContext::build(coordinator.clone(), scheduler.clone()) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
+                return;
+            }
+        };
+    startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "initialize_desktop_agent_runtime",
+        step_started,
+    );
+
     let coordinator_state = CoordinatorState {
         coordinator: coordinator.clone(),
     };
@@ -422,6 +440,7 @@ pub async fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
+        .manage(desktop_runtime)
         .manage(coordinator_state)
         .manage(scheduler_state)
         .manage(path_manager)
@@ -429,6 +448,26 @@ pub async fn run() {
         .manage(scheduler)
         .manage(terminal_state)
         .manage(startup_trace.clone())
+        .on_page_load(|webview, payload| {
+            let label = webview.label();
+            if label.starts_with("embedded-browser-view-")
+                || label.starts_with("embedded-browser-panel-view-")
+            {
+                let event = match payload.event() {
+                    tauri::webview::PageLoadEvent::Started => "started",
+                    tauri::webview::PageLoadEvent::Finished => "finished",
+                };
+                let _ = webview.emit_to(
+                    "main",
+                    BROWSER_WEBVIEW_PAGE_LOAD_EVENT,
+                    serde_json::json!({
+                        "label": label,
+                        "event": event,
+                        "url": payload.url(),
+                    }),
+                );
+            }
+        })
         .setup(move |app| {
             let setup_started = Instant::now();
             startup_trace.record_phase("tauri_setup_start", "native_setup");
@@ -894,6 +933,11 @@ pub async fn run() {
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
             api::editor_ai_api::editor_ai_cancel,
+            get_external_source_snapshot,
+            set_external_source_enabled_command,
+            set_external_source_conflict_choice_command,
+            set_external_tool_target_decision_command,
+            set_external_tool_conflict_choice_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
             get_readonly_tools_info,
@@ -912,8 +956,6 @@ pub async fn run() {
             discover_cli_credentials,
             refresh_cli_credential,
             initialize_ai,
-            set_agent_model,
-            get_agent_models,
             refresh_model_client,
             get_app_state,
             update_app_status,
@@ -1011,6 +1053,7 @@ pub async fn run() {
             git_resolve_revision,
             git_get_repository,
             review_platform_get_workspace_snapshot,
+            review_platform_get_workspace_context,
             review_platform_get_pull_request_detail,
             review_platform_get_pull_request_review_target,
             review_platform_get_issue,
@@ -1338,6 +1381,10 @@ pub async fn run() {
             api::miniapp_export_api::miniapp_render_slide_page,
             // Browser API (embedded webview)
             api::browser_api::browser_webview_eval,
+            api::browser_api::browser_webview_create,
+            api::browser_api::browser_webview_navigate,
+            api::browser_api::browser_webview_reload,
+            api::browser_api::browser_webview_set_bounds,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_list_browsers,
@@ -1726,7 +1773,7 @@ fn start_event_loop_with_transport(
                     }
 
                     let event_for_fanout = envelope.event.clone();
-                    if let Err(e) = transport.emit_event("", envelope.event).await {
+                    if let Err(e) = transport.emit_event(envelope.event).await {
                         log::error!("Failed to emit event: {:?}", e);
                     }
 

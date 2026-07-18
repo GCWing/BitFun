@@ -53,6 +53,45 @@ file is created even when the diff is empty.
 live probes for Network, Git, or MCP integrations that are currently represented by compatibility
 registrations.
 
+## Always-on account device host (daemon)
+
+Account multi-device access requires the target device to hold a live relay connection. On a
+server that is usually not true while no interactive CLI is running. The daemon solves this: it is
+a headless Peer Host process that restores the persisted account session and holds the relay
+device-routing connection, so other devices on the account can reach this machine whenever it is
+up.
+
+Full setup flow on a server:
+
+```bash
+bash src/apps/cli/install.sh    # build + install the CLI (see below)
+bitfun-cli                      # start the TUI, then /login with your account
+bitfun-cli daemon install       # register auto-start; device stays reachable after exit/reboot
+bitfun-cli daemon status        # verify: daemon running + service installed/active
+```
+
+```bash
+bitfun-cli daemon status      # daemon liveness + auto-start service status
+bitfun-cli daemon install     # register and start the auto-start service (requires /login first)
+bitfun-cli daemon uninstall   # stop and remove the auto-start service
+bitfun-cli daemon run         # foreground mode (used by the service manager; also for debugging)
+```
+
+- Prerequisites: a persisted account session (`/login` inside the TUI first), and on Linux a
+  working systemd user session (`systemctl --user`). Containers, WSL, and some minimal images do
+  not have one; there `daemon install` reports a clear error and you can instead run
+  `bitfun-cli daemon run` under your own supervisor (tmux, nohup, a custom unit, ...).
+- Linux: installs a systemd user unit (`~/.config/systemd/user/bitfun-cli-daemon.service`) and
+  enables linger, so the daemon starts at boot and keeps running without an interactive login
+  session. macOS: installs a LaunchAgent. Windows is not supported for auto-start; use
+  `daemon run` instead.
+- The interactive CLI detects a running daemon and skips its own relay connection (same-machine
+  processes share one `device_id`; last AuthConnect wins). Without a daemon, the interactive CLI
+  connects by itself as before.
+- Logging out (`/logout`) signals the daemon to shut down so the device goes offline immediately;
+  a daemon whose token is rejected by the relay exits on its own instead of staying "online" with
+  a doomed token.
+
 ## One-click install (Linux / macOS, amd64 + arm64)
 
 From the repository root:
@@ -79,6 +118,9 @@ Then run:
 ```bash
 bitfun-cli
 ```
+
+On a server that should stay reachable for account multi-device access, continue with the
+[daemon section](#always-on-account-device-host-daemon) above after `/login`.
 
 ### Options / environment
 

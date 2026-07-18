@@ -25,8 +25,8 @@ Stable Contracts and Security Control Plane 的边界以
 |---|---|---|---|---|---|
 | 1 | 接口与入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | 产品宿主、命令、UI 入口、协议接口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp` | 最近的本地 `AGENTS.md`；[interfaces](src/crates/interfaces/AGENTS.md) |
 | 2 | 产品组装层 | `src/crates/assembly` | 兼容导出、产品能力选择、product-full 接线和 adapter/service 注册 | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
-| 3 | 适配层 | `src/crates/adapters` | AI/API/transport/WebDriver/OpenCode 协议 adapter 和外部 provider 转换 | `ai-adapters`, `api-layer`, `opencode-adapter`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
-| 4 | 服务实现层 | `src/crates/services` | 可复用 OS、filesystem、terminal、MCP、remote、git、watch、process、LSP plugin registry、session persistence primitives、network 和 MiniApp runtime IO 实现 | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 3 | 适配层 | `src/crates/adapters` | AI/transport/WebDriver/OpenCode 协议 adapter 和外部 provider 转换 | `ai-adapters`, `opencode-adapter`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 4 | 服务实现层 | `src/crates/services` | 可复用 OS、filesystem、terminal、MCP、remote、git、watch、process、LSP plugin registry、session persistence primitives、network 和 MiniApp runtime IO 实现 | `services-core`, `services-integrations`, `relay-service`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
 | 5 | 执行原语层 | `src/crates/execution` | 可移植 agent、harness、stream、DeepReview policy/report、plugin host 边界、typed-service、tool-contract、tool-group 和 tool-execution 构件 | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-host`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | 稳定契约与产品领域层 | `src/crates/contracts` | 跨层共享 DTO、事件形状、runtime port、LSP protocol/plugin DTO、产品领域契约和策略 | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
 
@@ -143,13 +143,16 @@ await api.invoke('your_command', { request: { ... } });
 ### 平台边界
 
 - 不要在 UI 组件里直接调用 Tauri API；应通过 adapter / infrastructure 层访问。
-- 桌面端专属集成应放在 `src/apps/desktop`，再通过 transport / API layer 回流到共享逻辑。
+- 桌面端专属集成应放在 `src/apps/desktop`，再通过类型化能力接口回流；需要事件投递时，使用已有生产 transport adapter。
 - 在共享 core 中避免使用 `tauri::AppHandle` 等宿主 API；优先使用 `bitfun_events::EventEmitter` 等共享抽象。
 
 ### 远程兼容
 
 - 新增功能时，从一开始就要考虑远程工作区和远程控制同步适配。只支持本地的行为很容易让远程场景功能缺失。
 - 如果某个功能无法合理支持远程工作区，必须做能力屏蔽，或展示明确的不支持提示，不能让它以通用错误的形式失败。
+- 每个桌面端 Tauri 命令都必须在
+ `src/apps/desktop/src/api/remote_workspace_policy.rs` 中声明远程工作区策略；
+ 该文件的契约测试会拒绝没有显式策略的新命令，并禁止 legacy-unaudited 存量清单增长。
 
 ### Agent loop 行为
 
@@ -178,6 +181,13 @@ await api.invoke('your_command', { request: { ... } });
 [`docs/architecture/cli-product-line-design.md`](docs/architecture/cli-product-line-design.md) 和
 [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md)。CLI/TUI 展示留在 app；可复用产品行为通过
 Product Assembly、Agent Runtime、Tool/Harness、Runtime Services 或既有扩展边界承接。
+
+### HarmonyOS PC CLI/TUI 护栏
+
+涉及 HarmonyOS PC CLI/TUI 支持时，还必须阅读
+[`docs/architecture/platform-portability-design.md`](docs/architecture/platform-portability-design.md)。
+这是未来平台目标，不是已实现支持。目标是真实 PC 系统终端；HAP、`hdc shell`、
+手机 Remote App 和远端代执行都不能替代。具体适配必须另立专题，现有移动端能力保持不变。
 
 ### 产品定制护栏
 
@@ -217,7 +227,7 @@ OpenCode 兼容或目标项目治理的变更，先阅读
 | Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime、namespace loading 或直接 `i18nService.t(...)` 调用 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
-| `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
+| `core`、`transport`、adapter 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
 | 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
 | 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |
 | `src/crates/adapters/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |

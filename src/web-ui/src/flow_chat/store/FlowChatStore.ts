@@ -1751,7 +1751,7 @@ export class FlowChatStore {
       if (!session) return prev;
 
       const normalizedModelName = modelName.trim() || 'auto';
-      if ((session.config.modelName || 'auto') === normalizedModelName) {
+      if (session.config.modelName?.trim() === normalizedModelName) {
         return prev;
       }
 
@@ -3223,8 +3223,8 @@ export class FlowChatStore {
             endTime: round.endTime || Date.now(),
             durationMs: round.durationMs,
             providerId: round.providerId,
-            modelId: round.modelId,
-            modelAlias: round.modelAlias,
+            modelConfigId: round.modelConfigId,
+            effectiveModelName: round.effectiveModelName,
             firstChunkMs: round.firstChunkMs,
             firstVisibleOutputMs: round.firstVisibleOutputMs,
             streamDurationMs: round.streamDurationMs,
@@ -4252,7 +4252,7 @@ export class FlowChatStore {
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
-        
+
         const updatedSession = {
           ...session,
           dialogTurns,
@@ -4458,41 +4458,41 @@ export class FlowChatStore {
             attemptIndex: text.attemptIndex,
           })),
           ...round.toolItems.map((tool: any) => ({
-            id: tool.id,
-            type: 'tool' as const,
-            toolName: tool.toolName,
-            interruptionReason: normalizePersistedToolInterruptionReason(
-              tool.interruptionReason,
-              tool.status,
-            ),
-            toolCall: tool.toolCall,
-            toolResult: tool.toolResult,
-            aiIntent: tool.aiIntent,
-            requiresConfirmation: tool.requiresConfirmation,
-            userConfirmed: tool.userConfirmed,
-            acpPermission: tool.acpPermission,
-            startTime: tool.startTime,
-            confirmationTimeoutAt: tool.confirmationTimeoutAt,
-            endTime: tool.endTime,
-            durationMs: tool.durationMs,
-            queueWaitMs: tool.queueWaitMs,
-            preflightMs: tool.preflightMs,
-            confirmationWaitMs: tool.confirmationWaitMs,
-            executionMs: tool.executionMs,
-            timestamp: tool.startTime,
-            status: normalizeRecoveredToolStatus(
-              tool.status,
-              normalizedTurnStatus,
-              tool.toolResult,
-            ),
-            orderIndex: tool.orderIndex,
-            subagentSessionId: tool.subagentSessionId,
-            subagentDialogTurnId: tool.subagentDialogTurnId,
-            subagentModelId: tool.subagentModelId,
-            subagentModelDisplayName: tool.subagentModelDisplayName,
-            attemptId: tool.attemptId,
-            attemptIndex: tool.attemptIndex,
-          })),
+              id: tool.id,
+              type: 'tool' as const,
+              toolName: tool.toolName,
+              toolCall: tool.toolCall,
+              interruptionReason: normalizePersistedToolInterruptionReason(
+                tool.interruptionReason,
+                tool.status,
+              ),
+              toolResult: tool.toolResult,
+              aiIntent: tool.aiIntent,
+              requiresConfirmation: tool.requiresConfirmation,
+              userConfirmed: tool.userConfirmed,
+              acpPermission: tool.acpPermission,
+              startTime: tool.startTime,
+              confirmationTimeoutAt: tool.confirmationTimeoutAt,
+              endTime: tool.endTime,
+              durationMs: tool.durationMs,
+              queueWaitMs: tool.queueWaitMs,
+              preflightMs: tool.preflightMs,
+              confirmationWaitMs: tool.confirmationWaitMs,
+              executionMs: tool.executionMs,
+              timestamp: tool.startTime,
+              status: normalizeRecoveredToolStatus(
+                tool.status,
+                normalizedTurnStatus,
+                tool.toolResult,
+              ),
+              orderIndex: tool.orderIndex,
+              subagentSessionId: tool.subagentSessionId,
+              subagentDialogTurnId: tool.subagentDialogTurnId,
+              subagentModelId: tool.subagentModelId,
+              subagentModelDisplayName: tool.subagentModelDisplayName,
+              attemptId: tool.attemptId,
+              attemptIndex: tool.attemptIndex,
+            })),
           ...(round.thinkingItems || []).map((thinking: any) => ({
             id: thinking.id,
             type: 'thinking' as const,
@@ -4526,8 +4526,8 @@ export class FlowChatStore {
           endTime: round.endTime,
           durationMs: round.durationMs,
           providerId: round.providerId,
-          modelId: round.modelId,
-          modelAlias: round.modelAlias,
+          modelConfigId: round.modelConfigId,
+          effectiveModelName: round.effectiveModelName,
           firstChunkMs: round.firstChunkMs,
           firstVisibleOutputMs: round.firstVisibleOutputMs,
           streamDurationMs: round.streamDurationMs,

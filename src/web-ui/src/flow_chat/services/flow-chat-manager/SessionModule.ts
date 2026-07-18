@@ -14,7 +14,7 @@ import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
-import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
+import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import type { FlowChatContext, SessionConfig } from './types';
 import type { Session } from '../../types/flow-chat';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
@@ -479,24 +479,29 @@ export async function getModelMaxTokens(modelName?: string, agentType?: string):
     const configData = await configManager.getConfigs([
       'ai.models',
       'ai.default_models',
-      'ai.agent_models',
+      'ai.agent_model_defaults',
     ]);
     const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
     const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
-    const agentModels = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
-    
+    const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
+
+    const normalizedModelName = modelName?.trim();
     const explicitModel = resolveModelForContextWindow(modelName, models, defaultModels);
     if (explicitModel?.context_window) {
       return explicitModel.context_window;
     }
 
-    const agentModel = resolveModelForContextWindow(
-      agentType ? agentModels[agentType] : undefined,
-      models,
-      defaultModels,
-    );
-    if (agentModel?.context_window) {
-      return agentModel.context_window;
+    // Only legacy sessions without a model selector inherit the current mode
+    // default. Explicit symbolic selectors such as "auto" remain session-owned.
+    if (!normalizedModelName) {
+      const modeModel = resolveModelForContextWindow(
+        agentModelDefaults?.mode,
+        models,
+        defaultModels,
+      );
+      if (modeModel?.context_window) {
+        return modeModel.context_window;
+      }
     }
 
     const primaryModel = resolveModelForContextWindow('primary', models, defaultModels);
@@ -509,6 +514,23 @@ export async function getModelMaxTokens(modelName?: string, agentType?: string):
   } catch (error) {
     log.warn('Failed to get model max tokens', { modelName, agentType, error });
     return 128128;
+  }
+}
+
+async function resolveModelForSessionCreation(modelName?: string): Promise<string> {
+  const explicitModelName = modelName?.trim();
+  if (explicitModelName) {
+    return explicitModelName;
+  }
+
+  try {
+    const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
+    const configData = await configManager.getConfigs(['ai.agent_model_defaults']);
+    const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
+    return agentModelDefaults?.mode?.trim() || 'auto';
+  } catch (error) {
+    log.warn('Failed to resolve model default during session creation', { error });
+    return 'auto';
   }
 }
 
@@ -567,11 +589,13 @@ export async function createChatSession(
         (key, options) => i18nService.t(key, options),
       );
       const sessionName = titleDescriptor.text;
-      
-      const maxContextTokens = await getModelMaxTokens(config.modelName, agentType);
+
+      const sessionModelName = await resolveModelForSessionCreation(config.modelName);
+      const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
 
       const mergedConfig: SessionConfig = {
         ...config,
+        modelName: sessionModelName,
         workspaceId: workspace?.id ?? config.workspaceId,
       };
 
@@ -583,7 +607,7 @@ export async function createChatSession(
         remoteConnectionId,
         remoteSshHost,
         config: {
-          modelName: config.modelName || 'auto',
+          modelName: sessionModelName,
           enableTools: true,
           safeMode: true,
           autoCompact: true,

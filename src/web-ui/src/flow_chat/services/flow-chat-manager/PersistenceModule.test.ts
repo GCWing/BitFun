@@ -218,6 +218,61 @@ describe('PersistenceModule', () => {
     });
   });
 
+  it('persists only the original deferred wire invocation', () => {
+    const turn = createDialogTurn('completed');
+    turn.modelRounds[0].items = [{
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'CallDeferredTool',
+      toolCall: {
+        id: 'tool-1',
+        input: {
+          tool_name: 'WebFetch',
+          args: { url: 'https://example.test' },
+        },
+      },
+      status: 'completed',
+      timestamp: 1001,
+      startTime: 1001,
+    }];
+
+    const persisted = convertDialogTurnToBackendFormat(turn, 0);
+    const [toolItem] = persisted.modelRounds[0].toolItems;
+
+    expect(toolItem).toMatchObject({
+      toolName: 'CallDeferredTool',
+      toolCall: {
+        id: 'tool-1',
+        input: {
+          tool_name: 'WebFetch',
+          args: { url: 'https://example.test' },
+        },
+      },
+    });
+    expect(toolItem).not.toHaveProperty('effectiveToolName');
+    expect(toolItem).not.toHaveProperty('effectiveToolInput');
+  });
+
+  it('refuses to overwrite persistence with a completed mixed deferred identity', () => {
+    const turn = createDialogTurn('completed');
+    turn.modelRounds[0].items = [{
+      id: 'tool-broken',
+      type: 'tool',
+      toolName: 'CallDeferredTool',
+      toolCall: {
+        id: 'tool-broken',
+        input: { name: 'Plan', overview: 'Overview', plan: '# Plan' },
+      },
+      status: 'completed',
+      timestamp: 1001,
+      startTime: 1001,
+    }];
+
+    expect(() => convertDialogTurnToBackendFormat(turn, 0)).toThrow(
+      'Completed deferred tool is missing its wire invocation: tool-broken',
+    );
+  });
+
   it('coalesces non-terminal immediate saves into a short latest-state window', async () => {
     const turn = createDialogTurn('processing');
     const context = createContext(turn);

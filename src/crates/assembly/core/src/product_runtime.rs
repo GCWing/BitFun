@@ -9,7 +9,7 @@ mod runtime_services;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
+use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort, SessionViewRestoreTiming};
 use bitfun_runtime_services::RuntimeServices;
@@ -17,7 +17,7 @@ use bitfun_runtime_services::RuntimeServices;
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
 };
-use crate::agentic::core::{Message, Session, SessionConfig, SessionState};
+use crate::agentic::core::{Session, SessionConfig, SessionState};
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::{SessionBranchRequest, SessionBranchResult};
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
@@ -89,6 +89,24 @@ impl CoreProductAgentRuntime {
             harness_registry,
         )
     }
+
+    /// Build the ACP surface with its protocol requirement that a session
+    /// rejects a second prompt while another turn is active.
+    pub fn build_acp(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        event_source: AgentEventSource,
+        services: RuntimeServices,
+        harness_registry: HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        CoreServiceAgentRuntime::acp_product_agent_runtime(
+            coordinator,
+            scheduler,
+            event_source,
+            services,
+            harness_registry,
+        )
+    }
 }
 
 /// Core-owned compatibility boundary for product operations not yet exposed by
@@ -120,6 +138,8 @@ impl CoreAgentRuntimeCompatibility {
         }
     }
 
+    /// Compatibility shim for callers migrating to the Agent Runtime SDK.
+    #[deprecated(note = "use AgentRuntime::create_session_with_id")]
     pub async fn create_session_with_id(
         &self,
         session_id: String,
@@ -137,6 +157,16 @@ impl CoreAgentRuntimeCompatibility {
                     ..Default::default()
                 },
             )
+            .await
+    }
+
+    pub async fn update_session_agent_type(
+        &self,
+        session_id: &str,
+        agent_type: &str,
+    ) -> BitFunResult<()> {
+        self.coordinator
+            .update_session_agent_type(session_id, agent_type)
             .await
     }
 
@@ -242,16 +272,6 @@ impl CoreAgentRuntimeCompatibility {
         }
     }
 
-    pub async fn restore_session(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<Session> {
-        self.coordinator
-            .restore_session(workspace_path, session_id)
-            .await
-    }
-
     pub async fn is_session_loaded(
         &self,
         workspace_path: &Path,
@@ -263,36 +283,10 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
-    pub async fn get_messages(&self, session_id: &str) -> BitFunResult<Vec<Message>> {
-        self.coordinator.get_messages(session_id).await
-    }
-
     pub async fn update_session_model(&self, session_id: &str, model_id: &str) -> BitFunResult<()> {
         self.coordinator
             .update_session_model(session_id, model_id)
             .await
-    }
-
-    pub async fn confirm_tool(
-        &self,
-        tool_id: &str,
-        updated_input: Option<serde_json::Value>,
-    ) -> BitFunResult<()> {
-        self.coordinator.confirm_tool(tool_id, updated_input).await
-    }
-
-    pub async fn reject_tool(&self, tool_id: &str, reason: String) -> BitFunResult<()> {
-        self.coordinator.reject_tool(tool_id, reason).await
-    }
-
-    pub fn submit_user_answers(
-        &self,
-        tool_id: &str,
-        answers: serde_json::Value,
-    ) -> BitFunResult<()> {
-        crate::agentic::tools::user_input_manager::get_user_input_manager()
-            .send_answer(tool_id, answers)
-            .map_err(BitFunError::tool)
     }
 
     pub async fn branch_session_at_latest_turn(
@@ -684,9 +678,11 @@ mod tests {
         }
 
         let _ = build;
+        let _ = CoreProductAgentRuntime::build_acp;
     }
 
     #[test]
+    #[allow(deprecated)]
     fn compatibility_operations_have_one_core_owned_facade() {
         fn build(
             coordinator: Arc<ConversationCoordinator>,
@@ -698,12 +694,11 @@ mod tests {
 
         let _ = build;
         let _ = CoreAgentRuntimeCompatibility::create_session_with_id;
-        let _ = CoreAgentRuntimeCompatibility::restore_session;
-        let _ = CoreAgentRuntimeCompatibility::get_messages;
         let _ = CoreAgentRuntimeCompatibility::branch_session_at_latest_turn;
         let _ = CoreAgentRuntimeCompatibility::generate_session_usage_report;
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
+        let _ = CoreAgentRuntimeCompatibility::update_session_agent_type;
         let _ = CoreAgentRuntimeCompatibility::is_turn_processing;
     }
 

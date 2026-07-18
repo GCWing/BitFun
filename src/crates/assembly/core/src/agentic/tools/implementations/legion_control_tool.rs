@@ -109,7 +109,7 @@ impl Tool for LegionControlTool {
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Expanded
+        ToolExposure::Direct
     }
 
     fn input_schema(&self) -> Value {

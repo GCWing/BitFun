@@ -8,6 +8,21 @@
   "editProviderSubtitle": "Basic Provider Parameters",
   "editSubtitle": "Basic Model Parameters",
   "confirmDelete": "Are you sure you want to delete this configuration?",
+  "subagentModels": {
+    "title": "Subagent Models",
+    "default": {
+      "label": "Default Subagent Model",
+      "configureTooltip": "Sets the default model for subagents. Open Customize > Agents to configure each subagent separately",
+      "updateFailed": "Failed to update the default Subagent model"
+    },
+    "options": {
+      "inherit": "Inherit parent session",
+      "fast": "Fast model",
+      "primary": "Primary model",
+      "auto": "Automatic selection"
+    },
+    "loadFailed": "Failed to load Subagent model settings"
+  },
   "cliAuth": {
     "sectionTitle": "Local CLI accounts",
     "sectionDescription": "Import Codex CLI / Gemini CLI accounts already signed in on this machine and use them as models",

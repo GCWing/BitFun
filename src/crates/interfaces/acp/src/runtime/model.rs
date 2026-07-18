@@ -73,8 +73,7 @@ impl BitfunAcpRuntime {
 
         let normalized_model_id = normalize_model_selection(model_id).await?;
 
-        self.agentic_system
-            .coordinator
+        self.compatibility
             .update_session_model(&bitfun_session_id, &normalized_model_id)
             .await
             .map_err(Self::internal_error)?;
@@ -249,18 +248,14 @@ mod tests {
     }
 
     #[test]
-    fn current_model_resolves_name_to_model_id() {
+    fn current_model_accepts_enabled_canonical_model_id() {
         let mut ai_config = AIConfig::default();
         ai_config.models.push(AIModelConfig {
             id: "model-a".to_string(),
-            name: "Readable Model".to_string(),
             enabled: true,
             ..Default::default()
         });
 
-        assert_eq!(
-            current_model_id(&ai_config, Some("Readable Model")),
-            "model-a"
-        );
+        assert_eq!(current_model_id(&ai_config, Some("model-a")), "model-a");
     }
 }

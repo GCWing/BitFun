@@ -23,17 +23,17 @@ import type { NotificationAction } from '../../../shared/notification-system/typ
 import { createLogger } from '@/shared/utils/logger';
 import { handleThreadGoalUpdated } from '../threadGoalEventService';
 import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDisplay';
+import { effectiveToolInvocation, getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 import type {
   DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
+  ModelRoundStartedEvent,
   ModelRoundCompletedEvent,
   OpenBuiltInBrowserEvent,
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
   SubagentSessionLinkedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
@@ -153,7 +153,6 @@ export const __test_only__ = {
   resolveDialogTurnDisplayContent,
   mergeParamsPartialEventData,
   findSubagentParentInfoByRound,
-  resolveModelDisplayNameFromConfig,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -486,6 +485,7 @@ function handleSubagentSessionLinked(
   const subagentDialogTurnId =
     event?.subagentDialogTurnId ?? (event as any)?.subagent_dialog_turn_id;
   const agentType = event?.agentType ?? (event as any)?.agent_type;
+  const modelId = event?.modelId ?? (event as any)?.model_id;
 
   if (!childSessionId || !parentSessionId || !parentDialogTurnId || !parentToolCallId) {
     log.warn('SubagentSessionLinked missing required fields', { event });
@@ -500,6 +500,9 @@ function handleSubagentSessionLinked(
 
   attachSubagentSessionToParentTool(parentInfo, childSessionId, subagentDialogTurnId);
   ensureSubagentSession(context, parentInfo, childSessionId, event as Record<string, unknown>, agentType);
+  if (typeof modelId === 'string' && modelId.trim()) {
+    FlowChatStore.getInstance().updateSessionModelName(childSessionId, modelId.trim());
+  }
   reconcileBackgroundSubagentSession(childSessionId);
 }
 
@@ -542,7 +545,7 @@ function findSubagentParentInfoByRound(
 
           const toolItem = item as FlowToolItem;
           if (
-            toolItem.toolName?.toLowerCase() === 'task' &&
+            getEffectiveToolName(toolItem).toLowerCase() === 'task' &&
             toolItem.subagentSessionId === subagentSessionId &&
             toolItem.subagentDialogTurnId === subagentDialogTurnId
           ) {
@@ -560,106 +563,23 @@ function findSubagentParentInfoByRound(
   return undefined;
 }
 
-function readConfigString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function findConfiguredModel(
-  models: AIModelConfig[],
-  modelRef: string | null | undefined,
-): AIModelConfig | null {
-  const value = modelRef?.trim();
-  if (!value) {
-    return null;
-  }
-
-  return models.find(model =>
-    model.id === value ||
-    model.name === value ||
-    model.model_name === value
-  ) ?? null;
-}
-
-function resolveModelDisplayNameFromConfig(
-  modelId: string,
-  models: AIModelConfig[],
-  defaultModels: DefaultModelsConfig,
-): string {
-  const fallback = modelId.trim();
-  if (!fallback) {
-    return '';
-  }
-
-  let modelRef = fallback;
-  if (fallback === 'primary') {
-    modelRef = readConfigString(defaultModels.primary) || fallback;
-  } else if (fallback === 'fast') {
-    modelRef =
-      readConfigString(defaultModels.fast) ||
-      readConfigString(defaultModels.primary) ||
-      fallback;
-  }
-
-  const model = findConfiguredModel(models, modelRef);
-  return readConfigString(model?.model_name) || fallback;
-}
-
-async function resolveSubagentModelDisplayName(modelId: string): Promise<string> {
-  try {
-    const configData = await configManager.getConfigs([
-      'ai.models',
-      'ai.default_models',
-    ]);
-    const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
-    const defaultModels =
-      (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
-
-    return resolveModelDisplayNameFromConfig(modelId, models, defaultModels);
-  } catch (error) {
-    log.warn('Failed to resolve subagent model display name', { modelId, error });
-    return modelId;
-  }
-}
-
 function updateSubagentParentTaskModel(
   context: FlowChatContext,
   parentInfo: SubagentParentInfo,
-  modelId: string,
-  modelDisplayName: string,
+  modelConfigId: string | undefined,
+  effectiveModelName: string,
 ): void {
   const store = FlowChatStore.getInstance();
   store.updateModelRoundItem(
     parentInfo.sessionId,
     parentInfo.dialogTurnId,
     parentInfo.toolCallId,
-    { subagentModelId: modelId, subagentModelDisplayName: modelDisplayName } as Partial<FlowToolItem>,
+    {
+      subagentModelId: modelConfigId,
+      subagentModelDisplayName: effectiveModelName,
+    } as Partial<FlowToolItem>,
   );
   debouncedSaveDialogTurn(context, parentInfo.sessionId, parentInfo.dialogTurnId, 800);
-}
-
-function patchSubagentParentTaskModelDisplayName(
-  context: FlowChatContext,
-  parentInfo: SubagentParentInfo,
-  modelId: string,
-  displayName: string,
-): void {
-  const store = FlowChatStore.getInstance();
-  const currentItem = store.findToolItem(
-    parentInfo.sessionId,
-    parentInfo.dialogTurnId,
-    parentInfo.toolCallId,
-  );
-
-  if (currentItem?.type !== 'tool') {
-    return;
-  }
-
-  const currentTool = currentItem as FlowToolItem;
-  if (currentTool.subagentModelId !== modelId) {
-    return;
-  }
-
-  updateSubagentParentTaskModel(context, parentInfo, modelId, displayName);
 }
 
 /**
@@ -1856,7 +1776,7 @@ function handleToolEvent(
 /**
  * Handle model round started event
  */
-function handleModelRoundStart(context: FlowChatContext, event: any): void {
+function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStartedEvent): void {
   const { sessionId, turnId, roundId, roundIndex, roundGroupId } = event;
   
   if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundStarted')) {
@@ -1894,6 +1814,8 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
     event.renderHints?.disableExploreGrouping === true ||
     event.metadata?.disableExploreGrouping === true ||
     event.disableExploreGrouping === true;
+  const modelConfigId = event.modelConfigId.trim();
+  const effectiveModelName = event.effectiveModelName.trim();
 
   const modelRound: ModelRound = {
     id: roundId,
@@ -1904,6 +1826,8 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
     isComplete: false,
     status: 'streaming',
     startTime: Date.now(),
+    modelConfigId,
+    effectiveModelName,
     ...(disableExploreGrouping
       ? { renderHints: { disableExploreGrouping: true } }
       : {}),
@@ -1912,22 +1836,16 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
   scheduleModelResponseStatus(context, sessionId, turnId, roundId);
 
-  const modelIdRaw = event.modelId ?? (event as any).model_id;
-  const modelId = typeof modelIdRaw === 'string' ? modelIdRaw.trim() : '';
   const linkedParentInfo =
     findSubagentParentInfoByRound(sessionId, turnId) ||
     getLinkedSubagentParentInfo(sessionId);
-  if (linkedParentInfo && modelId) {
-    updateSubagentParentTaskModel(context, linkedParentInfo, modelId, modelId);
-    void resolveSubagentModelDisplayName(modelId)
-      .then(displayName => {
-        if (displayName && displayName !== modelId) {
-          patchSubagentParentTaskModelDisplayName(context, linkedParentInfo, modelId, displayName);
-        }
-      })
-      .catch(error => {
-        log.warn('Failed to patch subagent model display name', { modelId, error });
-      });
+  if (linkedParentInfo && effectiveModelName) {
+    updateSubagentParentTaskModel(
+      context,
+      linkedParentInfo,
+      modelConfigId,
+      effectiveModelName,
+    );
   }
   
   immediateSaveDialogTurn(context, sessionId, turnId);
@@ -1977,8 +1895,8 @@ function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCom
     endTime,
     durationMs,
     providerId: event.providerId ?? (event as any).provider_id,
-    modelId: event.modelId ?? (event as any).model_id,
-    modelAlias: event.modelAlias ?? (event as any).model_alias,
+    modelConfigId: event.modelConfigId,
+    effectiveModelName: event.effectiveModelName,
     firstChunkMs: optionalNumber(event.firstChunkMs ?? (event as any).first_chunk_ms),
     firstVisibleOutputMs: optionalNumber(event.firstVisibleOutputMs ?? (event as any).first_visible_output_ms),
     streamDurationMs: optionalNumber(event.streamDurationMs ?? (event as any).stream_duration_ms),
@@ -2652,14 +2570,15 @@ function detectModifiedPlanFiles(dialogTurn: DialogTurn): string[] {
     for (const item of round.items) {
       if (item.type !== 'tool') continue;
       const toolItem = item as FlowToolItem;
+      const effective = effectiveToolInvocation(toolItem.toolName, toolItem.toolCall?.input);
       
-      if (toolItem.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
+      if (effective.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
         const planPath = toolItem.toolResult.result?.plan_file_path;
         if (planPath) createPlanFiles.add(planPath);
       }
       
-      if (['Edit', 'Write'].includes(toolItem.toolName) && toolItem.toolResult?.success) {
-        const input = toolItem.toolCall?.input;
+      if (['Edit', 'Write'].includes(effective.toolName) && toolItem.toolResult?.success) {
+        const input = effective.input as any;
         const filePath = splitFilePathAndContent(input?.payload)?.filePath
           || input?.file_path
           || input?.target_file

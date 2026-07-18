@@ -404,14 +404,12 @@ impl SessionManager {
             return Self::context_window_for_model_selection(ai_config, configured_model_id);
         }
 
-        let agent_model_id = ai_config
-            .agent_models
-            .get(&session.agent_type)
-            .map(String::as_str)
-            .map(str::trim)
+        let fallback_model_id = (session.kind != SessionKind::Subagent)
+            .then(|| ai_config.agent_model_defaults.mode.trim().to_string())
             .filter(|model_id| !Self::is_auto_model_selector(model_id));
 
-        agent_model_id
+        fallback_model_id
+            .as_deref()
             .and_then(|model_id| Self::context_window_for_model_selection(ai_config, model_id))
             .or_else(|| Self::context_window_for_model_selection(ai_config, "primary"))
     }
@@ -1864,8 +1862,6 @@ impl SessionManager {
                 )));
             }
         }
-        self.commit_session_storage_path_claim(&session_id, &session_storage_path, storage_claim);
-
         // 2. Initialize the in-memory context cache.
         self.context_store.create_session(&session_id);
         self.token_anchor_store.create_session(&session_id);
@@ -1877,10 +1873,26 @@ impl SessionManager {
         // Use the local `session` directly -- no need to re-fetch from DashMap,
         // which would hold a Ref guard across the async save_session call.
         if self.config.enable_persistence && Self::should_persist_session(&session) {
-            self.persistence_manager
-                .save_session(&session_storage_path, &session)
-                .await?;
+            if let Err(error) = self
+                .persistence_manager
+                .create_session_if_absent(&session_storage_path, &session)
+                .await
+            {
+                self.sessions.remove(&session_id);
+                self.context_store.delete_session(&session_id);
+                self.token_anchor_store.delete_session(&session_id);
+                self.turn_skill_agent_snapshot_store
+                    .delete_session(&session_id);
+                self.file_read_state_store.delete_session(&session_id);
+                self.release_failed_session_storage_path_claim(
+                    &session_id,
+                    &session_storage_path,
+                    storage_claim,
+                );
+                return Err(error);
+            }
         }
+        self.commit_session_storage_path_claim(&session_id, &session_storage_path, storage_claim);
 
         info!("Session created: session_name={}", session.session_name);
 
@@ -4966,8 +4978,8 @@ impl SessionManager {
                             end_time: Some(timestamp),
                             duration_ms: Some(0),
                             provider_id: None,
-                            model_id: None,
-                            model_alias: None,
+                            model_config_id: None,
+                            effective_model_name: None,
                             first_chunk_ms: None,
                             first_visible_output_ms: None,
                             stream_duration_ms: None,
@@ -5129,8 +5141,8 @@ impl SessionManager {
                     end_time: Some(completion_timestamp),
                     duration_ms: Some(0),
                     provider_id: None,
-                    model_id: None,
-                    model_alias: None,
+                    model_config_id: None,
+                    effective_model_name: None,
                     first_chunk_ms: None,
                     first_visible_output_ms: None,
                     stream_duration_ms: None,
@@ -5845,7 +5857,8 @@ impl SessionManager {
 mod tests {
     use super::{CoreSessionStorePort, SessionManager, SessionManagerConfig};
     use crate::agentic::core::{
-        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig, SessionState,
+        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig,
+        SessionState, ToolCall, ToolResult,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
@@ -5892,6 +5905,67 @@ mod tests {
                 self.path.join("user-root"),
             ))
         }
+    }
+
+    #[test]
+    fn persisted_round_preserves_deferred_wire_call_and_effective_identity() {
+        let assistant = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: json!({
+                    "tool_name": "WebFetch",
+                    "args": { "url": "https://example.test" }
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            }],
+        )
+        .with_turn_id("turn-1".to_string())
+        .with_round_id("round-1".to_string());
+        let result = Message::tool_result(ToolResult {
+            tool_id: "tool-1".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            effective_tool_name: Some("WebFetch".to_string()),
+            result: json!({ "content": "external content" }),
+            result_for_assistant: Some("external content".to_string()),
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        })
+        .with_turn_id("turn-1".to_string())
+        .with_round_id("round-1".to_string());
+
+        let persisted_messages: Vec<Message> = serde_json::from_value(
+            serde_json::to_value(vec![assistant, result]).expect("serialize messages"),
+        )
+        .expect("deserialize messages");
+        let provider_result: crate::util::types::Message = (&persisted_messages[1]).into();
+        assert_eq!(
+            provider_result.name.as_deref(),
+            Some(bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME)
+        );
+
+        let rounds =
+            SessionManager::build_model_rounds_from_messages(&persisted_messages, "turn-1", 1);
+
+        assert_eq!(rounds.len(), 1);
+        assert_eq!(rounds[0].tool_items.len(), 1);
+        let tool = &rounds[0].tool_items[0];
+        assert_eq!(tool.tool_name, bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(
+            tool.tool_call.input,
+            json!({
+                "tool_name": "WebFetch",
+                "args": { "url": "https://example.test" }
+            })
+        );
+        let (effective_name, effective_input) =
+            crate::service::session::effective_tool_identity(tool);
+        assert_eq!(effective_name, "WebFetch");
+        assert_eq!(effective_input, &json!({ "url": "https://example.test" }));
     }
 
     impl Drop for TestWorkspace {
@@ -6119,6 +6193,52 @@ mod tests {
         assert!(error.to_string().contains("session_id"));
         assert!(manager.get_session(invalid_id).is_none());
         assert!(manager.session_storage_path_index.get(invalid_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn persistent_session_creation_failure_does_not_publish_runtime_state() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_id = "failed-persistent-session";
+        persistence_manager.fail_next_session_state_write_for_test(session_id);
+        let manager = test_manager(persistence_manager.clone());
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+
+        manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Must not become visible".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+            )
+            .await
+            .expect_err("state persistence failure must fail session creation");
+
+        assert!(manager.get_session(session_id).is_none());
+        assert!(manager.session_storage_path_index.get(session_id).is_none());
+        assert!(!persistence_manager
+            .session_storage_exists(workspace.path(), session_id)
+            .expect("session storage existence"));
+        assert!(persistence_manager
+            .load_session_metadata(workspace.path(), session_id)
+            .await
+            .expect("load session metadata")
+            .is_none());
+
+        manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Retry succeeds".to_string(),
+                "agentic".to_string(),
+                config,
+            )
+            .await
+            .expect("retry should not be blocked by partial persistence");
     }
 
     #[tokio::test]
@@ -6376,7 +6496,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_session_context_window_resolves_auto_through_agent_model_then_primary() {
+    fn sync_session_context_window_resolves_auto_through_mode_default_then_primary() {
         let mut ai_config = ServiceAIConfig {
             models: vec![
                 test_model("primary-model", 512_000),
@@ -6385,9 +6505,7 @@ mod tests {
             ..Default::default()
         };
         ai_config.default_models.primary = Some("primary-model".to_string());
-        ai_config
-            .agent_models
-            .insert("agentic".to_string(), "agent-model".to_string());
+        ai_config.agent_model_defaults.mode = "agent-model".to_string();
 
         let mut session = Session::new_with_id(
             "session-auto".to_string(),
@@ -6406,8 +6524,39 @@ mod tests {
         assert_eq!(resolved, Some(1_000_000));
         assert_eq!(session.config.max_context_tokens, 1_000_000);
 
-        ai_config.agent_models.clear();
+        ai_config.agent_model_defaults.mode = "auto".to_string();
         session.config.max_context_tokens = 256_000;
+
+        let resolved =
+            SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
+
+        assert_eq!(resolved, Some(512_000));
+        assert_eq!(session.config.max_context_tokens, 512_000);
+    }
+
+    #[test]
+    fn sync_session_context_window_resolves_subagent_auto_through_primary() {
+        let mut ai_config = ServiceAIConfig {
+            models: vec![
+                test_model("primary-model", 512_000),
+                test_model("mode-model", 1_000_000),
+            ],
+            ..Default::default()
+        };
+        ai_config.default_models.primary = Some("primary-model".to_string());
+        ai_config.agent_model_defaults.mode = "mode-model".to_string();
+
+        let mut session = Session::new_with_id(
+            "subagent-auto".to_string(),
+            "Auto subagent".to_string(),
+            "Explore".to_string(),
+            SessionConfig {
+                model_id: Some("auto".to_string()),
+                max_context_tokens: 256_000,
+                ..Default::default()
+            },
+        );
+        session.kind = SessionKind::Subagent;
 
         let resolved =
             SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
@@ -7440,8 +7589,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,

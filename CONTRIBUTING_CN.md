@@ -69,7 +69,7 @@ DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Sh
 
 - 日志只使用英文，并保持必要、可读。
 - 用户可见文案走项目 i18n 流程；不要把 Web UI locale catalog 共享给较小产品形态。
-- shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过 transport / API layer 回流。
+- shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过类型化能力接口回流；需要事件投递时使用已有生产 transport adapter。
 - Tauri command 使用 `snake_case` 命令名和结构化 `request` 参数。
 - core 拆解、feature 边界、依赖边界和构建提速重构必须遵循
   `docs/architecture/product-architecture.md`。

@@ -72,6 +72,15 @@
       "tools": "{{count}} tools",
       "skills": "{{count}} skills",
       "subagents": "{{count}} sub-agents"
+    },
+    "modelSelector": {
+      "label": "Model",
+      "default": "Use default Subagent model",
+      "inherit": "Inherit parent session",
+      "fast": "Fast model",
+      "primary": "Primary model",
+      "auto": "Automatic selection",
+      "updateFailed": "Failed to update the Subagent model"
     }
   },
   "capabilityCategories": {
@@ -160,7 +169,7 @@
       "promptRequired": "System prompt is required",
       "readonly": "Readonly mode",
       "model": "Model",
-      "modelPlaceholder": "Use auto, fast, or a concrete model ID",
+      "modelPlaceholder": "Use inherit, auto, fast, or a concrete model ID",
       "modelRequired": "Model is required",
       "tools": "Tools",
       "toolsOptional": "optional",

@@ -16,7 +16,7 @@ use crate::agentic::tools::pipeline::{
     SubagentBatchExecutionPolicy as PipelineSubagentBatchExecutionPolicy, ToolExecutionContext,
     ToolExecutionOptions, ToolPipeline,
 };
-use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::tools::registry::{get_global_tool_registry, ToolRegistry};
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_result_storage;
 use crate::agentic::MessageContent;
@@ -32,6 +32,7 @@ use bitfun_agent_runtime::tool_confirmation::{
     ToolConfirmationPolicyGateFacts,
 };
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
+use bitfun_agent_tools::ResolvedToolInvocation;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
@@ -39,6 +40,32 @@ use log::{debug, error, warn};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
+
+fn tool_call_needs_permission(
+    registry: &ToolRegistry,
+    tool_call: &ToolCall,
+    workspace_root: Option<&std::path::Path>,
+    is_remote: bool,
+) -> bool {
+    let invocation = ResolvedToolInvocation::from_wire_call(
+        tool_call.tool_name.clone(),
+        tool_call.arguments.clone(),
+    )
+    .unwrap_or_else(|_| {
+        ResolvedToolInvocation::direct(tool_call.tool_name.clone(), tool_call.arguments.clone())
+    });
+
+    registry
+        .get_tool(&invocation.effective_tool_name)
+        .and_then(|tool| {
+            crate::external_tools::resolve_external_tool_for_workspace(
+                tool,
+                crate::external_tools::external_tool_route_root(workspace_root, is_remote),
+            )
+        })
+        .map(|tool| tool.needs_permissions(Some(&invocation.effective_arguments)))
+        .unwrap_or(false)
+}
 
 /// Round executor
 pub struct RoundExecutor {
@@ -144,7 +171,8 @@ impl RoundExecutor {
                 round_id: round_id.clone(),
                 round_group_id: context.round_group_id.clone(),
                 round_index: context.round_number,
-                model_id: Some(context.model_name.clone()),
+                model_config_id: context.model_config_id.clone(),
+                effective_model_name: context.effective_model_name.clone(),
             },
             EventPriority::High,
         )
@@ -170,7 +198,7 @@ impl RoundExecutor {
             let request_started_at = Instant::now();
             debug!(
                 "Sending request: model={}, messages={}, tools={}, attempt={}/{}",
-                context.model_name,
+                context.effective_model_name,
                 ai_messages.len(),
                 tool_definitions.as_ref().map(|t| t.len()).unwrap_or(0),
                 attempt_index + 1,
@@ -621,8 +649,8 @@ impl RoundExecutor {
                 has_tool_calls: !stream_result.tool_calls.is_empty(),
                 duration_ms: Some(elapsed_ms_u64(round_started_at)),
                 provider_id: None,
-                model_id: Some(context.model_name.clone()),
-                model_alias: Some(context.model_name.clone()),
+                model_config_id: context.model_config_id.clone(),
+                effective_model_name: context.effective_model_name.clone(),
                 first_chunk_ms: stream_result.first_chunk_ms,
                 first_visible_output_ms: stream_result.first_visible_output_ms,
                 stream_duration_ms: Some(stream_processing_ms),
@@ -726,8 +754,8 @@ impl RoundExecutor {
                 context_vars: context.context_vars.clone(),
                 subagent_parent_info,
                 delegation_policy: context.delegation_policy,
-                collapsed_tools: context.collapsed_tools.clone(),
-                unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
+                deferred_tools: context.deferred_tools.clone(),
+                loaded_deferred_tool_specs: context.loaded_deferred_tool_specs.clone(),
                 allowed_tools,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
@@ -802,10 +830,18 @@ impl RoundExecutor {
                     let tool_registry = registry.read().await;
 
                     stream_result.tool_calls.iter().any(|tool_call| {
-                        tool_registry
-                            .get_tool(&tool_call.tool_name)
-                            .map(|tool| tool.needs_permissions(Some(&tool_call.arguments)))
-                            .unwrap_or(false)
+                        tool_call_needs_permission(
+                            &tool_registry,
+                            tool_call,
+                            context
+                                .workspace
+                                .as_ref()
+                                .map(|workspace| workspace.root_path()),
+                            context
+                                .workspace
+                                .as_ref()
+                                .is_some_and(|workspace| workspace.is_remote()),
+                        )
                     })
                 };
                 let needs_confirm =
@@ -854,9 +890,11 @@ impl RoundExecutor {
                         .map(|tc| crate::agentic::tools::pipeline::ToolExecutionResult {
                             tool_id: tc.tool_id.clone(),
                             tool_name: tc.tool_name.clone(),
+                            effective_tool_name: tc.tool_name.clone(),
                             result: crate::agentic::core::ToolResult {
                                 tool_id: tc.tool_id.clone(),
                                 tool_name: tc.tool_name.clone(),
+                                effective_tool_name: None,
                                 result: serde_json::json!({
                                     "error": e.to_string(),
                                     "message": format!("Tool pipeline execution failed: {}", e)
@@ -873,7 +911,15 @@ impl RoundExecutor {
             };
 
             // Convert to ToolResult, then enforce the aggregate budget for this model round.
-            let tool_results = execution_results.into_iter().map(|r| r.result).collect();
+            let tool_results = execution_results
+                .into_iter()
+                .map(|mut execution_result| {
+                    execution_result.result.effective_tool_name = (execution_result.tool_name
+                        != execution_result.effective_tool_name)
+                        .then_some(execution_result.effective_tool_name);
+                    execution_result.result
+                })
+                .collect();
             tool_result_storage::apply_round_tool_result_budget(tool_results, &storage_context)
                 .await
         } else {
@@ -1032,7 +1078,8 @@ impl RoundExecutor {
             AgenticEvent::TokenUsageUpdated {
                 session_id: context.session_id.clone(),
                 turn_id: context.dialog_turn_id.clone(),
-                model_id: context.model_name.clone(),
+                model_config_id: context.model_config_id.clone(),
+                effective_model_name: context.effective_model_name.clone(),
                 input_tokens: usage.prompt_token_count as usize,
                 output_tokens: Some(usage.candidates_token_count as usize),
                 total_tokens: usage.total_token_count as usize,
@@ -1062,8 +1109,10 @@ impl RoundExecutor {
                     attempt_id: None,
                     attempt_index: None,
                     tool_event: ToolEventData::Failed {
-                        tool_id: tool_call.tool_id.clone(),
-                        tool_name: tool_call.tool_name.clone(),
+                        identity: bitfun_events::ToolEventIdentity::direct(
+                            tool_call.tool_id.clone(),
+                            tool_call.tool_name.clone(),
+                        ),
                         error: format!("Tool arguments stream interrupted: {}", error),
                         duration_ms: None,
                         queue_wait_ms: None,
@@ -1328,11 +1377,12 @@ fn token_details_from_usage(
 
 #[cfg(test)]
 mod tests {
-    use super::{RoundExecutor, StreamProcessor};
+    use super::{tool_call_needs_permission, RoundExecutor, StreamProcessor};
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::stream_processor::StreamResult;
     use crate::agentic::execution::types::RoundContext;
+    use crate::agentic::tools::registry::create_tool_registry;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::BitFunError;
     use crate::util::types::ai::GeminiUsage;
@@ -1354,6 +1404,24 @@ mod tests {
         }
     }
 
+    #[test]
+    fn deferred_permission_gate_uses_effective_target() {
+        let registry = create_tool_registry();
+        let call = ToolCall {
+            tool_id: "tool-1".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            arguments: json!({
+                "tool_name": "Write",
+                "args": { "payload": "+++ file.txt\ncontent" }
+            }),
+            raw_arguments: None,
+            is_error: false,
+            recovered_from_truncation: false,
+        };
+
+        assert!(tool_call_needs_permission(&registry, &call, None, false));
+    }
+
     fn test_round_context() -> RoundContext {
         RoundContext {
             session_id: "session-1".to_string(),
@@ -1365,9 +1433,10 @@ mod tests {
             workspace: None,
             model_exchange_trace_dir: None,
             available_tools: Vec::new(),
-            collapsed_tools: Vec::new(),
-            unlocked_collapsed_tools: Vec::new(),
-            model_name: "model-1".to_string(),
+            deferred_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
+            model_config_id: "model-1".to_string(),
+            effective_model_name: "model-1".to_string(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::new(
                 "model-1", "model-1", "openai", true,
             ),
@@ -1437,7 +1506,8 @@ mod tests {
             crate::agentic::events::AgenticEvent::TokenUsageUpdated {
                 session_id,
                 turn_id,
-                model_id,
+                model_config_id,
+                effective_model_name,
                 input_tokens: 100,
                 output_tokens: Some(20),
                 total_tokens: 120,
@@ -1445,7 +1515,10 @@ mod tests {
                 is_subagent: false,
                 cached_tokens: Some(30),
                 ..
-            } if session_id == "session-1" && turn_id == "turn-1" && model_id == "model-1"
+            } if session_id == "session-1"
+                && turn_id == "turn-1"
+                && model_config_id == "model-1"
+                && effective_model_name == "model-1"
         )));
     }
 

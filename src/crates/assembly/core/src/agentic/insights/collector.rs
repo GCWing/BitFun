@@ -3,8 +3,9 @@ use crate::agentic::insights::session_paths::collect_effective_session_storage_r
 use crate::agentic::insights::types::*;
 use crate::agentic::persistence::PersistenceManager;
 use crate::infrastructure::get_path_manager_arc;
-use crate::service::session::{DialogTurnData, TurnStatus};
+use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
 use crate::util::errors::BitFunResult;
+use bitfun_agent_tools::ResolvedToolInvocation;
 use chrono::{DateTime, Utc};
 use log::{debug, warn};
 use std::collections::{HashMap, HashSet};
@@ -17,6 +18,19 @@ const TAIL_RESERVE_CHARS: usize = 4000;
 /// Gaps longer than this between messages are treated as "user away" and excluded
 /// from both active duration and response time calculations.
 const ACTIVITY_GAP_THRESHOLD_SECS: u64 = 30 * 60;
+
+fn effective_tool_call_name(tool_call: &ToolCall) -> String {
+    ResolvedToolInvocation::from_wire_call(tool_call.tool_name.clone(), tool_call.arguments.clone())
+        .map(|invocation| invocation.effective_tool_name)
+        .unwrap_or_else(|_| tool_call.tool_name.clone())
+}
+
+fn effective_tool_result_name<'a>(
+    wire_tool_name: &'a str,
+    effective_tool_name: &'a Option<String>,
+) -> &'a str {
+    effective_tool_name.as_deref().unwrap_or(wire_tool_name)
+}
 
 pub struct InsightsCollector;
 
@@ -184,20 +198,25 @@ impl InsightsCollector {
                         all_parts.push(format!("[Assistant]: {}", truncated));
                     }
                     for tc in tool_calls {
-                        if !tool_names.contains(&tc.tool_name) {
-                            tool_names.push(tc.tool_name.clone());
+                        let tool_name = effective_tool_call_name(tc);
+                        if !tool_names.contains(&tool_name) {
+                            tool_names.push(tool_name.clone());
                         }
-                        all_parts.push(format!("[Tool: {}]", tc.tool_name));
+                        all_parts.push(format!("[Tool: {}]", tool_name));
                     }
                 }
                 MessageContent::ToolResult {
                     tool_name,
+                    effective_tool_name,
                     is_error,
                     ..
                 } => {
                     if *is_error {
                         has_errors = true;
-                        all_parts.push(format!("[Tool Error: {}]", tool_name));
+                        all_parts.push(format!(
+                            "[Tool Error: {}]",
+                            effective_tool_result_name(tool_name, effective_tool_name)
+                        ));
                     }
                 }
                 MessageContent::Multimodal { text, .. } => {
@@ -260,18 +279,22 @@ impl InsightsCollector {
             match &msg.content {
                 MessageContent::Mixed { tool_calls, .. } => {
                     for tc in tool_calls {
-                        *base_stats
-                            .tool_usage
-                            .entry(tc.tool_name.clone())
-                            .or_insert(0) += 1;
+                        let tool_name = effective_tool_call_name(tc);
+                        *base_stats.tool_usage.entry(tool_name).or_insert(0) += 1;
                     }
                 }
                 MessageContent::ToolResult {
                     tool_name,
+                    effective_tool_name,
                     is_error: true,
                     ..
                 } => {
-                    *base_stats.tool_errors.entry(tool_name.clone()).or_insert(0) += 1;
+                    *base_stats
+                        .tool_errors
+                        .entry(
+                            effective_tool_result_name(tool_name, effective_tool_name).to_string(),
+                        )
+                        .or_insert(0) += 1;
                 }
                 _ => {}
             }
@@ -472,9 +495,12 @@ fn rebuild_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
 
             for ti in &round.tool_items {
                 if let Some(result_data) = &ti.tool_result {
+                    let effective_tool_name = ti.effective_name();
                     let mut msg = Message::tool_result(ToolResult {
                         tool_id: ti.tool_call.id.clone(),
                         tool_name: ti.tool_name.clone(),
+                        effective_tool_name: (effective_tool_name != ti.tool_name)
+                            .then(|| effective_tool_name.to_string()),
                         result: result_data.result.clone(),
                         result_for_assistant: None,
                         is_error: !result_data.success,
@@ -659,7 +685,7 @@ fn accumulate_code_stats_from_turns(base_stats: &mut BaseStats, turns: &[DialogT
                     continue;
                 }
 
-                match ti.tool_name.as_str() {
+                match ti.effective_name() {
                     "Edit" => {
                         let result = &result_data.result;
 
@@ -705,7 +731,7 @@ fn accumulate_code_stats_from_turns(base_stats: &mut BaseStats, turns: &[DialogT
                         {
                             base_stats.total_lines_added += lines_written as usize;
                         } else if let Some(content) =
-                            ti.tool_call.input.get("content").and_then(|v| v.as_str())
+                            ti.effective_input().get("content").and_then(|v| v.as_str())
                         {
                             base_stats.total_lines_added += content.lines().count().max(1);
                         }

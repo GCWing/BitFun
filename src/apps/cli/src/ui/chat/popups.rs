@@ -3,6 +3,8 @@ impl ChatView {
 
     pub(crate) fn show_info_popup(&mut self, message: String) {
         self.info_popup = Some(message);
+        self.info_popup_scroll = 0;
+        self.info_popup_max_scroll = 0;
         self.popup_stack.push(PopupType::InfoPopup);
     }
 
@@ -12,12 +14,33 @@ impl ChatView {
 
     pub(crate) fn dismiss_info_popup(&mut self) {
         self.info_popup = None;
+        self.info_popup_scroll = 0;
+        self.info_popup_max_scroll = 0;
+    }
+
+    pub(crate) fn info_popup_scroll_up(&mut self, amount: u16) {
+        self.info_popup_scroll = self.info_popup_scroll.saturating_sub(amount);
+    }
+
+    pub(crate) fn info_popup_scroll_down(&mut self, amount: u16) {
+        self.info_popup_scroll = self
+            .info_popup_scroll
+            .saturating_add(amount)
+            .min(self.info_popup_max_scroll);
+    }
+
+    pub(crate) fn info_popup_scroll_to_start(&mut self) {
+        self.info_popup_scroll = 0;
+    }
+
+    pub(crate) fn info_popup_scroll_to_end(&mut self) {
+        self.info_popup_scroll = self.info_popup_max_scroll;
     }
 
     // ============ Command palette methods ============
 
-    pub(crate) fn show_command_palette(&mut self) {
-        self.command_palette.show();
+    pub(crate) fn show_command_palette(&mut self, action_state: crate::actions::ActionState) {
+        self.command_palette.show(action_state);
         self.popup_stack.push(PopupType::CommandPalette);
     }
 
@@ -26,7 +49,7 @@ impl ChatView {
     }
 
     pub(crate) fn reshow_command_palette(&mut self) {
-        self.command_palette.show();
+        self.command_palette.reshow();
     }
 
     pub(crate) fn command_palette_visible(&self) -> bool {

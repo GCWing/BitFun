@@ -38,6 +38,59 @@ impl ReviewPlatformWorkspaceClassifier for CoreReviewPlatformWorkspaceClassifier
     async fn is_remote_workspace_path(&self, path: &str) -> bool {
         crate::service::remote_ssh::workspace_state::is_remote_path(path).await
     }
+
+    async fn execute_remote_git_command(
+        &self,
+        workspace_path: &str,
+        current_dir: &str,
+        args: &[&str],
+    ) -> Result<String, ReviewPlatformError> {
+        use crate::service::remote_ssh::workspace_state::{
+            get_remote_workspace_manager, lookup_remote_connection,
+        };
+        use bitfun_services_integrations::remote_ssh::{
+            build_remote_git_command, normalize_remote_workspace_path,
+        };
+
+        let entry = lookup_remote_connection(workspace_path)
+            .await
+            .ok_or_else(|| {
+                ReviewPlatformError::InvalidRepository(format!(
+                    "No SSH connection is registered for remote workspace {workspace_path}"
+                ))
+            })?;
+        let manager = match get_remote_workspace_manager() {
+            Some(state) => state.get_ssh_manager().await,
+            None => None,
+        }
+        .ok_or_else(|| {
+            ReviewPlatformError::InvalidRepository(
+                "SSH connection manager is not initialized for remote workspaces".to_string(),
+            )
+        })?;
+
+        let command = build_remote_git_command(&normalize_remote_workspace_path(current_dir), args);
+        let (stdout, stderr, exit_code) = manager
+            .execute_command(&entry.connection_id, &command)
+            .await
+            .map_err(|error| {
+                ReviewPlatformError::InvalidRepository(format!(
+                    "Failed to execute git command on remote workspace: {error}"
+                ))
+            })?;
+
+        if exit_code == 0 {
+            return Ok(stdout);
+        }
+        let message = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        Err(ReviewPlatformError::InvalidRepository(
+            message.trim().to_string(),
+        ))
+    }
 }
 
 fn owner_service() -> Result<ReviewPlatformOwnerService, ReviewPlatformError> {
@@ -66,6 +119,15 @@ impl ReviewPlatformService {
     ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
         owner_service()?
             .workspace_snapshot(repository_path, remote_id, page, per_page)
+            .await
+    }
+
+    pub async fn workspace_context(
+        repository_path: &str,
+        remote_id: Option<&str>,
+    ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
+        owner_service()?
+            .workspace_context(repository_path, remote_id)
             .await
     }
 
@@ -273,5 +335,30 @@ impl ReviewPlatformService {
         host: &str,
     ) -> Result<(), ReviewPlatformError> {
         owner_service()?.clear_auth_token(platform, host).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn remote_git_execution_fails_loudly_without_registered_connection() {
+        let classifier = CoreReviewPlatformWorkspaceClassifier;
+
+        let error = classifier
+            .execute_remote_git_command(
+                "/bitfun-tests/unregistered-remote-workspace",
+                "/bitfun-tests/unregistered-remote-workspace",
+                &["remote", "-v"],
+            )
+            .await
+            .expect_err("unregistered remote workspaces must not silently succeed");
+
+        let message = error.to_string();
+        assert!(
+            message.contains("No SSH connection is registered"),
+            "unexpected error message: {message}"
+        );
     }
 }
