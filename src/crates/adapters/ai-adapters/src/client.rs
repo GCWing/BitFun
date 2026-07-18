@@ -690,6 +690,47 @@ mod tests {
     }
 
     #[test]
+    fn build_openai_request_body_applies_glm_sampling_and_reasoning_configuration() {
+        ensure_audit_disabled_for_tests();
+        let client = AIClient::new(AIConfig {
+            name: "glm".to_string(),
+            base_url: "https://open.bigmodel.cn/api/paas/v4".to_string(),
+            request_url: "https://open.bigmodel.cn/api/paas/v4/chat/completions".to_string(),
+            api_key: "test-key".to_string(),
+            model: "glm-5.2".to_string(),
+            format: "openai".to_string(),
+            context_window: 1_048_576,
+            max_tokens: Some(65_536),
+            temperature: Some(1.0),
+            top_p: Some(1.0),
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: Some("max".to_string()),
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        })
+        .expect("test AI client should initialize");
+
+        let request_body = openai::chat::build_request_body(
+            &client,
+            &client.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["reasoning_effort"], "max");
+        assert_eq!(request_body["temperature"], 1.0);
+        assert_eq!(request_body["top_p"], 1.0);
+        assert_eq!(request_body["max_tokens"], 65_536);
+    }
+
+    #[test]
     fn build_openai_request_body_adds_deepseek_reasoning_effort() {
         ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {

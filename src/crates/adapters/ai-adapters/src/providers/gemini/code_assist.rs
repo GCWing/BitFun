@@ -176,6 +176,7 @@ pub(crate) async fn send_stream(
     let ttft_timeout = client.stream_options.ttft_timeout;
     execute_sse_request(
         "Gemini Code Assist Streaming API",
+        "gemini_code_assist",
         &url,
         &request_body,
         max_tries,

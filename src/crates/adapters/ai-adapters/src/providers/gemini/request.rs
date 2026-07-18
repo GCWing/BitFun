@@ -348,6 +348,7 @@ pub(crate) async fn send_stream(
 
     execute_sse_request(
         "Gemini Streaming API",
+        "gemini",
         &url,
         &request_body,
         max_tries,
