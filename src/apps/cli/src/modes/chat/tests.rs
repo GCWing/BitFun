@@ -4,16 +4,19 @@ mod tests {
 
     use super::{
         action_opens_extension_management, agent_event_stream_failure,
-        apply_model_selection_feedback, builtin_command_reconfirmation, command_route,
+        apply_agent_mode_feedback, apply_model_selection_feedback, builtin_command_reconfirmation,
+        command_route,
         external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
         external_agent_review_text, external_command_projections,
         external_tool_mutation_result_label, external_tool_pending_notice_key,
         external_tool_result_is_stale, external_tool_review_text, external_tool_run_location_label,
         mark_active_turn_failed, merge_external_agent_mutation_snapshot,
+        mode_change_blocks_typed_submission, mode_change_completion_should_exit,
         native_command_conflict_key, parse_command_token, parse_external_agent_review_action,
         parse_external_tool_review_action, CommandQualifier, CommandRoute,
         ExternalAgentReviewAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
+        previous_session_mode_change_status, ModeSelectionApplyOutcome,
         ModelSelectionApplyOutcome,
     };
     use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
@@ -657,6 +660,86 @@ mod tests {
         };
         assert!(content.contains("was not changed"));
         assert!(content.contains("retry"));
+    }
+
+    #[test]
+    fn mode_selection_commits_visible_state_only_after_runtime_success() {
+        let mut current_mode = "agentic".to_string();
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        let applied = apply_agent_mode_feedback(
+            &mut current_mode,
+            &mut state,
+            "plan",
+            ModeSelectionApplyOutcome::Applied,
+        );
+
+        assert!(applied);
+        assert_eq!(current_mode, "plan");
+        assert_eq!(state.agent_type, "plan");
+    }
+
+    #[test]
+    fn mode_selection_failure_preserves_visible_state_and_explains_retry() {
+        let mut current_mode = "agentic".to_string();
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        let applied = apply_agent_mode_feedback(
+            &mut current_mode,
+            &mut state,
+            "plan",
+            ModeSelectionApplyOutcome::SessionUpdateFailed(
+                "session storage unavailable".to_string(),
+            ),
+        );
+
+        assert!(!applied);
+        assert_eq!(current_mode, "agentic");
+        assert_eq!(state.agent_type, "agentic");
+        let notice = state.messages.last().expect("failure notice");
+        let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
+            panic!("failure notice must be text");
+        };
+        assert!(content.contains("was not changed"));
+        assert!(content.contains("retry"));
+    }
+
+    #[test]
+    fn previous_session_mode_failure_is_not_reported_as_a_success() {
+        let status = previous_session_mode_change_status(
+            "Plan",
+            &ModeSelectionApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
+        );
+
+        assert!(status.contains("failed"));
+        assert!(status.contains("storage unavailable"));
+        assert!(status.contains("retry"));
+    }
+
+    #[test]
+    fn pending_mode_change_allows_host_commands_but_blocks_agent_submission() {
+        assert!(mode_change_blocks_typed_submission(true, "continue"));
+        assert!(!mode_change_blocks_typed_submission(true, "/new"));
+        assert!(!mode_change_blocks_typed_submission(true, "/sessions"));
+        assert!(!mode_change_blocks_typed_submission(true, "/exit"));
+        assert!(!mode_change_blocks_typed_submission(false, "continue"));
+    }
+
+    #[test]
+    fn failed_mode_save_cancels_automatic_exit() {
+        assert!(mode_change_completion_should_exit(true, true));
+        assert!(!mode_change_completion_should_exit(true, false));
+        assert!(!mode_change_completion_should_exit(false, true));
     }
 
     #[test]

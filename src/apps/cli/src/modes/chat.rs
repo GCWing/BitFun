@@ -139,6 +139,17 @@ enum PendingMcpTask {
     },
 }
 
+struct PendingModeChange {
+    session_id: String,
+    mode_id: String,
+    started_at: Instant,
+    slow_notice_shown: bool,
+    exit_warning_shown: bool,
+    handle: tokio::task::JoinHandle<anyhow::Result<()>>,
+}
+
+const MODE_CHANGE_SLOW_NOTICE: Duration = Duration::from_secs(15);
+
 #[derive(Default)]
 struct NonKeyEventOutcome {
     request_redraw: bool,
@@ -171,6 +182,9 @@ pub(crate) struct ChatMode {
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
     pending_mcp_tasks: Vec<PendingMcpTask>,
+    /// One durable mode update in flight. The event loop remains responsive
+    /// while the runtime owner writes session metadata.
+    pending_mode_change: Option<PendingModeChange>,
     external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_source_conflict_choices: BTreeMap<String, String>,
     external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
@@ -215,6 +229,7 @@ impl ChatMode {
             initial_prompt: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
+            pending_mode_change: None,
             external_source_snapshot: None,
             external_source_conflict_choices: BTreeMap::new(),
             external_source_conflict_lineage_current_keys: BTreeMap::new(),

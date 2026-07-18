@@ -31,6 +31,8 @@ pub struct MCPServerProcess {
     last_ping_time: Arc<RwLock<Option<Instant>>>,
     last_error_message: Arc<RwLock<Option<String>>>,
     message_rx: Option<mpsc::UnboundedReceiver<MCPMessage>>,
+    #[cfg(test)]
+    fail_next_stop: bool,
 }
 
 impl MCPServerProcess {
@@ -51,7 +53,14 @@ impl MCPServerProcess {
             last_ping_time: Arc::new(RwLock::new(None)),
             last_error_message: Arc::new(RwLock::new(None)),
             message_rx: None,
+            #[cfg(test)]
+            fail_next_stop: false,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_stop_for_test(&mut self) {
+        self.fail_next_stop = true;
     }
 
     /// Starts the server process.
@@ -263,13 +272,24 @@ impl MCPServerProcess {
         info!("Stopping MCP server: name={} id={}", self.name, self.id);
         self.set_status(MCPServerStatus::Stopping).await;
 
-        if let Some(mut child) = self.child.take() {
-            if let Err(e) = child.kill().await {
-                warn!(
+        #[cfg(test)]
+        if self.fail_next_stop {
+            self.fail_next_stop = false;
+            return Err(MCPRuntimeError::process("Injected MCP stop failure"));
+        }
+
+        if let Some(child) = self.child.as_mut() {
+            if let Err(error) = child.kill().await {
+                let message = format!(
                     "Failed to kill MCP server process: name={} id={} error={}",
-                    self.name, self.id, e
+                    self.name, self.id, error
                 );
+                warn!("{}", message);
+                self.set_status_with_error(MCPServerStatus::Failed, Some(message.clone()))
+                    .await;
+                return Err(MCPRuntimeError::process(message));
             }
+            self.child = None;
         }
 
         self.connection = None;

@@ -43,7 +43,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -57,7 +57,7 @@ const COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS: usize = 32;
 const TOKEN_ANCHOR_SCHEMA_VERSION: u32 = 1;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 
-static SESSION_METADATA_UPDATE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+static SESSION_PERSISTENCE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> =
     OnceLock::new();
 static SESSION_BRANCH_ALLOCATION_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     OnceLock::new();
@@ -288,6 +288,8 @@ pub struct PersistenceManager {
     runtime_service: Arc<WorkspaceRuntimeService>,
     #[cfg(test)]
     fail_next_session_state_write: std::sync::Mutex<Option<String>>,
+    #[cfg(test)]
+    fail_next_session_metadata_write: std::sync::Mutex<Option<String>>,
 }
 
 impl PersistenceManager {
@@ -297,6 +299,8 @@ impl PersistenceManager {
             path_manager,
             #[cfg(test)]
             fail_next_session_state_write: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            fail_next_session_metadata_write: std::sync::Mutex::new(None),
         })
     }
 
@@ -321,6 +325,14 @@ impl PersistenceManager {
             .expect("session state fault lock") = Some(session_id.to_string());
     }
 
+    #[cfg(test)]
+    pub(crate) fn fail_next_session_metadata_write_for_test(&self, session_id: &str) {
+        *self
+            .fail_next_session_metadata_write
+            .lock()
+            .expect("session metadata fault lock") = Some(session_id.to_string());
+    }
+
     /// Resolve the on-disk sessions directory for `workspace_path`.
     ///
     /// Callers may pass either a logical workspace root or an already-resolved
@@ -336,11 +348,6 @@ impl PersistenceManager {
 
     pub(crate) fn is_resolved_sessions_dir(&self, path: &Path) -> bool {
         CoreSessionStorePort::resolved_sessions_dir_kind(self.path_manager.as_ref(), path).is_some()
-    }
-
-    fn metadata_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_layout(workspace_path)
-            .metadata_path(session_id)
     }
 
     fn state_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -522,18 +529,28 @@ impl PersistenceManager {
             .map_err(Self::json_store_error)
     }
 
-    async fn get_session_metadata_update_lock(
+    async fn get_session_persistence_lock(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> Arc<Mutex<()>> {
-        let metadata_path = self.metadata_path(workspace_path, session_id);
-        let registry = SESSION_METADATA_UPDATE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+        let session_path = self.session_layout(workspace_path).session_dir(session_id);
+        let session_path = dunce::canonicalize(&session_path).unwrap_or_else(|_| {
+            session_path
+                .parent()
+                .and_then(|parent| dunce::canonicalize(parent).ok())
+                .and_then(|parent| session_path.file_name().map(|name| parent.join(name)))
+                .unwrap_or(session_path)
+        });
+        let registry = SESSION_PERSISTENCE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
         let mut registry_guard = registry.lock().await;
-        registry_guard
-            .entry(metadata_path)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
+        registry_guard.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = registry_guard.get(&session_path).and_then(Weak::upgrade) {
+            return lock;
+        }
+        let lock = Arc::new(Mutex::new(()));
+        registry_guard.insert(session_path, Arc::downgrade(&lock));
+        lock
     }
 
     pub(super) async fn get_session_branch_allocation_lock(
@@ -892,12 +909,115 @@ impl PersistenceManager {
         workspace_path: &Path,
         metadata: &SessionMetadata,
     ) -> BitFunResult<()> {
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, &metadata.session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
+        self.save_session_metadata_locked(workspace_path, metadata)
+            .await
+    }
+
+    async fn save_session_metadata_locked(
+        &self,
+        workspace_path: &Path,
+        metadata: &SessionMetadata,
+    ) -> BitFunResult<()> {
         Self::validate_session_id(&metadata.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
+        #[cfg(test)]
+        {
+            let mut fault = self
+                .fail_next_session_metadata_write
+                .lock()
+                .expect("session metadata fault lock");
+            if fault.as_deref() == Some(metadata.session_id.as_str()) {
+                *fault = None;
+                return Err(BitFunError::io("Injected session metadata write failure"));
+            }
+        }
         self.session_metadata_store(workspace_path)
             .save_metadata(metadata)
             .await
             .map_err(Self::session_metadata_store_error)
+    }
+
+    pub async fn create_session_metadata_if_absent(
+        &self,
+        workspace_path: &Path,
+        metadata: &SessionMetadata,
+    ) -> BitFunResult<bool> {
+        Self::validate_session_id(&metadata.session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, &metadata.session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
+        if self
+            .load_session_metadata(workspace_path, &metadata.session_id)
+            .await?
+            .is_some()
+        {
+            return Ok(false);
+        }
+        self.save_session_metadata_locked(workspace_path, metadata)
+            .await?;
+        Ok(true)
+    }
+
+    pub async fn update_session_metadata(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata),
+    ) -> BitFunResult<()> {
+        let updated = self
+            .update_session_metadata_if_present(workspace_path, session_id, |metadata| {
+                update(metadata);
+                Ok(())
+            })
+            .await?;
+        if updated {
+            Ok(())
+        } else {
+            Err(BitFunError::NotFound(format!(
+                "Session metadata not found: {}",
+                session_id
+            )))
+        }
+    }
+
+    pub async fn update_session_metadata_if_present(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata) -> BitFunResult<()>,
+    ) -> BitFunResult<bool> {
+        Self::validate_session_id(session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
+        self.update_session_metadata_if_present_locked(workspace_path, session_id, update)
+            .await
+    }
+
+    async fn update_session_metadata_if_present_locked(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata) -> BitFunResult<()>,
+    ) -> BitFunResult<bool> {
+        let Some(mut metadata) = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+        else {
+            return Ok(false);
+        };
+        update(&mut metadata)?;
+        self.save_session_metadata_locked(workspace_path, &metadata)
+            .await?;
+        Ok(true)
     }
 
     pub async fn set_session_memory_mode(
@@ -907,10 +1027,10 @@ impl PersistenceManager {
         mode: SessionMemoryMode,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
-        let metadata_update_lock = self
-            .get_session_metadata_update_lock(workspace_path, session_id)
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
             .await;
-        let _metadata_update_guard = metadata_update_lock.lock().await;
+        let _persistence_guard = persistence_lock.lock().await;
         let mut metadata = self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -918,7 +1038,8 @@ impl PersistenceManager {
                 BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
             })?;
         metadata.memory_mode = mode;
-        self.save_session_metadata(workspace_path, &metadata).await
+        self.save_session_metadata_locked(workspace_path, &metadata)
+            .await
     }
 
     pub async fn mark_session_memory_mode_polluted(
@@ -927,10 +1048,10 @@ impl PersistenceManager {
         session_id: &str,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
-        let metadata_update_lock = self
-            .get_session_metadata_update_lock(workspace_path, session_id)
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
             .await;
-        let _metadata_update_guard = metadata_update_lock.lock().await;
+        let _persistence_guard = persistence_lock.lock().await;
         let mut metadata = self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -943,7 +1064,7 @@ impl PersistenceManager {
         );
         if metadata.memory_mode == SessionMemoryMode::Enabled {
             metadata.memory_mode = SessionMemoryMode::Polluted;
-            self.save_session_metadata(workspace_path, &metadata)
+            self.save_session_metadata_locked(workspace_path, &metadata)
                 .await?;
         }
         if should_enqueue_phase2 {
@@ -1407,6 +1528,10 @@ impl PersistenceManager {
                 error
             ))
         })?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, &session.session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
         let session_dir = self
             .session_layout(workspace_path)
             .session_dir(&session.session_id);
@@ -1427,7 +1552,10 @@ impl PersistenceManager {
             }
         }
 
-        if let Err(error) = self.save_session_files(workspace_path, session).await {
+        if let Err(error) = self
+            .save_session_files_locked(workspace_path, session)
+            .await
+        {
             if let Err(cleanup_error) = self
                 .session_metadata_store(workspace_path)
                 .delete_session_dir_and_index(&session.session_id)
@@ -1437,6 +1565,11 @@ impl PersistenceManager {
                     "Failed to clean up partial session persistence: session_id={}, error={}",
                     session.session_id, cleanup_error
                 );
+                return Err(BitFunError::SessionCreateCleanupRequired {
+                    session_id: session.session_id.clone(),
+                    error: error.to_string(),
+                    cleanup_error: cleanup_error.to_string(),
+                });
             }
             return Err(error);
         }
@@ -1448,12 +1581,17 @@ impl PersistenceManager {
     pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
         Self::validate_session_id(&session.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, &session.session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
         self.ensure_session_dir(workspace_path, &session.session_id)
             .await?;
-        self.save_session_files(workspace_path, session).await
+        self.save_session_files_locked(workspace_path, session)
+            .await
     }
 
-    async fn save_session_files(
+    async fn save_session_files_locked(
         &self,
         workspace_path: &Path,
         session: &Session,
@@ -1464,7 +1602,7 @@ impl PersistenceManager {
         let metadata = self
             .build_session_metadata(workspace_path, session, existing_metadata.as_ref())
             .await;
-        self.save_session_metadata(workspace_path, &metadata)
+        self.save_session_metadata_locked(workspace_path, &metadata)
             .await?;
 
         let state = StoredSessionStateFile {
@@ -1811,6 +1949,10 @@ impl PersistenceManager {
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
         let mut stored_state = self
             .load_stored_session_state(workspace_path, session_id)
             .await?
@@ -1839,6 +1981,10 @@ impl PersistenceManager {
         session_id: &str,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
         self.session_metadata_store(workspace_path)
             .delete_session_dir_and_index(session_id)
             .await
@@ -1886,10 +2032,10 @@ impl PersistenceManager {
         Self::validate_session_id(&turn.session_id)?;
         let save_started_at = Instant::now();
         self.ensure_runtime_for_write(workspace_path).await?;
-        let metadata_update_lock = self
-            .get_session_metadata_update_lock(workspace_path, &turn.session_id)
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, &turn.session_id)
             .await;
-        let _metadata_update_guard = metadata_update_lock.lock().await;
+        let _persistence_guard = persistence_lock.lock().await;
         let mut metadata = self
             .load_session_metadata(workspace_path, &turn.session_id)
             .await?
@@ -1968,7 +2114,7 @@ impl PersistenceManager {
         }
 
         let metadata_started_at = Instant::now();
-        self.save_session_metadata(workspace_path, &metadata)
+        self.save_session_metadata_locked(workspace_path, &metadata)
             .await?;
         if should_enqueue_phase2_for_pollution {
             self.enqueue_phase2_if_session_selected(&turn.session_id, current_unix_secs())
@@ -2225,6 +2371,10 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<()> {
         Self::validate_session_id(session_id)?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
         if !self.turns_dir(workspace_path, session_id).exists() {
             return Ok(());
         }
@@ -2234,20 +2384,27 @@ impl PersistenceManager {
             .await
             .map_err(|e| BitFunError::io(format!("Failed to delete dialog turn files: {}", e)))?;
 
-        if let Some(mut metadata) = self
+        if self
             .load_session_metadata(workspace_path, session_id)
             .await?
+            .is_some()
         {
             let turns = self.load_session_turns(workspace_path, session_id).await?;
             let workspace_path_text = workspace_path.to_string_lossy();
-            refresh_session_metadata_from_turns(
-                &mut metadata,
-                workspace_path_text.as_ref(),
-                &turns,
-                Self::system_time_to_unix_ms(SystemTime::now()),
-            );
-            self.save_session_metadata(workspace_path, &metadata)
-                .await?;
+            self.update_session_metadata_if_present_locked(
+                workspace_path,
+                session_id,
+                |metadata| {
+                    refresh_session_metadata_from_turns(
+                        metadata,
+                        workspace_path_text.as_ref(),
+                        &turns,
+                        Self::system_time_to_unix_ms(SystemTime::now()),
+                    );
+                    Ok(())
+                },
+            )
+            .await?;
         }
 
         Ok(())
@@ -2649,6 +2806,10 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<usize> {
         Self::validate_session_id(session_id)?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 
@@ -2665,20 +2826,27 @@ impl PersistenceManager {
             }
         }
 
-        if let Some(mut metadata) = self
+        if self
             .load_session_metadata(workspace_path, session_id)
             .await?
+            .is_some()
         {
             let remaining_turns = self.load_session_turns(workspace_path, session_id).await?;
             let workspace_path_text = workspace_path.to_string_lossy();
-            refresh_session_metadata_from_turns(
-                &mut metadata,
-                workspace_path_text.as_ref(),
-                &remaining_turns,
-                Self::system_time_to_unix_ms(SystemTime::now()),
-            );
-            self.save_session_metadata(workspace_path, &metadata)
-                .await?;
+            self.update_session_metadata_if_present_locked(
+                workspace_path,
+                session_id,
+                |metadata| {
+                    refresh_session_metadata_from_turns(
+                        metadata,
+                        workspace_path_text.as_ref(),
+                        &remaining_turns,
+                        Self::system_time_to_unix_ms(SystemTime::now()),
+                    );
+                    Ok(())
+                },
+            )
+            .await?;
         }
 
         Ok(deleted)
@@ -2691,6 +2859,10 @@ impl PersistenceManager {
         turn_index: usize,
     ) -> BitFunResult<usize> {
         Self::validate_session_id(session_id)?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 
@@ -2707,36 +2879,39 @@ impl PersistenceManager {
             }
         }
 
-        if let Some(mut metadata) = self
+        if self
             .load_session_metadata(workspace_path, session_id)
             .await?
+            .is_some()
         {
             let remaining_turns = self.load_session_turns(workspace_path, session_id).await?;
             let workspace_path_text = workspace_path.to_string_lossy();
-            refresh_session_metadata_from_turns(
-                &mut metadata,
-                workspace_path_text.as_ref(),
-                &remaining_turns,
-                Self::system_time_to_unix_ms(SystemTime::now()),
-            );
-            self.save_session_metadata(workspace_path, &metadata)
-                .await?;
+            self.update_session_metadata_if_present_locked(
+                workspace_path,
+                session_id,
+                |metadata| {
+                    refresh_session_metadata_from_turns(
+                        metadata,
+                        workspace_path_text.as_ref(),
+                        &remaining_turns,
+                        Self::system_time_to_unix_ms(SystemTime::now()),
+                    );
+                    Ok(())
+                },
+            )
+            .await?;
         }
 
         Ok(deleted)
     }
 
     pub async fn touch_session(&self, workspace_path: &Path, session_id: &str) -> BitFunResult<()> {
-        Self::validate_session_id(session_id)?;
-        if let Some(mut metadata) = self
-            .load_session_metadata(workspace_path, session_id)
-            .await?
-        {
+        self.update_session_metadata_if_present(workspace_path, session_id, |metadata| {
             metadata.touch();
-            self.save_session_metadata(workspace_path, &metadata)
-                .await?;
-        }
-        Ok(())
+            Ok(())
+        })
+        .await
+        .map(|_| ())
     }
 }
 
@@ -3438,6 +3613,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn metadata_patch_and_turn_save_share_one_read_modify_write_lock() {
+        let workspace = TestWorkspace::new();
+        let manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Concurrent metadata".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let metadata_lock = manager
+            .get_session_persistence_lock(workspace.path(), &session_id)
+            .await;
+        let metadata_guard = metadata_lock.lock().await;
+        let workspace_path = workspace.path().to_path_buf();
+
+        let patch_task = tokio::spawn({
+            let manager = manager.clone();
+            let workspace_path = workspace_path.clone();
+            let session_id = session_id.clone();
+            async move {
+                manager
+                    .update_session_metadata(&workspace_path, &session_id, |metadata| {
+                        metadata.agent_type = "Plan".to_string();
+                    })
+                    .await
+            }
+        });
+
+        let mut turn = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            session_id.clone(),
+            user_message("concurrent turn"),
+        );
+        turn.mark_completed();
+        let turn_task = tokio::spawn({
+            let manager = manager.clone();
+            let workspace_path = workspace_path.clone();
+            async move { manager.save_dialog_turn(&workspace_path, &turn).await }
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(!patch_task.is_finished());
+        assert!(!turn_task.is_finished());
+        drop(metadata_guard);
+
+        patch_task
+            .await
+            .expect("metadata patch task should join")
+            .expect("metadata patch should save");
+        turn_task
+            .await
+            .expect("turn save task should join")
+            .expect("turn should save");
+
+        let metadata = manager
+            .load_session_metadata(&workspace_path, &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.agent_type, "Plan");
+        assert_eq!(metadata.turn_count, 1);
+    }
+
+    #[tokio::test]
     async fn save_dialog_turn_updates_metadata_without_scanning_unrelated_turn_files() {
         let workspace = TestWorkspace::new();
         let manager =
@@ -3511,6 +3762,158 @@ mod tests {
             .expect("metadata should exist");
         assert_eq!(metadata.turn_count, 2);
         assert_eq!(metadata.message_count, 5);
+    }
+
+    #[tokio::test]
+    async fn turn_deletion_waits_for_the_session_metadata_transaction() {
+        let workspace = TestWorkspace::new();
+        let manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Transactional deletion".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+        let mut turn = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            session_id.clone(),
+            user_message("turn to delete"),
+        );
+        turn.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let metadata_lock = manager
+            .get_session_persistence_lock(workspace.path(), &session_id)
+            .await;
+        let metadata_guard = metadata_lock.lock().await;
+        let turn_path = manager.turn_path(workspace.path(), &session_id, 0);
+        let delete_task = tokio::spawn({
+            let manager = manager.clone();
+            let workspace_path = workspace.path().to_path_buf();
+            let session_id = session_id.clone();
+            async move {
+                manager
+                    .delete_turns_from(&workspace_path, &session_id, 0)
+                    .await
+            }
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(
+            turn_path.exists(),
+            "turn files must not change before the metadata transaction is acquired"
+        );
+        assert!(!delete_task.is_finished());
+        drop(metadata_guard);
+
+        assert_eq!(
+            delete_task
+                .await
+                .expect("delete task should join")
+                .expect("delete should succeed"),
+            1
+        );
+        assert!(!turn_path.exists());
+        let metadata = manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.turn_count, 0);
+    }
+
+    #[tokio::test]
+    async fn whole_session_deletion_waits_for_the_persistence_transaction() {
+        let workspace = TestWorkspace::new();
+        let manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Transactional session deletion".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let persistence_lock = manager
+            .get_session_persistence_lock(workspace.path(), &session_id)
+            .await;
+        let persistence_guard = persistence_lock.lock().await;
+        let session_dir = manager
+            .session_layout(workspace.path())
+            .session_dir(&session_id);
+        let delete_task = tokio::spawn({
+            let manager = manager.clone();
+            let workspace_path = workspace.path().to_path_buf();
+            let session_id = session_id.clone();
+            async move { manager.delete_session(&workspace_path, &session_id).await }
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(session_dir.exists());
+        assert!(!delete_task.is_finished());
+        drop(persistence_guard);
+
+        delete_task
+            .await
+            .expect("delete task should join")
+            .expect("session delete should succeed");
+        assert!(!session_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn metadata_lock_identity_normalizes_workspace_path_aliases() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Canonical metadata lock".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        std::fs::create_dir_all(workspace.path().join("alias-component"))
+            .expect("alias component should exist");
+        let alias = workspace.path().join("alias-component").join("..");
+        let canonical_lock = manager
+            .get_session_persistence_lock(workspace.path(), &session_id)
+            .await;
+        let alias_lock = manager
+            .get_session_persistence_lock(&alias, &session_id)
+            .await;
+
+        assert!(Arc::ptr_eq(&canonical_lock, &alias_lock));
     }
 
     #[tokio::test]

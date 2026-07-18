@@ -417,6 +417,9 @@ impl ChatMode {
         } = context;
         match reason {
             ChatExitReason::SwitchSession(new_session_id) => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    pending.exit_warning_shown = false;
+                }
                 match this.switch_to_session(
                     &new_session_id,
                     session_id,
@@ -432,6 +435,9 @@ impl ChatMode {
                 }
             }
             ChatExitReason::NewSession => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    pending.exit_warning_shown = false;
+                }
                 match this.create_new_session(session_id, chat_state, chat_view, rt_handle) {
                     Ok(()) => tracing::info!("Created new session: {}", session_id),
                     Err(e) => {
@@ -441,9 +447,19 @@ impl ChatMode {
                     }
                 }
             }
-            other => {
+            ChatExitReason::Quit => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    if !pending.exit_warning_shown {
+                        pending.exit_warning_shown = true;
+                        chat_view.set_status(Some(
+                            "Exit requested. Waiting for the agent mode change to finish; exit again to leave now. This mode change may not be saved, and the next restore will use the last successfully persisted mode."
+                                .to_string(),
+                        ));
+                        return;
+                    }
+                }
                 *should_quit = true;
-                *exit_reason = other;
+                *exit_reason = ChatExitReason::Quit;
             }
         }
     }

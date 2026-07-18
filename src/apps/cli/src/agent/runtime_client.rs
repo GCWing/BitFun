@@ -12,10 +12,10 @@ use tokio::sync::Mutex;
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRestoreRequest, AgentSessionUsageRequest,
-    AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, AgentUserAnswersRequest, PortErrorKind, RuntimeError,
-    SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRestoreRequest,
+    AgentSessionUsageRequest, AgentToolConfirmationRequest, AgentToolRejectionRequest,
+    AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    PortErrorKind, RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_runtime_ports::{AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy};
@@ -39,6 +39,31 @@ fn validated_session_summary(
                 workspace_path.display()
             )
         })
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SessionModeMigrationNotice {
+    pub(crate) previous_mode_id: String,
+    pub(crate) restored_mode_id: String,
+}
+
+impl SessionModeMigrationNotice {
+    pub(crate) fn user_message(&self) -> String {
+        format!(
+            "Session mode \"{}\" is unavailable. This session was restored with \"{}\". Review the mode before continuing.",
+            self.previous_mode_id, self.restored_mode_id
+        )
+    }
+}
+
+fn session_mode_migration_notice(
+    previous: &AgentSessionSummary,
+    restored: &AgentSessionSummary,
+) -> Option<SessionModeMigrationNotice> {
+    (previous.agent_type != restored.agent_type).then(|| SessionModeMigrationNotice {
+        previous_mode_id: previous.agent_type.clone(),
+        restored_mode_id: restored.agent_type.clone(),
+    })
 }
 
 /// CLI-owned client for the portable Agent Runtime SDK.
@@ -109,14 +134,19 @@ impl CliAgentRuntimeClient {
     pub(crate) async fn restore_session_in_current_workspace(
         &self,
         session_id: &str,
-    ) -> Result<(AgentSessionSummary, PathBuf)> {
+    ) -> Result<(
+        AgentSessionSummary,
+        PathBuf,
+        Option<SessionModeMigrationNotice>,
+    )> {
         tracing::info!("Restoring session: {}", session_id);
 
         let effective_workspace = self.current_workspace_path();
         let sessions = self
             .list_sessions_in_workspace(&effective_workspace)
             .await?;
-        validated_session_summary(&sessions, session_id, &effective_workspace)?;
+        let previous_summary =
+            validated_session_summary(&sessions, session_id, &effective_workspace)?;
 
         let restored = self
             .runtime
@@ -139,7 +169,8 @@ impl CliAgentRuntimeClient {
         *session_id_guard = Some(session_id.to_string());
         *turn_id_guard = None;
 
-        Ok((restored.session, effective_workspace))
+        let migration_notice = session_mode_migration_notice(&previous_summary, &restored.session);
+        Ok((restored.session, effective_workspace, migration_notice))
     }
 
     pub(crate) async fn delete_session(&self, session_id: &str) -> Result<()> {
@@ -173,6 +204,16 @@ impl CliAgentRuntimeClient {
             .update_session_model(AgentSessionModelUpdateRequest {
                 session_id: session_id.to_string(),
                 model_id: model_id.to_string(),
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    }
+
+    pub(crate) async fn update_session_mode(&self, session_id: &str, mode_id: &str) -> Result<()> {
+        self.runtime
+            .update_session_mode(AgentSessionModeUpdateRequest {
+                session_id: session_id.to_string(),
+                mode_id: mode_id.to_string(),
             })
             .await
             .map_err(|error| anyhow::anyhow!(error.into_message()))
@@ -552,7 +593,7 @@ mod tests {
 
     use bitfun_runtime_ports::AgentSessionSummary;
 
-    use super::validated_session_summary;
+    use super::{session_mode_migration_notice, validated_session_summary};
 
     #[test]
     fn model_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
@@ -560,6 +601,20 @@ mod tests {
         let runtime_update = ["self.runtime", "\n            .update_session_model"].concat();
         let compatibility_update =
             ["self.compatibility", "\n            .update_session_model"].concat();
+
+        assert!(source.contains(&runtime_update));
+        assert!(!source.contains(&compatibility_update));
+    }
+
+    #[test]
+    fn mode_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let runtime_update = ["self.runtime", "\n            .update_session_mode"].concat();
+        let compatibility_update = [
+            "self.compatibility",
+            "\n            .update_session_agent_type",
+        ]
+        .concat();
 
         assert!(source.contains(&runtime_update));
         assert!(!source.contains(&compatibility_update));
@@ -604,5 +659,27 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("session-from-another-workspace"));
         assert!(message.contains("D:/workspace/current"));
+    }
+
+    #[test]
+    fn restore_reports_a_cli_local_notice_when_core_migrates_the_mode() {
+        let previous = AgentSessionSummary {
+            agent_type: "removed-mode".to_string(),
+            ..session_summary("mode-migration")
+        };
+        let restored = session_summary("mode-migration");
+
+        let notice = session_mode_migration_notice(&previous, &restored)
+            .expect("changed mode should be reported to the TUI");
+
+        assert_eq!(notice.previous_mode_id, "removed-mode");
+        assert_eq!(notice.restored_mode_id, "agentic");
+    }
+
+    #[test]
+    fn restore_does_not_report_a_notice_when_the_mode_is_unchanged() {
+        let summary = session_summary("unchanged-mode");
+
+        assert!(session_mode_migration_notice(&summary, &summary).is_none());
     }
 }

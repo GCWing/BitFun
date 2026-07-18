@@ -30,7 +30,7 @@ use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::{SessionBranchRequest, SessionBranchResult};
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
 use crate::agentic::session::CoreSessionStorePort;
-use crate::service::session::{DialogTurnData, SessionMetadata};
+use crate::service::session::{DialogTurnData, SessionMetadata, SessionStatus};
 use crate::service::session_usage::{
     generate_session_usage_report, SessionUsageReport, SessionUsageReportRequest,
 };
@@ -432,6 +432,17 @@ impl CoreAgentRuntimeCompatibility {
         Ok(CoreSessionMaintenancePermit { _permit: permit })
     }
 
+    /// Compatibility-only lifecycle operation for ACP setup compensation and
+    /// session/close. It releases loaded Core state but preserves persistence
+    /// and the storage binding so the same session can be restored later.
+    pub async fn unload_persisted_session(&self, session_id: &str) -> BitFunResult<bool> {
+        validate_persisted_session_id(session_id)?;
+        self.coordinator
+            .get_session_manager()
+            .unload_session_from_memory(session_id)
+            .await
+    }
+
     pub async fn cancel_background_subagents_for_parent(
         &self,
         parent_session_id: &str,
@@ -516,25 +527,16 @@ impl CoreAgentRuntimeCompatibility {
         }
     }
 
-    pub async fn load_persisted_session_metadata(
+    pub async fn archive_persisted_session(
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<SessionMetadata>> {
+    ) -> BitFunResult<()> {
         validate_persisted_session_id(session_id)?;
         self.persistence
-            .load_session_metadata(workspace_path, session_id)
-            .await
-    }
-
-    pub async fn save_persisted_session_metadata(
-        &self,
-        workspace_path: &Path,
-        metadata: &SessionMetadata,
-    ) -> BitFunResult<()> {
-        validate_persisted_session_id(&metadata.session_id)?;
-        self.persistence
-            .save_session_metadata(workspace_path, metadata)
+            .update_session_metadata(workspace_path, session_id, |metadata| {
+                metadata.status = SessionStatus::Archived;
+            })
             .await
     }
 
@@ -669,6 +671,7 @@ fn runtime_port_error(error: BitFunError) -> PortError {
         BitFunError::NotFound(_) => PortErrorKind::NotFound,
         BitFunError::Timeout(_) => PortErrorKind::Timeout,
         BitFunError::Cancelled(_) => PortErrorKind::Cancelled,
+        BitFunError::SessionCreateCleanupRequired { .. } => PortErrorKind::CleanupRequired,
         _ => PortErrorKind::Backend,
     };
     PortError::new(kind, error.to_string())
@@ -752,11 +755,12 @@ mod tests {
     use bitfun_runtime_services::RuntimeServices;
 
     use super::{
-        validate_local_session_fork_request, validate_persisted_session_id,
+        runtime_port_error, validate_local_session_fork_request, validate_persisted_session_id,
         CoreAgentRuntimeCompatibility, CoreProductAgentRuntime,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::service::token_usage::TokenUsageService;
+    use crate::util::errors::BitFunError;
     use bitfun_agent_runtime::sdk::{AgentSessionForkRequest, PortErrorKind};
 
     #[test]
@@ -799,6 +803,7 @@ mod tests {
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
         let _ = CoreAgentRuntimeCompatibility::update_session_agent_type;
+        let _ = CoreAgentRuntimeCompatibility::unload_persisted_session;
     }
 
     #[test]
@@ -807,6 +812,18 @@ mod tests {
             .expect_err("compatibility boundary must reject path-like session ids");
 
         assert!(error.to_string().contains("session_id"), "{error}");
+    }
+
+    #[test]
+    fn session_create_rollback_residual_remains_typed_across_the_runtime_port() {
+        let error = runtime_port_error(BitFunError::SessionCreateCleanupRequired {
+            session_id: "session-1".to_string(),
+            error: "metadata write failed".to_string(),
+            cleanup_error: "session directory is locked".to_string(),
+        });
+
+        assert_eq!(error.kind, PortErrorKind::CleanupRequired);
+        assert!(error.message.contains("session-1"), "{error}");
     }
 
     #[test]

@@ -3985,6 +3985,48 @@ export class FlowChatStore {
       let restoredLoadedTurnCount: number | undefined;
       let restoredTotalTurnCount: number | undefined;
       let restoredTiming: SessionViewRestoreTiming | undefined;
+
+      // Finish or resume relay history import before Core restores its model
+      // context. Ordinary local sessions return after one metadata read, while
+      // an incomplete relay import fails closed instead of publishing a
+      // truncated UI/Core history pair.
+      if (!remote && workspacePath) {
+        const relayImportStartedAt = nowMs();
+        startupTrace.markPhase('historical_session_relay_import_start', {
+          remote,
+          sessionId,
+          sessionTraceId,
+        });
+        try {
+          const { remoteConnectAPI } = await import(
+            '@/infrastructure/api/service-api/RemoteConnectAPI'
+          );
+          const fetched = await remoteConnectAPI.accountFetchSessionTurns(
+            sessionId,
+            workspacePath
+          );
+          startupTrace.markPhase('historical_session_relay_import_end', {
+            remote,
+            sessionId,
+            sessionTraceId,
+            fetched,
+            durationMs: elapsedMs(relayImportStartedAt),
+          });
+        } catch (fetchErr) {
+          startupTrace.markPhase('historical_session_relay_import_failed', {
+            remote,
+            sessionId,
+            sessionTraceId,
+            durationMs: elapsedMs(relayImportStartedAt),
+          });
+          log.warn('Relay session history is incomplete; retry opening the session', {
+            sessionId,
+            error: fetchErr,
+          });
+          throw fetchErr;
+        }
+      }
+
       const stateMachineManagerPromise = import('../state-machine');
       if (!isAcpSession) {
         const restoreStartedAt = nowMs();
@@ -4138,36 +4180,6 @@ export class FlowChatStore {
           remoteConnectionId,
           remoteSshHost
         );
-        // Cloud-imported sessions may only have metadata locally; lazy-fetch turns.
-        if (
-          !remote &&
-          (!Array.isArray(turns) || turns.length === 0) &&
-          workspacePath
-        ) {
-          try {
-            const { remoteConnectAPI } = await import(
-              '@/infrastructure/api/service-api/RemoteConnectAPI'
-            );
-            const fetched = await remoteConnectAPI.accountFetchSessionTurns(
-              sessionId,
-              workspacePath
-            );
-            if (fetched) {
-              turns = await sessionAPI.loadSessionTurns(
-                sessionId,
-                workspacePath,
-                limit,
-                remoteConnectionId,
-                remoteSshHost
-              );
-            }
-          } catch (fetchErr) {
-            log.warn('accountFetchSessionTurns failed during hydrate', {
-              sessionId,
-              error: fetchErr,
-            });
-          }
-        }
         startupTrace.markPhase('historical_session_turns_load_end', {
           remote,
           sessionId,

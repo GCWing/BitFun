@@ -7,7 +7,6 @@ use serde_json::{json, Value};
 
 use bitfun_core::agentic::core::{Session, SessionConfig};
 use bitfun_core::agentic::get_agent_registry;
-use bitfun_core::service::session::SessionStatus;
 use bitfun_runtime_ports::{
     AgentSessionDeleteRequest, AgentSessionModelUpdateRequest, SessionStoragePathRequest,
 };
@@ -300,16 +299,9 @@ pub(crate) async fn archive_session(state: &PeerHostState, args: &Value) -> Resu
         .begin_persisted_session_mutation(&workspace_path, &session_id)
         .await
         .map_err(|error| format!("Failed to lock session archive: {error}"))?;
-    let mut metadata = state
-        .compatibility
-        .load_persisted_session_metadata(&workspace_path, &session_id)
-        .await
-        .map_err(|e| format!("Failed to load session metadata: {e}"))?
-        .ok_or_else(|| "Session not found".to_string())?;
-    metadata.status = SessionStatus::Archived;
     state
         .compatibility
-        .save_persisted_session_metadata(&workspace_path, &metadata)
+        .archive_persisted_session(&workspace_path, &session_id)
         .await
         .map_err(|e| format!("Failed to archive session: {e}"))?;
     Ok(Value::Null)
