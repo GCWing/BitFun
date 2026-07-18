@@ -218,6 +218,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("check_path_exists", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "choose_external_mcp_conflict_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "choose_external_subagent_conflict_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
@@ -1355,6 +1359,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("set_config", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "set_external_mcp_server_decision_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     (
         "set_external_source_conflict_choice_command",
         RemoteWorkspacePolicy::RemoteUnsupported,

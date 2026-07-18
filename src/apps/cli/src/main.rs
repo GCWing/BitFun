@@ -536,6 +536,7 @@ async fn initialize_core_services(
                 Ok(mcp_service) => {
                     let mcp_service = std::sync::Arc::new(mcp_service);
                     MCP_SERVICE.set(mcp_service.clone()).ok();
+                    bitfun_core::service::mcp::set_global_mcp_service(mcp_service.clone());
 
                     // Mark as in progress
                     get_mcp_init_status().store(1, Ordering::Relaxed);

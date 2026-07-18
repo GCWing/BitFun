@@ -31,6 +31,7 @@ pub struct MCPServerProcess {
     last_ping_time: Arc<RwLock<Option<Instant>>>,
     last_error_message: Arc<RwLock<Option<String>>>,
     message_rx: Option<mpsc::UnboundedReceiver<MCPMessage>>,
+    remote_url: Option<String>,
     #[cfg(test)]
     fail_next_stop: bool,
 }
@@ -53,6 +54,7 @@ impl MCPServerProcess {
             last_ping_time: Arc::new(RwLock::new(None)),
             last_error_message: Arc::new(RwLock::new(None)),
             message_rx: None,
+            remote_url: None,
             #[cfg(test)]
             fail_next_stop: false,
         }
@@ -69,6 +71,29 @@ impl MCPServerProcess {
         command: &str,
         args: &[String],
         env: &std::collections::HashMap<String, String>,
+    ) -> MCPRuntimeResult<()> {
+        self.start_in_directory(command, args, env, None).await
+    }
+
+    /// Starts the server process in an explicitly selected working directory.
+    pub async fn start_in_directory(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+    ) -> MCPRuntimeResult<()> {
+        self.start_with_environment_policy(command, args, env, working_directory, true)
+            .await
+    }
+
+    pub async fn start_with_environment_policy(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+        inherit_parent_environment: bool,
     ) -> MCPRuntimeResult<()> {
         info!("Starting MCP server: name={} id={}", self.name, self.id);
         self.set_status(MCPServerStatus::Starting).await;
@@ -95,7 +120,18 @@ impl MCPServerProcess {
 
         let mut cmd = process_manager::create_tokio_command(&final_command);
         cmd.args(&final_args);
+        if !inherit_parent_environment {
+            cmd.env_clear();
+            for key in safe_process_environment_keys() {
+                if let Some(value) = std::env::var_os(key) {
+                    cmd.env(key, value);
+                }
+            }
+        }
         cmd.envs(env);
+        if let Some(working_directory) = working_directory {
+            cmd.current_dir(working_directory);
+        }
         cmd.stdin(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
@@ -183,13 +219,13 @@ impl MCPServerProcess {
             )));
         }
         info!(
-            "Starting remote MCP server: name={} id={} transport={} url={}",
+            "Starting remote MCP server: name={} id={} transport={}",
             self.name,
             self.id,
-            transport.as_str(),
-            url
+            transport.as_str()
         );
         self.set_status(MCPServerStatus::Starting).await;
+        self.remote_url = Some(url.to_string());
 
         let merged_headers = merge_mcp_remote_headers(&config.headers, &config.env);
 
@@ -199,30 +235,37 @@ impl MCPServerProcess {
                 &self.id,
                 url.to_string(),
                 merged_headers,
-                true,
+                config.remote_oauth_enabled(),
             )
-            .await?,
+            .await
+            .map_err(|error| {
+                MCPRuntimeError::mcp(redact_sensitive_value(&error.to_string(), Some(url)))
+            })?,
         );
         self.connection = Some(connection.clone());
         self.start_time = Some(Instant::now());
 
         if let Err(e) = self.handshake().await {
+            let redacted_error = redact_sensitive_value(&e.to_string(), Some(url));
             error!(
-                "Remote MCP server handshake failed: name={} id={} url={} error={}",
-                self.name, self.id, url, e
+                "Remote MCP server handshake failed: name={} id={} error={}",
+                self.name, self.id, redacted_error
             );
             self.connection = None;
             self.message_rx = None;
             self.child = None;
             self.server_info = None;
-            if is_mcp_auth_error_message(&e.to_string()) {
-                self.set_status_with_error(MCPServerStatus::NeedsAuth, Some(e.to_string()))
-                    .await;
+            if is_mcp_auth_error_message(&redacted_error) {
+                self.set_status_with_error(
+                    MCPServerStatus::NeedsAuth,
+                    Some(redacted_error.clone()),
+                )
+                .await;
             } else {
-                self.set_status_with_error(MCPServerStatus::Failed, Some(e.to_string()))
+                self.set_status_with_error(MCPServerStatus::Failed, Some(redacted_error.clone()))
                     .await;
             }
-            return Err(e);
+            return Err(MCPRuntimeError::mcp(redacted_error));
         }
 
         self.set_status_with_error(MCPServerStatus::Connected, None)
@@ -307,6 +350,28 @@ impl MCPServerProcess {
         args: &[String],
         env: &std::collections::HashMap<String, String>,
     ) -> MCPRuntimeResult<()> {
+        self.restart_in_directory(command, args, env, None).await
+    }
+
+    pub async fn restart_in_directory(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+    ) -> MCPRuntimeResult<()> {
+        self.restart_with_environment_policy(command, args, env, working_directory, true)
+            .await
+    }
+
+    pub async fn restart_with_environment_policy(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+        inherit_parent_environment: bool,
+    ) -> MCPRuntimeResult<()> {
         if self.restart_count >= self.max_restarts {
             error!(
                 "Max restart attempts reached: name={} id={} max_restarts={}",
@@ -334,7 +399,14 @@ impl MCPServerProcess {
 
         self.stop().await?;
         tokio::time::sleep(Duration::from_secs(1)).await;
-        self.start(command, args, env).await
+        self.start_with_environment_policy(
+            command,
+            args,
+            env,
+            working_directory,
+            inherit_parent_environment,
+        )
+        .await
     }
 
     /// Sets status.
@@ -377,6 +449,7 @@ impl MCPServerProcess {
         let connection = self.connection.clone();
         let interval = self.health_check_interval;
         let server_name = self.name.clone();
+        let remote_url = self.remote_url.clone();
 
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
@@ -404,16 +477,18 @@ impl MCPServerProcess {
                             *last_error_message.write().await = None;
                         }
                         Err(e) => {
+                            let redacted_error =
+                                redact_sensitive_value(&e.to_string(), remote_url.as_deref());
                             warn!(
                                 "Health check failed: server_name={} error={}",
-                                server_name, e
+                                server_name, redacted_error
                             );
-                            if is_mcp_auth_error_message(&e.to_string()) {
+                            if is_mcp_auth_error_message(&redacted_error) {
                                 *status.write().await = MCPServerStatus::NeedsAuth;
                             } else {
                                 *status.write().await = MCPServerStatus::Reconnecting;
                             }
-                            *last_error_message.write().await = Some(e.to_string());
+                            *last_error_message.write().await = Some(redacted_error);
                         }
                     }
                 } else {
@@ -442,6 +517,59 @@ impl MCPServerProcess {
     pub fn uptime(&self) -> Option<Duration> {
         self.start_time.map(|t| t.elapsed())
     }
+}
+
+#[cfg(windows)]
+fn safe_process_environment_keys() -> &'static [&'static str] {
+    &[
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "PATH",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+    ]
+}
+
+fn redact_sensitive_value(message: &str, sensitive_value: Option<&str>) -> String {
+    sensitive_value
+        .filter(|value| !value.is_empty())
+        .map(|value| message.replace(value, "<redacted-url>"))
+        .unwrap_or_else(|| message.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{redact_sensitive_value, safe_process_environment_keys};
+
+    #[test]
+    fn isolated_environment_excludes_common_secret_variables() {
+        let keys = safe_process_environment_keys();
+        assert!(!keys.contains(&"OPENAI_API_KEY"));
+        assert!(!keys.contains(&"ANTHROPIC_API_KEY"));
+        assert!(keys.contains(&"PATH"));
+    }
+
+    #[test]
+    fn remote_errors_do_not_expose_the_configured_url() {
+        let url = "https://mcp.example.test/path?token=secret";
+        let error = format!("request to {url} failed");
+        let redacted = redact_sensitive_value(&error, Some(url));
+
+        assert!(!redacted.contains("secret"));
+        assert!(redacted.contains("<redacted-url>"));
+    }
+}
+
+#[cfg(not(windows))]
+fn safe_process_environment_keys() -> &'static [&'static str] {
+    &[
+        "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "SHELL",
+    ]
 }
 
 impl Drop for MCPServerProcess {

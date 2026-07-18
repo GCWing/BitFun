@@ -1886,7 +1886,7 @@ async fn local_candidate(tool: &Arc<dyn Tool>) -> ExternalToolConflictCandidate 
     }
 }
 
-fn workspace_route_key(workspace_root: Option<&Path>) -> String {
+pub(crate) fn workspace_route_key(workspace_root: Option<&Path>) -> String {
     workspace_root
         .map(|path| {
             dunce::canonicalize(path)

@@ -4,9 +4,14 @@
 //! branches on ecosystem identity. Concrete provider selection remains in the
 //! product composition root.
 
+mod mcp;
 mod subagent;
 mod tool;
 
+pub use mcp::{
+    ExternalMcpCoordinator, ExternalMcpCoordinatorSnapshot, ExternalMcpDiscoveryRequest,
+    ExternalMcpDiscoveryResult,
+};
 pub use subagent::{
     ExternalSubagentCoordinator, ExternalSubagentCoordinatorSnapshot,
     ExternalSubagentDiscoveryRequest, ExternalSubagentDiscoveryResult,
@@ -157,6 +162,10 @@ impl ExternalSourceCoordinator {
                 tools: Vec::new(),
                 tool_approval_requests: Vec::new(),
                 tool_conflicts: Vec::new(),
+                mcp_generation: 0,
+                mcp_servers: Vec::new(),
+                mcp_approval_requests: Vec::new(),
+                mcp_conflicts: Vec::new(),
                 subagent_generation: 0,
                 preference_revision: 0,
                 subagents: Vec::new(),
@@ -651,6 +660,10 @@ impl ExternalSourceCoordinator {
             tools: Vec::new(),
             tool_approval_requests: Vec::new(),
             tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
             subagent_generation: 0,
             preference_revision: 0,
             subagents: Vec::new(),

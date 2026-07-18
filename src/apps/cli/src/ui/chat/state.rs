@@ -185,7 +185,7 @@ pub(crate) struct ChatView {
     theme_preview_original: Option<Theme>,
 
     /// Pending MCP toggle from mouse click (consumed by caller)
-    pending_mcp_toggle: Option<String>,
+    pending_mcp_toggle: Option<McpItem>,
     /// Pending skill selector action from mouse click (consumed by caller)
     pending_skill_action: Option<SkillSelectorAction>,
     /// Pending Agent entry action from mouse click (consumed by caller)

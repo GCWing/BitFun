@@ -21,12 +21,71 @@ use bitfun_services_integrations::mcp::adapter::{
 };
 use log::{debug, error, info, warn};
 use serde_json::Value;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use std::sync::RwLock;
 
 const MCP_TOOL_DEFAULT_EXPOSURE: ToolExposure = ToolExposure::Deferred;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MCPWorkspaceToolRoute {
+    pub active_external_server_ids: BTreeSet<String>,
+    pub suppressed_native_server_ids: BTreeSet<String>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct MCPToolContextPolicy {
+    routes: RwLock<HashMap<String, MCPWorkspaceToolRoute>>,
+}
+
+impl MCPToolContextPolicy {
+    pub(crate) fn replace_route(&self, workspace_key: String, route: MCPWorkspaceToolRoute) {
+        let mut routes = self.routes.write().expect("MCP route lock poisoned");
+        if route == MCPWorkspaceToolRoute::default() {
+            routes.remove(&workspace_key);
+        } else {
+            routes.insert(workspace_key, route);
+        }
+    }
+
+    pub(crate) fn server_available_for_route(
+        &self,
+        server_id: &str,
+        external_workspace_scope: Option<&str>,
+        workspace_key: Option<&str>,
+        remote: bool,
+    ) -> bool {
+        if let Some(expected_workspace) = external_workspace_scope {
+            if remote || workspace_key != Some(expected_workspace) {
+                return false;
+            }
+            return self
+                .routes
+                .read()
+                .expect("MCP route lock poisoned")
+                .get(expected_workspace)
+                .is_some_and(|route| route.active_external_server_ids.contains(server_id));
+        }
+        if remote {
+            return true;
+        }
+        let Some(workspace_key) = workspace_key else {
+            return true;
+        };
+        !self
+            .routes
+            .read()
+            .expect("MCP route lock poisoned")
+            .get(workspace_key)
+            .is_some_and(|route| route.suppressed_native_server_ids.contains(server_id))
+    }
+}
+
 /// MCP tool wrapper that adapts an MCP tool to BitFun's `Tool`.
 struct MCPToolWrapper {
+    server_id: String,
+    external_workspace_scope: Option<String>,
+    context_policy: Arc<MCPToolContextPolicy>,
     mcp_tool: MCPTool,
     connection: Arc<MCPConnection>,
     descriptor: McpDynamicToolDescriptor,
@@ -34,11 +93,17 @@ struct MCPToolWrapper {
 
 impl MCPToolWrapper {
     fn from_descriptor(
+        server_id: String,
+        external_workspace_scope: Option<String>,
+        context_policy: Arc<MCPToolContextPolicy>,
         mcp_tool: MCPTool,
         connection: Arc<MCPConnection>,
         descriptor: McpDynamicToolDescriptor,
     ) -> Self {
         Self {
+            server_id,
+            external_workspace_scope,
+            context_policy,
             mcp_tool,
             connection,
             descriptor,
@@ -49,8 +114,16 @@ impl MCPToolWrapper {
         self.descriptor.title.clone()
     }
 
-    fn is_blocked_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
-        false
+    fn is_blocked_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        let workspace_key = crate::external_tools::workspace_route_key(
+            context.and_then(ToolUseContext::workspace_root),
+        );
+        !self.context_policy.server_available_for_route(
+            &self.server_id,
+            self.external_workspace_scope.as_deref(),
+            Some(&workspace_key),
+            context.is_some_and(ToolUseContext::is_remote),
+        )
     }
 
     // Do not pre-truncate MCP output here. The shared tool-result storage policy
@@ -174,7 +247,12 @@ impl Tool for MCPToolWrapper {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let _ = context;
+        if self.is_blocked_in_context(Some(context)) {
+            return Err(crate::util::errors::BitFunError::tool(format!(
+                "MCP server '{}' is unavailable in the current workspace",
+                self.descriptor.tool_info.server_name
+            )));
+        }
 
         info!(
             "Calling MCP tool: {} from server: {}",
@@ -218,11 +296,13 @@ impl MCPToolAdapter {
     }
 
     /// Loads tools from an MCP server.
-    pub async fn load_tools_from_server(
+    pub(crate) async fn load_tools_from_server(
         &mut self,
         server_id: &str,
         server_name: &str,
         connection: Arc<MCPConnection>,
+        external_workspace_scope: Option<String>,
+        context_policy: Arc<MCPToolContextPolicy>,
     ) -> BitFunResult<()> {
         info!(
             "Loading tools from MCP server: {} (id={})",
@@ -251,6 +331,9 @@ impl MCPToolAdapter {
 
         for definition in definitions.into_iter() {
             let wrapper = Arc::new(MCPToolWrapper::from_descriptor(
+                server_id.to_string(),
+                external_workspace_scope.clone(),
+                Arc::clone(&context_policy),
                 definition.mcp_tool,
                 connection.clone(),
                 definition.descriptor,
@@ -284,7 +367,44 @@ impl Default for MCPToolAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{ToolExposure, MCP_TOOL_DEFAULT_EXPOSURE};
+    use super::{
+        MCPToolContextPolicy, MCPWorkspaceToolRoute, ToolExposure, MCP_TOOL_DEFAULT_EXPOSURE,
+    };
+
+    #[test]
+    fn external_mcp_routes_are_workspace_scoped_and_remote_fail_closed() {
+        let policy = MCPToolContextPolicy::default();
+        policy.replace_route(
+            "workspace-a".to_string(),
+            MCPWorkspaceToolRoute {
+                active_external_server_ids: ["external-a".to_string()].into_iter().collect(),
+                suppressed_native_server_ids: ["native".to_string()].into_iter().collect(),
+            },
+        );
+
+        assert!(policy.server_available_for_route(
+            "external-a",
+            Some("workspace-a"),
+            Some("workspace-a"),
+            false,
+        ));
+        assert!(!policy.server_available_for_route(
+            "external-a",
+            Some("workspace-a"),
+            Some("workspace-b"),
+            false,
+        ));
+        assert!(!policy.server_available_for_route("external-a", Some("workspace-a"), None, false,));
+        assert!(!policy.server_available_for_route(
+            "external-a",
+            Some("workspace-a"),
+            Some("workspace-a"),
+            true,
+        ));
+        assert!(!policy.server_available_for_route("native", None, Some("workspace-a"), false,));
+        assert!(policy.server_available_for_route("native", None, Some("workspace-b"), false,));
+        assert!(policy.server_available_for_route("native", None, Some("workspace-a"), true,));
+    }
 
     #[test]
     fn mcp_tool_wrapper_defaults_to_deferred_exposure() {

@@ -1,12 +1,17 @@
 use bitfun_product_domains::external_sources::{
-    external_tool_approval_key, external_tool_conflict_key, prompt_command_conflict_key,
-    EcosystemId, ExecutionDomainId, ExpandedPromptCommand, ExternalSourceAssetKind,
-    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
+    external_mcp_approval_key, external_mcp_conflict_key, external_tool_approval_key,
+    external_tool_conflict_key, prompt_command_conflict_key, EcosystemId, ExecutionDomainId,
+    ExpandedPromptCommand, ExternalMcpActivationState, ExternalMcpApprovalRequest,
+    ExternalMcpCatalogEntry, ExternalMcpConflict, ExternalMcpConflictCandidate,
+    ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity, ExternalMcpProviderSnapshot,
+    ExternalMcpServerDefinition, ExternalMcpStaticStatus, ExternalMcpTransportKind,
+    ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalToolCapability,
     ExternalToolDefinition, ExternalToolRuntimeKind, ExternalToolStaticStatus, ExternalWatchRoot,
-    PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
-    PromptCommandProviderSnapshot, PromptCommandSourceProvider, SourceKey,
-    SourceQualifiedCommandId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
+    PreparedExternalMcpServer, PreparedExternalMcpTransport, PromptCommandAvailability,
+    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
+    PromptCommandSourceProvider, SecretValue, SourceKey, SourceQualifiedCommandId,
+    SourceQualifiedMcpServerId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
 };
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_candidate_id, external_subagent_conflict_key,
@@ -617,4 +622,227 @@ fn tool_conflict_choice_is_invalidated_when_name_or_candidate_changes() {
 
     assert_ne!(first, reordered);
     assert_ne!(first, updated);
+}
+
+#[test]
+fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
+    let source = source("opencode.mcp", "opencode", "project-config");
+    let definition = ExternalMcpServerDefinition {
+        id: SourceQualifiedMcpServerId::new(source.key.clone(), "github").unwrap(),
+        provenance: vec![source.key.clone()],
+        name: "github".to_string(),
+        transport: ExternalMcpTransportKind::StreamableHttp,
+        command_preview: None,
+        argument_count: 0,
+        working_directory: None,
+        environment_keys: Vec::new(),
+        environment_reference_names: Vec::new(),
+        remote_url_preview: Some("https://mcp.example.com/mcp".to_string()),
+        header_names: vec!["Authorization".to_string()],
+        source_enabled: true,
+        behavior_version: "sha256:behavior-v1".to_string(),
+        static_status: ExternalMcpStaticStatus::Ready,
+    };
+    let provider =
+        ExternalMcpProviderIdentity::new("opencode.mcp", "opencode", "OpenCode MCP servers")
+            .unwrap();
+    let snapshot = ExternalMcpProviderSnapshot {
+        provider,
+        sources: vec![source],
+        servers: vec![definition.clone()],
+        diagnostics: Vec::new(),
+    };
+
+    snapshot.validate().expect("valid MCP provider snapshot");
+    let encoded = serde_json::to_string(&snapshot).expect("serialize MCP snapshot");
+    assert!(encoded.contains("Authorization"));
+    assert!(!encoded.contains("Bearer secret"));
+    assert!(encoded.contains("mcp.example.com"));
+
+    let prepared = PreparedExternalMcpServer {
+        id: definition.id,
+        behavior_version: definition.behavior_version,
+        transport: PreparedExternalMcpTransport::Remote {
+            url: "https://mcp.example.com/mcp?token=url-secret".to_string(),
+            headers: [(
+                "Authorization".to_string(),
+                SecretValue::new("Bearer secret"),
+            )]
+            .into_iter()
+            .collect(),
+            oauth_enabled: true,
+        },
+    };
+    assert_eq!(
+        prepared.transport.remote_headers().unwrap()["Authorization"].expose(),
+        "Bearer secret"
+    );
+    assert!(!format!("{prepared:?}").contains("Bearer secret"));
+    assert!(!format!("{prepared:?}").contains("url-secret"));
+}
+
+#[test]
+fn external_mcp_snapshot_rejects_cross_provider_and_duplicate_servers() {
+    let provider =
+        ExternalMcpProviderIdentity::new("opencode.mcp", "opencode", "OpenCode MCP").unwrap();
+    let source = source("opencode.mcp", "opencode", "project-config");
+    let definition = ExternalMcpServerDefinition {
+        id: SourceQualifiedMcpServerId::new(source.key.clone(), "github").unwrap(),
+        provenance: vec![source.key.clone()],
+        name: "github".to_string(),
+        transport: ExternalMcpTransportKind::LocalStdio,
+        command_preview: Some("npx".to_string()),
+        argument_count: 2,
+        working_directory: Some("/workspace".to_string()),
+        environment_keys: vec!["GITHUB_TOKEN".to_string()],
+        environment_reference_names: Vec::new(),
+        remote_url_preview: None,
+        header_names: Vec::new(),
+        source_enabled: true,
+        behavior_version: "sha256:behavior-v1".to_string(),
+        static_status: ExternalMcpStaticStatus::Ready,
+    };
+    let snapshot = ExternalMcpProviderSnapshot {
+        provider,
+        sources: vec![source],
+        servers: vec![definition.clone(), definition],
+        diagnostics: Vec::new(),
+    };
+
+    assert!(snapshot.validate().is_err());
+
+    let input = ExternalMcpDiscoveryInput {
+        context: context(),
+        suppressed_sources: [SourceKey::new("opencode.mcp", "suppressed").unwrap()]
+            .into_iter()
+            .collect(),
+    };
+    assert_eq!(input.suppressed_sources.len(), 1);
+}
+
+#[test]
+fn external_mcp_decisions_change_only_with_behavior_domain_or_conflict_participants() {
+    let id = SourceQualifiedMcpServerId::new(
+        SourceKey::new("opencode.mcp", "project-config").unwrap(),
+        "github",
+    )
+    .unwrap();
+    let first = external_mcp_approval_key("local-user", "/workspace-a", &id, "behavior-v1");
+    let same = external_mcp_approval_key("local-user", "/workspace-a", &id, "behavior-v1");
+    let updated = external_mcp_approval_key("local-user", "/workspace-a", &id, "behavior-v2");
+    let other_workspace =
+        external_mcp_approval_key("local-user", "/workspace-b", &id, "behavior-v1");
+    let remote = external_mcp_approval_key("remote-user", "/workspace-a", &id, "behavior-v1");
+    assert_eq!(first, same);
+    assert_ne!(first, updated);
+    assert_ne!(first, other_workspace);
+    assert_ne!(first, remote);
+
+    let stable_id = id.stable_key();
+    let conflict = external_mcp_conflict_key(
+        "local-user",
+        "/workspace-a",
+        "github",
+        [
+            ("bitfun:github", "native-v1"),
+            (stable_id.as_str(), "behavior-v1"),
+        ],
+    );
+    let reordered = external_mcp_conflict_key(
+        "local-user",
+        "/workspace-a",
+        "GITHUB",
+        [
+            (stable_id.as_str(), "behavior-v1"),
+            ("bitfun:github", "native-v1"),
+        ],
+    );
+    let participant_updated = external_mcp_conflict_key(
+        "local-user",
+        "/workspace-a",
+        "github",
+        [
+            ("bitfun:github", "native-v1"),
+            (stable_id.as_str(), "behavior-v2"),
+        ],
+    );
+    assert_eq!(conflict, reordered);
+    assert_ne!(conflict, participant_updated);
+    assert_ne!(
+        conflict,
+        external_mcp_conflict_key(
+            "local-user",
+            "/workspace-b",
+            "github",
+            [
+                ("bitfun:github", "native-v1"),
+                (stable_id.as_str(), "behavior-v1"),
+            ],
+        )
+    );
+}
+
+#[test]
+fn external_mcp_product_view_is_version_guarded_and_contains_only_disclosed_fields() {
+    let source = source("opencode.mcp", "opencode", "project-config");
+    let definition = ExternalMcpServerDefinition {
+        id: SourceQualifiedMcpServerId::new(source.key.clone(), "github").unwrap(),
+        provenance: vec![source.key],
+        name: "github".to_string(),
+        transport: ExternalMcpTransportKind::LocalStdio,
+        command_preview: Some("npx".to_string()),
+        argument_count: 2,
+        working_directory: Some("<workspace>".to_string()),
+        environment_keys: vec!["GITHUB_TOKEN".to_string()],
+        environment_reference_names: Vec::new(),
+        remote_url_preview: None,
+        header_names: Vec::new(),
+        source_enabled: true,
+        behavior_version: "sha256:behavior-v1".to_string(),
+        static_status: ExternalMcpStaticStatus::Ready,
+    };
+    let entry = ExternalMcpCatalogEntry {
+        candidate_id: definition.candidate_id(),
+        definition: definition.clone(),
+        approval_key: "external_mcp_approval:local-user:v1".to_string(),
+        decision_key: "external_mcp_approval:local-user:v1".to_string(),
+        runtime_id: None,
+        activation_state: ExternalMcpActivationState::ApprovalRequired,
+    };
+    let request = ExternalMcpApprovalRequest {
+        candidate_id: entry.candidate_id.clone(),
+        approval_key: entry.approval_key.clone(),
+        decision_key: entry.decision_key.clone(),
+        definition,
+    };
+    let conflict = ExternalMcpConflict {
+        conflict_key: "external_mcp:local-user:github:v1".to_string(),
+        server_name: "github".to_string(),
+        candidates: vec![
+            ExternalMcpConflictCandidate {
+                candidate_id: "native_mcp:github".to_string(),
+                display_name: "BitFun: github".to_string(),
+                external: false,
+                source: None,
+                behavior_version: "native-v1".to_string(),
+                available: true,
+                unavailable_reason: None,
+            },
+            ExternalMcpConflictCandidate {
+                candidate_id: entry.candidate_id.clone(),
+                display_name: "OpenCode: github".to_string(),
+                external: true,
+                source: Some(entry.definition.id.source.clone()),
+                behavior_version: entry.definition.behavior_version.clone(),
+                available: true,
+                unavailable_reason: None,
+            },
+        ],
+        selected_candidate_id: None,
+    };
+
+    let encoded = serde_json::to_string(&(entry, request, conflict)).unwrap();
+    assert!(encoded.contains("GITHUB_TOKEN"));
+    assert!(!encoded.contains("Bearer secret"));
+    assert!(encoded.contains("approval_required"));
 }

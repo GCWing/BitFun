@@ -857,6 +857,9 @@ export function runManifestParserSelfTest({
   const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
   );
+  const externalSourcePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_sources.rs',
+  );
   const managedPluginActivationPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/assembly/core/src/plugin_runtime.rs',
   );
@@ -969,10 +972,10 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, tool, and subagent providers',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, tool, subagent, and MCP providers',
     );
   }
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
@@ -993,6 +996,25 @@ export function runManifestParserSelfTest({
   }
   if (!publicApiContractSlices.includes('external-source-subagent-contract')) {
     throw new Error('external subagent contracts must have an independent contract slice');
+  }
+  if (!publicApiContractSlices.includes('external-source-mcp-contract')) {
+    throw new Error('external MCP contracts must have an independent contract slice');
+  }
+  for (const requiredSymbol of [
+    'ExternalMcpServerDefinition',
+    'ExternalMcpSourceProvider',
+    'PreparedExternalMcpServer',
+    'external_mcp_approval_key',
+    'external_mcp_conflict_key',
+  ]) {
+    if (!externalSourcePublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-mcp-contract'
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external MCP public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
+    }
   }
   for (const requiredSymbol of [
     'ExternalSubagentDefinition',

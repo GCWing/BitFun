@@ -133,6 +133,8 @@ const ExternalSourcesConfig: React.FC = () => {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [reviewingToolKey, setReviewingToolKey] = useState<string | null>(null);
   const [reviewingAgentKey, setReviewingAgentKey] = useState<string | null>(null);
+  const [reviewingMcpKey, setReviewingMcpKey] = useState<string | null>(null);
+  const [reviewingMcpConflictKey, setReviewingMcpConflictKey] = useState<string | null>(null);
   const [error, setError] = useState<ExternalSourcesError | null>(null);
   const [operationStatus, setOperationStatus] = useState<string | null>(null);
   const [agentChangeNotice, setAgentChangeNotice] = useState<AgentChangeNotice | null>(null);
@@ -285,6 +287,8 @@ const ExternalSourcesConfig: React.FC = () => {
     setBusyKey(null);
     setReviewingToolKey(null);
     setReviewingAgentKey(null);
+    setReviewingMcpKey(null);
+    setReviewingMcpConflictKey(null);
     setLoading(desktopRuntime && !remoteWorkspace);
     void loadSnapshot(false, false);
     if (!desktopRuntime || remoteWorkspace) return undefined;
@@ -348,6 +352,16 @@ const ExternalSourcesConfig: React.FC = () => {
     return counts;
   }, [snapshot]);
 
+  const mcpCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const server of snapshot?.mcpServers ?? []) {
+      const source = server.definition.id.source;
+      const key = `${source.providerId}\u0000${source.sourceId}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [snapshot?.mcpServers]);
+
   const commandConflicts = useMemo(
     () => unresolvedFirst(snapshot?.commandConflicts ?? []),
     [snapshot?.commandConflicts],
@@ -361,6 +375,11 @@ const ExternalSourcesConfig: React.FC = () => {
   const agentConflicts = useMemo(
     () => unresolvedFirst(snapshot?.subagentConflicts ?? []),
     [snapshot?.subagentConflicts],
+  );
+
+  const mcpConflicts = useMemo(
+    () => unresolvedFirst(snapshot?.mcpConflicts ?? []),
+    [snapshot?.mcpConflicts],
   );
 
   const runMutation = useCallback(async (
@@ -496,6 +515,54 @@ const ExternalSourcesConfig: React.FC = () => {
     if (accepted) await loadSnapshot(true, false);
   }, [loadSnapshot, runMutation, snapshot, t, workspacePath]);
 
+  const decideMcpServer = useCallback(async (
+    candidateId: string,
+    decisionKey: string,
+    approved: boolean,
+  ) => {
+    if (!snapshot) return false;
+    const accepted = await runMutation(
+      decisionKey,
+      () => externalSourcesAPI.setMcpServerDecision(
+        workspacePath,
+        candidateId,
+        decisionKey,
+        approved,
+        snapshot.mcpGeneration ?? 0,
+        snapshot.preferenceRevision ?? 0,
+      ),
+      true,
+      'all',
+      t('actions.mcpUpdated'),
+    );
+    if (accepted) await loadSnapshot(true, false);
+    return accepted;
+  }, [loadSnapshot, runMutation, snapshot, t, workspacePath]);
+
+  const chooseMcpConflict = useCallback(async (
+    conflictKey: string,
+    candidateId: string,
+    approveExternal: boolean,
+  ) => {
+    if (!snapshot) return false;
+    const accepted = await runMutation(
+      conflictKey,
+      () => externalSourcesAPI.chooseMcpConflict(
+        workspacePath,
+        conflictKey,
+        candidateId,
+        approveExternal,
+        snapshot.mcpGeneration ?? 0,
+        snapshot.preferenceRevision ?? 0,
+      ),
+      true,
+      'all',
+      t('actions.mcpUpdated'),
+    );
+    if (accepted) await loadSnapshot(true, false);
+    return accepted;
+  }, [loadSnapshot, runMutation, snapshot, t, workspacePath]);
+
   if (loading && !snapshot) {
     return <ConfigPageLoading text={t('loading')} />;
   }
@@ -592,6 +659,378 @@ const ExternalSourcesConfig: React.FC = () => {
               <div className="bitfun-external-sources-config__notice" role="status">
                 {t('checkingNonBlocking')}
               </div>
+            ) : null}
+
+            {(snapshot?.mcpApprovalRequests?.length ?? 0) > 0 ? (
+              <ConfigPageSection
+                title={t('mcpApprovals.title')}
+                description={t('mcpApprovals.description')}
+              >
+                {snapshot?.mcpApprovalRequests?.map((request) => {
+                  const source = snapshot.sources.find((candidate) => (
+                    candidate.record.key.providerId === request.definition.id.source.providerId
+                    && candidate.record.key.sourceId === request.definition.id.source.sourceId
+                  ));
+                  return (
+                    <div
+                      className="bitfun-external-sources-config__tool-card"
+                      key={request.decisionKey}
+                    >
+                    <div className="bitfun-external-sources-config__conflict-title">
+                      {request.definition.name}
+                    </div>
+                    <div className="bitfun-external-sources-config__tool-detail">
+                      <span>{t('mcp.source', {
+                        source: source?.record.displayName ?? t('mcp.externalSource'),
+                      })}</span>
+                      {source ? (
+                        <span>{t('mcp.sourceLocation', {
+                          location: source.record.location,
+                        })}</span>
+                      ) : null}
+                      {source ? (
+                        <span>{t('mcp.scope', {
+                          scope: source.record.scope === 'workspace_local'
+                            ? t('shared:features.workspace')
+                            : t(`scope.${source.record.scope}`),
+                        })}</span>
+                      ) : null}
+                      <span>{t(`mcp.transport.${request.definition.transport}`)}</span>
+                      {request.definition.commandPreview ? (
+                        <span>{t('mcp.command', { command: request.definition.commandPreview })}</span>
+                      ) : null}
+                      {request.definition.remoteUrlPreview ? (
+                        <span>{t('mcp.url', { url: request.definition.remoteUrlPreview })}</span>
+                      ) : null}
+                      {request.definition.workingDirectory ? (
+                        <span>{t('mcp.workingDirectory', {
+                          location: request.definition.workingDirectory,
+                        })}</span>
+                      ) : null}
+                      <span>{t('mcp.argumentCount', {
+                        count: request.definition.argumentCount,
+                      })}</span>
+                      <span>{t('mcp.environmentCount', {
+                        count: request.definition.environmentKeys.length,
+                      })}</span>
+                      {request.definition.environmentKeys.length > 0 ? (
+                        <span>{t('mcp.environmentNames', {
+                          names: request.definition.environmentKeys.join(', '),
+                        })}</span>
+                      ) : null}
+                      {(request.definition.environmentReferenceNames?.length ?? 0) > 0 ? (
+                        <span>{t('mcp.environmentReads', {
+                          names: (request.definition.environmentReferenceNames ?? []).join(', '),
+                        })}</span>
+                      ) : null}
+                      <span>{t('mcp.headerCount', {
+                        count: request.definition.headerNames.length,
+                      })}</span>
+                      {request.definition.headerNames.length > 0 ? (
+                        <span>{t('mcp.headerNames', {
+                          names: request.definition.headerNames.join(', '),
+                        })}</span>
+                      ) : null}
+                    </div>
+                    <div className="bitfun-external-sources-config__tool-warning">
+                      {t('mcpApprovals.warning')}
+                    </div>
+                    <div className="bitfun-external-sources-config__tool-actions">
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        disabled={busyKey !== null}
+                        onClick={() => void decideMcpServer(
+                          request.candidateId,
+                          request.decisionKey,
+                          false,
+                        )}
+                      >
+                        {t('mcpApprovals.keepDisabled')}
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="small"
+                        disabled={busyKey !== null}
+                        onClick={() => void decideMcpServer(
+                          request.candidateId,
+                          request.decisionKey,
+                          true,
+                        )}
+                      >
+                        {t('mcpApprovals.enable')}
+                      </Button>
+                    </div>
+                    </div>
+                  );
+                })}
+              </ConfigPageSection>
+            ) : null}
+
+            {(snapshot?.mcpServers?.length ?? 0) > 0 ? (
+              <ConfigPageSection title={t('mcp.title')} description={t('mcp.description')}>
+                {snapshot?.mcpServers?.map((server) => {
+                  const state = server.activationState.state;
+                  const reviewing = reviewingMcpKey === server.candidateId;
+                  const canEnable = state === 'declined' || state === 'configuration_changed';
+                  const canDisable = ['starting', 'active', 'runtime_unavailable'].includes(state);
+                  return (
+                    <React.Fragment key={server.candidateId}>
+                      <ConfigPageRow
+                        label={server.definition.name}
+                        description={`${t(`mcp.transport.${server.definition.transport}`)} · ${t('mcp.externalSource')}`}
+                        align="center"
+                      >
+                        <div className="bitfun-external-sources-config__source-control">
+                          <span className={`bitfun-external-sources-config__state is-${state}`}>
+                            {t(`mcpState.${state}`)}
+                          </span>
+                          <Button
+                            variant="secondary"
+                            size="small"
+                            aria-expanded={reviewing}
+                            onClick={() => setReviewingMcpKey(reviewing ? null : server.candidateId)}
+                          >
+                            {reviewing ? t('common.hideDetails') : t('common.details')}
+                          </Button>
+                          {canDisable ? (
+                            <Button
+                              variant="secondary"
+                              size="small"
+                              disabled={busyKey !== null}
+                              onClick={() => void decideMcpServer(
+                                server.candidateId,
+                                server.decisionKey,
+                                false,
+                              )}
+                            >
+                              {t('mcp.disable')}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </ConfigPageRow>
+                      {reviewing ? (
+                        <div className="bitfun-external-sources-config__tool-card">
+                          <div className="bitfun-external-sources-config__tool-detail">
+                            {server.definition.commandPreview ? (
+                              <span>{t('mcp.command', { command: server.definition.commandPreview })}</span>
+                            ) : null}
+                            {server.definition.remoteUrlPreview ? (
+                              <span>{t('mcp.url', { url: server.definition.remoteUrlPreview })}</span>
+                            ) : null}
+                            {server.definition.workingDirectory ? (
+                              <span>{t('mcp.workingDirectory', {
+                                location: server.definition.workingDirectory,
+                              })}</span>
+                            ) : null}
+                            <span>{t('mcp.argumentCount', {
+                              count: server.definition.argumentCount,
+                            })}</span>
+                            {(server.definition.environmentReferenceNames?.length ?? 0) > 0 ? (
+                              <span>{t('mcp.environmentReads', {
+                                names: (server.definition.environmentReferenceNames ?? []).join(', '),
+                              })}</span>
+                            ) : null}
+                            {'reason' in server.activationState ? (
+                              <>
+                                <span>{t(server.activationState.state === 'runtime_unavailable'
+                                  ? 'mcp.runtimeUnavailableGuidance'
+                                  : 'mcp.unsupportedGuidance')}</span>
+                                <details>
+                                  <summary>{t('common.technicalDetails')}</summary>
+                                  <code>{server.activationState.reason}</code>
+                                </details>
+                              </>
+                            ) : null}
+                            <span>{t('mcp.changePolicy')}</span>
+                          </div>
+                          {canEnable ? (
+                            <div className="bitfun-external-sources-config__tool-actions">
+                              <Button
+                                variant="primary"
+                                size="small"
+                                disabled={busyKey !== null}
+                                onClick={() => void decideMcpServer(
+                                  server.candidateId,
+                                  server.decisionKey,
+                                  true,
+                                )}
+                              >
+                                {t('mcp.enable')}
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })}
+              </ConfigPageSection>
+            ) : null}
+
+            {mcpConflicts.length > 0 ? (
+              <ConfigPageSection
+                title={t('mcpConflicts.title')}
+                description={t('mcpConflicts.description')}
+              >
+                {mcpConflicts.map((conflict) => (
+                  <div className="bitfun-external-sources-config__conflict" key={conflict.conflictKey}>
+                    <div className="bitfun-external-sources-config__conflict-title">
+                      {t('mcpConflicts.serverName', { name: conflict.serverName })}
+                    </div>
+                    <div className="bitfun-external-sources-config__conflict-options">
+                      {conflict.candidates.map((candidate) => {
+                        const selected = conflict.selectedCandidateId === candidate.candidateId;
+                        const externalServer = candidate.external
+                          ? snapshot?.mcpServers?.find((server) => (
+                            server.candidateId === candidate.candidateId
+                          ))
+                          : undefined;
+                        const externalSource = externalServer
+                          ? snapshot?.sources?.find((source) => (
+                            source.record.key.providerId
+                              === externalServer.definition.id.source.providerId
+                            && source.record.key.sourceId
+                              === externalServer.definition.id.source.sourceId
+                          ))
+                          : undefined;
+                        const conflictReviewKey = `${conflict.conflictKey}:${candidate.candidateId}`;
+                        const reviewingExternal = reviewingMcpConflictKey === conflictReviewKey;
+                        const detailId = `mcp-conflict-detail-${candidate.candidateId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+                        return (
+                          <div className="bitfun-external-sources-config__candidate" key={candidate.candidateId}>
+                            <Button
+                              variant={selected ? 'primary' : 'secondary'}
+                              size="small"
+                              disabled={busyKey !== null || !candidate.available}
+                              aria-pressed={selected}
+                              aria-expanded={candidate.external ? reviewingExternal : undefined}
+                              aria-controls={candidate.external ? detailId : undefined}
+                              onClick={() => {
+                                if (candidate.external) {
+                                  setReviewingMcpConflictKey(
+                                    reviewingExternal ? null : conflictReviewKey,
+                                  );
+                                } else {
+                                  void chooseMcpConflict(
+                                    conflict.conflictKey,
+                                    candidate.candidateId,
+                                    false,
+                                  );
+                                }
+                              }}
+                            >
+                              {candidate.external
+                                ? reviewingExternal
+                                  ? t('common.hideDetails')
+                                  : t('mcpConflicts.review', { name: candidate.displayName })
+                                : candidate.displayName}
+                            </Button>
+                            <span className="bitfun-external-sources-config__candidate-state">
+                              {!candidate.available
+                                ? t(candidate.external
+                                  ? 'mcpConflicts.unavailable'
+                                  : 'mcpConflicts.nativeDisabled')
+                                : selected
+                                  ? t('common.selected')
+                                  : t('common.availableChoice')}
+                            </span>
+                            {!candidate.available && candidate.unavailableReason ? (
+                              <span className="bitfun-external-sources-config__candidate-state">
+                                {candidate.unavailableReason}
+                              </span>
+                            ) : null}
+                            {externalServer && (reviewingExternal || selected) ? (
+                              <div
+                                className="bitfun-external-sources-config__tool-detail"
+                                id={detailId}
+                              >
+                                <span>{t('mcp.source', {
+                                  source: externalSource?.record.displayName
+                                    ?? t('mcp.externalSource'),
+                                })}</span>
+                                {externalSource ? (
+                                  <>
+                                    <span>{t('mcp.sourceLocation', {
+                                      location: externalSource.record.location,
+                                    })}</span>
+                                    <span>{t('mcp.scope', {
+                                      scope: t(`scope.${externalSource.record.scope}`),
+                                    })}</span>
+                                  </>
+                                ) : null}
+                                <span>{t(`mcp.transport.${externalServer.definition.transport}`)}</span>
+                                {externalServer.definition.commandPreview ? (
+                                  <span>{t('mcp.command', {
+                                    command: externalServer.definition.commandPreview,
+                                  })}</span>
+                                ) : null}
+                                {externalServer.definition.remoteUrlPreview ? (
+                                  <span>{t('mcp.url', {
+                                    url: externalServer.definition.remoteUrlPreview,
+                                  })}</span>
+                                ) : null}
+                                <span>{t('mcp.argumentCount', {
+                                  count: externalServer.definition.argumentCount,
+                                })}</span>
+                                {externalServer.definition.workingDirectory ? (
+                                  <span>{t('mcp.workingDirectory', {
+                                    location: externalServer.definition.workingDirectory,
+                                  })}</span>
+                                ) : null}
+                                {(externalServer.definition.environmentKeys?.length ?? 0) > 0 ? (
+                                  <span>{t('mcp.environmentNames', {
+                                    names: externalServer.definition.environmentKeys.join(', '),
+                                  })}</span>
+                                ) : null}
+                                {(externalServer.definition.environmentReferenceNames?.length ?? 0) > 0 ? (
+                                  <span>{t('mcp.environmentReads', {
+                                    names: (externalServer.definition.environmentReferenceNames ?? []).join(', '),
+                                  })}</span>
+                                ) : null}
+                                {(externalServer.definition.headerNames?.length ?? 0) > 0 ? (
+                                  <span>{t('mcp.headerNames', {
+                                    names: externalServer.definition.headerNames.join(', '),
+                                  })}</span>
+                                ) : null}
+                                <span className="bitfun-external-sources-config__tool-warning">
+                                  {t('mcpApprovals.warning')}
+                                </span>
+                                {reviewingExternal && !selected && candidate.available ? (
+                                  <div className="bitfun-external-sources-config__tool-actions">
+                                    <Button
+                                      variant="primary"
+                                      size="small"
+                                      disabled={busyKey !== null}
+                                      aria-describedby={detailId}
+                                      onClick={() => void chooseMcpConflict(
+                                        conflict.conflictKey,
+                                        candidate.candidateId,
+                                        true,
+                                      ).then((accepted) => {
+                                        if (accepted) setReviewingMcpConflictKey(null);
+                                      })}
+                                    >
+                                      {t('mcpConflicts.approveAndUse', {
+                                        name: candidate.displayName,
+                                      })}
+                                    </Button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="bitfun-external-sources-config__conflict-hint">
+                      {conflict.selectedCandidateId
+                        ? t('mcpConflicts.currentSelection')
+                        : t('mcpConflicts.pending')}
+                    </div>
+                  </div>
+                ))}
+              </ConfigPageSection>
             ) : null}
 
             {(snapshot?.subagents?.length ?? 0) > 0 ? (
@@ -954,6 +1393,8 @@ const ExternalSourcesConfig: React.FC = () => {
                         {t('sources.toolCount', { count: toolCounts.get(sourcePair) ?? 0 })}
                         {' · '}
                         {t('sources.agentCount', { count: agentCounts.get(sourcePair) ?? 0 })}
+                        {' · '}
+                        {t('sources.mcpCount', { count: mcpCounts.get(sourcePair) ?? 0 })}
                       </>
                     )}
                     align="center"

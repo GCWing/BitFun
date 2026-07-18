@@ -5,7 +5,7 @@
 //! a concrete ecosystem or carrying arbitrary extension payloads.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
@@ -82,6 +82,7 @@ open_id!(SourceId, "source");
 open_id!(CommandLocalId, "command");
 open_id!(ToolTargetLocalId, "tool target");
 open_id!(ToolExportLocalId, "tool export");
+open_id!(McpServerLocalId, "MCP server");
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -223,6 +224,480 @@ impl SourceQualifiedToolId {
             self.export_id
         )
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourceQualifiedMcpServerId {
+    pub source: SourceKey,
+    pub local_id: McpServerLocalId,
+}
+
+impl SourceQualifiedMcpServerId {
+    pub fn new(
+        source: SourceKey,
+        local_id: impl Into<String>,
+    ) -> Result<Self, ExternalSourceContractError> {
+        Ok(Self {
+            source,
+            local_id: McpServerLocalId::new(local_id)?,
+        })
+    }
+
+    pub fn stable_key(&self) -> String {
+        format!(
+            "{}{}:{}",
+            self.source.stable_key(),
+            self.local_id.as_str().len(),
+            self.local_id
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ExternalMcpTransportKind {
+    LocalStdio,
+    StreamableHttp,
+}
+
+impl ExternalMcpTransportKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::LocalStdio => "local_stdio",
+            Self::StreamableHttp => "streamable_http",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ExternalMcpStaticStatus {
+    Ready,
+    DisabledBySource,
+    Unsupported { reason: String },
+    Invalid { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpServerDefinition {
+    pub id: SourceQualifiedMcpServerId,
+    /// Ordered low-to-high source contributions used to materialize this server.
+    pub provenance: Vec<SourceKey>,
+    /// Logical MCP name used for conflict detection and the public tool namespace.
+    pub name: String,
+    pub transport: ExternalMcpTransportKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_preview: Option<String>,
+    pub argument_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub environment_keys: Vec<String>,
+    /// Names read from BitFun's parent environment while resolving `{env:NAME}`
+    /// references. Values never enter the static catalog.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub environment_reference_names: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_url_preview: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub header_names: Vec<String>,
+    pub source_enabled: bool,
+    pub behavior_version: String,
+    pub static_status: ExternalMcpStaticStatus,
+}
+
+impl ExternalMcpServerDefinition {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        validate_id(&self.name, "MCP server name")?;
+        validate_id(&self.behavior_version, "MCP behavior version")?;
+        if self.provenance.is_empty()
+            || self.provenance.len() > 256
+            || self.provenance.last() != Some(&self.id.source)
+            || self.argument_count > 256
+            || self.environment_keys.len() > 128
+            || self.environment_reference_names.len() > 128
+            || self.header_names.len() > 128
+        {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "MCP configuration size",
+            ));
+        }
+        let mut provenance = BTreeSet::new();
+        if self
+            .provenance
+            .iter()
+            .any(|source| !provenance.insert(source))
+        {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "MCP provenance",
+            ));
+        }
+        if let Some(command) = &self.command_preview {
+            validate_text(command, "MCP command preview")?;
+        }
+        if let Some(directory) = &self.working_directory {
+            validate_text(directory, "MCP working directory")?;
+        }
+        if let Some(url) = &self.remote_url_preview {
+            validate_text(url, "MCP remote URL preview")?;
+        }
+        let mut environment_keys = BTreeSet::new();
+        for key in &self.environment_keys {
+            validate_id(key, "MCP environment key")?;
+            if !environment_keys.insert(key) {
+                return Err(ExternalSourceContractError::InvalidIdentifier(
+                    "MCP environment key",
+                ));
+            }
+        }
+        let mut environment_reference_names = BTreeSet::new();
+        for name in &self.environment_reference_names {
+            validate_id(name, "MCP environment reference")?;
+            if !environment_reference_names.insert(name) {
+                return Err(ExternalSourceContractError::InvalidIdentifier(
+                    "MCP environment reference",
+                ));
+            }
+        }
+        let mut header_names = BTreeSet::new();
+        for name in &self.header_names {
+            validate_id(name, "MCP header name")?;
+            if !header_names.insert(name.to_ascii_lowercase()) {
+                return Err(ExternalSourceContractError::InvalidIdentifier(
+                    "MCP header name",
+                ));
+            }
+        }
+        match self.transport {
+            ExternalMcpTransportKind::LocalStdio
+                if self.command_preview.is_none() || self.remote_url_preview.is_some() =>
+            {
+                Err(ExternalSourceContractError::InvalidIdentifier(
+                    "local MCP transport",
+                ))
+            }
+            ExternalMcpTransportKind::StreamableHttp
+                if self.remote_url_preview.is_none() || self.command_preview.is_some() =>
+            {
+                Err(ExternalSourceContractError::InvalidIdentifier(
+                    "remote MCP transport",
+                ))
+            }
+            _ => match &self.static_status {
+                ExternalMcpStaticStatus::Unsupported { reason }
+                | ExternalMcpStaticStatus::Invalid { reason } => {
+                    validate_text(reason, "MCP static status reason")
+                }
+                ExternalMcpStaticStatus::Ready | ExternalMcpStaticStatus::DisabledBySource => {
+                    Ok(())
+                }
+            },
+        }
+    }
+
+    pub fn candidate_id(&self) -> String {
+        format!("external_mcp:{}", self.id.stable_key())
+    }
+}
+
+/// Product-owned state for one discovered external MCP candidate. Ecosystem
+/// adapters never set this value; they only provide static definitions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ExternalMcpActivationState {
+    ApprovalRequired,
+    Starting,
+    Active,
+    Declined,
+    Conflict,
+    Covered { selected_candidate_id: String },
+    SourceDisabled,
+    ConfigurationChanged,
+    Unsupported { reason: String },
+    RuntimeUnavailable { reason: String },
+    Removed,
+}
+
+/// Sanitized product view for one external MCP server. Runtime credentials are
+/// intentionally absent and remain available only through `prepare_server`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpCatalogEntry {
+    pub candidate_id: String,
+    pub definition: ExternalMcpServerDefinition,
+    pub approval_key: String,
+    pub decision_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_id: Option<String>,
+    pub activation_state: ExternalMcpActivationState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpApprovalRequest {
+    pub candidate_id: String,
+    pub approval_key: String,
+    pub decision_key: String,
+    pub definition: ExternalMcpServerDefinition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpConflictCandidate {
+    pub candidate_id: String,
+    pub display_name: String,
+    pub external: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<SourceKey>,
+    pub behavior_version: String,
+    pub available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpConflict {
+    pub conflict_key: String,
+    pub server_name: String,
+    pub candidates: Vec<ExternalMcpConflictCandidate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_candidate_id: Option<String>,
+}
+
+/// Secret runtime value whose Debug representation never includes the value.
+#[derive(Clone, PartialEq, Eq)]
+pub struct SecretValue(String);
+
+impl SecretValue {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for SecretValue {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("SecretValue([REDACTED])")
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum PreparedExternalMcpTransport {
+    Local {
+        command: String,
+        args: Vec<String>,
+        environment: BTreeMap<String, SecretValue>,
+        working_directory: Option<PathBuf>,
+    },
+    Remote {
+        url: String,
+        headers: BTreeMap<String, SecretValue>,
+        oauth_enabled: bool,
+    },
+}
+
+impl PreparedExternalMcpTransport {
+    pub fn remote_headers(&self) -> Option<&BTreeMap<String, SecretValue>> {
+        match self {
+            Self::Remote { headers, .. } => Some(headers),
+            Self::Local { .. } => None,
+        }
+    }
+}
+
+impl fmt::Debug for PreparedExternalMcpTransport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Local {
+                command,
+                args,
+                environment,
+                working_directory,
+            } => formatter
+                .debug_struct("Local")
+                .field("command", command)
+                .field("args", args)
+                .field("environment_keys", &environment.keys().collect::<Vec<_>>())
+                .field("working_directory", working_directory)
+                .finish(),
+            Self::Remote {
+                url: _,
+                headers,
+                oauth_enabled,
+            } => formatter
+                .debug_struct("Remote")
+                // Query strings and path segments can carry credentials. The
+                // sanitized product snapshot already owns the safe preview.
+                .field("url", &"[REDACTED]")
+                .field("header_names", &headers.keys().collect::<Vec<_>>())
+                .field("oauth_enabled", oauth_enabled)
+                .finish(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedExternalMcpServer {
+    pub id: SourceQualifiedMcpServerId,
+    pub behavior_version: String,
+    pub transport: PreparedExternalMcpTransport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpProviderIdentity {
+    pub provider_id: ProviderId,
+    pub ecosystem_id: EcosystemId,
+    pub display_name: String,
+}
+
+impl ExternalMcpProviderIdentity {
+    pub fn new(
+        provider_id: impl Into<String>,
+        ecosystem_id: impl Into<String>,
+        display_name: impl Into<String>,
+    ) -> Result<Self, ExternalSourceContractError> {
+        let display_name = display_name.into();
+        validate_text(&display_name, "MCP provider display name")?;
+        Ok(Self {
+            provider_id: ProviderId::new(provider_id)?,
+            ecosystem_id: EcosystemId::new(ecosystem_id)?,
+            display_name,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpProviderSnapshot {
+    pub provider: ExternalMcpProviderIdentity,
+    pub sources: Vec<ExternalSourceRecord>,
+    pub servers: Vec<ExternalMcpServerDefinition>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<ExternalSourceDiagnostic>,
+}
+
+impl ExternalMcpProviderSnapshot {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        if self.sources.len() > 1024 || self.servers.len() > 1024 {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "MCP provider snapshot size",
+            ));
+        }
+        let mut source_keys = BTreeSet::new();
+        for source in &self.sources {
+            source.validate()?;
+            if source.key.provider_id != self.provider.provider_id
+                || source.ecosystem_id != self.provider.ecosystem_id
+                || !source_keys.insert(source.key.clone())
+            {
+                return Err(ExternalSourceContractError::InvalidIdentifier(
+                    "MCP provider-qualified source",
+                ));
+            }
+        }
+        let mut server_ids = BTreeSet::new();
+        for server in &self.servers {
+            server.validate()?;
+            if server.id.source.provider_id != self.provider.provider_id
+                || !source_keys.contains(&server.id.source)
+                || server
+                    .provenance
+                    .iter()
+                    .any(|source| !source_keys.contains(source))
+                || !server_ids.insert(server.id.clone())
+            {
+                return Err(ExternalSourceContractError::InvalidIdentifier(
+                    "provider-qualified MCP server",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Capability-specific MCP provider. Discovery is static; preparation may read
+/// runtime values only after the product owner has approved a behavior version.
+pub trait ExternalMcpSourceProvider: Send + Sync {
+    fn identity(&self) -> ExternalMcpProviderIdentity;
+
+    fn discover(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+    ) -> Result<ExternalMcpProviderSnapshot, ExternalSourceProviderError>;
+
+    fn prepare_server(
+        &self,
+        input: &ExternalMcpDiscoveryInput,
+        server_id: &SourceQualifiedMcpServerId,
+        expected_behavior_version: &str,
+    ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError>;
+
+    fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot>;
+}
+
+pub fn external_mcp_approval_key(
+    execution_domain_id: &str,
+    workspace_key: &str,
+    server_id: &SourceQualifiedMcpServerId,
+    behavior_version: &str,
+) -> String {
+    let stable_id = server_id.stable_key();
+    let workspace_fingerprint = stable_fingerprint([workspace_key.as_bytes()]);
+    let server_fingerprint = stable_fingerprint([stable_id.as_bytes()]);
+    format!(
+        "external_mcp_approval:{}:{}:{}:{}",
+        execution_domain_id,
+        &workspace_fingerprint[..24],
+        &server_fingerprint[..24],
+        stable_fingerprint([behavior_version.as_bytes()])
+    )
+}
+
+pub fn external_mcp_conflict_key<'a>(
+    execution_domain_id: &str,
+    workspace_key: &str,
+    server_name: &str,
+    candidates: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> String {
+    let normalized_name = server_name.to_ascii_lowercase();
+    let lineage = external_mcp_conflict_lineage(execution_domain_id, workspace_key, server_name);
+    let mut candidates = candidates.into_iter().collect::<Vec<_>>();
+    candidates.sort_unstable();
+    let encoded = candidates
+        .into_iter()
+        .map(|(id, version)| format!("{}:{id}{}:{version}", id.len(), version.len()))
+        .collect::<Vec<_>>();
+    let mut parts = vec![
+        execution_domain_id.as_bytes(),
+        workspace_key.as_bytes(),
+        normalized_name.as_bytes(),
+    ];
+    parts.extend(encoded.iter().map(|value| value.as_bytes()));
+    format!("{}:{}", lineage, stable_fingerprint(parts))
+}
+
+fn external_mcp_conflict_lineage(
+    execution_domain_id: &str,
+    workspace_key: &str,
+    server_name: &str,
+) -> String {
+    let workspace_fingerprint = stable_fingerprint([workspace_key.as_bytes()]);
+    format!(
+        "external_mcp:{}:{}:{}",
+        execution_domain_id,
+        &workspace_fingerprint[..24],
+        server_name.to_ascii_lowercase()
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -430,6 +905,7 @@ pub enum ExternalSourceAssetKind {
     Command,
     Tool,
     Subagent,
+    Mcp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -650,6 +1126,12 @@ impl PromptCommandProviderSnapshot {
 pub struct ExternalSourceContext {
     pub workspace_root: Option<PathBuf>,
     pub execution_domain_id: ExecutionDomainId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalMcpDiscoveryInput {
+    pub context: ExternalSourceContext,
+    pub suppressed_sources: BTreeSet<SourceKey>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1003,6 +1485,15 @@ pub struct ExternalSourceCatalogSnapshot {
     pub tool_approval_requests: Vec<ExternalToolApprovalRequest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_conflicts: Vec<ExternalToolConflict>,
+    /// Independent catalog generation for MCP row/action stability.
+    #[serde(default)]
+    pub mcp_generation: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<ExternalMcpCatalogEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_approval_requests: Vec<ExternalMcpApprovalRequest>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_conflicts: Vec<ExternalMcpConflict>,
     /// Independent catalog generation for subagent row/action stability.
     #[serde(default)]
     pub subagent_generation: u64,

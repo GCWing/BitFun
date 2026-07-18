@@ -220,6 +220,8 @@ pub fn parse_cursor_format(config: &serde_json::Value) -> Vec<MCPServerConfig> {
                     command,
                     args,
                     env,
+                    working_directory: None,
+                    inherit_parent_environment: None,
                     headers,
                     url,
                     auto_start,
@@ -231,6 +233,7 @@ pub fn parse_cursor_format(config: &serde_json::Value) -> Vec<MCPServerConfig> {
                         .get("oauth")
                         .cloned()
                         .and_then(|value| serde_json::from_value(value).ok()),
+                    oauth_enabled: None,
                     xaa: obj
                         .get("xaa")
                         .cloned()

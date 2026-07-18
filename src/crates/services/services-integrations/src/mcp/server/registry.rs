@@ -206,6 +206,8 @@ mod tests {
             command: Some("node".to_string()),
             args: Vec::new(),
             env: HashMap::new(),
+            working_directory: None,
+            inherit_parent_environment: None,
             headers: HashMap::new(),
             url: None,
             auto_start: false,
@@ -214,6 +216,7 @@ mod tests {
             capabilities: Vec::new(),
             settings: HashMap::new(),
             oauth: None,
+            oauth_enabled: None,
             xaa: None,
         }
     }

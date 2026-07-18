@@ -151,6 +151,8 @@ fn stdio_server_config(acp_session_id: &str, server: McpServerStdio) -> Result<M
             .into_iter()
             .map(|env| (env.name, env.value))
             .collect(),
+        working_directory: None,
+        inherit_parent_environment: None,
         headers: HashMap::new(),
         url: None,
         auto_start: true,
@@ -159,6 +161,7 @@ fn stdio_server_config(acp_session_id: &str, server: McpServerStdio) -> Result<M
         capabilities: Vec::new(),
         settings: HashMap::new(),
         oauth: None,
+        oauth_enabled: None,
         xaa: None,
     })
 }
@@ -189,6 +192,8 @@ fn remote_server_config(
         command: None,
         args: Vec::new(),
         env: HashMap::new(),
+        working_directory: None,
+        inherit_parent_environment: None,
         headers,
         url: Some(url),
         auto_start: true,
@@ -197,6 +202,7 @@ fn remote_server_config(
         capabilities: Vec::new(),
         settings: HashMap::new(),
         oauth: None,
+        oauth_enabled: None,
         xaa: None,
     })
 }

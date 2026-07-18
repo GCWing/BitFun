@@ -274,7 +274,14 @@ impl ChatMode {
                 KeyCode::Down => chat_view.mcp_selector_down(),
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if let Some(selected) = chat_view.mcp_selector_confirm() {
-                        self.toggle_mcp_server(&selected.id, chat_view);
+                        if selected.requires_external_confirmation()
+                            && !chat_view.mcp_selector_is_confirm_external(&selected.id)
+                        {
+                            chat_view.mcp_selector_start_confirm_external(selected.id.clone());
+                        } else {
+                            chat_view.mcp_selector_cancel_confirm_external();
+                            self.activate_mcp_item(selected, chat_view, chat_state);
+                        }
                     }
                 }
                 KeyCode::Char('a') => {
@@ -284,6 +291,13 @@ impl ChatMode {
                 }
                 KeyCode::Char('d') => {
                     if let Some(selected) = chat_view.mcp_selector_confirm() {
+                        if selected.is_external() {
+                            chat_state.add_system_message(
+                                "External MCP settings are read-only in BitFun. Disable the server here or edit it in the source application."
+                                    .to_string(),
+                            );
+                            return Ok(None);
+                        }
                         // First press: enter confirm-delete mode
                         // Second press: actually delete (handled by confirm_delete state)
                         if chat_view.mcp_selector_is_confirm_delete(&selected.id) {
@@ -294,13 +308,24 @@ impl ChatMode {
                     }
                 }
                 KeyCode::Char('e') => {
-                    chat_view.hide_mcp_selector();
-                    self.open_mcp_config(chat_state);
+                    if chat_view
+                        .mcp_selector_confirm()
+                        .is_some_and(|selected| selected.is_external())
+                    {
+                        chat_state.add_system_message(
+                            "External MCP settings are read-only in BitFun. Edit them in the source application."
+                                .to_string(),
+                        );
+                    } else {
+                        chat_view.hide_mcp_selector();
+                        self.open_mcp_config(chat_state);
+                    }
                 }
                 // Note: Esc is handled globally for navigation back
                 _ => {
                     // Any other key cancels the confirm-delete state
                     chat_view.mcp_selector_cancel_confirm_delete();
+                    chat_view.mcp_selector_cancel_confirm_external();
                 }
             }
             return Ok(None);
@@ -608,10 +633,10 @@ impl ChatMode {
                         .this
                         .preview_theme_selection(&theme, context.chat_view);
                 }
-                if let Some(server_id) = context.chat_view.take_pending_mcp_toggle() {
+                if let Some(item) = context.chat_view.take_pending_mcp_toggle() {
                     context
                         .this
-                        .toggle_mcp_server(&server_id, context.chat_view);
+                        .activate_mcp_item(item, context.chat_view, context.chat_state);
                 }
                 outcome.request_redraw = true;
             }

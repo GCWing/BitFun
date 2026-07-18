@@ -1,6 +1,6 @@
 {
   "title": "External AI applications",
-  "subtitle": "Use supported commands, tools, and agents from other AI applications without copying their files into BitFun.",
+  "subtitle": "Use supported commands, tools, agents, and MCP servers from other AI applications without copying their files into BitFun.",
   "loading": "Checking external sources…",
   "checkingNonBlocking": "Still checking for changes. You can continue using settings while this finishes.",
   "common": {
@@ -19,7 +19,8 @@
     "refreshing": "Refreshing…",
     "updated": "Saved. The current status is shown below.",
     "waitForUpdate": "Another change is still being saved. Wait for it to finish before making another choice.",
-    "agentUpdated": "Saved changes to {{name}} and refreshed its status."
+    "agentUpdated": "Saved changes to {{name}} and refreshed its status.",
+    "mcpUpdated": "Saved the MCP server choice and refreshed its status."
   },
   "unavailable": {
     "title": "External settings unavailable",
@@ -55,6 +56,7 @@
     "commandCount": "{{count}} commands",
     "toolCount": "{{count}} tools",
     "agentCount": "{{count}} agents",
+    "mcpCount": "{{count}} MCP servers",
     "toggleLabel": "Enable {{name}}"
   },
   "agents": {
@@ -138,6 +140,63 @@
     "currentSelectionUnavailable": "This source is still selected, but it is currently disabled or unavailable for new tasks. Enable or repair it, choose another option, or keep this name unavailable.",
     "keptUnavailable": "This agent name is kept unavailable. Choose an option above when you want to use one.",
     "selectionApproves": "This choice confirms the model, tools, run location, and configuration sources shown below."
+  },
+  "mcp": {
+    "title": "Found MCP servers",
+    "description": "MCP settings stay in the source application. External servers are read-only here; disable one or change it in its original application.",
+    "externalSource": "External AI application",
+    "source": "Source: {{source}}",
+    "sourceLocation": "Configuration: {{location}}",
+    "scope": "Applies to: {{scope}}",
+    "command": "Command: {{command}}",
+    "url": "Address: {{url}}",
+    "workingDirectory": "Starts in: {{location}}",
+    "environmentCount": "{{count}} environment variables configured",
+    "environmentNames": "Environment variables: {{names}}",
+    "environmentReads": "Reads from the BitFun environment: {{names}}",
+    "argumentCount": "Command arguments: {{count}}",
+    "headerCount": "{{count}} HTTP headers configured",
+    "headerNames": "HTTP headers: {{names}}",
+    "changePolicy": "BitFun asks again before loading a changed server configuration.",
+    "runtimeUnavailableGuidance": "Disable this server, fix the source configuration or authentication, then enable it again. Restarting BitFun is usually not required.",
+    "unsupportedGuidance": "Change this setting in the source application, then refresh.",
+    "enable": "Enable server",
+    "disable": "Disable",
+    "transport": {
+      "local_stdio": "Local process",
+      "streamable_http": "Remote connection"
+    }
+  },
+  "mcpApprovals": {
+    "title": "MCP servers to review",
+    "description": "BitFun found executable or network configuration from another AI application. It is not started or contacted until you confirm it.",
+    "warning": "Enabling can start a local process with your user permissions or connect to the shown remote service. The server can provide tools to the agent and can receive arguments sent to those tools.",
+    "keepDisabled": "Keep disabled",
+    "enable": "Enable server"
+  },
+  "mcpState": {
+    "approval_required": "Confirmation required",
+    "starting": "Starting",
+    "active": "Enabled",
+    "declined": "Kept disabled",
+    "conflict": "Choice required",
+    "covered": "Not selected",
+    "source_disabled": "Source disabled",
+    "configuration_changed": "Changed; confirm again",
+    "unsupported": "Not supported",
+    "runtime_unavailable": "Temporarily unavailable",
+    "removed": "Removed"
+  },
+  "mcpConflicts": {
+    "title": "MCP servers with the same name",
+    "description": "BitFun does not choose silently. Choose the BitFun or external server to use; the choice is remembered until one of these configurations changes.",
+    "serverName": "Multiple MCP servers are named {{name}}",
+    "pending": "Choose one server. Choosing an external server also confirms that configuration.",
+    "currentSelection": "The current choice is used. Choose another available option to change it.",
+    "unavailable": "Currently unavailable",
+    "nativeDisabled": "Enable this BitFun server before selecting it",
+    "review": "Review {{name}}",
+    "approveAndUse": "Approve and use {{name}}"
   },
   "tools": {
     "title": "Found tools",

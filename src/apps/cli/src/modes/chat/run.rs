@@ -300,6 +300,10 @@ impl ChatMode {
                         )));
                     }
                     self.external_source_snapshot = Some(snapshot);
+                    if chat_view.mcp_selector_visible() {
+                        chat_view.mcp_selector_cancel_confirm_external();
+                        chat_view.mcp_selector_update_items(self.get_mcp_items(&rt_handle));
+                    }
                     needs_redraw = true;
                 }
             }
@@ -335,6 +339,14 @@ impl ChatMode {
                         PendingMcpOp::Toggle(server_id) => {
                             self.execute_mcp_toggle(
                                 &server_id,
+                                &mut chat_view,
+                                &mut chat_state,
+                                &rt_handle,
+                            );
+                        }
+                        PendingMcpOp::External(item) => {
+                            self.execute_external_mcp_action(
+                                item,
                                 &mut chat_view,
                                 &mut chat_state,
                                 &rt_handle,

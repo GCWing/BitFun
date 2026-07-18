@@ -63,7 +63,7 @@ impl ChatView {
         if self.mcp_selector.captures_mouse(mouse) {
             let action = self.mcp_selector.handle_mouse_event(mouse);
             if let McpAction::Toggle(item) = action {
-                self.pending_mcp_toggle = Some(item.id.clone());
+                self.pending_mcp_toggle = Some(item);
             }
             return true;
         }

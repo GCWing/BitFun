@@ -1,6 +1,6 @@
 {
   "title": "外部 AI 应用",
-  "subtitle": "无需复制文件，即可使用其他 AI 应用中受支持的命令、工具和 Agent。",
+  "subtitle": "无需复制文件，即可使用其他 AI 应用中受支持的命令、工具、Agent 和 MCP 服务器。",
   "loading": "正在检查外部来源…",
   "checkingNonBlocking": "仍在检查变更；检查完成前可以继续使用当前设置。",
   "common": {
@@ -19,7 +19,8 @@
     "refreshing": "正在刷新…",
     "updated": "已保存，当前状态如下。",
     "waitForUpdate": "另一项更改仍在保存，请等待完成后再做选择。",
-    "agentUpdated": "已保存“{{name}}”的更改并刷新状态。"
+    "agentUpdated": "已保存“{{name}}”的更改并刷新状态。",
+    "mcpUpdated": "已保存 MCP 服务器选择并刷新状态。"
   },
   "unavailable": {
     "title": "外部配置暂不可用",
@@ -55,6 +56,7 @@
     "commandCount": "{{count}} 个命令",
     "toolCount": "{{count}} 个工具",
     "agentCount": "{{count}} 个 Agent",
+    "mcpCount": "{{count}} 个 MCP 服务器",
     "toggleLabel": "启用 {{name}}"
   },
   "agents": {
@@ -138,6 +140,63 @@
     "currentSelectionUnavailable": "仍保留此来源为当前选择，但它目前已停用或无法用于新任务。请启用或修复它、改选其他来源，或保持此名称不可用。",
     "keptUnavailable": "当前保持此 Agent 名称不可用。需要使用时，可在上方选择一个 Agent。",
     "selectionApproves": "选择后，也表示你确认了下方显示的模型、工具、运行位置和配置来源。"
+  },
+  "mcp": {
+    "title": "发现的 MCP 服务器",
+    "description": "MCP 配置仍保存在原应用中。外部服务器在此处为只读；你可以将其停用，或回到原应用修改配置。",
+    "externalSource": "外部 AI 应用",
+    "source": "来源：{{source}}",
+    "sourceLocation": "配置位置：{{location}}",
+    "scope": "作用范围：{{scope}}",
+    "command": "命令：{{command}}",
+    "url": "地址：{{url}}",
+    "workingDirectory": "启动目录：{{location}}",
+    "environmentCount": "已配置 {{count}} 个环境变量",
+    "environmentNames": "环境变量：{{names}}",
+    "environmentReads": "将读取 BitFun 环境变量：{{names}}",
+    "argumentCount": "命令参数数量：{{count}}",
+    "headerCount": "已配置 {{count}} 个 HTTP 请求头",
+    "headerNames": "HTTP 请求头：{{names}}",
+    "changePolicy": "服务器配置发生变化后，BitFun 会在再次加载前请你确认。",
+    "runtimeUnavailableGuidance": "请先停用此服务器，修复来源配置或认证后再启用，通常无需重启 BitFun。",
+    "unsupportedGuidance": "请在来源应用中修改此配置，然后刷新。",
+    "enable": "启用服务器",
+    "disable": "停用",
+    "transport": {
+      "local_stdio": "本地进程",
+      "streamable_http": "远程连接"
+    }
+  },
+  "mcpApprovals": {
+    "title": "待确认的 MCP 服务器",
+    "description": "BitFun 从其他 AI 应用中发现了可执行命令或网络连接配置；确认前不会启动进程或访问远程地址。",
+    "warning": "启用后，BitFun 可能以你的用户权限启动本地进程，或连接到上方显示的远程服务。服务器可以向 Agent 提供工具，并接收调用这些工具时提交的参数。",
+    "keepDisabled": "保持停用",
+    "enable": "启用服务器"
+  },
+  "mcpState": {
+    "approval_required": "待确认",
+    "starting": "正在启动",
+    "active": "已启用",
+    "declined": "保持停用",
+    "conflict": "需要选择",
+    "covered": "未选用",
+    "source_disabled": "来源已停用",
+    "configuration_changed": "配置已变化，需再次确认",
+    "unsupported": "暂不支持",
+    "runtime_unavailable": "暂时不可用",
+    "removed": "已删除"
+  },
+  "mcpConflicts": {
+    "title": "同名 MCP 服务器",
+    "description": "BitFun 不会自行选择。请选择使用 BitFun 或外部服务器；其中任一配置变化前，BitFun 会记住本次选择。",
+    "serverName": "有多个 MCP 服务器名为 {{name}}",
+    "pending": "请选择一个服务器。选择外部服务器时，也会确认其当前配置。",
+    "currentSelection": "当前使用已选择的服务器；可选择其他可用项进行更改。",
+    "unavailable": "当前不可用",
+    "nativeDisabled": "请先启用此 BitFun 服务器，再选择它",
+    "review": "查看 {{name}}",
+    "approveAndUse": "批准并使用 {{name}}"
   },
   "tools": {
     "title": "发现的工具",

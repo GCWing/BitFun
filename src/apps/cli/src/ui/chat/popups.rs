@@ -316,7 +316,7 @@ impl ChatView {
     }
 
     /// Take the pending MCP toggle (set by mouse click)
-    pub(crate) fn take_pending_mcp_toggle(&mut self) -> Option<String> {
+    pub(crate) fn take_pending_mcp_toggle(&mut self) -> Option<McpItem> {
         self.pending_mcp_toggle.take()
     }
 
@@ -330,6 +330,18 @@ impl ChatView {
 
     pub(crate) fn mcp_selector_is_confirm_delete(&self, server_id: &str) -> bool {
         self.mcp_selector.is_confirm_delete(server_id)
+    }
+
+    pub(crate) fn mcp_selector_start_confirm_external(&mut self, server_id: String) {
+        self.mcp_selector.start_confirm_external(server_id);
+    }
+
+    pub(crate) fn mcp_selector_is_confirm_external(&self, server_id: &str) -> bool {
+        self.mcp_selector.is_confirm_external(server_id)
+    }
+
+    pub(crate) fn mcp_selector_cancel_confirm_external(&mut self) {
+        self.mcp_selector.cancel_confirm_external();
     }
 
     // ============ MCP add dialog methods ============

@@ -1,13 +1,14 @@
 //! Desktop host API for ecosystem-neutral external AI application sources.
 
 use bitfun_core::external_sources::{
-    choose_external_subagent_conflict, external_source_snapshot,
-    set_external_prompt_command_conflict_choice, set_external_source_enabled,
-    set_external_subagent_activation, set_external_tool_conflict_choice,
-    set_external_tool_target_decision, ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot,
-    ExternalSourceDiagnostic, ExternalSubagentConflict, ExternalSubagentSummary,
-    ExternalToolApprovalRequest, ExternalToolCatalogEntry, ExternalToolConflict,
-    PromptCommandAvailability,
+    choose_external_mcp_conflict, choose_external_subagent_conflict, external_source_snapshot,
+    set_external_mcp_server_decision, set_external_prompt_command_conflict_choice,
+    set_external_source_enabled, set_external_subagent_activation,
+    set_external_tool_conflict_choice, set_external_tool_target_decision,
+    ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
+    ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic,
+    ExternalSubagentConflict, ExternalSubagentSummary, ExternalToolApprovalRequest,
+    ExternalToolCatalogEntry, ExternalToolConflict, PromptCommandAvailability,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_product_domains::external_sources::{PromptCommandConflict, SourceQualifiedCommandId};
@@ -80,6 +81,29 @@ pub struct ChooseExternalSubagentConflictRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalMcpServerDecisionRequest {
+    pub workspace_path: Option<String>,
+    pub candidate_id: String,
+    pub decision_key: String,
+    pub approved: bool,
+    pub expected_mcp_generation: u64,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ChooseExternalMcpConflictRequest {
+    pub workspace_path: Option<String>,
+    pub conflict_key: String,
+    pub candidate_id: String,
+    #[serde(default)]
+    pub approve_external: bool,
+    pub expected_mcp_generation: u64,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceSnapshotResponse {
     pub generation: u64,
     pub discovery_pending: bool,
@@ -93,6 +117,14 @@ pub struct ExternalSourceSnapshotResponse {
     pub tool_approval_requests: Vec<ExternalToolApprovalRequest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_conflicts: Vec<ExternalToolConflict>,
+    #[serde(default)]
+    pub mcp_generation: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<ExternalMcpCatalogEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_approval_requests: Vec<ExternalMcpApprovalRequest>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_conflicts: Vec<ExternalMcpConflict>,
     #[serde(default)]
     pub subagent_generation: u64,
     #[serde(default)]
@@ -146,6 +178,10 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourceSnapshotResponse {
             tools: snapshot.tools,
             tool_approval_requests: snapshot.tool_approval_requests,
             tool_conflicts: snapshot.tool_conflicts,
+            mcp_generation: snapshot.mcp_generation,
+            mcp_servers: snapshot.mcp_servers,
+            mcp_approval_requests: snapshot.mcp_approval_requests,
+            mcp_conflicts: snapshot.mcp_conflicts,
             subagent_generation: snapshot.subagent_generation,
             preference_revision: snapshot.preference_revision,
             subagents: snapshot.subagents,
@@ -259,6 +295,40 @@ pub async fn choose_external_subagent_conflict_command(
         &request.candidate_id,
         request.approve_external,
         request.expected_subagent_generation,
+        request.expected_preference_revision,
+    )
+    .await
+    .map(Into::into)
+}
+
+#[tauri::command]
+pub async fn set_external_mcp_server_decision_command(
+    request: SetExternalMcpServerDecisionRequest,
+) -> Result<ExternalSourceSnapshotResponse, String> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_mcp_server_decision(
+        workspace,
+        &request.candidate_id,
+        &request.decision_key,
+        request.approved,
+        request.expected_mcp_generation,
+        request.expected_preference_revision,
+    )
+    .await
+    .map(Into::into)
+}
+
+#[tauri::command]
+pub async fn choose_external_mcp_conflict_command(
+    request: ChooseExternalMcpConflictRequest,
+) -> Result<ExternalSourceSnapshotResponse, String> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    choose_external_mcp_conflict(
+        workspace,
+        &request.conflict_key,
+        &request.candidate_id,
+        request.approve_external,
+        request.expected_mcp_generation,
         request.expected_preference_revision,
     )
     .await

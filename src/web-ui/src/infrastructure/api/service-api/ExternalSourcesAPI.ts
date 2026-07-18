@@ -33,7 +33,7 @@ export interface ExternalSourceRecord {
   contentVersion: string;
   diagnostics?: Array<{
     severity: string;
-    assetKind?: 'source' | 'command' | 'tool' | 'subagent';
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp';
     code: string;
     message: string;
   }>;
@@ -78,6 +78,10 @@ export interface ExternalSourceCatalogSnapshot {
   tools?: ExternalToolCatalogEntry[];
   toolApprovalRequests?: ExternalToolApprovalRequest[];
   toolConflicts?: ExternalToolConflict[];
+  mcpGeneration?: number;
+  mcpServers?: ExternalMcpCatalogEntry[];
+  mcpApprovalRequests?: ExternalMcpApprovalRequest[];
+  mcpConflicts?: ExternalMcpConflict[];
   subagentGeneration?: number;
   preferenceRevision?: number;
   subagents?: ExternalSubagentSummary[];
@@ -85,7 +89,7 @@ export interface ExternalSourceCatalogSnapshot {
   pendingSubagentApprovals?: string[];
   diagnostics?: Array<{
     severity: string;
-    assetKind?: 'source' | 'command' | 'tool' | 'subagent';
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp';
     code: string;
     message: string;
   }>;
@@ -201,6 +205,74 @@ export interface ExternalToolConflict {
   }>;
 }
 
+export type ExternalMcpActivation =
+  | { state: 'approval_required' }
+  | { state: 'starting' }
+  | { state: 'active' }
+  | { state: 'declined' }
+  | { state: 'conflict' }
+  | { state: 'covered'; selected_candidate_id: string }
+  | { state: 'source_disabled' }
+  | { state: 'configuration_changed' }
+  | { state: 'unsupported'; reason: string }
+  | { state: 'runtime_unavailable'; reason: string }
+  | { state: 'removed' };
+
+export interface ExternalMcpDefinition {
+  id: {
+    source: { providerId: string; sourceId: string };
+    localId: string;
+  };
+  provenance: Array<{ providerId: string; sourceId: string }>;
+  name: string;
+  transport: 'local_stdio' | 'streamable_http';
+  commandPreview?: string;
+  argumentCount: number;
+  workingDirectory?: string;
+  environmentKeys: string[];
+  environmentReferenceNames?: string[];
+  remoteUrlPreview?: string;
+  headerNames: string[];
+  sourceEnabled: boolean;
+  behaviorVersion: string;
+  staticStatus:
+    | { state: 'ready' }
+    | { state: 'disabled_by_source' }
+    | { state: 'unsupported'; reason: string }
+    | { state: 'invalid'; reason: string };
+}
+
+export interface ExternalMcpCatalogEntry {
+  candidateId: string;
+  definition: ExternalMcpDefinition;
+  approvalKey: string;
+  decisionKey: string;
+  runtimeId?: string;
+  activationState: ExternalMcpActivation;
+}
+
+export interface ExternalMcpApprovalRequest {
+  candidateId: string;
+  approvalKey: string;
+  decisionKey: string;
+  definition: ExternalMcpDefinition;
+}
+
+export interface ExternalMcpConflict {
+  conflictKey: string;
+  serverName: string;
+  selectedCandidateId?: string;
+  candidates: Array<{
+    candidateId: string;
+    displayName: string;
+    external: boolean;
+    source?: { providerId: string; sourceId: string };
+    behaviorVersion: string;
+    available: boolean;
+    unavailableReason?: string;
+  }>;
+}
+
 export const externalSourcesAPI = {
   getSnapshot(workspacePath?: string, forceRefresh = false) {
     return api.invoke<ExternalSourceCatalogSnapshot>('get_external_source_snapshot', {
@@ -276,6 +348,46 @@ export const externalSourcesAPI = {
         candidateId,
         approveExternal,
         expectedSubagentGeneration,
+        expectedPreferenceRevision,
+      },
+    });
+  },
+
+  setMcpServerDecision(
+    workspacePath: string | undefined,
+    candidateId: string,
+    decisionKey: string,
+    approved: boolean,
+    expectedMcpGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_mcp_server_decision_command', {
+      request: {
+        workspacePath,
+        candidateId,
+        decisionKey,
+        approved,
+        expectedMcpGeneration,
+        expectedPreferenceRevision,
+      },
+    });
+  },
+
+  chooseMcpConflict(
+    workspacePath: string | undefined,
+    conflictKey: string,
+    candidateId: string,
+    approveExternal: boolean,
+    expectedMcpGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    return api.invoke<ExternalSourceCatalogSnapshot>('choose_external_mcp_conflict_command', {
+      request: {
+        workspacePath,
+        conflictKey,
+        candidateId,
+        approveExternal,
+        expectedMcpGeneration,
         expectedPreferenceRevision,
       },
     });

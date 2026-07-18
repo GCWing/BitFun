@@ -8,6 +8,7 @@ export const publicApiContractSlices = [
   'external-source-command-contract',
   'external-source-tool-contract',
   'external-source-subagent-contract',
+  'external-source-mcp-contract',
 ];
 
 const contractSlices = {
@@ -18,6 +19,7 @@ const contractSlices = {
   externalSourceCommandContract: 'external-source-command-contract',
   externalSourceToolContract: 'external-source-tool-contract',
   externalSourceSubagentContract: 'external-source-subagent-contract',
+  externalSourceMcpContract: 'external-source-mcp-contract',
 };
 
 function pluginRuntimeEntry(symbol, p0, consumer, verification, contractSlice, wireImpact = true) {
@@ -202,6 +204,14 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeSubagentProviderOptions',
     'OpenCode subagent adapter fixture tests and explicit environment injection',
   ),
+  opencodeAdapterEntry(
+    'OpenCodeMcpProvider',
+    'bitfun-core external source composition root and OpenCode MCP adapter tests',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeMcpProviderOptions',
+    'OpenCode MCP adapter fixture tests and explicit environment injection',
+  ),
 ];
 
 function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
@@ -250,6 +260,23 @@ function externalSubagentEntry(symbol, owner, consumer, wireImpact = false) {
       'PR3 needs typed discovery, approval-envelope, conflict, summary, and fresh-invocation contracts without ecosystem payload leakage',
     exit:
       'remove only through a reviewed subagent-capability contract migration with equivalent fail-closed routing and product tests',
+  };
+}
+
+function externalMcpEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'external MCP contract, coordinator, OpenCode adapter, MCP owner lifecycle, TUI, Desktop, and Web tests',
+    p0: 'PR6 ecosystem-neutral MCP source activation and OpenCode MCP configuration vertical slice',
+    contractSlice: contractSlices.externalSourceMcpContract,
+    wireImpact,
+    rationale:
+      'PR6 needs typed static discovery, versioned approval, conflict, preparation, and runtime status contracts without OpenCode or MCP-owner payload leakage',
+    exit:
+      'remove only through a reviewed MCP source contract migration with equivalent fail-closed activation and lifecycle tests',
   };
 }
 
@@ -313,6 +340,33 @@ export const externalSourceContractPublicApiEntries = [
       symbol,
       'product-domains external tool contract owner',
       'ecosystem tool providers, external-tool coordinator, product composition, and neutral product surfaces',
+      true,
+    ),
+  ),
+  [
+    'SourceQualifiedMcpServerId',
+    'ExternalMcpTransportKind',
+    'ExternalMcpStaticStatus',
+    'ExternalMcpServerDefinition',
+    'ExternalMcpActivationState',
+    'ExternalMcpCatalogEntry',
+    'ExternalMcpApprovalRequest',
+    'ExternalMcpConflictCandidate',
+    'ExternalMcpConflict',
+    'SecretValue',
+    'PreparedExternalMcpTransport',
+    'PreparedExternalMcpServer',
+    'ExternalMcpProviderIdentity',
+    'ExternalMcpProviderSnapshot',
+    'ExternalMcpSourceProvider',
+    'external_mcp_approval_key',
+    'external_mcp_conflict_key',
+    'ExternalMcpDiscoveryInput',
+  ].map((symbol) =>
+    externalMcpEntry(
+      symbol,
+      'product-domains external MCP contract owner',
+      'ecosystem MCP providers, external-MCP coordinator, product reconciliation, and MCP runtime owner',
       true,
     ),
   ),
@@ -390,6 +444,18 @@ export const externalSourceCoordinatorPublicApiEntries = [
       'bitfun-core bounded concurrent external-subagent provider scheduler',
     ),
   ),
+  ...[
+    'ExternalMcpCoordinator',
+    'ExternalMcpCoordinatorSnapshot',
+    'ExternalMcpDiscoveryRequest',
+    'ExternalMcpDiscoveryResult',
+  ].map((symbol) =>
+    externalMcpEntry(
+      symbol,
+      'external-sources assembly owner',
+      'bitfun-core bounded concurrent external-MCP provider scheduler',
+    ),
+  ),
 ];
 
 export const externalSourceCorePublicApiEntries = [
@@ -449,6 +515,22 @@ export const externalSourceCorePublicApiEntries = [
     externalSubagentEntry(
       symbol,
       'bitfun-core external subagent composition facade',
+      'bitfun-cli and desktop host APIs',
+    ),
+  ),
+  ...[
+    'ExternalMcpActivationState',
+    'ExternalMcpApprovalRequest',
+    'ExternalMcpCatalogEntry',
+    'ExternalMcpConflict',
+    'ExternalMcpTransportKind',
+    'native_mcp_candidate_id',
+    'set_external_mcp_server_decision',
+    'choose_external_mcp_conflict',
+  ].map((symbol) =>
+    externalMcpEntry(
+      symbol,
+      'bitfun-core external MCP composition facade',
       'bitfun-cli and desktop host APIs',
     ),
   ),

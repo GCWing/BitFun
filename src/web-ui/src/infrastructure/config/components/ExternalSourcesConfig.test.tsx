@@ -12,6 +12,8 @@ const setToolTargetDecisionMock = vi.hoisted(() => vi.fn());
 const setToolConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setSubagentActivationMock = vi.hoisted(() => vi.fn());
 const chooseSubagentConflictMock = vi.hoisted(() => vi.fn());
+const setMcpServerDecisionMock = vi.hoisted(() => vi.fn());
+const chooseMcpConflictMock = vi.hoisted(() => vi.fn());
 const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project' }));
 
 vi.mock('react-i18next', () => ({
@@ -43,6 +45,8 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     setToolConflictChoice: setToolConflictChoiceMock,
     setSubagentActivation: setSubagentActivationMock,
     chooseSubagentConflict: chooseSubagentConflictMock,
+    setMcpServerDecision: setMcpServerDecisionMock,
+    chooseMcpConflict: chooseMcpConflictMock,
   },
 }));
 
@@ -119,6 +123,8 @@ describe('ExternalSourcesConfig', () => {
     setToolConflictChoiceMock.mockResolvedValue(snapshot);
     setSubagentActivationMock.mockResolvedValue(snapshot);
     chooseSubagentConflictMock.mockResolvedValue(snapshot);
+    setMcpServerDecisionMock.mockResolvedValue(snapshot);
+    chooseMcpConflictMock.mockResolvedValue(snapshot);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -162,6 +168,164 @@ describe('ExternalSourcesConfig', () => {
       'D:/workspace/project',
       'source-key',
       false,
+    );
+  });
+
+  it('reviews MCP risk and binds approval and conflict choices to the visible versions', async () => {
+    const mcpSnapshot = {
+      ...snapshot,
+      commandConflicts: [],
+      preferenceRevision: 9,
+      mcpGeneration: 5,
+      sources: [{
+        ...snapshot.sources[0],
+        stableKey: 'opencode-mcp-project',
+        record: {
+          ...snapshot.sources[0].record,
+          key: { providerId: 'opencode.mcp', sourceId: 'project' },
+          displayName: 'OpenCode project MCP',
+          sourceKind: 'opencode_mcp_config',
+          location: '<workspace>/opencode.json',
+        },
+      }],
+      mcpServers: [{
+        candidateId: 'external-mcp-github',
+        decisionKey: 'mcp-decision-v1',
+        definition: {
+          id: {
+            source: { providerId: 'opencode.mcp', sourceId: 'project' },
+            localId: 'github',
+          },
+          provenance: [{ providerId: 'opencode.mcp', sourceId: 'project' }],
+          name: 'github',
+          transport: 'local_stdio',
+          commandPreview: 'npx',
+          argumentCount: 2,
+          workingDirectory: '<workspace>',
+          environmentKeys: ['GITHUB_TOKEN'],
+          environmentReferenceNames: ['OPENCODE_TOKEN'],
+          headerNames: [],
+          sourceEnabled: true,
+          behaviorVersion: 'behavior-v1',
+          staticStatus: { state: 'ready' },
+        },
+        activationState: { state: 'approval_required' },
+      }],
+      mcpApprovalRequests: [{
+        candidateId: 'external-mcp-github',
+        approvalKey: 'mcp-approval-v1',
+        decisionKey: 'mcp-decision-v1',
+        definition: {
+          id: {
+            source: { providerId: 'opencode.mcp', sourceId: 'project' },
+            localId: 'github',
+          },
+          provenance: [{ providerId: 'opencode.mcp', sourceId: 'project' }],
+          name: 'github',
+          transport: 'local_stdio',
+          commandPreview: 'npx',
+          argumentCount: 2,
+          workingDirectory: '<workspace>',
+          environmentKeys: ['GITHUB_TOKEN'],
+          environmentReferenceNames: ['OPENCODE_TOKEN'],
+          headerNames: [],
+          sourceEnabled: true,
+          behaviorVersion: 'behavior-v1',
+          staticStatus: { state: 'ready' },
+        },
+      }],
+      mcpConflicts: [{
+        conflictKey: 'mcp-conflict-v1',
+        serverName: 'github',
+        candidates: [{
+          candidateId: 'native-mcp-github',
+          displayName: 'BitFun: github',
+          external: false,
+          behaviorVersion: 'native-v1',
+          available: true,
+        }, {
+          candidateId: 'external-mcp-github',
+          displayName: 'OpenCode: github',
+          external: true,
+          behaviorVersion: 'behavior-v1',
+          available: true,
+        }],
+      }],
+    };
+    getSnapshotMock.mockResolvedValue(mcpSnapshot);
+    setMcpServerDecisionMock.mockResolvedValue({
+      ...mcpSnapshot,
+      mcpApprovalRequests: [],
+    });
+    chooseMcpConflictMock.mockResolvedValue({
+      ...mcpSnapshot,
+      mcpConflicts: [{
+        ...mcpSnapshot.mcpConflicts[0],
+        selectedCandidateId: 'native-mcp-github',
+      }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('mcpApprovals.warning');
+    expect(container.textContent).toContain('OpenCode project MCP');
+    expect(container.textContent).not.toContain('D:/workspace/project/opencode.json');
+    expect(container.textContent).toContain('mcp.command:{"command":"npx"}');
+    expect(container.textContent).toContain('mcp.workingDirectory:{"location":"<workspace>"}');
+    expect(container.textContent).toContain('GITHUB_TOKEN');
+    expect(container.textContent).toContain('OPENCODE_TOKEN');
+
+    const externalConflictCandidate = Array.from(
+      container.querySelectorAll('.bitfun-external-sources-config__candidate'),
+    ).find((candidate) => candidate.textContent?.includes('OpenCode: github'));
+    expect(externalConflictCandidate?.textContent).toContain('mcpConflicts.review');
+    expect(externalConflictCandidate?.textContent).not.toContain('mcp.argumentCount');
+
+    const reviewExternalCandidate = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('mcpConflicts.review'));
+    await act(async () => reviewExternalCandidate?.click());
+    expect(chooseMcpConflictMock).not.toHaveBeenCalled();
+    expect(externalConflictCandidate?.textContent).toContain('mcp.argumentCount:{"count":2}');
+    expect(externalConflictCandidate?.textContent).toContain('mcp.scope');
+    expect(externalConflictCandidate?.textContent).toContain('mcpApprovals.warning');
+
+    const approveExternalCandidate = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('mcpConflicts.approveAndUse'));
+    await act(async () => approveExternalCandidate?.click());
+    expect(chooseMcpConflictMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'mcp-conflict-v1',
+      'external-mcp-github',
+      true,
+      5,
+      9,
+    );
+
+    const enable = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('mcpApprovals.enable'));
+    await act(async () => enable?.click());
+    expect(setMcpServerDecisionMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'external-mcp-github',
+      'mcp-decision-v1',
+      true,
+      5,
+      9,
+    );
+
+    const nativeCandidate = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('BitFun: github'));
+    await act(async () => nativeCandidate?.click());
+    expect(chooseMcpConflictMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'mcp-conflict-v1',
+      'native-mcp-github',
+      false,
+      5,
+      9,
     );
   });
 

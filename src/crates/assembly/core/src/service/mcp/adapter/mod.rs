@@ -12,3 +12,4 @@ pub use context::MCPContextProvider;
 pub use prompt::PromptAdapter;
 pub use resource::ResourceAdapter;
 pub use tool::MCPToolAdapter;
+pub(crate) use tool::{MCPToolContextPolicy, MCPWorkspaceToolRoute};

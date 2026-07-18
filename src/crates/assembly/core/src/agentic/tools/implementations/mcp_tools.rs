@@ -64,8 +64,17 @@ async fn list_prompts_for_server(
 async fn ensure_mcp_server_available_for_context(
     manager: &Arc<MCPServerManager>,
     server_id: &str,
-    _context: &ToolUseContext,
+    context: &ToolUseContext,
 ) -> BitFunResult<()> {
+    if !manager
+        .server_available_for_context(server_id, context.workspace_root(), context.is_remote())
+        .await
+    {
+        return Err(tool_error(format!(
+            "MCP server is unavailable in the current workspace: {}",
+            server_id
+        )));
+    }
     manager
         .get_connection(server_id)
         .await

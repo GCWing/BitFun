@@ -26,14 +26,27 @@ impl MCPServerManager {
     /// Initializes all servers.
     pub async fn initialize_all(&self) -> BitFunResult<()> {
         info!("Initializing all MCP servers");
+        let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
 
         let existing_server_ids = self.runtime.get_all_server_ids().await;
         if !existing_server_ids.is_empty() {
+            let external_ids = self.ephemeral_workspace_scopes.read().await;
+            let refresh_ids = existing_server_ids
+                .iter()
+                .filter(|server_id| !external_ids.contains_key(*server_id))
+                .cloned()
+                .collect::<Vec<_>>();
+            drop(external_ids);
             info!(
-                "Refreshing MCP servers: shutting down existing servers before applying config: count={}",
-                existing_server_ids.len()
+                "Refreshing persisted MCP servers while preserving external workspace runtimes: count={}",
+                refresh_ids.len()
             );
-            self.shutdown().await?;
+            for server_id in refresh_ids {
+                let _ = self.stop_server(&server_id).await;
+                let _ = self.runtime.unregister(&server_id).await;
+                self.runtime.remove_catalog(&server_id).await;
+                self.clear_reconnect_state(&server_id).await;
+            }
         }
 
         let configs = self.config_service.load_all_configs().await?;
@@ -166,6 +179,14 @@ impl MCPServerManager {
 
     /// Starts a server.
     pub async fn start_server(&self, server_id: &str) -> BitFunResult<()> {
+        self.start_server_with_external_token(server_id, None).await
+    }
+
+    async fn start_server_with_external_token(
+        &self,
+        server_id: &str,
+        expected_external_start_token: Option<Arc<()>>,
+    ) -> BitFunResult<()> {
         self.start_reconnect_monitor_if_needed();
         info!("Starting MCP server: id={}", server_id);
 
@@ -213,7 +234,13 @@ impl MCPServerManager {
                     resolved_command, source_label, server_id
                 );
 
-                proc.start(&resolved_command, &config.args, &config.env)
+                proc.start_with_environment_policy(
+                    &resolved_command,
+                    &config.args,
+                    &config.env,
+                    config.working_directory.as_deref().map(Path::new),
+                    config.inherits_parent_environment(),
+                )
                     .await
                     .map_err(|e| {
                         error!(
@@ -237,35 +264,72 @@ impl MCPServerManager {
                     )));
                 }
 
-                let url = config.url.as_ref().ok_or_else(|| {
+                config.url.as_ref().ok_or_else(|| {
                     error!("Missing URL for remote MCP server: id={}", server_id);
                     BitFunError::Configuration("Missing URL for remote MCP server".to_string())
                 })?;
 
                 info!(
-                    "Connecting to remote MCP server: transport={} url={} id={}",
+                    "Connecting to remote MCP server: transport={} id={}",
                     transport.as_str(),
-                    url,
                     server_id
                 );
 
                 let data_dir = crate::infrastructure::try_get_path_manager_arc()?.user_data_dir();
                 proc.start_remote(data_dir, &config).await.map_err(|e| {
                     error!(
-                        "Failed to connect to remote MCP server: url={} id={} error={}",
-                        url, server_id, e
+                        "Failed to connect to remote MCP server: id={} error={}",
+                        server_id, e
                     );
                     e
                 })?;
             }
         }
 
-        if let Some(connection) = proc.connection() {
+        let connection = proc.connection();
+        drop(proc);
+        let external_workspace_scope = self
+            .ephemeral_workspace_scopes
+            .read()
+            .await
+            .get(server_id)
+            .cloned();
+        let _external_publication_guard = if external_workspace_scope.is_some() {
+            Some(self.ephemeral_lifecycle.lock().await)
+        } else {
+            None
+        };
+        if !external_start_publication_allowed(
+            external_workspace_scope.is_some(),
+            self.ephemeral_retirements
+                .read()
+                .await
+                .contains_key(server_id),
+        ) {
+            return Err(BitFunError::Configuration(format!(
+                "External MCP server was retired during startup: {}",
+                server_id
+            )));
+        }
+        if let Some(expected_token) = expected_external_start_token.as_ref() {
+            let start_tokens = self.ephemeral_start_tokens.read().await;
+            if !external_start_token_is_current(start_tokens.get(server_id), expected_token) {
+                return Err(BitFunError::Configuration(format!(
+                    "External MCP server startup was superseded: {}",
+                    server_id
+                )));
+            }
+        }
+
+        if let Some(connection) = connection {
             self.runtime
                 .add_connection(server_id.to_string(), connection.clone())
                 .await;
 
-            match Self::register_mcp_tools(server_id, &config.name, connection.clone()).await {
+            match self
+                .register_mcp_tools(server_id, &config.name, connection.clone())
+                .await
+            {
                 Ok(count) => {
                     info!(
                         "Registered {} MCP tools: server_name={} server_id={}",
@@ -277,17 +341,32 @@ impl MCPServerManager {
                         "Failed to register MCP tools: server_name={} server_id={} error={}",
                         config.name, server_id, e
                     );
+                    if external_workspace_scope.is_some() {
+                        self.runtime.remove_connection(server_id).await;
+                        return Err(e);
+                    }
                 }
             }
 
             self.start_connection_event_listener(server_id, &config.name, connection.clone())
                 .await;
             self.warm_catalog_caches(server_id, connection).await;
+            if external_workspace_scope.is_some() {
+                self.ephemeral_ready_servers
+                    .write()
+                    .await
+                    .insert(server_id.to_string());
+            }
         } else {
             warn!(
                 "Connection not available, server may not have started correctly: id={}",
                 server_id
             );
+            if external_workspace_scope.is_some() {
+                return Err(BitFunError::MCPError(
+                    "External MCP server did not establish a connection".to_string(),
+                ));
+            }
         }
 
         info!("MCP server started successfully: id={}", server_id);
@@ -336,7 +415,14 @@ impl MCPServerManager {
                     .command
                     .as_ref()
                     .ok_or_else(|| BitFunError::Configuration("Missing command".to_string()))?;
-                proc.restart(command, &config.args, &config.env).await?;
+                proc.restart_with_environment_policy(
+                    command,
+                    &config.args,
+                    &config.env,
+                    config.working_directory.as_deref().map(Path::new),
+                    config.inherits_parent_environment(),
+                )
+                .await?;
             }
             super::super::MCPServerType::Remote => {
                 self.ensure_registered(server_id).await?;
@@ -447,6 +533,302 @@ impl MCPServerManager {
         Ok(())
     }
 
+    async fn external_start_token_matches(&self, server_id: &str, expected: &Arc<()>) -> bool {
+        let start_tokens = self.ephemeral_start_tokens.read().await;
+        external_start_token_is_current(start_tokens.get(server_id), expected)
+    }
+
+    async fn remove_ephemeral_server_for_start(&self, server_id: &str, expected: &Arc<()>) -> bool {
+        let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
+        if !self.external_start_token_matches(server_id, expected).await {
+            return false;
+        }
+        if let Err(error) = self.remove_ephemeral_server(server_id).await {
+            warn!(
+                "Could not clean up failed external MCP startup: id={} error={}",
+                server_id, error
+            );
+        }
+        true
+    }
+
+    /// Installs a product-approved runtime-only server. A matching retirement
+    /// can be cancelled without restarting the process, which keeps rapid
+    /// disable/enable actions from interrupting unrelated session work.
+    pub async fn install_external_ephemeral_server(
+        &self,
+        config: MCPServerConfig,
+        workspace_key: String,
+    ) -> BitFunResult<()> {
+        config.validate()?;
+        let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
+        let server_id = config.id.clone();
+        let start_token = Arc::new(());
+        self.ephemeral_start_tokens
+            .write()
+            .await
+            .insert(server_id.clone(), Arc::clone(&start_token));
+        self.ephemeral_workspace_scopes
+            .write()
+            .await
+            .insert(server_id.clone(), workspace_key);
+        self.ephemeral_ready_servers
+            .write()
+            .await
+            .remove(&server_id);
+        let cancelled_retirement = self
+            .ephemeral_retirements
+            .write()
+            .await
+            .remove(&server_id)
+            .map(|cancelled| {
+                cancelled.store(true, Ordering::Release);
+                true
+            })
+            .unwrap_or(false);
+
+        if cancelled_retirement && self.runtime.contains(&server_id).await {
+            if let Err(error) = self.runtime.insert_runtime_config(config.clone()).await {
+                let _ = self.remove_ephemeral_server(&server_id).await;
+                return Err(error.into());
+            }
+            let connection = if let Some(process) = self.runtime.get_process(&server_id).await {
+                process.read().await.connection()
+            } else {
+                None
+            };
+            if let Some(connection) = connection {
+                self.runtime
+                    .add_connection(server_id.clone(), connection.clone())
+                    .await;
+                if let Err(error) = self
+                    .refresh_mcp_tools(&server_id, &config.name, connection.clone())
+                    .await
+                {
+                    let _ = self.remove_ephemeral_server(&server_id).await;
+                    return Err(error);
+                }
+                self.start_connection_event_listener(&server_id, &config.name, connection.clone())
+                    .await;
+                self.warm_catalog_caches(&server_id, connection).await;
+                self.ephemeral_ready_servers
+                    .write()
+                    .await
+                    .insert(server_id.clone());
+            } else {
+                let _ = self.remove_ephemeral_server(&server_id).await;
+                return Err(BitFunError::MCPError(
+                    "External MCP server did not retain its connection".to_string(),
+                ));
+            }
+            return Ok(());
+        }
+        if self.runtime.contains(&server_id).await {
+            self.ephemeral_workspace_scopes
+                .write()
+                .await
+                .remove(&server_id);
+            self.ephemeral_start_tokens.write().await.remove(&server_id);
+            return Err(BitFunError::Configuration(format!(
+                "MCP server already exists: {}",
+                server_id
+            )));
+        }
+
+        if let Err(error) = self.runtime.insert_runtime_config(config.clone()).await {
+            self.ephemeral_workspace_scopes
+                .write()
+                .await
+                .remove(&server_id);
+            self.ephemeral_start_tokens.write().await.remove(&server_id);
+            return Err(error.into());
+        }
+        if let Err(error) = self.runtime.register(&config).await {
+            self.runtime.remove_runtime_config(&server_id).await;
+            self.ephemeral_workspace_scopes
+                .write()
+                .await
+                .remove(&server_id);
+            self.ephemeral_start_tokens.write().await.remove(&server_id);
+            return Err(error.into());
+        }
+        if config.enabled && config.auto_start {
+            // External source refresh and product-surface reads must not wait
+            // for a third-party process or network handshake. Registration is
+            // synchronous so status reads immediately see Loading; startup is
+            // bounded in the background and cleans up only this runtime item.
+            const EXTERNAL_START_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+            let manager = self.clone();
+            tokio::spawn(async move {
+                let startup = tokio::time::timeout(
+                    EXTERNAL_START_TIMEOUT,
+                    manager.start_server_with_external_token(
+                        &server_id,
+                        Some(Arc::clone(&start_token)),
+                    ),
+                )
+                .await;
+                match startup {
+                    Ok(Ok(())) => {
+                        if manager
+                            .external_start_token_matches(&server_id, &start_token)
+                            .await
+                        {
+                            crate::external_sources::notify_external_tool_registry_changed();
+                        }
+                    }
+                    Ok(Err(error)) => {
+                        warn!(
+                            "External ephemeral MCP server failed to start: id={} error={}",
+                            server_id, error
+                        );
+                        if manager
+                            .remove_ephemeral_server_for_start(&server_id, &start_token)
+                            .await
+                        {
+                            crate::external_sources::notify_external_tool_registry_changed();
+                        }
+                    }
+                    Err(_) => {
+                        warn!(
+                            "External ephemeral MCP server startup timed out: id={}",
+                            server_id
+                        );
+                        if manager
+                            .remove_ephemeral_server_for_start(&server_id, &start_token)
+                            .await
+                        {
+                            crate::external_sources::notify_external_tool_registry_changed();
+                        }
+                    }
+                }
+            });
+        }
+        Ok(())
+    }
+
+    /// Withdraws new tool/resource access immediately, then lets already-held
+    /// connection users finish before the process is reclaimed. The grace is
+    /// bounded so a deleted or malicious server cannot remain indefinitely.
+    pub async fn retire_external_ephemeral_server(&self, server_id: &str) -> BitFunResult<()> {
+        const RETIREMENT_GRACE: std::time::Duration = std::time::Duration::from_secs(30);
+        const RETIREMENT_RECLAIM_ATTEMPTS: usize = 3;
+        const RETIREMENT_RETRY_DELAY: std::time::Duration =
+            std::time::Duration::from_millis(250);
+        let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
+        self.ephemeral_start_tokens.write().await.remove(server_id);
+        if !self.runtime.contains(server_id).await {
+            self.runtime.remove_runtime_config(server_id).await;
+            self.ephemeral_ready_servers.write().await.remove(server_id);
+            self.ephemeral_workspace_scopes
+                .write()
+                .await
+                .remove(server_id);
+            return Ok(());
+        }
+
+        if let Some(previous) = self
+            .ephemeral_retirements
+            .write()
+            .await
+            .insert(server_id.to_string(), Arc::new(AtomicBool::new(false)))
+        {
+            previous.store(true, Ordering::Release);
+        }
+        let cancelled = self
+            .ephemeral_retirements
+            .read()
+            .await
+            .get(server_id)
+            .cloned()
+            .expect("retirement marker was just inserted");
+        let connection = self.runtime.get_connection(server_id).await;
+
+        self.ephemeral_ready_servers.write().await.remove(server_id);
+        Self::unregister_mcp_tools(server_id).await;
+        self.stop_connection_event_listener(server_id).await;
+        self.runtime.remove_connection(server_id).await;
+        self.runtime.remove_catalog(server_id).await;
+        self.runtime.remove_runtime_config(server_id).await;
+        self.clear_reconnect_state(server_id).await;
+
+        let manager = self.clone();
+        let server_id = server_id.to_string();
+        tokio::spawn(async move {
+            let started = std::time::Instant::now();
+            loop {
+                if cancelled.load(Ordering::Acquire) {
+                    return;
+                }
+                let references = connection.as_ref().map_or(0, Arc::strong_count);
+                if should_finish_ephemeral_retirement(
+                    references,
+                    started.elapsed(),
+                    RETIREMENT_GRACE,
+                ) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+
+            for attempt in 1..=RETIREMENT_RECLAIM_ATTEMPTS {
+                let lifecycle_guard = manager.ephemeral_lifecycle.lock().await;
+                if cancelled.load(Ordering::Acquire) {
+                    return;
+                }
+                let should_remove = manager
+                    .ephemeral_retirements
+                    .read()
+                    .await
+                    .get(&server_id)
+                    .is_some_and(|current| Arc::ptr_eq(current, &cancelled));
+                if !should_remove {
+                    return;
+                }
+                match manager.runtime.unregister(&server_id).await {
+                    Ok(()) => {
+                        manager
+                            .ephemeral_retirements
+                            .write()
+                            .await
+                            .remove(&server_id);
+                        Self::unregister_mcp_tools(&server_id).await;
+                        manager.stop_connection_event_listener(&server_id).await;
+                        manager.runtime.remove_connection(&server_id).await;
+                        manager.runtime.remove_catalog(&server_id).await;
+                        manager
+                            .ephemeral_ready_servers
+                            .write()
+                            .await
+                            .remove(&server_id);
+                        manager
+                            .ephemeral_workspace_scopes
+                            .write()
+                            .await
+                            .remove(&server_id);
+                        return;
+                    }
+                    Err(error) if attempt < RETIREMENT_RECLAIM_ATTEMPTS => {
+                        warn!(
+                            "Could not reclaim retired ephemeral MCP server; retrying: id={} attempt={} error={}",
+                            server_id, attempt, error
+                        );
+                    }
+                    Err(error) => {
+                        warn!(
+                            "Could not reclaim retired ephemeral MCP server; retaining ownership for a later retry: id={} attempts={} error={}",
+                            server_id, RETIREMENT_RECLAIM_ATTEMPTS, error
+                        );
+                        return;
+                    }
+                }
+                drop(lifecycle_guard);
+                tokio::time::sleep(RETIREMENT_RETRY_DELAY).await;
+            }
+        });
+        Ok(())
+    }
+
     /// Removes a runtime-only MCP server and its registered tools without touching persisted config.
     pub async fn remove_ephemeral_server(&self, server_id: &str) -> BitFunResult<()> {
         info!("Removing ephemeral MCP server: id={}", server_id);
@@ -463,6 +845,12 @@ impl MCPServerManager {
         self.stop_connection_event_listener(server_id).await;
         self.clear_reconnect_state(server_id).await;
         self.runtime.remove_catalog(server_id).await;
+        self.ephemeral_ready_servers.write().await.remove(server_id);
+        self.ephemeral_start_tokens.write().await.remove(server_id);
+        self.ephemeral_workspace_scopes
+            .write()
+            .await
+            .remove(server_id);
 
         if let Err(error) = stop_result {
             warn!(
@@ -565,6 +953,12 @@ impl MCPServerManager {
     /// Shuts down all servers.
     pub async fn shutdown(&self) -> BitFunResult<()> {
         info!("Shutting down all MCP servers");
+
+        for (_, cancelled) in self.ephemeral_retirements.write().await.drain() {
+            cancelled.store(true, Ordering::Release);
+        }
+        self.ephemeral_ready_servers.write().await.clear();
+        self.ephemeral_start_tokens.write().await.clear();
 
         let server_ids = self.runtime.get_all_server_ids().await;
         for server_id in server_ids {

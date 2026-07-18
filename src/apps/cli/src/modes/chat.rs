@@ -37,7 +37,7 @@ use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionP
 use crate::ui::command_palette::PaletteAction;
 use crate::ui::login_form::LoginFormAction;
 use crate::ui::mcp_add_dialog::McpAddAction;
-use crate::ui::mcp_selector::McpItem;
+use crate::ui::mcp_selector::{McpItem, McpItemAction};
 use crate::ui::model_config_form::{ModelFormAction, ModelFormResult};
 use crate::ui::model_selector::ModelItem;
 use crate::ui::permission::{PermissionAction, ALLOW_ALWAYS_RUNTIME_SCOPE};
@@ -120,6 +120,7 @@ pub(crate) enum ChatExitReason {
 /// Pending MCP operation (deferred to allow a render frame for loading state)
 enum PendingMcpOp {
     Toggle(String),
+    External(McpItem),
     Add { name: String, config_json: String },
     Delete(String),
 }
@@ -136,6 +137,11 @@ enum PendingMcpTask {
     Delete {
         server_id: String,
         handle: tokio::task::JoinHandle<bitfun_core::util::errors::BitFunResult<()>>,
+    },
+    External {
+        item_id: String,
+        item_name: String,
+        handle: tokio::task::JoinHandle<std::result::Result<ExternalSourceCatalogSnapshot, String>>,
     },
 }
 

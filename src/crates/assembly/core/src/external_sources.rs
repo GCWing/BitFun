@@ -4,18 +4,25 @@
 //! catalog and product surfaces remain provider- and ecosystem-neutral.
 
 pub use bitfun_product_domains::external_sources::{
-    prompt_command_conflict_key, ExpandedPromptCommand, ExternalSourceAssetKind,
-    ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic,
-    ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState, ExternalToolActivationState,
-    ExternalToolApprovalRequest, ExternalToolCapability, ExternalToolCatalogEntry,
-    ExternalToolConflict, ExternalToolRuntimeKind, PromptCommandAvailability,
-    PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
+    prompt_command_conflict_key, ExpandedPromptCommand, ExternalMcpActivationState,
+    ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
+    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
+    ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity,
+    ExternalSourceLifecycleState, ExternalToolActivationState, ExternalToolApprovalRequest,
+    ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolConflict,
+    ExternalToolRuntimeKind, PromptCommandAvailability, PromptCommandCatalogEntry,
+    PromptCommandDefinition, SourceKey,
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
     ExternalSubagentConflictCandidate, ExternalSubagentSummary,
 };
 
+use crate::external_mcp::{
+    reconcile_external_mcp_catalog, BitFunExternalMcpRuntime, ExternalMcpDecision,
+    ExternalMcpDecisions, ExternalMcpProductState, ExternalMcpRuntimePort,
+    ExternalMcpRuntimeStatus, NativeMcpCandidate,
+};
 use crate::external_subagents::{
     reconcile_external_subagents, ExternalSubagentDecisions, ExternalSubagentProductState,
     DISABLED_SUBAGENT_CONFLICT_CHOICE,
@@ -23,21 +30,22 @@ use crate::external_subagents::{
 use crate::external_tools::{
     begin_external_tool_workspace_recovery, external_tool_workspace_requires_recovery,
     merge_tool_state, reconcile_external_tools, release_external_tool_workspace,
-    reset_external_tool_workspace_recovery_budget, ExternalToolDecisions, ExternalToolProductState,
-    TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
+    reset_external_tool_workspace_recovery_budget, workspace_route_key, ExternalToolDecisions,
+    ExternalToolProductState, TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
 use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 use bitfun_external_sources::{
+    ExternalMcpCoordinator, ExternalMcpDiscoveryRequest, ExternalMcpDiscoveryResult,
     ExternalSourceCoordinator, ExternalSourceDiscoveryRequest, ExternalSourceDiscoveryResult,
     ExternalSubagentCoordinator, ExternalSubagentDiscoveryRequest, ExternalSubagentDiscoveryResult,
     ExternalToolCoordinator, ExternalToolDiscoveryRequest, ExternalToolDiscoveryResult,
 };
 use bitfun_opencode_adapter::{
-    OpenCodeCommandProvider, OpenCodeSubagentProvider, OpenCodeToolProvider,
+    OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSubagentProvider, OpenCodeToolProvider,
 };
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider,
-    PromptCommandSourceProvider,
+    ExecutionDomainId, ExternalMcpSourceProvider, ExternalSourceContext, ExternalSourceScope,
+    ExternalToolSourceProvider, PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_services_core::json_store::JsonFileStore;
@@ -46,6 +54,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future::{join_all, BoxFuture, Shared};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -84,6 +93,10 @@ struct ExternalSourcesConfig {
     subagent_conflict_choices: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     subagent_conflict_lineage_current_keys: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    mcp_server_decisions: BTreeMap<String, ExternalMcpDecision>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    mcp_conflict_choices: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -128,6 +141,7 @@ impl ExternalSourcePreferenceStore {
 type SharedDiscoveryTask = Shared<BoxFuture<'static, ExternalSourceDiscoveryResult>>;
 type SharedToolDiscoveryTask = Shared<BoxFuture<'static, ExternalToolDiscoveryResult>>;
 type SharedSubagentDiscoveryTask = Shared<BoxFuture<'static, ExternalSubagentDiscoveryResult>>;
+type SharedMcpDiscoveryTask = Shared<BoxFuture<'static, ExternalMcpDiscoveryResult>>;
 
 struct InFlightDiscovery {
     task: SharedDiscoveryTask,
@@ -141,6 +155,11 @@ struct InFlightToolDiscovery {
 
 struct InFlightSubagentDiscovery {
     task: SharedSubagentDiscoveryTask,
+    wake_scheduled: bool,
+}
+
+struct InFlightMcpDiscovery {
+    task: SharedMcpDiscoveryTask,
     wake_scheduled: bool,
 }
 
@@ -160,6 +179,7 @@ struct WorkspaceExternalSourceService {
     coordinator: Arc<StdMutex<ExternalSourceCoordinator>>,
     tool_coordinator: Arc<StdMutex<ExternalToolCoordinator>>,
     subagent_coordinator: Arc<StdMutex<ExternalSubagentCoordinator>>,
+    mcp_coordinator: Arc<StdMutex<ExternalMcpCoordinator>>,
     snapshot: StdMutex<ExternalSourceCatalogSnapshot>,
     updates: broadcast::Sender<ExternalSourceCatalogSnapshot>,
     watch_states: tokio::sync::Mutex<BTreeMap<(PathBuf, bool), bool>>,
@@ -174,6 +194,11 @@ struct WorkspaceExternalSourceService {
     subagent_discovery_tasks: tokio::sync::Mutex<
         BTreeMap<bitfun_product_domains::external_sources::ProviderId, InFlightSubagentDiscovery>,
     >,
+    mcp_discovery_tasks: tokio::sync::Mutex<
+        BTreeMap<bitfun_product_domains::external_sources::ProviderId, InFlightMcpDiscovery>,
+    >,
+    mcp_runtime: Arc<dyn ExternalMcpRuntimePort>,
+    active_mcp_runtime_ids: tokio::sync::Mutex<BTreeSet<String>>,
     initial_refresh_completed: AtomicBool,
     background_refresh_scheduled: AtomicBool,
     initial_refresh_gate: tokio::sync::Mutex<()>,
@@ -203,7 +228,10 @@ impl WorkspaceExternalSourceService {
         let subagent_providers: Vec<Arc<dyn ExternalSubagentSourceProvider>> =
             vec![Arc::new(OpenCodeSubagentProvider::default())];
         let mut subagent_coordinator =
-            ExternalSubagentCoordinator::new(context, subagent_providers)?;
+            ExternalSubagentCoordinator::new(context.clone(), subagent_providers)?;
+        let mcp_providers: Vec<Arc<dyn ExternalMcpSourceProvider>> =
+            vec![Arc::new(OpenCodeMcpProvider::default())];
+        let mut mcp_coordinator = ExternalMcpCoordinator::new(context, mcp_providers)?;
         let preferences = read_external_sources_config().await?;
         let suppressed_sources = preferences
             .suppressed_source_keys
@@ -212,7 +240,8 @@ impl WorkspaceExternalSourceService {
             .collect::<BTreeSet<_>>();
         coordinator.replace_suppressed_sources(suppressed_sources.clone());
         tool_coordinator.replace_suppressed_sources(suppressed_sources.clone());
-        subagent_coordinator.replace_suppressed_sources(suppressed_sources);
+        subagent_coordinator.replace_suppressed_sources(suppressed_sources.clone());
+        mcp_coordinator.replace_suppressed_sources(suppressed_sources);
         coordinator.replace_conflict_choices(preferences.conflict_choices.clone());
         coordinator.replace_conflict_lineage_current_keys(
             preferences.conflict_lineage_current_keys.clone(),
@@ -231,6 +260,7 @@ impl WorkspaceExternalSourceService {
             coordinator: Arc::new(StdMutex::new(coordinator)),
             tool_coordinator: Arc::new(StdMutex::new(tool_coordinator)),
             subagent_coordinator: Arc::new(StdMutex::new(subagent_coordinator)),
+            mcp_coordinator: Arc::new(StdMutex::new(mcp_coordinator)),
             snapshot: StdMutex::new(initial_snapshot),
             updates,
             watch_states: tokio::sync::Mutex::new(BTreeMap::new()),
@@ -239,6 +269,9 @@ impl WorkspaceExternalSourceService {
             discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             tool_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             subagent_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_runtime: Arc::new(BitFunExternalMcpRuntime),
+            active_mcp_runtime_ids: tokio::sync::Mutex::new(BTreeSet::new()),
             initial_refresh_completed: AtomicBool::new(false),
             background_refresh_scheduled: AtomicBool::new(false),
             initial_refresh_gate: tokio::sync::Mutex::new(()),
@@ -305,18 +338,23 @@ impl WorkspaceExternalSourceService {
         let subagent_scheduled = self
             .prepare_subagent_discovery_tasks(subagent_requests)
             .await;
-        let (polled, tool_polled, subagent_polled) = tokio::join!(
+        let mcp_requests = lock_mcp_coordinator(&self.mcp_coordinator).discovery_requests();
+        let mcp_scheduled = self.prepare_mcp_discovery_tasks(mcp_requests).await;
+        let (polled, tool_polled, subagent_polled, mcp_polled) = tokio::join!(
             poll_discovery_tasks(scheduled, PROVIDER_DISCOVERY_TIMEOUT),
             poll_tool_discovery_tasks(tool_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
             poll_subagent_discovery_tasks(subagent_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
+            poll_mcp_discovery_tasks(mcp_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
         );
         let results = self.finish_discovery_poll(polled).await;
         let tool_results = self.finish_tool_discovery_poll(tool_polled).await;
         let subagent_results = self.finish_subagent_discovery_poll(subagent_polled).await;
+        let mcp_results = self.finish_mcp_discovery_poll(mcp_polled).await;
         let command_snapshot = lock_coordinator(&self.coordinator).apply_discovery_results(results);
         lock_tool_coordinator(&self.tool_coordinator).apply_discovery_results(tool_results);
         let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator)
             .apply_discovery_results(subagent_results);
+        lock_mcp_coordinator(&self.mcp_coordinator).apply_discovery_results(mcp_results);
         self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
         self.ensure_watch_roots().await;
         let snapshot = self
@@ -397,6 +435,42 @@ impl WorkspaceExternalSourceService {
         }
         let tool_snapshot = lock_tool_coordinator(&self.tool_coordinator).snapshot();
         let mut snapshot = merge_tool_state(command_snapshot, &tool_snapshot, state);
+        let mcp_snapshot = lock_mcp_coordinator(&self.mcp_coordinator).snapshot();
+        let mcp_workspace_key = workspace_route_key(self.workspace_root.as_deref());
+        let mut mcp_state = match load_native_mcp_candidates().await {
+            Ok(native_candidates) => reconcile_external_mcp_catalog(
+                "local-user",
+                &mcp_workspace_key,
+                &mcp_snapshot,
+                &native_candidates,
+                ExternalMcpDecisions {
+                    server_decisions: &preferences.mcp_server_decisions,
+                    conflict_choices: &preferences.mcp_conflict_choices,
+                },
+            ),
+            Err(error) => {
+                let mut state = reconcile_external_mcp_catalog(
+                    "local-user",
+                    &mcp_workspace_key,
+                    &mcp_snapshot,
+                    &[],
+                    ExternalMcpDecisions {
+                        server_decisions: &preferences.mcp_server_decisions,
+                        conflict_choices: &preferences.mcp_conflict_choices,
+                    },
+                );
+                for entry in &mut state.entries {
+                    entry.runtime_id = None;
+                    entry.activation_state = ExternalMcpActivationState::RuntimeUnavailable {
+                        reason: error.clone(),
+                    };
+                }
+                state.active.clear();
+                state
+            }
+        };
+        self.reconcile_mcp_runtime(&mut mcp_state).await;
+        merge_mcp_state(&mut snapshot, &mcp_snapshot, mcp_state);
         let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator).snapshot();
         let mut subagent_state = reconcile_external_subagents(
             self.workspace_root.as_deref(),
@@ -468,6 +542,16 @@ impl WorkspaceExternalSourceService {
         }
         sanitize_external_snapshot_locations(&mut snapshot, self.workspace_root.as_deref());
         let mut current = lock_snapshot(&self.snapshot);
+        let mcp_changed = snapshot.mcp_servers != current.mcp_servers
+            || snapshot.mcp_conflicts != current.mcp_conflicts
+            || snapshot.mcp_approval_requests != current.mcp_approval_requests;
+        snapshot.mcp_generation = if mcp_changed {
+            snapshot
+                .mcp_generation
+                .max(current.mcp_generation.saturating_add(1))
+        } else {
+            snapshot.mcp_generation.max(current.mcp_generation)
+        };
         let subagent_changed = snapshot.subagents != current.subagents
             || snapshot.subagent_conflicts != current.subagent_conflicts
             || snapshot.pending_subagent_approvals != current.pending_subagent_approvals
@@ -486,6 +570,122 @@ impl WorkspaceExternalSourceService {
             .max(current.generation.saturating_add(1));
         *current = snapshot.clone();
         Ok(snapshot)
+    }
+
+    async fn reconcile_mcp_runtime(&self, state: &mut ExternalMcpProductState) {
+        let desired = state
+            .active
+            .iter()
+            .map(|candidate| (candidate.runtime_id.clone(), candidate.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let desired_ids = desired.keys().cloned().collect::<BTreeSet<_>>();
+        let mut managed = self.active_mcp_runtime_ids.lock().await.clone();
+        let workspace_key = workspace_route_key(self.workspace_root.as_deref());
+        if let Err(reason) = self
+            .mcp_runtime
+            .replace_workspace_route(
+                &workspace_key,
+                desired_ids.clone(),
+                state.suppressed_native_server_ids.clone(),
+            )
+            .await
+        {
+            state.diagnostics.push(
+                ExternalSourceDiagnostic::warning("external_mcp.route_update_failed", reason, None)
+                    .with_asset_kind(ExternalSourceAssetKind::Mcp),
+            );
+        }
+        let managed_statuses = join_all(
+            desired
+                .values()
+                .filter(|candidate| managed.contains(&candidate.runtime_id))
+                .map(|candidate| async {
+                    (
+                        candidate.runtime_id.clone(),
+                        self.mcp_runtime.status(&candidate.runtime_id).await,
+                    )
+                }),
+        )
+        .await
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
+
+        for runtime_id in managed
+            .difference(&desired_ids)
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            match self.mcp_runtime.retire(&runtime_id).await {
+                Ok(()) => {
+                    managed.remove(&runtime_id);
+                }
+                Err(reason) => state.diagnostics.push(
+                    ExternalSourceDiagnostic::warning(
+                        "external_mcp.retirement_failed",
+                        reason,
+                        None,
+                    )
+                    .with_asset_kind(ExternalSourceAssetKind::Mcp),
+                ),
+            }
+        }
+
+        for candidate in desired.values() {
+            if managed.contains(&candidate.runtime_id) {
+                let status = managed_statuses
+                    .get(&candidate.runtime_id)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        Err("The external MCP server status is unavailable".to_string())
+                    });
+                // Keep failed registrations managed until the user disables
+                // them. Re-installing from a status error would turn a
+                // persistent startup failure into an unbounded retry loop.
+                apply_external_mcp_runtime_status(state, candidate, status);
+                continue;
+            }
+
+            let coordinator = Arc::clone(&self.mcp_coordinator);
+            let server_id = candidate.definition.id.clone();
+            let behavior_version = candidate.definition.behavior_version.clone();
+            let prepared = tokio::task::spawn_blocking(move || {
+                lock_mcp_coordinator(&coordinator)
+                    .prepare_server_guarded(&server_id, &behavior_version)
+            })
+            .await
+            .map_err(|_| "The external MCP configuration could not be prepared".to_string())
+            .and_then(|result| result.map_err(|error| error.message));
+
+            let activation = match prepared {
+                Ok(prepared) => {
+                    self.mcp_runtime
+                        .install(candidate, prepared, &workspace_key)
+                        .await
+                }
+                Err(reason) => Err(reason),
+            };
+            match activation {
+                Ok(()) => {
+                    managed.insert(candidate.runtime_id.clone());
+                    apply_external_mcp_runtime_status(
+                        state,
+                        candidate,
+                        self.mcp_runtime.status(&candidate.runtime_id).await,
+                    );
+                }
+                Err(reason) => {
+                    // A process may have reached a failed-but-registered state.
+                    // Track it so later source changes retire it safely instead
+                    // of attempting duplicate installs on every refresh.
+                    if self.mcp_runtime.status(&candidate.runtime_id).await.is_ok() {
+                        managed.insert(candidate.runtime_id.clone());
+                    }
+                    mark_external_mcp_runtime_unavailable(state, candidate, reason);
+                }
+            }
+        }
+
+        *self.active_mcp_runtime_ids.lock().await = managed;
     }
 
     async fn prepare_discovery_tasks(
@@ -726,6 +926,86 @@ impl WorkspaceExternalSourceService {
         results
     }
 
+    async fn prepare_mcp_discovery_tasks(
+        &self,
+        requests: Vec<ExternalMcpDiscoveryRequest>,
+    ) -> Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedMcpDiscoveryTask,
+        bool,
+    )> {
+        let mut tasks = self.mcp_discovery_tasks.lock().await;
+        requests
+            .into_iter()
+            .map(|request| {
+                let provider_id = request.provider_id().clone();
+                if let Some(in_flight) = tasks.get(&provider_id) {
+                    return (provider_id, in_flight.task.clone(), false);
+                }
+                let task = spawn_mcp_discovery_task(request);
+                tasks.insert(
+                    provider_id.clone(),
+                    InFlightMcpDiscovery {
+                        task: task.clone(),
+                        wake_scheduled: false,
+                    },
+                );
+                (provider_id, task, true)
+            })
+            .collect()
+    }
+
+    async fn finish_mcp_discovery_poll(
+        self: &Arc<Self>,
+        polled: Vec<McpDiscoveryPoll>,
+    ) -> Vec<ExternalMcpDiscoveryResult> {
+        let mut results = Vec::with_capacity(polled.len());
+        let mut wake_tasks = Vec::new();
+        let mut tasks = self.mcp_discovery_tasks.lock().await;
+        for poll in polled {
+            match poll {
+                McpDiscoveryPoll::Complete(result) => {
+                    tasks.remove(&result.provider_id().clone());
+                    results.push(result);
+                }
+                McpDiscoveryPoll::InFlight(provider_id) => {
+                    results.push(mcp_discovery_failure(
+                        provider_id,
+                        "external_mcp.discovery_in_progress",
+                        "MCP provider discovery is still running; using its last valid version",
+                    ));
+                }
+                McpDiscoveryPoll::TimedOut(provider_id) => {
+                    if let Some(in_flight) = tasks.get_mut(&provider_id) {
+                        if !in_flight.wake_scheduled {
+                            in_flight.wake_scheduled = true;
+                            wake_tasks.push((provider_id.clone(), in_flight.task.clone()));
+                        }
+                    }
+                    results.push(mcp_discovery_failure(
+                        provider_id,
+                        "external_mcp.discovery_timeout",
+                        "MCP provider discovery exceeded the 5 second deadline",
+                    ));
+                }
+            }
+        }
+        drop(tasks);
+        for (provider_id, task) in wake_tasks {
+            let weak = Arc::downgrade(self);
+            tokio::spawn(async move {
+                let result = task.await;
+                let Some(service) = weak.upgrade() else {
+                    return;
+                };
+                service
+                    .complete_deferred_mcp_discovery(provider_id, result)
+                    .await;
+            });
+        }
+        results
+    }
+
     async fn complete_deferred_discovery(
         &self,
         provider_id: bitfun_product_domains::external_sources::ProviderId,
@@ -789,6 +1069,29 @@ impl WorkspaceExternalSourceService {
         let subagent_snapshot =
             lock_subagent_coordinator(&self.subagent_coordinator).apply_discovery_result(result);
         self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
+        self.ensure_watch_roots().await;
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
+            let _ = self.updates.send(snapshot);
+        }
+    }
+
+    async fn complete_deferred_mcp_discovery(
+        &self,
+        provider_id: bitfun_product_domains::external_sources::ProviderId,
+        result: ExternalMcpDiscoveryResult,
+    ) {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        if self
+            .mcp_discovery_tasks
+            .lock()
+            .await
+            .remove(&provider_id)
+            .is_none()
+        {
+            return;
+        }
+        lock_mcp_coordinator(&self.mcp_coordinator).apply_discovery_result(result);
         self.ensure_watch_roots().await;
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
         if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
@@ -892,6 +1195,26 @@ impl WorkspaceExternalSourceService {
                         .is_some_and(|cached| Arc::ptr_eq(&cached, &service));
                     drop(entry);
                     if should_remove {
+                        let runtime_ids =
+                            std::mem::take(&mut *service.active_mcp_runtime_ids.lock().await);
+                        let workspace_key = workspace_route_key(key.as_deref());
+                        let _ = service
+                            .mcp_runtime
+                            .replace_workspace_route(
+                                &workspace_key,
+                                BTreeSet::new(),
+                                BTreeSet::new(),
+                            )
+                            .await;
+                        for runtime_id in runtime_ids {
+                            if let Err(error) = service.mcp_runtime.retire(&runtime_id).await {
+                                log::warn!(
+                                    "Could not retire idle external MCP runtime: id={} error={}",
+                                    runtime_id,
+                                    error
+                                );
+                            }
+                        }
                         workspace_services().remove(&key);
                         release_external_tool_workspace(key.as_deref()).await;
                         if let Some(workspace_root) = key.as_deref() {
@@ -910,7 +1233,7 @@ impl WorkspaceExternalSourceService {
     }
 
     async fn set_source_enabled(
-        &self,
+        self: &Arc<Self>,
         stable_key: &str,
         enabled: bool,
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
@@ -932,7 +1255,13 @@ impl WorkspaceExternalSourceService {
             let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
             (previous, known)
         };
-        if !command_known && !tool_known && !subagent_known {
+        let (previous_mcps, mcp_known) = {
+            let mut coordinator = lock_mcp_coordinator(&self.mcp_coordinator);
+            let previous = coordinator.suppressed_sources().clone();
+            let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
+            (previous, known)
+        };
+        if !command_known && !tool_known && !subagent_known && !mcp_known {
             return Err(format!("unknown external source: {stable_key}"));
         }
         let authoritative = match persist_source_enabled_change(stable_key, enabled).await {
@@ -943,6 +1272,8 @@ impl WorkspaceExternalSourceService {
                     .replace_suppressed_sources(previous_tools);
                 lock_subagent_coordinator(&self.subagent_coordinator)
                     .replace_suppressed_sources(previous_subagents);
+                lock_mcp_coordinator(&self.mcp_coordinator)
+                    .replace_suppressed_sources(previous_mcps);
                 return Err(error);
             }
         };
@@ -951,9 +1282,10 @@ impl WorkspaceExternalSourceService {
             .replace_suppressed_sources(authoritative.clone());
         lock_subagent_coordinator(&self.subagent_coordinator)
             .replace_suppressed_sources(authoritative.clone());
-        propagate_suppressed_sources(&authoritative);
-        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
-        self.rebuild_product_snapshot(command_snapshot).await
+        lock_mcp_coordinator(&self.mcp_coordinator)
+            .replace_suppressed_sources(authoritative.clone());
+        propagate_suppressed_sources(&authoritative, self);
+        self.refresh_preserving_worker_recovery().await
     }
 
     async fn set_conflict_choice(
@@ -1068,6 +1400,113 @@ impl WorkspaceExternalSourceService {
         validate_conflict_preference(conflict_key, candidate_id)?;
         let preferences = persist_tool_conflict_choice(conflict_key, candidate_id).await?;
         propagate_tool_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn set_mcp_server_decision(
+        &self,
+        candidate_id: &str,
+        decision_key: &str,
+        approved: bool,
+        expected_mcp_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.mcp_generation != expected_mcp_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(
+                "stale_action: external MCP catalog changed; refresh before retrying".to_string(),
+            );
+        }
+        let entry = snapshot
+            .mcp_servers
+            .iter()
+            .find(|entry| entry.candidate_id == candidate_id && entry.decision_key == decision_key)
+            .ok_or_else(|| {
+                "candidate_unavailable: external MCP candidate is no longer available".to_string()
+            })?;
+        if !external_mcp_decision_allowed(&entry.activation_state, approved) {
+            return Err(
+                "unsupported_definition: external MCP candidate cannot be changed in its current state"
+                    .to_string(),
+            );
+        }
+        validate_mcp_decision_value(candidate_id, "candidate id")?;
+        validate_mcp_decision_value(decision_key, "decision key")?;
+        let preferences = persist_mcp_server_decision(
+            decision_key,
+            approved,
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_mcp_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn choose_mcp_conflict(
+        &self,
+        conflict_key: &str,
+        candidate_id: &str,
+        approve_external: bool,
+        expected_mcp_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.mcp_generation != expected_mcp_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(
+                "stale_action: external MCP catalog changed; refresh before retrying".to_string(),
+            );
+        }
+        let conflict = snapshot
+            .mcp_conflicts
+            .iter()
+            .find(|conflict| conflict.conflict_key == conflict_key)
+            .ok_or_else(|| {
+                "conflict_choice_required: external MCP conflict is stale or unknown".to_string()
+            })?;
+        let candidate = conflict
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_id == candidate_id && candidate.available)
+            .ok_or_else(|| {
+                "candidate_unavailable: external MCP conflict candidate is unavailable".to_string()
+            })?;
+        let external_decision = if candidate.external {
+            if !approve_external {
+                return Err(
+                    "approval_required: selecting an external MCP server must atomically approve its current behavior"
+                        .to_string(),
+                );
+            }
+            let entry = snapshot
+                .mcp_servers
+                .iter()
+                .find(|entry| entry.candidate_id == candidate_id)
+                .ok_or_else(|| {
+                    "candidate_unavailable: external MCP candidate is no longer available"
+                        .to_string()
+                })?;
+            Some(entry.decision_key.as_str())
+        } else {
+            None
+        };
+        validate_mcp_decision_value(conflict_key, "conflict key")?;
+        validate_mcp_decision_value(candidate_id, "candidate id")?;
+        let preferences = persist_mcp_conflict_choice(
+            conflict_key,
+            candidate_id,
+            external_decision,
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_mcp_preferences(&preferences);
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
         self.rebuild_product_snapshot(command_snapshot).await
     }
@@ -1344,6 +1783,7 @@ impl WorkspaceExternalSourceService {
             .into_iter()
             .chain(lock_tool_coordinator(&self.tool_coordinator).watch_roots())
             .chain(lock_subagent_coordinator(&self.subagent_coordinator).watch_roots())
+            .chain(lock_mcp_coordinator(&self.mcp_coordinator).watch_roots())
         {
             roots
                 .entry(root.path)
@@ -1381,6 +1821,12 @@ enum ToolDiscoveryPoll {
 
 enum SubagentDiscoveryPoll {
     Complete(ExternalSubagentDiscoveryResult),
+    InFlight(bitfun_product_domains::external_sources::ProviderId),
+    TimedOut(bitfun_product_domains::external_sources::ProviderId),
+}
+
+enum McpDiscoveryPoll {
+    Complete(ExternalMcpDiscoveryResult),
     InFlight(bitfun_product_domains::external_sources::ProviderId),
     TimedOut(bitfun_product_domains::external_sources::ProviderId),
 }
@@ -1466,6 +1912,33 @@ async fn poll_subagent_discovery_tasks(
     .await
 }
 
+async fn poll_mcp_discovery_tasks(
+    scheduled: Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedMcpDiscoveryTask,
+        bool,
+    )>,
+    timeout: std::time::Duration,
+) -> Vec<McpDiscoveryPoll> {
+    join_all(
+        scheduled
+            .into_iter()
+            .map(|(provider_id, task, is_new)| async move {
+                if !is_new {
+                    return match task.clone().now_or_never() {
+                        Some(result) => McpDiscoveryPoll::Complete(result),
+                        None => McpDiscoveryPoll::InFlight(provider_id),
+                    };
+                }
+                match tokio::time::timeout(timeout, task).await {
+                    Ok(result) => McpDiscoveryPoll::Complete(result),
+                    Err(_) => McpDiscoveryPoll::TimedOut(provider_id),
+                }
+            }),
+    )
+    .await
+}
+
 fn spawn_discovery_task(request: ExternalSourceDiscoveryRequest) -> SharedDiscoveryTask {
     let provider_id = request.provider_id().clone();
     async move {
@@ -1516,6 +1989,22 @@ fn spawn_subagent_discovery_task(
     .shared()
 }
 
+fn spawn_mcp_discovery_task(request: ExternalMcpDiscoveryRequest) -> SharedMcpDiscoveryTask {
+    let provider_id = request.provider_id().clone();
+    async move {
+        match tokio::task::spawn_blocking(move || request.execute()).await {
+            Ok(result) => result,
+            Err(error) => mcp_discovery_failure(
+                provider_id,
+                "external_mcp.discovery_task_failed",
+                &format!("MCP provider discovery task failed: {error}"),
+            ),
+        }
+    }
+    .boxed()
+    .shared()
+}
+
 fn discovery_failure(
     provider_id: bitfun_product_domains::external_sources::ProviderId,
     code: &str,
@@ -1555,6 +2044,19 @@ fn subagent_discovery_failure(
     )
 }
 
+fn mcp_discovery_failure(
+    provider_id: bitfun_product_domains::external_sources::ProviderId,
+    code: &str,
+    message: &str,
+) -> ExternalMcpDiscoveryResult {
+    ExternalMcpDiscoveryResult::failed(
+        provider_id,
+        bitfun_product_domains::external_sources::ExternalSourceProviderError::new(
+            code, message, true,
+        ),
+    )
+}
+
 fn lock_coordinator(
     coordinator: &StdMutex<ExternalSourceCoordinator>,
 ) -> MutexGuard<'_, ExternalSourceCoordinator> {
@@ -1579,6 +2081,15 @@ fn lock_tool_coordinator(
 fn lock_subagent_coordinator(
     coordinator: &StdMutex<ExternalSubagentCoordinator>,
 ) -> MutexGuard<'_, ExternalSubagentCoordinator> {
+    match coordinator.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn lock_mcp_coordinator(
+    coordinator: &StdMutex<ExternalMcpCoordinator>,
+) -> MutexGuard<'_, ExternalMcpCoordinator> {
     match coordinator.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -1745,6 +2256,26 @@ fn sanitize_external_snapshot_locations(
             remember_location(scope, location);
         }
     }
+    for server in &snapshot.mcp_servers {
+        let Some(directory) = server.definition.working_directory.as_deref() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&server.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        remember_location(scope, directory);
+    }
+    for request in &snapshot.mcp_approval_requests {
+        let Some(directory) = request.definition.working_directory.as_deref() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&request.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        remember_location(scope, directory);
+    }
     drop(remember_location);
     replacements.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
     let sanitize_message = |message: &mut String| {
@@ -1818,6 +2349,148 @@ fn sanitize_external_snapshot_locations(
             *location = safe_external_source_location(scope, location, workspace_root);
         }
     }
+    for server in &mut snapshot.mcp_servers {
+        let Some(directory) = server.definition.working_directory.as_mut() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&server.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        *directory = safe_external_source_location(scope, directory, workspace_root);
+    }
+    for request in &mut snapshot.mcp_approval_requests {
+        let Some(directory) = request.definition.working_directory.as_mut() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&request.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        *directory = safe_external_source_location(scope, directory, workspace_root);
+    }
+}
+
+async fn load_native_mcp_candidates() -> Result<Vec<NativeMcpCandidate>, String> {
+    let service = crate::service::mcp::get_global_mcp_service()
+        .ok_or_else(|| "MCP service is not initialized".to_string())?;
+    let configs = service
+        .config_service()
+        .load_all_configs()
+        .await
+        .map_err(|error| format!("Could not read BitFun MCP configuration: {error}"))?;
+    let mut candidates = Vec::with_capacity(configs.len());
+    for config in configs {
+        let encoded = serde_json::to_vec(&config)
+            .map_err(|error| format!("Could not fingerprint BitFun MCP configuration: {error}"))?;
+        let mut behavior_hasher = Sha256::new();
+        behavior_hasher.update(&encoded);
+        let behavior_version = format!("sha256:{}", hex::encode(behavior_hasher.finalize()));
+        let candidate_id = native_mcp_candidate_id(&config.id);
+        candidates.push(NativeMcpCandidate {
+            candidate_id,
+            server_id: config.id,
+            display_name: format!("BitFun: {}", config.name),
+            name: config.name,
+            behavior_version,
+            enabled: config.enabled,
+        });
+    }
+    candidates.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then(left.server_id.cmp(&right.server_id))
+    });
+    Ok(candidates)
+}
+
+/// Stable product identifier for a BitFun-owned MCP configuration. Surfaces
+/// use this only to correlate native list rows with conflict candidates; the
+/// underlying configuration id remains private to the MCP owner.
+pub fn native_mcp_candidate_id(server_id: &str) -> String {
+    let mut id_hasher = Sha256::new();
+    id_hasher.update(server_id.as_bytes());
+    format!("native_mcp:{}", &hex::encode(id_hasher.finalize())[..24])
+}
+
+fn apply_external_mcp_runtime_status(
+    state: &mut ExternalMcpProductState,
+    candidate: &crate::external_mcp::ActiveExternalMcpCandidate,
+    status: Result<ExternalMcpRuntimeStatus, String>,
+) {
+    match status {
+        Ok(ExternalMcpRuntimeStatus::Active) => {}
+        Ok(ExternalMcpRuntimeStatus::Loading) => {
+            if let Some(entry) = state
+                .entries
+                .iter_mut()
+                .find(|entry| entry.candidate_id == candidate.definition.candidate_id())
+            {
+                entry.activation_state = ExternalMcpActivationState::Starting;
+            }
+        }
+        Ok(ExternalMcpRuntimeStatus::Unavailable(reason)) | Err(reason) => {
+            mark_external_mcp_runtime_unavailable(state, candidate, reason);
+        }
+    }
+}
+
+fn mark_external_mcp_runtime_unavailable(
+    state: &mut ExternalMcpProductState,
+    candidate: &crate::external_mcp::ActiveExternalMcpCandidate,
+    reason: String,
+) {
+    if let Some(entry) = state
+        .entries
+        .iter_mut()
+        .find(|entry| entry.candidate_id == candidate.definition.candidate_id())
+    {
+        entry.activation_state = ExternalMcpActivationState::RuntimeUnavailable {
+            reason: reason.clone(),
+        };
+    }
+    state.diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "external_mcp.runtime_unavailable",
+            reason,
+            Some(candidate.definition.id.source.clone()),
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Mcp),
+    );
+}
+
+fn merge_mcp_state(
+    snapshot: &mut ExternalSourceCatalogSnapshot,
+    coordinator_snapshot: &bitfun_external_sources::ExternalMcpCoordinatorSnapshot,
+    state: ExternalMcpProductState,
+) {
+    let known_sources = snapshot
+        .sources
+        .iter()
+        .map(|source| source.stable_key.clone())
+        .collect::<BTreeSet<_>>();
+    snapshot.sources.extend(
+        coordinator_snapshot
+            .sources
+            .iter()
+            .filter(|source| !known_sources.contains(&source.stable_key))
+            .cloned(),
+    );
+    snapshot.sources.sort_by(|left, right| {
+        left.record
+            .ecosystem_id
+            .cmp(&right.record.ecosystem_id)
+            .then(left.stable_key.cmp(&right.stable_key))
+    });
+    snapshot
+        .diagnostics
+        .extend(coordinator_snapshot.diagnostics.clone());
+    snapshot.diagnostics.extend(state.diagnostics.clone());
+    snapshot.discovery_pending |= coordinator_snapshot.discovery_pending;
+    snapshot.mcp_generation = coordinator_snapshot.generation;
+    snapshot.mcp_servers = state.entries;
+    snapshot.mcp_approval_requests = state.approval_requests;
+    snapshot.mcp_conflicts = state.conflicts;
 }
 
 async fn service_for(
@@ -2222,6 +2895,110 @@ async fn persist_subagent_conflict_choice_with_store(
         })
 }
 
+async fn persist_mcp_server_decision(
+    decision_key: &str,
+    approved: bool,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    let decision_key = decision_key.to_string();
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            reconcile_versioned_mcp_server_decision(
+                &mut config.mcp_server_decisions,
+                decision_key,
+                approved,
+            );
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                "stale_action: external MCP preferences changed; refresh before retrying"
+                    .to_string()
+            })
+        })
+}
+
+async fn persist_mcp_conflict_choice(
+    conflict_key: &str,
+    candidate_id: &str,
+    external_decision: Option<&str>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    let conflict_key = conflict_key.to_string();
+    let candidate_id = candidate_id.to_string();
+    let external_decision = external_decision.map(str::to_string);
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            reconcile_versioned_mcp_conflict_choice(
+                &mut config.mcp_conflict_choices,
+                conflict_key,
+                candidate_id,
+            );
+            if let Some(decision_key) = external_decision {
+                reconcile_versioned_mcp_server_decision(
+                    &mut config.mcp_server_decisions,
+                    decision_key,
+                    true,
+                );
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                "stale_action: external MCP preferences changed; refresh before retrying"
+                    .to_string()
+            })
+        })
+}
+
+fn reconcile_versioned_mcp_conflict_choice(
+    choices: &mut BTreeMap<String, String>,
+    conflict_key: String,
+    candidate_id: String,
+) {
+    if let Some((lineage, _)) = conflict_key.rsplit_once(':') {
+        choices.retain(|existing_key, _| {
+            existing_key
+                .rsplit_once(':')
+                .is_none_or(|(existing_lineage, _)| existing_lineage != lineage)
+        });
+    }
+    choices.insert(conflict_key, candidate_id);
+}
+
+fn reconcile_versioned_mcp_server_decision(
+    decisions: &mut BTreeMap<String, ExternalMcpDecision>,
+    decision_key: String,
+    approved: bool,
+) {
+    if let Some((lineage, _)) = decision_key.rsplit_once(':') {
+        decisions.retain(|existing_key, _| {
+            existing_key
+                .rsplit_once(':')
+                .is_none_or(|(existing_lineage, _)| existing_lineage != lineage)
+        });
+    }
+    decisions.insert(
+        decision_key.clone(),
+        ExternalMcpDecision {
+            decision_key,
+            approved,
+        },
+    );
+}
+
 fn reconcile_versioned_tool_conflict_choice(
     choices: &mut BTreeMap<String, String>,
     conflict_key: String,
@@ -2237,20 +3014,28 @@ fn reconcile_versioned_tool_conflict_choice(
     choices.insert(conflict_key, candidate_id);
 }
 
-fn propagate_suppressed_sources(sources: &BTreeSet<String>) {
+fn propagate_suppressed_sources(
+    sources: &BTreeSet<String>,
+    current: &Arc<WorkspaceExternalSourceService>,
+) {
     for service in workspace_services().iter() {
         let Some(service) = service.value().upgrade() else {
             continue;
         };
+        if Arc::ptr_eq(&service, current) {
+            continue;
+        }
         lock_coordinator(&service.coordinator).replace_suppressed_sources(sources.clone());
         lock_tool_coordinator(&service.tool_coordinator)
             .replace_suppressed_sources(sources.clone());
         lock_subagent_coordinator(&service.subagent_coordinator)
             .replace_suppressed_sources(sources.clone());
+        lock_mcp_coordinator(&service.mcp_coordinator).replace_suppressed_sources(sources.clone());
         tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
+            if let Err(error) = service.refresh_preserving_worker_recovery().await {
+                log::warn!(
+                    "Could not refresh external sources after source preference change: {error}"
+                );
             }
         });
     }
@@ -2294,6 +3079,20 @@ fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_subagent_preferences(_preferences: &ExternalSourcesConfig) {
+    for service in workspace_services().iter() {
+        let Some(service) = service.value().upgrade() else {
+            continue;
+        };
+        tokio::spawn(async move {
+            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
+                let _ = service.updates.send(snapshot);
+            }
+        });
+    }
+}
+
+fn propagate_mcp_preferences(_preferences: &ExternalSourcesConfig) {
     for service in workspace_services().iter() {
         let Some(service) = service.value().upgrade() else {
             continue;
@@ -2387,7 +3186,16 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
     let subagent_changed = {
         let mut coordinator = lock_subagent_coordinator(&service.subagent_coordinator);
         if coordinator.suppressed_sources() != &suppressed_sources {
-            coordinator.replace_suppressed_sources(suppressed_sources);
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
+            true
+        } else {
+            false
+        }
+    };
+    let mcp_changed = {
+        let mut coordinator = lock_mcp_coordinator(&service.mcp_coordinator);
+        if coordinator.suppressed_sources() != &suppressed_sources {
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
             true
         } else {
             false
@@ -2395,7 +3203,12 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
     };
     let subagent_preferences_changed =
         service.snapshot().preference_revision != preferences.preference_revision;
-    if command_changed || tool_changed || subagent_changed || subagent_preferences_changed {
+    if command_changed
+        || tool_changed
+        || subagent_changed
+        || mcp_changed
+        || subagent_preferences_changed
+    {
         let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
         let snapshot = service.rebuild_product_snapshot(command_snapshot).await?;
         let _ = service.updates.send(snapshot);
@@ -2420,6 +3233,35 @@ fn validate_subagent_decision_value(value: &str, label: &str) -> Result<(), Stri
         ));
     }
     Ok(())
+}
+
+fn validate_mcp_decision_value(value: &str, label: &str) -> Result<(), String> {
+    if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
+        return Err(format!("invalid_request: external MCP {label} is invalid"));
+    }
+    Ok(())
+}
+
+pub(super) fn external_mcp_decision_allowed(
+    state: &ExternalMcpActivationState,
+    approved: bool,
+) -> bool {
+    if matches!(
+        state,
+        ExternalMcpActivationState::Conflict
+            | ExternalMcpActivationState::Covered { .. }
+            | ExternalMcpActivationState::SourceDisabled
+            | ExternalMcpActivationState::Unsupported { .. }
+            | ExternalMcpActivationState::Removed
+    ) {
+        return false;
+    }
+    !approved
+        || !matches!(
+            state,
+            ExternalMcpActivationState::Starting
+                | ExternalMcpActivationState::RuntimeUnavailable { .. }
+        )
 }
 
 pub async fn external_source_conflict_choices() -> Result<
@@ -2502,6 +3344,46 @@ pub async fn set_external_tool_conflict_choice(
     service_for(workspace_root)
         .await?
         .set_tool_conflict_choice(conflict_key, candidate_id)
+        .await
+}
+
+pub async fn set_external_mcp_server_decision(
+    workspace_root: Option<&Path>,
+    candidate_id: &str,
+    decision_key: &str,
+    approved: bool,
+    expected_mcp_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_mcp_server_decision(
+            candidate_id,
+            decision_key,
+            approved,
+            expected_mcp_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
+pub async fn choose_external_mcp_conflict(
+    workspace_root: Option<&Path>,
+    conflict_key: &str,
+    candidate_id: &str,
+    approve_external: bool,
+    expected_mcp_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .choose_mcp_conflict(
+            conflict_key,
+            candidate_id,
+            approve_external,
+            expected_mcp_generation,
+            expected_preference_revision,
+        )
         .await
 }
 
@@ -2692,6 +3574,10 @@ mod tests {
             tools: Vec::new(),
             tool_approval_requests: Vec::new(),
             tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
             subagent_generation: 0,
             preference_revision: 0,
             subagents: Vec::new(),
@@ -2820,7 +3706,9 @@ mod tests {
         let (updates, _) = broadcast::channel(8);
         let coordinator = ExternalSourceCoordinator::new(context.clone(), providers).unwrap();
         let tool_coordinator = ExternalToolCoordinator::new(context.clone(), Vec::new()).unwrap();
-        let subagent_coordinator = ExternalSubagentCoordinator::new(context, Vec::new()).unwrap();
+        let subagent_coordinator =
+            ExternalSubagentCoordinator::new(context.clone(), Vec::new()).unwrap();
+        let mcp_coordinator = ExternalMcpCoordinator::new(context, Vec::new()).unwrap();
         let snapshot = merge_tool_state(
             coordinator.snapshot(),
             &tool_coordinator.snapshot(),
@@ -2831,6 +3719,7 @@ mod tests {
             coordinator: Arc::new(StdMutex::new(coordinator)),
             tool_coordinator: Arc::new(StdMutex::new(tool_coordinator)),
             subagent_coordinator: Arc::new(StdMutex::new(subagent_coordinator)),
+            mcp_coordinator: Arc::new(StdMutex::new(mcp_coordinator)),
             snapshot: StdMutex::new(snapshot),
             updates,
             watch_states: tokio::sync::Mutex::new(BTreeMap::new()),
@@ -2839,6 +3728,9 @@ mod tests {
             discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             tool_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             subagent_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_runtime: Arc::new(BitFunExternalMcpRuntime),
+            active_mcp_runtime_ids: tokio::sync::Mutex::new(BTreeSet::new()),
             initial_refresh_completed: AtomicBool::new(false),
             background_refresh_scheduled: AtomicBool::new(false),
             initial_refresh_gate: tokio::sync::Mutex::new(()),
@@ -3195,6 +4087,41 @@ mod tests {
         assert_eq!(choices["external_tool:local-user:review:new"], "external-b");
         assert_eq!(choices["external_tool:local-user:help:old"], "builtin-help");
         assert_eq!(choices.len(), 2);
+    }
+
+    #[test]
+    fn mcp_server_decisions_keep_one_version_per_workspace_lineage() {
+        let mut decisions = BTreeMap::from([
+            (
+                "external_mcp_approval:local-user:workspace-a:server:old".to_string(),
+                ExternalMcpDecision {
+                    decision_key:
+                        "external_mcp_approval:local-user:workspace-a:server:old".to_string(),
+                    approved: true,
+                },
+            ),
+            (
+                "external_mcp_approval:local-user:workspace-b:server:current".to_string(),
+                ExternalMcpDecision {
+                    decision_key:
+                        "external_mcp_approval:local-user:workspace-b:server:current".to_string(),
+                    approved: true,
+                },
+            ),
+        ]);
+
+        reconcile_versioned_mcp_server_decision(
+            &mut decisions,
+            "external_mcp_approval:local-user:workspace-a:server:new".to_string(),
+            false,
+        );
+
+        assert!(!decisions
+            .contains_key("external_mcp_approval:local-user:workspace-a:server:old"));
+        assert!(!decisions["external_mcp_approval:local-user:workspace-a:server:new"].approved);
+        assert!(decisions
+            .contains_key("external_mcp_approval:local-user:workspace-b:server:current"));
+        assert_eq!(decisions.len(), 2);
     }
 
     #[tokio::test]
