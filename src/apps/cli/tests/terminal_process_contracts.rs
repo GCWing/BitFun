@@ -19,6 +19,12 @@ const RESIZED_SIZE: PtySize = PtySize {
     pixel_width: 0,
     pixel_height: 0,
 };
+const EXEC_STREAM_SIZE: PtySize = PtySize {
+    rows: 30,
+    cols: 4096,
+    pixel_width: 0,
+    pixel_height: 0,
+};
 const STARTUP_INPUT: &[u8] = b"exercise active turn resize Q7Z9";
 const STARTUP_INPUT_SENTINEL: &str = "Q7Z9";
 const RECOVERY_INPUT: &[u8] = b"READY_AFTER_CANCEL K4W8";
@@ -171,6 +177,164 @@ fn active_turn_resize_can_be_cancelled_and_returns_to_editable_input() {
     assert!(output.contains("\x1b[?2004l"), "{output}");
     assert!(output.contains("\x1b[?25h"), "{output}");
     assert!(output.contains("Goodbye!"), "{output}");
+}
+
+#[test]
+fn exec_stream_json_ctrl_c_emits_one_cancelled_terminal_and_disconnects() {
+    let server = MockOpenAiServer::gated();
+    let environment = CliTestEnvironment::new();
+    environment.configure_mock_model(server.base_url());
+    let mut command = environment.pty_command();
+    command.args([
+        "exec",
+        "exercise interrupt contract",
+        "--output-format",
+        "stream-json",
+    ]);
+    let mut process = PtyProcess::spawn(command, EXEC_STREAM_SIZE);
+
+    process.expect_output(
+        STREAM_START_MARKER,
+        Duration::from_secs(30),
+        "exec model stream did not start",
+    );
+    process.write(&[0x03]);
+    server.expect_stream_disconnect(Duration::from_secs(5));
+
+    let (status, output) = process.finish(Duration::from_secs(15));
+    assert_eq!(
+        status.exit_code(),
+        1,
+        "interrupt exit code changed:\n{output}"
+    );
+    assert!(
+        output.contains("BITFUN_EXIT: cancelled:"),
+        "missing stable cancellation diagnostic:\n{output}"
+    );
+    let events = strict_stream_json_events(&output);
+    let terminal_events = events
+        .iter()
+        .filter(|value| {
+            matches!(
+                value["event"]["type"].as_str(),
+                Some(
+                    "DialogTurnCompleted"
+                        | "DialogTurnCancelled"
+                        | "DialogTurnFailed"
+                        | "SystemError"
+                )
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        terminal_events.len(),
+        1,
+        "interrupt must emit exactly one terminal envelope:\n{output}"
+    );
+    let raw_terminal_count = [
+        "DialogTurnCompleted",
+        "DialogTurnCancelled",
+        "DialogTurnFailed",
+        "SystemError",
+    ]
+    .iter()
+    .map(|event_type| {
+        output
+            .matches(&format!("\"type\":\"{event_type}\""))
+            .count()
+    })
+    .sum::<usize>();
+    assert_eq!(
+        raw_terminal_count, 1,
+        "raw PTY output contains a hidden or duplicate terminal envelope:\n{output}"
+    );
+    assert_eq!(
+        terminal_events[0]["event"]["type"], "DialogTurnCancelled",
+        "interrupt must settle as cancelled:\n{output}"
+    );
+    assert_eq!(
+        events.last().expect("stream-json cancellation event")["event"]["type"],
+        "DialogTurnCancelled",
+        "cancellation must be the final protocol envelope:\n{output}"
+    );
+}
+
+fn strict_stream_json_events(output: &str) -> Vec<serde_json::Value> {
+    output
+        .lines()
+        .filter_map(|raw_line| {
+            let line = strip_terminal_sequences(raw_line);
+            let line = line.strip_prefix("^C").unwrap_or(&line);
+            let is_protocol_candidate = line.contains('{')
+                || line.contains("\"event\"")
+                || [
+                    "DialogTurnCompleted",
+                    "DialogTurnCancelled",
+                    "DialogTurnFailed",
+                    "SystemError",
+                ]
+                .iter()
+                .any(|event_type| line.contains(event_type));
+            if !is_protocol_candidate {
+                return None;
+            }
+            let value = serde_json::from_str::<serde_json::Value>(&line).unwrap_or_else(|error| {
+                panic!("invalid stream-json PTY line {line:?}: {error}\nfull output:\n{output}")
+            });
+            assert!(
+                value.get("event").is_some(),
+                "stream-json PTY record is not an Agentic envelope: {line:?}"
+            );
+            Some(value)
+        })
+        .collect()
+}
+
+#[test]
+fn stream_json_parser_accepts_the_echoed_ctrl_c_prefix_before_an_envelope() {
+    let events = strict_stream_json_events(
+        "^C{\"id\":\"event-1\",\"event\":{\"type\":\"SessionStateChanged\"}}\n",
+    );
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event"]["type"], "SessionStateChanged");
+}
+
+fn strip_terminal_sequences(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character != '\x1b' {
+            if character != '\r' {
+                output.push(character);
+            }
+            continue;
+        }
+        match chars.next() {
+            Some('[') => {
+                for next in chars.by_ref() {
+                    if next.is_ascii() && (0x40..=0x7e).contains(&(next as u8)) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                while let Some(next) = chars.next() {
+                    if next == '\x07' {
+                        break;
+                    }
+                    if next == '\x1b' {
+                        if chars.peek() == Some(&'\\') {
+                            chars.next();
+                        }
+                        break;
+                    }
+                }
+            }
+            Some(_) | None => {}
+        }
+    }
+    output
 }
 
 fn captured_output(captured: &Arc<Mutex<Vec<u8>>>) -> String {

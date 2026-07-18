@@ -81,6 +81,10 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   stable capability requests instead of reimplementing behavior per entrypoint.
 - `json` is one result document; `stream-json` is one complete event per line.
   Keep protocol stdout free of logs and preserve schema/exit-code compatibility.
+- Keep `src/modes/exec.rs` as the stable module facade. The current private split
+  keeps lifecycle/event settlement in `exec/lifecycle.rs` and Patch capture/write
+  behavior in `exec/patch.rs`; further private splits are allowed when they keep
+  one executor, one output schema, and one lifecycle owner.
 - Approval policy is invocation-scoped: interactive TUI defaults to ask;
   non-interactive execution fails when confirmation is required unless an
   explicit argument or managed policy approves it. Do not mutate a global

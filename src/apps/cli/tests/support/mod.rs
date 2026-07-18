@@ -5,15 +5,90 @@ use serde_json::json;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const STREAM_START_MARKER: &str = "ACTIVE_TURN_STREAM_MARKER";
 pub(crate) const STREAM_RESIZED_MARKER: &str = "RESIZED_OK";
 pub(crate) const STREAM_COMPLETED_MARKER: &str = "ACTIVE_TURN_STREAM_COMPLETED";
+
+pub(crate) fn command_output_with_timeout(command: &mut Command, timeout: Duration) -> Output {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command.spawn().expect("spawn CLI process");
+    let mut child_stdout = child.stdout.take().expect("capture CLI stdout");
+    let mut child_stderr = child.stderr.take().expect("capture CLI stderr");
+    let (stdout_tx, stdout_rx) = mpsc::sync_channel(1);
+    let (stderr_tx, stderr_rx) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = child_stdout.read_to_end(&mut output).map(|_| output);
+        let _ = stdout_tx.send(result);
+    });
+    thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = child_stderr.read_to_end(&mut output).map(|_| output);
+        let _ = stderr_tx.send(result);
+    });
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("poll CLI process") {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let kill_error = child.kill().err();
+            let termination_result = if kill_error.is_none() {
+                wait_for_child_exit(&mut child, Instant::now() + Duration::from_secs(2))
+            } else {
+                None
+            };
+            let output_deadline = Instant::now() + Duration::from_secs(2);
+            let stdout = recv_pipe_output(&stdout_rx, output_deadline, "stdout");
+            let stderr = recv_pipe_output(&stderr_rx, output_deadline, "stderr");
+            panic!(
+                "CLI process exceeded {timeout:?}; kill_error={kill_error:?}; termination_result={termination_result:?}\nstdout:\n{}\nstderr:\n{}",
+                String::from_utf8_lossy(&stdout),
+                String::from_utf8_lossy(&stderr)
+            );
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+    let output_deadline = Instant::now() + Duration::from_secs(2);
+
+    Output {
+        status,
+        stdout: recv_pipe_output(&stdout_rx, output_deadline, "stdout"),
+        stderr: recv_pipe_output(&stderr_rx, output_deadline, "stderr"),
+    }
+}
+
+fn wait_for_child_exit(
+    child: &mut std::process::Child,
+    deadline: Instant,
+) -> Option<std::io::Result<std::process::ExitStatus>> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Some(Ok(status)),
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+            Ok(None) => return None,
+            Err(error) => return Some(Err(error)),
+        }
+    }
+}
+
+fn recv_pipe_output(
+    receiver: &mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    deadline: Instant,
+    stream: &str,
+) -> Vec<u8> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    receiver
+        .recv_timeout(remaining)
+        .unwrap_or_else(|error| panic!("timed out collecting CLI {stream}: {error}"))
+        .unwrap_or_else(|error| panic!("failed to read CLI {stream}: {error}"))
+}
 
 pub(crate) struct CliTestEnvironment {
     _temp: tempfile::TempDir,
@@ -153,17 +228,35 @@ pub(crate) struct MockOpenAiServer {
     base_url: String,
     release_stream: mpsc::Sender<()>,
     stream_disconnected: mpsc::Receiver<()>,
+    requests: Arc<Mutex<Vec<Vec<u8>>>>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
+enum MockModelResponse {
+    Immediate,
+    Gated,
+    Http403 { reason: String },
+    DisconnectThenHttp403,
+}
+
 impl MockOpenAiServer {
     pub(crate) fn gated() -> Self {
-        Self::spawn(true)
+        Self::spawn(MockModelResponse::Gated)
     }
 
     pub(crate) fn immediate() -> Self {
-        Self::spawn(false)
+        Self::spawn(MockModelResponse::Immediate)
+    }
+
+    pub(crate) fn http_403(reason: impl Into<String>) -> Self {
+        Self::spawn(MockModelResponse::Http403 {
+            reason: reason.into(),
+        })
+    }
+
+    pub(crate) fn disconnect_then_http_403() -> Self {
+        Self::spawn(MockModelResponse::DisconnectThenHttp403)
     }
 
     pub(crate) fn base_url(&self) -> &str {
@@ -180,7 +273,28 @@ impl MockOpenAiServer {
             .expect("model stream remained connected after cancellation");
     }
 
-    fn spawn(gated: bool) -> Self {
+    pub(crate) fn assert_chat_completion_requests(&self, expected_count: usize) {
+        let requests = self.requests.lock().expect("lock mock model requests");
+        assert_eq!(
+            requests.len(),
+            expected_count,
+            "unexpected mock model request count"
+        );
+        for request in requests.iter() {
+            let header_end = find_header_end(request).expect("mock request header terminator");
+            let headers = String::from_utf8_lossy(&request[..header_end]);
+            assert_eq!(
+                headers.lines().next(),
+                Some("POST /v1/chat/completions HTTP/1.1"),
+                "unexpected mock model request target"
+            );
+            let body: serde_json::Value = serde_json::from_slice(&request[header_end + 4..])
+                .expect("parse mock model request body");
+            assert_eq!(body["model"], "cli-e2e-model", "unexpected mock model id");
+        }
+    }
+
+    fn spawn(response: MockModelResponse) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock model server");
         listener
             .set_nonblocking(true)
@@ -188,17 +302,43 @@ impl MockOpenAiServer {
         let address = listener.local_addr().expect("mock model address");
         let stop = Arc::new(AtomicBool::new(false));
         let stop_for_thread = Arc::clone(&stop);
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let requests_for_thread = Arc::clone(&requests);
         let (release_tx, release_rx) = mpsc::channel();
         let (disconnect_tx, disconnect_rx) = mpsc::channel();
         let thread = thread::spawn(move || {
             let deadline = Instant::now() + Duration::from_secs(30);
+            let mut attempt = 0;
             loop {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
                         stream
                             .set_nonblocking(false)
                             .expect("configure accepted mock model connection");
-                        serve_model_response(&mut stream, gated, &release_rx, &disconnect_tx);
+                        stream
+                            .set_read_timeout(Some(Duration::from_secs(5)))
+                            .expect("configure mock request timeout");
+                        let request =
+                            read_http_request(&mut stream).expect("read mock model request");
+                        requests_for_thread
+                            .lock()
+                            .expect("lock mock model requests")
+                            .push(request);
+                        serve_model_response(
+                            &mut stream,
+                            &response,
+                            attempt,
+                            &release_rx,
+                            &disconnect_tx,
+                        );
+                        attempt += 1;
+                        if matches!(
+                            response,
+                            MockModelResponse::Http403 { .. }
+                                | MockModelResponse::DisconnectThenHttp403
+                        ) {
+                            continue;
+                        }
                         break;
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -216,6 +356,7 @@ impl MockOpenAiServer {
             base_url: format!("http://{address}"),
             release_stream: release_tx,
             stream_disconnected: disconnect_rx,
+            requests,
             stop,
             thread: Some(thread),
         }
@@ -239,14 +380,20 @@ impl Drop for MockOpenAiServer {
 
 fn serve_model_response(
     stream: &mut TcpStream,
-    gated: bool,
+    response: &MockModelResponse,
+    attempt: usize,
     release_stream: &mpsc::Receiver<()>,
     stream_disconnected: &mpsc::Sender<()>,
 ) {
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .expect("configure mock request timeout");
-    read_http_request(stream).expect("read mock model request");
+    if matches!(response, MockModelResponse::DisconnectThenHttp403) && attempt > 0 {
+        write_http_403(stream, "provider stream remained unavailable")
+            .expect("write post-disconnect HTTP error");
+        return;
+    }
+    if let MockModelResponse::Http403 { reason } = response {
+        write_http_403(stream, reason).expect("write mock HTTP error");
+        return;
+    }
     stream
         .write_all(
             b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
@@ -286,11 +433,12 @@ fn serve_model_response(
     )
     .expect("write mock streaming marker");
 
-    if gated
-        && release_stream
-            .recv_timeout(Duration::from_secs(30))
-            .is_err()
-    {
+    if matches!(response, MockModelResponse::DisconnectThenHttp403) {
+        return;
+    }
+
+    let gated = matches!(response, MockModelResponse::Gated);
+    if gated && !wait_for_release_or_disconnect(stream, release_stream, stream_disconnected) {
         return;
     }
 
@@ -344,6 +492,24 @@ fn serve_model_response(
     }
     let _ = stream.write_all(b"0\r\n\r\n");
     let _ = stream.flush();
+}
+
+fn write_http_403(stream: &mut TcpStream, reason: &str) -> std::io::Result<()> {
+    let body = json!({
+        "error": {
+            "message": reason,
+            "type": "permission_error",
+            "param": null,
+            "code": "permission_denied"
+        }
+    })
+    .to_string();
+    write!(
+        stream,
+        "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )?;
+    stream.flush()
 }
 
 fn wait_for_release_or_disconnect(

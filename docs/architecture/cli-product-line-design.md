@@ -111,7 +111,8 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
   关闭输入捕获、关闭 raw mode 并显示光标。真实 PTY/ConPTY 启动页进程冒烟测试已验证 resize 后仍可交互、
   多行输入、空闲 Ctrl+C 和可观察的终端清理序列；Chat 活动 turn 的 resize 静默期已有状态单测，窄屏流式
   reflow 已有 TestBackend 回归，Linux PTY 与 Windows ConPTY 活动 turn 的 resize/取消已有本地确定性流式模型夹具进程测试；
-  OS 级初始化失败与异常退出仍需独立验收。
+  `exec stream-json` 的 Ctrl+C 也由真实 PTY/ConPTY 进程验证断流、非零退出和单一取消终态。OS 级初始化失败与
+  异常退出仍需独立验收。
 - Startup 与 Chat 共用 CLI 私有输入读取器；一次读取同时受 256 个事件和 50ms 限制，跨批次仅延续快速文本尾部，
   短批次普通按键保持原有路由。被识别为粘贴的文本按批次写入输入缓冲，每批只刷新一次命令菜单；粘贴内容中的
   Tab 明确转换为四个空格。
@@ -148,7 +149,7 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 第一条闭环只完成一个无外部依赖的契约样例；取得真实 `execute` 并注册到 Tool Runtime 后才显示可用。 |
 | 当前 CLI 使用 `product-full`，OHOS target 图包含多组未验证的平台依赖 | 不能据依赖可解析、`hdc shell` 或移动 Remote App 推导 PC 本地 CLI/TUI 可用 | 问题与风险统一记录在平台规约；具体工作另立专题，HAP 不作为替代。 |
 | Product Capability 已有，但品牌、资源、默认策略和发行配置没有统一产品定义 | 白标需要修改多处常量和工作流，能力隐藏不等于后端禁用 | 产品定义只在组装/构建边界选择身份、资源、能力包、默认策略和发行事实。 |
-| CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；启动页及本地确定性流式模型夹具驱动的活动 turn 由 PTY/ConPTY 进程测试覆盖 resize、取消和恢复可编辑状态，`stream-json` 覆盖 Patch 写入失败且不会泄漏成功终态；发布归档上传前完成 SHA-256 与解压执行验证 | 真实供应商审批流和 OS 级终端初始化故障注入仍可能晚于 PR 发现 | 只按剩余真实故障补进程契约；避免为同一依赖图重复建立三平台编译矩阵。 |
+| CLI 已有独立 Linux 测试，参数互斥、结果/envelope 序列化、前置失败和组装有 focused contract；本地确定性模型夹具覆盖 HTTP 403 授权拒绝、流中断后的重试失败和 Patch 写入失败，真实 PTY/ConPTY 进程覆盖启动页、Chat resize/取消恢复及 `exec` Ctrl+C 的断流和单一取消终态；发布归档上传前完成 SHA-256 与解压执行验证 | 真实供应商审批交互和 OS 级终端初始化故障注入仍可能晚于 PR 发现 | 只按剩余真实故障补进程契约；避免为同一依赖图重复建立三平台编译矩阵。 |
 
 ## 3. 分阶段产品需求
 
@@ -160,15 +161,15 @@ CLI-P0 不是一个统一重构 PR。静态 profile、真实 Runtime Services、
 本地 Agent 纵向入口已接入；旧门面仅在后续 owner 迁移的行为等价成立后退出。配置解释、产品定制消费和 TUI
 进一步拆分仍需独立交付。CLI 托管的 ACP 服务端已独立切换到 ACP profile 与组装后的 SDK runtime；启动页
 PTY/ConPTY 生命周期、Chat 活动 turn 的 resize/取消和发布归档冒烟测试已存在；resize 静默期与窄屏流式 reflow
-分别有确定性状态单测和 TestBackend 回归，Patch 写入失败也由真实 `stream-json` 进程保护。真实供应商审批流、
-OS 级终端初始化故障注入与权限失败等完整进程级验收仍需另行完成。
+分别有确定性状态单测和 TestBackend 回归。真实 `stream-json` 进程已保护 Patch 写入失败、本地模型 HTTP 403 授权拒绝、
+流中断后的重试失败和 `exec` Ctrl+C 单一取消终态；真实供应商审批交互与 OS 级终端初始化故障注入仍需另行完成。
 
 其余工作独立立项，不能与 profile 迁移互相充当完成条件：
 
 | 切片 | 范围 | 退出条件 |
 |---|---|---|
 | 调用级审批 | TUI、`exec` 与 ACP 已使用各自调用级策略且不写全局配置 | Runtime-context `Allow always`、审批规划、`exec` 安全默认值和显式 `--auto` 有 focused test；真实模型/PTY 审批流与 ACP 仍需另行验收 |
-| 输出协议 | 保持通用 `text/json/stream-json` 心智，复用现有 Agentic envelope，不新建 CLI schema | 已覆盖结果/envelope 序列化、参数与前置 JSON 失败、失败完成、同会话跨 turn 隔离、stream-json/Patch stdout 冲突及 Patch 写入失败；写入失败返回非零并只发送结构化错误，不提前发送成功终态；真实信号与模型权限失败仍需进程级契约 |
+| 输出协议 | 保持通用 `text/json/stream-json` 心智，复用现有 Agentic envelope，不新建 CLI schema | 已覆盖结果/envelope 序列化、参数与前置 JSON 失败、失败完成、同会话跨 turn 隔离、stream-json/Patch stdout 冲突及 Patch 写入失败；写入失败返回非零并只发送结构化错误，不提前发送成功终态；真实 PTY/ConPTY 信号、本地模型 HTTP 403 授权拒绝和流中断后的重试失败已有进程契约，真实供应商审批交互另行验收 |
 | 配置解释 | Canonical Config 层级、全局/项目持续来源、加载状态和兼容导入 dry-run | 不自动写入；冲突、未知字段、待确认能力和凭据引用可解释 |
 | 产品定制 | 消费最小产品定义、组装结果和已注册 TUI layout/theme ID | 第二个真实 CLI 产品复用后再提升公共字段 |
 | TUI 边界 | 增量提取终端恢复守卫、命令分发和副作用边界 | 不改版视觉设计；Linux PTY 与 Windows ConPTY 活动 turn 的 resize/取消、恢复可编辑状态和正常退出清理可单独验证，macOS 活动 turn 与 OS 级初始化失败注入另行补齐 |
@@ -214,12 +215,12 @@ CLI-P1 应保证：
 |---|---|
 | `text` | 最终助手文本写 stdout；进度、思考、工具状态、日志和诊断写 stderr。显式 `--output-patch -` 是用户选择的额外 stdout 内容。 |
 | `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。 |
-| `stream-json` | 每行直接序列化一个现有 `AgenticEventEnvelope`；不增加 `schema_version`、`sequence` 或第二套 CLI 事件 taxonomy。成功的 `DialogTurnCompleted` 只在精确结算和 Patch 生成完成后发布；结算或 Patch 失败改为发布 `SystemError` 并以非零状态退出，避免消费者提前确认成功。 |
+| `stream-json` | 每行直接序列化一个现有 `AgenticEventEnvelope`；不增加 `schema_version`、`sequence` 或第二套 CLI 事件 taxonomy。所有 terminal envelope 都只在精确结算和 Patch 交付完成后发布一次；结算失败优先于 Patch 失败，Patch 失败优先于 turn 终态，前两者统一改为 `SystemError` 并以非零状态退出。一次执行最多发布一个 terminal envelope 和一条 `BITFUN_EXIT` 分类。 |
 | 事件范围 | 只输出本次 session/turn 的事件，以及与其明确关联的 subagent link/tool 事件；同 session 的其他并发 turn 不得混入。 |
 | Patch | `json` 可把 `--output-patch -` 放入最终对象；`stream-json` 要求显式文件路径。Patch 是写出显式 Patch 文件前捕获的仓库 `HEAD` 相对工作区快照，包含 staged、unstaged、untracked 及命令启动前已有改动，不包含输出 artifact 本身，也不表达改动归因。 |
 | 权限 | 非交互默认拒绝并返回权限失败；`--auto` 只改变当前提交策略，不修改持久化配置。 |
 | 人工输入 | 非交互 `exec` 不暴露 `AskUserQuestion`；调用方必须在初始输入中提供完整上下文。该事实沿 Task、SessionMessage 及其自动回复链传播，避免子 Agent 或后续 turn 等待不存在的 stdin 处理器。 |
-| 终止 | terminal event 决定结果；`success=false` 不能映射为成功。`Ctrl+C` 请求取消，并在有界等待内继续转发当前 turn 的 terminal envelope 后返回取消结果。当前公开契约不新增 Agent turn 总时限参数；调用方可使用进程级期限，只有出现真实消费方时才单独设计 deadline。 |
+| 终止 | terminal event 决定结果；`success=false` 不能映射为成功。`Ctrl+C` 请求取消，终态观察与精确结算共享同一有界等待；若取消与完成/失败竞争，以实际观察到的 terminal event 为准，若结算失败则只发布替代的 `SystemError`。窗口内未观察到 terminal envelope 时发布结构化错误，不能无终态退出。当前进程仍以通用错误码 `1` 退出；只有实际取消终态使用 stderr 的 `BITFUN_EXIT: cancelled:` 稳定分类。当前公开契约不新增 Agent turn 总时限参数；调用方可使用进程级期限，只有出现真实消费方时才单独设计 deadline。 |
 
 CLI 不提供 `--output-schema v1`。Codex/Claude 同类参数表达的是调用方提供的 JSON Schema，用于约束最终模型
 响应，不是协议版本选择；如未来支持，应复用该语义并独立设计，不能借此重定义事件 envelope。
@@ -607,7 +608,7 @@ CLI Agent 能力加强必须落在共享 Agent Runtime、Tool Runtime 或 Harnes
 `cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime`。Linux 启动页 PTY 生命周期冒烟随独立 CLI
 测试运行，Windows 启动页 ConPTY 生命周期冒烟复用通用 Windows job；发布归档在上传前完成 SHA-256 与解压执行
 验证。真实供应商模型进程级交互、macOS 活动 PTY 与 OS 级终端故障进程矩阵仍按对应切片补入门禁；Linux PTY
-与 Windows ConPTY 的 Chat 活动 turn resize/取消已由本地确定性流式模型夹具覆盖，不能用它替代上述验收。
+与 Windows ConPTY 的 Chat 活动 turn resize/取消及 `exec` Ctrl+C 已由本地确定性流式模型夹具覆盖，不能用它替代上述验收。
 
 ### 10.2 阶段退出条件
 
