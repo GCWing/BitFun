@@ -1,6 +1,7 @@
 //! Tauri commands for Computer use (permissions + settings deep links).
 
 use crate::api::app_state::AppState;
+#[cfg(not(target_env = "ohos"))]
 use crate::computer_use::DesktopComputerUseHost;
 use bitfun_core::agentic::tools::computer_use_host::ComputerUseHost;
 use bitfun_core::service::config::types::AIConfig;

@@ -208,31 +208,40 @@ fn show_main_window_for_secondary_launch(
     app: &tauri::AppHandle,
     attempt: &str,
 ) -> Result<(), String> {
-    let Some(main_window) = app.get_webview_window("main") else {
-        return Err("main window not found".to_string());
-    };
-
-    #[cfg(target_os = "macos")]
+    #[cfg(not(target_env = "ohos"))]
     {
-        cancel_main_window_close_request_on_macos();
-        mark_main_window_hidden_on_macos(false);
-    }
+        let Some(main_window) = app.get_webview_window("main") else {
+            return Err("main window not found".to_string());
+        };
 
-    main_window
-        .unminimize()
-        .map_err(|error| format!("failed to unminimize main window: {}", error))?;
-    main_window
-        .show()
-        .map_err(|error| format!("failed to show main window: {}", error))?;
-    main_window
-        .set_focus()
-        .map_err(|error| format!("failed to focus main window: {}", error))?;
+        #[cfg(target_os = "macos")]
+        {
+            cancel_main_window_close_request_on_macos();
+            mark_main_window_hidden_on_macos(false);
+        }
 
-    log::info!(
+        main_window
+            .unminimize()
+            .map_err(|error| format!("failed to unminimize main window: {}", error))?;
+        main_window
+            .show()
+            .map_err(|error| format!("failed to show main window: {}", error))?;
+        main_window
+            .set_focus()
+            .map_err(|error| format!("failed to focus main window: {}", error))?;
+
+        log::info!(
         "Main window shown from secondary launch: attempt={}",
         attempt
     );
-    Ok(())
+        Ok(())
+    }
+
+    #[cfg(target_env = "ohos")]
+    {
+        Err("Unable to support the main window".to_string())
+    }
+
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
@@ -454,18 +463,6 @@ pub async fn _run() {
     let path_manager = get_path_manager_arc();
 
     let mut builder = tauri::Builder::default();
-
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            log::info!(
-                "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",
-                args.len(),
-                cwd
-            );
-            handle_secondary_launch(app);
-        }));
-    }
 
     let app = builder
         .plugin(logging::build_log_plugin(log_targets))

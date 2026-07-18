@@ -113,14 +113,14 @@ fn emit_sync_progress(
 ///
 /// Events are queued and sent **sequentially** so high-frequency streams
 /// (especially `agentic://text-chunk`) keep emission order. Concurrent
-/// `tokio::spawn` per chunk previously scrambled peer remote chat text.
+/// `tauri::async_runtime::spawn` per chunk previously scrambled peer remote chat text.
 pub fn fanout_peer_device_event(event: String, payload: serde_json::Value) {
     if crate::api::peer_host_invoke::attached_controllers().is_empty() {
         return;
     }
     let tx = PEER_EVENT_FANOUT_TX.get_or_init(|| {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(String, serde_json::Value)>();
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             while let Some((event, payload)) = rx.recv().await {
                 fanout_peer_device_event_once(event, payload).await;
             }
@@ -454,7 +454,7 @@ pub fn init_on_startup() {
 
                 // Re-establish device routing WebSocket in the background.
                 // Uses the same Tauri command logic — fire and forget.
-                tokio::spawn(async {
+                tauri::async_runtime::spawn(async {
                     if let Err(e) = account_connect_devices().await {
                         log::warn!("Startup device connect failed: {e}");
                     }
@@ -1337,7 +1337,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
 
     // Background task: consume events (presence / device messages / auth errors)
     let session_arc = get_account_session().clone();
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         use bitfun_core::service::remote_connect::relay_client::RelayEvent;
         while let Some(event) = event_rx.recv().await {
             match event {
@@ -1358,7 +1358,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                     emit_device_presence(&pairs);
                     // Another device came online — pull cloud settings if needed.
                     if devices.len() > 1 {
-                        tokio::spawn(async {
+                        tauri::async_runtime::spawn(async {
                             pull_and_reconcile().await;
                         });
                     }
@@ -2341,7 +2341,7 @@ static SYNC_TX: OnceLock<mpsc::UnboundedSender<SyncRequest>> = OnceLock::new();
 pub fn init_auto_sync() {
     let (tx, rx) = mpsc::unbounded_channel::<SyncRequest>();
     let _ = SYNC_TX.set(tx);
-    tokio::spawn(sync_background_loop(rx));
+    tauri::async_runtime::spawn(sync_background_loop(rx));
 }
 
 /// Non-blocking notification that a session was created/modified. Called from
