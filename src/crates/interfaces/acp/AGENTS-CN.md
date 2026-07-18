@@ -7,8 +7,8 @@
 `bitfun-acp` 负责基于已组装产品 runtime 的 Agent Client Protocol 入口与 ACP client 行为。ACP protocol / client 细节留在这里或应用入口 adapter 中；跨层只共享稳定 capability facts。
 
 CLI 托管的 ACP 服务端已通过 `ProductAssembler` 消费 `DeliveryProfile::Acp`，并使用 Agent Runtime SDK
-完成会话创建/列举、轮次提交/取消、交互响应和 Agent 事件订阅。`bitfun-acp` 仍直接依赖
-`bitfun-core/product-full`，用于一次性恢复完整持久化历史、模型/模式配置、模型目录与配置读取、MCP 配置，
+完成会话创建/列举、活动会话模型/模式更新、轮次提交/取消、交互响应和 Agent 事件订阅。`bitfun-acp` 仍直接依赖
+`bitfun-core/product-full`，用于一次性恢复完整持久化历史、模型/模式目录与提供方配置读取、MCP 配置，
 以及本 crate 的 ACP 客户端路径。在这些生产路径分别获得可移植替代并证明等价前，不得宣称整个 crate
 已与 Core 解耦。
 

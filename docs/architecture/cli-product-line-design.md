@@ -97,7 +97,7 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
   `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、类型化转录、本地分支、
   用量生成、轮次提交/取消和精确结算；普通创建
   DTO 保持 v1 字段集合，固定 ID 冲突返回 `InvalidRequest`。会话模型更新、工具确认/拒绝和用户问题回答也通过
-  SDK 的窄端口回到 Core owner；模型目录、模式和提供方配置仍由产品入口解释。TUI 用量卡片持久化、快照及 Peer Host/ACP 维护
+  SDK 的窄端口回到 Core owner，ACP 的活动会话模式更新也复用同一窄端口；模型/模式目录和提供方配置仍由产品入口解释。TUI 用量卡片持久化、快照及 Peer Host/ACP 维护
   等 SDK v1 缺口由一个 Core 兼容门面转发给原 owner。
 - Agentic Event Queue 仍是唯一事件 owner；TUI、`exec` 与 Peer Host 使用独立广播订阅，不互相消费事件。
 - 有界旧队列只承担兼容存储；达到容量时不得抑制广播。CLI 保持一个后台 drain，订阅方一旦报告 lag/closed，

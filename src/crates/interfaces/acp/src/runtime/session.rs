@@ -7,7 +7,8 @@ use agent_client_protocol::schema::{
 };
 use agent_client_protocol::{Client, ConnectionTo, Error, Result};
 use bitfun_agent_runtime::sdk::{
-    AgentSessionCreateRequest, AgentSessionListRequest, SessionStoragePathRequest,
+    AgentSessionCreateRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    SessionStoragePathRequest,
 };
 use bitfun_core::agentic::agents::get_agent_registry;
 use chrono::{DateTime, Utc};
@@ -218,10 +219,13 @@ impl BitfunAcpRuntime {
 
         validate_mode_id(mode_id).await?;
 
-        self.compatibility
-            .update_session_agent_type(&bitfun_session_id, mode_id)
+        self.agent_runtime
+            .update_session_mode(AgentSessionModeUpdateRequest {
+                session_id: bitfun_session_id,
+                mode_id: mode_id.to_string(),
+            })
             .await
-            .map_err(Self::internal_error)?;
+            .map_err(Self::runtime_error)?;
 
         if let Some(mut state) = self.sessions.get_mut(session_id) {
             state.mode_id = mode_id.to_string();
@@ -289,7 +293,7 @@ fn unix_ms_to_rfc3339(time_ms: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::unix_ms_to_rfc3339;
+    use super::{unix_ms_to_rfc3339, validate_mode_id};
 
     #[test]
     fn session_timestamps_remain_rfc3339_after_runtime_projection() {
@@ -298,5 +302,10 @@ mod tests {
             unix_ms_to_rfc3339(1_700_000_000_000),
             "2023-11-14T22:13:20+00:00"
         );
+    }
+
+    #[tokio::test]
+    async fn unknown_session_mode_remains_an_invalid_request() {
+        assert!(validate_mode_id("__missing_acp_mode__").await.is_err());
     }
 }

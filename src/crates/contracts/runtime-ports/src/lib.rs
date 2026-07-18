@@ -1026,6 +1026,13 @@ pub struct AgentSessionModelUpdateRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentSessionModeUpdateRequest {
+    pub session_id: String,
+    pub mode_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSessionForkRequest {
     pub workspace_path: String,
     pub source_session_id: String,
@@ -1742,6 +1749,11 @@ pub trait AgentSessionManagementPort: Send + Sync {
 pub trait AgentSessionModelPort: Send + Sync {
     async fn update_session_model(&self, request: AgentSessionModelUpdateRequest)
         -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionModePort: Send + Sync {
+    async fn update_session_mode(&self, request: AgentSessionModeUpdateRequest) -> PortResult<()>;
 }
 
 #[async_trait::async_trait]
@@ -2770,6 +2782,10 @@ mod tests {
             session_id: "session_1".to_string(),
             model_id: "provider/model".to_string(),
         };
+        let mode_request = AgentSessionModeUpdateRequest {
+            session_id: "session_1".to_string(),
+            mode_id: "agentic".to_string(),
+        };
         let workspace_request = AgentSessionWorkspaceRequest {
             session_id: "session_1".to_string(),
         };
@@ -2784,6 +2800,7 @@ mod tests {
         let summary_json = serde_json::to_value(summary).expect("serialize summary");
         let delete_json = serde_json::to_value(delete_request).expect("serialize delete request");
         let model_json = serde_json::to_value(model_request).expect("serialize model request");
+        let mode_json = serde_json::to_value(mode_request).expect("serialize mode request");
         let workspace_json =
             serde_json::to_value(workspace_request).expect("serialize workspace request");
         let binding_json =
@@ -2801,6 +2818,8 @@ mod tests {
         assert_eq!(delete_json["remoteSshHost"], "host-1");
         assert_eq!(model_json["sessionId"], "session_1");
         assert_eq!(model_json["modelId"], "provider/model");
+        assert_eq!(mode_json["sessionId"], "session_1");
+        assert_eq!(mode_json["modeId"], "agentic");
         assert_eq!(workspace_json["sessionId"], "session_1");
         assert_eq!(binding_json["workspaceId"], "workspace_1");
         assert_eq!(binding_json["workspacePath"], "/workspace/project");

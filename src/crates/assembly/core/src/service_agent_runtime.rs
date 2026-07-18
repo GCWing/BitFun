@@ -7,8 +7,9 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionForkPort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
-    AgentSessionRestorePort, AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
+    AgentSessionForkPort, AgentSessionModePort, AgentSessionModelPort,
+    AgentSessionModelUpdateRequest, AgentSessionRestorePort, AgentSessionUsagePort,
+    AgentTurnSettlementPort, RuntimeError,
 };
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
@@ -398,6 +399,7 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
+    session_mode: Arc<dyn AgentSessionModePort>,
     session_model: Arc<dyn AgentSessionModelPort>,
     session_restore: Arc<dyn AgentSessionRestorePort>,
     transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
@@ -410,6 +412,7 @@ fn core_agent_runtime_builder(
     AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
+        .with_session_mode_port(session_mode)
         .with_session_model_port(session_model)
         .with_session_restore_port(session_restore)
         .with_session_transcript_reader(transcript_reader)
@@ -791,6 +794,7 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -801,6 +805,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_mode,
             session_model,
             session_restore,
             transcript_reader,
@@ -819,6 +824,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -831,6 +837,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_mode,
             session_model,
             session_restore,
             transcript_reader,
@@ -851,6 +858,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -862,6 +870,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_mode,
             session_model,
             session_restore,
             transcript_reader,
@@ -881,6 +890,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -893,6 +903,7 @@ impl CoreServiceAgentRuntime {
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_mode,
             session_model,
             session_restore,
             transcript_reader,
@@ -965,6 +976,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -977,6 +989,7 @@ impl CoreServiceAgentRuntime {
         let builder = core_agent_runtime_builder(
             submission,
             session_management,
+            session_mode,
             session_model,
             session_restore,
             transcript_reader,
