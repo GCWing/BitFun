@@ -36,7 +36,7 @@ pub use definitions::review::{
 };
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
-    AcpAgent, ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
+    ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
     ResearchSpecialistAgent,
 };
 use indexmap::IndexMap;
