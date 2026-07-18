@@ -2497,6 +2497,33 @@ fn system_time_to_unix_secs(time: std::time::SystemTime) -> u64 {
     }
 }
 
+// ── Legion preset commands ──────────────────────────────────────────
+
+#[tauri::command]
+pub async fn list_legion_presets() -> Result<Vec<bitfun_core::agentic::agents::team_presets::LegionPreset>, String> {
+    bitfun_core::agentic::agents::team_presets::list_presets()
+}
+
+#[tauri::command]
+pub async fn get_legion_preset(id: String) -> Result<bitfun_core::agentic::agents::team_presets::LegionPreset, String> {
+    bitfun_core::agentic::agents::team_presets::get_preset(&id)
+}
+
+#[tauri::command]
+pub async fn create_legion_preset(preset: bitfun_core::agentic::agents::team_presets::LegionPreset) -> Result<(), String> {
+    bitfun_core::agentic::agents::team_presets::create_preset(&preset)
+}
+
+#[tauri::command]
+pub async fn update_legion_preset(preset: bitfun_core::agentic::agents::team_presets::LegionPreset) -> Result<(), String> {
+    bitfun_core::agentic::agents::team_presets::update_preset(&preset)
+}
+
+#[tauri::command]
+pub async fn delete_legion_preset(id: String) -> Result<(), String> {
+    bitfun_core::agentic::agents::team_presets::delete_preset(&id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -208,7 +208,27 @@ pub(crate) async fn call_with_tool_runtime_hooks(
     };
 
     if result.is_ok() {
-        post_call_hooks::record_successful_tool_call(tool_name, input, context);
+        let hook_result = post_call_hooks::record_successful_tool_call(tool_name, input, context);
+        if let bitfun_agent_runtime::post_call_hooks::HookResult::Abort {
+            reason,
+            fix_instruction,
+            ..
+        } = hook_result
+        {
+            let interception = serde_json::json!({
+                "intercepted": true,
+                "reason": reason,
+                "fix_instruction": fix_instruction,
+            });
+            return Ok(vec![ToolResult::Result {
+                data: interception,
+                result_for_assistant: Some(format!(
+                    "[ToolGuard Intercepted] Result for tool {} was rejected.\nReason: {}\nFix: {}",
+                    tool_name, reason, fix_instruction
+                )),
+                image_attachments: None,
+            }]);
+        }
     }
 
     result

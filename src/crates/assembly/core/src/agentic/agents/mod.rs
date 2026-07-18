@@ -5,6 +5,7 @@
 mod definitions;
 mod prompt_builder;
 mod registry;
+pub mod team_presets;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
@@ -35,7 +36,8 @@ pub use definitions::review::{
 };
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
-    ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent, ResearchSpecialistAgent,
+    AcpAgent, ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
+    ResearchSpecialistAgent,
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{
@@ -132,6 +134,8 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
+        "SessionMessage".to_string(),
+        "SessionHistory".to_string(),
     ];
     append_provider_group_tools(&mut tools, "core.canvas");
     tools
