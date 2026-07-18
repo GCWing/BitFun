@@ -438,7 +438,7 @@ fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
 /// and is visually hidden (not rendered) while still receiving messages, so the
 /// brief foreground swap in the cloaked-injection path is invisible to the
 /// user. Best-effort; returns whether the attribute was set.
-unsafe fn set_cloak(h: HWND, on: bool) -> bool { unsafe {
+unsafe fn set_cloak(h: HWND, on: bool) -> bool {
     let v: BOOL = if on { TRUE } else { FALSE };
     // SAFETY: `v` is a live `BOOL` whose pointer and byte length match the
     // `DWMWA_CLOAK` contract; an invalid HWND is reported as an API error.
@@ -451,7 +451,7 @@ unsafe fn set_cloak(h: HWND, on: bool) -> bool { unsafe {
         )
     }
     .is_ok()
-}}
+}
 
 /// Bring `target` to the foreground using the `AttachThreadInput` trick, which
 /// inherits the current foreground thread's FG-lock token so the swap is
@@ -903,7 +903,7 @@ fn vk_event(vk: u16, scan: u32, up: bool) -> Input {
 /// # Safety
 /// `SendInput` reads `ev.len()` `INPUT` records from `ev.as_ptr()`; every
 /// record is fully initialized above. `cbSize` is the true `size_of::<INPUT>`.
-unsafe fn send_unicode(text: &str) -> BitFunResult<()> { unsafe {
+unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
     let mut ev: Vec<Input> = Vec::with_capacity(text.len() * 2);
     for u in text.encode_utf16() {
         ev.push(unicode_event(u, false));
@@ -926,14 +926,14 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> { unsafe {
         )));
     }
     Ok(())
-}}
+}
 
 /// Deliver a key + modifiers as a single `SendInput` burst: modifiers down,
 /// key down, key up, modifiers up (reverse).
 ///
 /// # Safety
 /// `SendInput` reads a fully-initialized `INPUT` array; `cbSize` is correct.
-unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> { unsafe {
+unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
     let mut ev: Vec<Input> = Vec::with_capacity(modifiers.len() * 2 + 2);
     for &m in modifiers {
         // SAFETY: `MapVirtualKeyW` accepts every virtual-key value and has no
@@ -965,7 +965,7 @@ unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> { 
         )));
     }
     Ok(())
-}}
+}
 
 /// Fallback for [`inject_key_cloaked`] when foreground can't be obtained: post
 /// `WM_KEYDOWN` / `WM_KEYUP` to the window's queue (best-effort; may miss

@@ -113,7 +113,7 @@ unsafe fn walk_bounded(
     hwnd: isize,
     max_total: usize,
     max_depth: usize,
-) -> BitFunResult<Vec<UiaNode>> { unsafe {
+) -> BitFunResult<Vec<UiaNode>> {
     // BitFun is a Tauri GUI app; match the UIA path's apartment threading.
     // SAFETY: initializes COM for the current thread; the result is intentionally
     // ignored because an already initialized apartment is acceptable here.
@@ -167,7 +167,7 @@ unsafe fn walk_bounded(
     );
 
     Ok(nodes)
-}}
+}
 
 /// Returns `true` when `hwnd` belongs to a LibreOffice / OpenOffice VCL window
 /// whose UIA provider is known to hang on `BuildUpdatedCache(Subtree)` or return
@@ -383,7 +383,7 @@ unsafe fn walk(
 /// `VARIANT_0.Anonymous` field is `ManuallyDrop<VARIANT_0_0>` inside a union;
 /// the borrow checker refuses to auto-`DerefMut` it for a write, so the
 /// `ManuallyDrop` is dereferenced explicitly.
-unsafe fn child_id_variant(id: i32) -> VARIANT { unsafe {
+unsafe fn child_id_variant(id: i32) -> VARIANT {
     let mut var = VARIANT::default();
     // SAFETY: `VARIANT::default` is initialized, and setting `vt = VT_I4`
     // selects the `lVal` union member written immediately afterward.
@@ -392,7 +392,7 @@ unsafe fn child_id_variant(id: i32) -> VARIANT { unsafe {
         (*var.Anonymous.Anonymous).Anonymous.lVal = id;
     }
     var
-}}
+}
 
 /// Read a `VT_I4` out of a VARIANT. `get_accRole` returns `VT_I4` in practice
 /// (custom roles may arrive as `VT_BSTR`, which we map to `None` = unknown).

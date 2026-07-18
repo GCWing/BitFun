@@ -191,7 +191,7 @@ unsafe fn build_cache_request(
 pub(crate) unsafe fn build_updated_cache_with_retry(
     uncached: &IUIAutomationElement,
     cache_req: &IUIAutomationCacheRequest,
-) -> BitFunResult<IUIAutomationElement> { unsafe {
+) -> BitFunResult<IUIAutomationElement> {
     let mut attempt = 0u32;
     loop {
         // SAFETY: both COM interfaces are live for the call and `cache_req`
@@ -216,7 +216,7 @@ pub(crate) unsafe fn build_updated_cache_with_retry(
             }
         }
     }
-}}
+}
 
 // ── Cached property readers ─────────────────────────────────────────────────
 //
@@ -480,7 +480,7 @@ unsafe fn walk_cached_bounded(
     total: &mut usize,
     max_elements: usize,
     max_depth: usize,
-) { unsafe {
+) {
     if depth > max_depth || *total >= max_elements {
         return;
     }
@@ -586,7 +586,7 @@ unsafe fn walk_cached_bounded(
             }
         }
     }
-}}
+}
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 

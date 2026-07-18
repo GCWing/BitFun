@@ -3420,7 +3420,21 @@ impl ExecutionEngine {
                     }
                 }
 
-                // Inject B01 additional contexts
+                // Inject B01 additional contexts — replaces previous review messages
+                // to prevent unbounded context growth and spurious compression triggers.
+                // Bee-review messages are identified by the review-prefix inside a
+                // <system_reminder> block.
+                messages.retain(|m| {
+                    match &m.content {
+                        crate::agentic::core::message::MessageContent::Text(text) => {
+                            let trimmed = text.trim();
+                            !(trimmed.contains("[书记官]") && trimmed.contains("<system_reminder>"))
+                                && !(trimmed.contains("[提示蜂]") && trimmed.contains("<system_reminder>"))
+                                && !(trimmed.contains("[审查员]") && trimmed.contains("<system_reminder>"))
+                        }
+                        _ => true,
+                    }
+                });
                 for ctx_msg in &aggregated.additional_contexts {
                     let msg = Message::system(render_system_reminder(ctx_msg));
                     messages.push(msg);
