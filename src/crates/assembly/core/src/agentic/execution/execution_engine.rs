@@ -52,8 +52,8 @@ use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::Arc;
+use std::path::Path;
 use tokio_util::sync::CancellationToken;
 use tool_runtime::context::PrimaryModelFacts;
 
@@ -3240,9 +3240,19 @@ impl ExecutionEngine {
                 let tool_calls: Vec<ToolCallSummary> = round_result
                     .tool_calls
                     .iter()
-                    .map(|tc| ToolCallSummary {
-                        tool_name: tc.tool_name.clone(),
-                        is_error: tc.is_error,
+                    .map(|tc| {
+                        let preview = serde_json::to_string(&tc.arguments)
+                            .unwrap_or_default();
+                        let preview = if preview.len() > 256 {
+                            format!("{}...", &preview[..253])
+                        } else {
+                            preview
+                        };
+                        ToolCallSummary {
+                            tool_name: tc.tool_name.clone(),
+                            is_error: tc.is_error,
+                            input_preview: preview,
+                        }
                     })
                     .collect();
 
@@ -3286,13 +3296,14 @@ impl ExecutionEngine {
                     .collect();
 
                 let aggregated = run_stop_hooks_for_round(
+                    &self.session_manager,
                     &context.session_id,
                     &context.dialog_turn_id,
                     round_index as u32,
-                    tool_calls,
+                    tool_calls.clone(),
                     assistant_text,
-                    file_reads,
-                    file_edits,
+                    file_reads.clone(),
+                    file_edits.clone(),
                     round_result.has_more_rounds,
                 );
 
@@ -3326,6 +3337,63 @@ impl ExecutionEngine {
                     let msg = Message::system(render_system_reminder(ctx_msg));
                     messages.push(msg);
                 }
+
+                // ── 蜂群审查（cc-haha模式：stop hook → fast LLM → 注入结果）──
+                if !tool_calls.is_empty() {
+                    let tl: Vec<String> = tool_calls.iter()
+                        .map(|tc| format!("{}{}", tc.tool_name, if tc.is_error { "(FAIL)" } else { "" }))
+                        .collect();
+                    let ts: String = assistant_text.chars().take(400).collect();
+                    let fr2: Vec<String> = file_reads.iter().take(5).cloned().collect();
+                    let fe2: Vec<String> = file_edits.iter().take(5).cloned().collect();
+
+                    let review_prompt = format!(
+                        "你是蜂群审查员（书记官+纪律委员+提示蜂）。审查Agent本轮：\n\
+                         工具:[{}] 读取:[{}] 编辑:[{}] 动作:{}\n\n\
+                         ## 书记官（上下文守护）\n\
+                         - 上下文压缩了？提取压缩前的关键决策/进度/用户纠正 → CTX:<要点>\n\
+                         - 轮次>20或token告急？预摘要关键状态 → CTX:<摘要>\n\
+                         - Agent忘记重要信息（重复提问/忽略决策）？→ CTX:<提醒>\n\n\
+                         ## 纪律委员（行为审查）\n\
+                         - 编辑前未Read？→ ABORT:未读即改-<文件>\n\
+                         - 碰了LionHeart库？→ ABORT:受保护路径\n\
+                         - 同工具连续失败？→ ABORT:策略死循环\n\
+                         - PS+中文+JSON？→ ABORT:PS编码风险\n\
+                         - 全部工具失败？→ ABORT:全部失败\n\
+                         - 改完不验证？→ WARN:未验证\n\n\
+                         ## 提示蜂（技能推荐）\n\
+                         - MiniApp相关但没加载miniapp-dev？→ SKILL:miniapp-dev\n\
+                         - 编码但没加载Pair-Programming？→ SKILL:Pair Programming\n\
+                         - 调研但没加载agent-reach？→ SKILL:agent-reach\n\n\
+                         输出（每行一个）：PASS / ABORT:<原因> / WARN:<问题> / CTX:<内容> / SKILL:<名称>\n\
+                         一切正常只回复PASS。",
+                        tl.join(","), fr2.join(","), fe2.join(","), ts
+                    );
+
+                    let sid2 = context.session_id.clone();
+                    std::thread::spawn(move || {
+                        let rt = tokio::runtime::Runtime::new().expect("bee-review");
+                        rt.block_on(async move {
+                            if let Ok(factory) = crate::infrastructure::ai::get_global_ai_client_factory().await {
+                                if let Ok(client) = factory.get_client_resolved("primary").await {
+                                    let msgs = vec![bitfun_core_types::Message::user(review_prompt)];
+                                    if let Ok(mut stream) = client.send_message_stream(msgs, None, None).await {
+                                        use futures::StreamExt;
+                                        let mut result = String::new();
+                                        while let Some(Ok(chunk)) = stream.stream.next().await {
+                                            if let Some(t) = chunk.text { result.push_str(&t); }
+                                        }
+                                        let trimmed = result.trim().to_string();
+                                        if !trimmed.is_empty() && trimmed != "PASS" {
+                                            crate::agentic::tools::post_call_hooks::push_review_result(&sid2, trimmed);
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    });
+                }
+
             }
 
             // Track partial recovery reason from the last round

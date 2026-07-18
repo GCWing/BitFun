@@ -51,6 +51,9 @@ const ToolbarMode = lazy(() =>
 const FloatingMiniChat = lazy(() =>
   import('./FloatingMiniChat').then(module => ({ default: module.FloatingMiniChat }))
 );
+const BeeColonyMonitor = lazy(() =>
+  import('./BeeColonyMonitor').then(module => ({ default: module.BeeColonyMonitor }))
+);
 const AboutDialog = lazy(() =>
   import('../components/AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -748,6 +751,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             <FloatingMiniChat />
           </Suspense>
         )}
+        <Suspense fallback={null}>
+          <BeeColonyMonitor />
+        </Suspense>
         {pendingAcpSessionClients.length > 0 && (
           <div className="bitfun-app-acp-session-loading" role="status" aria-live="polite">
             <LoaderCircle size={18} className="bitfun-app-acp-session-loading__spinner" />

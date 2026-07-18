@@ -159,6 +159,16 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
         worker_js: include_str!("builtin/assets/ppt-live/worker.js"),
         esm_dependencies_json: include_str!("builtin/assets/ppt-live/esm_dependencies.json"),
     },
+    BuiltinMiniAppBundle {
+        id: "builtin-bee-colony-dag",
+        version: 1,
+        meta_json: include_str!("builtin/assets/bee-colony-dag/meta.json"),
+        html: include_str!("builtin/assets/bee-colony-dag/index.html"),
+        css: include_str!("builtin/assets/bee-colony-dag/style.css"),
+        ui_js: include_str!("builtin/assets/bee-colony-dag/ui.js"),
+        worker_js: "",
+        esm_dependencies_json: "[]",
+    },
 ];
 
 pub fn builtin_content_hash(app: &BuiltinMiniAppBundle) -> String {

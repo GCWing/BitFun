@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme-type="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>蜂群架构监控</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app" class="bee-dag">
+    <header class="topbar">
+      <h1 class="topbar__title">蜂群架构监控</h1>
+      <span class="topbar__badge" id="status-badge">待命</span>
+    </header>
+    <main class="canvas-wrap">
+      <svg id="dag-svg" class="dag-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    </main>
+    <footer class="bottombar">
+      <span class="bottombar__hint" id="poll-hint">轮询中...</span>
+    </footer>
+  </div>
+  <script src="ui.js"></script>
+</body>
+</html>

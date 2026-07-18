@@ -238,6 +238,8 @@ where
 pub struct ToolCallSummary {
     pub tool_name: String,
     pub is_error: bool,
+    /// First 256 chars of serialized tool input, for hook inspection.
+    pub input_preview: String,
 }
 
 /// Context passed to Stop hooks after each dialog round completes.
