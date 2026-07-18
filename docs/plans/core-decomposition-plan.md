@@ -28,7 +28,7 @@
 | Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v1 preview 门面和 smoke test | 发布边界仍需真实嵌入方证明 |
 | 插件运行时 | 现有路径只覆盖 BitFun 原生包和 OpenCode custom tool 静态名称预览 | 不能据通用 envelope 或静态候选扩张稳定 ABI |
 | Relay | room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router 已归属 `services/relay-service`，standalone 与 embedded 入口同向消费；embedded 宿主逻辑仍在 assembly 兼容路径 | Cargo metadata 门禁覆盖 workspace、独立 manifest、normal/build/dev 依赖及 optional/target 变体；宿主归位是独立后续工作 |
-| CLI CI | 独立 Linux job 运行 CLI test，通用三平台 workspace check 覆盖 CLI 编译；Linux PTY 与 Windows ConPTY 有启动页生命周期及本地确定性流式模型夹具驱动的活动 turn 进程测试，发布归档上传前校验 SHA-256 并解压执行 | 参数/序列化/前置失败和组装已有 focused contract；resize 静默期、活动流式内容窄屏 reflow、Linux PTY/Windows ConPTY 活动 turn resize/取消及 Patch I/O 失败已有分层回归，真实供应商审批流、macOS 活动 PTY 与 OS 级终端故障注入仍需补齐 |
+| CLI CI | 独立 Linux job 运行 CLI test，通用三平台 workspace check 覆盖 CLI 编译；Linux PTY 与 Windows ConPTY 有启动页生命周期及本地确定性流式模型夹具驱动的活动 turn 进程测试，发布归档上传前校验 SHA-256 并解压执行 | 参数/序列化/前置失败和组装已有 focused contract；本地模型 HTTP 403 授权拒绝、流中断后的重试失败、Linux PTY/Windows ConPTY Chat resize/取消、`exec` Ctrl+C 及 Patch I/O 失败已有分层回归，真实供应商审批交互、macOS 活动 PTY 与 OS 级终端故障注入仍需补齐 |
 
 ## 3. 目标依赖与归属
 
@@ -75,11 +75,12 @@ Peer Host 的 Runtime 接入和跨 Relay/Desktop/Web 的协议切换保持独立
 
 1. 以真实调用方和行为等价测试逐项缩小快照及 Peer Host/ACP 持久化维护兼容面；远程分支另行定义身份和存储语义，模型目录与配置仍保留在产品入口。
 2. 继续迁移 ACP 尚未接入 SDK 的持久化历史、模型目录/模式和 MCP 操作；ACP stdio 与协议投影生命周期保留在接口入口。
-3. 继续按真实故障样例拆分 TUI 副作用边界；当前切片已覆盖本地确定性流式模型夹具驱动的 Linux PTY/Windows ConPTY 活动 turn resize/取消、
-   `stream-json` Patch 写入失败和终端恢复错误聚合，不以大规模重写替代现有回归保护。
+3. 继续按真实故障样例拆分 TUI 副作用边界；当前切片已覆盖本地确定性流式模型夹具驱动的 Linux PTY/Windows ConPTY Chat resize/取消、
+   `exec` Ctrl+C、本地模型 HTTP 403 授权拒绝、流中断后的重试失败、`stream-json` Patch 写入失败和终端恢复错误聚合，
+   不以大规模重写替代现有回归保护。
 
 当前 assembly 切换条件已经满足：CLI 生产入口消费真实组装结果，目标链路没有第二套状态，独立测试与三平台
-编译门禁存在，启动页 PTY/ConPTY 生命周期、活动 turn resize/取消、Patch I/O 失败与发布归档冒烟测试已接入门禁。
+编译门禁存在，启动页 PTY/ConPTY 生命周期、Chat resize/取消、`exec` Ctrl+C、本地模型 403/断流失败终态、Patch I/O 失败与发布归档冒烟测试已接入门禁。
 CLI-P0 整体退出条件尚未满足；真实供应商审批流、OS 级终端初始化故障注入、兼容门面退出以及 ACP/Desktop 切换仍需分别验收。
 
 ### 4.3 依次切换 ACP 与 Desktop
