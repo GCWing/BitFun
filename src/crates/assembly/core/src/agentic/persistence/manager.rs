@@ -59,6 +59,8 @@ const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 
 static SESSION_METADATA_UPDATE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     OnceLock::new();
+static SESSION_BRANCH_ALLOCATION_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+    OnceLock::new();
 
 async fn memory_pollution_guard_enabled() -> bool {
     match get_global_config_service().await {
@@ -530,6 +532,18 @@ impl PersistenceManager {
         let mut registry_guard = registry.lock().await;
         registry_guard
             .entry(metadata_path)
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
+    pub(super) async fn get_session_branch_allocation_lock(
+        &self,
+        workspace_path: &Path,
+    ) -> Arc<Mutex<()>> {
+        let registry = SESSION_BRANCH_ALLOCATION_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut registry_guard = registry.lock().await;
+        registry_guard
+            .entry(workspace_path.to_path_buf())
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
     }
