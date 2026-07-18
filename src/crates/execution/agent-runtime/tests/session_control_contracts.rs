@@ -51,7 +51,7 @@ fn rejects_current_session_mutation_when_context_matches() {
 fn validates_create_requires_workspace_and_creator_session() {
     let mut input = base_input(SessionControlAction::Create);
     input.workspace = Some(std::env::temp_dir().to_string_lossy().to_string());
-    input.agent_type = Some(SessionControlAgentType::Plan);
+    input.agent_type = Some(SessionControlAgentType("Plan".to_string()));
 
     let missing_creator =
         validate_session_control_input(&input, SessionControlValidationContext::default());

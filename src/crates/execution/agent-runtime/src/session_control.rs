@@ -24,23 +24,12 @@ impl SessionControlAction {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub enum SessionControlAgentType {
-    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
-    Agentic,
-    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
-    Plan,
-    #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
-    Cowork,
-}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionControlAgentType(pub String);
 
 impl SessionControlAgentType {
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Agentic => "agentic",
-            Self::Plan => "Plan",
-            Self::Cowork => "Cowork",
-        }
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 

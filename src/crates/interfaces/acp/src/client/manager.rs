@@ -1507,6 +1507,34 @@ impl AcpClientService {
             debug!("Registering ACP client tool: name={}", tool.name());
             registry.register_tool(tool);
         }
+        drop(registry);
+
+        // Also register each ACP client as a SubAgent in the global AgentRegistry
+        // so they appear in the agent selector and can be targeted by
+        // SessionControl / SessionMessage for legion orchestration.
+        let agent_registry =
+            bitfun_core::agentic::agents::get_agent_registry();
+        for (client_id, config) in configs.iter().filter(|(_, c)| c.enabled) {
+            let agent_id =
+                bitfun_core::agentic::agents::AcpAgent::agent_id_for(
+                    client_id,
+                );
+            // Clean up any previous registration for this client
+            agent_registry.unregister_agent(&agent_id);
+            let agent = Arc::new(
+                bitfun_core::agentic::agents::AcpAgent::new(
+                    client_id.clone(),
+                    config.name.clone().unwrap_or_else(|| client_id.clone()),
+                ),
+            );
+            agent_registry.register_agent(
+                agent,
+                bitfun_core::agentic::agents::AgentCategory::Mode,
+                bitfun_core::agentic::agents::AgentSource::Builtin,
+                None,
+                None,
+            );
+        }
     }
 
     async fn handle_permission_request(

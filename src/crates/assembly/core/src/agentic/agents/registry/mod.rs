@@ -127,6 +127,11 @@ impl AgentRegistry {
             .and_then(|entries| entries.get(agent_type).cloned())
     }
 
+    /// Remove an agent entry by id (e.g. when an ACP client is disabled/removed).
+    pub fn unregister_agent(&self, id: &str) {
+        self.write_agents().remove(id);
+    }
+
     /// Get a agent by ID (searches all categories including hidden)
     pub fn get_agent(
         &self,
