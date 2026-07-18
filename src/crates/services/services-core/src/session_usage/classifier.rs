@@ -1,13 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum UsageToolCategory {
-    Git,
-    Shell,
-    File,
-    Other,
-}
+pub use bitfun_core_types::UsageToolCategory;
 
 pub fn classify_tool_usage(
     tool_name: &str,

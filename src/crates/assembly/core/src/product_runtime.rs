@@ -8,16 +8,24 @@ mod runtime_services;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
-use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
+use bitfun_agent_runtime::sdk::{
+    AgentEventSource, AgentRuntime, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest,
+};
 use bitfun_harness::HarnessRegistry;
-use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort, SessionViewRestoreTiming};
+use bitfun_runtime_ports::{
+    PortError, PortErrorKind, PortResult, SessionStoragePathRequest, SessionStorePort,
+    SessionViewRestoreTiming,
+};
 use bitfun_runtime_services::RuntimeServices;
 
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
 };
-use crate::agentic::core::{Session, SessionConfig, SessionState};
+use crate::agentic::core::{Session, SessionConfig};
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::{SessionBranchRequest, SessionBranchResult};
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
@@ -79,12 +87,21 @@ impl CoreProductAgentRuntime {
     pub fn build(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
         services: RuntimeServices,
         harness_registry: HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
+        let session_operations = Arc::new(CoreSessionOperationsPort::new(
+            coordinator.clone(),
+            scheduler.clone(),
+            token_usage_service,
+        ));
         CoreServiceAgentRuntime::product_agent_runtime(
             coordinator,
             scheduler,
+            session_operations.clone(),
+            session_operations.clone(),
+            session_operations,
             services,
             harness_registry,
         )
@@ -270,17 +287,6 @@ impl CoreAgentRuntimeCompatibility {
                 .restore_session_for_workspace(request, session_id)
                 .await
         }
-    }
-
-    pub async fn is_session_loaded(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<bool> {
-        self.coordinator
-            .get_session_manager()
-            .is_session_loaded_for_workspace_path(workspace_path, session_id)
-            .await
     }
 
     pub async fn branch_session_at_latest_turn(
@@ -632,17 +638,108 @@ impl CoreAgentRuntimeCompatibility {
             )
             .await
     }
+}
 
-    pub fn is_turn_processing(&self, session_id: &str, turn_id: &str) -> bool {
+#[derive(Clone)]
+struct CoreSessionOperationsPort {
+    compatibility: CoreAgentRuntimeCompatibility,
+    coordinator: Arc<ConversationCoordinator>,
+}
+
+impl CoreSessionOperationsPort {
+    fn new(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
+    ) -> Self {
+        Self {
+            compatibility: CoreAgentRuntimeCompatibility::build(
+                coordinator.clone(),
+                scheduler,
+                token_usage_service,
+            ),
+            coordinator,
+        }
+    }
+}
+
+fn runtime_port_error(error: BitFunError) -> PortError {
+    let kind = match &error {
+        BitFunError::Validation(_) => PortErrorKind::InvalidRequest,
+        BitFunError::NotFound(_) => PortErrorKind::NotFound,
+        BitFunError::Timeout(_) => PortErrorKind::Timeout,
+        BitFunError::Cancelled(_) => PortErrorKind::Cancelled,
+        _ => PortErrorKind::Backend,
+    };
+    PortError::new(kind, error.to_string())
+}
+
+fn validate_local_session_fork_request(request: &AgentSessionForkRequest) -> PortResult<()> {
+    if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
+        return Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "Remote session fork is not supported by the local CLI runtime",
+        ));
+    }
+    Ok(())
+}
+
+#[async_trait::async_trait]
+impl AgentSessionForkPort for CoreSessionOperationsPort {
+    async fn fork_session(
+        &self,
+        request: AgentSessionForkRequest,
+    ) -> PortResult<AgentSessionForkResult> {
+        validate_local_session_fork_request(&request)?;
+        let result = self
+            .compatibility
+            .branch_session_at_latest_turn(
+                Path::new(&request.workspace_path),
+                &request.source_session_id,
+            )
+            .await
+            .map_err(runtime_port_error)?;
+        Ok(AgentSessionForkResult {
+            session_id: result.session_id,
+            session_name: result.session_name,
+            agent_type: result.agent_type,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentSessionUsagePort for CoreSessionOperationsPort {
+    async fn generate_session_usage(
+        &self,
+        request: AgentSessionUsageRequest,
+    ) -> PortResult<SessionUsageReport> {
+        self.compatibility
+            .generate_session_usage_report(request)
+            .await
+            .map_err(runtime_port_error)
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentTurnSettlementPort for CoreSessionOperationsPort {
+    async fn wait_for_turn_settlement(
+        &self,
+        request: AgentTurnSettlementRequest,
+    ) -> PortResult<()> {
+        if request.wait_timeout_ms == 0 {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "turn settlement timeout must be greater than zero",
+            ));
+        }
         self.coordinator
-            .get_session_manager()
-            .get_session(session_id)
-            .is_some_and(|session| {
-                matches!(
-                    session.state,
-                    SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
-                )
-            })
+            .wait_for_turn_settlement(
+                &request.session_id,
+                &request.turn_id,
+                Duration::from_millis(request.wait_timeout_ms),
+            )
+            .await
+            .map_err(runtime_port_error)
     }
 }
 
@@ -655,20 +752,29 @@ mod tests {
     use bitfun_runtime_services::RuntimeServices;
 
     use super::{
-        validate_persisted_session_id, CoreAgentRuntimeCompatibility, CoreProductAgentRuntime,
+        validate_local_session_fork_request, validate_persisted_session_id,
+        CoreAgentRuntimeCompatibility, CoreProductAgentRuntime,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::service::token_usage::TokenUsageService;
+    use bitfun_agent_runtime::sdk::{AgentSessionForkRequest, PortErrorKind};
 
     #[test]
     fn product_agent_runtime_has_one_sdk_safe_builder_boundary() {
         fn build(
             coordinator: Arc<ConversationCoordinator>,
             scheduler: Arc<DialogScheduler>,
+            token_usage_service: Arc<TokenUsageService>,
             services: RuntimeServices,
             harness_registry: HarnessRegistry,
         ) -> Result<AgentRuntime, String> {
-            CoreProductAgentRuntime::build(coordinator, scheduler, services, harness_registry)
+            CoreProductAgentRuntime::build(
+                coordinator,
+                scheduler,
+                token_usage_service,
+                services,
+                harness_registry,
+            )
         }
 
         let _ = build;
@@ -693,7 +799,6 @@ mod tests {
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
         let _ = CoreAgentRuntimeCompatibility::update_session_agent_type;
-        let _ = CoreAgentRuntimeCompatibility::is_turn_processing;
     }
 
     #[test]
@@ -702,5 +807,18 @@ mod tests {
             .expect_err("compatibility boundary must reject path-like session ids");
 
         assert!(error.to_string().contains("session_id"), "{error}");
+    }
+
+    #[test]
+    fn local_session_fork_rejects_remote_identity() {
+        let error = validate_local_session_fork_request(&AgentSessionForkRequest {
+            workspace_path: "D:/workspace/project".to_string(),
+            source_session_id: "session-1".to_string(),
+            remote_connection_id: Some("remote-1".to_string()),
+            remote_ssh_host: None,
+        })
+        .expect_err("the local fork provider must reject remote identity");
+
+        assert_eq!(error.kind, PortErrorKind::NotAvailable);
     }
 }

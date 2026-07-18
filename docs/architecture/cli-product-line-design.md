@@ -94,17 +94,18 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - CLI 本地 Agent 入口以类型化 `RuntimeServices` 调用 `ProductAssembler`，选择 `DeliveryProfile::Cli`，
   并把 `ProductRuntimeParts`、Agent Runtime SDK、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
 - TUI、`exec`、会话、用量和交互模式下的 Peer Host 复用同一上下文。SDK 已承接会话创建（包括
-  `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除、轮次提交和取消；普通创建
+  `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、类型化转录、本地分支、
+  用量生成、轮次提交/取消和精确结算；普通创建
   DTO 保持 v1 字段集合，固定 ID 冲突返回 `InvalidRequest`。会话模型更新、工具确认/拒绝和用户问题回答也通过
-  SDK 的窄端口回到 Core owner；模型目录、模式和提供方配置仍由产品入口解释。SDK v1 尚未覆盖的恢复视图、
-  消息、分支、用量和快照由一个 Core
-  兼容门面转发给原 owner。
+  SDK 的窄端口回到 Core owner；模型目录、模式和提供方配置仍由产品入口解释。TUI 用量卡片持久化、快照及 Peer Host/ACP 维护
+  等 SDK v1 缺口由一个 Core 兼容门面转发给原 owner。
 - Agentic Event Queue 仍是唯一事件 owner；TUI、`exec` 与 Peer Host 使用独立广播订阅，不互相消费事件。
 - 有界旧队列只承担兼容存储；达到容量时不得抑制广播。CLI 保持一个后台 drain，订阅方一旦报告 lag/closed，
   必须取消活动 turn 并显式失败，不能在状态不完整时继续报告成功。
 - 会话 ID 在进入存储路径前统一校验；运行时索引同时绑定 ID 与规范化存储路径，并以待提交 claim 计数保护
   并发恢复。同一进程不能把另一个工作区中已加载的同 ID 会话当作当前会话，单个失败恢复也不能释放其他
-  同路径恢复仍在使用的绑定；已加载会话只校验身份，不通过完整 restore 重置活动状态。删除路径不能通过
+  同路径恢复仍在使用的绑定；主会话提交不做前置完整 restore，只有 Runtime owner 返回结构化 `NotFound` 时才恢复或
+  按原 ID 重建并重试一次，其他资源缺失与后端错误原样失败。删除路径不能通过
   相对路径、绝对路径或分隔符越出 sessions 根目录。
 - TUI 终端句柄由恢复守卫持有；初始化中途失败、正常返回、错误返回或 panic 展开都会尽力退出 alternate screen、
   关闭输入捕获、关闭 raw mode 并显示光标。真实 PTY/ConPTY 启动页进程冒烟测试已验证 resize 后仍可交互、
@@ -140,9 +141,8 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 
 | 缺口 | 影响 | 本设计的处理 |
 |---|---|---|
-| CLI 已消费 Runtime Parts，但部分执行与持久化操作仍由 `bitfun-core/product-full` 兼容 owner 提供 | SDK 尚不能独立覆盖完整产品会话，过早删除兼容路径会改变行为 | 仅在稳定端口、真实嵌入方和行为等价测试齐备后迁移 owner；兼容门面保持单一且不扩展成第二套 Runtime。 |
+| CLI 主会话客户端已仅消费 Runtime SDK，但快照及 Peer Host/ACP 的持久化维护仍由 `bitfun-core/product-full` 兼容 owner 提供 | SDK 尚不能独立覆盖全部宿主维护能力，过早删除兼容路径会改变行为 | 仅在稳定端口、真实嵌入方和行为等价测试齐备后迁移 owner；兼容门面保持单一且不扩展成第二套 Runtime。 |
 | TUI 编排、输入、命令、副作用和渲染仍有大文件聚集 | 交互回归难以隔离，终端状态与业务状态容易耦合 | 在现有模块上增量收敛为事件、状态归约、副作用和渲染四个边界，不重写全部 TUI。 |
-| `ShortcutsConfig` 已加载，但主要按键分发仍硬编码；Slash、Palette、帮助和执行来自不同位置 | 配置可能保存却不生效，展示和真实行为会漂移 | 在 CLI 宿主建立单一 action registry 和上下文键位解析；不借机重写 renderer。 |
 | CLI 配置只覆盖入口本地选项，缺少统一层级、来源解释和兼容导入 | 用户无法安全复用其他 CLI 资产，也难以解释最终配置来源 | 建立 BitFun Canonical Config、持续来源视图和可选的显式导入报告。 |
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 第一条闭环只完成一个无外部依赖的契约样例；取得真实 `execute` 并注册到 Tool Runtime 后才显示可用。 |
 | 当前 CLI 使用 `product-full`，OHOS target 图包含多组未验证的平台依赖 | 不能据依赖可解析、`hdc shell` 或移动 Remote App 推导 PC 本地 CLI/TUI 可用 | 问题与风险统一记录在平台规约；具体工作另立专题，HAP 不作为替代。 |
@@ -212,7 +212,7 @@ CLI-P1 应保证：
 |---|---|
 | `text` | 最终助手文本写 stdout；进度、思考、工具状态、日志和诊断写 stderr。显式 `--output-patch -` 是用户选择的额外 stdout 内容。 |
 | `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。 |
-| `stream-json` | 每行直接序列化一个现有 `AgenticEventEnvelope`；不增加 `schema_version`、`sequence` 或第二套 CLI 事件 taxonomy。 |
+| `stream-json` | 每行直接序列化一个现有 `AgenticEventEnvelope`；不增加 `schema_version`、`sequence` 或第二套 CLI 事件 taxonomy。成功的 `DialogTurnCompleted` 只在精确结算和 Patch 生成完成后发布；结算或 Patch 失败改为发布 `SystemError` 并以非零状态退出，避免消费者提前确认成功。 |
 | 事件范围 | 只输出本次 session/turn 的事件，以及与其明确关联的 subagent link/tool 事件；同 session 的其他并发 turn 不得混入。 |
 | Patch | `json` 可把 `--output-patch -` 放入最终对象；`stream-json` 要求显式文件路径。Patch 是写出显式 Patch 文件前捕获的仓库 `HEAD` 相对工作区快照，包含 staged、unstaged、untracked 及命令启动前已有改动，不包含输出 artifact 本身，也不表达改动归因。 |
 | 权限 | 非交互默认拒绝并返回权限失败；`--auto` 只改变当前提交策略，不修改持久化配置。 |
@@ -269,7 +269,8 @@ TUI renderer、实验性接口和完整外部 Server 协议按总矩阵明确降
 
 CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Runtime SDK 的类型化端口完成；TUI 只把
 `SessionTranscript` 投影为本地渲染状态，不再消费 Core `Message`。Peer Host 的对话提交、精确取消、会话模型更新和
-工具确认/拒绝通过 SDK 回到 Core owner；账户同步、会话分支、用量、快照及其他未覆盖操作仍使用经过审查的 Core
+工具确认/拒绝通过 SDK 回到 Core owner；本地会话分支通过显式本地范围的 SDK 端口完成，携带远程身份的请求返回类型化
+`NotAvailable`，本轮不扩展远程分支。账户同步、TUI 用量卡片持久化、快照及其他未覆盖操作仍使用经过审查的 Core
 compatibility 方法，直到各自具备明确 owner、稳定 DTO、远程语义和行为等价测试。
 这是一条垂直链路迁移，不是删除整个兼容门面或新建 CLI 专用服务层。
 

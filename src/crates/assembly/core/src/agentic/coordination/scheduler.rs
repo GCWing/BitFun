@@ -14,6 +14,7 @@ use super::coordinator::{
     ConversationCoordinator, DialogTriggerSource, HiddenSubagentExecutionRequest, SubagentResult,
 };
 use super::turn_outcome::TurnOutcome;
+use super::turn_settlement::TurnSettlementRegistration;
 use crate::agentic::core::{InternalReminderKind, Message, SessionState};
 use crate::agentic::events::AgenticEvent;
 use crate::agentic::goal_mode::{
@@ -82,7 +83,16 @@ pub struct QueuedTurn {
     pub image_contexts: Option<Vec<ImageContextData>>,
     #[allow(dead_code)]
     pub enqueued_at: SystemTime,
+    _settlement_registration: Option<TurnSettlementRegistration>,
     execution: QueuedTurnExecution,
+}
+
+impl QueuedTurn {
+    fn accept_settlement(&self) {
+        if let Some(registration) = self._settlement_registration.as_ref() {
+            registration.accept();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -133,6 +143,66 @@ fn queued_background_task_id(turn: &QueuedTurn) -> Option<&str> {
     (turn.policy.trigger_source == DialogTriggerSource::AgentSession)
         .then(|| background_task_id_from_metadata(turn.user_message_metadata.as_ref()))
         .flatten()
+}
+
+#[derive(Debug)]
+enum SchedulerSubmitError {
+    Core(BitFunError),
+    Port(PortError),
+    Message(String),
+}
+
+impl SchedulerSubmitError {
+    fn into_port_error(self) -> PortError {
+        match self {
+            Self::Core(BitFunError::Validation(message)) => {
+                PortError::new(PortErrorKind::InvalidRequest, message)
+            }
+            Self::Core(BitFunError::NotFound(message)) => {
+                PortError::new(PortErrorKind::NotFound, message)
+            }
+            Self::Core(BitFunError::Cancelled(message)) => {
+                PortError::new(PortErrorKind::Cancelled, message)
+            }
+            Self::Core(BitFunError::Timeout(message)) => {
+                PortError::new(PortErrorKind::Timeout, message)
+            }
+            Self::Core(BitFunError::NotImplemented(message)) => {
+                PortError::new(PortErrorKind::NotAvailable, message)
+            }
+            Self::Core(error) => PortError::new(PortErrorKind::Backend, error.to_string()),
+            Self::Port(error) => error,
+            Self::Message(message) => PortError::new(PortErrorKind::Backend, message),
+        }
+    }
+}
+
+impl std::fmt::Display for SchedulerSubmitError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Core(error) => error.fmt(formatter),
+            Self::Port(error) => error.fmt(formatter),
+            Self::Message(message) => formatter.write_str(message),
+        }
+    }
+}
+
+impl From<BitFunError> for SchedulerSubmitError {
+    fn from(error: BitFunError) -> Self {
+        Self::Core(error)
+    }
+}
+
+impl From<String> for SchedulerSubmitError {
+    fn from(message: String) -> Self {
+        Self::Message(message)
+    }
+}
+
+impl From<PortError> for SchedulerSubmitError {
+    fn from(error: PortError) -> Self {
+        Self::Port(error)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -771,6 +841,7 @@ impl DialogScheduler {
             user_message_metadata: delivery.user_message_metadata,
             image_contexts: None,
             enqueued_at: SystemTime::now(),
+            _settlement_registration: None,
             execution: QueuedTurnExecution::Standard,
         };
         if background_task_id
@@ -801,7 +872,7 @@ impl DialogScheduler {
                     .finish_background_subagent_delivery(background_task_id);
             }
         }
-        result.map(|_| ())
+        result.map(|_| ()).map_err(|error| error.to_string())
     }
 
     pub async fn submit_init_agents_md(
@@ -924,10 +995,12 @@ impl DialogScheduler {
             user_message_metadata,
             image_contexts,
             enqueued_at: SystemTime::now(),
+            _settlement_registration: None,
             execution: QueuedTurnExecution::Standard,
         };
         self.submit_queued_turn(session_id, resolved_turn_id, queued_turn, false)
             .await
+            .map_err(|error| error.to_string())
     }
 
     pub(crate) async fn submit_hidden_subagent(
@@ -972,6 +1045,7 @@ impl DialogScheduler {
             user_message_metadata: None,
             image_contexts: None,
             enqueued_at: SystemTime::now(),
+            _settlement_registration: None,
             execution: QueuedTurnExecution::HiddenSubagent(HiddenSubagentQueuedExecution {
                 request,
                 timeout_seconds,
@@ -986,7 +1060,8 @@ impl DialogScheduler {
             queued_turn,
             false,
         )
-        .await?;
+        .await
+        .map_err(|error| error.to_string())?;
         Ok(HiddenSubagentSubmitResult {
             receiver: result_rx,
             cancel_handle: HiddenSubagentQueueCancelHandle {
@@ -1038,7 +1113,8 @@ impl DialogScheduler {
                     remote_connection_id,
                     remote_ssh_host,
                 )
-                .await?;
+                .await
+                .map_err(|error| error.to_string())?;
                 self.session_manager
                     .restore_session_from_storage_path(&restore_path, session_id)
                     .await
@@ -1057,7 +1133,7 @@ impl DialogScheduler {
         workspace_path: &str,
         remote_connection_id: Option<&str>,
         remote_ssh_host: Option<&str>,
-    ) -> Result<PathBuf, String> {
+    ) -> Result<PathBuf, SchedulerSubmitError> {
         let request = SessionStoragePathRequest {
             workspace_path: PathBuf::from(workspace_path),
             remote_connection_id: remote_connection_id.map(ToOwned::to_owned),
@@ -1068,7 +1144,7 @@ impl DialogScheduler {
             .resolve_session_storage_path(request)
             .await
             .map(|resolution| resolution.effective_storage_path)
-            .map_err(|error| error.to_string())
+            .map_err(SchedulerSubmitError::Port)
     }
 
     async fn submit_queued_turn(
@@ -1077,7 +1153,7 @@ impl DialogScheduler {
         resolved_turn_id: String,
         queued_turn: QueuedTurn,
         reject_if_busy: bool,
-    ) -> Result<DialogSubmitOutcome, String> {
+    ) -> Result<DialogSubmitOutcome, SchedulerSubmitError> {
         let _operation_guard = self.lock_session_operation(&session_id).await;
         self.submit_queued_turn_locked(session_id, resolved_turn_id, queued_turn, reject_if_busy)
             .await
@@ -1089,7 +1165,7 @@ impl DialogScheduler {
         resolved_turn_id: String,
         queued_turn: QueuedTurn,
         reject_if_busy: bool,
-    ) -> Result<DialogSubmitOutcome, String> {
+    ) -> Result<DialogSubmitOutcome, SchedulerSubmitError> {
         if let Some(workspace_path) = queued_turn.workspace_path.as_deref() {
             let requested_storage_path = Self::resolve_session_restore_path(
                 workspace_path,
@@ -1099,7 +1175,7 @@ impl DialogScheduler {
             .await?;
             self.session_manager
                 .validate_session_storage_path_binding(&session_id, &requested_storage_path)
-                .map_err(|error| error.to_string())?;
+                .map_err(SchedulerSubmitError::Core)?;
         }
         let state = self
             .session_manager
@@ -1125,12 +1201,15 @@ impl DialogScheduler {
                     | DialogSubmitQueueAction::EnqueueForActiveTurn
             )
         {
-            return Err("Session state does not allow starting new dialog: Processing".to_string());
+            return Err(SchedulerSubmitError::Message(
+                "Session state does not allow starting new dialog: Processing".to_string(),
+            ));
         }
 
         match action {
             DialogSubmitQueueAction::StartImmediately => {
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
+                queued_turn.accept_settlement();
                 self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
                     .await;
                 Ok(DialogSubmitOutcome::Started {
@@ -1142,6 +1221,7 @@ impl DialogScheduler {
             DialogSubmitQueueAction::ClearQueueAndStartImmediately => {
                 self.clear_queue(&session_id).await;
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
+                queued_turn.accept_settlement();
                 self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
                     .await;
                 Ok(DialogSubmitOutcome::Started {
@@ -1152,6 +1232,7 @@ impl DialogScheduler {
 
             DialogSubmitQueueAction::EnqueueThenStartNext => {
                 self.enqueue(&session_id, queued_turn.clone())?;
+                queued_turn.accept_settlement();
                 self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
                     .await;
                 let started_tid = self.try_start_next_queued_locked(&session_id).await?;
@@ -1162,7 +1243,8 @@ impl DialogScheduler {
 
             DialogSubmitQueueAction::EnqueueForActiveTurn => {
                 let accepted_agent_type = queued_turn.agent_type.clone();
-                self.enqueue(&session_id, queued_turn)?;
+                self.enqueue(&session_id, queued_turn.clone())?;
+                queued_turn.accept_settlement();
                 self.record_last_submitted_agent_type(&session_id, &accepted_agent_type)
                     .await;
                 Ok(DialogSubmitOutcome::Queued {
@@ -1584,7 +1666,10 @@ impl DialogScheduler {
         self.queues.requeue_front(session_id, turn, priority);
     }
 
-    async fn try_start_next_queued(&self, session_id: &str) -> Result<Option<String>, String> {
+    async fn try_start_next_queued(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<String>, SchedulerSubmitError> {
         let _operation_guard = self.lock_session_operation(session_id).await;
         self.try_start_next_queued_locked(session_id).await
     }
@@ -1592,7 +1677,7 @@ impl DialogScheduler {
     async fn try_start_next_queued_locked(
         &self,
         session_id: &str,
-    ) -> Result<Option<String>, String> {
+    ) -> Result<Option<String>, SchedulerSubmitError> {
         let state = self
             .session_manager
             .get_session(session_id)
@@ -1624,11 +1709,12 @@ impl DialogScheduler {
         &self,
         session_id: &str,
         queued_turn: &QueuedTurn,
-    ) -> Result<String, String> {
+    ) -> Result<String, SchedulerSubmitError> {
         if let QueuedTurnExecution::HiddenSubagent(execution) = &queued_turn.execution {
             return self
                 .start_hidden_subagent_turn(session_id, queued_turn, execution)
-                .await;
+                .await
+                .map_err(SchedulerSubmitError::Message);
         }
 
         let images = queued_turn
@@ -1715,7 +1801,7 @@ impl DialogScheduler {
             }
         };
 
-        res.map_err(|e| e.to_string())?;
+        res.map_err(SchedulerSubmitError::Core)?;
 
         // Standard scheduler submissions resolve and persist their turn ID
         // before entering the coordinator. Reading SessionState here races a
@@ -1931,7 +2017,10 @@ impl DialogScheduler {
     }
 
     async fn dispatch_next_if_idle(&self, session_id: &str) -> Result<(), String> {
-        let _ = self.try_start_next_queued(session_id).await?;
+        let _ = self
+            .try_start_next_queued(session_id)
+            .await
+            .map_err(|error| error.to_string())?;
         Ok(())
     }
 
@@ -2322,6 +2411,18 @@ impl DialogScheduler {
         let resolved_turn_id = request
             .turn_id
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let settlement_registration = self
+            .coordinator
+            .try_register_turn_settlement(&request.session_id, &resolved_turn_id)
+            .ok_or_else(|| {
+                PortError::new(
+                    PortErrorKind::InvalidRequest,
+                    format!(
+                        "Dialog turn ID is already active or completed: session_id={}, turn_id={resolved_turn_id}",
+                        request.session_id
+                    ),
+                )
+            })?;
         let queued_turn = QueuedTurn {
             user_input: request.message,
             original_user_input: request.original_message,
@@ -2336,6 +2437,7 @@ impl DialogScheduler {
             user_message_metadata,
             image_contexts,
             enqueued_at: SystemTime::now(),
+            _settlement_registration: Some(settlement_registration),
             execution: QueuedTurnExecution::Standard,
         };
 
@@ -2346,7 +2448,7 @@ impl DialogScheduler {
             reject_if_busy,
         )
         .await
-        .map_err(|error| PortError::new(PortErrorKind::Backend, error))
+        .map_err(SchedulerSubmitError::into_port_error)
     }
 }
 
@@ -2633,6 +2735,7 @@ mod tests {
             user_message_metadata: None,
             image_contexts: None,
             enqueued_at: SystemTime::now(),
+            _settlement_registration: None,
             execution: QueuedTurnExecution::Standard,
         }
     }
@@ -3099,6 +3202,121 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dialog_port_preserves_not_found_for_a_missing_session() {
+        let (scheduler, _, _, root) = test_scheduler();
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+
+        let error = scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: "missing-session".to_string(),
+                message: "hello".to_string(),
+                original_message: None,
+                turn_id: Some("missing-turn".to_string()),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace.to_string_lossy().to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("a missing session must remain distinguishable");
+
+        assert_eq!(error.kind, PortErrorKind::NotFound);
+        assert!(error.message.contains("missing-session"), "{error}");
+        assert!(matches!(
+            scheduler
+                .coordinator
+                .wait_for_turn_settlement(
+                    "missing-session",
+                    "missing-turn",
+                    Duration::from_millis(10),
+                )
+                .await,
+            Err(BitFunError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn dialog_port_tracks_settlement_from_queue_admission_through_cancellation() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "queued-session";
+        let turn_id = "queued-turn";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Queued".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create queued session");
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Processing {
+                    current_turn_id: "active-turn".to_string(),
+                    phase: ProcessingPhase::Thinking,
+                },
+            )
+            .await
+            .expect("mark another turn active");
+
+        let outcome = scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "queued prompt".to_string(),
+                original_message: None,
+                turn_id: Some(turn_id.to_string()),
+                agent_type: "agentic".to_string(),
+                workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect("queue the submitted turn");
+
+        assert_eq!(
+            outcome,
+            DialogSubmitOutcome::Queued {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+            }
+        );
+        assert!(matches!(
+            scheduler
+                .coordinator
+                .wait_for_turn_settlement(session_id, turn_id, Duration::from_millis(10))
+                .await,
+            Err(BitFunError::Timeout(_))
+        ));
+
+        assert!(scheduler
+            .cancel_queued_or_active_turn(session_id, turn_id)
+            .await
+            .expect("cancel queued turn"));
+        scheduler
+            .coordinator
+            .wait_for_turn_settlement(session_id, turn_id, Duration::from_millis(10))
+            .await
+            .expect("cancelled queued turn should settle");
+    }
+
+    #[tokio::test]
     async fn reject_busy_dialog_port_does_not_enqueue_or_replace_the_active_turn() {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "acp-session";
@@ -3156,6 +3374,204 @@ mod tests {
                 .state,
             SessionState::Processing { current_turn_id, .. } if current_turn_id == "active-turn"
         ));
+        assert!(matches!(
+            scheduler
+                .coordinator
+                .wait_for_turn_settlement(session_id, "rejected-turn", Duration::from_millis(10),)
+                .await,
+            Err(BitFunError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn dialog_port_rejects_duplicate_active_turn_id() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "duplicate-active-session";
+        let turn_id = "duplicate-turn";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Duplicate".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let _active_registration = scheduler
+            .coordinator
+            .register_turn_settlement(session_id, turn_id);
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Processing {
+                    current_turn_id: turn_id.to_string(),
+                    phase: ProcessingPhase::Thinking,
+                },
+            )
+            .await
+            .expect("mark active turn");
+
+        let error = scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "duplicate".to_string(),
+                original_message: None,
+                turn_id: Some(turn_id.to_string()),
+                agent_type: "agentic".to_string(),
+                workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("duplicate active turn ID must be rejected");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn dialog_port_preserves_invalid_request_for_wrong_workspace() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "workspace-bound-session";
+        let turn_id = "wrong-workspace-turn";
+        let workspace_a = root.path().join("workspace-a");
+        let workspace_b = root.path().join("workspace-b");
+        std::fs::create_dir_all(&workspace_a).expect("workspace a");
+        std::fs::create_dir_all(&workspace_b).expect("workspace b");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Workspace".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_a.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let error = scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "wrong workspace".to_string(),
+                original_message: None,
+                turn_id: Some(turn_id.to_string()),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace_b.to_string_lossy().to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("wrong workspace must be rejected");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+        assert!(matches!(
+            scheduler
+                .coordinator
+                .wait_for_turn_settlement(session_id, turn_id, Duration::from_millis(10))
+                .await,
+            Err(BitFunError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn dialog_port_treats_unknown_agent_as_invalid_request() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "invalid-agent-session";
+        let turn_id = "invalid-agent-turn";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Invalid agent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+
+        let error = scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "invalid agent".to_string(),
+                original_message: None,
+                turn_id: Some(turn_id.to_string()),
+                agent_type: "agent-that-does-not-exist".to_string(),
+                workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("unknown agent must be rejected");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn missing_settlement_evidence_for_known_turn_fails_closed() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "known-turn-session";
+        let turn_id = "known-turn";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Known turn".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        session_manager
+            .start_dialog_turn(
+                session_id,
+                "agentic".to_string(),
+                "hello".to_string(),
+                Some(turn_id.to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("record turn");
+        session_manager
+            .update_session_state(session_id, SessionState::Idle)
+            .await
+            .expect("mark idle");
+
+        let error = scheduler
+            .coordinator
+            .wait_for_turn_settlement(session_id, turn_id, Duration::from_millis(10))
+            .await
+            .expect_err("missing settlement evidence must not be treated as success");
+
+        assert!(matches!(error, BitFunError::Service(_)), "{error}");
     }
 
     #[test]

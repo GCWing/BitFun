@@ -326,7 +326,7 @@ flowchart LR
 | 产品形态 | 当前扩展能力 | 入口行为 |
 |---|---|---|
 | Desktop / product-full | 生产入口仍依赖 `bitfun-core/product-full` 作为兼容组装层；“外部 AI 应用”设置已消费 OpenCode Command、standalone Tool 和 Subagent 的统一来源快照、审批、冲突选择与诊断 | 仅本地执行域支持当前三条纵向切片；受管 package plugin 仍只有静态预览，不能据设置页接入宣称完整 OpenCode 插件运行时 |
-| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；交互式 TUI 已可执行受支持的 Prompt Command，并通过 `/external-tools`、`/external-agents` 消费与 Desktop 相同的审批、冲突和刷新状态 | 已批准的 standalone Tool 进入现有 Tool Runtime；已批准的外部 Subagent 只支持 fresh single-run。CLI/TUI 不解析生态文件、不启动第二套 worker/Agent owner；非交互入口和 Remote 未接入时不得借本机 TUI 路径代执行 |
+| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；交互式 TUI 已可执行受支持的 Prompt Command，并通过 `/external-tools`、`/external-agents` 消费与 Desktop 相同的审批、冲突和刷新状态 | 已批准的 standalone Tool 进入现有 Tool Runtime；已批准的外部 Subagent 只支持 fresh single-run。CLI/TUI 不解析生态文件、不启动第二套 worker/Agent owner；非交互入口和 Remote 未接入时不得借本机 TUI 路径代执行。本地 Agent 与 Peer Host 路径选择 `DeliveryProfile::Cli` 并消费同一 Runtime Parts/SDK；主会话的恢复、转录、本地分支、用量报告生成与精确结算走 SDK，远程分支明确不支持。TUI 用量卡片持久化、快照及 Peer Host/ACP 持久化维护缺口由单一 Core 兼容门面转发；本切片不改变扩展执行边界 |
 | HarmonyOS PC 原生 CLI/TUI | 未来平台目标，当前未实现 | 目标、问题和风险见平台规约；具体适配另立专题，HAP、手机 Remote App 与远端代执行均不替代 |
 | HarmonyOS PC GUI | 完整 HarmonyOS PC 支持的另一目标形态，当前未实现 | 与 CLI/TUI 共享稳定能力和 Runtime 语义，但独立设计宿主、界面与发布验证；Web、Remote 或现有 Tauri Desktop 均不能替代 |
 | HarmonyOS 手机 Remote App | `src/apps/mobile/harmonyos` 是 phone-only ArkTS 远程入口，不持有本地 Rust Agent Runtime | 保持当前能力并按移动端专题独立演进；本轮不提前设计移动 Runtime/TUI/GUI，也不能据此宣称 HarmonyOS PC 本地能力 |

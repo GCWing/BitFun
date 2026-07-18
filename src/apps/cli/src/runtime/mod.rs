@@ -94,6 +94,7 @@ impl CliRuntimeContext {
         let agent_runtime = CoreProductAgentRuntime::build(
             agentic_system.coordinator.clone(),
             scheduler.clone(),
+            agentic_system.token_usage_service.clone(),
             services.clone(),
             harness_registry,
         )

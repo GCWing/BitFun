@@ -18,6 +18,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
+use bitfun_agent_runtime::sdk::{AgentSessionUsageRequest, SessionUsageReport};
 use bitfun_events::{AgenticEvent, ToolEventData};
 use resize::ResizeRedrawState;
 
@@ -25,7 +26,7 @@ use crate::actions::{
     action_by_id, action_for_alias, slash_actions, ActionContext, ActionHandler, ActionSpec,
     ActionState, ResolvedKeymap,
 };
-use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
+use crate::agent::runtime_client::CliAgentRuntimeClient;
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
 use crate::runtime::CliRuntimeContext;
@@ -73,9 +74,7 @@ use bitfun_core::external_sources::{
     ExternalToolRuntimeKind, PromptCommandAvailability,
 };
 use bitfun_core::service::config::GlobalConfigManager;
-use bitfun_core::service::session_usage::{
-    render_usage_report_markdown, SessionUsageReportRequest,
-};
+use bitfun_core::service::session_usage::render_usage_report_markdown;
 
 /// Spinner/UI redraw interval while a turn is processing.
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
@@ -161,7 +160,7 @@ pub(crate) struct ChatMode {
     /// Current agent type (e.g. "agentic", "plan", "debug")
     agent_type: String,
     workspace: Option<String>,
-    agent: Arc<CoreAgentAdapter>,
+    agent: Arc<CliAgentRuntimeClient>,
     runtime: Arc<CliRuntimeContext>,
     /// If set, restore this existing session instead of creating a new one
     restore_session_id: Option<String>,
@@ -198,7 +197,7 @@ impl ChatMode {
         workspace: Option<String>,
         runtime: Arc<CliRuntimeContext>,
     ) -> Self {
-        let agent = Arc::new(CoreAgentAdapter::new(
+        let agent = Arc::new(CliAgentRuntimeClient::new(
             runtime.as_ref(),
             workspace.clone().map(PathBuf::from),
         ));

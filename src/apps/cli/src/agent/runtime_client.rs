@@ -1,6 +1,7 @@
-//! Core Agent adapter
+//! CLI/TUI Agent Runtime SDK client.
 //!
-//! Adapts bitfun-core's Agentic system to CLI's Agent interface.
+//! Keeps CLI session state while product operations remain behind portable
+//! Runtime SDK ports.
 //! Event consumption is NOT done here — it's done in the chat/exec mode main loops.
 
 use anyhow::Result;
@@ -8,18 +9,15 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::sync::Mutex;
 
-use super::Agent;
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentRuntime, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionListRequest, AgentSessionModelUpdateRequest, AgentSessionRestoreRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRestoreRequest, AgentSessionUsageRequest,
     AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentTurnCancellationRequest,
-    AgentUserAnswersRequest, SessionTranscript, SessionTranscriptRequest,
+    AgentTurnSettlementRequest, AgentUserAnswersRequest, PortErrorKind, RuntimeError,
+    SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
-use bitfun_core::agentic::persistence::session_branch::SessionBranchResult;
-use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
-use bitfun_core::service::session::DialogTurnData;
-use bitfun_core::service::session_usage::{SessionUsageReport, SessionUsageReportRequest};
 use bitfun_runtime_ports::{AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy};
 
 use crate::runtime::approval::CliApprovalPolicy;
@@ -43,11 +41,10 @@ fn validated_session_summary(
         })
 }
 
-/// Core-based Agent implementation.
-/// Stateless regarding agent_type — callers pass it per-call.
-pub(crate) struct CoreAgentAdapter {
+/// CLI-owned client for the portable Agent Runtime SDK.
+/// Stateless regarding agent_type; callers pass it per call.
+pub(crate) struct CliAgentRuntimeClient {
     runtime: AgentRuntime,
-    compatibility: CoreAgentRuntimeCompatibility,
     event_source: CliAgentEventSource,
     approval_policy: CliApprovalPolicy,
     workspace_path: Arc<RwLock<Option<PathBuf>>>,
@@ -57,11 +54,10 @@ pub(crate) struct CoreAgentAdapter {
     current_turn_id: Arc<Mutex<Option<String>>>,
 }
 
-impl CoreAgentAdapter {
+impl CliAgentRuntimeClient {
     pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
         Self {
             runtime: runtime.agent_runtime().clone(),
-            compatibility: runtime.compatibility().clone(),
             event_source: runtime.agent_events().clone(),
             approval_policy: runtime.approval_policy(),
             workspace_path: Arc::new(RwLock::new(workspace_path)),
@@ -185,45 +181,41 @@ impl CoreAgentAdapter {
     pub(crate) async fn branch_session_at_latest_turn(
         &self,
         source_session_id: &str,
-    ) -> Result<SessionBranchResult> {
-        self.compatibility
-            .branch_session_at_latest_turn(&self.workspace_path_buf(), source_session_id)
+    ) -> Result<AgentSessionForkResult> {
+        self.runtime
+            .fork_session(AgentSessionForkRequest {
+                workspace_path: self.workspace_path_string(),
+                source_session_id: source_session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
             .await
-            .map_err(Into::into)
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) async fn generate_session_usage_report(
         &self,
-        request: SessionUsageReportRequest,
+        request: AgentSessionUsageRequest,
     ) -> Result<SessionUsageReport> {
-        self.compatibility
-            .generate_session_usage_report(request)
+        self.runtime
+            .generate_session_usage(request)
             .await
-            .map_err(Into::into)
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
-    pub(crate) async fn append_completed_local_command_turn(
+    pub(crate) async fn wait_for_turn_settlement(
         &self,
         session_id: &str,
-        content: String,
-        turn_id: Option<String>,
-        timestamp_ms: Option<u64>,
-        metadata: Option<serde_json::Value>,
-    ) -> Result<DialogTurnData> {
-        self.compatibility
-            .append_completed_local_command_turn(
-                session_id,
-                content,
-                turn_id,
-                timestamp_ms,
-                metadata,
-            )
+        turn_id: &str,
+        wait_timeout_ms: u64,
+    ) -> std::result::Result<(), RuntimeError> {
+        self.runtime
+            .wait_for_turn_settlement(AgentTurnSettlementRequest {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                wait_timeout_ms,
+            })
             .await
-            .map_err(Into::into)
-    }
-
-    pub(crate) fn is_turn_processing(&self, session_id: &str, turn_id: &str) -> bool {
-        self.compatibility.is_turn_processing(session_id, turn_id)
     }
 
     fn build_default_session_name() -> String {
@@ -233,11 +225,11 @@ impl CoreAgentAdapter {
         )
     }
 
-    fn is_session_not_found_error(error_msg: &str) -> bool {
-        let msg = error_msg.to_lowercase();
-        msg.contains("session not found")
-            || msg.contains("session does not exist")
-            || msg.contains("not found")
+    fn is_session_not_found_error(error: &RuntimeError) -> bool {
+        matches!(
+            error,
+            RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::NotFound
+        )
     }
 
     async fn recreate_session_with_id(&self, session_id: &str, agent_type: &str) -> Result<()> {
@@ -281,13 +273,6 @@ impl CoreAgentAdapter {
 
     async fn ensure_backend_session_alive(&self, session_id: &str, agent_type: &str) -> Result<()> {
         let workspace = self.workspace_path_buf();
-        if self
-            .compatibility
-            .is_session_loaded(&workspace, session_id)
-            .await?
-        {
-            return Ok(());
-        }
         match self
             .runtime
             .restore_session(AgentSessionRestoreRequest {
@@ -303,8 +288,9 @@ impl CoreAgentAdapter {
                 Ok(())
             }
             Err(error) => {
+                let session_not_found = Self::is_session_not_found_error(&error);
                 let message = error.into_message();
-                if Self::is_session_not_found_error(&message) {
+                if session_not_found {
                     tracing::warn!(
                         "Session is unavailable, recreating backend session: {}",
                         session_id
@@ -348,13 +334,11 @@ impl CoreAgentAdapter {
     }
 }
 
-#[async_trait::async_trait]
-impl Agent for CoreAgentAdapter {
-    async fn ensure_session(&self, agent_type: &str) -> Result<String> {
+impl CliAgentRuntimeClient {
+    pub(crate) async fn ensure_session(&self, agent_type: &str) -> Result<String> {
         let mut session_id_guard = self.session_id.lock().await;
 
         if let Some(ref id) = *session_id_guard {
-            self.ensure_backend_session_alive(id, agent_type).await?;
             return Ok(id.clone());
         }
 
@@ -379,7 +363,7 @@ impl Agent for CoreAgentAdapter {
         Ok(id)
     }
 
-    async fn send_message(&self, message: String, agent_type: &str) -> Result<String> {
+    pub(crate) async fn send_message(&self, message: String, agent_type: &str) -> Result<String> {
         let session_id = self.ensure_session(agent_type).await?;
         tracing::info!("Sending message to session {}: {}", session_id, message);
 
@@ -419,8 +403,9 @@ impl Agent for CoreAgentAdapter {
         let start_result = self.runtime.submit_dialog_turn(request.clone()).await;
 
         if let Err(err) = start_result {
+            let session_not_found = Self::is_session_not_found_error(&err);
             let error_message = err.into_message();
-            if Self::is_session_not_found_error(&error_message) {
+            if session_not_found {
                 tracing::warn!(
                     "Session missing when starting turn, attempting recovery and retry: session_id={}, error={}",
                     session_id,
@@ -440,7 +425,7 @@ impl Agent for CoreAgentAdapter {
         Ok(turn_id)
     }
 
-    async fn cancel_current_turn(&self) -> Result<()> {
+    pub(crate) async fn cancel_current_turn(&self) -> Result<()> {
         let session_id = self.session_id.lock().await.clone();
         let turn_id = self.current_turn_id.lock().await.clone();
 
@@ -467,7 +452,7 @@ impl Agent for CoreAgentAdapter {
         Ok(())
     }
 
-    async fn create_new_session(&self, agent_type: &str) -> Result<String> {
+    pub(crate) async fn create_new_session(&self, agent_type: &str) -> Result<String> {
         let mut session_id_guard = self.session_id.lock().await;
 
         let session = self
@@ -491,13 +476,13 @@ impl Agent for CoreAgentAdapter {
         Ok(id)
     }
 
-    async fn restore_session(&self, session_id: &str) -> Result<()> {
+    pub(crate) async fn restore_session(&self, session_id: &str) -> Result<()> {
         self.restore_session_in_current_workspace(session_id)
             .await?;
         Ok(())
     }
 
-    async fn confirm_tool(
+    pub(crate) async fn confirm_tool(
         &self,
         tool_id: &str,
         updated_input: Option<serde_json::Value>,
@@ -512,7 +497,7 @@ impl Agent for CoreAgentAdapter {
             .map_err(|e| anyhow::anyhow!("Confirm tool failed: {}", e.into_message()))
     }
 
-    async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<()> {
+    pub(crate) async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<()> {
         tracing::info!("Rejecting tool execution: {}, reason: {}", tool_id, reason);
         self.runtime
             .reject_tool(AgentToolRejectionRequest {
@@ -523,7 +508,11 @@ impl Agent for CoreAgentAdapter {
             .map_err(|e| anyhow::anyhow!("Reject tool failed: {}", e.into_message()))
     }
 
-    async fn submit_user_answers(&self, tool_id: &str, answers: serde_json::Value) -> Result<()> {
+    pub(crate) async fn submit_user_answers(
+        &self,
+        tool_id: &str,
+        answers: serde_json::Value,
+    ) -> Result<()> {
         tracing::info!("Submitting user answers for tool: {}", tool_id);
         self.runtime
             .submit_user_answers(AgentUserAnswersRequest {
@@ -532,6 +521,28 @@ impl Agent for CoreAgentAdapter {
             })
             .await
             .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e.into_message()))
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+
+    use super::CliAgentRuntimeClient;
+
+    #[test]
+    fn session_recovery_requires_structured_not_found_error() {
+        let missing_session =
+            RuntimeError::Port(PortError::new(PortErrorKind::NotFound, "session not found"));
+        let unrelated_backend_error =
+            RuntimeError::Port(PortError::new(PortErrorKind::Backend, "model not found"));
+
+        assert!(CliAgentRuntimeClient::is_session_not_found_error(
+            &missing_session
+        ));
+        assert!(!CliAgentRuntimeClient::is_session_not_found_error(
+            &unrelated_backend_error
+        ));
     }
 }
 
@@ -545,10 +556,10 @@ mod tests {
 
     #[test]
     fn model_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
-        let source = include_str!("core_adapter.rs");
-        let runtime_update = ["runtime", "\n            .update_session_model"].concat();
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let runtime_update = ["self.runtime", "\n            .update_session_model"].concat();
         let compatibility_update =
-            ["compatibility", "\n            .update_session_model"].concat();
+            ["self.compatibility", "\n            .update_session_model"].concat();
 
         assert!(source.contains(&runtime_update));
         assert!(!source.contains(&compatibility_update));

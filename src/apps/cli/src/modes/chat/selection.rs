@@ -5,6 +5,20 @@ enum ModelSelectionApplyOutcome {
     },
 }
 
+fn usage_report_metadata(report: &SessionUsageReport) -> Result<serde_json::Value> {
+    let usage_report = serde_json::to_value(report)
+        .map_err(|error| anyhow!("Failed to serialize usage report: {error}"))?;
+    Ok(serde_json::json!({
+        "localCommandKind": "usage_report",
+        "reportId": report.report_id,
+        "schemaVersion": report.schema_version,
+        "generatedAt": report.generated_at,
+        "modelVisible": false,
+        "usageReport": usage_report,
+        "usageReportStatus": "completed",
+    }))
+}
+
 fn apply_model_selection_feedback(
     chat_state: &mut ChatState,
     selected_display_name: &str,
@@ -80,19 +94,21 @@ impl ChatMode {
             .or_else(|| self.workspace.clone())
             .or_else(|| Some(self.agent.workspace_path_string()));
         let agent = self.agent.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
                 let workspace_path = workspace_path.clone();
                 let agent = agent.clone();
+                let runtime = Arc::clone(&runtime);
                 rt_handle.block_on(async move {
                     let workspace_path = workspace_path
                         .filter(|path| !path.trim().is_empty())
                         .ok_or_else(|| anyhow!("Workspace path is required for usage reports"))?;
 
                     let report = agent
-                        .generate_session_usage_report(SessionUsageReportRequest {
+                        .generate_session_usage_report(AgentSessionUsageRequest {
                             session_id: session_id.clone(),
                             workspace_path: Some(workspace_path),
                             remote_connection_id: None,
@@ -103,19 +119,9 @@ impl ChatMode {
 
                     let markdown = render_usage_report_markdown(&report);
                     let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
-                    let usage_report = serde_json::to_value(&report)
-                        .map_err(|error| anyhow!("Failed to serialize usage report: {}", error))?;
-                    let metadata = serde_json::json!({
-                        "localCommandKind": "usage_report",
-                        "reportId": report.report_id.clone(),
-                        "schemaVersion": report.schema_version,
-                        "generatedAt": report.generated_at,
-                        "modelVisible": false,
-                        "usageReport": usage_report,
-                        "usageReportStatus": "completed",
-                    });
-
-                    agent
+                    let metadata = usage_report_metadata(&report)?;
+                    runtime
+                        .compatibility()
                         .append_completed_local_command_turn(
                             &session_id,
                             markdown,
@@ -494,4 +500,26 @@ impl ChatMode {
 
     // ============ MCP management ============
 
+}
+
+#[cfg(test)]
+mod usage_metadata_tests {
+    use super::{SessionUsageReport, usage_report_metadata};
+
+    #[test]
+    fn usage_metadata_preserves_the_existing_tui_transcript_schema() {
+        let mut report = SessionUsageReport::partial_unavailable("session-1", 1_778_347_200_000);
+        report.report_id = "usage-session-1-1778347200000".to_string();
+
+        let metadata = usage_report_metadata(&report).expect("usage metadata");
+
+        assert_eq!(metadata["localCommandKind"], "usage_report");
+        assert_eq!(metadata["reportId"], report.report_id);
+        assert_eq!(metadata["schemaVersion"], report.schema_version);
+        assert_eq!(metadata["generatedAt"], report.generated_at);
+        assert_eq!(metadata["modelVisible"], false);
+        assert_eq!(metadata["usageReportStatus"], "completed");
+        assert_eq!(metadata["usageReport"]["sessionId"], "session-1");
+        assert_eq!(metadata.as_object().map(serde_json::Map::len), Some(7));
+    }
 }

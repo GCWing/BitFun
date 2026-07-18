@@ -348,17 +348,6 @@ impl SessionManager {
         Ok(())
     }
 
-    pub(crate) async fn is_session_loaded_for_workspace_path(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<bool> {
-        let storage_path = self
-            .resolve_storage_path_for_restore_workspace_path(workspace_path)
-            .await?;
-        self.is_session_loaded_from_storage_path(&storage_path, session_id)
-    }
-
     pub(crate) fn is_session_loaded_from_storage_path(
         &self,
         storage_path: &Path,

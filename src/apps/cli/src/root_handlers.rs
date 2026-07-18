@@ -301,9 +301,15 @@ pub(crate) async fn handle_session_action(
             let session_id =
                 resolve_cli_session_id(runtime.agent_runtime(), &workspace_path, &id).await?;
             let result = runtime
-                .compatibility()
-                .branch_session_at_latest_turn(&workspace_path, &session_id)
-                .await?;
+                .agent_runtime()
+                .fork_session(bitfun_agent_runtime::sdk::AgentSessionForkRequest {
+                    workspace_path: workspace_path.to_string_lossy().to_string(),
+                    source_session_id: session_id.clone(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                })
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
 
             if id_only {
                 println!("{}", result.session_id);

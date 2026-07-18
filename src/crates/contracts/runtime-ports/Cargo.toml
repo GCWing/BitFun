@@ -12,6 +12,7 @@ crate-type = ["rlib"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bitfun-core-types = { path = "../core-types" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

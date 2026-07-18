@@ -1026,6 +1026,47 @@ pub struct AgentSessionModelUpdateRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentSessionForkRequest {
+    pub workspace_path: String,
+    pub source_session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionForkResult {
+    pub session_id: String,
+    pub session_name: String,
+    pub agent_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionUsageRequest {
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_hidden_subagents: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnSettlementRequest {
+    pub session_id: String,
+    pub turn_id: String,
+    pub wait_timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSessionWorkspaceRequest {
     pub session_id: String,
 }
@@ -1700,6 +1741,28 @@ pub trait AgentSessionManagementPort: Send + Sync {
 #[async_trait::async_trait]
 pub trait AgentSessionModelPort: Send + Sync {
     async fn update_session_model(&self, request: AgentSessionModelUpdateRequest)
+        -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionForkPort: Send + Sync {
+    async fn fork_session(
+        &self,
+        request: AgentSessionForkRequest,
+    ) -> PortResult<AgentSessionForkResult>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionUsagePort: Send + Sync {
+    async fn generate_session_usage(
+        &self,
+        request: AgentSessionUsageRequest,
+    ) -> PortResult<bitfun_core_types::SessionUsageReport>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentTurnSettlementPort: Send + Sync {
+    async fn wait_for_turn_settlement(&self, request: AgentTurnSettlementRequest)
         -> PortResult<()>;
 }
 

@@ -59,9 +59,10 @@ assembly → apps。embedded 的 bind、静态 fallback 和任务生命周期移
 CLI 是首个入口迁移对象，因为它已有独立产品诉求、显式设计和最小 CI 命令。
 
 当前纵向切片已经完成：入口只提交一次 `DeliveryProfile::Cli`，通过现有 `ProductAssembler` 获得计划、服务可用性、
-Harness 和禁用的插件 binding；TUI、Exec、Session 与 Usage 共用一个 `CliRuntimeContext`。会话创建（包括
-`exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/
-删除、会话模型更新、轮次提交和取消走 Agent Runtime SDK；SDK v1 缺口集中在一个 Core 兼容门面。Agentic Event Queue 仍是唯一
+Harness 和禁用的插件 binding；TUI、Exec、Session 与 Usage 共用一个 `CliRuntimeContext`。主会话客户端的创建（包括
+`exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、类型化转录、本地分支、用量生成、
+会话模型更新、轮次提交/取消和精确轮次结算均走 Agent Runtime SDK；TUI 用量卡片持久化、快照、Peer Host/ACP 的维护等
+未迁移能力继续集中在一个 Core 兼容门面。Agentic Event Queue 仍是唯一
 owner，各入口只建立独立广播订阅，有界兼容队列满载不再阻断广播。TUI 与 Exec 审批均为调用级策略，不写全局
 配置；CLI 本地路径不获取具体 PersistenceManager。交互、执行和管理入口分别控制 Peer Host/MCP 生命周期，管理查询不启动
 这两类外部服务。结构化输出复用现有 Agentic envelope；会话 ID 与
@@ -72,7 +73,7 @@ Peer Host 的 Runtime 接入和跨 Relay/Desktop/Web 的协议切换保持独立
 
 下一步按独立纵向切片推进：
 
-1. 以真实调用方和行为等价测试补齐 SDK 端口，逐项缩小分支、用量、快照和持久化维护兼容面；会话模型更新已迁移，模型目录与配置仍保留在产品入口。
+1. 以真实调用方和行为等价测试逐项缩小快照及 Peer Host/ACP 持久化维护兼容面；远程分支另行定义身份和存储语义，模型目录与配置仍保留在产品入口。
 2. 继续迁移 ACP 尚未接入 SDK 的持久化历史、模型目录/模式和 MCP 操作；ACP stdio 与协议投影生命周期保留在接口入口。
 3. 继续按真实故障样例拆分 TUI 副作用边界，不以大规模重写替代现有回归保护。
 

@@ -7,8 +7,8 @@
 [OpenCode 兼容](opencode-extension-compatibility-plan.md)；能力 Provider、SDK 和外部宿主双向集成边界见
 [能力装配与宿主集成](../architecture/extensions/capability-runtime-integration-design.md)。专项文档不能用自己的阶段编号扩大本计划范围。
 
-本轮对照的上游基线为 `da027e2e8`（2026-07-18）；本文所在提交记录
-本轮实现事实。后续事实变化必须随代码显式更新，只有代码、入口消费和对应验证同时成立的项目才标记为完成。
+本文所在提交记录本轮实现事实。后续事实变化必须随代码显式更新，只有代码、入口消费和对应验证同时成立的项目才标记为完成；
+不在长期计划中固定易失效的上游提交号。
 
 ## 1. 裁决原则
 
@@ -28,7 +28,7 @@
 | 范围 | 当前事实 | 近期结论 |
 |---|---|---|
 | 编译依赖 | `assembly/core -> apps/relay-server` 已移除；通用检查覆盖 normal/build/dev 依赖及 optional/target 变体 | 后续反向依赖和未知 crate 层级直接失败 |
-| 公开面 | `bitfun-core` 仍有迁移期 re-export；CLI 只完成部分 Runtime SDK 接入 | 按入口逐项迁移，不做全仓逐 symbol 台账或批量删除 |
+| 公开面 | `bitfun-core` 仍有迁移期 re-export；CLI 主会话客户端已仅消费 Runtime SDK，其他产品入口仍保留兼容路径 | 按入口逐项迁移，不做全仓逐 symbol 台账或批量删除 |
 | CLI/TUI | `ShortcutsConfig` 已加载但真实按键分发仍硬编码；Slash、Palette、帮助和执行不是同一来源 | 先统一宿主 action 声明和键位解析，不重写 renderer |
 | OpenCode | Prompt Command、受支持的单文件 JavaScript Tool 和 Subagent 安全子集已分别通过能力专属 provider 接入；受管 package plugin 仍只有静态预览 | 先收敛三条已交付路径的诊断、运行时提示和配置失败语义，再按真实阻塞样例评估下一能力切片 |
 | HarmonyOS PC | 未来平台目标，当前未实现 | 目标、问题、风险和旧设计闭环见平台规约；具体工作后续分别立项 |
@@ -101,10 +101,10 @@ HarmonyOS 手机 Remote App 不在该平台执行范围内。
 
 ## 7. 工作流五：入口逐项迁移
 
-- CLI：会话创建（包括 `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、类型化转录、轮次
-  提交/取消、活动会话模型更新和 TUI 工具确认/拒绝/用户问题回答已由真实入口消费 Runtime SDK；交互模式下的 Peer Host
-  也通过同一 SDK 提交/精确取消 turn、更新活动会话模型并处理工具确认/拒绝。分支、用量、快照和持久化维护等未覆盖操作
-  继续由现有单一兼容路径转发。
+- CLI：主会话客户端的会话创建（包括 `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、
+  类型化转录、本地分支、用量生成、轮次提交/取消与精确结算、活动会话模型更新和 TUI 工具确认/拒绝/用户问题回答
+  已由真实入口消费 Runtime SDK；交互模式下的 Peer Host 也通过同一 SDK 提交/精确取消 turn、更新活动会话模型并处理工具
+  确认/拒绝。远程分支保持不支持；TUI 用量卡片持久化、快照和 Peer Host/ACP 维护等产品操作继续由现有单一兼容路径转发。
 - ACP：CLI 托管服务端的会话创建/列举、轮次提交/取消、活动会话模型更新、工具确认/拒绝、用户问题回答和事件订阅
   已复用同一 SDK 语义；ACP stdio、连接、权限 RPC 与通知生命周期仍留在接口入口。
 - Desktop：主界面轮次提交/取消、活动会话模型更新、工具确认/拒绝和用户问题回答已通过现有协调器与调度器端口构造的窄口径 SDK 门面；

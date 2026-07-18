@@ -6,6 +6,7 @@ pub mod coordinator;
 pub mod scheduler;
 pub mod state_manager;
 pub mod turn_outcome;
+mod turn_settlement;
 
 pub use coordinator::*;
 pub use scheduler::*;

@@ -8,6 +8,7 @@ use super::{
         get_global_scheduler, DialogSubmissionPolicy, HiddenSubagentQueueCancelHandle,
     },
     turn_outcome::TurnOutcome,
+    turn_settlement::TurnSettlementTracker,
 };
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
@@ -815,6 +816,10 @@ pub struct ConversationCoordinator {
     /// Map value is a counter shared between the coordinator and the spawn
     /// task; spawn task increments on entry and decrements on exit.
     active_turns_per_session: Arc<DashMap<String, Arc<AtomicUsize>>>,
+    /// Exact `(session_id, turn_id)` completion signals. A registration stays
+    /// active through persistence finalization, not merely until session state
+    /// changes to Idle.
+    turn_settlements: Arc<TurnSettlementTracker>,
     thread_goal_runtime: Arc<ThreadGoalRuntime>,
     terminal_port: OnceLock<Arc<dyn TerminalPort>>,
     remote_exec_port: OnceLock<Arc<dyn RemoteExecPort>>,
@@ -1360,6 +1365,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             scheduler_notify_tx: OnceLock::new(),
             round_injection_source: OnceLock::new(),
             active_turns_per_session: Arc::new(DashMap::new()),
+            turn_settlements: Arc::new(TurnSettlementTracker::default()),
             thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
             terminal_port: OnceLock::new(),
             remote_exec_port: OnceLock::new(),
@@ -2119,7 +2125,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await;
         let current_agent = agent_registry
             .get_agent(agent_type, workspace.map(|binding| binding.root_path()))
-            .ok_or_else(|| BitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;
+            .ok_or_else(|| {
+                BitFunError::Validation(format!("Unknown agent type: {}", agent_type))
+            })?;
         let current_agent_reminder = current_agent
             .get_system_reminder(previous_agent_type, workspace)
             .await?;
@@ -3643,6 +3651,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             counter: active_counter.clone(),
             armed: true,
         };
+        let turn_settlement_registration = self
+            .turn_settlements
+            .register_accepted(session_id.clone(), turn_id.clone());
         let cancellation_token = CancellationToken::new();
         self.execution_engine
             .register_cancel_token(&turn_id, cancellation_token);
@@ -3847,6 +3858,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
 
         tokio::spawn(async move {
+            // Keep exact turn settlement pending until every tail write in
+            // this spawned task has completed.
+            let _turn_settlement_registration = turn_settlement_registration;
             // RAII guard: on drop (ANY exit path, including panic), decrements
             // the in-flight counter and resets Processing → Idle only if this
             // task still owns the current turn.
@@ -4013,6 +4027,61 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
             sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    pub(crate) async fn wait_for_turn_settlement(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        max_wait: Duration,
+    ) -> BitFunResult<()> {
+        match self
+            .turn_settlements
+            .wait(session_id, turn_id, max_wait)
+            .await
+        {
+            super::turn_settlement::TurnSettlementWait::Settled => return Ok(()),
+            super::turn_settlement::TurnSettlementWait::TimedOut => {}
+            super::turn_settlement::TurnSettlementWait::Unknown => {
+                let session = self
+                    .session_manager
+                    .get_session(session_id)
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {session_id}"))
+                    })?;
+                if !session.dialog_turn_ids.iter().any(|known| known == turn_id) {
+                    return Err(BitFunError::NotFound(format!(
+                        "Dialog turn not found: {turn_id}"
+                    )));
+                }
+                return Err(BitFunError::Service(format!(
+                    "Turn settlement evidence is unavailable: session_id={session_id}, turn_id={turn_id}"
+                )));
+            }
+        }
+        Err(BitFunError::Timeout(format!(
+            "Turn did not settle before timeout: session_id={session_id}, turn_id={turn_id}, timeout_ms={}",
+            max_wait.as_millis()
+        )))
+    }
+
+    #[cfg(test)]
+    pub(super) fn register_turn_settlement(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> super::turn_settlement::TurnSettlementRegistration {
+        self.turn_settlements
+            .register_accepted(session_id.to_string(), turn_id.to_string())
+    }
+
+    pub(super) fn try_register_turn_settlement(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Option<super::turn_settlement::TurnSettlementRegistration> {
+        self.turn_settlements
+            .try_register_pending(session_id.to_string(), turn_id.to_string())
     }
 
     /// Strict maintenance barrier for callers that must not overlap an older

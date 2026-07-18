@@ -190,3 +190,30 @@ fn cli_local_persistence_stays_behind_core_compatibility_facade() {
         "Peer Host persistence operations must stay behind the Core compatibility facade"
     );
 }
+
+#[test]
+fn primary_cli_session_client_uses_only_the_runtime_sdk_boundary() {
+    const AGENT_MODULE: &str = include_str!("../src/agent/mod.rs");
+    const PRIMARY_CLIENT: &str = include_str!("../src/agent/runtime_client.rs");
+
+    assert!(
+        !AGENT_MODULE.contains("trait Agent"),
+        "a one-implementation private trait must not obscure the Runtime SDK client boundary"
+    );
+    assert!(
+        !PRIMARY_CLIENT.contains("CoreAgentRuntimeCompatibility")
+            && !PRIMARY_CLIENT.contains("compatibility:")
+            && !PRIMARY_CLIENT.contains("is_turn_processing"),
+        "the primary CLI/TUI session client must not depend on Core compatibility or state polling"
+    );
+    for sdk_operation in [
+        "fork_session",
+        "generate_session_usage",
+        "wait_for_turn_settlement",
+    ] {
+        assert!(
+            PRIMARY_CLIENT.contains(sdk_operation),
+            "primary session client must route {sdk_operation} through the Runtime SDK"
+        );
+    }
+}

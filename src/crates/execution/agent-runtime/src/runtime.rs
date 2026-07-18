@@ -12,15 +12,18 @@ use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
-    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkPort,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
-    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSubmitOutcome,
-    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
-    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentTurnSettlementPort,
+    AgentTurnSettlementRequest, DialogSubmitOutcome, PluginRuntimeBinding, PortError,
+    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
+    SessionTranscriptRequest, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -185,6 +188,9 @@ pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
     session_model: Option<Arc<dyn AgentSessionModelPort>>,
+    session_fork: Option<Arc<dyn AgentSessionForkPort>>,
+    session_usage: Option<Arc<dyn AgentSessionUsagePort>>,
+    turn_settlement: Option<Arc<dyn AgentTurnSettlementPort>>,
     session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
     session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
@@ -219,6 +225,27 @@ impl std::fmt::Debug for AgentRuntime {
                     .session_model
                     .as_ref()
                     .map(|_| "<dyn AgentSessionModelPort>"),
+            )
+            .field(
+                "session_fork",
+                &self
+                    .session_fork
+                    .as_ref()
+                    .map(|_| "<dyn AgentSessionForkPort>"),
+            )
+            .field(
+                "session_usage",
+                &self
+                    .session_usage
+                    .as_ref()
+                    .map(|_| "<dyn AgentSessionUsagePort>"),
+            )
+            .field(
+                "turn_settlement",
+                &self
+                    .turn_settlement
+                    .as_ref()
+                    .map(|_| "<dyn AgentTurnSettlementPort>"),
             )
             .field(
                 "session_restore",
@@ -320,6 +347,9 @@ pub struct AgentRuntimeBuilder {
     submission: Option<Arc<dyn AgentSubmissionPort>>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
     session_model: Option<Arc<dyn AgentSessionModelPort>>,
+    session_fork: Option<Arc<dyn AgentSessionForkPort>>,
+    session_usage: Option<Arc<dyn AgentSessionUsagePort>>,
+    turn_settlement: Option<Arc<dyn AgentTurnSettlementPort>>,
     session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
     session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
@@ -357,6 +387,21 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_model_port(mut self, port: Arc<dyn AgentSessionModelPort>) -> Self {
         self.session_model = Some(port);
+        self
+    }
+
+    pub fn with_session_fork_port(mut self, port: Arc<dyn AgentSessionForkPort>) -> Self {
+        self.session_fork = Some(port);
+        self
+    }
+
+    pub fn with_session_usage_port(mut self, port: Arc<dyn AgentSessionUsagePort>) -> Self {
+        self.session_usage = Some(port);
+        self
+    }
+
+    pub fn with_turn_settlement_port(mut self, port: Arc<dyn AgentTurnSettlementPort>) -> Self {
+        self.turn_settlement = Some(port);
         self
     }
 
@@ -452,6 +497,9 @@ impl AgentRuntimeBuilder {
             submission,
             session_management,
             session_model,
+            session_fork,
+            session_usage,
+            turn_settlement,
             session_restore,
             session_transcript_reader,
             thread_goal_management,
@@ -477,6 +525,9 @@ impl AgentRuntimeBuilder {
             submission: submission.ok_or(RuntimeBuildError::MissingSubmissionPort)?,
             session_management,
             session_model,
+            session_fork,
+            session_usage,
+            turn_settlement,
             session_restore,
             session_transcript_reader,
             thread_goal_management,
@@ -752,6 +803,49 @@ impl AgentRuntime {
         })?;
         session_model
             .update_session_model(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn fork_session(
+        &self,
+        request: AgentSessionForkRequest,
+    ) -> Result<AgentSessionForkResult, RuntimeError> {
+        let port = self.session_fork.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session fork port is not registered",
+            ))
+        })?;
+        port.fork_session(request).await.map_err(RuntimeError::from)
+    }
+
+    pub async fn generate_session_usage(
+        &self,
+        request: AgentSessionUsageRequest,
+    ) -> Result<bitfun_core_types::SessionUsageReport, RuntimeError> {
+        let port = self.session_usage.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session usage port is not registered",
+            ))
+        })?;
+        port.generate_session_usage(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn wait_for_turn_settlement(
+        &self,
+        request: AgentTurnSettlementRequest,
+    ) -> Result<(), RuntimeError> {
+        let port = self.turn_settlement.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent turn settlement port is not registered",
+            ))
+        })?;
+        port.wait_for_turn_settlement(request)
             .await
             .map_err(RuntimeError::from)
     }

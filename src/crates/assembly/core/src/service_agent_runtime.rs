@@ -7,7 +7,8 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRestorePort, RuntimeError,
+    AgentSessionForkPort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
+    AgentSessionRestorePort, AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
 };
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
@@ -908,6 +909,9 @@ impl CoreServiceAgentRuntime {
     pub(crate) fn product_agent_runtime(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
+        session_fork: Arc<dyn AgentSessionForkPort>,
+        session_usage: Arc<dyn AgentSessionUsagePort>,
+        turn_settlement: Arc<dyn AgentTurnSettlementPort>,
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
@@ -917,6 +921,9 @@ impl CoreServiceAgentRuntime {
             scheduler,
             dialog_turn,
             None,
+            Some(session_fork),
+            Some(session_usage),
+            Some(turn_settlement),
             services,
             harness_registry,
         )
@@ -936,6 +943,9 @@ impl CoreServiceAgentRuntime {
             scheduler,
             dialog_turn,
             Some(event_source),
+            None,
+            None,
+            None,
             services,
             harness_registry,
         )
@@ -946,6 +956,9 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
         dialog_turn: Arc<dyn AgentDialogTurnPort>,
         event_source: Option<AgentEventSource>,
+        session_fork: Option<Arc<dyn AgentSessionForkPort>>,
+        session_usage: Option<Arc<dyn AgentSessionUsagePort>>,
+        turn_settlement: Option<Arc<dyn AgentTurnSettlementPort>>,
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
@@ -975,6 +988,18 @@ impl CoreServiceAgentRuntime {
         .with_lifecycle_delivery_port(lifecycle_delivery);
         let builder = match event_source {
             Some(event_source) => builder.with_event_source(event_source),
+            None => builder,
+        };
+        let builder = match session_fork {
+            Some(port) => builder.with_session_fork_port(port),
+            None => builder,
+        };
+        let builder = match session_usage {
+            Some(port) => builder.with_session_usage_port(port),
+            None => builder,
+        };
+        let builder = match turn_settlement {
+            Some(port) => builder.with_turn_settlement_port(port),
             None => builder,
         };
         builder
@@ -1163,6 +1188,10 @@ impl CoreRemoteInteractionRuntimeHost {
     }
 }
 
+fn generate_remote_turn_id() -> String {
+    format!("turn_{}", uuid::Uuid::new_v4())
+}
+
 #[async_trait::async_trait]
 impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     type ImageContext = ImageContextData;
@@ -1265,7 +1294,7 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     }
 
     fn generate_turn_id(&self) -> String {
-        format!("turn_{}", chrono::Utc::now().timestamp_millis())
+        generate_remote_turn_id()
     }
 
     async fn submit_dialog(
@@ -1640,6 +1669,8 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use bitfun_runtime_ports::SessionTranscriptReader;
 
     use super::*;
@@ -1663,6 +1694,19 @@ mod tests {
         }
 
         assert_runtime_ports::<ConversationCoordinator>();
+    }
+
+    #[test]
+    fn remote_generated_turn_ids_are_uuid_unique() {
+        let ids = (0..1_024)
+            .map(|_| generate_remote_turn_id())
+            .collect::<HashSet<_>>();
+
+        assert_eq!(ids.len(), 1_024);
+        assert!(ids.iter().all(|id| {
+            id.strip_prefix("turn_")
+                .is_some_and(|value| uuid::Uuid::parse_str(value).is_ok())
+        }));
     }
 
     #[test]

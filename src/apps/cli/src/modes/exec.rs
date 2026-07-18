@@ -11,11 +11,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitfun_agent_runtime::sdk::{PortErrorKind, RuntimeError};
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{AgenticEvent, ToolEventIdentity};
-use tokio::time::{sleep, Instant};
+use tokio::time::Instant;
 
-use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
+use crate::agent::runtime_client::CliAgentRuntimeClient;
 use crate::config::CliConfig;
 use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
 use crate::runtime::CliRuntimeContext;
@@ -195,6 +196,48 @@ fn completed_turn_failure(
     })
 }
 
+fn is_successful_exec_terminal(event: &AgenticEvent, turn_id: &str) -> bool {
+    matches!(
+        event,
+        AgenticEvent::DialogTurnCompleted {
+            turn_id: event_turn_id,
+            success,
+            finish_reason,
+            has_final_response,
+            ..
+        } if event_turn_id == turn_id
+            && completed_turn_failure(
+                *success,
+                finish_reason.as_deref(),
+                *has_final_response,
+            )
+            .is_none()
+    )
+}
+
+fn settlement_failure(error: RuntimeError, session_id: &str, turn_id: &str) -> (ExitKind, String) {
+    let is_timeout = matches!(
+        &error,
+        RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::Timeout
+    );
+    let detail = error.into_message();
+    if is_timeout {
+        (
+            ExitKind::SettlementTimedOut,
+            format!(
+                "Timed out waiting for exec turn settlement: session_id={session_id}, turn_id={turn_id}: {detail}"
+            ),
+        )
+    } else {
+        (
+            ExitKind::SystemError,
+            format!(
+                "Failed to wait for exec turn settlement: session_id={session_id}, turn_id={turn_id}: {detail}"
+            ),
+        )
+    }
+}
+
 impl ExecJsonResult {
     pub(crate) fn success(
         session_id: impl Into<String>,
@@ -308,7 +351,7 @@ pub(crate) struct ExecMode {
     config: CliConfig,
     message: String,
     agent_type: String,
-    agent: Arc<CoreAgentAdapter>,
+    agent: Arc<CliAgentRuntimeClient>,
     _runtime: Arc<CliRuntimeContext>,
     workspace_path: Option<PathBuf>,
     /// None: no patch output, Some("-"): output to stdout, Some(path): save to file
@@ -334,7 +377,7 @@ impl ExecMode {
             crate::runtime::approval::CliApprovalPolicy::Ask
             | crate::runtime::approval::CliApprovalPolicy::Reject => ExecApprovalMode::Reject,
         };
-        let agent = Arc::new(CoreAgentAdapter::new(
+        let agent = Arc::new(CliAgentRuntimeClient::new(
             runtime.as_ref(),
             workspace_path.clone(),
         ));
@@ -594,6 +637,7 @@ impl ExecMode {
         let mut terminal_message: Option<String> = None;
         let mut assistant_text = String::new();
         let mut usage: Option<ExecTokenUsage> = None;
+        let mut deferred_success_envelope: Option<bitfun_events::AgenticEventEnvelope> = None;
 
         'event_loop: loop {
             let envelope = tokio::select! {
@@ -758,7 +802,11 @@ impl ExecMode {
                     continue;
                 }
 
-                self.emit_stream_envelope(&envelope)?;
+                if is_successful_exec_terminal(event, &turn_id) {
+                    deferred_success_envelope = Some(envelope.clone());
+                } else {
+                    self.emit_stream_envelope(&envelope)?;
+                }
 
                 if let Some(model_config_id) =
                     ExecTokenUsage::accumulate_event(&mut usage, event, &turn_id)
@@ -1029,21 +1077,35 @@ impl ExecMode {
             }
         }
 
-        if let Err(error) = self.wait_for_turn_settlement(&session_id, &turn_id).await {
-            let message = match terminal_message.take() {
-                Some(existing) => format!("{existing}; {error}"),
-                None => error.to_string(),
-            };
-            emit_exit_diagnostic(
-                ExitKind::SettlementTimedOut,
-                &message,
-                &self.exit_context(Some(&session_id), Some(&turn_id)),
-            );
-            terminal_status = Some(ExecTerminalStatus::Error);
-            terminal_message = Some(message.clone());
-            terminal_outcome = Some(Err(anyhow::anyhow!(message)));
-        }
-        let (patch, patch_error) = self.output_patch_if_needed();
+        let turn_settled = match self.wait_for_turn_settlement(&session_id, &turn_id).await {
+            Ok(()) => true,
+            Err(error) => {
+                let (exit_kind, settlement_message) =
+                    settlement_failure(error, &session_id, &turn_id);
+                let message = match terminal_message.take() {
+                    Some(existing) => format!("{existing}; {settlement_message}"),
+                    None => settlement_message,
+                };
+                emit_exit_diagnostic(
+                    exit_kind,
+                    &message,
+                    &self.exit_context(Some(&session_id), Some(&turn_id)),
+                );
+                terminal_status = Some(ExecTerminalStatus::Error);
+                terminal_message = Some(message.clone());
+                terminal_outcome = Some(Err(anyhow::anyhow!(message)));
+                self.emit_stream_error(
+                    &session_id,
+                    terminal_message.as_deref().unwrap_or_default(),
+                )?;
+                false
+            }
+        };
+        let (patch, patch_error) = if turn_settled {
+            self.output_patch_if_needed()
+        } else {
+            (None, None)
+        };
         if let Some(error) = patch_error {
             let message = match terminal_message.take() {
                 Some(existing) => format!("{existing}; {error}"),
@@ -1052,6 +1114,12 @@ impl ExecMode {
             terminal_status = Some(ExecTerminalStatus::Error);
             terminal_message = Some(message.clone());
             terminal_outcome = Some(Err(anyhow::anyhow!(message)));
+            self.emit_stream_error(&session_id, terminal_message.as_deref().unwrap_or_default())?;
+        }
+        if terminal_status == Some(ExecTerminalStatus::Success) {
+            if let Some(envelope) = deferred_success_envelope.as_ref() {
+                self.emit_stream_envelope(envelope)?;
+            }
         }
         if self.output_format == ExecOutputFormat::Json {
             let result_text = terminal_message.unwrap_or(assistant_text);
@@ -1142,6 +1210,18 @@ impl ExecMode {
             stdout.flush()?;
         }
         Ok(())
+    }
+
+    fn emit_stream_error(&self, session_id: &str, message: &str) -> Result<()> {
+        let envelope = bitfun_events::AgenticEventEnvelope::new(
+            AgenticEvent::SystemError {
+                session_id: Some(session_id.to_string()),
+                error: message.to_string(),
+                recoverable: false,
+            },
+            bitfun_events::AgenticEventPriority::Critical,
+        );
+        self.emit_stream_envelope(&envelope)
     }
 
     fn print_text(&self, f: impl FnOnce()) {
@@ -1238,22 +1318,14 @@ impl ExecMode {
         )
     }
 
-    async fn wait_for_turn_settlement(&self, session_id: &str, turn_id: &str) -> Result<()> {
-        let deadline = Instant::now() + Duration::from_secs(5);
-
-        loop {
-            if !self.agent.is_turn_processing(session_id, turn_id) {
-                return Ok(());
-            }
-
-            if Instant::now() >= deadline {
-                return Err(anyhow::anyhow!(
-                    "Timed out waiting for exec turn settlement: session_id={session_id}, turn_id={turn_id}"
-                ));
-            }
-
-            sleep(Duration::from_millis(50)).await;
-        }
+    async fn wait_for_turn_settlement(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> std::result::Result<(), RuntimeError> {
+        self.agent
+            .wait_for_turn_settlement(session_id, turn_id, 5_000)
+            .await
     }
 
     async fn drain_interrupted_turn_events(
@@ -1304,9 +1376,11 @@ mod patch_tests {
 
     use super::{
         completed_turn_failure, effective_event_invocation, event_belongs_to_exec_turn,
-        event_turn_id, serialize_stream_envelope, write_patch_to_path, ExecApprovalMode,
-        ExecJsonResult, ExecMode, ExecTokenUsage, TOOL_START_INPUT_PREVIEW_CHARS,
+        event_turn_id, is_successful_exec_terminal, serialize_stream_envelope, settlement_failure,
+        write_patch_to_path, ExecApprovalMode, ExecJsonResult, ExecMode, ExecTokenUsage, ExitKind,
+        TOOL_START_INPUT_PREVIEW_CHARS,
     };
+    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
     use bitfun_events::{
         AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, ToolEventIdentity,
     };
@@ -1658,6 +1732,44 @@ mod patch_tests {
         );
         assert!(completed_turn_failure(Some(true), Some("stop"), Some(true)).is_none());
         assert!(completed_turn_failure(None, None, None).is_none());
+    }
+
+    #[test]
+    fn successful_terminal_event_is_deferred_until_exec_settlement() {
+        let event = AgenticEvent::DialogTurnCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            total_rounds: 1,
+            total_tools: 0,
+            duration_ms: 10,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("complete".to_string()),
+            has_final_response: Some(true),
+        };
+
+        assert!(is_successful_exec_terminal(&event, "turn-1"));
+        assert!(!is_successful_exec_terminal(&event, "turn-other"));
+    }
+
+    #[test]
+    fn settlement_failure_preserves_timeout_and_runtime_error_kinds() {
+        let timeout = RuntimeError::Port(PortError::new(
+            PortErrorKind::Timeout,
+            "turn did not settle",
+        ));
+        let backend = RuntimeError::Port(PortError::new(
+            PortErrorKind::Backend,
+            "settlement provider failed",
+        ));
+
+        let (timeout_kind, timeout_message) = settlement_failure(timeout, "session-1", "turn-1");
+        let (backend_kind, backend_message) = settlement_failure(backend, "session-1", "turn-1");
+
+        assert_eq!(timeout_kind, ExitKind::SettlementTimedOut);
+        assert!(timeout_message.starts_with("Timed out waiting"));
+        assert_eq!(backend_kind, ExitKind::SystemError);
+        assert!(backend_message.starts_with("Failed to wait"));
     }
 
     #[test]

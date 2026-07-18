@@ -49,6 +49,7 @@ pub use crate::runtime::{
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
+pub use bitfun_core_types::SessionUsageReport;
 pub use bitfun_harness::{
     build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
     HarnessRegistry, HarnessWorkflow,
@@ -56,15 +57,18 @@ pub use bitfun_harness::{
 pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
-    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkPort,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
-    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, ClockPort, DialogSubmissionPolicy,
-    DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision,
-    PermissionPort, PermissionRequest, PortError, PortResult, RemoteAssistantWorkspaceFacts,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentTurnSettlementPort,
+    AgentTurnSettlementRequest, ClockPort, DialogSubmissionPolicy, DialogSubmitOutcome,
+    FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort,
+    PermissionRequest, PortError, PortErrorKind, PortResult, RemoteAssistantWorkspaceFacts,
     RemoteCapabilityPort, RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
     RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
@@ -116,6 +120,21 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_model_port(mut self, port: Arc<dyn AgentSessionModelPort>) -> Self {
         self.inner = self.inner.with_session_model_port(port);
+        self
+    }
+
+    pub fn with_session_fork_port(mut self, port: Arc<dyn AgentSessionForkPort>) -> Self {
+        self.inner = self.inner.with_session_fork_port(port);
+        self
+    }
+
+    pub fn with_session_usage_port(mut self, port: Arc<dyn AgentSessionUsagePort>) -> Self {
+        self.inner = self.inner.with_session_usage_port(port);
+        self
+    }
+
+    pub fn with_turn_settlement_port(mut self, port: Arc<dyn AgentTurnSettlementPort>) -> Self {
+        self.inner = self.inner.with_turn_settlement_port(port);
         self
     }
 
@@ -272,6 +291,27 @@ impl AgentRuntime {
         request: AgentSessionModelUpdateRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.update_session_model(request).await
+    }
+
+    pub async fn fork_session(
+        &self,
+        request: AgentSessionForkRequest,
+    ) -> Result<AgentSessionForkResult, RuntimeError> {
+        self.inner.fork_session(request).await
+    }
+
+    pub async fn generate_session_usage(
+        &self,
+        request: AgentSessionUsageRequest,
+    ) -> Result<SessionUsageReport, RuntimeError> {
+        self.inner.generate_session_usage(request).await
+    }
+
+    pub async fn wait_for_turn_settlement(
+        &self,
+        request: AgentTurnSettlementRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.wait_for_turn_settlement(request).await
     }
 
     pub async fn restore_session(
