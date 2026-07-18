@@ -463,11 +463,11 @@ mod tests {
     }
 
     #[test]
-    fn processing_chat_hides_idle_only_actions() {
+    fn processing_chat_keeps_agent_management_and_hides_idle_only_actions() {
         let mut menu = CommandMenuState::new(ActionState::chat(true, false));
         menu.update("/", 1);
 
-        assert!(!names(&menu).contains(&"/agents"));
+        assert!(names(&menu).contains(&"/agents"));
         assert!(!names(&menu).contains(&"/new"));
         assert!(names(&menu).contains(&"/help"));
     }

@@ -310,7 +310,7 @@ impl ChatMode {
 
         if subagent_items.is_empty() {
             chat_state.add_system_message(if has_external_subagents {
-                "No locally manageable subagents found. External agents are read-only here; use /external-agents to review or change them."
+                "No locally manageable subagents found. Open Agents from the command palette to review imported agents."
                     .to_string()
             } else {
                 "No subagents found.".to_string()
@@ -322,7 +322,7 @@ impl ChatMode {
     }
 
     fn handle_subagent_selector_action(
-        &self,
+        &mut self,
         action: SubagentSelectorAction,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,

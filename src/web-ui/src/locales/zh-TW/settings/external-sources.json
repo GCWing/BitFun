@@ -8,7 +8,11 @@
     "hideDetails": "收合詳細資料",
     "close": "關閉",
     "unknown": "未知",
-    "technicalDetails": "技術詳細資料"
+    "technicalDetails": "技術詳細資料",
+    "selected": "目前使用",
+    "selectedUnavailable": "已選擇，目前無法使用",
+    "notSelected": "未使用",
+    "availableChoice": "可選"
   },
   "actions": {
     "refresh": "重新整理",
@@ -96,7 +100,7 @@
     "configurationUnavailable": {
       "reason": "BitFun 無法讀取模型設定。",
       "impact": "{{impact}}",
-      "nextStep": "請開啟 BitFun 的模型設定並確認可以正常載入；若無法載入，請重新啟動 BitFun。問題仍存在時，請確認 BitFun 可以正常讀取與儲存設定，然後重新整理。"
+      "nextStep": "請開啟 BitFun 的模型設定，確認 BitFun 可以正常讀取與儲存設定，然後重新整理。"
     },
     "modelUnavailable": {
       "reason": "此 Agent 要求的模型在 BitFun 中不可用。",
@@ -125,11 +129,14 @@
     }
   },
   "agentConflicts": {
-    "title": "選擇同名 Agent",
-    "description": "BitFun 不會替你決定使用哪一個。你的選擇會保留，直到其中一個 Agent 的設定發生變更。",
+    "title": "同名 Agent",
+    "description": "BitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個 Agent 發生變更前，BitFun 會記住你的選擇。",
     "agentName": "找到多個名為 {{name}} 的 Agent",
     "disableAll": "暫不使用任何一個",
     "pending": "請選擇日後執行任務時使用哪一個 Agent。選擇外部 Agent 時，也會確認下方顯示的模型、工具與執行位置。",
+    "currentSelection": "新任務會使用目前選擇。若要變更，請在上方選擇其他選項。",
+    "currentSelectionUnavailable": "仍保留此來源為目前選擇，但它目前已停用或無法用於新任務。請啟用或修復它、改選其他來源，或讓此名稱維持無法使用。",
+    "keptUnavailable": "目前保持此 Agent 名稱不可用。需要使用時，可在上方選擇一個 Agent。",
     "selectionApproves": "選擇後，也表示你確認了下方顯示的模型、工具、執行位置與設定來源。"
   },
   "tools": {
@@ -187,14 +194,16 @@
     "active": "無需操作。若要停止使用該來源的所有工具，請停用這些工具。",
     "conflict": "請在下方選擇要使用的工具，或繼續保持停用。",
     "unsupported": "請將來源改為 BitFun 目前支援的單一 JavaScript 檔案格式，然後重新整理。",
-    "runtime_unavailable": "請安裝或修復 Node.js，然後重新啟動 BitFun 以再次檢查。",
+    "runtime_unavailable": "請安裝或修復 Node.js，然後重新整理。執行環境無法使用期間，你仍可繼續使用其他功能。",
     "load_failed": "請修正來源後重新整理，或繼續停用這些工具。"
   },
   "toolConflicts": {
-    "title": "選擇同名工具",
-    "description": "選擇前，BitFun 會繼續使用目前可用的本機或 MCP 工具；如果沒有可用工具，則暫時停用此名稱。選項發生變更前不會再次詢問。",
+    "title": "同名工具",
+    "description": "待選項目與目前選擇都會保留顯示。選擇前，BitFun 會繼續使用可用的本機或 MCP 工具；若沒有可用工具，則停用此名稱。可用工具發生變更前，BitFun 會記住你的選擇。",
     "toolName": "找到多個名為 {{name}} 的工具",
-    "pending": "請選擇日後呼叫此工具名稱時使用哪一個工具。"
+    "pending": "請選擇日後呼叫此工具名稱時使用哪一個工具。",
+    "currentSelection": "呼叫此工具名稱時會使用目前選擇。若要變更，請在上方選擇其他工具。",
+    "currentSelectionUnavailable": "仍保留此工具來源為目前選擇，但它目前已停用或無法使用。請啟用或修復它，或選擇其他工具。"
   },
   "toolCandidateKind": {
     "built_in": "內建",
@@ -226,10 +235,12 @@
     "using_last_valid_version": "正在使用上次可用的內容"
   },
   "conflicts": {
-    "title": "選擇同名命令",
-    "description": "多個來源提供同名命令時，BitFun 不會替你選擇。你的選擇會保留，直到其中一個來源發生變更。",
+    "title": "同名命令",
+    "description": "BitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個來源發生變更前，BitFun 會記住你的選擇。",
     "commandName": "多個來源提供了 /{{name}}",
     "pending": "請選擇使用哪個來源的命令。",
+    "currentSelection": "目前命令會使用已選來源。若要變更，請在上方選擇其他可用來源。",
+    "currentSelectionUnavailable": "仍保留此命令來源為目前選擇，但它目前無法執行。請改選可用來源，或先修復此來源。",
     "restricted": "目前版本暫不支援"
   }
 }

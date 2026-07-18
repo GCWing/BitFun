@@ -110,6 +110,11 @@
     font-size: 11px;
   }
 
+  &__candidate-state {
+    color: var(--color-text-secondary);
+    font-size: 11px;
+  }
+
   &__ecosystem {
     margin-left: 4px;
     opacity: 0.7;

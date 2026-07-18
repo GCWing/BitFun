@@ -92,6 +92,15 @@ type AgentChangeNotice = {
   message: string;
 };
 
+const DISABLED_SUBAGENT_CONFLICT_CHOICE = '__bitfun_disabled__';
+
+function unresolvedFirst<T extends { selectedCandidateId?: string }>(items: T[]): T[] {
+  return [
+    ...items.filter((item) => !item.selectedCandidateId),
+    ...items.filter((item) => item.selectedCandidateId),
+  ];
+}
+
 function activeAgentAvailabilityChanges(
   previous: ExternalSourceCatalogSnapshot | null,
   next: ExternalSourceCatalogSnapshot,
@@ -339,24 +348,18 @@ const ExternalSourcesConfig: React.FC = () => {
     return counts;
   }, [snapshot]);
 
-  const pendingConflicts = useMemo(
-    () => (snapshot?.commandConflicts ?? []).filter(
-      (conflict) => !conflict.selectedCandidateId,
-    ),
+  const commandConflicts = useMemo(
+    () => unresolvedFirst(snapshot?.commandConflicts ?? []),
     [snapshot?.commandConflicts],
   );
 
-  const pendingToolConflicts = useMemo(
-    () => (snapshot?.toolConflicts ?? []).filter(
-      (conflict) => !conflict.selectedCandidateId,
-    ),
+  const toolConflicts = useMemo(
+    () => unresolvedFirst(snapshot?.toolConflicts ?? []),
     [snapshot?.toolConflicts],
   );
 
-  const pendingAgentConflicts = useMemo(
-    () => (snapshot?.subagentConflicts ?? []).filter(
-      (conflict) => !conflict.selectedCandidateId,
-    ),
+  const agentConflicts = useMemo(
+    () => unresolvedFirst(snapshot?.subagentConflicts ?? []),
     [snapshot?.subagentConflicts],
   );
 
@@ -704,18 +707,27 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
-            {pendingAgentConflicts.length > 0 ? (
+            {agentConflicts.length > 0 ? (
               <ConfigPageSection
                 title={t('agentConflicts.title')}
                 description={t('agentConflicts.description')}
               >
-                {pendingAgentConflicts.map((conflict) => (
-                  <div className="bitfun-external-sources-config__conflict" key={conflict.conflictKey}>
+                {agentConflicts.map((conflict) => {
+                  const selectedExternalAgent = snapshot?.subagents?.find((agent) => (
+                    agent.candidateId === conflict.selectedCandidateId
+                  ));
+                  const selectedChoiceUnavailable = Boolean(
+                    selectedExternalAgent
+                    && selectedExternalAgent.activationState.state !== 'active',
+                  );
+                  return (
+                    <div className="bitfun-external-sources-config__conflict" key={conflict.conflictKey}>
                     <div className="bitfun-external-sources-config__conflict-title">
                       {t('agentConflicts.agentName', { name: conflict.logicalId })}
                     </div>
                     <div className="bitfun-external-sources-config__conflict-options">
                       {conflict.candidates.map((candidate) => {
+                        const selected = conflict.selectedCandidateId === candidate.candidateId;
                         const externalAgent = candidate.external
                           ? snapshot?.subagents?.find((agent) => (
                             agent.candidateId === candidate.candidateId
@@ -724,9 +736,10 @@ const ExternalSourcesConfig: React.FC = () => {
                         return (
                           <div className="bitfun-external-sources-config__candidate" key={candidate.candidateId}>
                             <Button
-                              variant="secondary"
+                              variant={selected ? 'primary' : 'secondary'}
                               size="small"
                               disabled={busyKey !== null}
+                              aria-pressed={selected}
                               onClick={() => void chooseAgentConflict(
                                 conflict.conflictKey,
                                 candidate.candidateId,
@@ -738,6 +751,15 @@ const ExternalSourcesConfig: React.FC = () => {
                                 {candidate.sourceLabel}
                               </span>
                             </Button>
+                            <span className="bitfun-external-sources-config__candidate-state">
+                              {t(selected
+                                ? selectedChoiceUnavailable
+                                  ? 'common.selectedUnavailable'
+                                  : 'common.selected'
+                                : conflict.selectedCandidateId
+                                  ? 'common.notSelected'
+                                  : 'common.availableChoice')}
+                            </span>
                             {externalAgent ? (
                               <div className="bitfun-external-sources-config__candidate-detail">
                                 <span>{t('agents.model', { model: externalAgentModelLabel(externalAgent.effectiveModelLabel, t) })}</span>
@@ -771,12 +793,17 @@ const ExternalSourcesConfig: React.FC = () => {
                         );
                       })}
                       <Button
-                        variant="secondary"
+                        variant={conflict.selectedCandidateId === DISABLED_SUBAGENT_CONFLICT_CHOICE
+                          ? 'primary'
+                          : 'secondary'}
                         size="small"
                         disabled={busyKey !== null}
+                        aria-pressed={
+                          conflict.selectedCandidateId === DISABLED_SUBAGENT_CONFLICT_CHOICE
+                        }
                         onClick={() => void chooseAgentConflict(
                           conflict.conflictKey,
-                          '__bitfun_disabled__',
+                          DISABLED_SUBAGENT_CONFLICT_CHOICE,
                           false,
                         )}
                       >
@@ -784,10 +811,17 @@ const ExternalSourcesConfig: React.FC = () => {
                       </Button>
                     </div>
                     <div className="bitfun-external-sources-config__conflict-hint">
-                      {t('agentConflicts.pending')}
+                      {conflict.selectedCandidateId === DISABLED_SUBAGENT_CONFLICT_CHOICE
+                        ? t('agentConflicts.keptUnavailable')
+                        : conflict.selectedCandidateId
+                          ? t(selectedChoiceUnavailable
+                            ? 'agentConflicts.currentSelectionUnavailable'
+                            : 'agentConflicts.currentSelection')
+                          : t('agentConflicts.pending')}
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </ConfigPageSection>
             ) : null}
 
@@ -1097,13 +1131,18 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
-            {pendingConflicts.length > 0 ? (
+            {commandConflicts.length > 0 ? (
               <ConfigPageSection
                 title={t('conflicts.title')}
                 description={t('conflicts.description')}
               >
-                {pendingConflicts.map((conflict) => (
-                  <div className="bitfun-external-sources-config__conflict" key={conflict.conflictKey}>
+                {commandConflicts.map((conflict) => {
+                  const selectedChoiceUnavailable = conflict.candidates.some((candidate) => (
+                    candidate.candidateId === conflict.selectedCandidateId
+                    && candidate.availability.state !== 'available'
+                  ));
+                  return (
+                    <div className="bitfun-external-sources-config__conflict" key={conflict.conflictKey}>
                     <div className="bitfun-external-sources-config__conflict-title">
                       {t('conflicts.commandName', { name: conflict.commandName })}
                     </div>
@@ -1131,6 +1170,17 @@ const ExternalSourcesConfig: React.FC = () => {
                                 {candidate.ecosystemId}
                               </span>
                             </Button>
+                            <span className="bitfun-external-sources-config__candidate-state">
+                              {t(selected
+                                ? selectedChoiceUnavailable
+                                  ? 'common.selectedUnavailable'
+                                  : 'common.selected'
+                                : !available
+                                  ? 'conflicts.restricted'
+                                  : conflict.selectedCandidateId
+                                    ? 'common.notSelected'
+                                    : 'common.availableChoice')}
+                            </span>
                             <div className="bitfun-external-sources-config__candidate-detail">
                               {candidate.commandDescription}
                               {' · '}
@@ -1147,56 +1197,94 @@ const ExternalSourcesConfig: React.FC = () => {
                         );
                       })}
                     </div>
-                    {!conflict.selectedCandidateId ? (
-                      <div className="bitfun-external-sources-config__conflict-hint">
-                        {t('conflicts.pending')}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
+                    <div className="bitfun-external-sources-config__conflict-hint">
+                      {conflict.selectedCandidateId
+                        ? t(selectedChoiceUnavailable
+                          ? 'conflicts.currentSelectionUnavailable'
+                          : 'conflicts.currentSelection')
+                        : t('conflicts.pending')}
+                    </div>
+                    </div>
+                  );
+                })}
               </ConfigPageSection>
             ) : null}
 
-            {pendingToolConflicts.length > 0 ? (
+            {toolConflicts.length > 0 ? (
               <ConfigPageSection
                 title={t('toolConflicts.title')}
                 description={t('toolConflicts.description')}
               >
-                {pendingToolConflicts.map((conflict) => (
-                  <div className="bitfun-external-sources-config__conflict" key={conflict.conflictKey}>
+                {toolConflicts.map((conflict) => {
+                  const selectedCandidate = conflict.candidates.find((candidate) => (
+                    candidate.candidateId === conflict.selectedCandidateId
+                  ));
+                  const selectedExternalTool = selectedCandidate?.kind === 'external'
+                    ? snapshot?.tools?.find((tool) => (
+                      tool.definition.id.target.source.providerId
+                        === selectedCandidate.source?.providerId
+                      && tool.definition.id.target.source.sourceId
+                        === selectedCandidate.source?.sourceId
+                      && tool.definition.modulePath === selectedCandidate.sourceLocation
+                      && tool.definition.name === conflict.toolName
+                      && tool.definition.contentVersion === selectedCandidate.contentVersion
+                    ))
+                    : undefined;
+                  const selectedChoiceUnavailable = selectedCandidate?.kind === 'external'
+                    && selectedExternalTool?.activation.state !== 'active';
+                  return (
+                    <div className="bitfun-external-sources-config__conflict" key={conflict.conflictKey}>
                     <div className="bitfun-external-sources-config__conflict-title">
                       {t('toolConflicts.toolName', { name: conflict.toolName })}
                     </div>
                     <div className="bitfun-external-sources-config__conflict-options">
-                      {conflict.candidates.map((candidate) => (
-                        <div className="bitfun-external-sources-config__candidate" key={candidate.candidateId}>
-                          <Button
-                            variant="secondary"
-                            size="small"
-                            disabled={busyKey === conflict.conflictKey}
-                            onClick={() => void chooseToolConflict(
-                              conflict.conflictKey,
-                              candidate.candidateId,
-                            )}
-                          >
-                            {candidate.displayName}
-                            <span className="bitfun-external-sources-config__ecosystem">
-                              {t(`toolCandidateKind.${candidate.kind}`)}
+                      {conflict.candidates.map((candidate) => {
+                        const selected = conflict.selectedCandidateId === candidate.candidateId;
+                        return (
+                          <div className="bitfun-external-sources-config__candidate" key={candidate.candidateId}>
+                            <Button
+                              variant={selected ? 'primary' : 'secondary'}
+                              size="small"
+                              disabled={busyKey === conflict.conflictKey}
+                              aria-pressed={selected}
+                              onClick={() => void chooseToolConflict(
+                                conflict.conflictKey,
+                                candidate.candidateId,
+                              )}
+                            >
+                              {candidate.displayName}
+                              <span className="bitfun-external-sources-config__ecosystem">
+                                {t(`toolCandidateKind.${candidate.kind}`)}
+                              </span>
+                            </Button>
+                            <span className="bitfun-external-sources-config__candidate-state">
+                              {t(selected
+                                ? selectedChoiceUnavailable
+                                  ? 'common.selectedUnavailable'
+                                  : 'common.selected'
+                                : conflict.selectedCandidateId
+                                  ? 'common.notSelected'
+                                  : 'common.availableChoice')}
                             </span>
-                          </Button>
-                          <div className="bitfun-external-sources-config__candidate-detail">
-                            {candidate.sourceLocation
-                              ? abbreviatedLocation(candidate.sourceLocation)
-                              : candidate.providerId}
+                            <div className="bitfun-external-sources-config__candidate-detail">
+                              {candidate.sourceLocation
+                                ? abbreviatedLocation(candidate.sourceLocation)
+                                : candidate.providerId}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="bitfun-external-sources-config__conflict-hint">
-                      {t('toolConflicts.pending')}
+                      {conflict.selectedCandidateId
+                        ? t(selectedChoiceUnavailable
+                          ? 'toolConflicts.currentSelectionUnavailable'
+                          : 'toolConflicts.currentSelection')
+                        : t('toolConflicts.pending')}
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </ConfigPageSection>
             ) : null}
           </>

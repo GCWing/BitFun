@@ -93,8 +93,10 @@ App 保持不变。
 2. standalone Tool 只加载受支持的单文件 JavaScript 子集，经来源确认后接入现有 Tool Runtime；
 3. Subagent 安全子集经模型、工具和同名冲突确认后接入现有 Subagent owner，仅支持 fresh single-run。
 
-近期先修复已实现路径中的事实偏移和类型化失败：运行时依赖在当前进程首次检查时不可用时给出真实的重启建议；读取 BitFun
-模型配置失败时阻止外部 Subagent 激活并显示独立原因，不能伪装成“请求模型不存在”。随后只有官方 import 型 tool、
+已实现路径已经收敛运行时依赖与配置失败：Node.js 在当前进程首次检查时不可用时，只提示修复、刷新和可继续使用其他功能；
+当前宿主没有可靠的刷新前后证据，因此不主动建议或触发重启。读取 BitFun 模型配置失败时阻止外部 Subagent 激活并显示独立原因，不能伪装成
+“请求模型不存在”。同名冲突的待选择和当前选择保持可见，TUI 通过通用 `/tools` 与 `/agents` 入口按能力和来源分组；
+`/agents` 同时容纳主 Agent、Subagent 和外部来源管理，不再创建 `/subagents` 或 `external-*` 平行命令。随后只有官方 import 型 tool、
 package plugin、Hook 或 TUI contribution 的真实样例证明当前 owner/契约不足时，才增加对应的最小切片。原始
 OpenTUI/Solid renderer、完整 package runtime 和 Remote 执行仍保持不支持。
 
