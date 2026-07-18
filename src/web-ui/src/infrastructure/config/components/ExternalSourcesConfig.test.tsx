@@ -150,7 +150,10 @@ describe('ExternalSourcesConfig', () => {
       'conflict-v1',
       'candidate-opencode',
     );
-    expect(container.textContent).not.toContain('conflicts.commandName');
+    expect(container.textContent).toContain('conflicts.commandName');
+    expect(container.textContent).toContain('conflicts.currentSelection');
+    expect(container.textContent).toContain('common.selected');
+    expect(container.textContent).toContain('common.notSelected');
 
     const sourceToggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
     expect(sourceToggle.checked).toBe(true);
@@ -160,6 +163,221 @@ describe('ExternalSourcesConfig', () => {
       'source-key',
       false,
     );
+  });
+
+  it('keeps remembered command, tool, and agent choices visible and changeable', async () => {
+    const resolvedSnapshot = {
+      ...snapshot,
+      commandConflicts: [{
+        ...snapshot.commandConflicts[0],
+        selectedCandidateId: 'candidate-opencode',
+      }],
+      toolConflicts: [{
+        conflictKey: 'tool-conflict-v1',
+        toolName: 'review',
+        selectedCandidateId: 'builtin-review',
+        candidates: [{
+          candidateId: 'builtin-review',
+          displayName: 'BitFun Review',
+          kind: 'built_in',
+          providerId: 'bitfun.builtin',
+          contentVersion: 'builtin-v1',
+        }, {
+          candidateId: 'external-review',
+          displayName: 'OpenCode Review Tool',
+          kind: 'external',
+          providerId: 'opencode.tools',
+          contentVersion: 'external-v1',
+          sourceLocation: '<workspace>/.opencode/tools/review.js',
+        }],
+      }],
+      subagentGeneration: 4,
+      preferenceRevision: 7,
+      subagents: [],
+      subagentConflicts: [{
+        conflictKey: 'agent-conflict-v1',
+        logicalId: 'review',
+        selectedCandidateId: '__bitfun_disabled__',
+        candidates: [{
+          candidateId: 'builtin-agent-review',
+          displayName: 'BitFun Review Agent',
+          sourceLabel: 'BitFun',
+          external: false,
+        }, {
+          candidateId: 'external-agent-review',
+          displayName: 'OpenCode Review Agent',
+          sourceLabel: 'OpenCode',
+          external: true,
+        }],
+      }],
+      pendingSubagentApprovals: [],
+    };
+    getSnapshotMock.mockResolvedValue(resolvedSnapshot);
+    setToolConflictChoiceMock.mockResolvedValue(resolvedSnapshot);
+    chooseSubagentConflictMock.mockResolvedValue(resolvedSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('conflicts.currentSelection');
+    expect(container.textContent).toContain('toolConflicts.currentSelection');
+    expect(container.textContent).toContain('agentConflicts.keptUnavailable');
+    expect(container.textContent).toContain('BitFun Review');
+    expect(container.textContent).toContain('OpenCode Review Tool');
+    expect(container.textContent).toContain('BitFun Review Agent');
+    expect(container.textContent).toContain('OpenCode Review Agent');
+
+    const externalTool = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('OpenCode Review Tool'));
+    await act(async () => externalTool?.click());
+    expect(setToolConflictChoiceMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'tool-conflict-v1',
+      'external-review',
+    );
+
+    const bitfunAgent = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('BitFun Review Agent'));
+    await act(async () => bitfunAgent?.click());
+    expect(chooseSubagentConflictMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'agent-conflict-v1',
+      'builtin-agent-review',
+      false,
+      4,
+      7,
+    );
+  });
+
+  it('does not present a selected but disabled external agent as currently used', async () => {
+    const selectedDisabledSnapshot = {
+      ...snapshot,
+      commandConflicts: [{
+        ...snapshot.commandConflicts[0],
+        selectedCandidateId: 'candidate-opencode',
+        candidates: [{
+          ...snapshot.commandConflicts[0].candidates[0],
+          availability: {
+            state: 'restricted',
+            reason: 'Unsupported command capability',
+            required_capabilities: ['shell'],
+          },
+        }, snapshot.commandConflicts[0].candidates[1]],
+      }],
+      tools: [{
+        definition: {
+          id: {
+            target: {
+              source: { providerId: 'opencode.tools', sourceId: 'project' },
+              localId: 'review',
+            },
+            exportId: 'other',
+          },
+          name: 'other',
+          descriptionPreview: 'Another export in the same module',
+          modulePath: '<workspace>/.opencode/tools/review.js',
+          workingDirectory: '<workspace>',
+          runtimeKind: 'java_script',
+          capabilities: [],
+          contentVersion: 'tool-v1',
+          staticStatus: { state: 'ready' },
+        },
+        approvalKey: 'other-tool-approval-v1',
+        decisionKey: 'other-tool-decision-v1',
+        activation: { state: 'active' },
+      }, {
+        definition: {
+          id: {
+            target: {
+              source: { providerId: 'opencode.tools', sourceId: 'project' },
+              localId: 'review',
+            },
+            exportId: 'review',
+          },
+          name: 'review',
+          descriptionPreview: 'Review a change',
+          modulePath: '<workspace>/.opencode/tools/review.js',
+          workingDirectory: '<workspace>',
+          runtimeKind: 'java_script',
+          capabilities: [],
+          contentVersion: 'tool-v1',
+          staticStatus: { state: 'ready' },
+        },
+        approvalKey: 'tool-approval-v1',
+        decisionKey: 'tool-decision-v1',
+        activation: { state: 'disabled' },
+      }],
+      toolConflicts: [{
+        conflictKey: 'tool-conflict-v1',
+        toolName: 'review',
+        selectedCandidateId: 'external-review',
+        candidates: [{
+          candidateId: 'builtin-review',
+          displayName: 'BitFun Review',
+          kind: 'built_in',
+          providerId: 'bitfun.builtin',
+          contentVersion: 'builtin-v1',
+        }, {
+          candidateId: 'external-review',
+          displayName: 'OpenCode Review',
+          kind: 'external',
+          providerId: 'opencode.tools',
+          contentVersion: 'tool-v1',
+          source: { providerId: 'opencode.tools', sourceId: 'project' },
+          sourceLocation: '<workspace>/.opencode/tools/review.js',
+        }],
+      }],
+      subagentGeneration: 4,
+      preferenceRevision: 7,
+      subagents: [{
+        candidateId: 'external-agent-review',
+        logicalId: 'review',
+        displayName: 'OpenCode Review Agent',
+        description: 'Review a change',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [{ providerId: 'opencode.agents', sourceId: 'review' }],
+        sourceLocationLabels: ['<workspace>/.opencode/agents/review.md'],
+        sourceCount: 1,
+        effectiveModelLabel: 'fast',
+        effectiveToolLabels: ['Read'],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'disabled' },
+        decisionKey: 'agent-decision-v1',
+      }],
+      subagentConflicts: [{
+        conflictKey: 'agent-conflict-v1',
+        logicalId: 'review',
+        selectedCandidateId: 'external-agent-review',
+        candidates: [{
+          candidateId: 'builtin-agent-review',
+          displayName: 'BitFun Review Agent',
+          sourceLabel: 'BitFun',
+          external: false,
+        }, {
+          candidateId: 'external-agent-review',
+          displayName: 'OpenCode Review Agent',
+          sourceLabel: 'OpenCode',
+          external: true,
+        }],
+      }],
+      pendingSubagentApprovals: [],
+    };
+    getSnapshotMock.mockResolvedValue(selectedDisabledSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('common.selectedUnavailable');
+    expect(container.textContent).toContain('conflicts.currentSelectionUnavailable');
+    expect(container.textContent).toContain('toolConflicts.currentSelectionUnavailable');
+    expect(container.textContent).toContain('agentConflicts.currentSelectionUnavailable');
   });
 
   it('keeps discovery non-blocking while an initial refresh completes', async () => {

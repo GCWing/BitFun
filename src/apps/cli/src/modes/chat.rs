@@ -23,14 +23,15 @@ use bitfun_events::{AgenticEvent, ToolEventData};
 use resize::ResizeRedrawState;
 
 use crate::actions::{
-    action_by_id, action_for_alias, slash_actions, ActionContext, ActionHandler, ActionSpec,
+    action_by_id, action_conflict_behavior_version, action_for_alias,
+    removed_management_command_hint, slash_actions, ActionContext, ActionHandler, ActionSpec,
     ActionState, ResolvedKeymap,
 };
 use crate::agent::runtime_client::CliAgentRuntimeClient;
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
 use crate::runtime::CliRuntimeContext;
-use crate::ui::agent_selector::AgentItem;
+use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
 use crate::ui::chat::{ChatView, MouseGestureOutcome};
 use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
 use crate::ui::command_palette::PaletteAction;

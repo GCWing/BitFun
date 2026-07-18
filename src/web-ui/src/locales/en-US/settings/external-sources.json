@@ -8,7 +8,11 @@
     "hideDetails": "Hide details",
     "close": "Close",
     "unknown": "Unknown",
-    "technicalDetails": "Technical details"
+    "technicalDetails": "Technical details",
+    "selected": "Currently used",
+    "selectedUnavailable": "Selected, currently unavailable",
+    "notSelected": "Not used",
+    "availableChoice": "Available choice"
   },
   "actions": {
     "refresh": "Refresh",
@@ -96,7 +100,7 @@
     "configurationUnavailable": {
       "reason": "BitFun could not read its model settings.",
       "impact": "{{impact}}",
-      "nextStep": "Open BitFun model settings and confirm they load. If not, restart BitFun. If the problem continues, check that BitFun can read and save its settings; then refresh."
+      "nextStep": "Open BitFun model settings, check that BitFun can read and save its settings, then refresh."
     },
     "modelUnavailable": {
       "reason": "The requested model is not available in BitFun.",
@@ -125,11 +129,14 @@
     }
   },
   "agentConflicts": {
-    "title": "Choose between agents with the same name",
-    "description": "BitFun will not choose one for you. Your choice is remembered until one of these agents changes.",
+    "title": "Agents with the same name",
+    "description": "BitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of these agents changes.",
     "agentName": "Multiple agents are named {{name}}",
     "disableAll": "Do not use any of these",
     "pending": "Choose which agent to use for future tasks. Choosing an external agent also confirms the model, tools, and where it runs as shown below.",
+    "currentSelection": "The current choice is used for new tasks. Choose another option above to change it.",
+    "currentSelectionUnavailable": "This source is still selected, but it is currently disabled or unavailable for new tasks. Enable or repair it, choose another option, or keep this name unavailable.",
+    "keptUnavailable": "This agent name is kept unavailable. Choose an option above when you want to use one.",
     "selectionApproves": "This choice confirms the model, tools, run location, and configuration sources shown below."
   },
   "tools": {
@@ -187,14 +194,16 @@
     "active": "No action needed. Disable these tools to stop using this source's tools.",
     "conflict": "Choose which tool to use below, or leave them disabled.",
     "unsupported": "Change the source to a single JavaScript file supported by BitFun, then refresh.",
-    "runtime_unavailable": "Install or repair Node.js, then restart BitFun to check again.",
+    "runtime_unavailable": "Install or repair Node.js, then refresh. You can continue without these external JavaScript tools while the run environment is unavailable.",
     "load_failed": "Fix the source and refresh, or keep these tools disabled."
   },
   "toolConflicts": {
-    "title": "Choose between tools with the same name",
-    "description": "Until you choose, BitFun keeps using an available local or MCP tool. If none is available, this name stays disabled. You will not be asked again unless the available choices change.",
+    "title": "Tools with the same name",
+    "description": "Pending and current choices stay visible. Until you choose, BitFun keeps using an available local or MCP tool; if none is available, this name stays disabled. Choices are remembered until the available tools change.",
     "toolName": "Multiple tools are named {{name}}",
-    "pending": "Choose which tool to use when this name is called."
+    "pending": "Choose which tool to use when this name is called.",
+    "currentSelection": "The current choice is used for this tool name. Choose another option above to change it.",
+    "currentSelectionUnavailable": "This tool source is still selected, but it is currently disabled or unavailable. Enable or repair it, or choose another tool."
   },
   "toolCandidateKind": {
     "built_in": "Built in",
@@ -226,10 +235,12 @@
     "using_last_valid_version": "Using the last working version"
   },
   "conflicts": {
-    "title": "Choose between commands with the same name",
-    "description": "When multiple sources provide the same command, BitFun will not choose one for you. Your choice is remembered until one of the sources changes.",
+    "title": "Commands with the same name",
+    "description": "BitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of the sources changes.",
     "commandName": "More than one source provides /{{name}}",
     "pending": "Choose an available source to use this command.",
+    "currentSelection": "The current source is used for this command. Choose another available source above to change it.",
+    "currentSelectionUnavailable": "This command source is still selected, but it cannot run in its current state. Choose an available source or fix this source first.",
     "restricted": "Not supported in this version"
   }
 }

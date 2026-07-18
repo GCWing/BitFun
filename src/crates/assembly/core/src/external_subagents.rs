@@ -800,8 +800,6 @@ fn reconcile_conflict_group(
             external: true,
         });
     }
-    conflict_candidates.sort_by(|left, right| left.candidate_id.cmp(&right.candidate_id));
-
     match selected.as_deref() {
         Some(selected_id) if selected_id == DISABLED_SUBAGENT_CONFLICT_CHOICE => {
             state
@@ -1596,6 +1594,11 @@ mod tests {
         assert_eq!(
             preview.routes.get("reviewer"),
             Some(&ExternalSubagentRoute::Unavailable)
+        );
+        assert_eq!(preview.conflicts[0].candidates.len(), 2);
+        assert!(
+            !preview.conflicts[0].candidates[0].external,
+            "the BitFun/local candidate must be shown before external candidates"
         );
         let external_id = preview.conflicts[0]
             .candidates

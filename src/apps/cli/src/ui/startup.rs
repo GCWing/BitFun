@@ -1,4 +1,4 @@
-use super::agent_selector::{AgentItem, AgentSelectorState};
+use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
 use super::login_form::{LoginFormAction, LoginFormState};
@@ -15,8 +15,8 @@ use super::theme::{
 };
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::actions::{
-    action_by_id, action_for_alias, ActionContext, ActionHandler, ActionSpec, ActionState,
-    ResolvedKeymap,
+    action_by_id, action_for_alias, removed_management_command_hint, ActionContext, ActionHandler,
+    ActionSpec, ActionState, ResolvedKeymap,
 };
 use crate::config::CliConfig;
 /// Startup page module
@@ -781,9 +781,8 @@ impl StartupPage {
                 KeyCode::Up => self.agent_selector.move_up(),
                 KeyCode::Down => self.agent_selector.move_down(),
                 KeyCode::Enter => {
-                    if let Some(selected) = self.agent_selector.confirm_selection() {
-                        self.agent_selector.hide();
-                        self.apply_agent_selection(&selected);
+                    if let Some(action) = self.agent_selector.confirm_selection() {
+                        self.handle_agent_selector_action(action);
                     }
                 }
                 KeyCode::Esc => self.navigate_back(),
@@ -998,7 +997,6 @@ impl StartupPage {
             ActionHandler::SwitchAgent => self.cycle_agent(1),
             ActionHandler::SwitchAgentReverse => self.cycle_agent(-1),
             ActionHandler::Skills => self.show_skill_selector(),
-            ActionHandler::Subagents => self.show_subagent_selector(),
             ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
                     prompt: Some("/mcps".to_string()),
@@ -1043,8 +1041,7 @@ impl StartupPage {
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::ClearConversation
             | ActionHandler::ReloadSkills
-            | ActionHandler::ExternalTools
-            | ActionHandler::ExternalAgents
+            | ActionHandler::Tools
             | ActionHandler::History
             | ActionHandler::Interrupt
             | ActionHandler::ToggleFocusedTool
@@ -1112,9 +1109,13 @@ impl StartupPage {
         self.text_input.clear();
         self.refresh_command_menu();
         let Some(action) = action_for_alias(cmd, ActionContext::Startup) else {
-            self.status = Some(format!(
-                "Unknown command: {cmd}. Type /help for available commands."
-            ));
+            self.status = Some(
+                removed_management_command_hint(cmd, ActionContext::Startup)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        format!("Unknown command: {cmd}. Type /help for available commands.")
+                    }),
+            );
             return None;
         };
         self.dispatch_action(action, ActionState::startup(false))
@@ -1697,8 +1698,9 @@ impl StartupPage {
 
         let modes = self.get_mode_agents();
         if modes.is_empty() {
-            self.status = Some("No mode agents available".to_string());
-            return;
+            self.status = Some(
+                "Main agent modes are unavailable; agent management remains available.".to_string(),
+            );
         }
 
         let agent_items: Vec<AgentItem> = modes
@@ -1710,7 +1712,22 @@ impl StartupPage {
             .collect();
 
         self.agent_selector
-            .show(agent_items, Some(self.agent_type.clone()));
+            .show(agent_items, Some(self.agent_type.clone()), false, true);
+    }
+
+    fn handle_agent_selector_action(&mut self, action: AgentSelectorAction) {
+        match action {
+            AgentSelectorAction::SwitchMode(selected) => {
+                self.agent_selector.hide();
+                self.apply_agent_selection(&selected);
+            }
+            AgentSelectorAction::ManageSubagents => self.show_subagent_selector(),
+            AgentSelectorAction::ReviewExternalSources => {
+                self.status = Some(
+                    "External agent sources are available after starting a session.".to_string(),
+                );
+            }
+        }
     }
 
     fn apply_agent_selection(&mut self, selected: &AgentItem) {

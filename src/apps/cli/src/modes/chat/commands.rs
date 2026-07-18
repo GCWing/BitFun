@@ -32,27 +32,29 @@ impl ChatMode {
             chat_view.set_status(Some(format!("Unknown action: {action_id}")));
             return Ok(None);
         };
-        if let Some(collision) = self.native_command_collision_for_action(action.id) {
-            self.remember_native_command_choice(
-                &collision,
-                &collision.native_candidate_id,
-                chat_view,
-                rt_handle,
-            );
-        } else if let Some(reconfirmation) = builtin_command_reconfirmation(
-            action.id,
-            action.name,
-            &self.external_conflict_preferences(),
-        )
-        .filter(|reconfirmation| !reconfirmation.confirmed)
-        {
-            self.remember_command_choice(
-                &reconfirmation.conflict_key,
-                &reconfirmation.candidate_id,
-                vec![reconfirmation.candidate_id.clone()],
-                chat_view,
-                rt_handle,
-            );
+        if !action_opens_extension_management(action) {
+            if let Some(collision) = self.native_command_collision_for_action(action.id) {
+                self.remember_native_command_choice(
+                    &collision,
+                    &collision.native_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            } else if let Some(reconfirmation) = builtin_command_reconfirmation(
+                action.id,
+                action.name,
+                &self.external_conflict_preferences(),
+            )
+            .filter(|reconfirmation| !reconfirmation.confirmed)
+            {
+                self.remember_command_choice(
+                    &reconfirmation.conflict_key,
+                    &reconfirmation.candidate_id,
+                    vec![reconfirmation.candidate_id.clone()],
+                    chat_view,
+                    rt_handle,
+                );
+            }
         }
         self.dispatch_action(
             action,
@@ -89,6 +91,9 @@ impl ChatMode {
         }
         let builtin_alias = format!("/{command_name}");
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
+        let nonmutating_management_subcommand = builtin_action.is_some_and(|action| {
+            action_opens_extension_management(action) && !arguments.trim().is_empty()
+        });
         let mut external = self.external_command_projection(command_name);
         let authoritative_preferences = tokio::task::block_in_place(|| {
             rt_handle
@@ -123,7 +128,7 @@ impl ChatMode {
                     chat_view,
                     rt_handle,
                 );
-            } else if qualifier == CommandQualifier::Builtin {
+            } else if qualifier == CommandQualifier::Builtin && !nonmutating_management_subcommand {
                 self.remember_native_command_choice(
                     &collision,
                     &collision.native_candidate_id,
@@ -131,7 +136,7 @@ impl ChatMode {
                     rt_handle,
                 );
             }
-        } else if qualifier == CommandQualifier::Builtin {
+        } else if qualifier == CommandQualifier::Builtin && !nonmutating_management_subcommand {
             if let Some(reconfirmation) = builtin_reconfirmation
                 .as_ref()
                 .filter(|reconfirmation| !reconfirmation.confirmed)
@@ -161,7 +166,7 @@ impl ChatMode {
                 .is_some_and(|reconfirmation| !reconfirmation.confirmed);
         let unresolved_candidates = self.external_conflict_projections(command_name);
         let can_route_external_tool_review = builtin_action
-            .is_some_and(|action| action.handler == ActionHandler::ExternalTools)
+            .is_some_and(|action| action.handler == ActionHandler::Tools)
             && qualifier != CommandQualifier::External
             && (qualifier == CommandQualifier::Builtin
                 || (external.is_none()
@@ -172,7 +177,8 @@ impl ChatMode {
             return Ok(None);
         }
         let can_route_external_agent_review = builtin_action
-            .is_some_and(|action| action.handler == ActionHandler::ExternalAgents)
+            .is_some_and(|action| action.handler == ActionHandler::OpenAgentSelector)
+            && !arguments.trim().is_empty()
             && qualifier != CommandQualifier::External
             && (qualifier == CommandQualifier::Builtin
                 || (external.is_none()
@@ -246,10 +252,15 @@ impl ChatMode {
             ) {
                 Ok(result) => Ok(result),
                 Err(error) if error.to_string().contains("command not found") => {
-                    chat_state.add_system_message(format!(
-                        "Unknown command: {}\nUse /help or type / to see available commands",
-                        parts[0]
-                    ));
+                    let message = removed_management_command_hint(parts[0], ActionContext::Chat)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| {
+                            format!(
+                                "Unknown command: {}\nUse /help or type / to see available commands",
+                                parts[0]
+                            )
+                        });
+                    chat_state.add_system_message(message);
                     Ok(None)
                 }
                 Err(error) => Err(error),
@@ -591,17 +602,11 @@ impl ChatMode {
             ActionHandler::ReloadSkills => {
                 self.reload_skills_from_disk(chat_view, chat_state, rt_handle);
             }
-            ActionHandler::Subagents => {
-                self.show_subagent_selector(chat_view, chat_state, rt_handle);
-            }
             ActionHandler::McpServers => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);
             }
-            ActionHandler::ExternalTools => {
+            ActionHandler::Tools => {
                 self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
-            }
-            ActionHandler::ExternalAgents => {
-                self.handle_external_agent_review("", chat_view, chat_state, rt_handle);
             }
             ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun-cli"));
@@ -754,4 +759,11 @@ impl ChatMode {
             chat_view.insert_paste(&text);
         }
     }
+}
+
+fn action_opens_extension_management(action: &ActionSpec) -> bool {
+    matches!(
+        action.handler,
+        ActionHandler::Tools | ActionHandler::OpenAgentSelector
+    )
 }

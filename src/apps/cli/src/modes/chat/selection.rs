@@ -456,8 +456,9 @@ impl ChatMode {
     ) {
         let modes = self.get_mode_agents(rt_handle);
         if modes.is_empty() {
-            chat_state.add_system_message("No mode agents available".to_string());
-            return;
+            chat_view.set_status(Some(
+                "Main agent modes are unavailable; agent management remains available.".to_string(),
+            ));
         }
 
         let agent_items: Vec<AgentItem> = modes
@@ -468,7 +469,41 @@ impl ChatMode {
             })
             .collect();
 
-        chat_view.show_agent_selector(agent_items, Some(self.agent_type.clone()));
+        chat_view.show_agent_selector(
+            agent_items,
+            Some(self.agent_type.clone()),
+            true,
+            agent_mode_switch_allowed(chat_state.is_processing),
+        );
+    }
+
+    fn handle_agent_selector_action(
+        &mut self,
+        action: AgentSelectorAction,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        match action {
+            AgentSelectorAction::SwitchMode(selected) => {
+                if !agent_mode_switch_allowed(chat_state.is_processing) {
+                    chat_view.set_status(Some(
+                        "Agent mode cannot be changed during the current turn. Subagent and external source management remain available."
+                            .to_string(),
+                    ));
+                    return;
+                }
+                chat_view.hide_agent_selector();
+                self.apply_agent_selection(&selected, chat_state);
+            }
+            AgentSelectorAction::ManageSubagents => {
+                self.show_subagent_selector(chat_view, chat_state, rt_handle);
+            }
+            AgentSelectorAction::ReviewExternalSources => {
+                chat_view.hide_agent_selector();
+                self.handle_external_agent_review("", chat_view, chat_state, rt_handle);
+            }
+        }
     }
 
     /// Apply agent selection: switch agent type
@@ -498,9 +533,19 @@ impl ChatMode {
     // ============ MCP management ============
 }
 
+fn agent_mode_switch_allowed(is_processing: bool) -> bool {
+    !is_processing
+}
+
 #[cfg(test)]
 mod usage_metadata_tests {
-    use super::{SessionUsageReport, usage_report_metadata};
+    use super::{agent_mode_switch_allowed, usage_report_metadata, SessionUsageReport};
+
+    #[test]
+    fn mode_switch_is_rechecked_when_an_idle_popup_outlives_turn_start() {
+        assert!(agent_mode_switch_allowed(false));
+        assert!(!agent_mode_switch_allowed(true));
+    }
 
     #[test]
     fn usage_metadata_preserves_the_existing_tui_transcript_schema() {

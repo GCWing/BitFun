@@ -212,9 +212,8 @@ impl ChatMode {
                 KeyCode::Up => chat_view.agent_selector_up(),
                 KeyCode::Down => chat_view.agent_selector_down(),
                 KeyCode::Enter => {
-                    if let Some(selected) = chat_view.agent_selector_confirm() {
-                        chat_view.hide_agent_selector();
-                        self.apply_agent_selection(&selected, chat_state);
+                    if let Some(action) = chat_view.agent_selector_confirm() {
+                        self.handle_agent_selector_action(action, chat_view, chat_state, rt_handle);
                     }
                 }
                 // Note: Esc is handled globally for navigation back
@@ -493,6 +492,14 @@ impl ChatMode {
                             .handle_provider_selection(selection, context.chat_view);
                     }
                 } else if context.chat_view.handle_mouse_event(&mouse) {
+                    if let Some(action) = context.chat_view.take_pending_agent_action() {
+                        context.this.handle_agent_selector_action(
+                            action,
+                            context.chat_view,
+                            context.chat_state,
+                            context.rt_handle,
+                        );
+                    }
                     if let Some(action) = context.chat_view.take_pending_skill_action() {
                         context.this.handle_skill_selector_action(
                             action,
@@ -612,5 +619,4 @@ impl ChatMode {
         }
         Ok(outcome)
     }
-
 }
