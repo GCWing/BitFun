@@ -273,6 +273,10 @@ export interface SkillInfo {
   path: string;
   level: SkillLevel;
   sourceSlot: string;
+  /** Provider-neutral ecosystem identity shared by related discovery slots. */
+  sourceId?: string;
+  /** Stable product name supplied by the skill source definition. */
+  sourceLabel?: string;
   dirName: string;
   isBuiltin: boolean;
   groupKey?: string | null;

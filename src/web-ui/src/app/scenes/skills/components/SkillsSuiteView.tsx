@@ -7,6 +7,7 @@ import { configAPI } from '@/infrastructure/api';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
+import { buildSkillCoverageSourceMap } from '@/infrastructure/config/skillSourcePresentation';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import type { SuiteModeId } from '../skillsSceneStore';
@@ -124,11 +125,24 @@ function buildBuiltinSkillGroups(
     });
 }
 
-function buildSkillTitle(skill: ModeSkillInfo, enabled: boolean, t: (key: string) => string): string {
+function buildSkillTitle(
+  skill: ModeSkillInfo,
+  enabled: boolean,
+  shadowed: boolean,
+  dirty: boolean,
+  coverageSource: string,
+  t: (key: string, options?: { source: string }) => string,
+): string {
   return [
     skill.description || skill.name,
-    enabled ? t('suite.groupState.enabled') : t('suite.groupState.disabled'),
-    enabled && skill.isShadowed ? t('list.item.shadowedTooltip') : null,
+    dirty
+      ? t('suite.skillState.pending')
+      : enabled
+        ? t('suite.skillState.enabled')
+        : t('suite.skillState.disabled'),
+    shadowed
+      ? t('suite.skillState.coveredDetail', { source: coverageSource })
+      : null,
   ].filter(Boolean).join('\n');
 }
 
@@ -173,6 +187,10 @@ const SkillsSuiteView: React.FC = () => {
   const draftEnabledKeySet = useMemo(
     () => cloneSet(draftEnabledKeys),
     [draftEnabledKeys],
+  );
+  const coverageSourceBySkillKey = useMemo(
+    () => buildSkillCoverageSourceMap(modeSkills, t('list.item.unknownSource')),
+    [modeSkills, t],
   );
 
   const suiteGroups = useMemo(
@@ -536,7 +554,17 @@ const SkillsSuiteView: React.FC = () => {
                   {group.skills.map((skill) => {
                     const draftEnabled = draftEnabledKeySet.has(skill.key);
                     const dirty = committedEnabledKeySet.has(skill.key) !== draftEnabled;
-                    const shadowed = draftEnabled && skill.isShadowed;
+                    const coverageSource = coverageSourceBySkillKey.get(skill.key)
+                      ?? t('list.item.unknownSource');
+                    const shadowed = draftEnabled && !dirty && coverageSourceBySkillKey.has(skill.key);
+                    const accessibleStatus = buildSkillTitle(
+                      skill,
+                      draftEnabled,
+                      shadowed,
+                      dirty,
+                      coverageSource,
+                      t,
+                    );
 
                     return (
                       <button
@@ -548,7 +576,9 @@ const SkillsSuiteView: React.FC = () => {
                           shadowed ? 'is-shadowed' : '',
                           dirty ? 'is-dirty' : '',
                         ].filter(Boolean).join(' ')}
-                        title={buildSkillTitle(skill, draftEnabled, t)}
+                        title={accessibleStatus}
+                        aria-label={`${skill.name}. ${accessibleStatus}`}
+                        aria-pressed={draftEnabled}
                         disabled={isSaving}
                         onClick={() => {
                           setDraftEnabledKeys((prev) => {
@@ -563,10 +593,20 @@ const SkillsSuiteView: React.FC = () => {
                         }}
                       >
                         <span className="skills-suite__skill-chip-name">{skill.name}</span>
-                        {draftEnabled ? (
+                        {draftEnabled && !shadowed ? (
                           <ShieldCheck size={11} />
                         ) : (
                           <ShieldAlert size={11} />
+                        )}
+                        {shadowed && (
+                          <span className="skills-suite__skill-chip-status">
+                            {t('suite.skillState.covered', { source: coverageSource })}
+                          </span>
+                        )}
+                        {dirty && (
+                          <span className="skills-suite__skill-chip-status">
+                            {t('suite.skillState.pending')}
+                          </span>
                         )}
                       </button>
                     );

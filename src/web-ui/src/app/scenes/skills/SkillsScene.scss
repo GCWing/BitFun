@@ -605,7 +605,12 @@
   }
 
   &.is-shadowed {
-    text-decoration: line-through;
+    background: color-mix(in srgb, var(--color-warning) 10%, var(--element-bg-subtle));
+    border-color: color-mix(in srgb, var(--color-warning) 30%, var(--border-subtle));
+
+    .skills-suite__skill-chip-name {
+      text-decoration: line-through;
+    }
   }
 
   &.is-dirty {
@@ -619,6 +624,13 @@
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skills-suite__skill-chip-status {
+  color: var(--color-warning);
+  font-size: 10px;
+  font-weight: $font-weight-medium;
   white-space: nowrap;
 }
 

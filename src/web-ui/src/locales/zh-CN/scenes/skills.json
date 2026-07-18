@@ -148,6 +148,13 @@
       "disabled": "隐藏",
       "partial": "部分"
     },
+    "skillState": {
+      "enabled": "已为此模式启用",
+      "disabled": "已为此模式禁用",
+      "pending": "未保存",
+      "covered": "已覆盖 · {{source}}",
+      "coveredDetail": "已启用，但此模式会使用 {{source}} 中的同名技能。"
+    },
     "groupCount": "{{total}} 个",
     "messages": {
       "saveSuccess": "已更新 {{mode}} 套件可见性",
@@ -192,17 +199,21 @@
     "item": {
       "user": "用户级",
       "project": "项目级",
+      "localUser": "此设备 · 用户级",
+      "remoteProject": "远程工作区 · 项目级",
       "builtin": "内置",
       "userInstalled": "已安装",
       "detail": "详情",
       "deleteTooltip": "删除",
       "pathLabel": "路径:",
+      "sourceLabel": "来源:",
       "openPathInExplorer": "在资源管理器中打开此文件夹",
       "revealPathUnavailableRemote": "远程工作区无法在本地资源管理器中打开路径",
-      "shadowed": "重复",
-      "shadowedTooltip": "该技能被更高优先级的同名技能覆盖，不会生效。",
-      "shadowedLabel": "被覆盖自:",
-      "shadowedDetail": "技能 key {{key}}"
+      "shadowed": "已覆盖",
+      "shadowedTooltip": "{{source}} 中的同名技能通常具有更高优先级。",
+      "shadowedLabel": "更高优先级来源:",
+      "shadowedDetail": "{{source}} 中的同名技能",
+      "unknownSource": "其他来源"
     }
   },
   "deleteModal": {

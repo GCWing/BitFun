@@ -22,6 +22,11 @@ import { useTranslation } from 'react-i18next';
 import { Badge, Button, ConfirmDialog, Input, Modal, Search, Select } from '@/component-library';
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
+import {
+  buildSkillCoverageSourceMap,
+  findSkillByKey,
+  getSkillSourceLabel,
+} from '@/infrastructure/config/skillSourcePresentation';
 import { workspaceAPI } from '@/infrastructure/api';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useNotification } from '@/shared/notification-system';
@@ -79,7 +84,7 @@ const SkillsScene: React.FC = () => {
   const [installedListPage, setInstalledListPage] = useState(0);
   const [installedSearch, setInstalledSearch] = useState('');
   const [selectedDetail, setSelectedDetail] = useState<
-    | { type: 'installed'; skill: SkillInfo }
+    | { type: 'installed'; skillKey: string }
     | { type: 'market'; skill: SkillMarketItem }
     | null
   >(null);
@@ -93,6 +98,24 @@ const SkillsScene: React.FC = () => {
     () => new Set(installed.skills.map((skill) => skill.name)),
     [installed.skills],
   );
+  const coverageSourceBySkillKey = useMemo(
+    () => buildSkillCoverageSourceMap(installed.skills, t('list.item.unknownSource')),
+    [installed.skills, t],
+  );
+  const selectedInstalledSkill = useMemo(
+    () => findSkillByKey(
+      installed.skills,
+      selectedDetail?.type === 'installed' ? selectedDetail.skillKey : null,
+    ),
+    [installed.skills, selectedDetail],
+  );
+  const selectedMarketSkill = selectedDetail?.type === 'market' ? selectedDetail.skill : null;
+
+  useEffect(() => {
+    if (selectedDetail?.type === 'installed' && !installed.loading && !selectedInstalledSkill) {
+      setSelectedDetail(null);
+    }
+  }, [installed.loading, selectedDetail, selectedInstalledSkill]);
 
   const market = useSkillMarket({
     searchQuery: marketQuery,
@@ -136,9 +159,6 @@ const SkillsScene: React.FC = () => {
       await market.refresh();
     }
   };
-
-  const selectedInstalledSkill = selectedDetail?.type === 'installed' ? selectedDetail.skill : null;
-  const selectedMarketSkill = selectedDetail?.type === 'market' ? selectedDetail.skill : null;
 
   const installedFiltered = useMemo(() => {
     const list = hideDuplicates
@@ -286,13 +306,13 @@ const SkillsScene: React.FC = () => {
                               skill.isShadowed && 'is-shadowed',
                             ].filter(Boolean).join(' ')}
                             style={{ '--surface-stagger-index': index } as React.CSSProperties}
-                            onClick={() => setSelectedDetail({ type: 'installed', skill })}
+                            onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
                             role="button"
                             tabIndex={0}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
-                                setSelectedDetail({ type: 'installed', skill });
+                                setSelectedDetail({ type: 'installed', skillKey: skill.key });
                               }
                             }}
                             aria-label={skill.name}
@@ -323,20 +343,32 @@ const SkillsScene: React.FC = () => {
 
                             <div className="skills-card__meta">
                               {skill.isShadowed && (
-                                <span title={t('list.item.shadowedTooltip')}>
+                                <span title={t('list.item.shadowedTooltip', {
+                                  source: coverageSourceBySkillKey.get(skill.key)
+                                    ?? t('list.item.unknownSource'),
+                                })}>
                                   <Badge variant="warning">
                                     <ShieldAlert size={11} />
                                     {t('list.item.shadowed')}
                                   </Badge>
                                 </span>
                               )}
+                              <Badge variant="neutral">
+                                {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
+                              </Badge>
                               <Badge
                                 variant={skill.level === 'user' ? 'info' : 'purple'}
                               >
                                 {skill.level === 'user'
                                   ? <User size={11} />
                                   : <FolderOpen size={11} />}
-                                {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
+                                {market.isRemoteWorkspace
+                                  ? skill.level === 'user'
+                                    ? t('list.item.localUser')
+                                    : t('list.item.remoteProject')
+                                  : skill.level === 'user'
+                                    ? t('list.item.user')
+                                    : t('list.item.project')}
                               </Badge>
                               {skill.path && (
                                 <button
@@ -361,7 +393,7 @@ const SkillsScene: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="small"
-                                onClick={() => setSelectedDetail({ type: 'installed', skill })}
+                                onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
                               >
                                 <span>{t('list.item.detail')}</span>
                                 <ArrowRight size={12} />
@@ -591,18 +623,30 @@ const SkillsScene: React.FC = () => {
         badges={selectedInstalledSkill ? (
           <>
             {selectedInstalledSkill.isShadowed && (
-              <span title={t('list.item.shadowedTooltip')}>
+              <span title={t('list.item.shadowedTooltip', {
+                source: coverageSourceBySkillKey.get(selectedInstalledSkill.key)
+                  ?? t('list.item.unknownSource'),
+              })}>
                 <Badge variant="warning">
                   <ShieldAlert size={11} />
                   {t('list.item.shadowed')}
                 </Badge>
               </span>
             )}
+            <Badge variant="neutral">
+              {getSkillSourceLabel(selectedInstalledSkill, t('list.item.unknownSource'))}
+            </Badge>
             <Badge variant={selectedInstalledSkill.isBuiltin ? 'accent' : 'success'}>
               {selectedInstalledSkill.isBuiltin ? t('list.item.builtin') : t('list.item.userInstalled')}
             </Badge>
             <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
-              {selectedInstalledSkill.level === 'user' ? t('list.item.user') : t('list.item.project')}
+              {market.isRemoteWorkspace
+                ? selectedInstalledSkill.level === 'user'
+                  ? t('list.item.localUser')
+                  : t('list.item.remoteProject')
+                : selectedInstalledSkill.level === 'user'
+                  ? t('list.item.user')
+                  : t('list.item.project')}
             </Badge>
           </>
         ) : selectedMarketSkill && installedSkillNames.has(selectedMarketSkill.name) ? (
@@ -667,11 +711,20 @@ const SkillsScene: React.FC = () => {
       >
         {selectedInstalledSkill ? (
           <>
+            <div className="bitfun-skills-scene__detail-row">
+              <span className="bitfun-skills-scene__detail-label">{t('list.item.sourceLabel')}</span>
+              <span className="bitfun-skills-scene__detail-value">
+                {getSkillSourceLabel(selectedInstalledSkill, t('list.item.unknownSource'))}
+              </span>
+            </div>
             {selectedInstalledSkill.isShadowed && (
               <div className="bitfun-skills-scene__detail-row">
                 <span className="bitfun-skills-scene__detail-label">{t('list.item.shadowedLabel')}</span>
                 <span className="bitfun-skills-scene__detail-value">
-                  {t('list.item.shadowedDetail', { key: selectedInstalledSkill.shadowedByKey ?? '' })}
+                  {t('list.item.shadowedDetail', {
+                    source: coverageSourceBySkillKey.get(selectedInstalledSkill.key)
+                      ?? t('list.item.unknownSource'),
+                  })}
                 </span>
               </div>
             )}

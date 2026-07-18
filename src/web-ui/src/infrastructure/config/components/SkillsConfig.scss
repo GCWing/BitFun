@@ -67,6 +67,28 @@
     word-break: break-all;
   }
 
+  &__source-badge {
+    color: var(--color-text-secondary);
+  }
+
+  &__covered-badge {
+    color: var(--color-warning);
+    border-color: color-mix(in srgb, var(--color-warning) 32%, var(--border-subtle));
+    background: color-mix(in srgb, var(--color-warning) 10%, var(--element-bg-medium));
+  }
+
+  &__item--covered {
+    .bitfun-collection-item__name {
+      color: var(--color-text-muted);
+      text-decoration: line-through;
+    }
+
+  }
+
+  &__coverage-detail {
+    color: var(--color-text-secondary);
+  }
+
   &__market-toolbar {
     margin-bottom: $size-gap-3;
 

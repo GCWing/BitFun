@@ -1964,10 +1964,13 @@ impl StartupPage {
             name: info.name,
             description: info.description,
             level: info.level.as_str().to_string(),
+            source_slot: info.source_slot,
+            source_label: info.source_label,
             enabled: true,
             selected_for_runtime: true,
             default_enabled: true,
             is_shadowed: info.is_shadowed,
+            shadowed_by_key: info.shadowed_by_key,
         }
     }
 
@@ -1977,10 +1980,13 @@ impl StartupPage {
             name: info.skill.name,
             description: info.skill.description,
             level: info.skill.level.as_str().to_string(),
+            source_slot: info.skill.source_slot,
+            source_label: info.skill.source_label,
             enabled: info.effective_enabled,
             selected_for_runtime: info.selected_for_runtime,
             default_enabled: info.default_enabled,
             is_shadowed: info.skill.is_shadowed,
+            shadowed_by_key: info.skill.shadowed_by_key,
         }
     }
 

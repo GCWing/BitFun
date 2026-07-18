@@ -46,6 +46,11 @@ import {
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { ModeSkillInfo, SubagentModelSelection } from '@/infrastructure/config/types';
+import {
+  buildSkillCoverageSourceMap,
+  formatSkillOrigin,
+  getModeSkillRuntimeStatus,
+} from '@/infrastructure/config/skillSourcePresentation';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useNotification } from '@/shared/notification-system';
 import {
@@ -72,6 +77,7 @@ interface SkillGroup {
   label: string;
   skills: ModeSkillInfo[];
   enabledCount: number;
+  selectedCount: number;
   totalCount: number;
 }
 
@@ -121,15 +127,32 @@ function buildDuplicateSkillNameSet(skills: ModeSkillInfo[]): Set<string> {
   );
 }
 
-function formatSkillOrigin(skill: ModeSkillInfo): string {
-  return `${skill.level}/${skill.sourceSlot}`;
+function formatLocalizedSkillOrigin(
+  skill: ModeSkillInfo,
+  t: TFunction<'scenes/agents'>,
+  workspaceIsRemote: boolean,
+): string {
+  return formatSkillOrigin(skill, {
+    fallbackSourceLabel: t('agentsOverview.unknownSkillSource'),
+    userLabel: workspaceIsRemote
+      ? t('agentsOverview.skillScopeLocalUser')
+      : t('agentsOverview.skillScopeUser'),
+    projectLabel: workspaceIsRemote
+      ? t('agentsOverview.skillScopeRemoteProject')
+      : t('agentsOverview.skillScopeProject'),
+  });
 }
 
-function formatSkillDisplayName(skill: ModeSkillInfo, duplicateNames: Set<string>): string {
+function formatSkillDisplayName(
+  skill: ModeSkillInfo,
+  duplicateNames: Set<string>,
+  t: TFunction<'scenes/agents'>,
+  workspaceIsRemote: boolean,
+): string {
   if (!duplicateNames.has(skill.name)) {
     return skill.name;
   }
-  return `${skill.name} [${formatSkillOrigin(skill)}]`;
+  return `${skill.name} [${formatLocalizedSkillOrigin(skill, t, workspaceIsRemote)}]`;
 }
 
 function getSkillGroupKey(skill: ModeSkillInfo): string {
@@ -155,13 +178,38 @@ function getSkillGroupLabel(groupKey: string, t: TFunction<'scenes/agents'>): st
   }
 }
 
-function getSkillTitle(skill: ModeSkillInfo, t: TFunction<'scenes/agents'>): string {
+function getSkillRuntimeStatusLabel(
+  skill: ModeSkillInfo,
+  coverageSourceBySkillKey: ReadonlyMap<string, string>,
+  t: TFunction<'scenes/agents'>,
+): string | null {
+  const status = getModeSkillRuntimeStatus(
+    skill,
+    coverageSourceBySkillKey,
+    t('agentsOverview.unknownSkillSource'),
+  );
+  switch (status.kind) {
+    case 'selected':
+      return t('agentsOverview.skillRuntimeSelected');
+    case 'covered':
+      return t('agentsOverview.skillRuntimeCovered', { source: status.sourceLabel });
+    case 'enabled':
+      return t('agentsOverview.skillRuntimeEnabled');
+    case 'disabled':
+      return null;
+  }
+}
+
+function getSkillTitle(
+  skill: ModeSkillInfo,
+  coverageSourceBySkillKey: ReadonlyMap<string, string>,
+  t: TFunction<'scenes/agents'>,
+  workspaceIsRemote: boolean,
+): string {
   return [
     skill.description || skill.name,
-    `key: ${skill.key}`,
-    skill.effectiveEnabled && !skill.selectedForRuntime
-      ? t('agentsOverview.skillShadowed')
-      : null,
+    formatLocalizedSkillOrigin(skill, t, workspaceIsRemote),
+    getSkillRuntimeStatusLabel(skill, coverageSourceBySkillKey, t),
   ].filter(Boolean).join('\n');
 }
 
@@ -195,6 +243,7 @@ function buildSkillGroups(
         return a.name.localeCompare(b.name) || a.key.localeCompare(b.key);
       }),
       enabledCount: groupSkills.filter((skill) => enabledSkillKeySet.has(skill.key)).length,
+      selectedCount: groupSkills.filter((skill) => skill.selectedForRuntime).length,
       totalCount: groupSkills.length,
     }))
     .sort((a, b) => {
@@ -239,6 +288,7 @@ const AgentsHomeView: React.FC = () => {
 
   const {
     workspacePath,
+    workspaceIsRemote = false,
     allAgents,
     filteredAgents,
     loading,
@@ -410,6 +460,17 @@ const AgentsHomeView: React.FC = () => {
     () => buildDuplicateSkillNameSet(selectedAgentModeSkills),
     [selectedAgentModeSkills],
   );
+  const selectedAgentCoverageSourceBySkillKey = useMemo(
+    () => buildSkillCoverageSourceMap(
+      selectedAgentModeSkills,
+      t('agentsOverview.unknownSkillSource'),
+    ),
+    [selectedAgentModeSkills, t],
+  );
+  const selectedAgentRuntimeSkillCount = useMemo(
+    () => selectedAgentModeSkills.filter((skill) => skill.selectedForRuntime).length,
+    [selectedAgentModeSkills],
+  );
   const selectedAgentProfileMemberNames = useMemo(() => {
     if (!selectedAgentModeProfile) {
       return [];
@@ -514,7 +575,7 @@ const AgentsHomeView: React.FC = () => {
         key: 'skills',
         icon: Puzzle,
         label: t('agentsOverview.skills'),
-        count: `${(skillsEditing ? (pendingSkills ?? selectedAgentSkills) : selectedAgentSkills).length}/${selectedAgentModeSkills.length}`,
+        count: `${selectedAgentRuntimeSkillCount}/${selectedAgentModeSkills.length}`,
       });
     }
 
@@ -533,7 +594,6 @@ const AgentsHomeView: React.FC = () => {
     return tabs;
   }, [
     userSelectableAvailableTools.length,
-    pendingSkills,
     pendingSubagentIds,
     pendingTools,
     selectedAgent,
@@ -544,9 +604,8 @@ const AgentsHomeView: React.FC = () => {
     selectedAgentHasTaskTool,
     selectedAgentManageableSubagents.length,
     selectedAgentModeSkills.length,
-    selectedAgentSkills,
+    selectedAgentRuntimeSkillCount,
     selectedAgentTools,
-    skillsEditing,
     subagentsEditing,
     t,
     toolsEditing,
@@ -896,7 +955,7 @@ const AgentsHomeView: React.FC = () => {
               <span>{t('agentCard.meta.singleRun')}</span>
             ) : null}
             {selectedAgent.agentKind === 'mode' && selectedAgentHasSkillTool ? (
-              <span>{t('agentCard.meta.skills', { count: selectedAgentSkills.length })}</span>
+              <span>{t('agentCard.meta.skills', { count: selectedAgentRuntimeSkillCount })}</span>
             ) : null}
             {selectedAgent.agentKind === 'mode' && selectedAgentHasTaskTool ? (
               <span>{t('agentCard.meta.subagents', { count: selectedAgentManageableSubagents.filter((subagent) => subagent.effectiveEnabled).length })}</span>
@@ -1270,17 +1329,32 @@ const AgentsHomeView: React.FC = () => {
                                 const displayName = formatSkillDisplayName(
                                   skill,
                                   selectedAgentDuplicateSkillNames,
+                                  t,
+                                  workspaceIsRemote,
+                                );
+                                const runtimeStatus = getModeSkillRuntimeStatus(
+                                  skill,
+                                  selectedAgentCoverageSourceBySkillKey,
+                                  t('agentsOverview.unknownSkillSource'),
+                                );
+                                const runtimeStatusLabel = getSkillRuntimeStatusLabel(
+                                  skill,
+                                  selectedAgentCoverageSourceBySkillKey,
+                                  t,
                                 );
 
                                 return (
                                   <button
                                     key={skill.key}
                                     type="button"
-                                    className={`agent-card__token${isOn ? ' is-on' : ''}`}
-                                    title={getSkillTitle(skill, t)}
+                                    className={`agent-card__token${isOn ? ' is-on' : ''}${runtimeStatus.kind === 'covered' ? ' is-covered' : ''}`}
+                                    title={getSkillTitle(skill, selectedAgentCoverageSourceBySkillKey, t, workspaceIsRemote)}
                                     onClick={() => togglePendingSkill(skill.key)}
                                   >
                                     <span className="agent-card__token-name">{displayName}</span>
+                                    {runtimeStatusLabel ? (
+                                      <span className="agent-card__token-state">{runtimeStatusLabel}</span>
+                                    ) : null}
                                   </button>
                                 );
                               })}
@@ -1304,22 +1378,37 @@ const AgentsHomeView: React.FC = () => {
                                 <div className="agent-card__skill-group-title-wrap">
                                   <span className="agent-card__skill-group-title">{group.label}</span>
                                   <span className="agent-card__skill-group-count">
-                                    {group.enabledCount}
+                                    {group.selectedCount}
                                   </span>
                                 </div>
                               </div>
                               <div className="agent-card__chip-grid">
                                 {group.skills
                                   .filter((skill) => skill.effectiveEnabled)
-                                  .map((skill) => (
-                                    <span
-                                      key={skill.key}
-                                      className="agent-card__chip"
-                                      title={getSkillTitle(skill, t)}
-                                    >
-                                      {formatSkillDisplayName(skill, selectedAgentDuplicateSkillNames)}
-                                    </span>
-                                  ))}
+                                  .map((skill) => {
+                                    const runtimeStatus = getModeSkillRuntimeStatus(
+                                      skill,
+                                      selectedAgentCoverageSourceBySkillKey,
+                                      t('agentsOverview.unknownSkillSource'),
+                                    );
+                                    const runtimeStatusLabel = getSkillRuntimeStatusLabel(
+                                      skill,
+                                      selectedAgentCoverageSourceBySkillKey,
+                                      t,
+                                    );
+                                    return (
+                                      <span
+                                        key={skill.key}
+                                        className={`agent-card__chip${runtimeStatus.kind === 'covered' ? ' is-covered' : ''}`}
+                                        title={getSkillTitle(skill, selectedAgentCoverageSourceBySkillKey, t, workspaceIsRemote)}
+                                      >
+                                        <span>{formatSkillDisplayName(skill, selectedAgentDuplicateSkillNames, t, workspaceIsRemote)}</span>
+                                        {runtimeStatusLabel ? (
+                                          <span className="agent-card__chip-state">{runtimeStatusLabel}</span>
+                                        ) : null}
+                                      </span>
+                                    );
+                                  })}
                               </div>
                             </div>
                           ))

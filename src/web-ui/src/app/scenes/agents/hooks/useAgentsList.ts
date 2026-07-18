@@ -20,6 +20,7 @@ import { HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { isRemoteWorkspace } from '@/shared/types';
 
 export type FilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
 export type FilterType = 'all' | 'mode' | 'subagent';
@@ -162,7 +163,7 @@ export function useAgentsList({
   t,
 }: UseAgentsListOptions) {
   const notification = useNotification();
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspace, workspacePath } = useCurrentWorkspace();
   const [allAgents, setAllAgents] = useState<AgentWithCapabilities[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
@@ -566,6 +567,7 @@ export function useAgentsList({
 
   return {
     workspacePath,
+    workspaceIsRemote: isRemoteWorkspace(workspace),
     allAgents,
     filteredAgents,
     loading,

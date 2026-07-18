@@ -454,8 +454,9 @@ Plugin/Tool、可执行 Skill/Command、MCP/LSP/Formatter、远程 Reference 等
 规则文件优先复用项目已有文件，不复制出第二份内容。若不同生态规则冲突，导入报告必须展示目标文件、
 优先级和冲突段，不能自动拼接。
 
-现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现需要补来源身份、全局/项目作用域、自动应用偏好、
-变化监听和可见性测试。OpenCode 兼容来源继续直接发现官方目录；Codex/Claude 是否增加新的持续来源另行决定。
+现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现已经保留来源身份和全局/项目作用域，并在 GUI/TUI
+展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。变化监听与可见性测试仍需
+后续补齐。OpenCode 兼容来源继续直接发现官方目录；Codex/Claude 是否增加新的持续来源另行决定。
 Skill 说明和索引可按 L1 处理，脚本、URL 和外部依赖按 L2 确认；显式导入仍不得复制凭据值。MCP 启用状态按
 OpenCode 来源解释，首次连接、策略限制和凭据缺失分别显示。
 
