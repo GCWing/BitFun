@@ -18,6 +18,94 @@ import { buildDomPaintOrderMap } from './paint-order.js';
 export const PT_PER_PX = 0.75;
 export const PX_PER_IN = 96;
 
+export function createSvgViewportMapper(svg, svgRect) {
+  const values = String(svg.getAttribute('viewBox') || `0 0 ${svgRect.width} ${svgRect.height}`)
+    .trim().split(/[\s,]+/).map(Number);
+  const [viewBoxX = 0, viewBoxY = 0, viewBoxWidth = svgRect.width, viewBoxHeight = svgRect.height] = values;
+  const raw = String(svg.getAttribute('preserveAspectRatio') || 'xMidYMid meet').trim();
+  const parts = raw.split(/\s+/).filter(Boolean);
+  const align = parts.find((part) => /^(?:none|x(?:Min|Mid|Max)Y(?:Min|Mid|Max))$/.test(part))
+    || 'xMidYMid';
+  const mode = parts.includes('slice') ? 'slice' : 'meet';
+  const naturalXScale = svgRect.width / (viewBoxWidth || svgRect.width);
+  const naturalYScale = svgRect.height / (viewBoxHeight || svgRect.height);
+  let xScale = naturalXScale;
+  let yScale = naturalYScale;
+  let offsetX = 0;
+  let offsetY = 0;
+  if (align !== 'none') {
+    const scale = mode === 'slice'
+      ? Math.max(naturalXScale, naturalYScale)
+      : Math.min(naturalXScale, naturalYScale);
+    xScale = scale;
+    yScale = scale;
+    const remainingX = svgRect.width - viewBoxWidth * scale;
+    const remainingY = svgRect.height - viewBoxHeight * scale;
+    offsetX = align.startsWith('xMid') ? remainingX / 2 : align.startsWith('xMax') ? remainingX : 0;
+    offsetY = align.includes('YMid') ? remainingY / 2 : align.includes('YMax') ? remainingY : 0;
+  }
+  return {
+    xScale,
+    yScale,
+    map(point) {
+      return {
+        x: svgRect.left + offsetX + (point.x - viewBoxX) * xScale,
+        y: svgRect.top + offsetY + (point.y - viewBoxY) * yScale,
+      };
+    },
+  };
+}
+
+export function classifySvgPresetPolygon(points) {
+  if (!Array.isArray(points)) return null;
+  const tolerance = 1e-6;
+  if (points.length === 3) {
+    for (let left = 0; left < points.length; left += 1) {
+      for (let right = left + 1; right < points.length; right += 1) {
+        const apex = points.find((_point, index) => index !== left && index !== right);
+        const baseMidpoint = {
+          x: (points[left].x + points[right].x) / 2,
+          y: (points[left].y + points[right].y) / 2,
+        };
+        if (Math.abs(points[left].x - points[right].x) <= tolerance
+          && Math.abs(apex.y - baseMidpoint.y) <= tolerance
+          && Math.abs(apex.x - baseMidpoint.x) > tolerance) {
+          return { shapeType: 'triangle', rotate: apex.x > baseMidpoint.x ? 90 : 270 };
+        }
+        if (Math.abs(points[left].y - points[right].y) <= tolerance
+          && Math.abs(apex.x - baseMidpoint.x) <= tolerance
+          && Math.abs(apex.y - baseMidpoint.y) > tolerance) {
+          return { shapeType: 'triangle', rotate: apex.y > baseMidpoint.y ? 180 : 0 };
+        }
+      }
+    }
+    return null;
+  }
+  if (points.length !== 4) return null;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const expected = [
+    { x: centerX, y: minY },
+    { x: maxX, y: centerY },
+    { x: centerX, y: maxY },
+    { x: minX, y: centerY },
+  ];
+  const matches = expected.every((target) => points.some((point) => (
+    Math.abs(point.x - target.x) <= tolerance && Math.abs(point.y - target.y) <= tolerance
+  )));
+  return matches ? { shapeType: 'diamond', rotate: 0 } : null;
+}
+
+function clipsOverflowAxis(value) {
+  return value === 'hidden' || value === 'clip';
+}
+
 export function measureBodyDimensions(doc = document) {
   const view = doc.defaultView || window;
   const body = doc.body;
@@ -33,11 +121,21 @@ export function measureBodyDimensions(doc = document) {
   const heightOverflowPx = Math.max(0, bodyDimensions.scrollHeight - bodyDimensions.height - 1);
   const widthOverflowPt = widthOverflowPx * PT_PER_PX;
   const heightOverflowPt = heightOverflowPx * PT_PER_PX;
-  if (widthOverflowPt > 0 || heightOverflowPt > 0) {
+  const overflowX = style.overflowX || style.overflow || 'visible';
+  const overflowY = style.overflowY || style.overflow || 'visible';
+  const clipsX = clipsOverflowAxis(overflowX);
+  const clipsY = clipsOverflowAxis(overflowY);
+  // Slide bodies use overflow:hidden as the canvas clip frame (also enforced by
+  // ensureExportCanvas). Decorative bleed/rotation expands scrollWidth/Height
+  // while remaining visually clipped — same as PowerPoint off-slide shapes.
+  // Only unclipped overflow is a blocking canvas error; text bounds stay separate.
+  const reportWidth = widthOverflowPx > 0 && !clipsX;
+  const reportHeight = heightOverflowPx > 0 && !clipsY;
+  if (reportWidth || reportHeight) {
     const directions = [];
-    if (widthOverflowPt > 0) directions.push(`${widthOverflowPt.toFixed(1)}pt horizontally`);
-    if (heightOverflowPt > 0) directions.push(`${heightOverflowPt.toFixed(1)}pt vertically`);
-    const reminder = heightOverflowPt > 0 ? ' (Remember: leave 0.5" margin at bottom of slide)' : '';
+    if (reportWidth) directions.push(`${widthOverflowPt.toFixed(1)}pt horizontally`);
+    if (reportHeight) directions.push(`${heightOverflowPt.toFixed(1)}pt vertically`);
+    const reminder = reportHeight ? ' (Remember: leave 0.5" margin at bottom of slide)' : '';
     errors.push(`HTML content overflows body by ${directions.join(' and ')}${reminder}`);
   }
   return { ...bodyDimensions, errors };
@@ -118,6 +216,13 @@ export function extractSlideDataFromDocument(doc = document) {
       // Handle transparent backgrounds by defaulting to white
       if (rgbStr === 'rgba(0, 0, 0, 0)' || rgbStr === 'transparent') return 'FFFFFF';
 
+      const hex = String(rgbStr || '').trim().match(/^#([\da-f]{3,8})$/i)?.[1];
+      if (hex) {
+        if (hex.length === 3 || hex.length === 4) {
+          return hex.slice(0, 3).split('').map((channel) => channel.repeat(2)).join('');
+        }
+        return hex.slice(0, 6);
+      }
       const match = rgbStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
       if (!match) return 'FFFFFF';
       return match.slice(1).map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
@@ -243,9 +348,18 @@ export function extractSlideDataFromDocument(doc = document) {
       };
     };
 
-    // Parse CSS box-shadow into PptxGenJS shadow properties
+    // Parse CSS box-shadow into either:
+    // - { mode: 'outer', shadow } native PowerPoint outer shadow (zero spread)
+    // - { mode: 'ring', ring } zero-offset/zero-blur spread ring → concentric shape rewrite
+    // Returns null for none / unsupported (inset, multi-layer, soft+spread, etc.).
     const parseBoxShadow = (boxShadow) => {
       if (!boxShadow || boxShadow === 'none') return null;
+      let nesting = 0;
+      for (const character of boxShadow) {
+        if (character === '(') nesting += 1;
+        else if (character === ')') nesting = Math.max(0, nesting - 1);
+        else if (character === ',' && nesting === 0) return null;
+      }
 
       // Browser computed style format: "rgba(0, 0, 0, 0.3) 2px 2px 8px 0px [inset]"
       // CSS format: "[inset] 2px 2px 8px 0px rgba(0, 0, 0, 0.3)"
@@ -256,17 +370,44 @@ export function extractSlideDataFromDocument(doc = document) {
       // Only process outer shadows to avoid file corruption
       if (insetMatch) return null;
 
-      // Extract color first (rgba or rgb at start)
-      const colorMatch = boxShadow.match(/rgba?\([^)]+\)/);
-
-      // Extract numeric values (handles both px and pt units)
-      const parts = boxShadow.match(/([-\d.]+)(px|pt)/g);
+      // Extract color first (rgba/rgb/hex); length tokens may be unitless 0.
+      const colorMatch = boxShadow.match(/rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}/);
+      const withoutColor = boxShadow
+        .replace(/rgba?\([^)]+\)/g, ' ')
+        .replace(/#[0-9a-fA-F]{3,8}/g, ' ');
+      // CSS allows unitless 0; browsers often keep "0 0 0 1px" in authored/computed forms.
+      const parts = withoutColor.match(/-?\d*\.?\d+(?:px|pt)?/g);
 
       if (!parts || parts.length < 2) return null;
 
       const offsetX = parseFloat(parts[0]);
       const offsetY = parseFloat(parts[1]);
       const blur = parts.length > 2 ? parseFloat(parts[2]) : 0;
+      const spread = parts.length > 3 ? parseFloat(parts[3]) : 0;
+      if (![offsetX, offsetY, blur, spread].every(Number.isFinite) || blur < 0) return null;
+
+      // Extract opacity from rgba
+      let opacity = 0.5;
+      if (colorMatch) {
+        const opacityMatch = colorMatch[0].match(/[\d.]+\)$/);
+        if (opacityMatch) {
+          opacity = parseFloat(opacityMatch[0].replace(')', ''));
+        }
+      }
+      if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) return null;
+      const color = colorMatch ? rgbToHex(colorMatch[0]) : '000000';
+      if (!color) return null;
+
+      // Hard CSS ring: 0 offset, 0 blur, positive > 0 → concentric editable shape.
+      if (spread !== 0) {
+        if (offsetX === 0 && offsetY === 0 && blur === 0 && spread > 0) {
+          return {
+            mode: 'ring',
+            ring: { spreadPx: spread, color, opacity },
+          };
+        }
+        return null;
+      }
 
       // Calculate angle from offsets (in degrees, 0 = right, 90 = down)
       let angle = 0;
@@ -278,24 +419,20 @@ export function extractSlideDataFromDocument(doc = document) {
       // Calculate offset distance (hypotenuse)
       const offset = Math.sqrt(offsetX * offsetX + offsetY * offsetY) * PT_PER_PX;
 
-      // Extract opacity from rgba
-      let opacity = 0.5;
-      if (colorMatch) {
-        const opacityMatch = colorMatch[0].match(/[\d.]+\)$/);
-        if (opacityMatch) {
-          opacity = parseFloat(opacityMatch[0].replace(')', ''));
-        }
-      }
-
       return {
-        type: 'outer',
-        angle: Math.round(angle),
-        blur: blur * 0.75, // Convert to points
-        color: colorMatch ? rgbToHex(colorMatch[0]) : '000000',
-        offset: offset,
-        opacity
+        mode: 'outer',
+        shadow: {
+          type: 'outer',
+          angle: Math.round(angle),
+          blur: blur * 0.75, // Convert to points
+          color,
+          offset,
+          opacity,
+        },
       };
     };
+
+    const outerShadowOf = (effect) => (effect?.mode === 'outer' ? effect.shadow : null);
 
     // Parse inline formatting tags (<b>, <i>, <u>, <strong>, <em>, <span>) into text runs
     const parseInlineFormatting = (element, baseOptions = {}, runs = [], baseTextTransform = (x) => x) => {
@@ -339,16 +476,16 @@ export function extractSlideDataFromDocument(doc = document) {
 
             // Validate: Check for margins on inline elements
             if (computed.marginLeft && parseFloat(computed.marginLeft) > 0) {
-              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-left; fallback layout may be needed.`, node);
+              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-left.`, node);
             }
             if (computed.marginRight && parseFloat(computed.marginRight) > 0) {
-              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-right; fallback layout may be needed.`, node);
+              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-right.`, node);
             }
             if (computed.marginTop && parseFloat(computed.marginTop) > 0) {
-              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-top; fallback layout may be needed.`, node);
+              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-top.`, node);
             }
             if (computed.marginBottom && parseFloat(computed.marginBottom) > 0) {
-              addDiagnostic('fallback', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has margin-bottom; fallback layout may be needed.`, node);
+              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-bottom.`, node);
             }
 
             // Recursively process the child node. This will flatten nested spans into multiple runs.
@@ -369,6 +506,26 @@ export function extractSlideDataFromDocument(doc = document) {
     };
 
     const isTransparentBg = (color) => !color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)';
+
+    const authoredStyleValue = (element, property) => {
+      const authored = element?.dataset?.pptxAuthoredStyle || '';
+      const match = authored.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, 'i'));
+      return match?.[1]?.trim() || '';
+    };
+
+    const elementBoxShadow = (element, computed) => (
+      [computed?.boxShadow, element?.style?.boxShadow, authoredStyleValue(element, 'box-shadow')]
+        .find((value) => value && value !== 'none') || 'none'
+    );
+
+    const elementBackgroundColor = (element, computed) => {
+      if (!isTransparentBg(computed.backgroundColor)) return computed.backgroundColor;
+      return element.style.backgroundColor
+        || authoredStyleValue(element, 'background-color')
+        || element.style.background
+        || authoredStyleValue(element, 'background')
+        || computed.backgroundColor;
+    };
 
     const resolveSlideBackground = (rootBody) => {
       const candidates = [
@@ -499,6 +656,40 @@ export function extractSlideDataFromDocument(doc = document) {
       elements.push(entry);
     };
 
+    const pushCssRingBackdrop = (el, rectPx, rectRadius, ring) => {
+      if (!ring || !rectPx || !(rectPx.width > 0) || !(rectPx.height > 0)) return;
+      const spreadIn = pxToInch(ring.spreadPx);
+      if (!(spreadIn > 0)) return;
+      const ringRadius = rectRadius === 1 || !Number.isFinite(rectRadius) || rectRadius <= 0
+        ? rectRadius
+        : rectRadius + spreadIn;
+      const transparency = Math.round((1 - ring.opacity) * 100);
+      pushElement({
+        type: 'shape',
+        text: '',
+        rewrite: 'css_box_shadow_ring',
+        position: {
+          x: pxToInch(rectPx.left) - spreadIn,
+          y: pxToInch(rectPx.top) - spreadIn,
+          w: pxToInch(rectPx.width) + spreadIn * 2,
+          h: pxToInch(rectPx.height) + spreadIn * 2,
+        },
+        shape: {
+          fill: ring.color,
+          transparency: Number.isFinite(transparency) ? transparency : null,
+          line: null,
+          rectRadius: ringRadius || 0,
+          shadow: null,
+        },
+      }, el);
+      addDiagnostic(
+        'rewrite',
+        'css_box_shadow_ring',
+        'CSS ring box-shadow was rewritten as a concentric editable shape.',
+        el,
+      );
+    };
+
     const resolveListBulletColor = (ul, liElements, textHex) => {
       const ulComputed = view.getComputedStyle(ul);
       const listColor = ulComputed.listStyleColor;
@@ -523,9 +714,9 @@ export function extractSlideDataFromDocument(doc = document) {
     const bgResolved = resolveSlideBackground(body);
     if (bgResolved.gradient) {
       addDiagnostic(
-        'fallback',
+        'rewrite',
         'css_gradient',
-        'CSS gradient requires fallback rendering; native gradient mapping is not available.',
+        'CSS gradient will be rewritten as editable solid strips.',
         bgResolved.element || body,
       );
     }
@@ -537,7 +728,6 @@ export function extractSlideDataFromDocument(doc = document) {
 
     // Process all elements
     const elements = [];
-    const slideDataFallbackLayers = [];
     const placeholders = [];
     const textTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI'];
     const genericInlineTextTags = new Set([
@@ -569,8 +759,9 @@ export function extractSlideDataFromDocument(doc = document) {
     };
 
     const resolveTextAlign = (computed) => {
-      if (computed.textAlign && !['start', 'auto'].includes(computed.textAlign)) {
-        return computed.textAlign === 'end' ? 'right' : computed.textAlign;
+      if (computed.textAlign === 'end') return 'right';
+      if (['left', 'center', 'right', 'justify'].includes(computed.textAlign)) {
+        return computed.textAlign;
       }
       if (computed.display.includes('flex')) {
         if (computed.justifyContent === 'center') return 'center';
@@ -604,12 +795,13 @@ export function extractSlideDataFromDocument(doc = document) {
     // visual line spacing of the HTML preview.
     const resolveLineSpacing = (computed) => {
       const lh = computed.lineHeight;
+      const fontSize = pxToPoints(computed.fontSize) || 12;
       if (!lh || lh === 'normal') {
-        return pxToPoints(computed.fontSize) * 1.2;
+        return fontSize * 1.2;
       }
       const parsed = parseFloat(lh);
-      if (Number.isNaN(parsed)) return pxToPoints(computed.fontSize) * 1.2;
-      return pxToPoints(lh);
+      if (Number.isNaN(parsed)) return fontSize * 1.2;
+      return pxToPoints(lh) || fontSize * 1.2;
     };
 
     const emitTextElement = (el, type = el.tagName.toLowerCase(), exactFrame = false, rectOverride = null) => {
@@ -619,7 +811,7 @@ export function extractSlideDataFromDocument(doc = document) {
 
       if (type !== 'text' && el.tagName !== 'LI' && /^[•●○▪‣·▸◆◇■□]\s/u.test(text.trimStart())) {
         addDiagnostic(
-          'fallback',
+          'blocking',
           'manual_bullet_unrepaired',
           `Text element <${el.tagName.toLowerCase()}> still starts with a manual bullet; exporting as editable text.`,
           el,
@@ -648,13 +840,13 @@ export function extractSlideDataFromDocument(doc = document) {
       const padR = parseFloat(computed.paddingRight) || 0;
       const padT = parseFloat(computed.paddingTop) || 0;
       const padB = parseFloat(computed.paddingBottom) || 0;
-      const textInset = [padL, padR, padT, padB].some((v) => v > 0)
-        ? [pxToInch(padL), pxToInch(padR), pxToInch(padB), pxToInch(padT)]
+      const textInset = [padT, padR, padB, padL].some((v) => v > 0)
+        ? [pxToInch(padT), pxToInch(padR), pxToInch(padB), pxToInch(padL)]
         : 0;
 
       const baseStyle = {
-        fontSize: pxToPoints(computed.fontSize),
-        fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
+        fontSize: pxToPoints(computed.fontSize) || 12,
+        fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim() || 'Arial',
         color: resolveTextColor(computed, el),
         align: resolveTextAlign(computed),
         valign: resolveVerticalAlign(computed, rect),
@@ -735,6 +927,14 @@ export function extractSlideDataFromDocument(doc = document) {
     const svgNumber = (value, fallback = 0) => {
       const parsed = parseFloat(String(value || ''));
       return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const svgDashStyle = (value) => {
+      const values = String(value || '').match(/[-+]?(?:\d*\.)?\d+/g)?.map(Number)
+        .filter((item) => Number.isFinite(item) && item >= 0) || [];
+      if (!values.length) return null;
+      if (values.length >= 4 && values[2] <= values[0] * 0.5) return 'dashDot';
+      if (values.length >= 2 && values[0] <= values[1] * 0.5) return 'dot';
+      return 'dash';
     };
     const identityMatrix = () => [1, 0, 0, 1, 0, 0];
     const multiplyMatrix = (left, right) => [
@@ -898,67 +1098,6 @@ export function extractSlideDataFromDocument(doc = document) {
       }
       return points;
     };
-    const svgStyleProperties = [
-      'fill', 'fill-opacity', 'fill-rule',
-      'stroke', 'stroke-width', 'stroke-opacity', 'stroke-linecap', 'stroke-linejoin',
-      'stroke-dasharray', 'stroke-dashoffset',
-      'opacity', 'color', 'vector-effect',
-    ];
-    const resolvedSvgStyle = (element, property) => {
-      let current = element;
-      while (current) {
-        const value = String(
-          view.getComputedStyle(current).getPropertyValue(property) || '',
-        ).trim();
-        if (value && !['inherit', 'unset', 'initial'].includes(value)) return value;
-        if (['opacity', 'vector-effect'].includes(property)) break;
-        current = current.parentElement;
-      }
-      return '';
-    };
-    const inlineComputedSvgStyles = (original, clone) => {
-      svgStyleProperties.forEach((property) => {
-        const value = resolvedSvgStyle(original, property);
-        if (value) clone.style.setProperty(property, value);
-      });
-      const originalChildren = [...original.children];
-      const cloneChildren = [...clone.children];
-      originalChildren.forEach((child, index) => {
-        if (cloneChildren[index]) inlineComputedSvgStyles(child, cloneChildren[index]);
-      });
-    };
-    const serializeSvgVisual = (svg, node) => {
-      const rootClone = svg.cloneNode(false);
-      rootClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      if (!rootClone.getAttribute('width')) rootClone.setAttribute('width', '100%');
-      if (!rootClone.getAttribute('height')) rootClone.setAttribute('height', '100%');
-      inlineComputedSvgStyles(svg, rootClone);
-
-      [...svg.querySelectorAll('defs')].forEach((defs) => {
-        const defsClone = defs.cloneNode(true);
-        inlineComputedSvgStyles(defs, defsClone);
-        rootClone.appendChild(defsClone);
-      });
-
-      const ancestors = [];
-      let current = node.parentElement;
-      while (current && current !== svg) {
-        ancestors.unshift(current);
-        current = current.parentElement;
-      }
-      let targetParent = rootClone;
-      ancestors.forEach((ancestor) => {
-        const ancestorClone = ancestor.cloneNode(false);
-        inlineComputedSvgStyles(ancestor, ancestorClone);
-        targetParent.appendChild(ancestorClone);
-        targetParent = ancestorClone;
-      });
-      const targetClone = node.cloneNode(true);
-      inlineComputedSvgStyles(node, targetClone);
-      targetClone.querySelectorAll?.('text').forEach((text) => text.remove());
-      targetParent.appendChild(targetClone);
-      return `data:image/svg+xml,${encodeURIComponent(rootClone.outerHTML)}`;
-    };
     const boundsOfPoints = (points) => {
       const xs = points.map((point) => point.x);
       const ys = points.map((point) => point.y);
@@ -969,29 +1108,12 @@ export function extractSlideDataFromDocument(doc = document) {
         height: Math.max(...ys) - Math.min(...ys),
       };
     };
-    const isDiamondPoints = (points) => {
-      if (points.length !== 4) return false;
-      const bounds = boundsOfPoints(points);
-      const cx = bounds.left + bounds.width / 2;
-      const cy = bounds.top + bounds.height / 2;
-      const tolerance = Math.max(bounds.width, bounds.height) * 0.08 + 0.01;
-      return points.every((point) => (
-        Math.abs(point.x - cx) <= tolerance || Math.abs(point.y - cy) <= tolerance
-      ));
-    };
     const emitNativeSvg = (svg) => {
       const svgRect = rectFor(svg);
       if (svgRect.width <= 0 || svgRect.height <= 0) return;
-      const viewBox = String(svg.getAttribute('viewBox') || `0 0 ${svgRect.width} ${svgRect.height}`)
-        .trim().split(/[\s,]+/).map(Number);
-      const [vbX = 0, vbY = 0, vbW = svgRect.width, vbH = svgRect.height] = viewBox;
-      const xScale = svgRect.width / (vbW || svgRect.width);
-      const yScale = svgRect.height / (vbH || svgRect.height);
-      const fallbackLayers = slideDataFallbackLayers;
-      const toSlidePoint = (point) => ({
-        x: svgRect.left + ((point.x - vbX) * xScale),
-        y: svgRect.top + ((point.y - vbY) * yScale),
-      });
+      const viewportMapper = createSvgViewportMapper(svg, svgRect);
+      const { xScale, yScale } = viewportMapper;
+      const toSlidePoint = (point) => viewportMapper.map(point);
       const pushLine = (start, end, node, stroke, width, coordinateSpace = 'viewBox') => {
         const toLinePoint = (point) => (
           coordinateSpace === 'viewport'
@@ -1000,6 +1122,14 @@ export function extractSlideDataFromDocument(doc = document) {
         );
         const first = toLinePoint(start);
         const second = toLinePoint(end);
+        const dashArray = node.getAttribute?.('stroke-dasharray')
+          || view.getComputedStyle(node).strokeDasharray;
+        const dash = svgDashStyle(dashArray);
+        const lineStyle = {
+          color: stroke || '000000',
+          width,
+          ...(dash ? { dash } : {}),
+        };
         pushElement({
           type: 'line',
           kind: 'native',
@@ -1007,68 +1137,23 @@ export function extractSlideDataFromDocument(doc = document) {
           y1: pxToInch(first.y),
           x2: pxToInch(second.x),
           y2: pxToInch(second.y),
-          color: stroke || '000000',
-          width,
+          color: lineStyle.color,
+          width: lineStyle.width,
+          style: lineStyle,
         }, node);
-      };
-      const hasBrowserOnlySvg = Boolean(
-        svg.querySelector('filter,mask,foreignObject,use,pattern,textPath,clipPath,image'),
-      );
-      const canSerializeSvgVisual = (node) => (
-        !svg.querySelector('script')
-        && !/(?:href|src)\s*=\s*["']\s*(?:https?:)?\/\//i.test(node.outerHTML || '')
-      );
-      const pushSvgImageLayer = (node, code, message) => {
-        if (!canSerializeSvgVisual(node)) {
-          addDiagnostic(
-            'fallback',
-            'complex_svg_raster',
-            'Complex SVG cannot be safely serialized and requires local browser raster rendering.',
-            svg,
-          );
-          return;
-        }
-        const paintMetadata = nextPaintMetadata(node);
-        fallbackLayers.push({
-          sourceId: paintMetadata.sourceId,
-          zIndex: readZIndex(node),
-          paintOrder: paintMetadata.paintOrder,
-          subOrder: paintMetadata.subOrder,
-          kind: 'svg-image',
-          captureStrategy: 'local-svg',
-          bbox: {
-            x: pxToInch(svgRect.left),
-            y: pxToInch(svgRect.top),
-            w: pxToInch(svgRect.width),
-            h: pxToInch(svgRect.height),
-          },
-          data: serializeSvgVisual(svg, node),
-          diagnostics: [{
-            severity: 'fallback',
-            code,
-            message,
-            sourceId: node.dataset?.pptxSourceId || node.id || null,
-          }],
-        });
       };
       svg.querySelectorAll('rect,circle,ellipse,line,polyline,polygon,text,path').forEach((node) => {
         const tag = node.tagName.toLowerCase();
         if (tag === 'path') {
-          if (!hasBrowserOnlySvg) {
-            pushSvgImageLayer(
-              node,
-              'complex_svg_vector',
-              'Complex SVG geometry is preserved as a local movable vector image.',
-            );
-          }
           return;
         }
         const transform = transformForSvgNode(node, svg);
         if (!transform.reliable) {
-          pushSvgImageLayer(
+          addDiagnostic(
+            'blocking',
+            'svg_transform_unsupported',
+            'SVG transform cannot be represented reliably as an editable native shape.',
             node,
-            'svg_transform_vector',
-            'SVG transform cannot be represented reliably as a native shape; preserving it as SVG.',
           );
           return;
         }
@@ -1116,6 +1201,13 @@ export function extractSlideDataFromDocument(doc = document) {
           ]);
           common.position = { x: pxToInch(layoutBounds.left), y: pxToInch(layoutBounds.top), w: pxToInch(layoutBounds.width), h: pxToInch(layoutBounds.height) };
           common.bbox = { x: pxToInch(bounds.left), y: pxToInch(bounds.top), w: pxToInch(bounds.width), h: pxToInch(bounds.height) };
+          const rx = svgNumber(node.getAttribute('rx'));
+          const ry = svgNumber(node.getAttribute('ry'));
+          if (rx > 0 || ry > 0) {
+            common.svgType = 'roundRect';
+            common.shape.rectRadius = pxToInch(Math.max(rx, ry));
+            common.shape.radius = pxToInch(rx * xScale);
+          }
           if (transform.rotation) common.shape.rotate = transform.rotation;
         } else if (tag === 'circle' || tag === 'ellipse') {
           const rx = tag === 'circle' ? svgNumber(node.getAttribute('r')) : svgNumber(node.getAttribute('rx'));
@@ -1147,16 +1239,73 @@ export function extractSlideDataFromDocument(doc = document) {
           common.text = node.textContent || '';
           const fontSize = svgNumber(node.getAttribute('font-size'), 16);
           const origin = mapPoint(node.getAttribute('x'), svgNumber(node.getAttribute('y')) - fontSize);
-          common.position = { x: pxToInch(origin.x), y: pxToInch(origin.y), w: pxToInch(Math.max(1, svgRect.width)), h: pxToInch(Math.max(1, fontSize * yScale * 1.3)) };
-          common.style = { fontSize: svgNumber(node.getAttribute('font-size'), 16) * 0.75, fontFace: 'Arial', color: fill || '000000', align: 'left' };
+          const textAnchor = node.getAttribute('text-anchor')
+            || view.getComputedStyle(node).textAnchor
+            || 'start';
+          let measuredBox = null;
+          try {
+            const bbox = node.getBBox?.();
+            if (bbox && [bbox.x, bbox.y, bbox.width, bbox.height].every(Number.isFinite)
+              && bbox.width > 0 && bbox.height > 0) {
+              const bounds = boundsOfPoints([
+                mapPoint(bbox.x, bbox.y),
+                mapPoint(bbox.x + bbox.width, bbox.y + bbox.height),
+              ]);
+              measuredBox = {
+                x: bounds.left,
+                y: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+              };
+            }
+          } catch {
+            // Fall through to text length or deterministic character metrics.
+          }
+          let userWidth = 0;
+          if (!measuredBox) {
+            try {
+              userWidth = Number(node.getComputedTextLength?.()) || 0;
+            } catch {
+              userWidth = 0;
+            }
+            if (!(userWidth > 0)) {
+              userWidth = [...common.text].reduce((sum, character) => (
+                sum + (/[\u1100-\u11ff\u2e80-\u9fff\uf900-\ufaff\uff01-\uff60\uffe0-\uffe6]/u.test(character)
+                  ? fontSize
+                  : fontSize * 0.6)
+              ), 0);
+            }
+            const textWidth = Math.max(1, userWidth * xScale);
+            const anchorOffset = textAnchor === 'middle' ? textWidth / 2 : textAnchor === 'end' ? textWidth : 0;
+            measuredBox = {
+              x: Math.max(0, origin.x - anchorOffset),
+              y: origin.y,
+              width: textWidth,
+              height: Math.max(1, fontSize * yScale * 1.3),
+            };
+          }
+          common.position = {
+            x: pxToInch(measuredBox.x),
+            y: pxToInch(measuredBox.y),
+            w: pxToInch(measuredBox.width),
+            h: pxToInch(measuredBox.height),
+          };
+          common.style = {
+            fontSize: svgNumber(node.getAttribute('font-size'), 16) * 0.75,
+            fontFace: 'Arial',
+            color: fill || '000000',
+            align: { start: 'left', middle: 'center', end: 'right' }[textAnchor] || 'left',
+          };
           if (transform.rotation) common.style.rotate = transform.rotation;
         } else {
-          const points = parseSvgPoints(node.getAttribute('points'))
+          const rawPoints = parseSvgPoints(node.getAttribute('points'));
+          const points = rawPoints
             .map((point) => transformPoint(point, transform.matrix));
-          if (tag === 'polygon' && (points.length === 3 || isDiamondPoints(points))) {
+          const preset = tag === 'polygon' ? classifySvgPresetPolygon(points) : null;
+          if (preset) {
             const slidePoints = points.map(transformedToSlidePoint);
             const bounds = boundsOfPoints(slidePoints);
-            common.svgType = points.length === 3 ? 'triangle' : 'diamond';
+            common.svgType = preset.shapeType;
             common.position = {
               x: pxToInch(bounds.left),
               y: pxToInch(bounds.top),
@@ -1164,7 +1313,7 @@ export function extractSlideDataFromDocument(doc = document) {
               h: pxToInch(bounds.height),
             };
             common.bbox = { ...common.position };
-            if (transform.rotation) common.shape.rotate = transform.rotation;
+            common.shape.rotate = preset.rotate;
           } else {
             const closed = tag === 'polygon' && points.length > 2 ? [...points, points[0]] : points;
             for (let index = 0; index + 1 < closed.length; index += 1) {
@@ -1176,29 +1325,6 @@ export function extractSlideDataFromDocument(doc = document) {
                 lineWidth,
                 transform.coordinateSpace,
               );
-            }
-            if (tag === 'polygon' && fill && points.length > 2) {
-              const sourceId = node.dataset?.pptxSourceId || node.id || null;
-              fallbackLayers.push({
-                sourceId,
-                zIndex: readZIndex(node),
-                paintOrder: domPaintOrder.get(sourceId) ?? unmappedPaintOrder++,
-                subOrder: -1,
-                kind: 'svg-image',
-                bbox: {
-                  x: pxToInch(svgRect.left),
-                  y: pxToInch(svgRect.top),
-                  w: pxToInch(svgRect.width),
-                  h: pxToInch(svgRect.height),
-                },
-                data: serializeSvgVisual(svg, node),
-                diagnostics: [{
-                  severity: 'fallback',
-                  code: 'svg_polygon_fill',
-                  message: 'Polygon fill is preserved as a local SVG layer over an editable outline.',
-                  sourceId: node.dataset?.pptxSourceId || node.id || null,
-                }],
-              });
             }
             return;
           }
@@ -1232,9 +1358,9 @@ export function extractSlideDataFromDocument(doc = document) {
         // Reject nested merge containers — undefined behavior.
         if (el.querySelector('[data-pptx-merge="true"]')) {
           addDiagnostic(
-            'fallback',
+            'blocking',
             'nested_merge_container',
-            'Nested data-pptx-merge containers require fallback handling.',
+            'Nested data-pptx-merge containers cannot be represented as editable text.',
             el,
           );
           processed.add(el);
@@ -1246,9 +1372,9 @@ export function extractSlideDataFromDocument(doc = document) {
         // Container background image — same restriction as regular divs.
         if (mergeComputed.backgroundImage && mergeComputed.backgroundImage !== 'none') {
           addDiagnostic(
-            'fallback',
+            'blocking',
             'merge_background_image',
-            'Background image on data-pptx-merge requires fallback rendering.',
+            'Background image on data-pptx-merge cannot be represented as editable objects.',
             el,
           );
         }
@@ -1265,6 +1391,22 @@ export function extractSlideDataFromDocument(doc = document) {
         const mHasUniformBorder = mHasBorder && mBorders.every(b => b === mBorders[0]);
 
         if (mHasBg || mHasUniformBorder) {
+          const mergeRectRadius = (() => {
+            const radius = mergeComputed.borderRadius;
+            const radiusValue = parseFloat(radius);
+            if (radiusValue === 0) return 0;
+            if (radius.includes('%')) {
+              if (radiusValue >= 50) return 1;
+              const minDim = Math.min(containerRect.width, containerRect.height);
+              return (radiusValue / 100) * pxToInch(minDim);
+            }
+            if (radius.includes('pt')) return radiusValue / 72;
+            return radiusValue / PX_PER_IN;
+          })();
+          const mergeShadowEffect = parseBoxShadow(elementBoxShadow(el, mergeComputed));
+          if (mergeShadowEffect?.mode === 'ring') {
+            pushCssRingBackdrop(el, containerRect, mergeRectRadius, mergeShadowEffect.ring);
+          }
           pushElement({
             type: 'shape',
             text: '',
@@ -1281,19 +1423,8 @@ export function extractSlideDataFromDocument(doc = document) {
                 color: rgbToHex(mergeComputed.borderColor),
                 width: pxToPoints(mergeComputed.borderWidth)
               } : null,
-              rectRadius: (() => {
-                const radius = mergeComputed.borderRadius;
-                const radiusValue = parseFloat(radius);
-                if (radiusValue === 0) return 0;
-                if (radius.includes('%')) {
-                  if (radiusValue >= 50) return 1;
-                  const minDim = Math.min(containerRect.width, containerRect.height);
-                  return (radiusValue / 100) * pxToInch(minDim);
-                }
-                if (radius.includes('pt')) return radiusValue / 72;
-                return radiusValue / PX_PER_IN;
-              })(),
-              shadow: parseBoxShadow(mergeComputed.boxShadow)
+              rectRadius: mergeRectRadius,
+              shadow: outerShadowOf(mergeShadowEffect),
             }
           }, el);
         }
@@ -1302,7 +1433,7 @@ export function extractSlideDataFromDocument(doc = document) {
         const textDescendants = Array.from(el.querySelectorAll('p, h1, h2, h3, h4, h5, h6'));
         if (textDescendants.length === 0) {
           addDiagnostic(
-            'fallback',
+            'blocking',
             'empty_merge_container',
             'data-pptx-merge container has no semantic text children.',
             el,
@@ -1322,14 +1453,16 @@ export function extractSlideDataFromDocument(doc = document) {
         const mPadT = pxToInch(parseFloat(mergeComputed.paddingTop) || 0);
         const mPadB = pxToInch(parseFloat(mergeComputed.paddingBottom) || 0);
         const baseStyle = {
-          fontSize: pxToPoints(firstComputed.fontSize),
-          fontFace: firstComputed.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
+          fontSize: pxToPoints(firstComputed.fontSize) || 12,
+          fontFace: firstComputed.fontFamily.split(',')[0].replace(/['"]/g, '').trim() || 'Arial',
           color: rgbToHex(firstComputed.color),
-          align: firstComputed.textAlign === 'start' ? 'left' : firstComputed.textAlign,
+          align: !firstComputed.textAlign || firstComputed.textAlign === 'start'
+            ? 'left'
+            : firstComputed.textAlign,
           lineSpacing: resolveLineSpacing(firstComputed),
           paraSpaceBefore: 0,
           paraSpaceAfter: 0,
-          margin: [mPadL, mPadR, mPadB, mPadT].some((v) => v > 0) ? [mPadL, mPadR, mPadB, mPadT] : 0,
+          margin: [mPadT, mPadR, mPadB, mPadL].some((v) => v > 0) ? [mPadT, mPadR, mPadB, mPadL] : 0,
         };
         const baseTransparency = extractAlpha(firstComputed.color);
         if (baseTransparency !== null) baseStyle.transparency = baseTransparency;
@@ -1342,8 +1475,9 @@ export function extractSlideDataFromDocument(doc = document) {
           const transformStr = tComputed.textTransform;
 
           // Per-paragraph style overrides — only include if they differ from base.
-          const elemFontSize = pxToPoints(tComputed.fontSize);
-          const elemFontFace = tComputed.fontFamily.split(',')[0].replace(/['"]/g, '').trim();
+          const elemFontSize = pxToPoints(tComputed.fontSize) || baseStyle.fontSize;
+          const elemFontFace = tComputed.fontFamily.split(',')[0].replace(/['"]/g, '').trim()
+            || baseStyle.fontFace;
           const elemColor = rgbToHex(tComputed.color);
           const elemBold = tComputed.fontWeight === 'bold' || parseInt(tComputed.fontWeight) >= 600;
           const elemItalic = tComputed.fontStyle === 'italic';
@@ -1430,6 +1564,20 @@ export function extractSlideDataFromDocument(doc = document) {
             if (solid.fill || hasUniformBorder) {
               const radius = computed.borderRadius;
               const radiusValue = parseFloat(radius);
+              const decoRectRadius = (() => {
+                if (!radiusValue) return 0;
+                if (radius.includes('%')) {
+                  if (radiusValue >= 50) return 1;
+                  const minDim = Math.min(decoRect.width, decoRect.height);
+                  return (radiusValue / 100) * pxToInch(minDim);
+                }
+                if (radius.includes('pt')) return radiusValue / 72;
+                return radiusValue / PX_PER_IN;
+              })();
+              const decoShadowEffect = parseBoxShadow(elementBoxShadow(el, computed));
+              if (decoShadowEffect?.mode === 'ring') {
+                pushCssRingBackdrop(el, decoRect, decoRectRadius, decoShadowEffect.ring);
+              }
               pushElement({
                 type: 'shape',
                 text: '',
@@ -1446,17 +1594,8 @@ export function extractSlideDataFromDocument(doc = document) {
                     color: rgbToHex(computed.borderColor),
                     width: pxToPoints(computed.borderWidth),
                   } : null,
-                  rectRadius: (() => {
-                    if (!radiusValue) return 0;
-                    if (radius.includes('%')) {
-                      if (radiusValue >= 50) return 1;
-                      const minDim = Math.min(decoRect.width, decoRect.height);
-                      return (radiusValue / 100) * pxToInch(minDim);
-                    }
-                    if (radius.includes('pt')) return radiusValue / 72;
-                    return radiusValue / PX_PER_IN;
-                  })(),
-                  shadow: parseBoxShadow(computed.boxShadow),
+                  rectRadius: decoRectRadius,
+                  shadow: outerShadowOf(decoShadowEffect),
                 },
               }, el);
             }
@@ -1472,7 +1611,7 @@ export function extractSlideDataFromDocument(doc = document) {
         const rect = rectFor(el);
         if (rect.width === 0 || rect.height === 0) {
           addDiagnostic(
-            'fallback',
+            'blocking',
             'unmeasurable_placeholder',
             `Placeholder "${el.id || 'unnamed'}" has ${rect.width === 0 ? 'width: 0' : 'height: 0'}.`,
             el,
@@ -1509,8 +1648,11 @@ export function extractSlideDataFromDocument(doc = document) {
         }
       }
 
-      // Common CSS arrow: a zero-sized box with one opaque border and
-      // transparent side borders maps cleanly to an editable PPT triangle.
+      // Common CSS arrow: an empty transparent box with one opaque border and
+      // the two perpendicular transparent side borders maps cleanly to an
+      // editable PPT triangle. WebKit may report the total border-box size as
+      // computed width/height for authored zero-content border boxes, so the
+      // classification must use border semantics rather than computed size.
       if (el.tagName === 'DIV') {
         const computed = view.getComputedStyle(el);
         const isZeroBox = svgNumber(computed.width) === 0 && svgNumber(computed.height) === 0;
@@ -1522,13 +1664,31 @@ export function extractSlideDataFromDocument(doc = document) {
         const opaqueSides = sides.filter((side) => (
           side.width > 0 && !isTransparentBg(side.color)
         ));
-        if (isZeroBox && opaqueSides.length === 1 && sides.filter((side) => side.width > 0).length >= 3) {
-          const active = opaqueSides[0];
+        const transparentSides = sides.filter((side) => (
+          side.width > 0 && isTransparentBg(side.color)
+        ));
+        const perpendicularSides = {
+          Bottom: ['Left', 'Right'],
+          Left: ['Top', 'Bottom'],
+          Top: ['Left', 'Right'],
+          Right: ['Top', 'Bottom'],
+        };
+        const active = opaqueSides[0];
+        const requiredTransparentSides = active ? perpendicularSides[active.side] : [];
+        const hasNoVisibleContent = !el.textContent.replace(/\s+/g, '').length
+          && el.children.length === 0;
+        const hasTransparentBackground = isTransparentBg(elementBackgroundColor(el, computed));
+        const formsDirectionalTriangle = requiredTransparentSides.length === 2
+          && requiredTransparentSides.every((side) => (
+            transparentSides.some((candidate) => candidate.side === side)
+          ));
+        const isSemanticCssTriangle = hasNoVisibleContent
+          && hasTransparentBackground
+          && opaqueSides.length === 1
+          && transparentSides.length >= 2
+          && formsDirectionalTriangle;
+        if (isSemanticCssTriangle) {
           const rect = rectFor(el);
-          const horizontal = sides.find((side) => side.side === 'Left').width
-            + sides.find((side) => side.side === 'Right').width;
-          const vertical = sides.find((side) => side.side === 'Top').width
-            + sides.find((side) => side.side === 'Bottom').width;
           const rotations = { Bottom: 0, Left: 90, Top: 180, Right: 270 };
           pushElement({
             type: 'svg-shape',
@@ -1536,10 +1696,10 @@ export function extractSlideDataFromDocument(doc = document) {
             kind: 'native',
             text: '',
             position: {
-              x: pxToInch(rect.left - sides.find((side) => side.side === 'Left').width),
-              y: pxToInch(rect.top - sides.find((side) => side.side === 'Top').width),
-              w: pxToInch(Math.max(1, horizontal)),
-              h: pxToInch(Math.max(1, vertical)),
+              x: pxToInch(rect.left),
+              y: pxToInch(rect.top),
+              w: pxToInch(Math.max(1, rect.width)),
+              h: pxToInch(Math.max(1, rect.height)),
             },
             shape: {
               fill: rgbToHex(active.color),
@@ -1558,15 +1718,16 @@ export function extractSlideDataFromDocument(doc = document) {
       const isContainer = containerTags.has(el.tagName);
       if (isContainer) {
         const computed = view.getComputedStyle(el);
-        const hasBg = computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)';
+        const backgroundColor = elementBackgroundColor(el, computed);
+        const hasBg = !isTransparentBg(backgroundColor);
 
         // Check for background images on shapes
         const bgImage = computed.backgroundImage;
         if (bgImage && bgImage !== 'none') {
           addDiagnostic(
-            'fallback',
+            'blocking',
             'container_background_image',
-            'Container background image requires fallback rendering.',
+            'Container background image cannot be represented as editable objects.',
             el,
           );
         }
@@ -1640,12 +1801,16 @@ export function extractSlideDataFromDocument(doc = document) {
             return;
           }
           if (rect.width > 0 && rect.height > 0) {
-            const shadow = parseBoxShadow(computed.boxShadow);
+            const shadowEffect = parseBoxShadow(elementBoxShadow(el, computed));
+            const rotation = getRotation(computed.transform)
+              || getRotation(el.style?.transform)
+              || getRotation(authoredStyleValue(el, 'transform'));
+            const placed = getPositionAndSize(el, rect, rotation);
 
             // Only add shape if there's background or uniform border
             if (hasBg || hasUniformBorder) {
               const solid = hasBg
-                ? resolveSolidFill(computed.backgroundColor, slideBackdropHex)
+                ? resolveSolidFill(backgroundColor, slideBackdropHex)
                 : { fill: null, transparency: null };
               let fillHex = solid.fill;
               let fillTransparency = solid.transparency;
@@ -1653,14 +1818,44 @@ export function extractSlideDataFromDocument(doc = document) {
                 fillHex = rgbToHex(computed.borderColor) || '2A2A30';
                 fillTransparency = fillTransparency ?? 88;
               }
+              // Convert border-radius to rectRadius (in inches)
+              // % values: 50%+ = circle (1), <50% = percentage of min dimension
+              // pt values: divide by 72 (72pt = 1 inch)
+              // px values: divide by 96 (96px = 1 inch)
+              const shapeRectRadius = (() => {
+                const radius = computed.borderRadius
+                  || el.style.borderRadius
+                  || authoredStyleValue(el, 'border-radius');
+                const radiusValue = parseFloat(radius);
+                if (radiusValue === 0) return 0;
+
+                if (radius.includes('%')) {
+                  if (radiusValue >= 50) return 1;
+                  // Calculate percentage of smaller dimension
+                  const minDim = Math.min(placed.w, placed.h);
+                  return (radiusValue / 100) * pxToInch(minDim);
+                }
+
+                if (radius.includes('pt')) return radiusValue / 72;
+                return radiusValue / PX_PER_IN;
+              })();
+              const placedRect = {
+                left: placed.x,
+                top: placed.y,
+                width: placed.w,
+                height: placed.h,
+              };
+              if (shadowEffect?.mode === 'ring') {
+                pushCssRingBackdrop(el, placedRect, shapeRectRadius, shadowEffect.ring);
+              }
               pushElement({
                 type: 'shape',
                 text: '',  // Shape only - child text elements render on top
                 position: {
-                  x: pxToInch(rect.left),
-                  y: pxToInch(rect.top),
-                  w: pxToInch(rect.width),
-                  h: pxToInch(rect.height)
+                  x: pxToInch(placed.x),
+                  y: pxToInch(placed.y),
+                  w: pxToInch(placed.w),
+                  h: pxToInch(placed.h)
                 },
                 shape: {
                   fill: fillHex,
@@ -1669,26 +1864,9 @@ export function extractSlideDataFromDocument(doc = document) {
                     color: rgbToHex(computed.borderColor),
                     width: pxToPoints(computed.borderWidth)
                   } : null,
-                  // Convert border-radius to rectRadius (in inches)
-                  // % values: 50%+ = circle (1), <50% = percentage of min dimension
-                  // pt values: divide by 72 (72pt = 1 inch)
-                  // px values: divide by 96 (96px = 1 inch)
-                  rectRadius: (() => {
-                    const radius = computed.borderRadius;
-                    const radiusValue = parseFloat(radius);
-                    if (radiusValue === 0) return 0;
-
-                    if (radius.includes('%')) {
-                      if (radiusValue >= 50) return 1;
-                      // Calculate percentage of smaller dimension
-                      const minDim = Math.min(rect.width, rect.height);
-                      return (radiusValue / 100) * pxToInch(minDim);
-                    }
-
-                    if (radius.includes('pt')) return radiusValue / 72;
-                    return radiusValue / PX_PER_IN;
-                  })(),
-                  shadow: shadow
+                  rectRadius: shapeRectRadius,
+                  shadow: outerShadowOf(shadowEffect),
+                  ...(rotation != null ? { rotate: rotation } : {}),
                 }
               }, el);
             }
@@ -1768,17 +1946,17 @@ export function extractSlideDataFromDocument(doc = document) {
             h: pxToInch(listFrame.h)
           },
           style: {
-            fontSize: pxToPoints(computed.fontSize),
-            fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
+            fontSize: pxToPoints(computed.fontSize) || 12,
+            fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim() || 'Arial',
             color: textHex,
             bulletColor,
             transparency: extractAlpha(computed.color),
-            align: computed.textAlign === 'start' ? 'left' : computed.textAlign,
+            align: resolveTextAlign(computed),
             lineSpacing: resolveLineSpacing(computed),
             paraSpaceBefore: 0,
-            paraSpaceAfter: pxToPoints(computed.marginBottom),
-            // PptxGenJS margin array is [left, right, bottom, top]
-            margin: [marginLeft, ulPadR, ulPadB, ulPadT]
+            paraSpaceAfter: pxToPoints(computed.marginBottom) || 0,
+            // PptxGenJS margin array is [top, right, bottom, left].
+            margin: [ulPadT, ulPadR, ulPadB, marginLeft / 72]
           }
         }, el);
 
@@ -1807,21 +1985,21 @@ export function extractSlideDataFromDocument(doc = document) {
       const computed = view.getComputedStyle(element);
       const filter = String(computed.filter || element.style?.filter || '');
       if (filter && filter !== 'none') {
-        addDiagnostic('fallback', 'css_filter', 'CSS filter requires fallback rendering.', element);
+        addDiagnostic('blocking', 'css_filter', 'CSS filter cannot be represented as editable objects.', element);
       }
       if (String(element.tagName).toUpperCase() === 'SVG') {
         if (element.querySelector('filter,mask,foreignObject,use,pattern,textPath,clipPath,image')) {
           addDiagnostic(
-            'fallback',
-            'complex_svg_raster',
-            'SVG filter, mask, or foreignObject requires local browser raster rendering.',
+            'blocking',
+            'complex_svg_unsupported',
+            'SVG filter, mask, or foreignObject cannot be represented as editable objects.',
             element,
           );
         } else if (element.querySelector('path')) {
           addDiagnostic(
-            'fallback',
-            'complex_svg_vector',
-            'Complex SVG geometry is preserved as a local SVG image.',
+            'rewrite',
+            'svg_path_rewrite',
+            'SVG path geometry will be rewritten as editable line segments.',
             element,
           );
         }
@@ -1831,19 +2009,9 @@ export function extractSlideDataFromDocument(doc = document) {
     const blockingErrors = diagnostics
       .filter((diagnostic) => diagnostic.severity === 'blocking')
       .map((diagnostic) => diagnostic.message);
-    slideDataFallbackLayers.sort((a, b) => {
-      const z = (a.zIndex ?? 0) - (b.zIndex ?? 0);
-      if (z !== 0) return z;
-      const order = (a.paintOrder ?? 0) - (b.paintOrder ?? 0);
-      if (order !== 0) return order;
-      const sub = (a.subOrder ?? 0) - (b.subOrder ?? 0);
-      if (sub !== 0) return sub;
-      return (a.stableOrder ?? 0) - (b.stableOrder ?? 0);
-    });
     return {
       background,
       elements,
-      fallbackLayers: slideDataFallbackLayers,
       placeholders,
       diagnostics,
       errors: blockingErrors,

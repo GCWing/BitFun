@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 
+import {
+  EditableExportError,
+  validateEditableSlideScene,
+} from '../src/editable-slide-scene.js';
+import { normalizeDocumentToEditableScene } from '../src/editable-slide-normalize.js';
 import { extractSlideDataFromDocument } from '../src/html2pptx-dom-core.js';
-import { buildSlideFromExtracted } from '../src/pptx-html-build.js';
+import { buildSlideFromScene } from '../src/pptx-html-build.js';
 import { sanitizeSlideDocumentRoot } from '../src/sanitize-slide-html.js';
 import {
   HTML_ALLOWED_TAGS,
@@ -11,13 +16,6 @@ import {
   isAllowedSanitizedAttribute,
   sanitizeSlideDocument,
 } from '../src/sanitize-slide-markup.js';
-import {
-  buildPageVisualFallbackRequest,
-  buildRasterFallbackRequests,
-  buildWholePageVisualFallbackRequest,
-  renderRasterFallbackPlan,
-  renderRasterFallbackLayers,
-} from '../src/fallback-layer-render.js';
 import {
   formatLocalizedExportDiagnostic,
   sanitizeDiagnosticSourceId,
@@ -30,11 +28,137 @@ const requireFromWebUi = createRequire(
 );
 const { JSDOM, VirtualConsole } = requireFromWebUi('jsdom');
 
+test('editable scene rejects fallback fields with located diagnostics', () => {
+  for (const fallbackField of ['rasterBase64', 'renderRaster']) {
+    const scene = {
+      slideNumber: 3,
+      width: 13.333,
+      height: 7.5,
+      nodes: [],
+      [fallbackField]: null,
+    };
+
+    assert.throws(
+      () => validateEditableSlideScene(scene),
+      (error) => {
+        assert.ok(error instanceof EditableExportError);
+        assert.deepEqual(
+          {
+            slideNumber: error.diagnostic.slideNumber,
+            sourceId: error.diagnostic.sourceId,
+            code: error.diagnostic.code,
+          },
+          {
+            slideNumber: 3,
+            sourceId: 'slide-3',
+            code: 'editable_scene_fallback_forbidden',
+          },
+        );
+        return true;
+      },
+      fallbackField,
+    );
+  }
+});
+
+test('normalizes an allowed hr element into one native editable line', () => {
+  const doc = createDocument(`
+    <hr data-pptx-source-id="section-rule" style="
+      position:absolute;left:96px;top:192px;width:384px;height:0;
+      margin:0;border:0;border-top:2px dashed #123456">
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  doc.querySelector('hr').getBoundingClientRect = () => ({
+    x: 96, y: 192, left: 96, top: 192, right: 480, bottom: 192,
+    width: 384, height: 0,
+  });
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 4,
+    width: 1280 / 96,
+    height: 720 / 96,
+  });
+  const rules = scene.nodes.filter((node) => node.sourceId === 'section-rule');
+
+  assert.equal(rules.length, 1);
+  assert.deepEqual(rules[0], {
+    type: 'line',
+    sourceId: 'section-rule',
+    x1: 1,
+    y1: 2,
+    x2: 5,
+    y2: 2,
+    paintOrder: 1,
+    subOrder: 0,
+    zIndex: 0,
+    style: {
+      color: '123456',
+      width: 1.5,
+      dash: 'dash',
+      dashType: 'dash',
+    },
+  });
+});
+
+test('blocks SVG defs geometry and local paint-server fills with structured diagnostics', () => {
+  const cases = [
+    {
+      sourceId: 'hidden-def-shape',
+      code: 'svg_defs_geometry_unsupported',
+      markup: `<svg viewBox="0 0 100 100">
+        <defs><rect data-pptx-source-id="hidden-def-shape" width="80" height="80" fill="#fff"/></defs>
+      </svg>`,
+    },
+    {
+      sourceId: 'gradient-shape',
+      code: 'svg_paint_server_unsupported',
+      markup: `<svg viewBox="0 0 100 100">
+        <defs><linearGradient id="paint"><stop offset="0" stop-color="#fff"/></linearGradient></defs>
+        <rect data-pptx-source-id="gradient-shape" width="80" height="80" fill="url(#paint)"/>
+      </svg>`,
+    },
+    {
+      sourceId: 'pattern-line',
+      code: 'svg_paint_server_unsupported',
+      markup: `<svg viewBox="0 0 100 100">
+        <defs><pattern id="paint" width="4" height="4"></pattern></defs>
+        <line data-pptx-source-id="pattern-line" x2="80" y2="80" stroke="url(#paint)"/>
+      </svg>`,
+    },
+  ];
+
+  for (const { sourceId, code, markup } of cases) {
+    const doc = createDocument(markup);
+    sanitizeSlideDocumentRoot(doc);
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 9,
+        width: 1280 / 96,
+        height: 720 / 96,
+      }),
+      (error) => error instanceof EditableExportError
+        && error.slideNumber === 9
+        && error.sourceId === sourceId
+        && error.code === code,
+      sourceId,
+    );
+  }
+});
+
 function createSilentDom(markup, options = {}) {
   return new JSDOM(markup, {
     ...options,
     virtualConsole: new VirtualConsole(),
   });
+}
+
+function decodeSvgLayerMarkup(data) {
+  const raw = String(data || '');
+  const comma = raw.indexOf(',');
+  const header = raw.slice(0, comma);
+  const payload = raw.slice(comma + 1);
+  if (/;base64$/i.test(header)) return Buffer.from(payload, 'base64').toString('utf8');
+  return decodeURIComponent(payload);
 }
 
 function createDocument(bodyHtml, css = '') {
@@ -86,6 +210,1132 @@ function installMeasurableLayout(doc) {
     detach() {},
   });
 }
+
+test('normalizes CSS border triangles in all four directions as editable native triangles', () => {
+  const directions = [
+    ['bottom', 0],
+    ['left', 90],
+    ['top', 180],
+    ['right', 270],
+  ];
+  const doc = createDocument(directions.map(([side]) => `
+    <div data-pptx-source-id="triangle-${side}" style="
+      width:0;height:0;
+      border-top:20px solid transparent;
+      border-right:20px solid transparent;
+      border-bottom:20px solid transparent;
+      border-left:20px solid transparent;
+      border-${side}-color:rgb(255,0,0)">
+    </div>
+  `).join(''));
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 2, width: 13.333, height: 7.5,
+  });
+
+  directions.forEach(([side, rotate]) => {
+    const node = scene.nodes.find((item) => item.sourceId === `triangle-${side}`);
+    assert.equal(node?.type, 'shape', side);
+    assert.equal(node?.shapeType, 'triangle', side);
+    assert.equal(node?.style.rotate, rotate, side);
+  });
+});
+
+test('normalizes rounded SVG rects, anchored text, and dashed lines', () => {
+  const doc = createDocument(`
+    <svg viewBox="0 0 100 100">
+      <rect data-pptx-source-id="rounded" x="5" y="5" width="40" height="20"
+        rx="3.3333333333333335" ry="3.3333333333333335"/>
+      <text data-pptx-source-id="anchored" x="50" y="50" text-anchor="middle">Centered</text>
+      <line data-pptx-source-id="dashed" x1="0" y1="80" x2="100" y2="80"
+        stroke="#123456" stroke-dasharray="6 3"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  assert.equal(scene.nodes.find((node) => node.sourceId === 'rounded')?.shapeType, 'roundRect');
+  assert.equal(scene.nodes.find((node) => node.sourceId === 'anchored')?.style.align, 'center');
+  assert.equal(scene.nodes.find((node) => node.sourceId === 'dashed')?.style.dash, 'dash');
+});
+
+test('normalizes a DOM table as one native node with measured grid and complete cell formatting', () => {
+  const doc = createDocument(`
+    <table data-pptx-source-id="quality-table"
+      style="font-family:Arial;font-size:16px;border-collapse:collapse">
+      <tr>
+        <th colspan="2" class="styled-header">
+          <span style="color:#ffffff">Head</span><strong style="color:#ffeeaa;font-weight:700">er</strong>
+        </th>
+        <th style="background:#223344">Metric</th>
+      </tr>
+      <tr>
+        <td style="background:#ffffff">A</td>
+        <td colspan="2" style="background:#f0f1f2">Wide value</td>
+      </tr>
+      <tr>
+        <td rowspan="2" style="background:#ddeeff;vertical-align:bottom">Merged</td>
+        <td style="background:#ffffff">B1</td>
+        <td style="background:#ffffff">C1</td>
+      </tr>
+      <tr>
+        <td style="background:#ffffff">B2</td>
+        <td style="background:#ffffff">C2</td>
+      </tr>
+    </table>
+  `, `
+    .styled-header {
+      background:#112233;
+      padding:8px 12px 10px 14px;
+      border-top:1px solid #101010;
+      border-right:2px solid #202020;
+      border-bottom:3px solid #303030;
+      border-left:4px solid #404040;
+      text-align:center;
+      vertical-align:middle;
+      font-weight:700;
+    }
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const rect = (left, top, width, height) => ({
+    x: left, y: top, left, top, width, height,
+    right: left + width, bottom: top + height,
+  });
+  const table = doc.querySelector('table');
+  const rows = [...table.rows];
+  const cells = rows.map((row) => [...row.cells]);
+  table.getBoundingClientRect = () => rect(96, 120, 600, 204);
+  rows.forEach((row, index) => {
+    const heights = [60, 48, 48, 48];
+    const top = 120 + heights.slice(0, index).reduce((sum, value) => sum + value, 0);
+    row.getBoundingClientRect = () => rect(96, top, 600, heights[index]);
+  });
+  [
+    [rect(96, 120, 360, 60), rect(456, 120, 240, 60)],
+    [rect(96, 180, 120, 48), rect(216, 180, 480, 48)],
+    [rect(96, 228, 120, 96), rect(216, 228, 240, 48), rect(456, 228, 240, 48)],
+    [rect(216, 276, 240, 48), rect(456, 276, 240, 48)],
+  ].forEach((rowRects, rowIndex) => {
+    rowRects.forEach((cellRect, cellIndex) => {
+      cells[rowIndex][cellIndex].getBoundingClientRect = () => cellRect;
+    });
+  });
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 3, width: 13.333, height: 7.5,
+  });
+  const tables = scene.nodes.filter((node) => node.type === 'table');
+  assert.equal(tables.length, 1);
+  const node = tables[0];
+  assert.equal(node.sourceId, 'quality-table');
+  assert.deepEqual(node.columnWidths, [1.25, 2.5, 2.5]);
+  assert.deepEqual(node.rows.map((row) => row.height), [0.625, 0.5, 0.5, 0.5]);
+  assert.equal(node.rows[0].cells[0].colspan, 2);
+  assert.equal(node.rows[2].cells[0].rowspan, 2);
+  assert.deepEqual(node.rows[0].cells[0].text.map((run) => run.text), ['Head', 'er']);
+  assert.deepEqual(node.rows[0].cells[0].text.map((run) => run.options.color), ['FFFFFF', 'FFEEAA']);
+  assert.equal(node.rows[0].cells[0].text[1].options.bold, true);
+  assert.equal(
+    node.rows[0].cells[0].style.fill,
+    '112233',
+    JSON.stringify(node.rows[0].cells[0]),
+  );
+  assert.deepEqual(node.rows[0].cells[0].style.border, {
+    top: { color: '101010', width: 0.75 },
+    right: { color: '202020', width: 1.5 },
+    bottom: { color: '303030', width: 2.25 },
+    left: { color: '404040', width: 3 },
+  });
+  assert.deepEqual(node.rows[0].cells[0].style.padding, [
+    8 / 96, 12 / 96, 10 / 96, 14 / 96,
+  ]);
+  assert.equal(node.rows[0].cells[0].style.align, 'center');
+  assert.equal(node.rows[0].cells[0].style.valign, 'mid');
+  assert.equal(node.rows[0].cells[0].style.fontFamily, 'Arial');
+  assert.equal(node.rows[0].cells[0].style.fontSize, 12);
+  assert.equal(node.rows[0].cells[0].style.fontColor, 'FFFFFF');
+  assert.equal(node.rows[0].cells[0].style.bold, true);
+  assert.equal(scene.nodes.some((item) => (
+    item.type === 'text' && /Header|Metric|Wide value|Merged|B[12]|C[12]/.test(
+      Array.isArray(item.text) ? item.text.map((run) => run.text).join('') : item.text,
+    )
+  )), false);
+});
+
+test('blocks DOM tables whose measured spans cannot form a rectangular grid', () => {
+  const doc = createDocument(`
+    <table data-pptx-source-id="broken-table">
+      <tr><td>A</td><td>B</td><td>C</td></tr>
+      <tr><td colspan="2">Only two columns</td></tr>
+    </table>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const rect = (left, top, width, height) => ({
+    x: left, y: top, left, top, width, height,
+    right: left + width, bottom: top + height,
+  });
+  const table = doc.querySelector('table');
+  table.getBoundingClientRect = () => rect(96, 120, 600, 100);
+  const rows = [...table.rows];
+  rows[0].getBoundingClientRect = () => rect(96, 120, 600, 50);
+  rows[1].getBoundingClientRect = () => rect(96, 170, 600, 50);
+  [...rows[0].cells].forEach((cell, index) => {
+    cell.getBoundingClientRect = () => rect(96 + index * 200, 120, 200, 50);
+  });
+  rows[1].cells[0].getBoundingClientRect = () => rect(96, 170, 400, 50);
+
+  assert.throws(
+    () => normalizeDocumentToEditableScene(doc, {
+      slideNumber: 8, width: 13.333, height: 7.5,
+    }),
+    (error) => error instanceof EditableExportError
+      && error.code === 'table_grid_non_rectangular'
+      && error.sourceId === 'broken-table',
+  );
+});
+
+test('preserves transparent table fills and block-level cell text line breaks as styled runs', () => {
+  const doc = createDocument(`
+    <table data-pptx-source-id="transparent-table">
+      <tr><td style="background:transparent">
+        <p><span style="color:#aa0000">A</span></p>
+        <div><strong style="color:#00aa00;font-weight:700">B</strong><br><em>C</em></div>
+      </td></tr>
+    </table>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const rect = (left, top, width, height) => ({
+    x: left, y: top, left, top, width, height,
+    right: left + width, bottom: top + height,
+  });
+  const table = doc.querySelector('table');
+  const row = table.rows[0];
+  const cell = row.cells[0];
+  table.getBoundingClientRect = () => rect(96, 120, 240, 80);
+  row.getBoundingClientRect = () => rect(96, 120, 240, 80);
+  cell.getBoundingClientRect = () => rect(96, 120, 240, 80);
+
+  const node = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 4, width: 13.333, height: 7.5,
+  }).nodes.find((item) => item.type === 'table');
+
+  assert.equal(node.rows[0].cells[0].style.fill, null);
+  assert.equal(node.rows[0].cells[0].text.map((run) => run.text).join(''), 'A\nB\nC');
+  assert.deepEqual(
+    node.rows[0].cells[0].text.filter((run) => run.text !== '\n').map((run) => ({
+      text: run.text,
+      color: run.options.color,
+      bold: run.options.bold,
+      italic: run.options.italic,
+    })),
+    [
+      { text: 'A', color: 'AA0000', bold: false, italic: false },
+      { text: 'B', color: '00AA00', bold: true, italic: false },
+      { text: 'C', color: '000000', bold: false, italic: true },
+    ],
+  );
+});
+
+test('preserves semantic inline spaces and separates both sides of block cell content', () => {
+  const doc = createDocument(`
+    <table data-pptx-source-id="rich-space-table"><tr><td>
+      <span style="color:#aa0000">Hello</span> <strong style="color:#00aa00;font-weight:700">world</strong>
+      <div><em style="color:#0000aa">A</em></div>B
+    </td></tr></table>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const rect = (left, top, width, height) => ({
+    x: left, y: top, left, top, width, height,
+    right: left + width, bottom: top + height,
+  });
+  const table = doc.querySelector('table');
+  const row = table.rows[0];
+  const cell = row.cells[0];
+  table.getBoundingClientRect = () => rect(96, 120, 320, 100);
+  row.getBoundingClientRect = () => rect(96, 120, 320, 100);
+  cell.getBoundingClientRect = () => rect(96, 120, 320, 100);
+
+  const runs = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 4, width: 13.333, height: 7.5,
+  }).nodes.find((item) => item.type === 'table').rows[0].cells[0].text;
+
+  assert.equal(runs.map((run) => run.text).join(''), 'Hello world\nA\nB');
+  assert.equal(runs[0].text, 'Hello');
+  assert.equal(runs[0].options.color, 'AA0000');
+  assert.equal(runs.find((run) => run.text === 'world').options.color, '00AA00');
+  assert.equal(runs.find((run) => run.text === 'world').options.bold, true);
+  assert.equal(runs.find((run) => run.text === 'A').options.color, '0000AA');
+  assert.equal(runs[0].text.startsWith('\n'), false);
+  assert.equal(runs.at(-1).text.endsWith('\n'), false);
+});
+
+test('resolves rowspan zero through the end of its own table row group', () => {
+  const doc = createDocument(`
+    <table data-pptx-source-id="row-group-table">
+      <thead><tr><th>Head A</th><th>Head B</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="0">Body group</td><td>B1</td></tr>
+        <tr><td>B2</td></tr>
+        <tr><td>B3</td></tr>
+      </tbody>
+      <tfoot><tr><td>Foot A</td><td>Foot B</td></tr></tfoot>
+    </table>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const rect = (left, top, width, height) => ({
+    x: left, y: top, left, top, width, height,
+    right: left + width, bottom: top + height,
+  });
+  const table = doc.querySelector('table');
+  const rows = [...table.rows];
+  table.getBoundingClientRect = () => rect(96, 100, 400, 200);
+  rows.forEach((row, rowIndex) => {
+    row.getBoundingClientRect = () => rect(96, 100 + rowIndex * 40, 400, 40);
+  });
+  [
+    [rect(96, 100, 200, 40), rect(296, 100, 200, 40)],
+    [rect(96, 140, 200, 120), rect(296, 140, 200, 40)],
+    [rect(296, 180, 200, 40)],
+    [rect(296, 220, 200, 40)],
+    [rect(96, 260, 200, 40), rect(296, 260, 200, 40)],
+  ].forEach((rowRects, rowIndex) => {
+    rowRects.forEach((cellRect, cellIndex) => {
+      rows[rowIndex].cells[cellIndex].getBoundingClientRect = () => cellRect;
+    });
+  });
+
+  const node = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 5, width: 13.333, height: 7.5,
+  }).nodes.find((item) => item.type === 'table');
+
+  assert.equal(node.rows[1].cells[0].rowspan, 3);
+  assert.equal(node.rows[4].cells.length, 2);
+});
+
+test('normalizes the production slide-03 quality table as one native table regression', () => {
+  const doc = createDocument(`
+    <table data-pptx-source-id="slide-03-quality-table"
+      style="width:100%;border-collapse:collapse;font-size:11pt">
+      <thead><tr>
+        <th style="background:#1E293B;padding:8pt 12pt;border:1pt solid #1E293B;width:14%"><p style="color:#fff;font-weight:700;font-size:11pt;text-align:left">阶段</p></th>
+        <th style="background:#1E293B;padding:8pt 12pt;border:1pt solid #1E293B;width:22%"><p style="color:#fff;font-weight:700;font-size:11pt;text-align:left">输入</p></th>
+        <th style="background:#1E293B;padding:8pt 12pt;border:1pt solid #1E293B;width:36%"><p style="color:#fff;font-weight:700;font-size:11pt;text-align:left">处理动作</p></th>
+        <th style="background:#1E293B;padding:8pt 12pt;border:1pt solid #1E293B;width:28%"><p style="color:#fff;font-weight:700;font-size:11pt;text-align:left">质量门槛</p></th>
+      </tr></thead>
+      <tbody>
+        <tr><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb"><p style="font-weight:600;color:#0f766e;font-size:11pt">采集</p></td><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb">Kafka / MQTT</td><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb">拉取与推送双模式接入</td><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb">完整率 ≥ 99.5%</td></tr>
+        <tr><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">清洗</td><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">原始数据流</td><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">字段校验、去重、PII 脱敏</td><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">脏数据率 ≤ 0.3%</td></tr>
+        <tr><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb">特征</td><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb">清洗后数据</td><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb">向量化、时序聚合、维度对齐</td><td style="background:#fff;padding:8pt 12pt;border:1pt solid #e5e7eb">特征覆盖率 ≥ 95%</td></tr>
+        <tr><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">推理</td><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">特征向量</td><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">模型打分、阈值判定、结果序列化</td><td style="background:#FAFAF7;padding:8pt 12pt;border:1pt solid #e5e7eb">P99 延迟 ≤ 80ms</td></tr>
+      </tbody>
+    </table>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const rect = (left, top, width, height) => ({
+    x: left, y: top, left, top, width, height,
+    right: left + width, bottom: top + height,
+  });
+  const table = doc.querySelector('table');
+  const rows = [...table.rows];
+  const widths = [156.8, 246.4, 403.2, 313.6];
+  table.getBoundingClientRect = () => rect(80, 300, 1120, 220);
+  rows.forEach((row, rowIndex) => {
+    row.getBoundingClientRect = () => rect(80, 300 + rowIndex * 44, 1120, 44);
+    let left = 80;
+    [...row.cells].forEach((cell, columnIndex) => {
+      const cellLeft = left;
+      cell.getBoundingClientRect = () => rect(cellLeft, 300 + rowIndex * 44, widths[columnIndex], 44);
+      left += widths[columnIndex];
+    });
+  });
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 3, width: 13.333, height: 7.5,
+  });
+  const tables = scene.nodes.filter((node) => node.type === 'table');
+  assert.equal(tables.length, 1);
+  assert.deepEqual(
+    tables[0].columnWidths.map((width) => Number(width.toFixed(6))),
+    widths.map((width) => Number((width / 96).toFixed(6))),
+  );
+  assert.equal(tables[0].rows.length, 5);
+  assert.equal(tables[0].rows.flatMap((row) => row.cells).length, 20);
+  assert.equal(tables[0].rows[4].cells[3].text.map((run) => run.text).join(''), 'P99 延迟 ≤ 80ms');
+  assert.equal(scene.nodes.some((node) => (
+    node.type === 'text'
+    && String(Array.isArray(node.text) ? node.text.map((run) => run.text).join('') : node.text)
+      .includes('P99 延迟 ≤ 80ms')
+  )), false);
+});
+
+test('samples every supported SVG path command into editable line nodes', () => {
+  const doc = createDocument(`
+    <svg viewBox="0 0 200 120">
+      <path data-pptx-source-id="all-commands" fill="none" stroke="#112233"
+        d="M5 5 L20 5 H30 V20 C35 5 45 5 50 20 S65 35 70 20 Q80 5 90 20 T110 20 Z"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 4, width: 13.333, height: 7.5,
+  });
+  const pathNodes = scene.nodes.filter((node) => node.sourceId === 'all-commands');
+  assert.ok(pathNodes.length > 20);
+  assert.ok(pathNodes.every((node) => node.type === 'line'));
+  assert.ok(pathNodes.every((node) => node.style.color === '112233'));
+});
+
+test('rejects absolute and relative SVG arc commands as unsupported paths', () => {
+  for (const command of ['A', 'a']) {
+    const sourceId = `arc-${command}`;
+    const doc = createDocument(`
+      <svg viewBox="0 0 100 100">
+        <path data-pptx-source-id="${sourceId}" fill="none" stroke="#112233"
+          d="M10 10 ${command} 20 20 0 0 1 50 50"/>
+      </svg>
+    `);
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 4, width: 13.333, height: 7.5,
+      }),
+      (error) => error instanceof EditableExportError
+        && error.code === 'svg_path_command_unsupported'
+        && error.sourceId === sourceId,
+      command,
+    );
+  }
+});
+
+test('rejects transforms on an SVG path and on its parent group', () => {
+  const cases = [
+    {
+      sourceId: 'transformed-path',
+      markup: '<path data-pptx-source-id="transformed-path" transform="translate(5 5)" fill="none" d="M0 0L20 20"/>',
+    },
+    {
+      sourceId: 'transformed-parent',
+      markup: '<g transform="translate(5 5)"><path data-pptx-source-id="transformed-parent" fill="none" d="M0 0L20 20"/></g>',
+    },
+  ];
+
+  for (const { sourceId, markup } of cases) {
+    const doc = createDocument(`<svg viewBox="0 0 100 100">${markup}</svg>`);
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 4, width: 13.333, height: 7.5,
+      }),
+      (error) => error instanceof EditableExportError
+        && error.code === 'svg_path_transform_unsupported'
+        && error.sourceId === sourceId,
+      sourceId,
+    );
+  }
+});
+
+test('rewrites linear gradients into ordered solid editable strips', () => {
+  const doc = createDocument(`
+    <div data-pptx-source-id="gradient"
+      style="background-image:linear-gradient(90deg, #ff0000 0%, #0000ff 100%)"></div>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const strips = scene.nodes.filter((node) => node.sourceId === 'gradient');
+  assert.ok(strips.length >= 8);
+  assert.ok(strips.every((node) => node.type === 'shape' && node.shapeType === 'rect'));
+  assert.ok(strips.every((node) => node.rewrite === 'css_gradient'));
+  assert.notEqual(strips[0].style.fill, strips.at(-1).style.fill);
+  assert.deepEqual(strips.map((node) => node.order), [...strips.keys()]);
+});
+
+test('preserves intentional images and emits no fallback or SVG-image nodes', () => {
+  const doc = createDocument(`
+      <img data-pptx-source-id="photo"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="/>
+    <svg viewBox="0 0 100 100">
+      <path data-pptx-source-id="route-path" d="M0 0L100 100" fill="none" stroke="black"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  assert.equal(scene.nodes.find((node) => node.sourceId === 'photo')?.intent, 'user-image');
+  assert.doesNotMatch(JSON.stringify(scene), /fallback|svg-image|raster|page-visual/);
+  assert.equal(validateEditableSlideScene(scene), scene);
+});
+
+test('HTML intentional images require inline base64 raster data URLs', () => {
+  const invalidSources = [
+    'data:image/svg+xml;base64,PHN2Zy8+',
+    'data:image/png,not-base64',
+    'https://example.invalid/photo.png',
+    'file:///tmp/photo.png',
+    'blob:unsafe',
+  ];
+  invalidSources.forEach((src, index) => {
+    const doc = createDocument(
+      `<img data-pptx-source-id="unsafe-${index}" src="${src}">`,
+    );
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 4, width: 13.333, height: 7.5,
+      }),
+      (error) => error instanceof EditableExportError
+        && ['editable_scene_payload_invalid', 'external_resource'].includes(error.code)
+        && error.sourceId === `unsafe-${index}`,
+    );
+  });
+});
+
+test('blocks unsupported visuals with located editable export diagnostics', () => {
+  const fixtures = [
+    ['filtered', '<div data-pptx-source-id="filtered" style="filter:blur(2px)"></div>', 'css_filter'],
+    ['masked', '<svg><mask id="m"></mask><rect data-pptx-source-id="masked" mask="url(#m)"/></svg>', 'svg_mask'],
+    ['external', '<svg><image data-pptx-source-id="external" href="https://example.invalid/a.png"/></svg>', 'external_resource'],
+    ['animated', '<svg><rect data-pptx-source-id="animated"><animate attributeName="x"/></rect></svg>', 'animation_unsupported'],
+    ['generated', '<div data-pptx-source-id="generated" class="pseudo"></div>', 'generated_content',
+      '.pseudo::before { content:"x"; }'],
+  ];
+
+  fixtures.forEach(([sourceId, markup, code, css = '']) => {
+    const doc = createDocument(markup, css);
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 6, width: 13.333, height: 7.5,
+      }),
+      (error) => error instanceof EditableExportError
+        && error.code === code
+        && error.slideNumber === 6
+        && error.sourceId === sourceId,
+      sourceId,
+    );
+  });
+});
+
+test('blocks closed filled SVG paths instead of converting them to pictures', () => {
+  const doc = createDocument(`
+    <svg><path data-pptx-source-id="filled-path" d="M0 0L20 0L10 20Z" fill="#ff0000"/></svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+
+  assert.throws(
+    () => normalizeDocumentToEditableScene(doc, {
+      slideNumber: 3, width: 13.333, height: 7.5,
+    }),
+    (error) => error instanceof EditableExportError
+      && error.code === 'svg_path_fill_unsupported'
+      && error.sourceId === 'filled-path',
+  );
+});
+
+test('maps four SVG triangle orientations and CSS border triangles with exact geometry', () => {
+  const doc = createDocument(`
+    <svg data-pptx-source-id="triangles" viewBox="0 0 100 100">
+      <polygon data-pptx-source-id="up" points="10,20 20,0 30,20" fill="#f00"/>
+      <polygon data-pptx-source-id="right" points="32,5 40,10 32,15" fill="#0f0"/>
+      <polygon data-pptx-source-id="down" points="50,0 70,0 60,20" fill="#00f"/>
+      <polygon data-pptx-source-id="left" points="90,5 82,10 90,15" fill="#ff0"/>
+    </svg>
+    ${['bottom', 'left', 'top', 'right'].map((side) => `
+      <div data-pptx-source-id="css-${side}" style="
+        width:0;height:0;border:0 solid transparent;
+        border-${side}-width:30px;
+        border-${side}-color:#123456;
+        ${side === 'top' || side === 'bottom'
+          ? 'border-left-width:20px;border-right-width:20px'
+          : 'border-top-width:20px;border-bottom-width:20px'}"></div>
+    `).join('')}
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const svg = doc.querySelector('svg');
+  svg.getBoundingClientRect = () => ({
+    x: 96, y: 48, left: 96, top: 48, right: 288, bottom: 240, width: 192, height: 192,
+  });
+  ['bottom', 'left', 'top', 'right'].forEach((side, index) => {
+    const width = side === 'left' || side === 'right' ? 30 : 40;
+    const height = side === 'top' || side === 'bottom' ? 30 : 40;
+    doc.querySelector(`[data-pptx-source-id="css-${side}"]`).getBoundingClientRect = () => ({
+      x: 320, y: 80 + index * 50, left: 320, top: 80 + index * 50,
+      right: 320 + width, bottom: 80 + index * 50 + height, width, height,
+    });
+  });
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 3, width: 13.333, height: 7.5,
+  });
+  const expectedSvg = {
+    up: [0, 0.4, 0.4],
+    right: [90, 0.16, 0.2],
+    down: [180, 0.4, 0.4],
+    left: [270, 0.16, 0.2],
+  };
+  Object.entries(expectedSvg).forEach(([sourceId, [rotate, w, h]]) => {
+    const node = scene.nodes.find((item) => item.sourceId === sourceId);
+    assert.equal(node?.style.rotate, rotate, sourceId);
+    assert.equal(Number(node?.w.toFixed(6)), Number(w.toFixed(6)), `${sourceId}:w`);
+    assert.equal(Number(node?.h.toFixed(6)), Number(h.toFixed(6)), `${sourceId}:h`);
+  });
+  const expectedCssRotation = { bottom: 0, left: 90, top: 180, right: 270 };
+  Object.entries(expectedCssRotation).forEach(([side, rotate], index) => {
+    const node = scene.nodes.find((item) => item.sourceId === `css-${side}`);
+    assert.equal(node?.style.rotate, rotate, side);
+    assert.equal(node?.x, 320 / 96, `${side}:x`);
+    assert.equal(node?.y, (80 + index * 50) / 96, `${side}:y`);
+    assert.equal(node?.w, (side === 'left' || side === 'right' ? 30 : 40) / 96, `${side}:w`);
+    assert.equal(node?.h, (side === 'top' || side === 'bottom' ? 30 : 40) / 96, `${side}:h`);
+  });
+});
+
+test('blocks extractor diagnostics that have no editable rewrite', () => {
+  const filledPolygon = createDocument(`
+    <svg viewBox="0 0 100 100">
+      <polygon data-pptx-source-id="filled-freeform"
+        points="5,5 40,5 45,30 20,45 5,25" fill="#abcdef"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(filledPolygon);
+  installMeasurableLayout(filledPolygon);
+  assert.throws(
+    () => normalizeDocumentToEditableScene(filledPolygon, {
+      slideNumber: 2, width: 13.333, height: 7.5,
+    }),
+    (error) => error instanceof EditableExportError
+      && error.code === 'svg_polygon_unsupported'
+      && error.sourceId === 'filled-freeform',
+  );
+
+  const arbitraryFallback = createDocument(`
+    <svg viewBox="0 0 100 100">
+      <rect data-pptx-source-id="skewed" x="5" y="5" width="20" height="10"
+        style="transform:skewX(20deg)"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(arbitraryFallback);
+  installMeasurableLayout(arbitraryFallback);
+  assert.throws(
+    () => normalizeDocumentToEditableScene(arbitraryFallback, {
+      slideNumber: 5, width: 13.333, height: 7.5,
+    }),
+    (error) => error instanceof EditableExportError
+      && error.code === 'svg_transform_unsupported'
+      && error.sourceId === 'skewed',
+  );
+});
+
+test('projects arbitrary gradient angles, interpolates stops, and paints before child text', () => {
+  const doc = createDocument(`
+    <div data-pptx-source-id="gradient-180"
+      style="z-index:7;background-image:linear-gradient(180deg,#ff0000 0%,#00ff00 25%,#0000ff 100%)">
+      <p data-pptx-source-id="gradient-copy">Text above gradient</p>
+    </div>
+    <div data-pptx-source-id="gradient-diagonal"
+      style="background-image:linear-gradient(to top right,#000000,#ffffff)"></div>
+    <div data-pptx-source-id="gradient-0"
+      style="background-image:linear-gradient(0deg,#ff0000,#0000ff)"></div>
+    <div data-pptx-source-id="gradient-90"
+      style="background-image:linear-gradient(to right,#ff0000,#0000ff)"></div>
+    <div data-pptx-source-id="gradient-270"
+      style="background-image:linear-gradient(to left,#ff0000,#0000ff)"></div>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const vertical = scene.nodes.filter((node) => node.sourceId === 'gradient-180');
+  const diagonal = scene.nodes.filter((node) => node.sourceId === 'gradient-diagonal');
+  const copy = scene.nodes.find((node) => node.sourceId === 'gradient-copy');
+  assert.equal(vertical[0].style.fill, 'DF2000');
+  assert.equal(vertical[4].style.fill, '00F40B');
+  assert.equal(vertical.at(-1).style.fill, '000BF4');
+  assert.ok(vertical.every((node) => node.zIndex === copy.zIndex));
+  assert.ok(vertical.every((node) => node.paintOrder < copy.paintOrder
+    || (node.paintOrder === copy.paintOrder && node.subOrder < copy.subOrder)));
+  assert.ok(diagonal.length > 16, 'diagonal gradients require a projected editable cell grid');
+  const distinctDiagonal = new Set(diagonal.map((node) => node.style.fill));
+  assert.ok(distinctDiagonal.size > 16);
+  assert.ok(diagonal.every((node) => Number.isFinite(node.paintOrder) && Number.isFinite(node.subOrder)));
+  const endpoints = (sourceId) => {
+    const cells = scene.nodes.filter((node) => node.sourceId === sourceId);
+    return [cells[0].style.fill, cells.at(-1).style.fill];
+  };
+  assert.deepEqual(endpoints('gradient-0'), ['0800F7', 'F70008']);
+  assert.deepEqual(endpoints('gradient-90'), ['F70008', '0800F7']);
+  assert.deepEqual(endpoints('gradient-270'), ['0800F7', 'F70008']);
+});
+
+test('supports CSS gradient angle units and fail-closes unsupported stops and colors', () => {
+  const supported = createDocument(`
+    <div data-pptx-source-id="turn" style="background:linear-gradient(.5turn,#f00,#00f)"></div>
+    <div data-pptx-source-id="rad" style="background:linear-gradient(3.141592653589793rad,#f00,#00f)"></div>
+    <div data-pptx-source-id="grad" style="background:linear-gradient(200grad,#f00,#00f)"></div>
+  `);
+  sanitizeSlideDocumentRoot(supported);
+  installMeasurableLayout(supported);
+  const scene = normalizeDocumentToEditableScene(supported, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const endpoints = (sourceId) => scene.nodes
+    .filter((node) => node.sourceId === sourceId)
+    .map((node) => node.style.fill);
+  assert.deepEqual(endpoints('turn'), endpoints('rad'));
+  assert.deepEqual(endpoints('rad'), endpoints('grad'));
+
+  const rejected = [
+    ['px-stop', 'linear-gradient(90deg,#f00 10px,#00f 100%)'],
+    ['em-stop', 'linear-gradient(90deg,#f00 1em,#00f 100%)'],
+    ['double-stop', 'linear-gradient(90deg,#f00 10% 20%,#00f)'],
+    ['color-hint', 'linear-gradient(90deg,#f00 0%,40%,#00f 100%)'],
+    ['unsupported-color', 'linear-gradient(90deg,rebeccapurple,#00f)'],
+  ];
+  rejected.forEach(([sourceId, background]) => {
+    const doc = createDocument(
+      `<div data-pptx-source-id="${sourceId}" style="background:${background}"></div>`,
+    );
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 8, width: 13.333, height: 7.5,
+      }),
+      (error) => error.code === 'css_gradient_unsupported' && error.sourceId === sourceId,
+      sourceId,
+    );
+  });
+});
+
+test('interpolates gradient alpha into editable cell transparency and rejects unsupported alpha', () => {
+  const doc = createDocument(`
+    <div data-pptx-source-id="alpha-gradient"
+      style="background:linear-gradient(90deg,rgba(255,0,0,0),rgba(0,0,255,1))"></div>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const cells = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  }).nodes.filter((node) => node.sourceId === 'alpha-gradient');
+  assert.equal(cells[0].style.transparency, 96.875);
+  assert.equal(cells.at(-1).style.transparency, 3.125);
+  assert.ok(cells.every((cell) => cell.style.fill === '0000FF'));
+  assert.ok(cells.every((cell, index) => (
+    index === 0 || cell.style.transparency < cells[index - 1].style.transparency
+  )));
+
+  const unsupported = createDocument(`
+    <div data-pptx-source-id="unsupported-alpha"
+      style="--gradient:linear-gradient(90deg,rgba(255,0,0,2turn),#0000ff);
+        background:var(--gradient)"></div>
+  `);
+  sanitizeSlideDocumentRoot(unsupported);
+  installMeasurableLayout(unsupported);
+  assert.throws(
+    () => normalizeDocumentToEditableScene(unsupported, {
+      slideNumber: 1, width: 13.333, height: 7.5,
+    }),
+    (error) => error.code === 'css_gradient_unsupported'
+      && error.sourceId === 'unsupported-alpha',
+  );
+});
+
+test('preserves direct text owned by a gradient element above its background cells', () => {
+  const doc = createDocument(`
+    <div data-pptx-source-id="gradient-with-copy"
+      style="background:linear-gradient(90deg,#111,#999)">Direct gradient copy</div>
+  `);
+  installMeasurableLayout(doc);
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const nodes = scene.nodes.filter((node) => node.sourceId === 'gradient-with-copy');
+  const text = nodes.find((node) => node.type === 'text');
+  const cells = nodes.filter((node) => node.type === 'shape');
+  assert.equal(text?.text, 'Direct gradient copy');
+  assert.ok(cells.length > 0);
+  assert.ok(cells.every((cell) => cell.paintOrder < text.paintOrder
+    || (cell.paintOrder === text.paintOrder && cell.subOrder < text.subOrder)));
+});
+
+test('blocks every drawable filled path including open and multi-subpath forms', () => {
+  const cases = [
+    ['open-default-fill', 'M0 0L20 20', null],
+    ['open-explicit-fill', 'M0 0L20 20', '#ff0000'],
+    ['multi-subpath-fill', 'M0 0L20 0Z M30 0L40 10', '#00ff00'],
+  ];
+  cases.forEach(([sourceId, d, fill]) => {
+    const doc = createDocument(`
+      <svg><path data-pptx-source-id="${sourceId}" d="${d}"
+        ${fill ? `fill="${fill}"` : ''} stroke="#000"/></svg>
+    `);
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 7, width: 13.333, height: 7.5,
+      }),
+      (error) => error instanceof EditableExportError
+        && error.code === 'svg_path_fill_unsupported'
+        && error.sourceId === sourceId,
+      sourceId,
+    );
+  });
+});
+
+test('positions SVG text frames from middle and end anchor coordinates', () => {
+  const doc = createDocument(`
+    <svg viewBox="0 0 100 100">
+      <text data-pptx-source-id="middle-anchor" x="50" y="40"
+        text-anchor="middle">Middle</text>
+      <text data-pptx-source-id="end-anchor" x="80" y="70"
+        text-anchor="end">End</text>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const middle = scene.nodes.find((node) => node.sourceId === 'middle-anchor');
+  const end = scene.nodes.find((node) => node.sourceId === 'end-anchor');
+  const anchorX = (40 + 305 + 50 * 0.3) / 96;
+  const endAnchorX = (40 + 305 + 80 * 0.3) / 96;
+  assert.equal(Number((middle.x + middle.w / 2).toFixed(4)), Number(anchorX.toFixed(4)));
+  assert.equal(Number((end.x + end.w).toFixed(4)), Number(endAnchorX.toFixed(4)));
+});
+
+test('uses one preserveAspectRatio mapping for SVG shapes paths polygons and text', () => {
+  const doc = createDocument(`
+    <svg data-pptx-source-id="meet-svg" viewBox="0 0 200 100">
+      <rect data-pptx-source-id="meet-rect" x="0" y="0" width="20" height="20"/>
+      <path data-pptx-source-id="meet-path" d="M0 0L20 0" fill="none" stroke="#000"/>
+      <polygon data-pptx-source-id="meet-triangle" points="90,20 100,0 110,20"/>
+      <text data-pptx-source-id="meet-text" x="0" y="20">A</text>
+    </svg>
+    <svg data-pptx-source-id="none-svg" viewBox="0 0 200 100" preserveAspectRatio="none">
+      <rect data-pptx-source-id="none-rect" x="0" y="0" width="200" height="100"/>
+    </svg>
+    <svg data-pptx-source-id="slice-svg" viewBox="0 0 200 100"
+      preserveAspectRatio="xMaxYMin slice">
+      <rect data-pptx-source-id="slice-rect" x="100" y="0" width="100" height="100"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  [...doc.querySelectorAll('svg')].forEach((svg, index) => {
+    svg.getBoundingClientRect = () => ({
+      x: 100, y: 50 + index * 220, left: 100, top: 50 + index * 220,
+      right: 300, bottom: 250 + index * 220, width: 200, height: 200,
+    });
+  });
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const meetRect = scene.nodes.find((node) => node.sourceId === 'meet-rect');
+  const meetPath = scene.nodes.find((node) => node.sourceId === 'meet-path');
+  const meetTriangle = scene.nodes.find((node) => node.sourceId === 'meet-triangle');
+  const meetText = scene.nodes.find((node) => node.sourceId === 'meet-text');
+  assert.equal(meetRect.y, 100 / 96);
+  assert.equal(meetPath.y1, 100 / 96);
+  assert.equal(meetTriangle.y, 100 / 96);
+  assert.equal(meetText.y, (100 + 20 - 16) / 96);
+  const noneRect = scene.nodes.find((node) => node.sourceId === 'none-rect');
+  assert.equal(noneRect.w, 200 / 96);
+  assert.equal(noneRect.h, 200 / 96);
+  const sliceRect = scene.nodes.find((node) => node.sourceId === 'slice-rect');
+  assert.equal(sliceRect.x, 100 / 96);
+  assert.equal(sliceRect.w, 200 / 96);
+});
+
+test('blocks CSS masks and recursively finds generated content in grouping rules', () => {
+  const masked = createDocument(`
+    <div data-pptx-source-id="css-mask" style="mask-image:linear-gradient(black,transparent)"></div>
+  `);
+  sanitizeSlideDocumentRoot(masked);
+  installMeasurableLayout(masked);
+  assert.throws(
+    () => normalizeDocumentToEditableScene(masked, {
+      slideNumber: 2, width: 13.333, height: 7.5,
+    }),
+    (error) => error.code === 'css_mask' && error.sourceId === 'css-mask',
+  );
+
+  const generated = createDocument(
+    '<div data-pptx-source-id="nested-generated" class="nested"></div>',
+    '@media screen { @supports (display:grid) { .nested::after { content:"generated"; } } }',
+  );
+  sanitizeSlideDocumentRoot(generated);
+  installMeasurableLayout(generated);
+  assert.throws(
+    () => normalizeDocumentToEditableScene(generated, {
+      slideNumber: 2, width: 13.333, height: 7.5,
+    }),
+    (error) => error.code === 'generated_content' && error.sourceId === 'nested-generated',
+  );
+});
+
+test('parses relative repeated path parameters, preserves S/T controls, adapts curves, and classifies dashes', () => {
+  const doc = createDocument(`
+    <svg viewBox="0 0 200 120">
+      <path data-pptx-source-id="relative-repeat" fill="none" stroke="#111"
+        d="m5 5 10 0 0 10 h10 10 v10 10"/>
+      <path data-pptx-source-id="smooth-curves" fill="none" stroke="#222"
+        d="M0 80 C10 0 20 0 30 80 S50 160 60 80 S80 0 90 80
+           Q100 20 110 80 T130 80 T150 80"/>
+      <path data-pptx-source-id="flat-curve" fill="none" stroke="#333"
+        d="M0 100 C20 100 40 100 60 100"/>
+      <line data-pptx-source-id="dash" x1="0" y1="10" x2="40" y2="10"
+        stroke="#000" stroke-dasharray="8 4"/>
+      <line data-pptx-source-id="dot" x1="0" y1="20" x2="40" y2="20"
+        stroke="#000" stroke-dasharray="1 4"/>
+      <line data-pptx-source-id="dash-dot" x1="0" y1="30" x2="40" y2="30"
+        stroke="#000" stroke-dasharray="8 3 1 3"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  assert.equal(scene.nodes.filter((node) => node.sourceId === 'relative-repeat').length, 6);
+  assert.ok(scene.nodes.filter((node) => node.sourceId === 'smooth-curves').length
+    > scene.nodes.filter((node) => node.sourceId === 'flat-curve').length);
+  assert.equal(scene.nodes.find((node) => node.sourceId === 'dash').style.dash, 'dash');
+  assert.equal(scene.nodes.find((node) => node.sourceId === 'dot').style.dash, 'dot');
+  assert.equal(scene.nodes.find((node) => node.sourceId === 'dash-dot').style.dash, 'dashDot');
+});
+
+test('samples reflected S and T controls at their exact midpoint coordinates', () => {
+  const doc = createDocument(`
+    <svg viewBox="0 0 200 120">
+      <path data-pptx-source-id="reflected-s" fill="none" stroke="#000"
+        d="M0 50 C10 0 20 0 30 50 S50 100 60 50"/>
+      <path data-pptx-source-id="reflected-t" fill="none" stroke="#000"
+        d="M70 50 Q80 0 90 50 T110 50"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const svg = doc.querySelector('svg');
+  svg.getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 120, width: 200, height: 120,
+  });
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const hasEndpoint = (sourceId, x, y) => scene.nodes.some((node) => (
+    node.sourceId === sourceId
+    && Math.abs(node.x2 * 96 - x) < 1e-6
+    && Math.abs(node.y2 * 96 - y) < 1e-6
+  ));
+  assert.equal(hasEndpoint('reflected-s', 45, 87.5), true);
+  assert.equal(hasEndpoint('reflected-t', 100, 75), true);
+});
+
+test('preserves distinct editable roundRect radii and rejects unequal or out-of-range values', () => {
+  const doc = createDocument(`
+    <svg viewBox="0 0 100 100">
+      <rect data-pptx-source-id="radius-eight" x="5" y="5" width="80" height="50"
+        rx="8" ry="8" fill="#123456"/>
+      <rect data-pptx-source-id="radius-four" x="5" y="60" width="80" height="50"
+        rx="4" ry="4" fill="#654321"/>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  doc.querySelector('svg').getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100,
+  });
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const radiusEight = scene.nodes.find((item) => item.sourceId === 'radius-eight');
+  const radiusFour = scene.nodes.find((item) => item.sourceId === 'radius-four');
+  assert.equal(radiusEight.shapeType, 'roundRect');
+  assert.equal(radiusFour.shapeType, 'roundRect');
+  assert.equal(radiusEight.style.radius, 8 / 96);
+  assert.equal(radiusFour.style.radius, 4 / 96);
+  assert.notEqual(radiusEight.style.radius, radiusFour.style.radius);
+
+  const unsupported = [
+    ['unequal-radius', '12', '4'],
+    ['out-of-range-radius', '26', '26'],
+  ];
+  unsupported.forEach(([sourceId, rx, ry]) => {
+    const invalid = createDocument(`
+    <svg viewBox="0 0 100 100">
+      <rect data-pptx-source-id="${sourceId}" x="5" y="5" width="80" height="50"
+        rx="${rx}" ry="${ry}" fill="#123456"/>
+    </svg>
+    `);
+    sanitizeSlideDocumentRoot(invalid);
+    installMeasurableLayout(invalid);
+    assert.throws(
+      () => normalizeDocumentToEditableScene(invalid, {
+        slideNumber: 1, width: 13.333, height: 7.5,
+      }),
+      (error) => error.code === 'svg_round_rect_radius_unsupported'
+        && error.sourceId === sourceId,
+    );
+  });
+});
+
+test('normalizes the slide-01 roundRect probe without blocking', () => {
+  const slide01Probe = createDocument(`
+    <svg viewBox="0 0 1280 720">
+      <rect data-pptx-source-id="slide-01-card" x="120" y="90" width="80" height="50"
+        rx="8" ry="8" fill="#17233c" stroke="#3f67ff"/>
+      <text data-pptx-source-id="slide-01-label" x="160" y="122"
+        text-anchor="middle">核心模块</text>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(slide01Probe);
+  installMeasurableLayout(slide01Probe);
+  const scene = normalizeDocumentToEditableScene(slide01Probe, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const card = scene.nodes.find((node) => node.sourceId === 'slide-01-card');
+  assert.equal(card.shapeType, 'roundRect');
+  assert.ok(card.style.radius > 0);
+  assert.ok(scene.nodes.some((node) => (
+    node.sourceId === 'slide-01-label' && node.type === 'text'
+  )));
+});
+
+test('blocks nonuniform preserveAspectRatio none for roundRect but permits uniform scaling', () => {
+  const createRoundRectDocument = () => {
+    const doc = createDocument(`
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <rect data-pptx-source-id="none-roundrect" x="5" y="5" width="80" height="50"
+          rx="8" ry="8" fill="#123456"/>
+      </svg>
+    `);
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+    return doc;
+  };
+
+  const nonuniform = createRoundRectDocument();
+  nonuniform.querySelector('svg').getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100,
+  });
+  assert.throws(
+    () => normalizeDocumentToEditableScene(nonuniform, {
+      slideNumber: 1, width: 13.333, height: 7.5,
+    }),
+    (error) => error.code === 'svg_round_rect_radius_unsupported'
+      && error.sourceId === 'none-roundrect',
+  );
+
+  const uniform = createRoundRectDocument();
+  uniform.querySelector('svg').getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 200, width: 200, height: 200,
+  });
+  const node = normalizeDocumentToEditableScene(uniform, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  }).nodes.find((item) => item.sourceId === 'none-roundrect');
+  assert.equal(node.style.radius, 16 / 96);
+});
+
+test('rejects asymmetric preset polygons instead of silently standardizing them', () => {
+  for (const [sourceId, points] of [
+    ['off-center-triangle', '0,0 20,0 3,20'],
+    ['asymmetric-diamond', '10,0 20,10 8,22 0,10'],
+  ]) {
+    const doc = createDocument(`
+      <svg viewBox="0 0 100 100">
+        <polygon data-pptx-source-id="${sourceId}" points="${points}" fill="#123456"/>
+      </svg>
+    `);
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+    assert.throws(
+      () => normalizeDocumentToEditableScene(doc, {
+        slideNumber: 1, width: 13.333, height: 7.5,
+      }),
+      (error) => error.code === 'svg_polygon_unsupported' && error.sourceId === sourceId,
+      sourceId,
+    );
+  }
+});
+
+test('measures SVG text with geometry APIs and CJK-aware fallback widths', () => {
+  const doc = createDocument(`
+    <svg viewBox="0 0 100 100">
+      <text data-pptx-source-id="measured" x="50" y="30" text-anchor="middle">Measured</text>
+      <text data-pptx-source-id="cjk" x="50" y="60" text-anchor="middle">中A文B</text>
+    </svg>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  const svg = doc.querySelector('svg');
+  svg.getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100,
+  });
+  doc.querySelector('[data-pptx-source-id="measured"]').getBBox = () => ({
+    x: 35, y: 14, width: 30, height: 16,
+  });
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 1, width: 13.333, height: 7.5,
+  });
+  const measured = scene.nodes.find((node) => node.sourceId === 'measured');
+  const cjk = scene.nodes.find((node) => node.sourceId === 'cjk');
+  assert.equal(measured.x, 35 / 96);
+  assert.equal(measured.w, 30 / 96);
+  assert.equal(cjk.w, (16 * (1 + 0.6 + 1 + 0.6)) / 96);
+  assert.ok(Math.abs(cjk.x + cjk.w / 2 - 50 / 96) < 1e-12);
+});
+
+test('normalizes the three-slide production visual matrix with the slide-03 arrow pointing right', () => {
+  const slides = [
+    `<svg viewBox="0 0 50 20"><polygon data-pptx-source-id="slide-01-arrow"
+      points="20,15 25,5 30,15" fill="#fff"/></svg>`,
+    `<div data-pptx-source-id="slide-02-gradient"
+      style="background:linear-gradient(135deg,#111,#555)"></div>`,
+    `<svg viewBox="0 0 50 20"><polygon data-pptx-source-id="slide-03-arrow"
+      points="32,5 40,10 32,15" fill="#fff"/></svg>`,
+  ];
+  const scenes = slides.map((markup, index) => {
+    const doc = createDocument(markup);
+    sanitizeSlideDocumentRoot(doc);
+    installMeasurableLayout(doc);
+    return normalizeDocumentToEditableScene(doc, {
+      slideNumber: index + 1, width: 13.333, height: 7.5,
+    });
+  });
+  assert.equal(scenes[0].nodes.find((node) => node.sourceId === 'slide-01-arrow').style.rotate, 0);
+  assert.equal(scenes[2].nodes.find((node) => node.sourceId === 'slide-03-arrow').style.rotate, 90);
+  scenes.forEach((scene) => assert.equal(validateEditableSlideScene(scene), scene));
+});
 
 test('shared markup sanitizer removes active content and unsafe resource URLs for every export surface', () => {
   const dom = createSilentDom(`<!doctype html><html><head>
@@ -195,17 +1445,6 @@ test('sanitizer enforces tag and attribute allowlists plus embedded-resource CSS
       );
     });
   });
-});
-
-test('whole-page visual request owns native visual suppression at construction', () => {
-  const doc = createDocument('<div data-pptx-source-id="panel"></div><p data-pptx-source-id="copy">Text</p>');
-  sanitizeSlideDocumentRoot(doc);
-  const request = buildWholePageVisualFallbackRequest(
-    doc,
-    [{ code: 'canvas_overflow', severity: 'fallback' }],
-    ['panel', 'image', 'panel'],
-  );
-  assert.deepEqual(request.suppressedNativeVisualIds, ['panel', 'image']);
 });
 
 test('all SVG paint-server and resource presentation attributes canonicalize to local fragments', () => {
@@ -445,7 +1684,7 @@ test('repairs duplicate authored source ids uniquely and remains stable on rerun
   assert.deepEqual(secondIds, firstIds);
 });
 
-test('classifies unsupported visual capabilities as fallback diagnostics', () => {
+test('mixed unsupported visuals report rewrite or blocking diagnostics only', () => {
   const doc = createDocument(`
     <div id="gradient" style="background-image: linear-gradient(red, blue)">Gradient</div>
     <div id="filter" style="filter: blur(2px)">Filtered</div>
@@ -457,120 +1696,17 @@ test('classifies unsupported visual capabilities as fallback diagnostics', () =>
   installMeasurableLayout(doc);
   const extracted = extractSlideDataFromDocument(doc);
 
-  for (const code of ['css_gradient', 'css_filter', 'complex_svg_raster', 'generated_content']) {
-    const diagnostic = diagnostics.find((item) => item.code === code);
-    assert.equal(diagnostic?.severity, 'fallback', code);
-    assert.ok(diagnostic.sourceId, code);
-    assert.ok(diagnostic.tag, code);
-  }
-  assert.ok(!diagnostics.some((item) => item.severity === 'blocking'));
-  for (const code of ['css_filter', 'complex_svg_raster']) {
+  diagnostics.forEach((diagnostic) => {
+    assert.notEqual(diagnostic.severity, 'fallback');
+  });
+  for (const code of ['css_filter']) {
     assert.equal(
       extracted.diagnostics.find((item) => item.code === code)?.severity,
-      'fallback',
+      'blocking',
       code,
     );
   }
-});
-
-test('comprehensive DOM fixture preserves editable text and every native or fallback visual', async () => {
-  const doc = createDocument(`
-    <div data-pptx-source-id="background-panel" style="background-color: rgb(10, 20, 30); z-index: 0"></div>
-    <section data-pptx-source-id="content-layer" style="z-index: 2">
-      <p data-pptx-source-id="manual-one">• Manual one</p>
-      <p data-pptx-source-id="manual-two">• Manual <strong>two</strong></p>
-      <p data-pptx-source-id="mixed-run">Plain <strong>bold</strong> <em>italic</em></p>
-      <div data-pptx-source-id="merge-copy" data-pptx-merge="true">
-        <p>Merged first</p><p>Merged second</p>
-      </div>
-      <table data-pptx-source-id="table">
-        <tr><th data-pptx-source-id="table-head">Header text</th></tr>
-        <tr><td data-pptx-source-id="table-cell">Cell text</td></tr>
-      </table>
-      <img data-pptx-source-id="photo" alt="Photo" src="data:image/png;base64,AA==" />
-      <div data-pptx-source-id="css-shape" style="background-color: rgb(1, 2, 3); border: 2px solid rgb(4, 5, 6)"></div>
-      <div data-pptx-source-id="css-triangle" style="
-        width: 0; height: 0; border-left: 20px solid transparent;
-        border-right: 20px solid transparent; border-bottom: 30px solid rgb(255, 0, 0);
-      "></div>
-      <svg data-pptx-source-id="basic-svg" viewBox="0 0 100 100">
-        <rect data-pptx-source-id="svg-rect" x="5" y="5" width="30" height="20" fill="#00ff00"/>
-        <line data-pptx-source-id="svg-line" x1="0" y1="50" x2="90" y2="50" stroke="#0000ff"/>
-        <text data-pptx-source-id="svg-text" x="5" y="90">Basic SVG text</text>
-      </svg>
-      <svg data-pptx-source-id="complex-svg" viewBox="0 0 100 100">
-        <defs><filter id="blur"><feGaussianBlur stdDeviation="2"/></filter></defs>
-        <path data-pptx-source-id="complex-path" d="M0 0L90 90" filter="url(#blur)"/>
-        <text data-pptx-source-id="complex-label" x="5" y="90">Complex SVG label</text>
-      </svg>
-      <div data-pptx-source-id="gradient" style="background-image: linear-gradient(red, blue)">
-        <p data-pptx-source-id="gradient-label">Gradient label</p>
-      </div>
-      <div data-pptx-source-id="filtered" style="filter: blur(2px)">
-        <p data-pptx-source-id="filtered-label">Filtered label</p>
-      </div>
-      <div data-pptx-source-id="pseudo" class="fixture-pseudo"><p>Pseudo label</p></div>
-    </section>
-    <p data-pptx-source-id="foreground-copy" style="z-index: 9">Foreground copy</p>
-  `, '.fixture-pseudo::before { content: "Generated star"; color: red; }');
-  const beforeText = doc.body.textContent.replace(/\s+/g, ' ').trim();
-
-  const repair = sanitizeSlideDocumentRoot(doc);
-  installMeasurableLayout(doc);
-  const extracted = extractSlideDataFromDocument(doc);
-  const allDiagnostics = [...repair.diagnostics, ...extracted.diagnostics];
-  const localRequests = buildRasterFallbackRequests(doc, allDiagnostics);
-  const rendered = await renderRasterFallbackLayers(
-    localRequests,
-    async (_html, _slideIndex, metadata) => Buffer.from(`png:${metadata.sourceId}`).toString('base64'),
-    0,
-  );
-  const preparedModel = {
-    ...extracted,
-    fallbackLayers: [...(extracted.fallbackLayers || []), ...rendered.layers],
-    diagnostics: allDiagnostics,
-  };
-
-  const repairedDomText = doc.body.textContent.replace(/\s+/g, ' ').trim();
-  for (const phrase of ['Manual one', 'Manual two', 'Plain bold italic', 'Merged first', 'Merged second']) {
-    assert.ok(beforeText.includes(phrase) && repairedDomText.includes(phrase), phrase);
-  }
-  const editableText = preparedModel.elements.flatMap((element) => {
-    if (typeof element.text === 'string') return [element.text];
-    const runs = element.items || element.text || [];
-    return Array.isArray(runs) ? [runs.map((run) => run.text).join('')] : [];
-  }).join(' | ');
-  for (const text of [
-    'Manual one', 'Manual two', 'Plain bold italic', 'Merged first', 'Merged second',
-    'Header text', 'Cell text', 'Basic SVG text', 'Complex SVG label',
-    'Gradient label', 'Filtered label', 'Pseudo label', 'Foreground copy',
-  ]) {
-    assert.match(editableText, new RegExp(text), text);
-  }
-
-  const diagnosticCodes = new Set(preparedModel.diagnostics.map((item) => item.code));
-  for (const code of ['manual_bullet_list', 'css_gradient', 'css_filter', 'complex_svg_raster', 'generated_content']) {
-    assert.ok(diagnosticCodes.has(code), code);
-  }
-  assert.ok(preparedModel.diagnostics.some((item) => item.severity === 'repaired'));
-  assert.ok(preparedModel.diagnostics.some((item) => item.severity === 'fallback'));
-  assert.ok(!preparedModel.diagnostics.some((item) => item.severity === 'blocking'));
-
-  const nativeBySource = new Map(preparedModel.elements.map((item) => [item.sourceId, item]));
-  assert.equal(nativeBySource.get('photo')?.type, 'image');
-  assert.equal(nativeBySource.get('css-shape')?.type, 'shape');
-  assert.equal(nativeBySource.get('css-triangle')?.svgType, 'triangle');
-  assert.equal(nativeBySource.get('svg-rect')?.type, 'svg-shape');
-  assert.equal(nativeBySource.get('svg-line')?.type, 'line');
-  const fallbackSources = new Set(preparedModel.fallbackLayers.map((item) => item.sourceId));
-  for (const sourceId of ['complex-svg', 'gradient', 'filtered', 'pseudo']) {
-    assert.ok(fallbackSources.has(sourceId), sourceId);
-  }
-  assert.equal(preparedModel.background.value, '0a141e');
-  const background = nativeBySource.get('css-shape');
-  const foreground = nativeBySource.get('foreground-copy');
-  assert.ok(background.paintOrder < foreground.paintOrder);
-  assert.ok(background.zIndex < foreground.zIndex);
+  assert.doesNotMatch(JSON.stringify(extracted), /fallbackLayers|svg-image|rasterBase64/);
 });
 
 test('returns blocking diagnostics for an unmeasurable slide canvas', () => {
@@ -605,26 +1741,21 @@ test('emits a structured pptx_serialization blocking diagnostic from the product
       throw serializationFailure;
     },
   };
-  const slideData = {
-    background: { type: 'color', value: 'FFFFFF' },
-    elements: [{
-      type: 'p',
+  const scene = {
+    slideNumber: 1,
+    width: 13.333,
+    height: 7.5,
+    nodes: [{
+      type: 'text',
       text: 'Serializable text',
-      position: { x: 1, y: 1, w: 4, h: 1 },
+      x: 1, y: 1, w: 4, h: 1,
       style: { fontSize: 20, fontFace: 'Arial', color: '111111', align: 'left' },
       sourceId: 'source-text',
     }],
-    placeholders: [],
-    diagnostics: [],
-    errors: [],
   };
 
   await assert.rejects(
-    buildSlideFromExtracted(
-      slideData,
-      { width: 1280, height: 720, errors: [] },
-      { addSlide: () => targetSlide, ShapeType: {} },
-    ),
+    buildSlideFromScene(scene, { addSlide: () => targetSlide, ShapeType: {} }),
     (error) => {
       assert.equal(error, serializationFailure);
       assert.equal(error.diagnostic?.severity, 'blocking');
@@ -665,48 +1796,11 @@ test('keeps editable HTML objects and emits native basic SVG primitives with sou
   assert.equal(svgElements.length, 4);
   assert.deepEqual(svgElements.map((element) => element.kind), ['native', 'native', 'native', 'native']);
   assert.ok(svgElements.every((element) => element.sourceId && Number.isFinite(element.zIndex)));
+  assert.equal(svgElements.find((element) => element.svgType === 'rect')?.shape?.fill, 'ff0000');
+  assert.equal(svgElements.find((element) => element.svgType === 'rect')?.shape?.line?.color, '000000');
+  assert.equal(svgElements.find((element) => element.svgType === 'circle')?.shape?.fill, '00ff00');
+  assert.equal(svgElements.find((element) => element.type === 'line')?.color, '0000ff');
   assert.equal(svgElements.find((element) => element.text === 'SVG label')?.type, 'svg-text');
-});
-
-test('serializes fallback layers in paint order without removing editable objects', async () => {
-  const calls = [];
-  const slide = {
-    addText(value, options) { calls.push({ op: 'text', value, options }); },
-    addImage(options) { calls.push({ op: 'image', options }); },
-    addShape(type, options) { calls.push({ op: 'shape', type, options }); },
-  };
-  await buildSlideFromExtracted({
-    background: { type: 'color', value: 'FFFFFF' },
-    elements: [
-      {
-        type: 'p',
-        text: 'Editable',
-        sourceId: 'text',
-        zIndex: 20,
-        kind: 'native',
-        position: { x: 1, y: 1, w: 4, h: 1 },
-        style: { fontSize: 20, fontFace: 'Arial', color: '111111', align: 'left' },
-      },
-    ],
-    fallbackLayers: [{
-      sourceId: 'complex-visual',
-      kind: 'raster',
-      zIndex: 10,
-      bbox: { x: 0, y: 0, w: 2, h: 2 },
-      data: 'data:image/png;base64,AA==',
-      diagnostics: [{ severity: 'fallback', code: 'css_gradient', message: 'gradient' }],
-    }],
-    placeholders: [],
-    diagnostics: [],
-    errors: [],
-  }, { width: 1280, height: 720, errors: [] }, {
-    addSlide: () => slide,
-    ShapeType: { line: 'line', rect: 'rect', roundRect: 'roundRect' },
-  });
-
-  assert.deepEqual(calls.map((call) => call.op), ['image', 'text']);
-  assert.equal(calls[0].options.x, 0);
-  assert.equal(calls[1].value, 'Editable');
 });
 
 test('maps SVG polyline and recognized polygons to editable geometry with local fill fidelity', () => {
@@ -727,7 +1821,6 @@ test('maps SVG polyline and recognized polygons to editable geometry with local 
   const triangle = slideData.elements.find((element) => element.sourceId === 'triangle');
   const diamond = slideData.elements.find((element) => element.sourceId === 'diamond');
   const freeform = slideData.elements.filter((element) => element.sourceId === 'freeform');
-  const fidelity = slideData.fallbackLayers?.find((layer) => layer.sourceId === 'freeform');
 
   assert.equal(route.length, 2);
   assert.ok(route.every((element) => element.type === 'line' && element.kind === 'native'));
@@ -736,9 +1829,7 @@ test('maps SVG polyline and recognized polygons to editable geometry with local 
   assert.equal(diamond?.svgType, 'diamond');
   assert.equal(freeform.length, 5);
   assert.ok(freeform.every((element) => element.type === 'line' && element.kind === 'native'));
-  assert.equal(fidelity?.kind, 'svg-image');
-  assert.equal(fidelity?.zIndex, 7);
-  assert.match(fidelity?.data || '', /^data:image\/svg\+xml/);
+  assert.equal(Object.hasOwn(slideData, 'fallbackLayers'), false);
   assert.ok(slideData.elements.some((element) => element.text === 'Editable stays'));
 });
 
@@ -776,29 +1867,6 @@ test('applies viewBox plus translate scale and rotate transforms to SVG coordina
   );
 });
 
-test('serializes path-only complex SVG as a local movable vector layer without duplicating SVG text', () => {
-  const doc = createDocument(`
-    <p>HTML text remains editable</p>
-    <svg id="logo" viewBox="0 0 100 100" style="z-index: 4">
-      <path data-pptx-source-id="curve" d="M 5 80 C 20 5, 80 5, 95 80" fill="#ffee00" stroke="#111111"/>
-      <text data-pptx-source-id="logo-label" x="10" y="95">Editable SVG text</text>
-    </svg>
-  `);
-  sanitizeSlideDocumentRoot(doc);
-  installMeasurableLayout(doc);
-
-  const slideData = extractSlideDataFromDocument(doc);
-  const layer = slideData.fallbackLayers?.find((item) => item.sourceId === 'curve');
-  const decoded = decodeURIComponent(String(layer?.data || '').split(',').slice(1).join(','));
-
-  assert.equal(layer?.kind, 'svg-image');
-  assert.equal(layer?.zIndex, 4);
-  assert.match(decoded, /<path/);
-  assert.doesNotMatch(decoded, /Editable SVG text/);
-  assert.ok(slideData.elements.some((element) => element.type === 'svg-text' && element.text === 'Editable SVG text'));
-  assert.ok(slideData.elements.some((element) => element.text === 'HTML text remains editable'));
-});
-
 test('maps a common CSS border triangle to a native editable triangle', () => {
   const doc = createDocument(`
     <div data-pptx-source-id="arrow" style="
@@ -820,604 +1888,85 @@ test('maps a common CSS border triangle to a native editable triangle', () => {
   assert.equal(triangle?.shape.fill, 'ff0000');
 });
 
-test('fake PPTX receives native shapes text lines and local SVG images while preserving metadata', async () => {
-  const calls = [];
-  const slide = {
-    addText(value, options) { calls.push({ op: 'text', value, options }); },
-    addImage(options) { calls.push({ op: 'image', options }); },
-    addShape(type, options) { calls.push({ op: 'shape', type, options }); },
-  };
-  const elements = [
-    {
-      type: 'svg-shape', svgType: 'triangle', kind: 'native', sourceId: 'triangle', zIndex: 1, paintOrder: 1,
-      text: '', position: { x: 1, y: 1, w: 1, h: 1 },
-      shape: { fill: 'FF0000', line: null, rectRadius: 0 },
-    },
-    {
-      type: 'line', kind: 'native', sourceId: 'route', zIndex: 3, paintOrder: 3,
-      x1: 1, y1: 1, x2: 2, y2: 2, color: '000000', width: 1,
-    },
-    {
-      type: 'svg-text', kind: 'native', sourceId: 'label', zIndex: 4, paintOrder: 4,
-      text: 'Vector text', position: { x: 1, y: 1, w: 2, h: 1 },
-      style: { fontSize: 16, fontFace: 'Arial', color: '111111', align: 'left' },
-    },
+test('simulates the WebKit border-box regression for semantic CSS triangles', () => {
+  const cases = [
+    { side: 'Bottom', rotate: 0, width: 84, height: 74, cross: ['Left', 'Right'] },
+    { side: 'Left', rotate: 90, width: 16, height: 18, cross: ['Top', 'Bottom'] },
+    { side: 'Top', rotate: 180, width: 44, height: 28, cross: ['Left', 'Right'] },
+    { side: 'Right', rotate: 270, width: 18, height: 20, cross: ['Top', 'Bottom'] },
   ];
-  const fallbackLayers = [{
-    sourceId: 'curve', zIndex: 2, paintOrder: 2, kind: 'svg-image',
-    bbox: { x: 0, y: 0, w: 3, h: 2 },
-    data: 'data:image/svg+xml,%3Csvg%3E%3Cpath%20d%3D%22M0%200L1%201%22%2F%3E%3C%2Fsvg%3E',
-    diagnostics: [],
-  }];
+  const markup = cases.map(({ side, cross }, index) => `
+    <div data-pptx-source-id="webkit-${side.toLowerCase()}" style="
+      position:absolute;left:${80 + index * 120}px;top:80px;
+      width:0;height:0;box-sizing:border-box;
+      border-${cross[0].toLowerCase()}:${index + 9}px solid transparent;
+      border-${cross[1].toLowerCase()}:${index + 9}px solid transparent;
+      border-${side.toLowerCase()}:${index + 16}px solid rgb(15,118,110)">
+    </div>
+  `).join('');
+  const doc = createDocument(`${markup}
+    <div data-pptx-source-id="ordinary-partial" style="
+      width:120px;height:40px;
+      border-top:2px solid transparent;
+      border-bottom:2px solid transparent;
+      border-left:4px solid rgb(30,41,59)">Visible content</div>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
 
-  await buildSlideFromExtracted({
-    background: { type: 'color', value: 'FFFFFF' },
-    elements,
-    fallbackLayers,
-    placeholders: [],
-    diagnostics: [],
-    errors: [],
-  }, { width: 1280, height: 720, errors: [] }, {
-    addSlide: () => slide,
-    ShapeType: {
-      line: 'line', rect: 'rect', roundRect: 'roundRect', ellipse: 'ellipse',
-      triangle: 'triangle', diamond: 'diamond',
-    },
+  const nativeGetComputedStyle = doc.defaultView.getComputedStyle.bind(doc.defaultView);
+  const webkitSizes = new Map(cases.map(({ side, width, height }) => (
+    [`webkit-${side.toLowerCase()}`, { width, height }]
+  )));
+  doc.defaultView.getComputedStyle = (element, pseudoElement) => {
+    const computed = nativeGetComputedStyle(element, pseudoElement);
+    const size = webkitSizes.get(element.dataset?.pptxSourceId);
+    if (!size) return computed;
+    return new Proxy(computed, {
+      get(target, property) {
+        if (property === 'width') return `${size.width}px`;
+        if (property === 'height') return `${size.height}px`;
+        if (property === 'boxSizing') return 'border-box';
+        return Reflect.get(target, property, target);
+      },
+    });
+  };
+  cases.forEach(({ side, width, height }, index) => {
+    const element = doc.querySelector(`[data-pptx-source-id="webkit-${side.toLowerCase()}"]`);
+    element.getBoundingClientRect = () => ({
+      x: 80 + index * 120,
+      y: 80,
+      left: 80 + index * 120,
+      top: 80,
+      right: 80 + index * 120 + width,
+      bottom: 80 + height,
+      width,
+      height,
+    });
   });
 
-  assert.deepEqual(calls.map((call) => call.op), ['shape', 'image', 'shape', 'text']);
-  assert.equal(calls[0].options.shape, 'triangle');
-  assert.equal(calls[1].options.data.startsWith('data:image/svg+xml'), true);
-  assert.equal(calls[2].type, 'line');
-  assert.equal(calls[3].value, 'Vector text');
-  assert.deepEqual(
-    elements.map(({ sourceId, zIndex, kind }) => ({ sourceId, zIndex, kind })),
-    [
-      { sourceId: 'triangle', zIndex: 1, kind: 'native' },
-      { sourceId: 'route', zIndex: 3, kind: 'native' },
-      { sourceId: 'label', zIndex: 4, kind: 'native' },
-    ],
-  );
-});
-
-test('builds one transparent text-hidden raster HTML request per unsupported source visual', () => {
-  const doc = createDocument(`
-    <div data-pptx-source-id="gradient" style="background-image: linear-gradient(red, blue)">
-      <p>Editable gradient label</p>
-    </div>
-    <div data-pptx-source-id="filtered" style="filter: blur(2px)">
-      <p>Editable filter label</p>
-    </div>
-    <div data-pptx-source-id="native" style="background: rgb(1, 2, 3)">Unrelated visual</div>
-  `);
-  const repair = sanitizeSlideDocumentRoot(doc);
-  installMeasurableLayout(doc);
   const slideData = extractSlideDataFromDocument(doc);
-  const diagnostics = [...repair.diagnostics, ...slideData.diagnostics];
-
-  const requests = buildRasterFallbackRequests(doc, diagnostics);
-
-  assert.deepEqual(requests.map((request) => request.sourceId).sort(), ['filtered', 'gradient']);
-  assert.ok(requests.every((request) => request.kind === 'raster' && Number.isFinite(request.zIndex)));
-  assert.ok(requests.every((request) => request.bbox.w > 0 && request.bbox.h > 0));
-  assert.ok(requests.every((request) => request.html === undefined && typeof request.buildHtml === 'function'));
-  assert.ok(requests.every((request) => /background:\s*transparent\s*!important/i.test(request.buildHtml())));
-  assert.ok(requests.every((request) => /pptx-raster-hide-editable-text/.test(request.buildHtml())));
-  assert.ok(requests.every((request) => /data-pptx-raster-target="1"/.test(request.buildHtml())));
-  assert.ok(requests.every((request) => /visibility:\s*hidden\s*!important/.test(request.buildHtml())));
-  assert.ok(slideData.elements.some((element) => element.text === 'Editable gradient label'));
-  assert.ok(slideData.elements.some((element) => element.text === 'Editable filter label'));
-});
-
-test('request-build failures escalate without silently dropping unsupported visuals', async (t) => {
-  const fullPageRequest = {
-    sourceId: 'slide-1',
-    zIndex: 0,
-    paintOrder: 0,
-    kind: 'raster',
-    phase: 'full-page',
-    bbox: { x: 0, y: 0, w: 13.333, h: 7.5 },
-    html: '<html><body>full page</body></html>',
-    diagnostics: [],
-  };
-  const runPlan = async (doc, diagnostics, renderRaster) => {
-    const localRequests = buildRasterFallbackRequests(doc, diagnostics);
-    return {
-      localRequests,
-      pageVisualRequest: buildPageVisualFallbackRequest(doc, localRequests),
-      result: await renderRasterFallbackPlan({
-        localRequests,
-        pageVisualRequest: buildPageVisualFallbackRequest(doc, localRequests),
-        fullPageRequest,
-      }, renderRaster, 0),
-    };
-  };
-
-  await t.test('missing source element records local and page build failures before full-page fallback', async () => {
-    const doc = createDocument(`
-      <div data-pptx-source-id="valid-gradient" style="background-image:linear-gradient(red,blue)"></div>
-      <p>Editable text survives in source HTML</p>
-    `);
-    const phases = [];
-    const { localRequests, pageVisualRequest, result } = await runPlan(doc, [
-      { severity: 'fallback', code: 'css_gradient', sourceId: 'missing-gradient' },
-      { severity: 'fallback', code: 'css_gradient', sourceId: 'valid-gradient' },
-    ], async (_html, _index, metadata) => {
-      phases.push(metadata.phase);
-      return metadata.phase === 'full-page' ? 'full-page-png' : 'local-png';
-    });
-
-    assert.equal(localRequests.length, 2);
-    const missingRequest = localRequests.find((request) => request.sourceId === 'missing-gradient');
-    assert.equal(missingRequest.buildFailure?.code, 'local_raster_target_missing');
-    assert.equal(missingRequest.buildFailure?.stage, 'request-build');
-    assert.match(missingRequest.buildFailure?.reason || '', /missing-gradient/);
-    assert.equal(pageVisualRequest.buildFailure?.code, 'page_visual_target_missing');
-    assert.deepEqual(phases, ['local-visual', 'full-page']);
-    assert.equal(result.blocking, false);
-    assert.equal(result.fullPageFallback?.data, 'data:image/png;base64,full-page-png');
-    assert.ok(result.diagnostics.some((item) => (
-      item.code === 'local_raster_target_missing'
-        && item.sourceId === 'missing-gradient'
-        && item.stage === 'request-build'
-        && item.reason
-    )));
-    assert.ok(result.diagnostics.some((item) => (
-      item.code === 'page_visual_target_missing'
-        && item.sourceId === 'slide-visuals'
-        && item.stage === 'request-build'
-        && item.reason
-    )));
-    assert.ok(result.diagnostics.some((item) => item.code === 'full_page_fallback'));
-
-    const blocked = await runPlan(doc, [
-      { severity: 'fallback', code: 'css_gradient', sourceId: 'missing-gradient' },
-      { severity: 'fallback', code: 'css_gradient', sourceId: 'valid-gradient' },
-    ], async () => {
-      throw new Error('full-page host failed');
-    });
-    assert.equal(blocked.result.blocking, true);
-    assert.equal(blocked.result.fullPageFallback, null);
-    assert.ok(blocked.result.diagnostics.some((item) => (
-      item.code === 'full_page_raster_failed'
-        && item.severity === 'blocking'
-        && item.stage === 'render'
-        && /full-page host failed/.test(item.reason)
-    )));
+  cases.forEach(({ side, rotate, width, height }) => {
+    const sourceId = `webkit-${side.toLowerCase()}`;
+    const nodes = slideData.elements.filter((element) => element.sourceId === sourceId);
+    assert.equal(nodes.length, 1, `${side} must not also emit border lines`);
+    assert.equal(nodes[0].svgType, 'triangle', side);
+    assert.equal(nodes[0].kind, 'native', side);
+    assert.equal(nodes[0].shape.rotate, rotate, side);
+    assert.equal(nodes[0].position.w, width / 96, `${side} bbox width`);
+    assert.equal(nodes[0].position.h, height / 96, `${side} bbox height`);
   });
-
-  await t.test('zero-size source skips local renderer but invokes page-visual renderer with source coverage', async () => {
-    const doc = createDocument(`
-      <div data-pptx-source-id="zero-gradient" style="background-image:linear-gradient(red,blue)">
-        <p>Editable zero-size label</p>
-      </div>
-    `);
-    doc.querySelector('[data-pptx-source-id="zero-gradient"]').getBoundingClientRect = () => ({
-      x: 40, y: 40, left: 40, top: 40, right: 40, bottom: 40, width: 0, height: 0,
-    });
-    const phases = [];
-    const { localRequests, result } = await runPlan(doc, [
-      { severity: 'fallback', code: 'css_gradient', sourceId: 'zero-gradient' },
-    ], async (_html, _index, metadata) => {
-      phases.push(metadata.phase);
-      return 'page-visual-png';
-    });
-
-    assert.equal(localRequests[0].buildFailure?.code, 'local_raster_unmeasurable');
-    assert.deepEqual(phases, ['page-visual']);
-    assert.equal(result.fullPageFallback, null);
-    assert.equal(result.layers[0].data, 'data:image/png;base64,page-visual-png');
-    assert.deepEqual(result.layers[0].sourceIds, ['zero-gradient']);
-    assert.ok(result.diagnostics.some((item) => (
-      item.code === 'local_raster_unmeasurable'
-        && item.sourceId === 'zero-gradient'
-        && item.stage === 'request-build'
-    )));
-    assert.ok(result.diagnostics.some((item) => item.code === 'page_visual_fallback'));
-  });
-
-  await t.test('serialization failure records both build stages and reaches full-page renderer', async () => {
-    const doc = createDocument(`
-      <div data-pptx-source-id="broken-filter" style="filter:blur(2px)">
-        <p>Editable filtered label</p>
-      </div>
-    `);
-    doc.body.cloneNode = () => {
-      throw new Error('DOM clone failed');
-    };
-    const phases = [];
-    const { localRequests, pageVisualRequest, result } = await runPlan(doc, [
-      { severity: 'fallback', code: 'css_filter', sourceId: 'broken-filter' },
-    ], async (_html, _index, metadata) => {
-      phases.push(metadata.phase);
-      return 'full-page-after-clone-error';
-    });
-
-    assert.equal(localRequests[0].buildFailure?.code, 'local_raster_serialize_failed');
-    assert.equal(pageVisualRequest.buildFailure?.code, 'page_visual_serialize_failed');
-    assert.deepEqual(phases, ['full-page']);
-    assert.equal(result.fullPageFallback?.data, 'data:image/png;base64,full-page-after-clone-error');
-    for (const code of ['local_raster_serialize_failed', 'page_visual_serialize_failed']) {
-      assert.ok(result.diagnostics.some((item) => (
-        item.code === code
-          && item.stage === 'request-build'
-          && /DOM clone failed/.test(item.reason)
-      )), code);
-    }
-  });
+  const ordinaryNodes = slideData.elements.filter((element) => (
+    element.sourceId === 'ordinary-partial'
+  ));
+  assert.equal(ordinaryNodes.some((element) => element.svgType === 'triangle'), false);
+  assert.equal(ordinaryNodes.filter((element) => element.type === 'line').length, 3);
 });
 
-test('renders local PNG fallback requests independently and preserves layer metadata', async () => {
-  const calls = [];
-  const requests = [
-    {
-      sourceId: 'gradient', zIndex: 2, paintOrder: 3, kind: 'raster',
-      bbox: { x: 1, y: 1, w: 2, h: 1 }, html: '<html>gradient</html>', diagnostics: [],
-    },
-    {
-      sourceId: 'filter', zIndex: 5, paintOrder: 8, kind: 'raster',
-      bbox: { x: 4, y: 2, w: 3, h: 2 }, html: '<html>filter</html>', diagnostics: [],
-    },
-  ];
-
-  const result = await renderRasterFallbackLayers(
-    requests,
-    async (html, slideIndex, metadata) => {
-      calls.push({ html, slideIndex, metadata });
-      return `png-${metadata.sourceId}`;
-    },
-    6,
-  );
-
-  assert.equal(result.failures.length, 0);
-  assert.deepEqual(result.layers.map((layer) => layer.sourceId), ['gradient', 'filter']);
-  assert.deepEqual(result.layers.map((layer) => layer.data), [
-    'data:image/png;base64,png-gradient',
-    'data:image/png;base64,png-filter',
-  ]);
-  assert.deepEqual(result.layers.map(({ bbox, zIndex, paintOrder, kind }) => ({
-    bbox, zIndex, paintOrder, kind,
-  })), requests.map(({ bbox, zIndex, paintOrder, kind }) => ({
-    bbox, zIndex, paintOrder, kind,
-  })));
-  assert.deepEqual(calls.map((call) => call.metadata.sourceId), ['gradient', 'filter']);
-  assert.ok(calls.every((call) => call.slideIndex === 6));
-});
-
-test('escalates local raster failure to page visuals and then full-page fallback with located diagnostics', async () => {
-  const calls = [];
-  const localRequests = [{
-    sourceId: 'gradient-card', zIndex: 3, paintOrder: 4, kind: 'raster', phase: 'local-visual',
-    bbox: { x: 1, y: 1, w: 2, h: 2 }, html: '<html>local</html>', diagnostics: [],
-  }];
-  const pageVisualRequest = {
-    sourceId: 'slide-visuals', zIndex: 3, paintOrder: 4, kind: 'raster', phase: 'page-visual',
-    bbox: { x: 0, y: 0, w: 13.333, h: 7.5 }, html: '<html>visuals</html>', diagnostics: [],
-  };
-  const fullPageRequest = {
-    sourceId: 'slide-7', zIndex: 0, paintOrder: 0, kind: 'raster', phase: 'full-page',
-    bbox: { x: 0, y: 0, w: 13.333, h: 7.5 }, html: '<html>full</html>', diagnostics: [],
-  };
-
-  const result = await renderRasterFallbackPlan({
-    localRequests,
-    pageVisualRequest,
-    fullPageRequest,
-  }, async (_html, _index, metadata) => {
-    calls.push(metadata);
-    if (metadata.phase !== 'full-page') throw new Error(`${metadata.phase} failed`);
-    return 'full-page-png';
-  }, 6);
-
-  assert.deepEqual(calls.map((call) => call.phase), ['local-visual', 'page-visual', 'full-page']);
-  assert.equal(result.layers.length, 0);
-  assert.equal(result.fullPageFallback?.data, 'data:image/png;base64,full-page-png');
-  assert.equal(result.fullPageFallback?.sourceId, 'slide-7');
-  assert.equal(result.blocking, false);
-  assert.ok(result.diagnostics.some((diagnostic) => (
-    diagnostic.code === 'full_page_fallback'
-      && diagnostic.slideNumber === 7
-      && diagnostic.sourceId === 'slide-7'
-      && diagnostic.phase === 'full-page'
-  )));
-  assert.ok(result.diagnostics.some((diagnostic) => (
-    diagnostic.code === 'local_raster_failed'
-      && diagnostic.sourceId === 'gradient-card'
-      && /local-visual failed/.test(diagnostic.reason)
-  )));
-});
-
-test('uses one page-visual layer after a local failure and does not render full page', async () => {
-  const phases = [];
-  const result = await renderRasterFallbackPlan({
-    localRequests: [{
-      sourceId: 'pseudo', zIndex: 2, paintOrder: 5, kind: 'raster', phase: 'local-visual',
-      bbox: { x: 1, y: 1, w: 1, h: 1 }, html: '<html>local</html>', diagnostics: [],
-    }],
-    pageVisualRequest: {
-      sourceId: 'slide-visuals', zIndex: 2, paintOrder: 5, kind: 'raster', phase: 'page-visual',
-      bbox: { x: 0, y: 0, w: 13.333, h: 7.5 }, html: '<html>visual</html>', diagnostics: [],
-    },
-    fullPageRequest: {
-      sourceId: 'slide-1', kind: 'raster', phase: 'full-page',
-      bbox: { x: 0, y: 0, w: 13.333, h: 7.5 }, html: '<html>full</html>', diagnostics: [],
-    },
-  }, async (_html, _index, metadata) => {
-    phases.push(metadata.phase);
-    if (metadata.phase === 'local-visual') throw new Error('local failed');
-    return 'visual-png';
-  }, 0);
-
-  assert.deepEqual(phases, ['local-visual', 'page-visual']);
-  assert.equal(result.fullPageFallback, null);
-  assert.equal(result.layers.length, 1);
-  assert.equal(result.layers[0].phase, 'page-visual');
-  assert.equal(result.layers[0].data, 'data:image/png;base64,visual-png');
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'page_visual_fallback'));
-});
-
-test('records every fallback level and keeps all source coverage when local rendering partially fails', async (t) => {
-  const localRequests = [
-    {
-      sourceId: 'gradient', zIndex: 1, paintOrder: 1, kind: 'raster', phase: 'local-visual',
-      bbox: { x: 1, y: 1, w: 2, h: 1 }, html: '<html>gradient</html>',
-      suppressedNativeVisualIds: ['gradient'], diagnostics: [],
-    },
-    {
-      sourceId: 'filtered', zIndex: 2, paintOrder: 2, kind: 'raster', phase: 'local-visual',
-      bbox: { x: 4, y: 1, w: 2, h: 1 }, html: '<html>filtered</html>',
-      suppressedNativeVisualIds: ['filtered', 'filtered-image'], diagnostics: [],
-    },
-  ];
-  const pageVisualRequest = {
-    sourceId: 'slide-visuals',
-    sourceIds: ['gradient', 'filtered'],
-    suppressedNativeVisualIds: ['gradient', 'filtered', 'filtered-image'],
-    zIndex: 1,
-    paintOrder: 1,
-    kind: 'raster',
-    phase: 'page-visual',
-    bbox: { x: 0, y: 0, w: 13.333, h: 7.5 },
-    html: '<html>all unsupported visuals</html>',
-    diagnostics: [],
-  };
-  const fullPageRequest = {
-    sourceId: 'slide-4',
-    zIndex: 0,
-    paintOrder: 0,
-    kind: 'raster',
-    phase: 'full-page',
-    bbox: { x: 0, y: 0, w: 13.333, h: 7.5 },
-    html: '<html>full page</html>',
-    diagnostics: [],
-  };
-
-  await t.test('page visual replaces the complete unsupported source set after one local failure', async () => {
-    const attempts = [];
-    const result = await renderRasterFallbackPlan({
-      localRequests,
-      pageVisualRequest,
-      fullPageRequest,
-    }, async (_html, _slideIndex, metadata) => {
-      attempts.push(`${metadata.phase}:${metadata.sourceId}`);
-      if (metadata.sourceId === 'filtered') throw new Error('filtered local failed');
-      return Buffer.from(metadata.sourceId).toString('base64');
-    }, 3);
-
-    assert.deepEqual(attempts, [
-      'local-visual:gradient',
-      'local-visual:filtered',
-      'page-visual:slide-visuals',
-    ]);
-    assert.equal(result.blocking, false);
-    assert.equal(result.fullPageFallback, null);
-    assert.equal(result.layers.length, 1);
-    assert.deepEqual(result.layers[0].sourceIds, ['gradient', 'filtered']);
-    assert.deepEqual(
-      result.layers[0].suppressedNativeVisualIds,
-      ['gradient', 'filtered', 'filtered-image'],
-    );
-    assert.ok(result.diagnostics.some((item) => (
-      item.code === 'local_raster_failed'
-        && item.sourceId === 'filtered'
-        && item.slideNumber === 4
-    )));
-    assert.ok(result.diagnostics.some((item) => (
-      item.code === 'page_visual_fallback'
-        && item.sourceId === 'slide-visuals'
-        && item.slideNumber === 4
-    )));
-  });
-
-  await t.test('all failed levels produce located blocking evidence instead of an empty success', async () => {
-    const result = await renderRasterFallbackPlan({
-      localRequests,
-      pageVisualRequest,
-      fullPageRequest,
-    }, async (_html, _slideIndex, metadata) => {
-      throw new Error(`${metadata.phase}:${metadata.sourceId} unavailable`);
-    }, 3);
-
-    assert.equal(result.blocking, true);
-    assert.deepEqual(result.layers, []);
-    assert.equal(result.fullPageFallback, null);
-    const byCode = new Map(result.diagnostics.map((item) => [item.code, item]));
-    assert.equal(byCode.get('local_raster_failed')?.sourceId, 'filtered');
-    assert.equal(byCode.get('page_visual_raster_failed')?.sourceId, 'slide-visuals');
-    assert.equal(byCode.get('full_page_raster_failed')?.sourceId, 'slide-4');
-    assert.equal(byCode.get('full_page_raster_failed')?.severity, 'blocking');
-    assert.equal(byCode.get('full_page_raster_failed')?.slideNumber, 4);
-    for (const diagnostic of result.diagnostics) {
-      assert.ok(diagnostic.reason, `${diagnostic.code} must retain its renderer failure`);
-      assert.ok(diagnostic.sourceId, `${diagnostic.code} must retain its source location`);
-      assert.ok(diagnostic.phase, `${diagnostic.code} must retain its fallback phase`);
-    }
-  });
-});
-
-test('builds a transparent page-visual request containing only all unsupported targets', () => {
-  const doc = createDocument(`
-    <div data-pptx-source-id="one" style="background-image: linear-gradient(red, blue)"><p>One</p></div>
-    <div data-pptx-source-id="two" style="filter: blur(2px)"><p>Two</p></div>
-    <div data-pptx-source-id="native" style="background: red"><p>Native</p></div>
-  `);
-  const repair = sanitizeSlideDocumentRoot(doc);
-  installMeasurableLayout(doc);
-  const localRequests = buildRasterFallbackRequests(doc, repair.diagnostics);
-
-  const request = buildPageVisualFallbackRequest(doc, localRequests);
-
-  assert.equal(request.phase, 'page-visual');
-  assert.equal(request.kind, 'raster');
-  assert.deepEqual(request.sourceIds.sort(), ['one', 'two']);
-  assert.equal(request.html, undefined);
-  assert.equal((request.buildHtml().match(/<[^>]+data-pptx-raster-target="1"/g) || []).length, 2);
-  assert.match(request.buildHtml(), /background:\s*transparent\s*!important/i);
-  assert.match(request.buildHtml(), /pptx-raster-hide-editable-text/);
-});
-
-test('full-page fallback serializes as the only slide object', async () => {
-  const calls = [];
-  const slide = {
-    addText(value, options) { calls.push({ op: 'text', value, options }); },
-    addImage(options) { calls.push({ op: 'image', options }); },
-    addShape(type, options) { calls.push({ op: 'shape', type, options }); },
-  };
-
-  await buildSlideFromExtracted({
-    background: { type: 'color', value: 'FFFFFF' },
-    elements: [{
-      type: 'p',
-      text: 'Must not duplicate',
-      sourceId: 'text',
-      kind: 'native',
-      zIndex: 1,
-      position: { x: 1, y: 1, w: 2, h: 1 },
-      style: { fontSize: 18, fontFace: 'Arial', color: '111111', align: 'left' },
-    }],
-    fallbackLayers: [],
-    fullPageFallback: {
-      sourceId: 'slide-3',
-      kind: 'raster',
-      phase: 'full-page',
-      data: 'data:image/png;base64,full-page',
-    },
-    placeholders: [],
-    diagnostics: [],
-    errors: [],
-  }, { width: 1280, height: 720, errors: [] }, {
-    addSlide: () => slide,
-    ShapeType: { line: 'line', rect: 'rect', roundRect: 'roundRect' },
-  });
-
-  assert.deepEqual(calls.map((call) => call.op), ['image']);
-  assert.deepEqual(
-    (({ x, y, w, h }) => ({ x, y, w, h }))(calls[0].options),
-    { x: 0, y: 0, w: 13.333, h: 7.5 },
-  );
-});
-
-test('places an uncropped transparent local fallback canvas at full-slide geometry while retaining source bbox', async () => {
-  const calls = [];
-  const slide = {
-    addImage(options) { calls.push(options); },
-    addText() {},
-    addShape() {},
-  };
-  const layer = {
-    sourceId: 'filtered-card',
-    kind: 'raster',
-    phase: 'local-visual',
-    canvas: 'full-page',
-    zIndex: 2,
-    paintOrder: 2,
-    bbox: { x: 4, y: 2, w: 2, h: 1 },
-    data: 'data:image/png;base64,transparent-page-canvas',
-  };
-
-  await buildSlideFromExtracted({
-    background: { type: 'color', value: 'FFFFFF' },
-    elements: [],
-    fallbackLayers: [layer],
-    placeholders: [],
-    diagnostics: [],
-    errors: [],
-  }, { width: 1280, height: 720, errors: [] }, {
-    addSlide: () => slide,
-    ShapeType: {},
-  });
-
-  assert.deepEqual(
-    (({ x, y, w, h }) => ({ x, y, w, h }))(calls[0]),
-    { x: 0, y: 0, w: 13.333, h: 7.5 },
-  );
-  assert.deepEqual(layer.bbox, { x: 4, y: 2, w: 2, h: 1 });
-});
-
-test('summarizes repairs local SVG PNG full-page fallback and blocking diagnostics by slide and source', () => {
-  const summary = summarizePptxExportDiagnostics([
-    {
-      index: 0,
-      slideData: {
-        diagnostics: [
-          { severity: 'repaired', code: 'manual_bullet_list', sourceId: 'list' },
-          { severity: 'fallback', code: 'page_visual_fallback', sourceId: 'slide-visuals', phase: 'page-visual' },
-        ],
-        fallbackLayers: [
-          { kind: 'svg-image', sourceId: 'curve', phase: 'local-svg' },
-          { kind: 'raster', sourceId: 'gradient', phase: 'local-visual' },
-          { kind: 'raster', sourceId: 'slide-visuals', phase: 'page-visual' },
-        ],
-      },
-    },
-    {
-      index: 2,
-      slideData: {
-        diagnostics: [
-          {
-            severity: 'fallback', code: 'full_page_fallback', sourceId: 'slide-3',
-            phase: 'full-page', reason: 'local and page visual failed',
-          },
-          {
-            severity: 'blocking', code: 'pptx_serialization', sourceId: 'bad-shape',
-            reason: 'serialization failed',
-          },
-        ],
-        fallbackLayers: [],
-        fullPageFallback: { kind: 'raster', sourceId: 'slide-3', phase: 'full-page' },
-      },
-    },
-  ]);
-
-  assert.deepEqual(summary.counts, {
-    repaired: 1,
-    svgImage: 1,
-    localPng: 1,
-    pageVisual: 1,
-    fullPage: 1,
-    blocking: 1,
-  });
-  assert.ok(summary.locations.some((item) => (
-    item.slideNumber === 1 && item.sourceId === 'curve' && item.phase === 'local-svg'
-  )));
-  assert.ok(summary.locations.some((item) => (
-    item.slideNumber === 3 && item.sourceId === 'slide-3' && item.phase === 'full-page'
-  )));
-  assert.ok(summary.locations.some((item) => (
-    item.slideNumber === 3 && item.sourceId === 'bad-shape' && item.severity === 'blocking'
-  )));
-  assert.equal(summary.hasWarnings, true);
-  assert.equal(summary.hasBlocking, true);
-});
-
-test('localized export diagnostic labels cover every summarized count and location', () => {
+test('localized export diagnostic labels cover strict summarized counts and locations', () => {
   const requiredKeys = [
     'exportDiagnosticsSummary',
     'exportDiagnosticsRepaired',
-    'exportDiagnosticsSvg',
-    'exportDiagnosticsLocalPng',
-    'exportDiagnosticsPageVisual',
-    'exportDiagnosticsFullPage',
     'exportDiagnosticsBlocking',
     'exportDiagnosticsLocation',
   ];
@@ -1429,11 +1978,11 @@ test('localized export diagnostic labels cover every summarized count and locati
 test('localizes known diagnostics and safely redacts unknown low-level reasons', () => {
   assert.equal(
     formatLocalizedExportDiagnostic({ code: 'canvas_overflow' }, 'zh-CN').reason,
-    '页面内容超出幻灯片边界，已切换视觉兜底。',
+    '页面内容超出可编辑幻灯片边界。',
   );
   assert.equal(
     formatLocalizedExportDiagnostic({ code: 'canvas_overflow' }, 'en-US').reason,
-    'Slide content exceeded the canvas; visual fallback was used.',
+    'Slide content exceeds the editable canvas.',
   );
   const unknown = formatLocalizedExportDiagnostic({
     code: 'vendor_failure',
@@ -1446,158 +1995,29 @@ test('localizes known diagnostics and safely redacts unknown low-level reasons',
   assert.ok(unknown.reason.length <= 120);
 });
 
-test('routes filter mask and foreignObject SVG visuals to local PNG without dropping editable text', () => {
-  const doc = createDocument(`
-    <svg data-pptx-source-id="unsafe-svg" viewBox="0 0 100 100">
-      <defs><filter id="blur"><feGaussianBlur stdDeviation="2"/></filter></defs>
-      <path data-pptx-source-id="filtered-path" d="M0 0L90 90" filter="url(#blur)"/>
-      <mask id="mask"><rect width="100" height="100" fill="white"/></mask>
-      <foreignObject x="5" y="5" width="40" height="20"><div>Foreign visual</div></foreignObject>
-      <text data-pptx-source-id="unsafe-label" x="10" y="90">Editable label</text>
-    </svg>
-    <svg data-pptx-source-id="unsafe-reference" viewBox="0 0 100 100">
-      <use href="https://example.invalid/external.svg#shape"/>
-    </svg>
-  `);
-  const repair = sanitizeSlideDocumentRoot(doc);
-  installMeasurableLayout(doc);
-  const slideData = extractSlideDataFromDocument(doc);
-  const diagnostics = [...repair.diagnostics, ...slideData.diagnostics];
-  const request = buildRasterFallbackRequests(doc, diagnostics)
-    .find((item) => item.sourceId === 'unsafe-svg');
-  const unsafeReferenceRequest = buildRasterFallbackRequests(doc, diagnostics)
-    .find((item) => item.sourceId === 'unsafe-reference');
-
-  assert.ok(diagnostics.some((item) => item.code === 'complex_svg_raster'));
-  assert.equal(request?.captureStrategy, 'visual-subtree');
-  assert.ok(request?.suppressedNativeVisualIds.includes('unsafe-svg'));
-  assert.ok(request?.suppressedNativeVisualIds.includes('filtered-path'));
-  assert.equal(unsafeReferenceRequest?.captureStrategy, 'visual-subtree');
-  assert.ok(slideData.elements.some((element) => (
-    element.type === 'svg-text' && element.text === 'Editable label'
-  )));
-});
-
-test('assigns decoration subtree and pseudo capture strategies with exact native suppression scopes', () => {
-  const doc = createDocument(`
-    <div data-pptx-source-id="gradient" style="background-image:linear-gradient(red,blue)">
-      <img data-pptx-source-id="gradient-child" src="data:image/png;base64,AA=="/>
-      <p data-pptx-source-id="gradient-text">Gradient text</p>
-    </div>
-    <div data-pptx-source-id="filtered" style="filter:blur(2px)">
-      <img data-pptx-source-id="filtered-child" src="data:image/png;base64,AA=="/>
-      <p data-pptx-source-id="filtered-text">Filtered text</p>
-    </div>
-    <div data-pptx-source-id="pseudo"><p>Pseudo owner</p></div>
-  `);
-  sanitizeSlideDocumentRoot(doc);
-  installMeasurableLayout(doc);
-  const requests = buildRasterFallbackRequests(doc, [
-    { severity: 'fallback', code: 'css_gradient', sourceId: 'gradient' },
-    { severity: 'fallback', code: 'css_filter', sourceId: 'filtered' },
-    { severity: 'fallback', code: 'generated_content', sourceId: 'pseudo' },
-  ]);
-  const bySource = new Map(requests.map((request) => [request.sourceId, request]));
-
-  assert.equal(bySource.get('gradient').captureStrategy, 'self-decoration');
-  assert.deepEqual(bySource.get('gradient').suppressedNativeVisualIds, ['gradient']);
-  assert.equal(bySource.get('gradient').html, undefined);
-  assert.match(bySource.get('gradient').buildHtml(), /data-pptx-capture-strategy="self-decoration"/);
-  assert.match(bySource.get('gradient').buildHtml(), /self-decoration[^}]*>\s*\*/s);
-
-  assert.equal(bySource.get('filtered').captureStrategy, 'visual-subtree');
-  assert.ok(bySource.get('filtered').suppressedNativeVisualIds.includes('filtered-child'));
-  assert.ok(bySource.get('filtered').suppressedNativeVisualIds.includes('filtered'));
-  assert.match(bySource.get('filtered').buildHtml(), /data-pptx-capture-strategy="visual-subtree"/);
-
-  assert.equal(bySource.get('pseudo').captureStrategy, 'pseudo-only');
-  assert.deepEqual(bySource.get('pseudo').suppressedNativeVisualIds, []);
-  assert.match(bySource.get('pseudo').buildHtml(), /data-pptx-capture-strategy="pseudo-only"/);
-  assert.match(bySource.get('pseudo').buildHtml(), /background:\s*none\s*!important/);
-});
-
-test('suppresses duplicated native visuals for raster captures while retaining editable text and unrelated children', async () => {
-  const calls = [];
-  const slide = {
-    addText(value) { calls.push({ op: 'text', value }); },
-    addImage(options) { calls.push({ op: 'image', data: options.data, path: options.path }); },
-    addShape(type) { calls.push({ op: 'shape', type }); },
-  };
-  await buildSlideFromExtracted({
-    background: { type: 'color', value: 'FFFFFF' },
-    elements: [
-      {
-        type: 'shape', sourceId: 'gradient', kind: 'native', zIndex: 1, paintOrder: 1,
-        text: '', position: { x: 1, y: 1, w: 3, h: 2 },
-        shape: { fill: 'FF0000', line: null, rectRadius: 0 },
-      },
-      {
-        type: 'image', sourceId: 'gradient-child', kind: 'native', zIndex: 1, paintOrder: 2,
-        src: 'data:image/png;base64,native-child', position: { x: 1, y: 1, w: 1, h: 1 },
-      },
-      {
-        type: 'image', sourceId: 'filtered-child', kind: 'native', zIndex: 2, paintOrder: 4,
-        src: 'data:image/png;base64,duplicate-filtered-child', position: { x: 4, y: 1, w: 1, h: 1 },
-      },
-      {
-        type: 'p', sourceId: 'filtered-text', kind: 'native', zIndex: 2, paintOrder: 5,
-        text: 'Editable filtered text', position: { x: 4, y: 1, w: 2, h: 1 },
-        style: { fontSize: 16, fontFace: 'Arial', color: '111111', align: 'left' },
-      },
-    ],
-    fallbackLayers: [
-      {
-        sourceId: 'gradient', kind: 'raster', phase: 'local-visual', zIndex: 1, paintOrder: 0,
-        captureStrategy: 'self-decoration', suppressedNativeVisualIds: ['gradient'],
-        canvas: 'full-page', bbox: { x: 1, y: 1, w: 3, h: 2 },
-        data: 'data:image/png;base64,gradient-layer',
-      },
-      {
-        sourceId: 'filtered', kind: 'raster', phase: 'local-visual', zIndex: 2, paintOrder: 3,
-        captureStrategy: 'visual-subtree',
-        suppressedNativeVisualIds: ['filtered', 'filtered-child', 'filtered-text'],
-        canvas: 'full-page', bbox: { x: 4, y: 1, w: 3, h: 2 },
-        data: 'data:image/png;base64,filter-layer',
-      },
-    ],
-    placeholders: [],
-    diagnostics: [],
-    errors: [],
-  }, { width: 1280, height: 720, errors: [] }, {
-    addSlide: () => slide,
-    ShapeType: { rect: 'rect', roundRect: 'roundRect', line: 'line' },
-  });
-
-  assert.deepEqual(calls.map((call) => call.op), ['image', 'image', 'image', 'text']);
-  assert.ok(calls.some((call) => call.data?.includes('gradient-layer')));
-  assert.ok(calls.some((call) => call.data?.includes('native-child')));
-  assert.ok(calls.some((call) => call.data?.includes('filter-layer')));
-  assert.ok(!calls.some((call) => call.data?.includes('duplicate-filtered-child')));
-  assert.equal(calls.filter((call) => call.value === 'Editable filtered text').length, 1);
-});
-
 test('preserves actual SVG DOM paint order between paths and native primitives', () => {
   const extractOrder = (markup) => {
     const doc = createDocument(markup);
     sanitizeSlideDocumentRoot(doc);
     installMeasurableLayout(doc);
     const slideData = extractSlideDataFromDocument(doc);
-    return [...slideData.elements, ...(slideData.fallbackLayers || [])]
-      .filter((item) => ['ordered-path', 'ordered-rect'].includes(item.sourceId))
+    return slideData.elements
+      .filter((item) => item.sourceId === 'ordered-rect' || item.sourceId.startsWith('ordered-path'))
       .sort((left, right) => left.paintOrder - right.paintOrder)
-      .map((item) => item.sourceId);
+      .map((item) => item.sourceId.startsWith('ordered-path') ? 'ordered-path' : item.sourceId)
+      .filter((sourceId, index, items) => sourceId !== items[index - 1]);
   };
 
   assert.deepEqual(extractOrder(`
     <svg viewBox="0 0 100 100">
-      <path data-pptx-source-id="ordered-path" d="M0 0L100 100"/>
+      <line data-pptx-source-id="ordered-path" x1="0" y1="0" x2="100" y2="100" stroke="black"/>
       <rect data-pptx-source-id="ordered-rect" x="10" y="10" width="20" height="20"/>
     </svg>
   `), ['ordered-path', 'ordered-rect']);
   assert.deepEqual(extractOrder(`
     <svg viewBox="0 0 100 100">
       <rect data-pptx-source-id="ordered-rect" x="10" y="10" width="20" height="20"/>
-      <path data-pptx-source-id="ordered-path" d="M0 0L100 100"/>
+      <line data-pptx-source-id="ordered-path" x1="0" y1="0" x2="100" y2="100" stroke="black"/>
     </svg>
   `), ['ordered-rect', 'ordered-path']);
 });
@@ -1624,7 +2044,9 @@ test('uses attribute and computed CSS SVG transforms and falls back when transfo
   const attr = slideData.elements.find((item) => item.sourceId === 'attr-transform');
   const css = slideData.elements.find((item) => item.sourceId === 'css-transform');
   const unsafeNative = slideData.elements.find((item) => item.sourceId === 'unsafe-transform');
-  const unsafeFallback = slideData.fallbackLayers?.find((item) => item.sourceId === 'unsafe-transform');
+  const unsafeDiagnostic = slideData.diagnostics.find((item) => (
+    item.sourceId === 'unsafe-transform' && item.severity === 'blocking'
+  ));
   const ctm = slideData.elements.find((item) => item.sourceId === 'ctm-transform');
 
   assert.equal(attr?.kind, 'native');
@@ -1633,7 +2055,7 @@ test('uses attribute and computed CSS SVG transforms and falls back when transfo
   assert.equal(Number(css?.shape?.rotate?.toFixed(1)), 30);
   assert.ok(css.bbox.w > css.position.w);
   assert.equal(unsafeNative, undefined);
-  assert.equal(unsafeFallback?.kind, 'svg-image');
+  assert.equal(unsafeDiagnostic?.code, 'svg_transform_unsupported');
   const svgRect = doc.querySelector('svg').getBoundingClientRect();
   assert.equal(Number(ctm?.bbox?.x.toFixed(4)), Number(((svgRect.left + 40) / 96).toFixed(4)));
   assert.equal(Number(ctm?.bbox?.y.toFixed(4)), Number(((svgRect.top + 20) / 96).toFixed(4)));
@@ -1689,89 +2111,90 @@ test('does not apply viewBox scaling twice to getCTM polygon coordinates', () =>
   assert.equal(Number(diamond.position.h.toFixed(4)), Number((60 / 96).toFixed(4)));
 });
 
-test('shares one full-DOM paint order domain across HTML native and raster fallback siblings', () => {
-  const wrappers = Array.from({ length: 30 }, (_, index) => (
-    `<div data-pptx-source-id="wrapper-${index}"><span></span></div>`
-  )).join('');
+test('extractor emits no visual layer or image fallback fields', () => {
   const doc = createDocument(`
-    <div data-pptx-source-id="native-before" style="background:rgb(1,2,3)"></div>
-    ${wrappers}
-    <div data-pptx-source-id="gradient-middle"
-      style="background-image:linear-gradient(red,blue)"></div>
-    <div data-pptx-source-id="native-after" style="background:rgb(4,5,6)"></div>
-  `);
-  const repair = sanitizeSlideDocumentRoot(doc);
-  installMeasurableLayout(doc);
-  const slideData = extractSlideDataFromDocument(doc);
-  const raster = buildRasterFallbackRequests(doc, repair.diagnostics)
-    .find((item) => item.sourceId === 'gradient-middle');
-  const before = slideData.elements.find((item) => item.sourceId === 'native-before');
-  const after = slideData.elements.find((item) => item.sourceId === 'native-after');
-
-  assert.ok(before.paintOrder < raster.paintOrder);
-  assert.ok(raster.paintOrder < after.paintOrder);
-  assert.equal(before.subOrder, 0);
-  assert.equal(raster.subOrder, 0);
-  assert.equal(after.subOrder, 0);
-});
-
-test('orders decomposed objects by shared paintOrder and explicit subOrder in Stage 2', async () => {
-  const calls = [];
-  const slide = {
-    addText() {},
-    addImage(options) { calls.push(options.data); },
-    addShape(_type, options) { calls.push(options.line?.color); },
-  };
-  await buildSlideFromExtracted({
-    background: { type: 'color', value: 'FFFFFF' },
-    elements: [
-      {
-        type: 'line', sourceId: 'poly', kind: 'native', zIndex: 0, paintOrder: 8, subOrder: 2,
-        x1: 0, y1: 0, x2: 1, y2: 1, color: '222222', width: 1,
-      },
-      {
-        type: 'line', sourceId: 'poly', kind: 'native', zIndex: 0, paintOrder: 8, subOrder: 1,
-        x1: 0, y1: 0, x2: 1, y2: 1, color: '111111', width: 1,
-      },
-    ],
-    fallbackLayers: [{
-      sourceId: 'middle', kind: 'svg-image', zIndex: 0, paintOrder: 8, subOrder: 1.5,
-      bbox: { x: 0, y: 0, w: 1, h: 1 }, data: 'data:image/svg+xml,mid',
-    }],
-    placeholders: [],
-    diagnostics: [],
-    errors: [],
-  }, { width: 1280, height: 720, errors: [] }, {
-    addSlide: () => slide,
-    ShapeType: { line: 'line', rect: 'rect', roundRect: 'roundRect' },
-  });
-
-  assert.deepEqual(calls, ['111111', 'data:image/svg+xml,mid', '222222']);
-});
-
-test('local SVG image preserves class and inherited styles plus ancestor transforms', () => {
-  const doc = createDocument(`
-    <svg data-pptx-source-id="styled-root" viewBox="0 0 300 150">
-      <defs><linearGradient id="paint"><stop offset="0" stop-color="red"/></linearGradient></defs>
-      <g data-pptx-source-id="styled-group" transform="translate(40 20)"
-        style="fill:rgb(10,20,30);stroke:rgb(40,50,60);opacity:0.6">
-        <path data-pptx-source-id="styled-path" class="accent"
-          d="M0 0L80 0L40 60Z"/>
-      </g>
+    <svg viewBox="0 0 100 100">
+      <path data-pptx-source-id="route" d="M0 0L100 100" fill="none" stroke="#123456"/>
     </svg>
-  `, '.accent { fill: inherit; stroke-width: 5; }');
+  `);
   sanitizeSlideDocumentRoot(doc);
   installMeasurableLayout(doc);
-  const slideData = extractSlideDataFromDocument(doc);
-  const layer = slideData.fallbackLayers.find((item) => item.sourceId === 'styled-path');
-  const markup = decodeURIComponent(layer.data.replace('data:image/svg+xml,', ''));
+  const extracted = extractSlideDataFromDocument(doc);
 
-  assert.match(markup, /viewBox="0 0 300 150"/);
-  assert.match(markup, /transform="translate\(40 20\)"/);
-  assert.match(markup, /fill:\s*rgb\(10,\s*20,\s*30\)/);
-  assert.match(markup, /stroke:\s*rgb\(40,\s*50,\s*60\)/);
-  assert.match(markup, /stroke-width:\s*5(?:px)?/);
-  assert.match(markup, /opacity:\s*0\.6/);
-  assert.equal(layer.bbox.w, 640 / 96);
-  assert.equal(layer.bbox.h, 30 / 96);
+  assert.equal(Object.hasOwn(extracted, 'fallbackLayers'), false);
+  assert.doesNotMatch(JSON.stringify(extracted), /svg-image|raster|page-visual|full-page/);
+  assert.equal(
+    extracted.diagnostics.find((item) => item.code === 'svg_path_rewrite')?.severity,
+    'rewrite',
+  );
+});
+
+test('normalizer blocks unsupported visuals without invoking a page renderer', () => {
+  const doc = createDocument(`
+    <div data-pptx-source-id="filtered" style="filter:blur(2px)">Filtered</div>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+  let renderPageCalls = 0;
+
+  assert.throws(
+    () => normalizeDocumentToEditableScene(doc, {
+      slideNumber: 8,
+      width: 13.333,
+      height: 7.5,
+      renderPage: () => { renderPageCalls += 1; },
+    }),
+    (error) => error instanceof EditableExportError
+      && error.code === 'css_filter'
+      && error.slideNumber === 8
+      && error.sourceId === 'filtered',
+  );
+  assert.equal(renderPageCalls, 0);
+});
+
+test('scene serializer rejects legacy visual metadata before adding slide objects', async () => {
+  let objectCalls = 0;
+  const scene = {
+    slideNumber: 2,
+    width: 13.333,
+    height: 7.5,
+    nodes: [{
+      type: 'shape',
+      shapeType: 'rect',
+      sourceId: 'generated-panel',
+      x: 1,
+      y: 1,
+      w: 2,
+      h: 1,
+      style: { fill: '112233' },
+    }],
+    fallbackLayers: [],
+  };
+  await assert.rejects(
+    buildSlideFromScene(scene, {
+      addSlide: () => ({
+        addShape() { objectCalls += 1; },
+      }),
+      ShapeType: { rect: 'rect' },
+    }),
+    (error) => error instanceof EditableExportError
+      && error.code === 'editable_scene_fallback_forbidden',
+  );
+  assert.equal(objectCalls, 0);
+});
+
+test('export summaries count rewrites and blocking evidence only', () => {
+  const summary = summarizePptxExportDiagnostics([{
+    slideNumber: 3,
+    nodes: [{
+      type: 'shape',
+      sourceId: 'gradient-strip',
+      rewrite: 'css_gradient',
+    }],
+  }]);
+  assert.deepEqual(summary.counts, { rewritten: 1, blocking: 0 });
+  assert.equal(summary.hasWarnings, true);
+  assert.equal(summary.locations[0].severity, 'rewrite');
+  assert.equal(Object.hasOwn(summary.counts, 'localPng'), false);
+  assert.equal(Object.hasOwn(summary.counts, 'fullPage'), false);
 });

@@ -683,6 +683,132 @@ test('skill defines the workspace root unambiguously and bounded plan-first comp
   assert.match(skill, /仅检查一次/);
 });
 
+function contractSection(source, startLabel, endLabel) {
+  const start = source.indexOf(startLabel);
+  const end = source.indexOf(endLabel, start + startLabel.length);
+  assert.notEqual(start, -1, `missing section: ${startLabel}`);
+  assert.notEqual(end, -1, `missing section boundary: ${endLabel}`);
+  return source.slice(start, end);
+}
+
+function assertNoPositiveVisualFallbackAdvice(source, label) {
+  const suspectLines = source.split('\n').filter((line) => (
+    /\b(?:rasterize|screenshot|fallback)\b/i.test(line)
+  ));
+  assert.ok(suspectLines.length > 0, `${label} should explicitly forbid fallback techniques`);
+  for (const line of suspectLines) {
+    assert.match(
+      line,
+      /禁止|不得|不是|不应|不能|无|拒绝|不存在|not|never/i,
+      `${label} contains positive visual fallback advice: ${line}`,
+    );
+  }
+}
+
+test('authoring contracts separate generation rules from converter legacy rewrites', async () => {
+  const skillRoot = new URL('../../../../../../../../assembly/core/builtin_skills/ppt-design/', import.meta.url);
+  const [skill, editable, visualization, slideDecks] = await Promise.all([
+    readFile(new URL('SKILL.md', skillRoot), 'utf8'),
+    readFile(new URL('references/editable-pptx.md', skillRoot), 'utf8'),
+    readFile(new URL('references/data-information-visualization.md', skillRoot), 'utf8'),
+    readFile(new URL('references/slide-decks.md', skillRoot), 'utf8'),
+  ]);
+  const prompt = buildAgentPrompt({ instruction: '生成一份含图表、流程图和表格的演示稿' });
+
+  for (const [label, contract] of [
+    ['skill', skill],
+    ['editable reference', editable],
+    ['visualization reference', visualization],
+    ['agent prompt', prompt],
+  ]) {
+    const authoring = contractSection(
+      contract,
+      'Authoring subset（生成规则）',
+      'Converter legacy rewrite boundary（兼容边界，不是生成建议）',
+    );
+    const compatibility = contractSection(
+      contract,
+      'Converter legacy rewrite boundary（兼容边界，不是生成建议）',
+      'End editable contract',
+    );
+
+    assert.match(contract, /唯一.*editable HTML\s*→\s*EditableSlideScene\s*→\s*OOXML/i, label);
+    assert.match(authoring, /1280px\s*[×x]\s*720px/i, label);
+    assert.match(authoring, /只使用 solid color/i, label);
+    assert.match(authoring, /不得生成.*CSS gradient.*background-image/is, label);
+    assert.match(authoring, /HTML 文字.*`?<p>`?.*`?<h1>`?.*`?<h6>`?.*`?<li>`?/s, label);
+    assert.match(
+      authoring,
+      /box-shadow.*单层.*outer.*非 inset.*zero spread.*不支持.*blocking/is,
+      label,
+    );
+    assert.match(authoring, /text-shadow.*blocking/is, label);
+    assert.match(authoring, /优先.*`?line`?.*`?polyline`?/is, label);
+    assert.match(authoring, /base64.*PNG.*JPEG.*WebP.*GIF/s, label);
+    assert.match(
+      authoring,
+      /禁止任意顶点\/非严格对称.*polygon.*仅.*严格对称.*triangle.*diamond/is,
+      label,
+    );
+    assert.match(
+      authoring,
+      /流程箭头.*editable line\s*\+\s*CSS border triangle.*SVG line\s*\+\s*strict symmetric triangle polygon/is,
+      label,
+    );
+
+    assert.match(compatibility, /兼容既有输入.*不是生成许可/s, label);
+    assert.match(compatibility, /SVG `?text`?.*支持的 SVG 原语/s, label);
+    assert.match(compatibility, /`?div`?\s*裸文字.*repair.*不应生成/is, label);
+    assert.match(compatibility, /M\/L\/H\/V\/C\/S\/Q\/T\/Z/, label);
+    assert.match(compatibility, /`?fill:\s*none`?/i, label);
+    assert.match(compatibility, /`?Z`?.*闭合/s, label);
+    assert.match(compatibility, /拒绝.*`?A`?.*transform/is, label);
+    assert.match(compatibility, /曲线.*采样.*多段 editable line.*不是 PowerPoint curve/is, label);
+    assert.match(compatibility, /严格对称.*triangle.*diamond/is, label);
+    assert.match(compatibility, /任意顶点.*非严格对称 polygon.*拒绝/is, label);
+    assert.match(compatibility, /linear-gradient.*deg.*turn.*rad.*grad/is, label);
+    assert.match(compatibility, /percentage stop.*缺省 stop.*均匀分配/is, label);
+    assert.match(compatibility, /拒绝.*radial-gradient.*px\/em stop.*double-position stop.*color hint/is, label);
+    assert.match(compatibility, /solid strips.*不是生成建议/is, label);
+    assert.match(
+      compatibility,
+      /hard ring.*box-shadow.*0 0 0 Npx.*同心可编辑 shape.*不得依赖 ring rewrite/is,
+      label,
+    );
+
+    assert.doesNotMatch(contract, /禁止任意 SVG polygon/i, label);
+    assert.doesNotMatch(
+      contract,
+      /CSS\/element-model preset|preset (?:arrow|arrowhead)|rightArrow|chevron/i,
+      label,
+    );
+    assertNoPositiveVisualFallbackAdvice(contract, label);
+  }
+
+  assert.match(skill, /slide-decks\.md.*1280\s*[×x]\s*720.*editable-only/is);
+  assert.match(slideDecks, /1280px\s*[×x]\s*720px/i);
+  assert.match(slideDecks, /editable HTML\s*→\s*EditableSlideScene\s*→\s*OOXML/i);
+  assert.match(slideDecks, /无法表示.*停止.*报告/s);
+  assert.doesNotMatch(slideDecks, /960\s*[×x]\s*540\s*pt/i);
+  assert.doesNotMatch(slideDecks, /fallback 流程/i);
+});
+
+test('agent prompt keeps native table and editable visualization requirements in authoring section', () => {
+  const prompt = buildAgentPrompt({ instruction: '生成一份含图表、流程图和表格的演示稿' });
+  const authoring = contractSection(
+    prompt,
+    'Authoring subset（生成规则）',
+    'Converter legacy rewrite boundary（兼容边界，不是生成建议）',
+  );
+
+  assert.match(authoring, /真实的 `<table>`.*native `a:tbl`/s);
+  assert.match(authoring, /图表.*流程箭头.*虚线.*曲线.*可编辑原语/s);
+  assert.match(authoring, /禁止 CSS `filter`、`mask`/);
+  assert.match(authoring, /generated content/i);
+  assert.match(authoring, /不得生成 CSS gradient 或 `background-image`/i);
+  assert.match(authoring, /intentional 图片.*PNG.*JPEG.*WebP.*GIF/s);
+});
+
 test('repository exposes and runs the focused PPT Live contract test in CI', async () => {
   const repoRoot = new URL('../../../../../../../../../../', import.meta.url);
   const packageJson = JSON.parse(await readFile(new URL('package.json', repoRoot), 'utf8'));

@@ -35,15 +35,14 @@ import { enhanceFlatSelect, refreshFlatSelect } from './src/flat-select.js';
 import { applyI18n, readInputs, readStyleInputs, renderAll, renderInspector, renderSlideCanvas, renderGeneration, renderGenerationOverlay, renderThumbs, slideHtml, hydrateHtmlSlideIframes, fitSlideCanvas, fitHtmlSlideFrame, buildExportPreviewStage, fitExportPreviewFrame, fitThumbPreviews, normalizeSlideDocument, observeThumbPreviews, ensureCanvasFitted, syncDensitySlider, syncFontFamilyToggle, syncColorModeToggle, syncStylePanelFromState } from './src/render.js';
 import {
   buildElementSlideHtml,
-  prepareSlidesForPptxExport,
+  prepareEditableSlides,
   slideExportHtml,
   EXPORT_VIEWPORT,
 } from './src/export-slide-browser.js';
 import {
+  exportEditablePptx,
   exportPdfFromBase64Pages,
   exportPngZipFromPages,
-  exportPptxFromDeck,
-  exportPptxPrepared,
 } from './src/export-deck-host.js';
 import { downloadBase64File, downloadHtmlDeck, fileSafe } from './src/export-html.js';
 import { exportFormatIcon, exportFormatTone } from './src/export-format-icons.js';
@@ -2592,20 +2591,10 @@ function getExportLabels(format) {
 function formatExportDiagnostics(summary) {
   if (!summary?.hasWarnings && !summary?.hasBlocking) return '';
   const countLabels = [
-    ['repaired', 'exportDiagnosticsRepaired'],
-    ['svgImage', 'exportDiagnosticsSvg'],
-    ['localPng', 'exportDiagnosticsLocalPng'],
-    ['pageVisual', 'exportDiagnosticsPageVisual'],
-    ['fullPage', 'exportDiagnosticsFullPage'],
+    ['rewritten', 'exportDiagnosticsRepaired'],
     ['blocking', 'exportDiagnosticsBlocking'],
   ].filter(([countKey]) => summary.counts?.[countKey] > 0)
     .map(([countKey, labelKey]) => t(labelKey, { count: summary.counts[countKey] }));
-  const phaseKeys = {
-    'local-svg': 'exportDiagnosticsPhaseSvg',
-    'local-visual': 'exportDiagnosticsPhaseLocalPng',
-    'page-visual': 'exportDiagnosticsPhasePageVisual',
-    'full-page': 'exportDiagnosticsPhaseFullPage',
-  };
   const locations = localizeExportDiagnosticLocations(summary.locations || [], getLocale())
     .filter((location) => location.sourceId)
     .slice(0, 3)
@@ -2613,10 +2602,9 @@ function formatExportDiagnostics(summary) {
       slide: location.slideNumber,
       source: location.sourceId,
       phase: t(
-        phaseKeys[location.phase]
-          || (location.severity === 'blocking'
-            ? 'exportDiagnosticsPhaseBlocking'
-            : 'exportDiagnosticsPhaseRepair'),
+        location.severity === 'blocking'
+          ? 'exportDiagnosticsPhaseBlocking'
+          : 'exportDiagnosticsPhaseRepair',
       ),
       reason: location.reason,
     }));
@@ -2633,17 +2621,12 @@ function formatBlockingExportDiagnostics(diagnostics) {
   if (!blocking.length) return '';
   return formatExportDiagnostics({
     counts: {
-      repaired: 0,
-      svgImage: 0,
-      localPng: 0,
-      pageVisual: 0,
-      fullPage: 0,
+      rewritten: 0,
       blocking: blocking.length,
     },
     locations: blocking.map((diagnostic) => ({
       slideNumber: diagnostic.slideNumber || '?',
       sourceId: diagnostic.sourceId || '?',
-      phase: diagnostic.phase || null,
       severity: 'blocking',
       code: diagnostic.code,
     })),
@@ -2703,29 +2686,11 @@ async function executeExport(format) {
   let result;
   const deckPayload = clone(state);
   if (format === 'pptx') {
-    if (slides.some((slide) => slide?.html)) {
-      const hostDeck = runtime();
-      const renderRaster = typeof hostDeck?.deck?.renderPage === 'function'
-        ? async (html, index) => {
-            setExportRenderProgress(index, slides.length, 'pptx');
-            const base64 = await hostDeck.deck.renderPage({
-              html,
-              format: 'png',
-              width: EXPORT_VIEWPORT.width,
-              height: EXPORT_VIEWPORT.height,
-            });
-            return String(base64 || '').replace(/^data:.*;base64,/, '');
-          }
-        : null;
-      const preparedSlides = await prepareSlidesForPptxExport(slides, {
-        renderRaster,
-        onRasterProgress: (index) => setExportRenderProgress(index, slides.length, 'pptx'),
-      });
-      result = await exportPptxPrepared(deckPayload, preparedSlides);
-      result.exportSummary = summarizePptxExportDiagnostics(preparedSlides);
-    } else {
-      result = await exportPptxFromDeck(deckPayload);
-    }
+    const scenes = await prepareEditableSlides(slides, {
+      onSlideProgress: (pageNumber) => setExportRenderProgress(pageNumber - 1, slides.length, 'pptx'),
+    });
+    result = await exportEditablePptx(deckPayload, scenes);
+    result.exportSummary = summarizePptxExportDiagnostics(scenes);
   } else if (format === 'pdf') {
     const pages = await renderSlidesInHostWebView(slides, 'pdf');
     result = await exportPdfFromBase64Pages(deckPayload, pages.map((page) => page.base64));
@@ -3421,7 +3386,13 @@ async function confirmExportFromModal() {
     const localizedDiagnostics = formatBlockingExportDiagnostics(error?.diagnostics);
     const message = localizedDiagnostics
       || (error instanceof Error ? error.message : String(error));
-    runtime().log?.error?.(`PPT Live ${format} export failed`, { error: message });
+    runtime().log?.error?.(`PPT Live ${format} export failed`, {
+      error: message,
+      code: error?.code || error?.diagnostic?.code || null,
+      sourceId: error?.sourceId || error?.diagnostic?.sourceId || null,
+      slideNumber: error?.slideNumber || error?.diagnostic?.slideNumber || null,
+      detail: error?.message || null,
+    });
     $('exportOverlay')?.classList.remove('is-exporting');
     setExportModalFeedback('error', `${labels.failed} ${message}`);
     setExportStatus(`${labels.failed} ${message}`);

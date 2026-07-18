@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width: 960pt; height: 540pt;
+    font-family: system-ui, -apple-system, "PingFang SC", "Source Han Sans SC", sans-serif;
+    background: #FAFAF7; color: #111111;
+    overflow: hidden; position: relative;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== Title ===== -->
+  <div style="position: absolute; top: 36pt; left: 60pt; right: 60pt;">
+    <h1 style="font-size: 30pt; font-weight: 700; color: #111111; line-height: 1.15;">PPT 形状与元素测试矩阵</h1>
+    <p style="font-size: 13pt; color: #787774; margin-top: 6pt;">矩形 · 圆角框 · 圆形 · 描边圆 · 三角 · 线条 · SVG · 多级文字样式</p>
+  </div>
+
+  <!-- ===== LEFT: CSS Shapes ===== -->
+
+  <!-- Row 1: Filled rect + Rounded rect -->
+  <div style="position: absolute; top: 115pt; left: 60pt; width: 170pt; height: 56pt; background: #1E293B; display: flex; align-items: center; justify-content: center;">
+    <p style="font-size: 13pt; color: #ffffff; font-weight: 600;">实心矩形</p>
+  </div>
+  <div style="position: absolute; top: 115pt; left: 250pt; width: 170pt; height: 56pt; background: #0f766e; border-radius: 10pt; display: flex; align-items: center; justify-content: center;">
+    <p style="font-size: 13pt; color: #ffffff; font-weight: 600;">圆角矩形</p>
+  </div>
+
+  <!-- Row 2: Circle + Outline circle + Triangle -->
+  <div style="position: absolute; top: 195pt; left: 80pt; width: 64pt; height: 64pt; background: #0f766e; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+    <p style="font-size: 11pt; color: #ffffff;">圆形</p>
+  </div>
+  <div style="position: absolute; top: 195pt; left: 180pt; width: 64pt; height: 64pt; border: 2pt solid #1E293B; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+    <p style="font-size: 11pt; color: #1E293B;">描边圆</p>
+  </div>
+  <!-- Triangle (CSS border trick — no text inside) -->
+  <div style="position: absolute; top: 195pt; left: 290pt; width: 0; height: 0; border-left: 32pt solid transparent; border-right: 32pt solid transparent; border-bottom: 56pt solid #1E293B;"></div>
+  <div style="position: absolute; top: 256pt; left: 282pt; width: 80pt;">
+    <p style="font-size: 10pt; color: #787774; text-align: center;">三角</p>
+  </div>
+
+  <!-- Row 3: Horizontal line + arrow -->
+  <div style="position: absolute; top: 292pt; left: 60pt; width: 350pt; height: 2pt; background: #787774;"></div>
+  <div style="position: absolute; top: 286pt; left: 408pt; width: 0; height: 0; border-left: 12pt solid #787774; border-top: 7pt solid transparent; border-bottom: 7pt solid transparent;"></div>
+
+  <!-- Row 4: Text styles -->
+  <div style="position: absolute; top: 315pt; left: 60pt; width: 380pt;">
+    <h3 style="font-size: 14pt; font-weight: 700; color: #1E293B;">文字样式</h3>
+    <p style="font-size: 12pt; color: #111111; margin-top: 6pt; line-height: 1.6;">常规 · <span style="font-weight: 700;">粗体</span> · <span style="font-style: italic;">斜体</span> · <span style="color: #0f766e; font-weight: 700;">强调色</span> · <span style="text-decoration: underline;">下划线</span></p>
+    <p style="font-size: 10pt; color: #787774; margin-top: 4pt;">注解级小字 — 脚注与来源标注用途</p>
+  </div>
+
+  <!-- ===== RIGHT: SVG Panel ===== -->
+  <div style="position: absolute; top: 115pt; left: 500pt; width: 400pt; height: 300pt; border: 1pt solid #e5e7eb; border-radius: 8pt; background: #ffffff;">
+    <div style="padding: 12pt 14pt 0 14pt;">
+      <h4 style="font-size: 12pt; font-weight: 600; color: #787774;">SVG 元素集</h4>
+    </div>
+    <svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: 235pt; display: block;" xmlns="http://www.w3.org/2000/svg">
+      <!-- Filled rect -->
+      <rect x="20" y="10" width="80" height="50" fill="#1E293B"/>
+      <!-- Rounded rect -->
+      <rect x="120" y="10" width="80" height="50" fill="#0f766e" rx="8" ry="8"/>
+      <!-- Outline rect -->
+      <rect x="220" y="10" width="80" height="50" fill="none" stroke="#1E293B" stroke-width="2" rx="4" ry="4"/>
+      <!-- Filled circle -->
+      <circle cx="60" cy="110" r="28" fill="#0f766e"/>
+      <!-- Outline circle -->
+      <circle cx="160" cy="110" r="28" fill="none" stroke="#1E293B" stroke-width="2"/>
+      <!-- Triangle polygon -->
+      <polygon points="280,82 320,138 240,138" fill="#1E293B"/>
+      <!-- Solid line -->
+      <line x1="20" y1="165" x2="370" y2="165" stroke="#787774" stroke-width="2"/>
+      <!-- Bezier curve -->
+      <path d="M 20 200 Q 120 170 200 200 T 370 200" fill="none" stroke="#0f766e" stroke-width="2"/>
+      <!-- Dashed line -->
+      <path d="M 20 230 L 370 230" fill="none" stroke="#1E293B" stroke-width="1" stroke-dasharray="6 4"/>
+      <!-- SVG labels -->
+      <text x="20" y="255" font-size="10" fill="#787774" font-family="sans-serif">矩形 · 圆角 · 描边 · 圆 · 多边形 · 直线 · 曲线 · 虚线</text>
+    </svg>
+  </div>
+
+  <!-- ===== Footer ===== -->
+  <div style="position: absolute; left: 60pt; bottom: 36pt;">
+    <p style="font-size: 9pt; color: #787774;">PPT Live 测试 · 形状与元素 · 01 / 03</p>
+  </div>
+
+</body>
+</html>
