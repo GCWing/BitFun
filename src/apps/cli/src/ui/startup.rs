@@ -1434,6 +1434,7 @@ impl StartupPage {
         if success {
             self.model_display_name = selected_display_name.clone();
             self.status = Some(format!("Model switched to: {}", selected_display_name));
+            crate::account_sync::notify_local_settings_changed();
         } else {
             self.status = Some("Failed to switch model".to_string());
         }
@@ -1559,6 +1560,7 @@ impl StartupPage {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model added: {}", result_name));
             tracing::info!("Added new AI model: {}", model_id);
+            crate::account_sync::notify_local_settings_changed();
             // Reload model name display
             self.load_current_model_name();
         } else {
@@ -1682,6 +1684,7 @@ impl StartupPage {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model updated: {}", result_name));
             tracing::info!("Updated AI model: {}", model_id);
+            crate::account_sync::notify_local_settings_changed();
             self.load_current_model_name();
         } else {
             self.status = Some("Failed to update model".to_string());

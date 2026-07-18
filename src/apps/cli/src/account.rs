@@ -94,6 +94,12 @@ pub(crate) fn is_token_expired() -> bool {
     TOKEN_EXPIRED.load(Ordering::Relaxed)
 }
 
+/// Mark the account token as rejected by the relay (expired / revoked).
+/// Called by the settings sync engine when a sync request gets a 401.
+pub(crate) fn mark_token_expired() {
+    TOKEN_EXPIRED.store(true, Ordering::Relaxed);
+}
+
 /// Resolve the current device identity (machine-based).
 fn current_device_identity() -> Result<DeviceIdentity> {
     DeviceIdentity::from_current_machine().map_err(|e| anyhow!("detect device: {e}"))

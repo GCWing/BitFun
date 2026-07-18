@@ -625,6 +625,10 @@ async fn run_interactive(
         }
     }
 
+    // 3.6 Continuous account settings sync (30s pull + debounced push).
+    // Safe to start before login: cycles skip while logged out.
+    account_sync::start_settings_sync_loop();
+
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
         config,

@@ -13,6 +13,7 @@ pub mod embedded_relay;
 pub mod lan;
 pub mod ngrok;
 pub mod remote_server;
+pub mod settings_sync;
 
 pub mod device {
     pub use bitfun_services_integrations::remote_connect::device::*;

@@ -11,6 +11,7 @@ use bitfun_core::service::remote_connect::{
     ConnectionResult, DeviceIdentity, PairingState, RemoteConnectConfig, RemoteConnectService,
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
+use bitfun_services_integrations::remote_connect::account::error_indicates_expired_token;
 use futures::stream::{self, StreamExt};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -298,15 +299,6 @@ static TOKEN_EXPIRED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicB
 #[tauri::command]
 pub async fn account_token_expired() -> bool {
     TOKEN_EXPIRED.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// Internal helper: check if an error message indicates an invalid/expired token.
-fn error_indicates_expired_token(msg: &str) -> bool {
-    let lower = msg.to_ascii_lowercase();
-    lower.contains("http 401")
-        || lower.contains("unauthorized")
-        || lower.contains("invalid or expired token")
-        || lower.contains("relay auth error")
 }
 
 /// Internal helper: check if an error message indicates HTTP 401.
@@ -1633,10 +1625,14 @@ pub async fn account_delete_synced_session(session_id: String) -> Result<(), Str
 #[tauri::command]
 pub async fn account_sync_settings(settings_json: String) -> Result<(), String> {
     let (session, relay_url) = read_account_context().await?;
-    AccountClient::new()
-        .upload_settings(&relay_url, &session, &settings_json)
-        .await
-        .map_err(|e| format!("{e}"))
+    bitfun_core::service::remote_connect::settings_sync::upload_settings_payload(
+        &session,
+        &relay_url,
+        &settings_json,
+    )
+    .await
+    .map_err(|e| format!("{e}"))?;
+    Ok(())
 }
 
 /// Fetch and decrypt the settings blob. Returns null if none exists.
@@ -2106,17 +2102,14 @@ pub async fn account_auto_sync(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<AutoSyncResult, String> {
-    AUTO_SYNC_IN_FLIGHT.store(true, std::sync::atomic::Ordering::SeqCst);
-    let sync_result = account_auto_sync_inner(
+    account_auto_sync_inner(
         is_first_login,
         workspace_path,
         config_json,
         app_state,
         path_manager,
     )
-    .await;
-    AUTO_SYNC_IN_FLIGHT.store(false, std::sync::atomic::Ordering::SeqCst);
-    sync_result
+    .await
 }
 
 async fn account_auto_sync_inner(
@@ -2131,18 +2124,14 @@ async fn account_auto_sync_inner(
     }
     let (acct_session, relay_url) = read_account_context().await?;
     let client = AccountClient::new();
+    use bitfun_core::service::remote_connect::settings_sync;
 
     // 1. Settings sync
     let settings_synced = if is_first_login {
         emit_sync_progress("uploading_settings", 5, None, None, None);
-        client
-            .upload_settings(&relay_url, &acct_session, &config_json)
+        settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json)
             .await
             .map_err(|e| format!("upload settings: {e}"))?;
-        LAST_SETTINGS_VERSION.store(
-            chrono::Utc::now().timestamp_millis(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
         log::info!("First login: uploaded local settings to cloud");
         emit_sync_progress("settings_done", 15, None, None, None);
         true
@@ -2154,30 +2143,13 @@ async fn account_auto_sync_inner(
             .map_err(|e| format!("fetch settings: {e}"))?;
         if let Some(blob) = cloud {
             emit_sync_progress("applying_settings", 10, None, None, None);
-            let config_value: serde_json::Value = serde_json::from_str(&blob.plaintext)
-                .map_err(|e| format!("parse cloud config: {e}"))?;
-            // Extract the .config field from the ConfigExport wrapper —
-            // the upload path stores the full ConfigExport JSON which has
-            // { config: GlobalConfig, export_timestamp, version }, but
-            // import_config_data expects the inner GlobalConfig directly.
-            let inner_config = config_value.get("config").cloned().unwrap_or(config_value);
-            let import_result = app_state
-                .config_service
-                .import_config_data(inner_config)
+            // Explicit user choice — always apply, even when the cursor says
+            // this device already has this version. Applies into the global
+            // config service, invalidates the AI client cache, reloads, and
+            // emits `account://settings-applied`.
+            settings_sync::apply_settings_blob(&acct_session, &blob, true)
                 .await
-                .map_err(|e| format!("import cloud config: {e}"))?;
-            if !import_result.success {
-                return Err(format!(
-                    "import cloud config failed: {}",
-                    import_result.errors.join("; ")
-                ));
-            }
-            app_state.ai_client_factory.invalidate_cache();
-            if let Err(e) = app_state.config_service.reload().await {
-                log::warn!("reload after cloud config import failed: {e}");
-            }
-            emit_settings_applied();
-            LAST_SETTINGS_VERSION.store(blob.version, std::sync::atomic::Ordering::Relaxed);
+                .map_err(|e| format!("apply cloud config: {e}"))?;
             log::info!(
                 "Applied cloud settings to local device (version={})",
                 blob.version
@@ -2304,22 +2276,15 @@ async fn account_auto_sync_inner(
     })
 }
 
-// ── Auto-sync: debounced upload on session/config changes ──────────────────
+// ── Auto-sync: debounced upload on session changes ─────────────────────────
+//
+// Settings sync (debounced push + 30s pull) is owned by the shared engine in
+// `bitfun_core::service::remote_connect::settings_sync`; this module only
+// keeps the desktop-specific session backup loop and wires engine hooks.
 
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-/// Tracks the last-known cloud settings version so the periodic pull can
-/// skip re-applying unchanged settings. Updated by both the push path
-/// (after upload) and the pull path (after fetch).
-static LAST_SETTINGS_VERSION: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
-
-/// True while `account_auto_sync` is running — periodic pull must not apply
-/// settings we just uploaded (causes mid-sync UI reload).
-static AUTO_SYNC_IN_FLIGHT: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// What to sync. `Session` carries the session_id + workspace_path.
 /// What to sync. Each variant maps to a single relay operation.
 #[derive(Debug, Clone)]
 enum SyncRequest {
@@ -2330,18 +2295,49 @@ enum SyncRequest {
     },
     /// Tombstone a session on the relay — fired on delete. Prevents re-import.
     SessionDelete { session_id: String },
-    /// Upload config blob — fired on set_config/import_config/reset_config.
-    Settings,
 }
 
 /// Global channel for notifying the sync background task.
 static SYNC_TX: OnceLock<mpsc::UnboundedSender<SyncRequest>> = OnceLock::new();
 
-/// Called once at app startup to start the debounced sync background task.
+/// Called once at app startup to start the settings sync engine and the
+/// debounced session sync background task.
 pub fn init_auto_sync() {
+    start_settings_sync_engine();
     let (tx, rx) = mpsc::unbounded_channel::<SyncRequest>();
     let _ = SYNC_TX.set(tx);
     tokio::spawn(sync_background_loop(rx));
+}
+
+/// Start the shared settings sync engine with desktop hooks.
+fn start_settings_sync_engine() {
+    use bitfun_core::service::remote_connect::settings_sync;
+    let hooks = settings_sync::SettingsSyncHooks {
+        account_context: Some(std::sync::Arc::new(|| {
+            Box::pin(async { read_account_context().await.map_err(anyhow::Error::msg) })
+        })),
+        should_pause: Some(std::sync::Arc::new(|| {
+            crate::api::peer_host_invoke::is_peer_controller_active()
+        })),
+        on_settings_applied: Some(std::sync::Arc::new(|| {
+            emit_settings_applied();
+            fanout_peer_device_event(
+                "account://settings-applied".to_string(),
+                serde_json::json!({ "applied": true }),
+            );
+        })),
+        on_settings_pushed: Some(std::sync::Arc::new(|| {
+            fanout_peer_device_event(
+                "account://settings-applied".to_string(),
+                serde_json::json!({ "applied": true }),
+            );
+        })),
+        on_token_expired: Some(std::sync::Arc::new(|| {
+            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+        })),
+        ..Default::default()
+    };
+    settings_sync::start_settings_sync_engine(hooks);
 }
 
 /// Non-blocking notification that a session was created/modified. Called from
@@ -2368,82 +2364,65 @@ pub fn notify_session_deleted(session_id: &str) {
 }
 
 /// Non-blocking notification that config was changed. Called from `set_config`.
+/// Forwards to the shared settings sync engine (debounced + hash-deduped).
 pub fn notify_settings_changed() {
-    if let Some(tx) = SYNC_TX.get() {
-        let _ = tx.send(SyncRequest::Settings);
-    }
+    bitfun_core::service::remote_connect::settings_sync::notify_settings_changed();
 }
 
-/// Background loop: collects sync requests, debounces 5 seconds, then uploads.
+/// Background loop: collects session sync requests, debounces 5 seconds,
+/// then uploads. Settings push/pull is handled by the settings sync engine.
 async fn sync_background_loop(mut rx: mpsc::UnboundedReceiver<SyncRequest>) {
     let debounce = Duration::from_secs(5);
-    let pull_interval = Duration::from_secs(30);
-    let mut next_pull = tokio::time::Instant::now() + pull_interval;
     loop {
-        // Wait for either a sync request (push) or the pull timer
-        let pull_deadline = tokio::time::sleep_until(next_pull);
-        tokio::pin!(pull_deadline);
+        // Wait for the next session sync request, then drain during the
+        // debounce window.
+        let Some(first) = rx.recv().await else {
+            return;
+        };
+        let mut pending_upserts: HashMap<String, String> = HashMap::new();
+        let mut pending_deletes: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        match first {
+            SyncRequest::SessionUpsert {
+                session_id,
+                workspace_path,
+            } => {
+                pending_upserts.insert(session_id, workspace_path);
+            }
+            SyncRequest::SessionDelete { session_id } => {
+                pending_deletes.insert(session_id);
+            }
+        }
 
-        tokio::select! {
-            // Push path: collect and debounce
-            Some(first) = rx.recv() => {
-                let mut pending_upserts: HashMap<String, String> = HashMap::new();
-                let mut pending_deletes: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
-                let mut pending_settings = false;
-                match first {
-                    SyncRequest::SessionUpsert { session_id, workspace_path } => {
-                        pending_upserts.insert(session_id, workspace_path);
-                    }
-                    SyncRequest::SessionDelete { session_id } => {
-                        pending_deletes.insert(session_id);
-                    }
-                    SyncRequest::Settings => {
-                        pending_settings = true;
-                    }
-                }
-
-                // Drain during debounce window
-                let deadline = tokio::time::sleep(debounce);
-                tokio::pin!(deadline);
-                loop {
-                    tokio::select! {
-                        _ = &mut deadline => break,
-                        Some(req) = rx.recv() => {
-                            match req {
-                                SyncRequest::SessionUpsert { session_id, workspace_path } => {
-                                    pending_deletes.remove(&session_id);
-                                    pending_upserts.insert(session_id, workspace_path);
-                                }
-                                SyncRequest::SessionDelete { session_id } => {
-                                    pending_upserts.remove(&session_id);
-                                    pending_deletes.insert(session_id);
-                                }
-                                SyncRequest::Settings => {
-                                    pending_settings = true;
-                                }
-                            }
+        let deadline = tokio::time::sleep(debounce);
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                _ = &mut deadline => break,
+                Some(req) = rx.recv() => {
+                    match req {
+                        SyncRequest::SessionUpsert { session_id, workspace_path } => {
+                            pending_deletes.remove(&session_id);
+                            pending_upserts.insert(session_id, workspace_path);
+                        }
+                        SyncRequest::SessionDelete { session_id } => {
+                            pending_upserts.remove(&session_id);
+                            pending_deletes.insert(session_id);
                         }
                     }
                 }
-
-                execute_debounced_sync(pending_upserts, pending_deletes, pending_settings).await;
-            }
-            // Pull path: periodic remote fetch + reconcile
-            _ = &mut pull_deadline => {
-                next_pull = tokio::time::Instant::now() + pull_interval;
-                pull_and_reconcile().await;
             }
         }
+
+        execute_debounced_sync(pending_upserts, pending_deletes).await;
     }
 }
 
 /// Execute the debounced sync: upload changed sessions, tombstone deleted
-/// sessions, optionally upload settings.
+/// sessions.
 async fn execute_debounced_sync(
     upserts: HashMap<String, String>,
     deletes: std::collections::HashSet<String>,
-    sync_settings: bool,
 ) {
     if crate::api::peer_host_invoke::is_peer_controller_active() {
         log::debug!("Debounced sync skipped while peer controller mode is active");
@@ -2522,38 +2501,6 @@ async fn execute_debounced_sync(
         }
     }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
-
-    // Upload settings if changed
-    if sync_settings {
-        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await
-        {
-            match config_service.export_config().await {
-                Ok(export_data) => {
-                    let json = serde_json::to_string(&export_data).unwrap_or_else(|_| "{}".into());
-                    if let Err(e) = client
-                        .upload_settings(&relay_url, &acct_session, &json)
-                        .await
-                    {
-                        if is_token_expired_error(&e) {
-                            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
-                        }
-                        log::warn!("Auto-sync settings failed: {e}");
-                    } else {
-                        // Record the version we just uploaded so the pull path
-                        // doesn't immediately re-apply our own upload.
-                        LAST_SETTINGS_VERSION.store(
-                            chrono::Utc::now().timestamp_millis(),
-                            std::sync::atomic::Ordering::Relaxed,
-                        );
-                        log::debug!("Auto-synced settings");
-                    }
-                }
-                Err(e) => {
-                    log::warn!("Auto-sync: export config failed: {e}");
-                }
-            }
-        }
-    }
 }
 
 /// Load a single session from disk, serialize to bundle, and upload.
@@ -2763,96 +2710,23 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Periodic pull: fetch all remote sessions, import any that don't exist
-/// locally anywhere. Does NOT delete local sessions based on remote
-/// absence — that would risk deleting locally-created sessions that
-/// haven't been uploaded yet. Deletion propagation is handled by the
-/// explicit tombstone call in the SessionDelete sync path (the relay
-/// marks deleted=1, and future pulls simply won't return that session,
-/// so it won't be re-imported).
-///
-/// To avoid cross-workspace duplication, we first collect ALL local
-/// session IDs across ALL workspaces, then only import a remote session
-/// if it doesn't exist in ANY workspace.
+/// One-shot cloud settings pull, triggered when another same-account device
+/// comes online. The periodic pull lives in the shared settings sync engine.
 async fn pull_and_reconcile() {
     if crate::api::peer_host_invoke::is_peer_controller_active() {
         log::debug!("Pull: skip while peer controller mode is active");
         return;
     }
-    let (acct_session, relay_url) = match read_account_context().await {
-        Ok(ctx) => ctx,
-        Err(_) => return,
+    let Ok((acct_session, relay_url)) = read_account_context().await else {
+        return;
     };
-    let client = AccountClient::new();
-
-    // ── Settings pull ──
-    // Fetch the cloud settings blob; if the version changed since our last
-    // known version, apply it locally. Skip while login auto-sync is running —
-    // otherwise we re-apply the settings we just uploaded and flash the UI.
-    if AUTO_SYNC_IN_FLIGHT.load(std::sync::atomic::Ordering::SeqCst) {
-        log::debug!("Pull: skip settings apply while account_auto_sync in flight");
-    } else {
-        match client
-            .fetch_settings_with_version(&relay_url, &acct_session)
-            .await
-        {
-            Ok(Some(blob)) => {
-                let known = LAST_SETTINGS_VERSION.load(std::sync::atomic::Ordering::Relaxed);
-                if blob.version != known {
-                    if let Ok(config_value) =
-                        serde_json::from_str::<serde_json::Value>(&blob.plaintext)
-                    {
-                        let inner_config =
-                            config_value.get("config").cloned().unwrap_or(config_value);
-                        if let Ok(config_service) =
-                            bitfun_core::service::config::get_global_config_service().await
-                        {
-                            match config_service.import_config_data(inner_config).await {
-                                Ok(result) if result.success => {
-                                    LAST_SETTINGS_VERSION
-                                        .store(blob.version, std::sync::atomic::Ordering::Relaxed);
-                                    if let Ok(factory) =
-                                    bitfun_core::infrastructure::ai::AIClientFactory::get_global()
-                                        .await
-                                {
-                                    factory.invalidate_cache();
-                                }
-                                    if let Err(e) = config_service.reload().await {
-                                        log::warn!("Pull: reload after config import failed: {e}");
-                                    }
-                                    emit_settings_applied();
-                                    log::info!(
-                                        "Pull: applied cloud settings (version={})",
-                                        blob.version
-                                    );
-                                }
-                                Ok(result) => {
-                                    log::warn!(
-                                        "Pull: import config unsuccessful: {}",
-                                        result.errors.join("; ")
-                                    );
-                                }
-                                Err(e) => {
-                                    log::warn!("Pull: import config failed: {e}");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Ok(None) => {} // no cloud settings yet
-            Err(e) => {
-                if is_token_expired_error(&e) {
-                    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                log::debug!("Pull: fetch_settings failed: {e}");
-            }
+    use bitfun_core::service::remote_connect::settings_sync;
+    if let Err(e) = settings_sync::pull_and_apply_settings(&acct_session, &relay_url).await {
+        if is_token_expired_error(&e) {
+            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
-    } // end AUTO_SYNC_IN_FLIGHT settings guard
-
-    // Session cloud import into local disk is intentionally disabled.
-    // Peer Remote Mode reads the peer device's live session store via HostInvoke;
-    // merging cloud session metadata into this machine pollutes local UX.
+        log::debug!("Pull: fetch_settings failed: {e}");
+    }
 }
 
 #[cfg(test)]

@@ -174,6 +174,10 @@ pub(crate) async fn set_default_model(model_id: &str) -> Result<()> {
         .await?;
 
     println!("Default model set to: {}", model_id);
+
+    // Short-lived management process: the sync loop never runs here, so push
+    // the change directly (no-op when logged out).
+    crate::account_sync::push_settings_after_local_change().await;
     Ok(())
 }
 

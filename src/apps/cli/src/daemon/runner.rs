@@ -45,6 +45,11 @@ pub(crate) async fn run_daemon() -> Result<()> {
         DeviceIdentity::from_current_machine().map_err(|e| anyhow!("detect device: {e}"))?;
     account::restore_device_routing(&device.device_name).await?;
 
+    // Continuous account settings sync (30s pull + debounced push) so this
+    // always-on host converges with cloud changes made on other devices and
+    // attached controllers see fresh config without reconnecting.
+    crate::account_sync::start_settings_sync_loop();
+
     pid::write_pid_file()?;
     tracing::info!("bitfun-cli daemon running (pid {})", std::process::id());
 
