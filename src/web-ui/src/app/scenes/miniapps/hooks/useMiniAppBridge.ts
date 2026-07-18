@@ -15,7 +15,6 @@ import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { buildMiniAppThemeVars } from '../utils/buildMiniAppThemeVars';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useI18n } from '@/infrastructure/i18n';
-import {workspaceAPI} from "@/infrastructure";
 import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { workspaceAPI } from '@/infrastructure/api';

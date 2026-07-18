@@ -20,7 +20,6 @@ import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { getEffectiveToolName, projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
-import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
 import {
   buildModelRoundItemGroups,

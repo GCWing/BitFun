@@ -668,256 +668,12 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
           </ConfigPageRow>
         </ConfigPageSection>
 
-        {/* ── Computer use (desktop) ─────────────────────────────── */}
-        <ConfigPageSection
-          title={t('computerUse.sectionTitle')}
-          description={
-            IS_TAURI_DESKTOP ? t('computerUse.sectionDescription') : t('computerUse.desktopOnly')
-          }
-        >
-          {IS_TAURI_DESKTOP ? (
-            <>
-              <ConfigPageRow label={t('computerUse.enable')} description={t('computerUse.enableDesc')} align="center">
-                <div className="bitfun-func-agent-config__row-control">
-                  <Switch
-                    checked={computerUseEnabled}
-                    onChange={(e) => handleComputerUseEnabledChange(e.target.checked)}
-                    disabled={computerUseBusy || computerUseStatusLoading}
-                    size="small"
-                  />
-                </div>
-              </ConfigPageRow>
-              <ConfigPageRow
-                label={t('computerUse.accessibility')}
-                description={t('computerUse.accessibilityDesc')}
-                align="center"
-                balanced
-              >
-                <div
-                  className="bitfun-func-agent-config__row-control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span className={!computerUseStatusLoading && computerUseAccess ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
-                      {computerUseAccessLabel}
-                    </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void refreshComputerUseStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
-                  </span>
-                  {platform === 'macos' && (
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void handleComputerUseOpenSettings('accessibility')}
-                    >
-                      {t('computerUse.openSettings')}
-                    </Button>
-                  )}
-                </div>
-              </ConfigPageRow>
-              <ConfigPageRow
-                label={t('computerUse.screenCapture')}
-                description={t('computerUse.screenCaptureDesc')}
-                align="center"
-                balanced
-              >
-                <div
-                  className="bitfun-func-agent-config__row-control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span className={!computerUseStatusLoading && computerUseScreen ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
-                      {computerUseScreenLabel}
-                    </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void refreshComputerUseStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
-                  </span>
-                  {platform === 'macos' && (
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void handleComputerUseOpenSettings('screen_capture')}
-                    >
-                      {t('computerUse.openSettings')}
-                    </Button>
-                  )}
-                </div>
-              </ConfigPageRow>
-              {computerUsePlatformNote && (
-                <div
-                  className="bitfun-func-agent-config__platform-note"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 6,
-                    padding: '8px 0 4px',
-                  }}
-                >
-                  <Info size={14} style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
-                  <p className="bitfun-config-page-row__description" style={{ margin: 0 }}>
-                    <strong>{t('computerUse.platformNote')}: </strong>
-                    {computerUsePlatformNote}
-                  </p>
-                </div>
-              )}
-            </>
-          ) : null}
-        </ConfigPageSection>
-
-        {/* ── Browser control (CDP) ──────────────────────────────── */}
-        <ConfigPageSection
-          title={t('browserControl.sectionTitle')}
-          description={
-            IS_TAURI_DESKTOP ? t('browserControl.sectionDescription') : t('browserControl.desktopOnly')
-          }
-        >
-          {IS_TAURI_DESKTOP ? (
-            <>
-              {/* Only show browser selector when CDP is not connected */}
-              {!browserCdpAvailable && (
-              <ConfigPageRow
-                label={t('browserControl.preferredBrowser')}
-                description={t('browserControl.preferredBrowserDesc')}
-                align="center"
-                balanced
-              >
-                <div className="bitfun-func-agent-config__row-control">
-                  <Select
-                    value={preferredBrowser}
-                    options={browserSelectOptions}
-                    size="small"
-                    disabled={browserControlBusy || browserStatusLoading || browserSelectOptions.length === 0}
-                    onChange={(value) => {
-                      if (!Array.isArray(value)) void handleBrowserControlBrowserChange(value);
-                    }}
-                  />
-                </div>
-              </ConfigPageRow>
-              )}
-              <ConfigPageRow
-                label={t('browserControl.status')}
-                description={t('browserControl.statusDesc') || undefined}
-                align="center"
-                balanced
-              >
-                <div
-                  className="bitfun-func-agent-config__row-control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                    minWidth: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      minWidth: 0,
-                      maxWidth: '100%',
-                    }}
-                    title={browserCdpAvailable && browserVersion ? `${browserKind} ${browserVersion}` : undefined}
-                  >
-                    <span
-                      className={!browserStatusLoading && browserCdpAvailable ? 'bitfun-func-agent-config__perm-status--granted' : undefined}
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
-                    >
-                      {browserStatusLabel}
-                    </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('browserControl.refreshStatus')}
-                      tooltip={t('browserControl.refreshStatus')}
-                      disabled={browserControlBusy || browserStatusLoading}
-                      onClick={() => void refreshBrowserControlStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
-                  </span>
-                  {!browserCdpAvailable && (
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={browserControlBusy || browserStatusLoading}
-                      onClick={() => void handleBrowserControlLaunch()}
-                    >
-                      {t('browserControl.connect')}
-                    </Button>
-                  )}
-                </div>
-              </ConfigPageRow>
-              {platform === 'macos' && (
-                <ConfigPageRow
-                  label={t('browserControl.createLauncher')}
-                  description={t('browserControl.createLauncherDesc')}
-                  align="center"
-                >
-                  <div className="bitfun-func-agent-config__row-control">
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={browserControlBusy}
-                      onClick={() => void handleBrowserControlCreateLauncher()}
-                    >
-                      {t('browserControl.createLauncher')}
-                    </Button>
-                  </div>
-                </ConfigPageRow>
-              )}
-            </>
-          ) : null}
-        </ConfigPageSection>
-
         {/* ── Debug mode settings ───────────────────────────────── */}
         {/* <ConfigPageSection
           title={tDebug('sections.combined')}
           description={tDebug('sections.combinedDescription')}
         >
-          {/* Basic settings: log path + ingest port */}
+          Basic settings: log path + ingest port
           <ConfigPageRow
             label={tDebug('settings.logPath.label')}
             description={tDebug('settings.logPath.description')}
@@ -956,7 +712,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             />
           </ConfigPageRow>
 
-          {/* Save / cancel for basic settings changes (not shown while modal is open) */}
+          Save / cancel for basic settings changes (not shown while modal is open)
           {debugHasChanges && !isTemplatesModalOpen && (
             <ConfigPageRow label={tDebug('actions.save')} align="center">
               <div className="bitfun-debug-config__settings-actions">
@@ -980,7 +736,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </ConfigPageRow>
           )}
 
-          {/* Language templates entry row */}
+          Language templates entry row
           <ConfigPageRow
             label={tDebug('sections.templates')}
             description={tDebug('templates.description')}
@@ -1124,44 +880,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               </Button>
             </div>
           )}
-        </Modal>
-
-        <Modal
-          isOpen={browserRestartPrompt !== null}
-          onClose={() => {
-            if (!browserControlBusy) setBrowserRestartPrompt(null);
-          }}
-          title={t('browserControl.restartModal.title')}
-          size="small"
-          closeOnOverlayClick={!browserControlBusy}
-        >
-          <div className="bitfun-debug-config__modal-body">
-            <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
-            <p>{t('browserControl.restartModal.warning')}</p>
-            {browserRestartPrompt?.message ? (
-              <p className="bitfun-func-agent-config__hint">{browserRestartPrompt.message}</p>
-            ) : null}
-          </div>
-          <div className="bitfun-debug-config__modal-footer">
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={() => setBrowserRestartPrompt(null)}
-              disabled={browserControlBusy}
-            >
-              {t('browserControl.restartModal.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              size="small"
-              onClick={() => void handleBrowserControlRestart()}
-              disabled={browserControlBusy}
-            >
-              {browserControlBusy
-                ? t('browserControl.restartModal.restarting')
-                : t('browserControl.restartModal.confirm')}
-            </Button>
-          </div>
         </Modal>
 
           </>

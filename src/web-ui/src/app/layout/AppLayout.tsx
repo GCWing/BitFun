@@ -267,9 +267,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     void (async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        const { pickWorkspaceDirectory } = await import(
-          '@/infrastructure/peer-device/pickWorkspaceDirectory'
-        );
         unlistenFns.push(await listen('bitfun_menu_open_project', async () => {
           try {
             const selected = await workspaceAPI.open_oh_file_dialog();
