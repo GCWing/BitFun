@@ -109,7 +109,7 @@ pub(super) fn find_top_window_for_pid(pid: u32) -> Option<HWND> {
             return windows::Win32::Foundation::FALSE;
         }
         TRUE
-    }}
+    }
     let mut state = FindState {
         target_pid: pid,
         found: None,
@@ -166,7 +166,7 @@ unsafe extern "system" fn enum_windows_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
         s.windows.push(WindowEntry { pid, title });
     }
     TRUE
-}}
+}
 
 /// Resolve the full image path of `pid` and return its `.exe` basename.
 fn exe_basename_for_pid(pid: u32) -> Option<String> {

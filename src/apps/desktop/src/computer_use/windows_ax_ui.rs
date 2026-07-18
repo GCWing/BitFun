@@ -182,7 +182,7 @@ unsafe fn build_cache_request(
     }
 
     Ok(cache_req)
-}}
+}
 
 /// `BuildUpdatedCache` with a short retry loop. A single transient provider
 /// error (commonly `E_FAIL` / `0x80004005` from a control rebuilding its
@@ -467,7 +467,7 @@ unsafe fn walk_tree_full(
 
     let tree_text = render_lines(&lines);
     Ok((tree_text, nodes))
-}}
+}
 
 #[allow(clippy::too_many_arguments)]
 unsafe fn walk_cached_bounded(

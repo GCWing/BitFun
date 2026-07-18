@@ -60,7 +60,7 @@ unsafe fn build_shortcuts_cache_request(
     let _ = unsafe { cache_req.AddPattern(UIA_TogglePatternId) };
     let _ = unsafe { cache_req.SetTreeScope(TreeScope_Subtree) };
     Ok(cache_req)
-}}
+}
 
 fn read_cached_name(element: &IUIAutomationElement) -> Option<String> {
     unsafe {

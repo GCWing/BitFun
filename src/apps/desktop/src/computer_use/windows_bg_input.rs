@@ -580,7 +580,7 @@ pub(super) fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) ->
 /// # Safety
 /// `process` must be a valid `HANDLE` (or the `GetCurrentProcess()` pseudo-
 /// handle) with `TOKEN_QUERY` access for `OpenProcessToken` to succeed.
-unsafe fn process_integrity_rid(process: Handle) -> Option<u32> { unsafe {
+unsafe fn process_integrity_rid(process: Handle) -> Option<u32> {
     let mut token: Handle = std::ptr::null_mut();
     // SAFETY: the caller supplies a process handle valid for `TOKEN_QUERY`;
     // `token` is a live out-pointer for the duration of the call.

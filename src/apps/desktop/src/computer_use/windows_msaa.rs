@@ -219,7 +219,7 @@ unsafe fn walk(
     total: &mut usize,
     max_depth: usize,
     max_total: usize,
-) { unsafe {
+) {
     if depth >= max_depth || *total >= max_total {
         return;
     }
@@ -374,7 +374,7 @@ unsafe fn walk(
             }
         }
     }
-}}
+}
 
 /// Construct a `VT_I4` VARIANT carrying `id` (used for `CHILDID_SELF` and child
 /// indices). The `windows` 0.61 crate exposes `VARIANT` as a `#[repr(C)]` struct
@@ -406,7 +406,7 @@ unsafe fn variant_to_i32(v: &VARIANT) -> Option<i32> {
             None
         }
     }
-}}
+}
 
 /// Map an MSAA role id to a `control_type` string matching the UIA path. For
 /// roles not in this list we emit `Role_<hex>` so the agent still sees something
