@@ -2,6 +2,14 @@
 
 export const optionalDependencyFeatureOwnerRules = [
   {
+    crateName: 'runtime-ports',
+    reason:
+      'runtime-ports may expose product-domain permission ports only through the explicit permission-v2 contract slice',
+    dependencies: [
+      { depName: 'bitfun-product-domains', ownerFeatures: ['permission-v2'] },
+    ],
+  },
+  {
     crateName: 'core',
     reason:
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',

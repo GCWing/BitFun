@@ -40,6 +40,7 @@ default = ["lsp"]
 lsp = ["dep:anyhow", "dep:notify", "dep:zip"]
 markdown = ["dep:serde_yaml"]
 workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports"]
+permission-v2 = ["dep:async-trait", "dep:bitfun-runtime-ports", "bitfun-runtime-ports/permission-v2"]
 
 [dev-dependencies]
 filetime = { workspace = true }

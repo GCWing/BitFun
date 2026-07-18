@@ -1,6 +1,6 @@
 use bitfun_product_domains::tool_permissions::{
     merge_permission_rule_layers, wildcard_matches, PermissionEffect, PermissionEvaluator,
-    PermissionResourceCaseSensitivity, PermissionRule,
+    PermissionReply, PermissionResourceCaseSensitivity, PermissionRule,
 };
 use serde_json::json;
 
@@ -24,6 +24,28 @@ fn permission_rule_uses_stable_wire_values() {
     assert_eq!(
         serde_json::from_value::<PermissionRule>(value).expect("deserialize permission rule"),
         rule("read", "src/*", PermissionEffect::Ask)
+    );
+}
+
+#[test]
+fn permission_reply_uses_stable_tagged_wire_values() {
+    assert_eq!(
+        serde_json::to_value(PermissionReply::Once).expect("serialize once reply"),
+        json!({ "reply": "once" })
+    );
+    assert_eq!(
+        serde_json::to_value(PermissionReply::Always).expect("serialize always reply"),
+        json!({ "reply": "always" })
+    );
+    assert_eq!(
+        serde_json::to_value(PermissionReply::Reject {
+            feedback: Some("Use a read-only path".to_string()),
+        })
+        .expect("serialize reject reply"),
+        json!({
+            "reply": "reject",
+            "feedback": "Use a read-only path",
+        })
     );
 }
 

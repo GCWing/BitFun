@@ -11,8 +11,20 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(feature = "permission-v2")]
+mod permission_v2;
 mod plugin;
 mod script_tool;
+#[cfg(feature = "permission-v2")]
+pub use bitfun_product_domains::tool_permissions::{
+    PermissionAuditEvent, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
+    PermissionReply, PermissionReplySource, PermissionRequest as PermissionV2Request,
+    PermissionRequestSource, PermissionRequestSourceKind,
+};
+#[cfg(feature = "permission-v2")]
+pub use permission_v2::{
+    PermissionAuditStorePort, PermissionGrantStorePort, PermissionReplyStorePort,
+};
 pub use plugin::{
     validate_plugin_dispatch_response, validate_plugin_runtime_read_response,
     DisabledPluginRuntimeClient, ExtensionCapabilityAvailability, PermissionPromptDenyState,

@@ -81,7 +81,6 @@ export const lightweightBoundaryRules = [
       'bitfun-services-integrations',
       'bitfun-agent-tools',
       'bitfun-tool-packs',
-      'bitfun-product-domains',
       'bitfun-transport',
       'terminal-core',
       'tool-runtime',
