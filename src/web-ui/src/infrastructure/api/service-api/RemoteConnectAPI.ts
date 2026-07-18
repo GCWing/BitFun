@@ -463,7 +463,7 @@ class RemoteConnectAPIService {
     }
   }
 
-  /** Lazy-load a session's turns from the relay on first open. */
+  /** Complete or resume a relay-imported session's lazy turn import. */
   async accountFetchSessionTurns(sessionId: string, workspacePath: string): Promise<boolean> {
     try {
       return await this.adapter.request<boolean>('account_fetch_session_turns', {
@@ -471,8 +471,8 @@ class RemoteConnectAPIService {
         workspacePath,
       });
     } catch (e) {
-      log.warn('accountFetchSessionTurns failed', e);
-      return false;
+      log.error('accountFetchSessionTurns failed', e);
+      throw e;
     }
   }
 

@@ -428,7 +428,10 @@ impl MCPServerManager {
 
         let server_id = config.id.clone();
         if self.runtime.contains(&server_id).await {
-            let _ = self.remove_ephemeral_server(&server_id).await;
+            return Err(BitFunError::Configuration(format!(
+                "MCP server already exists: {}",
+                server_id
+            )));
         }
 
         self.runtime.insert_runtime_config(config.clone()).await?;
@@ -448,25 +451,30 @@ impl MCPServerManager {
     pub async fn remove_ephemeral_server(&self, server_id: &str) -> BitFunResult<()> {
         info!("Removing ephemeral MCP server: id={}", server_id);
 
-        let _ = self.stop_server(server_id).await;
-        self.stop_connection_event_listener(server_id).await;
-
-        match self.runtime.unregister(server_id).await {
-            Ok(_) => {
-                info!("Unregistered ephemeral MCP server: id={}", server_id);
-            }
-            Err(e) => {
-                warn!(
-                    "Ephemeral MCP server was not registered, skipping unregister: id={} error={}",
-                    server_id, e
-                );
-            }
+        if !self.runtime.contains(server_id).await {
+            self.runtime.remove_runtime_config(server_id).await;
+            self.clear_reconnect_state(server_id).await;
+            self.runtime.remove_catalog(server_id).await;
+            Self::unregister_mcp_tools(server_id).await;
+            return Ok(());
         }
 
-        self.runtime.remove_runtime_config(server_id).await;
+        let stop_result = self.stop_server(server_id).await;
+        self.stop_connection_event_listener(server_id).await;
         self.clear_reconnect_state(server_id).await;
         self.runtime.remove_catalog(server_id).await;
 
+        if let Err(error) = stop_result {
+            warn!(
+                "Failed to stop ephemeral MCP server; retaining runtime ownership for retry: id={} error={}",
+                server_id, error
+            );
+            return Err(error);
+        }
+
+        self.runtime.unregister(server_id).await?;
+        self.runtime.remove_runtime_config(server_id).await;
+        info!("Unregistered ephemeral MCP server: id={}", server_id);
         Ok(())
     }
 

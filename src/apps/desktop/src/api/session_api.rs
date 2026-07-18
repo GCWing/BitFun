@@ -19,6 +19,65 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::State;
 
+const UI_CUSTOM_METADATA_KEYS: [&str; 3] = ["titleSource", "titleKey", "titleParams"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UiSessionMetadataField {
+    SessionName,
+    Tags,
+    Todos,
+    ReviewActionState,
+    UnreadCompletion,
+    NeedsUserAttention,
+    TitleMetadata,
+}
+
+fn merge_ui_owned_session_metadata(
+    current: &mut SessionMetadata,
+    incoming: &SessionMetadata,
+    fields: &[UiSessionMetadataField],
+) {
+    if fields.contains(&UiSessionMetadataField::SessionName) {
+        current.session_name = incoming.session_name.clone();
+    }
+    if fields.contains(&UiSessionMetadataField::Tags) {
+        current.tags = incoming.tags.clone();
+    }
+    if fields.contains(&UiSessionMetadataField::Todos) {
+        current.todos = incoming.todos.clone();
+    }
+    if fields.contains(&UiSessionMetadataField::ReviewActionState) {
+        current.review_action_state = incoming.review_action_state.clone();
+    }
+    if fields.contains(&UiSessionMetadataField::UnreadCompletion) {
+        current.unread_completion = incoming.unread_completion.clone();
+    }
+    if fields.contains(&UiSessionMetadataField::NeedsUserAttention) {
+        current.needs_user_attention = incoming.needs_user_attention.clone();
+    }
+
+    if fields.contains(&UiSessionMetadataField::TitleMetadata) {
+        let mut custom = current
+            .custom_metadata
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        let incoming_custom = incoming
+            .custom_metadata
+            .as_ref()
+            .and_then(serde_json::Value::as_object);
+        for key in UI_CUSTOM_METADATA_KEYS {
+            custom.remove(key);
+            if let Some(value) = incoming_custom.and_then(|metadata| metadata.get(key)) {
+                custom.insert(key.to_string(), value.clone());
+            }
+        }
+        current.custom_metadata = (!custom.is_empty()).then(|| serde_json::Value::Object(custom));
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListPersistedSessionsRequest {
     pub workspace_path: String,
@@ -65,6 +124,7 @@ pub struct SaveSessionTurnRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveSessionMetadataRequest {
     pub metadata: SessionMetadata,
+    pub fields: Vec<UiSessionMetadataField>,
     pub workspace_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
@@ -359,6 +419,9 @@ pub async fn save_session_metadata(
     app_state: State<'_, AppState>,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<(), String> {
+    if request.fields.is_empty() {
+        return Err("At least one session metadata field is required".to_string());
+    }
     let workspace_path = desktop_effective_session_storage_path(
         &app_state,
         &request.workspace_path,
@@ -369,16 +432,16 @@ pub async fn save_session_metadata(
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
+    let session_id = request.metadata.session_id.clone();
     manager
-        .save_session_metadata(&workspace_path, &request.metadata)
+        .update_session_metadata(&workspace_path, &session_id, |metadata| {
+            merge_ui_owned_session_metadata(metadata, &request.metadata, &request.fields);
+        })
         .await
         .map_err(|e| format!("Failed to save session metadata: {}", e))?;
 
     // Notify the auto-sync background task
-    crate::api::remote_connect_api::notify_session_changed(
-        &request.metadata.session_id,
-        &request.workspace_path,
-    );
+    crate::api::remote_connect_api::notify_session_changed(&session_id, &request.workspace_path);
     Ok(())
 }
 
@@ -549,16 +612,10 @@ pub async fn archive_session(
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
-    let mut metadata = manager
-        .load_session_metadata(&workspace_path, &request.session_id)
-        .await
-        .map_err(|e| format!("Failed to load session metadata: {}", e))?
-        .ok_or_else(|| "Session not found".to_string())?;
-
-    metadata.status = SessionStatus::Archived;
-
     manager
-        .save_session_metadata(&workspace_path, &metadata)
+        .update_session_metadata(&workspace_path, &request.session_id, |metadata| {
+            metadata.status = SessionStatus::Archived;
+        })
         .await
         .map_err(|e| format!("Failed to save session metadata: {}", e))
 }
@@ -579,16 +636,10 @@ pub async fn unarchive_session(
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
-    let mut metadata = manager
-        .load_session_metadata(&workspace_path, &request.session_id)
-        .await
-        .map_err(|e| format!("Failed to load session metadata: {}", e))?
-        .ok_or_else(|| "Session not found".to_string())?;
-
-    metadata.status = SessionStatus::Active;
-
     manager
-        .save_session_metadata(&workspace_path, &metadata)
+        .update_session_metadata(&workspace_path, &request.session_id, |metadata| {
+            metadata.status = SessionStatus::Active;
+        })
         .await
         .map_err(|e| format!("Failed to save session metadata: {}", e))
 }
@@ -616,13 +667,16 @@ pub async fn archive_all_sessions(
 
     let mut archived_count: u32 = 0;
 
-    for mut metadata in sessions {
+    for metadata in sessions {
         if metadata.status != SessionStatus::Archived
             && metadata.session_kind == SessionKind::Standard
         {
-            metadata.status = SessionStatus::Archived;
             manager
-                .save_session_metadata(&workspace_path, &metadata)
+                .update_session_metadata(&workspace_path, &metadata.session_id, |current| {
+                    if current.session_kind == SessionKind::Standard {
+                        current.status = SessionStatus::Archived;
+                    }
+                })
                 .await
                 .map_err(|e| format!("Failed to save session metadata: {}", e))?;
             archived_count += 1;
@@ -695,4 +749,118 @@ pub async fn delete_all_archived_sessions(
     }
 
     Ok(deleted_count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{merge_ui_owned_session_metadata, UiSessionMetadataField};
+    use bitfun_core::service::session::{
+        SessionKind, SessionMemoryMode, SessionMetadata, SessionStatus,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn ui_metadata_merge_preserves_core_authoritative_fields_and_custom_keys() {
+        let mut current = SessionMetadata::new(
+            "session".to_string(),
+            "Current".to_string(),
+            "plan".to_string(),
+            "model-a".to_string(),
+        );
+        current.last_submitted_agent_type = Some("plan".to_string());
+        current.memory_mode = SessionMemoryMode::Polluted;
+        current.session_kind = SessionKind::Standard;
+        current.status = SessionStatus::Archived;
+        current.turn_count = 7;
+        current.custom_metadata = Some(json!({
+            "threadGoal": { "objective": "preserve" },
+            "titleSource": "i18n",
+            "titleKey": "old"
+        }));
+
+        let mut incoming = current.clone();
+        incoming.session_name = "Renamed".to_string();
+        incoming.agent_type = "agentic".to_string();
+        incoming.model_name = "stale-model".to_string();
+        incoming.memory_mode = SessionMemoryMode::Enabled;
+        incoming.status = SessionStatus::Active;
+        incoming.turn_count = 1;
+        incoming.review_action_state = Some(json!({ "phase": "fixing" }));
+        incoming.custom_metadata = Some(json!({
+            "titleSource": "i18n",
+            "titleKey": "new",
+            "untrustedCoreKey": "drop"
+        }));
+
+        merge_ui_owned_session_metadata(
+            &mut current,
+            &incoming,
+            &[
+                UiSessionMetadataField::SessionName,
+                UiSessionMetadataField::Tags,
+                UiSessionMetadataField::Todos,
+                UiSessionMetadataField::ReviewActionState,
+                UiSessionMetadataField::UnreadCompletion,
+                UiSessionMetadataField::NeedsUserAttention,
+                UiSessionMetadataField::TitleMetadata,
+            ],
+        );
+
+        assert_eq!(current.session_name, "Renamed");
+        assert_eq!(current.agent_type, "plan");
+        assert_eq!(current.model_name, "model-a");
+        assert_eq!(current.memory_mode, SessionMemoryMode::Polluted);
+        assert_eq!(current.status, SessionStatus::Archived);
+        assert_eq!(current.turn_count, 7);
+        assert_eq!(current.review_action_state, incoming.review_action_state);
+        let custom = current.custom_metadata.unwrap();
+        assert_eq!(custom["threadGoal"]["objective"], "preserve");
+        assert_eq!(custom["titleKey"], "new");
+        assert!(custom.get("untrustedCoreKey").is_none());
+    }
+
+    #[test]
+    fn ui_metadata_field_mask_keeps_independent_writers_isolated() {
+        let mut current = SessionMetadata::new(
+            "session".to_string(),
+            "Current".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        current.review_action_state = Some(json!({ "phase": "review_completed" }));
+        current.unread_completion = Some("completed".to_string());
+        current.needs_user_attention = Some("ask_user".to_string());
+
+        let mut stale_general_update = current.clone();
+        stale_general_update.session_name = "Renamed".to_string();
+        stale_general_update.review_action_state = None;
+        merge_ui_owned_session_metadata(
+            &mut current,
+            &stale_general_update,
+            &[UiSessionMetadataField::SessionName],
+        );
+        assert_eq!(current.session_name, "Renamed");
+        assert_eq!(
+            current.review_action_state,
+            Some(json!({ "phase": "review_completed" }))
+        );
+        assert_eq!(current.unread_completion.as_deref(), Some("completed"));
+        assert_eq!(current.needs_user_attention.as_deref(), Some("ask_user"));
+
+        let mut review_update = current.clone();
+        review_update.review_action_state = Some(json!({ "phase": "fixing" }));
+        review_update.unread_completion = None;
+        review_update.needs_user_attention = None;
+        merge_ui_owned_session_metadata(
+            &mut current,
+            &review_update,
+            &[UiSessionMetadataField::ReviewActionState],
+        );
+        assert_eq!(
+            current.review_action_state,
+            Some(json!({ "phase": "fixing" }))
+        );
+        assert_eq!(current.unread_completion.as_deref(), Some("completed"));
+        assert_eq!(current.needs_user_attention.as_deref(), Some("ask_user"));
+    }
 }

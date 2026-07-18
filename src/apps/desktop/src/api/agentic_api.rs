@@ -791,9 +791,22 @@ pub async fn create_session(
                 repaired = true;
             }
             if repaired {
+                let relationship = request.relationship.clone();
+                let deep_review_run_manifest = request.deep_review_run_manifest.clone();
+                let review_target_evidence = request.review_target_evidence.clone();
                 coordinator
                     .get_session_manager()
-                    .save_session_metadata(&effective_path, &metadata)
+                    .update_session_metadata(&effective_path, session_id, |current| {
+                        if current.relationship.is_none() {
+                            current.relationship = relationship;
+                        }
+                        if current.deep_review_run_manifest.is_none() {
+                            current.deep_review_run_manifest = deep_review_run_manifest;
+                        }
+                        if current.review_target_evidence.is_none() {
+                            current.review_target_evidence = review_target_evidence;
+                        }
+                    })
                     .await
                     .map_err(|error| {
                         format!("Failed to repair Review session metadata: {error}")

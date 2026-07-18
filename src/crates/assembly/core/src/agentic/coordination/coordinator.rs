@@ -1699,7 +1699,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 needs_user_attention: None,
             };
             if let Err(e) = persistence_manager
-                .save_session_metadata(&workspace_path_buf, &metadata)
+                .create_session_metadata_if_absent(&workspace_path_buf, &metadata)
                 .await
             {
                 warn!(
@@ -4026,6 +4026,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         loop {
             let pending = counter.load(Ordering::SeqCst);
             if pending == 0 {
+                self.active_turns_per_session
+                    .remove_if(session_id, |_, current| {
+                        Arc::ptr_eq(current, &counter) && current.load(Ordering::SeqCst) == 0
+                    });
                 return 0;
             }
             if Instant::now() >= deadline {
@@ -4088,6 +4092,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> Option<super::turn_settlement::TurnSettlementRegistration> {
         self.turn_settlements
             .try_register_pending(session_id.to_string(), turn_id.to_string())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_active_turn_count_for_test(&self, session_id: &str, count: usize) {
+        self.active_turns_per_session
+            .insert(session_id.to_string(), Arc::new(AtomicUsize::new(count)));
     }
 
     /// Strict maintenance barrier for callers that must not overlap an older
@@ -4327,7 +4337,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     current_turn_id,
                     wait_timeout.as_millis()
                 );
-                break;
+                return Err(BitFunError::Timeout(format!(
+                    "Active turn cancellation did not drain before timeout: session_id={session_id}, dialog_turn_id={current_turn_id}, timeout_ms={}",
+                    wait_timeout.as_millis()
+                )));
             }
             sleep(Duration::from_millis(50)).await;
         }
@@ -6992,12 +7005,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     pub(crate) async fn cancel_background_subagents_for_parent_session(
         &self,
         parent_session_id: &str,
-    ) -> BitFunResult<usize> {
+    ) -> BitFunResult<Vec<String>> {
         let controls = self.claim_background_subagent_controls(|control| {
             control.parent_session_id == parent_session_id
         });
-
-        self.cancel_background_subagent_controls(controls).await
+        let subagent_session_ids = controls
+            .iter()
+            .map(|(_, control)| control.subagent_session_id.clone())
+            .collect::<Vec<_>>();
+        self.cancel_background_subagent_controls(controls).await?;
+        Ok(subagent_session_ids)
     }
 
     pub(crate) fn take_background_subagent_delivery_suppression(
@@ -7690,6 +7707,30 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn update_session_mode(&self, session_id: &str, mode_id: &str) -> BitFunResult<()> {
+        let mode_id = mode_id.trim();
+        if mode_id.is_empty() {
+            return Err(BitFunError::Validation(
+                "Session mode must not be empty".to_string(),
+            ));
+        }
+
+        let mode_exists = get_agent_registry()
+            .get_modes_info()
+            .await
+            .into_iter()
+            .any(|mode| mode.id == mode_id);
+        if !mode_exists {
+            return Err(BitFunError::Validation(format!(
+                "Unknown session mode: {mode_id}"
+            )));
+        }
+
+        self.session_manager
+            .update_session_agent_type(session_id, mode_id)
+            .await
+    }
+
     /// Update the session-level prompt-cache guard mode for the latest
     /// scheduler-accepted user submission.
     pub async fn update_last_submitted_agent_type(
@@ -8132,7 +8173,7 @@ impl bitfun_runtime_ports::AgentSessionModePort for ConversationCoordinator {
         &self,
         request: bitfun_runtime_ports::AgentSessionModeUpdateRequest,
     ) -> bitfun_runtime_ports::PortResult<()> {
-        self.update_session_agent_type(&request.session_id, &request.mode_id)
+        self.update_session_mode(&request.session_id, &request.mode_id)
             .await
             .map_err(runtime_port_error_preserving_message)
     }
@@ -8680,6 +8721,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_mode_port_rejects_blank_mode_for_active_session() {
+        use bitfun_agent_runtime::sdk::{AgentSessionModePort, AgentSessionModeUpdateRequest};
+
+        let (coordinator, _) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-session-mode-validation-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let workspace_path_string = workspace_path.to_string_lossy().into_owned();
+        let session = TEST_AGENT_MODEL_DEFAULTS
+            .scope(
+                AgentModelDefaultsConfig::default(),
+                coordinator.create_session_with_workspace(
+                    None,
+                    "Runtime mode validation".to_string(),
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path_string.clone()),
+                        ..Default::default()
+                    },
+                    workspace_path_string,
+                ),
+            )
+            .await
+            .expect("real Core session should be created");
+
+        let error = AgentSessionModePort::update_session_mode(
+            &coordinator,
+            AgentSessionModeUpdateRequest {
+                session_id: session.session_id,
+                mode_id: "   ".to_string(),
+            },
+        )
+        .await
+        .expect_err("blank mode must remain a typed invalid request");
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn session_mode_port_rejects_unknown_mode_for_active_session() {
+        use bitfun_agent_runtime::sdk::{AgentSessionModePort, AgentSessionModeUpdateRequest};
+
+        let (coordinator, _) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-session-mode-validation-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let workspace_path_string = workspace_path.to_string_lossy().into_owned();
+        let session = TEST_AGENT_MODEL_DEFAULTS
+            .scope(
+                AgentModelDefaultsConfig::default(),
+                coordinator.create_session_with_workspace(
+                    None,
+                    "Runtime mode validation".to_string(),
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path_string.clone()),
+                        ..Default::default()
+                    },
+                    workspace_path_string,
+                ),
+            )
+            .await
+            .expect("real Core session should be created");
+
+        let error = AgentSessionModePort::update_session_mode(
+            &coordinator,
+            AgentSessionModeUpdateRequest {
+                session_id: session.session_id,
+                mode_id: "__missing_runtime_mode__".to_string(),
+            },
+        )
+        .await
+        .expect_err("unknown mode must remain a typed invalid request");
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
     async fn session_mode_runtime_updates_the_real_core_session() {
         use bitfun_agent_runtime::sdk::{AgentRuntimeBuilder, AgentSessionModeUpdateRequest};
 
@@ -8716,7 +8847,7 @@ mod tests {
         runtime
             .update_session_mode(AgentSessionModeUpdateRequest {
                 session_id: session.session_id.clone(),
-                mode_id: " plan ".to_string(),
+                mode_id: " Plan ".to_string(),
             })
             .await
             .expect("runtime mode port should update the Core owner");
@@ -8726,7 +8857,7 @@ mod tests {
                 .get_session(&session.session_id)
                 .map(|session| session.agent_type.clone())
                 .as_deref(),
-            Some("plan")
+            Some("Plan")
         );
         let _ = std::fs::remove_dir_all(workspace_path);
     }

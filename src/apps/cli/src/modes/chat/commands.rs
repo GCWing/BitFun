@@ -1,3 +1,7 @@
+fn mode_change_blocks_typed_submission(pending_for_current_session: bool, input: &str) -> bool {
+    pending_for_current_session && !input.trim().starts_with('/')
+}
+
 impl ChatMode {
     /// Handle command palette action
     fn handle_palette_action(
@@ -716,8 +720,19 @@ impl ChatMode {
             return self.handle_action_id(&action_id, chat_view, chat_state, rt_handle);
         }
 
+        let trimmed = chat_view.input_text().trim();
+        let pending_for_current_session = self
+            .pending_mode_change
+            .as_ref()
+            .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
+        if mode_change_blocks_typed_submission(pending_for_current_session, trimmed) {
+            chat_view.set_status(Some(
+                "Waiting for the agent mode change to finish before sending.".to_string(),
+            ));
+            return Ok(None);
+        }
+
         if chat_state.is_processing {
-            let trimmed = chat_view.input_text().trim();
             if trimmed.starts_with('/') {
                 if let Some(input) = chat_view.send_input() {
                     return self.handle_command(&input, chat_view, chat_state, rt_handle);

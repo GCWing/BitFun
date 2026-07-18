@@ -152,15 +152,12 @@ pub(crate) async fn persist_deep_review_cache(
     };
     let session_storage_dir = workspace.session_storage_dir();
     let session_manager = coordinator.get_session_manager();
-    let Some(mut metadata) = session_manager
-        .load_session_metadata(&session_storage_dir, session_id)
-        .await?
-    else {
-        return Ok(());
-    };
-
-    set_deep_review_cache(&mut metadata, cache_value);
     session_manager
-        .save_session_metadata(&session_storage_dir, &metadata)
+        .persistence_manager()
+        .update_session_metadata_if_present(&session_storage_dir, session_id, |metadata| {
+            set_deep_review_cache(metadata, cache_value);
+            Ok(())
+        })
         .await
+        .map(|_| ())
 }

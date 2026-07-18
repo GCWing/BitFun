@@ -13,6 +13,7 @@ bitfun-core = { path = "../../assembly/core", default-features = false, features
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
+bitfun-core-types = { path = "../../contracts/core-types" }
 
 agent-client-protocol = { workspace = true }
 tokio = { workspace = true }
@@ -25,6 +26,7 @@ chrono = { workspace = true }
 dashmap = { workspace = true }
 log = { workspace = true }
 uuid = { workspace = true }
+sha2 = { workspace = true }
 
 [lints]
 workspace = true

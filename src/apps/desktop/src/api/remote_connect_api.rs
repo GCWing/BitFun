@@ -1662,6 +1662,42 @@ pub struct SessionBundle {
     pub source_device_name: Option<String>,
 }
 
+const RELAY_TURNS_IMPORT_STATE_KEY: &str = "relayTurnsImportState";
+const RELAY_TURNS_IMPORT_PENDING: &str = "pending";
+const RELAY_TURNS_IMPORT_COMPLETE: &str = "complete";
+
+fn relay_turns_import_state(metadata: &SessionMetadata) -> Option<&str> {
+    metadata
+        .custom_metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+        .and_then(|custom| custom.get(RELAY_TURNS_IMPORT_STATE_KEY))
+        .and_then(serde_json::Value::as_str)
+}
+
+fn relay_turns_import_is_complete(metadata: &SessionMetadata, local_turn_count: usize) -> bool {
+    metadata.turn_count == local_turn_count
+        && relay_turns_import_state(metadata) == Some(RELAY_TURNS_IMPORT_COMPLETE)
+}
+
+fn set_relay_turns_import_state(metadata: &mut SessionMetadata, state: &str) {
+    let mut custom = metadata
+        .custom_metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    custom.insert(
+        RELAY_TURNS_IMPORT_STATE_KEY.to_string(),
+        serde_json::Value::String(state.to_string()),
+    );
+    metadata.custom_metadata = Some(serde_json::Value::Object(custom));
+}
+
+fn mark_relay_turns_import_complete(metadata: &mut SessionMetadata) {
+    set_relay_turns_import_state(metadata, RELAY_TURNS_IMPORT_COMPLETE);
+}
+
 /// Export a single local session as an encrypted blob and upload it to the relay.
 /// Uses the workspace + session_id to load metadata and turns from disk.
 #[tauri::command]
@@ -1834,17 +1870,6 @@ pub async fn account_import_remote_sessions(
     for fetched in remote_sessions {
         let session_id = fetched.session_id;
         let bundle_json = fetched.plaintext;
-        // Skip if session already exists locally
-        if manager
-            .load_session_metadata(&storage_path, &session_id)
-            .await
-            .ok()
-            .flatten()
-            .is_some()
-        {
-            continue;
-        }
-
         // Deserialize the bundle and write metadata as-is. The source device's
         // workspace_path is preserved for display (read-only history). Tasks
         // are always executed on the receiving device's own workspace, so
@@ -1852,14 +1877,25 @@ pub async fn account_import_remote_sessions(
         let bundle: SessionBundle =
             serde_json::from_str(&bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
 
-        let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+        let mut metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
             .map_err(|e| format!("deserialize metadata: {e}"))?;
+        if metadata.session_id != session_id {
+            log::warn!(
+                "Skipping remote session bundle with mismatched metadata identity: expected_session_id={}, metadata_session_id={}",
+                session_id,
+                metadata.session_id
+            );
+            continue;
+        }
         // Only write metadata — turns are lazy-loaded when the user opens
         // the session (see `account_fetch_session_turns`).
-        if manager
-            .save_session_metadata(&storage_path, &metadata)
+        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        if !manager
+            .create_session_metadata_if_absent(&storage_path, &metadata)
             .await
-            .is_err()
+            .map_err(|error| {
+                format!("persist imported metadata for session {session_id}: {error}")
+            })?
         {
             continue;
         }
@@ -1898,11 +1934,25 @@ pub async fn account_fetch_session_turns(
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("create persistence manager: {e}"))?;
 
-    // If turns already exist locally, no fetch needed.
-    if let Ok(turns) = manager.load_session_turns(&storage_path, &session_id).await {
-        if !turns.is_empty() {
-            return Ok(false);
-        }
+    // Ordinary local sessions carry no relay marker and return without an
+    // account or network lookup. A non-empty turn prefix is not proof that an
+    // import completed, so pending or inconsistent imports are retried.
+    let Some(metadata) = manager
+        .load_session_metadata(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("load imported metadata: {error}"))?
+    else {
+        return Ok(false);
+    };
+    if relay_turns_import_state(&metadata).is_none() {
+        return Ok(false);
+    }
+    let local_turns = manager
+        .load_session_turns(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("load imported turns: {error}"))?;
+    if relay_turns_import_is_complete(&metadata, local_turns.len()) {
+        return Ok(false);
     }
 
     // Fetch the full bundle from the relay (which includes turns).
@@ -1916,18 +1966,41 @@ pub async fn account_fetch_session_turns(
     let bundle: SessionBundle =
         serde_json::from_str(&fetched.plaintext).map_err(|e| format!("deserialize bundle: {e}"))?;
 
-    // Write turns first, then metadata (self-healing on crash).
-    for turn_val in &bundle.turns {
-        let turn: DialogTurnData = serde_json::from_value(turn_val.clone())
-            .map_err(|e| format!("deserialize turn: {e}"))?;
-        let _ = manager.save_dialog_turn(&storage_path, &turn).await;
-    }
-    // Re-save metadata to ensure consistency.
-    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())
         .map_err(|e| format!("deserialize metadata: {e}"))?;
-    let _ = manager
-        .save_session_metadata(&storage_path, &metadata)
-        .await;
+    if metadata.session_id != session_id {
+        return Err("relay session metadata identity does not match request".to_string());
+    }
+    let turns = bundle
+        .turns
+        .iter()
+        .map(|turn| {
+            serde_json::from_value::<DialogTurnData>(turn.clone())
+                .map_err(|error| format!("deserialize turn: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if turns.iter().any(|turn| turn.session_id != session_id) {
+        return Err("relay session turn identity does not match request".to_string());
+    }
+
+    manager
+        .create_session_metadata_if_absent(&storage_path, &metadata)
+        .await
+        .map_err(|e| format!("persist imported metadata: {e}"))?;
+
+    // Each turn save refreshes counts through an owner-side metadata RMW.
+    for turn in &turns {
+        manager
+            .save_dialog_turn(&storage_path, turn)
+            .await
+            .map_err(|e| format!("persist imported turn: {e}"))?;
+    }
+    manager
+        .update_session_metadata(&storage_path, &session_id, |metadata| {
+            mark_relay_turns_import_complete(metadata);
+        })
+        .await
+        .map_err(|e| format!("mark imported turns complete: {e}"))?;
 
     log::info!(
         "Lazy-loaded {} turns for session {session_id}",
@@ -2686,24 +2759,19 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
         dir
     });
 
-    // Skip if session already exists locally
-    if manager
-        .load_session_metadata(&target_dir, &bundle.session_id)
-        .await
-        .ok()
-        .flatten()
-        .is_some()
-    {
-        return Ok(());
+    let mut metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
+    if metadata.session_id != bundle.session_id {
+        return Err(anyhow::anyhow!(
+            "relay session metadata identity does not match bundle"
+        ));
     }
-
-    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
 
     // Only write metadata — turns are lazy-loaded when the user opens the
     // session. This keeps the import fast and avoids writing potentially
     // large turn data that may never be read.
+    set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
     manager
-        .save_session_metadata(&target_dir, &metadata)
+        .create_session_metadata_if_absent(&target_dir, &metadata)
         .await
         .map_err(|e| anyhow::anyhow!("save metadata: {e}"))?;
 
@@ -2752,5 +2820,29 @@ mod sync_state_tests {
         assert_eq!(state.last_session_since, 5);
         state.advance_session_since([9]);
         assert_eq!(state.last_session_since, 9);
+    }
+
+    #[test]
+    fn relay_turn_import_requires_an_explicit_complete_marker_and_exact_count() {
+        let mut metadata = SessionMetadata::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        metadata.turn_count = 2;
+
+        assert_eq!(relay_turns_import_state(&metadata), None);
+        assert!(!relay_turns_import_is_complete(&metadata, 1));
+        assert!(!relay_turns_import_is_complete(&metadata, 2));
+        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        assert_eq!(
+            relay_turns_import_state(&metadata),
+            Some(RELAY_TURNS_IMPORT_PENDING)
+        );
+        assert!(!relay_turns_import_is_complete(&metadata, 2));
+        mark_relay_turns_import_complete(&mut metadata);
+        assert!(!relay_turns_import_is_complete(&metadata, 1));
+        assert!(relay_turns_import_is_complete(&metadata, 2));
     }
 }

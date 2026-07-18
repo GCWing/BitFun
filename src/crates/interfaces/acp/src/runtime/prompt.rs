@@ -26,11 +26,7 @@ use super::{AcpSessionState, BitfunAcpRuntime};
 impl BitfunAcpRuntime {
     pub(super) async fn run_prompt(&self, request: PromptRequest) -> Result<PromptResponse> {
         let session_id = request.session_id.to_string();
-        let acp_session = self
-            .sessions
-            .get(&session_id)
-            .ok_or_else(|| Error::resource_not_found(Some(session_id.clone())))?;
-        let acp_session = acp_session.clone();
+        let (acp_session, lifecycle_guard) = self.lock_active_session(&session_id).await?;
         let connection = self
             .connections
             .get(&session_id)
@@ -46,12 +42,12 @@ impl BitfunAcpRuntime {
         let mut event_rx = self
             .agent_runtime
             .subscribe_session_events(&acp_session.bitfun_session_id)
-            .map_err(Self::runtime_error)?;
+            .map_err(|error| Self::session_runtime_error(&session_id, error))?;
         let outcome = self
             .agent_runtime
             .submit_dialog_turn(dialog_turn_request(&acp_session, parsed_prompt))
             .await
-            .map_err(Self::runtime_error)?;
+            .map_err(|error| Self::session_runtime_error(&session_id, error))?;
         let turn_id = match resolve_started_prompt_turn(outcome) {
             Ok(turn_id) => turn_id,
             Err(queued_turn_id) => {
@@ -62,11 +58,12 @@ impl BitfunAcpRuntime {
                         "acp_busy_rejected",
                     ))
                     .await
-                    .map_err(Self::runtime_error)?;
+                    .map_err(|error| Self::session_runtime_error(&session_id, error))?;
                 return Err(Error::internal_error()
                     .data("Session state does not allow starting new dialog: Processing"));
             }
         };
+        drop(lifecycle_guard);
 
         let stop_reason = wait_for_prompt_completion(
             self,
@@ -83,11 +80,7 @@ impl BitfunAcpRuntime {
 
     pub(super) async fn cancel_prompt(&self, notification: CancelNotification) -> Result<()> {
         let session_id = notification.session_id.to_string();
-        let acp_session = self
-            .sessions
-            .get(&session_id)
-            .ok_or_else(|| Error::resource_not_found(Some(session_id.clone())))?;
-        let acp_session = acp_session.clone();
+        let (acp_session, _lifecycle_guard) = self.lock_active_session(&session_id).await?;
 
         self.agent_runtime
             .cancel_turn(turn_cancellation_request(
@@ -96,7 +89,7 @@ impl BitfunAcpRuntime {
                 "acp_client_cancelled",
             ))
             .await
-            .map_err(Self::runtime_error)?;
+            .map_err(|error| Self::session_runtime_error(&session_id, error))?;
 
         Ok(())
     }
@@ -129,7 +122,7 @@ fn resolve_started_prompt_turn(
     }
 }
 
-fn turn_cancellation_request(
+pub(super) fn turn_cancellation_request(
     session_id: &str,
     turn_id: Option<&str>,
     reason: &str,
@@ -420,6 +413,7 @@ mod tests {
             mode_id: "agentic".to_string(),
             model_id: "auto".to_string(),
             mcp_server_ids: Vec::new(),
+            lifecycle: std::sync::Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 

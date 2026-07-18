@@ -63,9 +63,16 @@ impl AcpSessionPersistence {
             CUSTOM_METADATA_LAST_RESUME_ERROR_KEY: null,
         }));
 
-        self.manager
-            .save_session_metadata(session_storage_path, &metadata)
-            .await?;
+        if !self
+            .manager
+            .create_session_metadata_if_absent(session_storage_path, &metadata)
+            .await?
+        {
+            return Err(BitFunError::Validation(format!(
+                "ACP flow session ID already exists: {}",
+                session_id
+            )));
+        }
 
         Ok(CreateAcpFlowSessionRecordResponse {
             session_id,
@@ -150,18 +157,10 @@ impl AcpSessionPersistence {
         bitfun_session_id: &str,
         update: impl FnOnce(&mut SessionMetadata) -> BitFunResult<()>,
     ) -> BitFunResult<()> {
-        let Some(mut metadata) = self
-            .manager
-            .load_session_metadata(session_storage_path, bitfun_session_id)
-            .await?
-        else {
-            return Ok(());
-        };
-
-        update(&mut metadata)?;
         self.manager
-            .save_session_metadata(session_storage_path, &metadata)
+            .update_session_metadata_if_present(session_storage_path, bitfun_session_id, update)
             .await
+            .map(|_| ())
     }
 }
 

@@ -46,6 +46,7 @@ pub enum PortErrorKind {
     PermissionDenied,
     Cancelled,
     Timeout,
+    CleanupRequired,
     Backend,
 }
 

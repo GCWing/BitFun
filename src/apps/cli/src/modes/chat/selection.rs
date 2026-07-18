@@ -5,6 +5,62 @@ enum ModelSelectionApplyOutcome {
     },
 }
 
+enum ModeSelectionApplyOutcome {
+    SessionUpdateFailed(String),
+    Applied,
+}
+
+enum ModeChangePollOutcome {
+    NoChange,
+    Redraw,
+    ExitAfterSave,
+}
+
+fn previous_session_mode_change_status(
+    mode_id: &str,
+    outcome: &ModeSelectionApplyOutcome,
+) -> String {
+    match outcome {
+        ModeSelectionApplyOutcome::Applied => format!(
+            "The previous session mode was changed to {mode_id}; the current session was not modified."
+        ),
+        ModeSelectionApplyOutcome::SessionUpdateFailed(error) => format!(
+            "The previous session mode change to {mode_id} failed: {error}. Return to that session to retry."
+        ),
+    }
+}
+
+fn mode_change_completion_should_exit(exit_requested: bool, applied: bool) -> bool {
+    exit_requested && applied
+}
+
+fn apply_agent_mode_feedback(
+    current_mode: &mut String,
+    chat_state: &mut ChatState,
+    selected_mode: &str,
+    outcome: ModeSelectionApplyOutcome,
+) -> bool {
+    match outcome {
+        ModeSelectionApplyOutcome::SessionUpdateFailed(error) => {
+            tracing::error!(
+                "Failed to switch agent mode to {}: {}",
+                selected_mode,
+                error
+            );
+            chat_state.add_system_message(format!(
+                "Agent mode was not changed: {error}. Please retry."
+            ));
+            false
+        }
+        ModeSelectionApplyOutcome::Applied => {
+            *current_mode = selected_mode.to_string();
+            chat_state.agent_type = selected_mode.to_string();
+            tracing::info!("Agent mode switched to: {}", selected_mode);
+            true
+        }
+    }
+}
+
 fn usage_report_metadata(report: &SessionUsageReport) -> Result<serde_json::Value> {
     let usage_report = serde_json::to_value(report)
         .map_err(|error| anyhow!("Failed to serialize usage report: {error}"))?;
@@ -263,10 +319,16 @@ impl ChatMode {
     fn switch_agent_by_offset(
         &mut self,
         offset: isize,
-        _chat_view: &mut ChatView,
+        chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if !agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some()) {
+            chat_view.set_status(Some(mode_switch_unavailable_message(
+                chat_state.is_processing,
+            )));
+            return;
+        }
         let modes = self.get_mode_agents(rt_handle);
         if modes.len() <= 1 {
             return;
@@ -281,8 +343,11 @@ impl ChatMode {
         let next_idx = ((current_idx as isize + offset) % len + len) % len;
         let next = &modes[next_idx as usize];
 
-        self.agent_type = next.id.clone();
-        chat_state.agent_type = next.id.clone();
+        let selected = AgentItem {
+            id: next.id.clone(),
+            description: next.description.clone(),
+        };
+        self.apply_agent_selection(&selected, chat_view, chat_state, rt_handle);
     }
 
     /// Load current model name from global config for display
@@ -473,7 +538,10 @@ impl ChatMode {
             agent_items,
             Some(self.agent_type.clone()),
             true,
-            agent_mode_switch_allowed(chat_state.is_processing),
+            agent_mode_switch_allowed(
+                chat_state.is_processing,
+                self.pending_mode_change.is_some(),
+            ),
         );
     }
 
@@ -486,15 +554,17 @@ impl ChatMode {
     ) {
         match action {
             AgentSelectorAction::SwitchMode(selected) => {
-                if !agent_mode_switch_allowed(chat_state.is_processing) {
-                    chat_view.set_status(Some(
-                        "Agent mode cannot be changed during the current turn. Subagent and external source management remain available."
-                            .to_string(),
-                    ));
+                if !agent_mode_switch_allowed(
+                    chat_state.is_processing,
+                    self.pending_mode_change.is_some(),
+                ) {
+                    chat_view.set_status(Some(mode_switch_unavailable_message(
+                        chat_state.is_processing,
+                    )));
                     return;
                 }
                 chat_view.hide_agent_selector();
-                self.apply_agent_selection(&selected, chat_state);
+                self.apply_agent_selection(&selected, chat_view, chat_state, rt_handle);
             }
             AgentSelectorAction::ManageSubagents => {
                 self.show_subagent_selector(chat_view, chat_state, rt_handle);
@@ -507,15 +577,107 @@ impl ChatMode {
     }
 
     /// Apply agent selection: switch agent type
-    fn apply_agent_selection(&mut self, selected: &AgentItem, chat_state: &mut ChatState) {
+    fn apply_agent_selection(
+        &mut self,
+        selected: &AgentItem,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
         if selected.id == self.agent_type {
             return;
         }
-        self.agent_type = selected.id.clone();
-        chat_state.agent_type = selected.id.clone();
-        tracing::info!("Switched to agent: {}", selected.id);
 
-        if selected.id == "HarmonyOSDev" {
+        if self.pending_mode_change.is_some() {
+            chat_view.set_status(Some(
+                "An agent mode change is already in progress. Please wait.".to_string(),
+            ));
+            return;
+        }
+
+        let session_id = chat_state.core_session_id.clone();
+        let mode_id = selected.id.clone();
+        let task_mode_id = mode_id.clone();
+        let agent = self.agent.clone();
+        chat_view.set_status(Some(format!("Switching agent mode to {mode_id}...")));
+        let task_session_id = session_id.clone();
+        let handle = rt_handle.spawn(async move {
+            agent
+                .update_session_mode(&task_session_id, &task_mode_id)
+                .await
+        });
+        self.pending_mode_change = Some(PendingModeChange {
+            session_id,
+            mode_id,
+            started_at: Instant::now(),
+            slow_notice_shown: false,
+            exit_warning_shown: false,
+            handle,
+        });
+    }
+
+    fn poll_mode_change_completion(
+        &mut self,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> ModeChangePollOutcome {
+        let Some(pending) = self.pending_mode_change.as_mut() else {
+            return ModeChangePollOutcome::NoChange;
+        };
+        if !pending.handle.is_finished() {
+            if !pending.slow_notice_shown && pending.started_at.elapsed() >= MODE_CHANGE_SLOW_NOTICE
+            {
+                pending.slow_notice_shown = true;
+                if !pending.exit_warning_shown {
+                    chat_view.set_status(Some(
+                        "The agent mode change is still being saved. You can edit or switch sessions; sending in this session waits."
+                            .to_string(),
+                    ));
+                }
+                return ModeChangePollOutcome::Redraw;
+            }
+            return ModeChangePollOutcome::NoChange;
+        }
+        let pending = self
+            .pending_mode_change
+            .take()
+            .expect("finished mode task should remain present");
+        let outcome = match tokio::task::block_in_place(|| rt_handle.block_on(pending.handle)) {
+            Ok(Ok(())) => ModeSelectionApplyOutcome::Applied,
+            Ok(Err(error)) => ModeSelectionApplyOutcome::SessionUpdateFailed(error.to_string()),
+            Err(error) => ModeSelectionApplyOutcome::SessionUpdateFailed(format!(
+                "mode update task failed: {error}"
+            )),
+        };
+        if chat_state.core_session_id != pending.session_id {
+            if let ModeSelectionApplyOutcome::SessionUpdateFailed(error) = &outcome {
+                tracing::error!(
+                    "Failed to switch previous session {} to agent mode {}: {}",
+                    pending.session_id,
+                    pending.mode_id,
+                    error
+                );
+            }
+            chat_view.set_status(Some(previous_session_mode_change_status(
+                &pending.mode_id,
+                &outcome,
+            )));
+            return ModeChangePollOutcome::Redraw;
+        }
+        let applied = apply_agent_mode_feedback(
+            &mut self.agent_type,
+            chat_state,
+            &pending.mode_id,
+            outcome,
+        );
+        if applied {
+            chat_view.set_status(Some(format!("Agent mode set to {}", pending.mode_id)));
+        } else {
+            chat_view.set_status(Some("Agent mode change failed. Please retry.".to_string()));
+        }
+
+        if applied && pending.mode_id == "HarmonyOSDev" {
             let deveco_home = std::env::var("DEVECO_HOME").ok();
             let missing = deveco_home
                 .as_deref()
@@ -528,13 +690,27 @@ impl ChatMode {
                 );
             }
         }
+        if mode_change_completion_should_exit(pending.exit_warning_shown, applied) {
+            ModeChangePollOutcome::ExitAfterSave
+        } else {
+            ModeChangePollOutcome::Redraw
+        }
     }
 
     // ============ MCP management ============
 }
 
-fn agent_mode_switch_allowed(is_processing: bool) -> bool {
-    !is_processing
+fn agent_mode_switch_allowed(is_processing: bool, mode_change_pending: bool) -> bool {
+    !is_processing && !mode_change_pending
+}
+
+fn mode_switch_unavailable_message(is_processing: bool) -> String {
+    if is_processing {
+        "Agent mode cannot be changed during the current turn. Subagent and external source management remain available."
+            .to_string()
+    } else {
+        "An agent mode change is already in progress. Please wait.".to_string()
+    }
 }
 
 #[cfg(test)]
@@ -543,8 +719,9 @@ mod usage_metadata_tests {
 
     #[test]
     fn mode_switch_is_rechecked_when_an_idle_popup_outlives_turn_start() {
-        assert!(agent_mode_switch_allowed(false));
-        assert!(!agent_mode_switch_allowed(true));
+        assert!(agent_mode_switch_allowed(false, false));
+        assert!(!agent_mode_switch_allowed(true, false));
+        assert!(!agent_mode_switch_allowed(false, true));
     }
 
     #[test]

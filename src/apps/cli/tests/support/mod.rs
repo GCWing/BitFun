@@ -122,6 +122,34 @@ impl CliTestEnvironment {
         &self.workspace
     }
 
+    pub(crate) fn session_metadata_path(&self, session_id: &str) -> PathBuf {
+        fn find(dir: &Path, session_id: &str) -> Option<PathBuf> {
+            for entry in std::fs::read_dir(dir).ok()? {
+                let entry = entry.ok()?;
+                let path = entry.path();
+                if path.is_dir() {
+                    if path.file_name().and_then(|name| name.to_str()) == Some(session_id) {
+                        let metadata = path.join("metadata.json");
+                        if metadata.is_file() {
+                            return Some(metadata);
+                        }
+                    }
+                    if let Some(found) = find(&path, session_id) {
+                        return Some(found);
+                    }
+                }
+            }
+            None
+        }
+
+        find(self._temp.path(), session_id).unwrap_or_else(|| {
+            panic!(
+                "persisted metadata for session {session_id} was not found under {}",
+                self._temp.path().display()
+            )
+        })
+    }
+
     pub(crate) fn configure_mock_model(&self, server_base_url: &str) {
         let config_dir = self.user_root.join("config");
         std::fs::create_dir_all(&config_dir).expect("create model config directory");
@@ -178,6 +206,21 @@ impl CliTestEnvironment {
         command.current_dir(&self.workspace);
         self.apply_std_environment(&mut command);
         command
+    }
+
+    pub(crate) fn apply_tokio_environment(&self, command: &mut tokio::process::Command) {
+        command
+            .current_dir(&self.workspace)
+            .env_remove("BITFUN_USER_ROOT")
+            .env_remove("BITFUN_HOME")
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env("BITFUN_E2E_USER_ROOT", &self.user_root)
+            .env("BITFUN_E2E_HOME", &self.home_root)
+            .env("APPDATA", &self.config_root)
+            .env("XDG_CONFIG_HOME", &self.config_root)
+            .env("HOME", &self.home_root)
+            .env("USERPROFILE", &self.home_root)
+            .env("TERM", "xterm-256color");
     }
 
     pub(crate) fn pty_command(&self) -> CommandBuilder {

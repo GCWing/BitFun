@@ -30,11 +30,12 @@ use crate::agentic::session::SessionManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_runtime_ports::{ThreadGoal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS};
 use log::{debug, info, warn};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -391,6 +392,10 @@ pub struct DialogScheduler {
     round_injection_buffer: Arc<SessionRoundInjectionBuffer>,
     round_injection_source: Arc<SchedulerRoundInjectionSource>,
     pending_background_results: Arc<dashmap::DashMap<String, PendingBackgroundResultDelivery>>,
+    /// Child sessions already cancelled for a parent maintenance attempt but
+    /// not yet observed as drained. Retain them across retryable timeouts even
+    /// after their one-shot cancellation controls have been claimed.
+    maintenance_background_sessions: Arc<dashmap::DashMap<String, HashSet<String>>>,
     #[cfg(test)]
     background_delivery_before_lock: std::sync::Mutex<Option<oneshot::Sender<()>>>,
 }
@@ -464,6 +469,7 @@ impl DialogScheduler {
             round_injection_buffer,
             round_injection_source,
             pending_background_results,
+            maintenance_background_sessions: Arc::new(dashmap::DashMap::new()),
             #[cfg(test)]
             background_delivery_before_lock: std::sync::Mutex::new(None),
         });
@@ -1535,18 +1541,51 @@ impl DialogScheduler {
             self.clear_queue(session_id).await;
         }
         abort_thread_goal_continuation_for_session(session_id);
-        self.coordinator
+        let deadline = Instant::now() + wait_timeout;
+        let cancelled_before_parent = self
+            .coordinator
             .cancel_background_subagents_for_parent_session(session_id)
             .await?;
+        let mut subagent_session_ids = self
+            .maintenance_background_sessions
+            .get(session_id)
+            .map(|sessions| sessions.clone())
+            .unwrap_or_default();
+        subagent_session_ids.extend(cancelled_before_parent);
+        if !subagent_session_ids.is_empty() {
+            self.maintenance_background_sessions
+                .insert(session_id.to_string(), subagent_session_ids.clone());
+        }
         self.coordinator
-            .cancel_active_turn_for_session(session_id, wait_timeout)
+            .cancel_active_turn_for_session(
+                session_id,
+                deadline.saturating_duration_since(Instant::now()),
+            )
             .await?;
-        self.coordinator
+        let cancelled_during_parent = self
+            .coordinator
             .cancel_background_subagents_for_parent_session(session_id)
             .await?;
+        subagent_session_ids.extend(cancelled_during_parent);
+        if !subagent_session_ids.is_empty() {
+            self.maintenance_background_sessions
+                .insert(session_id.to_string(), subagent_session_ids.clone());
+        }
+        for subagent_session_id in &subagent_session_ids {
+            self.coordinator
+                .ensure_session_execution_drained(
+                    subagent_session_id,
+                    deadline.saturating_duration_since(Instant::now()),
+                )
+                .await?;
+        }
         self.coordinator
-            .ensure_session_execution_drained(session_id, wait_timeout)
+            .ensure_session_execution_drained(
+                session_id,
+                deadline.saturating_duration_since(Instant::now()),
+            )
             .await?;
+        self.maintenance_background_sessions.remove(session_id);
         self.retire_active_turn_for_maintenance(session_id);
         Ok(SessionMaintenancePermit {
             _operation_guard: operation_guard,
@@ -2785,6 +2824,74 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn maintenance_does_not_release_parent_while_background_child_is_still_running() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let parent_session_id = "parent-session";
+        let child_session_id = "background-child-session";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(parent_session_id.to_string()),
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create parent session");
+        let storage_path = session_manager
+            .storage_path_binding_for_test(parent_session_id)
+            .expect("parent storage binding");
+        scheduler
+            .coordinator
+            .register_background_subagent_task_for_test(
+                "background-task",
+                parent_session_id,
+                child_session_id,
+            );
+        scheduler
+            .coordinator
+            .set_active_turn_count_for_test(child_session_id, 1);
+
+        let result = scheduler
+            .begin_session_maintenance(parent_session_id, &storage_path, Duration::from_millis(40))
+            .await;
+        let error = match result {
+            Ok(_) => panic!("maintenance must not detach a parent with a running child"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, BitFunError::Timeout(_)));
+        assert!(error.to_string().contains(child_session_id));
+        assert!(session_manager.get_session(parent_session_id).is_some());
+
+        let retry_error = match scheduler
+            .begin_session_maintenance(parent_session_id, &storage_path, Duration::from_millis(40))
+            .await
+        {
+            Ok(_) => panic!("retry must retain ownership of the still-running child"),
+            Err(error) => error,
+        };
+        assert!(matches!(retry_error, BitFunError::Timeout(_)));
+        assert!(retry_error.to_string().contains(child_session_id));
+
+        scheduler
+            .coordinator
+            .set_active_turn_count_for_test(child_session_id, 0);
+        let maintenance = scheduler
+            .begin_session_maintenance(parent_session_id, &storage_path, Duration::from_millis(40))
+            .await
+            .expect("maintenance should succeed after the child drains");
+        drop(maintenance);
+        assert!(!scheduler
+            .maintenance_background_sessions
+            .contains_key(parent_session_id));
     }
 
     #[tokio::test]

@@ -3,6 +3,15 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SessionMetadata, DialogTurnData } from '@/shared/types/session-history';
 
+export type UiSessionMetadataField =
+  | 'sessionName'
+  | 'tags'
+  | 'todos'
+  | 'reviewActionState'
+  | 'unreadCompletion'
+  | 'needsUserAttention'
+  | 'titleMetadata';
+
 export interface SessionMetadataPageRequest {
   workspacePath: string;
   limit: number;
@@ -295,6 +304,7 @@ export class SessionAPI {
   async saveSessionMetadata(
     metadata: SessionMetadata,
     workspacePath: string,
+    fields: UiSessionMetadataField[],
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): Promise<void> {
@@ -302,6 +312,7 @@ export class SessionAPI {
       await api.invoke('save_session_metadata', {
         request: {
           metadata,
+          fields,
           workspace_path: workspacePath,
           ...remoteSessionFields(remoteConnectionId, remoteSshHost),
         }
