@@ -176,7 +176,7 @@ describe('CodeReviewToolCard', () => {
     dom.window.close();
   });
 
-  it('echoes the deep review run manifest from the review session', () => {
+  it('summarizes deep review coverage without exposing the run manifest', () => {
     const toolItem: FlowToolItem = {
       id: 'tool-1',
       type: 'tool',
@@ -224,30 +224,24 @@ describe('CodeReviewToolCard', () => {
       );
     });
 
-    expect(container.textContent).toContain('Run manifest');
-    expect(container.textContent).toContain('3 active');
-    expect(container.textContent).toContain('2 skipped');
-
-    const manifestSectionButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Run manifest'));
-
-    act(() => {
-      manifestSectionButton?.dispatchEvent(new window.Event('click', { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain('Logic reviewer');
-    expect(container.textContent).toContain('Quality inspector');
-    expect(container.textContent).toContain('Custom security reviewer');
-    expect(container.textContent).toContain('Frontend reviewer');
-    expect(container.textContent).toContain('Not applicable to this target');
-    expect(container.textContent).toContain('Custom invalid reviewer');
-    expect(container.textContent).toContain('Configuration issue');
-    expect(container.textContent).toContain('Recommended strategy');
-    expect(container.textContent).toContain('deep');
-    expect(container.textContent).toContain('Large/high-risk change');
+    expect(container.textContent).toContain('Review status');
+    expect(container.textContent).toContain('Review scope tailored');
+    expect(container.textContent).toContain('Token budget limited review coverage');
+    expect(container.textContent).toContain('2 optional check was outside this run');
+    expect(container.textContent).toContain('Token budget mode kept 1 optional check outside this run');
+    expect(container.textContent).not.toContain('Coverage and cost');
+    expect(container.textContent).not.toContain('Target');
+    expect(container.textContent).not.toContain('Budget');
+    expect(container.textContent).not.toContain('Estimated review checks');
+    expect(container.textContent).not.toContain('Recommended strategy');
+    expect(container.textContent).not.toContain('Frontend reviewer');
+    expect(container.textContent).not.toContain('Not applicable to this target');
+    expect(container.textContent).not.toContain('Custom invalid reviewer');
+    expect(container.textContent).not.toContain('Configuration issue');
+    expect(container.textContent).not.toContain('Large/high-risk change');
   });
 
-  it('updates the manifest echo when session metadata arrives after render', () => {
+  it('updates coverage reliability when session metadata arrives after render', () => {
     flowState.current = {
       sessions: new Map<string, unknown>([
         ['review-session', { id: 'review-session' }],
@@ -302,7 +296,7 @@ describe('CodeReviewToolCard', () => {
       );
     });
 
-    expect(container.textContent).not.toContain('Run manifest');
+    expect(container.textContent).not.toContain('Review scope tailored');
 
     act(() => {
       flowState.current = {
@@ -314,8 +308,9 @@ describe('CodeReviewToolCard', () => {
       notifyFlowState();
     });
 
-    expect(container.textContent).toContain('Run manifest');
-    expect(container.textContent).toContain('3 active');
+    expect(container.textContent).toContain('Review scope tailored');
+    expect(container.textContent).toContain('Token budget limited review coverage');
+    expect(container.textContent).not.toContain('Coverage and cost');
   });
 
   it('renders compact reliability status when a reviewer returned partial evidence', () => {
@@ -375,11 +370,11 @@ describe('CodeReviewToolCard', () => {
     });
 
     expect(container.textContent).toContain('Review status');
-    expect(container.textContent).toContain('Reviewer returned partial result');
-    expect(container.textContent).toContain('1 reviewer result is partial; confidence is reduced.');
+    expect(container.textContent).toContain('Review returned partial result');
+    expect(container.textContent).toContain('1 review result is partial; confidence is limited.');
   });
 
-  it('renders reduced-depth reliability status from structured report signals', () => {
+  it('renders focused-scope reliability status from structured report signals', () => {
     const toolItem: FlowToolItem = {
       id: 'tool-1',
       type: 'tool',
@@ -401,6 +396,7 @@ describe('CodeReviewToolCard', () => {
           },
           issues: [],
           reviewers: [],
+          evidence_status: 'limited',
           reliability_signals: [
             {
               kind: 'reduced_scope',
@@ -436,7 +432,124 @@ describe('CodeReviewToolCard', () => {
       );
     });
 
-    expect(container.textContent).toContain('Reduced-depth coverage');
+    expect(container.textContent).toContain('Focused review scope');
     expect(container.textContent).toContain('High-risk-only pass; changed files remain visible.');
+    expect(container.textContent).toContain('Evidence status');
+    expect(container.textContent).toContain('limited');
+    expect(container.textContent).toContain('Target evidence limited');
+  });
+
+  it('maps internal reviewer source ids before rendering issues', () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      timestamp: Date.now(),
+      toolName: 'submit_code_review',
+      status: 'completed',
+      toolCall: {
+        id: 'call-1',
+        input: {},
+      },
+      toolResult: {
+        success: true,
+        result: {
+          review_mode: 'deep',
+          summary: {
+            overall_assessment: 'Security issue found.',
+            risk_level: 'high',
+            recommended_action: 'request_changes',
+          },
+          issues: [{
+            severity: 'high',
+            certainty: 'likely',
+            title: 'Token leak',
+            description: 'A token is logged.',
+            source_reviewer: 'ReviewSecurity',
+          }],
+          reviewers: [],
+        },
+      },
+    };
+    const config: ToolCardConfig = {
+      toolName: 'submit_code_review',
+      displayName: 'Code Review',
+      icon: 'REVIEW',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+    };
+
+    act(() => {
+      root.render(
+        <CodeReviewToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="review-session"
+        />,
+      );
+    });
+
+    act(() => {
+      container.querySelector('.preview-toggle-btn')?.dispatchEvent(
+        new window.Event('click', { bubbles: true }),
+      );
+    });
+    const issuesSectionButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.review-report-section__header'),
+    ).find((button) => button.textContent?.includes('Issues'));
+    expect(issuesSectionButton).toBeTruthy();
+    act(() => {
+      issuesSectionButton!.dispatchEvent(
+        new window.Event('click', { bubbles: true }),
+      );
+    });
+
+    expect(container.textContent).toContain('Security coverage');
+    expect(container.textContent).not.toContain('ReviewSecurity');
+  });
+
+  it('does not invent risk or recommendation for an incomplete historical summary', () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-incomplete-summary',
+      type: 'tool',
+      timestamp: Date.now(),
+      toolName: 'submit_code_review',
+      status: 'completed',
+      toolCall: { id: 'call-incomplete-summary', input: {} },
+      toolResult: {
+        success: true,
+        result: {
+          review_mode: 'standard',
+          summary: { overall_assessment: 'Historical report' },
+          issues: [],
+          reviewers: [],
+        },
+      },
+    };
+    const config: ToolCardConfig = {
+      toolName: 'submit_code_review',
+      displayName: 'Code Review',
+      icon: 'REVIEW',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+    };
+
+    act(() => {
+      root.render(
+        <CodeReviewToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="review-session"
+        />,
+      );
+    });
+    act(() => {
+      container.querySelector('.preview-toggle-btn')?.dispatchEvent(
+        new window.Event('click', { bubbles: true }),
+      );
+    });
+
+    expect(container.textContent).not.toContain('Risk Level');
+    expect(container.textContent).not.toContain('Recommended Action');
+    expect(container.textContent).not.toContain('Request Changes');
   });
 });

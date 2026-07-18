@@ -19,6 +19,8 @@ import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
+import { getEffectiveToolName, projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
+import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
 import {
   buildModelRoundItemGroups,
@@ -175,6 +177,7 @@ interface TaskWithSubagentWrapperProps {
   parentTaskToolId: string;
   parentSessionId?: string;
   directSubagentSessionId?: string;
+  directSubagentDialogTurnId?: string;
   turnId: string;
   roundId?: string;
   completedToolExitNowMs: number;
@@ -186,6 +189,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
   parentTaskToolId,
   parentSessionId,
   directSubagentSessionId,
+  directSubagentDialogTurnId,
   turnId,
   roundId,
   completedToolExitNowMs,
@@ -218,6 +222,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
         parentTaskToolId={parentTaskToolId}
         parentSessionId={parentSessionId}
         directSubagentSessionId={directSubagentSessionId}
+        directSubagentDialogTurnId={directSubagentDialogTurnId}
         parentToolIds={new Set<string>([parentTaskToolId, (taskItem as FlowToolItem).toolCall?.id].filter(Boolean) as string[])}
         liveItemsMode={isTaskRunning ? 'full-turn' : 'last-round'}
         turnId={turnId}
@@ -247,7 +252,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const copyButtonRef = useRef<HTMLButtonElement>(null);
     const renderTraceEnabled = isStartupRenderTraceEnabled();
     const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
-
+    
     useEffect(() => {
       if (!copied) return;
       
@@ -445,7 +450,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             ));
 
           case 'critical': {
-            const projectedSubagent = group.item.type === 'tool' && (group.item as FlowToolItem).toolName === 'Task'
+            const projectedSubagent = group.item.type === 'tool' && getEffectiveToolName(group.item as FlowToolItem) === 'Task'
               ? group.item as FlowToolItem
               : undefined;
             if (projectedSubagent) {
@@ -456,6 +461,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   parentTaskToolId={projectedSubagent.id}
                   parentSessionId={sessionId}
                   directSubagentSessionId={projectedSubagent.subagentSessionId}
+                  directSubagentDialogTurnId={projectedSubagent.subagentDialogTurnId}
                   turnId={turnId}
                   roundId={options.roundId}
                   completedToolExitNowMs={transientNowMs}
@@ -514,13 +520,14 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           } else if (item.type === 'thinking' && item.content?.trim()) {
             roundContent.push(`[Thinking]\n${item.content.trim()}`);
           } else if (item.type === 'tool' && item.toolCall) {
-            const toolName = item.toolName || t('copyOutput.unknownTool');
+            const effectiveItem = projectEffectiveToolItem(item);
+            const toolName = effectiveItem.toolName || t('copyOutput.unknownTool');
             let toolContent = t('modelRound.toolCallLabel', { name: toolName }) + '\n';
             
-            if (item.toolCall.input) {
-              const inputStr = typeof item.toolCall.input === 'string'
-                ? item.toolCall.input
-                : JSON.stringify(item.toolCall.input, null, 2);
+            if (effectiveItem.toolCall.input) {
+              const inputStr = typeof effectiveItem.toolCall.input === 'string'
+                ? effectiveItem.toolCall.input
+                : JSON.stringify(effectiveItem.toolCall.input, null, 2);
               toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
             }
             
@@ -600,8 +607,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         data-turn-id={turnId}
         data-round-id={round.id}
         data-status={round.status}
-        data-model-id={round.modelId || ''}
-        data-model-alias={round.modelAlias || ''}
+        data-model-config-id={round.modelConfigId || ''}
+        data-effective-model-name={round.effectiveModelName || ''}
         data-streaming={round.isStreaming ? 'true' : 'false'}
       >
         {renderTraceEnabled && renderTraceStartedAtMs !== null && allGroupSummary && visibleGroupSummary && (
@@ -869,7 +876,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
     case 'tool': {
       const toolItem = item as FlowToolItem;
       const isCompletedTool = toolItem.status === 'completed';
-      const isCollapsible = isCollapsibleTool(toolItem.toolName);
+      const isCollapsible = isCollapsibleTool(getEffectiveToolName(toolItem));
       const shouldAnimateCompletedExit =
         allowCompletedToolExit &&
         isCollapsible &&

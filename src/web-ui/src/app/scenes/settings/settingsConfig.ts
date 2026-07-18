@@ -16,6 +16,7 @@ export type ConfigTab =
   | 'review'
   | 'memories'
   | 'mcp-tools'
+  | 'external-sources'
   // | 'acp-agents' // temporarily hidden from config center
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
@@ -187,10 +188,12 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         keywords: [
           'review',
           'code review',
-          'deep review',
-          'review team',
-          'subagent',
-          'readonly',
+          'strict review',
+          'review coverage',
+          'review strategy',
+          'capacity',
+          'cost',
+          'latency',
           'audit',
         ],
       },
@@ -207,6 +210,21 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'rollout',
           'learning',
           'knowledge',
+        ],
+      },
+      {
+        id: 'external-sources',
+        labelKey: 'configCenter.tabs.externalSources',
+        descriptionKey: 'configCenter.tabDescriptions.externalSources',
+        keywords: [
+          'external ai applications',
+          'import work',
+          'extensions',
+          'commands',
+          'opencode',
+          'claude code',
+          'codex',
+          'compatibility',
         ],
       },
       {
@@ -271,7 +289,6 @@ export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'theme' || section === 'font' || section === 'fonts') return 'appearance';
   if (section === 'logging' || section === 'terminal') return 'basics';
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
-  if (section === 'acp-agents') return DEFAULT_SETTINGS_TAB;
   if (section === 'session-config') return 'session-personalization';
   if (section === 'deep-review' || section === 'code-review' || section === 'review-team') return 'review';
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';

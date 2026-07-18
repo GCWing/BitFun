@@ -5,11 +5,12 @@ use bitfun_runtime_ports::{
     AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
 };
 use bitfun_services_integrations::remote_connect::{
-    build_lan_relay_url_with_ip, build_remote_chat_messages, build_remote_image_attachment,
-    build_remote_image_contexts, build_remote_image_submission_request, build_remote_model_catalog,
+    agent_input_attachment_from_remote_image_context, build_lan_relay_url_with_ip,
+    build_remote_chat_messages, build_remote_image_attachment, build_remote_image_contexts,
+    build_remote_image_submission_request, build_remote_model_catalog,
     build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
     handle_remote_command, handle_remote_workspace_file_command, make_slim_tool_params,
-    normalize_remote_model_selection, normalize_remote_session_model_id,
+    normalize_remote_model_selection, normalize_remote_session_model_id, project_remote_chat_user,
     read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
     remote_answer_question_response, remote_assistant_list_response,
     remote_assistant_updated_response, remote_dialog_submit_outcome_from_scheduler,
@@ -285,6 +286,100 @@ fn remote_connect_image_context_adapter_owns_portable_conversion_shape() {
     );
     assert_eq!(adapted.mime_type, "image/png");
     assert_eq!(adapted.metadata.as_ref().unwrap()["source"], "remote");
+}
+
+#[test]
+fn remote_chat_projection_owner_extracts_images_and_display_text() {
+    let metadata = serde_json::json!({
+        "original_text": " original question ",
+        "images": [
+            {
+                "name": "screenshot.png",
+                "data_url": "data:image/png;base64,abcd"
+            },
+            {
+                "name": "raw-image",
+                "data_url": "not-a-data-url"
+            },
+            {
+                "name": "",
+                "ignored": true
+            }
+        ]
+    });
+
+    let projection = project_remote_chat_user(Some(&metadata), "fallback question");
+
+    assert_eq!(
+        projection.images,
+        vec![
+            ChatImageAttachment {
+                name: "screenshot.png".to_string(),
+                data_url: "data:image/png;base64,abcd".to_string(),
+            },
+            ChatImageAttachment {
+                name: "raw-image".to_string(),
+                data_url: "not-a-data-url".to_string(),
+            },
+        ]
+    );
+    assert_eq!(projection.content, " original question ");
+    assert_eq!(
+        project_remote_chat_user(
+            Some(&serde_json::json!({ "original_text": "  keep exact question text  " })),
+            "fallback question",
+        )
+        .content,
+        "  keep exact question text  "
+    );
+    assert_eq!(
+        project_remote_chat_user(
+            None,
+            "User uploaded a file.\nUser's question:\n  explain this  ",
+        )
+        .content,
+        "explain this"
+    );
+    assert_eq!(
+        project_remote_chat_user(None, "  keep fallback spacing  ").content,
+        "  keep fallback spacing  "
+    );
+}
+
+#[test]
+fn remote_image_context_to_agent_attachment_preserves_metadata_contract() {
+    let attachment = agent_input_attachment_from_remote_image_context(RemoteImageContext {
+        id: "remote-img-1".to_string(),
+        image_path: Some("D:/workspace/image.png".to_string()),
+        data_url: Some("data:image/png;base64,abc".to_string()),
+        mime_type: "image/png".to_string(),
+        metadata: Some(serde_json::json!({ "source": "remote" })),
+    });
+
+    assert_eq!(attachment.kind, "remote_image");
+    assert_eq!(attachment.id, "remote-img-1");
+    assert_eq!(
+        attachment
+            .metadata
+            .get("imagePath")
+            .and_then(|value| value.as_str()),
+        Some("D:/workspace/image.png")
+    );
+    assert_eq!(
+        attachment
+            .metadata
+            .get("dataUrl")
+            .and_then(|value| value.as_str()),
+        Some("data:image/png;base64,abc")
+    );
+    assert_eq!(
+        attachment
+            .metadata
+            .get("mimeType")
+            .and_then(|value| value.as_str()),
+        Some("image/png")
+    );
+    assert_eq!(attachment.metadata["metadata"]["source"], "remote");
 }
 
 #[test]
@@ -1543,6 +1638,8 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
             name: workspace.name.clone(),
             last_opened: "2026-05-25T00:00:00Z".to_string(),
             kind: workspace.kind,
+            remote_connection_id: workspace.remote_connection_id.clone(),
+            remote_ssh_host: workspace.remote_ssh_host.clone(),
         },
     ]))
     .expect("serialize recent workspaces");
@@ -1552,6 +1649,11 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
         recent_json["workspaces"][0]["last_opened"],
         "2026-05-25T00:00:00Z"
     );
+    assert_eq!(
+        recent_json["workspaces"][0]["remote_connection_id"],
+        "ssh-1"
+    );
+    assert_eq!(recent_json["workspaces"][0]["remote_ssh_host"], "dev-host");
 
     let assistant_json = serde_json::to_value(remote_assistant_list_response(vec![
         RemoteAssistantWorkspaceFacts {
@@ -1571,11 +1673,15 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
         remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
             path: "D:/workspace/project".to_string(),
             name: "project".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
         })),
         RemoteResponse::WorkspaceUpdated {
             success: true,
             path: Some("D:/workspace/project".to_string()),
             project_name: Some("project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
             error: None,
         }
     );
@@ -1851,6 +1957,26 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(poll["since_version"], 7);
     assert_eq!(poll["known_msg_count"], 3);
     assert_eq!(poll["known_model_catalog_version"], 11);
+
+    let get_identity = serde_json::to_value(RemoteCommand::GetDelegatedIdentity)
+        .expect("serialize get delegated identity command");
+    assert_eq!(get_identity["cmd"], "get_delegated_identity");
+    let parsed: RemoteCommand = serde_json::from_str(r#"{"cmd":"get_delegated_identity"}"#)
+        .expect("parse get delegated identity command");
+    assert_eq!(parsed, RemoteCommand::GetDelegatedIdentity);
+
+    let identity = serde_json::to_value(RemoteResponse::DelegateIdentity {
+        token: "token-1".to_string(),
+        user_id: "user-1".to_string(),
+        master_key: "bWFzdGVyLWtleQ==".to_string(),
+        device_id: "device-1".to_string(),
+    })
+    .expect("serialize delegate identity response");
+    assert_eq!(identity["resp"], "delegate_identity");
+    assert_eq!(identity["token"], "token-1");
+    assert_eq!(identity["user_id"], "user-1");
+    assert_eq!(identity["master_key"], "bWFzdGVyLWtleQ==");
+    assert_eq!(identity["device_id"], "device-1");
 }
 
 #[test]
@@ -2080,7 +2206,8 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         round_id: "round-1".to_string(),
         round_group_id: None,
         round_index: 3,
-        model_id: None,
+        model_config_id: "model-config".to_string(),
+        effective_model_name: "provider-model".to_string(),
     });
     tracker.handle_agentic_event(&AgenticEvent::ThinkingChunk {
         session_id: "session-1".to_string(),
@@ -2125,10 +2252,12 @@ fn remote_connect_tracker_keeps_subagent_items_out_of_parent_accumulators() {
     tracker.initialize_active_turn("parent-turn".to_string());
     tracker.handle_agentic_event(&AgenticEvent::SubagentSessionLinked {
         session_id: "child-session".to_string(),
+        subagent_dialog_turn_id: "child-turn".to_string(),
         parent_session_id: "parent-session".to_string(),
         parent_dialog_turn_id: "parent-turn".to_string(),
         parent_tool_call_id: "task-1".to_string(),
         agent_type: None,
+        model_id: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "child-session".to_string(),
@@ -2168,9 +2297,15 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         attempt_id: None,
         attempt_index: None,
         tool_event: ToolEventData::Started {
-            tool_id: "tool-1".to_string(),
-            tool_name: "AskUserQuestion".to_string(),
-            params: serde_json::json!({ "questions": [] }),
+            identity: bitfun_events::ToolEventIdentity::resolved(
+                "tool-1",
+                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+                "AskUserQuestion",
+            ),
+            params: serde_json::json!({
+                "tool_name": "AskUserQuestion",
+                "args": { "questions": [] }
+            }),
             timeout_seconds: None,
         },
     });
@@ -2187,7 +2322,7 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         } => {
             assert_eq!(tool_id, "tool-1");
             assert_eq!(tool_name, "AskUserQuestion");
-            assert!(params.is_some());
+            assert_eq!(params, Some(serde_json::json!({ "questions": [] })));
         }
         other => panic!("unexpected event: {other:?}"),
     }

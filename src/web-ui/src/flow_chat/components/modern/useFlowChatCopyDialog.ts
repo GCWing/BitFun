@@ -10,6 +10,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { i18nService } from '@/infrastructure/i18n';
 import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
+import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
 
 const log = createLogger('useFlowChatCopyDialog');
 
@@ -45,13 +46,14 @@ function extractDialogTurnContent(turnId: string): string {
       } else if (item.type === 'thinking' && item.content?.trim()) {
         roundContent.push(`[Thinking]\n${item.content.trim()}`);
       } else if (item.type === 'tool' && item.toolCall) {
-        const toolName = item.toolName || i18nService.t('flow-chat:copyOutput.unknownTool');
+        const effectiveItem = projectEffectiveToolItem(item);
+        const toolName = effectiveItem.toolName || i18nService.t('flow-chat:copyOutput.unknownTool');
         let toolContent = i18nService.t('flow-chat:modelRound.toolCallLabel', { name: toolName }) + '\n';
         
-        if (item.toolCall.input) {
-          const inputStr = typeof item.toolCall.input === 'string'
-            ? item.toolCall.input
-            : JSON.stringify(item.toolCall.input, null, 2);
+        if (effectiveItem.toolCall.input) {
+          const inputStr = typeof effectiveItem.toolCall.input === 'string'
+            ? effectiveItem.toolCall.input
+            : JSON.stringify(effectiveItem.toolCall.input, null, 2);
           toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
         }
         

@@ -1,5 +1,23 @@
 const COMMAND_BOUNDARY_RE = /^(\/[A-Za-z][\w:-]*)(?=\s|$)/;
 
+export interface InlineSlashCommandTrigger {
+  isActive: boolean;
+  trigger: '/' | '$' | null;
+  query: string;
+  startOffset: number;
+}
+
+export function getInlineSlashCommandPickerQuery(
+  trigger: InlineSlashCommandTrigger,
+): string | null {
+  if (!trigger.isActive || trigger.trigger !== '/' || trigger.startOffset !== 0) {
+    return null;
+  }
+  return isSlashCommandPickerQuery(trigger.query)
+    ? trigger.query.toLowerCase()
+    : null;
+}
+
 export function isSlashCommandPickerQuery(query: string): boolean {
   return typeof query === 'string' && !query.includes('/');
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { getSubagentProjectionState } from './subagentProjection';
+import {
+  deriveSubagentExecutionStatus,
+  getSubagentProjectionState,
+} from './subagentProjection';
 import type { FlowChatState, Session } from '../types/flow-chat';
 
 function createState(session: Session): FlowChatState {
@@ -11,6 +14,17 @@ function createState(session: Session): FlowChatState {
 }
 
 describe('getSubagentProjectionState', () => {
+  it('projects the complete child lifecycle for parent task displays', () => {
+    expect(deriveSubagentExecutionStatus({ status: 'processing', modelRounds: [] } as never))
+      .toBe('running');
+    expect(deriveSubagentExecutionStatus({ status: 'completed', modelRounds: [] } as never))
+      .toBe('completed');
+    expect(deriveSubagentExecutionStatus({ status: 'error', modelRounds: [] } as never))
+      .toBe('error');
+    expect(deriveSubagentExecutionStatus({ status: 'cancelled', modelRounds: [] } as never))
+      .toBe('cancelled');
+  });
+
   it('projects only the last round when requested, including a streaming round', () => {
     const session = {
       sessionId: 'subagent-1',
@@ -167,5 +181,101 @@ describe('getSubagentProjectionState', () => {
 
     expect(projection.round?.id).toBe('round-2');
     expect(projection.items.map(item => item.id)).toEqual(['text-1', 'text-2']);
+  });
+
+  it('uses the direct subagent turn id instead of the latest reused-session turn', () => {
+    const session = {
+      sessionId: 'subagent-1',
+      sessionKind: 'subagent',
+      parentSessionId: 'parent-1',
+      parentToolCallId: 'task-call-2',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'subagent-1',
+          userMessage: {
+            id: 'user-1',
+            content: 'first task call',
+            timestamp: 1,
+          },
+          modelRounds: [
+            {
+              id: 'round-1',
+              index: 0,
+              items: [
+                {
+                  id: 'text-1',
+                  type: 'text',
+                  timestamp: 2,
+                  status: 'completed',
+                  content: 'first task answer',
+                  isStreaming: false,
+                },
+              ],
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              startTime: 2,
+            },
+          ],
+          status: 'completed',
+          startTime: 1,
+          endTime: 3,
+        },
+        {
+          id: 'turn-2',
+          sessionId: 'subagent-1',
+          userMessage: {
+            id: 'user-2',
+            content: 'send input',
+            timestamp: 4,
+          },
+          modelRounds: [
+            {
+              id: 'round-2',
+              index: 0,
+              items: [
+                {
+                  id: 'text-2',
+                  type: 'text',
+                  timestamp: 5,
+                  status: 'streaming',
+                  content: 'second task answer',
+                  isStreaming: true,
+                },
+              ],
+              isStreaming: true,
+              isComplete: false,
+              status: 'streaming',
+              startTime: 5,
+            },
+          ],
+          status: 'processing',
+          startTime: 4,
+        },
+      ],
+      status: 'idle',
+      config: { agentType: 'agentic', modelName: 'auto' },
+      createdAt: 1,
+      lastActiveAt: 5,
+      error: null,
+    } as unknown as Session;
+
+    const projection = getSubagentProjectionState(
+      createState(session),
+      {
+        parentSessionId: 'parent-1',
+        parentToolIds: new Set(['task-call-1']),
+        directSubagentSessionId: 'subagent-1',
+        directSubagentDialogTurnId: 'turn-1',
+      },
+      { itemsMode: 'last-round' },
+    );
+
+    expect(projection.session?.sessionId).toBe('subagent-1');
+    expect(projection.turn?.id).toBe('turn-1');
+    expect(projection.round?.id).toBe('round-1');
+    expect(projection.isRunning).toBe(false);
+    expect(projection.items.map(item => item.id)).toEqual(['text-1']);
   });
 });

@@ -292,6 +292,92 @@ describe('openBtwSessionInAuxPane', () => {
       { includeInternal: true },
     );
   });
+
+  it('hydrates an existing subagent shell when its model selection is missing', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+    sessions.set('subagent-child', {
+      sessionId: 'subagent-child',
+      sessionKind: 'subagent',
+      isHistorical: false,
+      historyState: 'new',
+      config: { agentType: 'Explore' },
+      workspacePath: 'D:\\workspace\\repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+
+    ensureBtwSessionAvailable({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      parentToolCallId: 'call-1',
+      includeInternal: true,
+    });
+
+    expect(mocks.addExternalSession).not.toHaveBeenCalled();
+    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
+      'subagent-child',
+      'D:\\workspace\\repo',
+      undefined,
+      'remote-1',
+      'host-1',
+      { includeInternal: true },
+    );
+  });
+
+  it('does not hydrate an existing live subagent with in-memory turns just to fill missing model selection', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+    sessions.set('subagent-child', {
+      sessionId: 'subagent-child',
+      sessionKind: 'subagent',
+      isHistorical: false,
+      historyState: 'new',
+      config: { agentType: 'Explore' },
+      workspacePath: 'D:\\workspace\\repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          status: 'processing',
+          modelRounds: [],
+          userMessage: { id: 'user-1', type: 'user', content: 'work', timestamp: 1 },
+          timestamp: 1,
+        },
+      ],
+    });
+
+    ensureBtwSessionAvailable({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      parentToolCallId: 'call-1',
+      includeInternal: true,
+    });
+
+    expect(mocks.addExternalSession).not.toHaveBeenCalled();
+    expect(mocks.updateSessionRelationship).toHaveBeenCalledWith(
+      'subagent-child',
+      expect.objectContaining({
+        parentSessionId: 'parent-session',
+        sessionKind: 'subagent',
+        parentToolCallId: 'call-1',
+      }),
+    );
+    expect(mocks.loadSessionHistory).not.toHaveBeenCalled();
+  });
 });
 
 describe('openMainSession', () => {

@@ -29,7 +29,7 @@ async fn role_match_string(acc: &AccessibleProxy<'_>) -> String {
 }
 
 /// Registry application roots → BFS until first match with non-empty screen extents.
-pub async fn locate_ui_element_center(
+pub(super) async fn locate_ui_element_center(
     query: UiElementLocateQuery,
 ) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(&query)?;

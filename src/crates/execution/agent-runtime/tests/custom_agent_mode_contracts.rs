@@ -11,16 +11,30 @@ use bitfun_agent_runtime::prompt::UserContextPolicy;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+struct BuildModeDefinitionInput<'a>(
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<Vec<String>>,
+    Option<bool>,
+    Option<&'a str>,
+    Option<UserContextPolicy>,
+    CustomAgentLevel,
+);
+
 fn build_mode_definition(
-    id: Option<&str>,
-    name: Option<&str>,
-    description: Option<&str>,
-    tools: Option<Vec<String>>,
-    readonly: Option<bool>,
-    model: Option<&str>,
-    user_context_policy: Option<UserContextPolicy>,
-    level: CustomAgentLevel,
+    input: BuildModeDefinitionInput<'_>,
 ) -> Result<ParsedCustomAgentDefinition, CustomAgentDefinitionError> {
+    let BuildModeDefinitionInput(
+        id,
+        name,
+        description,
+        tools,
+        readonly,
+        model,
+        user_context_policy,
+        level,
+    ) = input;
     CustomAgentDefinition::from_front_matter_fields(
         id,
         name,
@@ -38,7 +52,7 @@ fn build_mode_definition(
 
 #[test]
 fn custom_mode_defaults_generate_id_and_default_policy() {
-    let parsed = build_mode_definition(
+    let parsed = build_mode_definition(BuildModeDefinitionInput(
         None,
         Some("PlannerPlus"),
         Some("Custom planning mode"),
@@ -47,7 +61,7 @@ fn custom_mode_defaults_generate_id_and_default_policy() {
         None,
         None,
         CustomAgentLevel::User,
-    )
+    ))
     .expect("mode definition should be valid");
 
     assert_eq!(parsed.definition.id, "PlannerPlus");
@@ -97,7 +111,7 @@ fn custom_mode_rejects_review_flag() {
 fn custom_mode_markdown_save_omits_default_fields() {
     let dir = TestTempDir::new("bitfun-runtime-custom-mode-defaults");
     let path = dir.join("planner.md");
-    let definition = build_mode_definition(
+    let definition = build_mode_definition(BuildModeDefinitionInput(
         Some("PlannerPlus"),
         Some("PlannerPlus"),
         Some("Custom planning mode"),
@@ -106,7 +120,7 @@ fn custom_mode_markdown_save_omits_default_fields() {
         None,
         None,
         CustomAgentLevel::User,
-    )
+    ))
     .expect("mode definition should be valid")
     .definition;
 
@@ -132,7 +146,7 @@ fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
     let dir = TestTempDir::new("bitfun-runtime-custom-mode-custom");
     let path = dir.join("planner.md");
     let policy = UserContextPolicy::empty().with_workspace_instructions();
-    let definition = build_mode_definition(
+    let definition = build_mode_definition(BuildModeDefinitionInput(
         Some("PlannerPlus"),
         Some("PlannerPlus"),
         Some("Custom planning mode"),
@@ -141,7 +155,7 @@ fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
         Some("primary"),
         Some(policy.clone()),
         CustomAgentLevel::User,
-    )
+    ))
     .expect("mode definition should be valid")
     .definition;
 
@@ -166,7 +180,7 @@ fn custom_mode_markdown_save_round_trips_empty_custom_policy() {
     let dir = TestTempDir::new("bitfun-runtime-custom-mode-empty-policy");
     let path = dir.join("planner.md");
     let policy = UserContextPolicy::empty();
-    let definition = build_mode_definition(
+    let definition = build_mode_definition(BuildModeDefinitionInput(
         Some("PlannerPlus"),
         Some("PlannerPlus"),
         Some("Custom planning mode"),
@@ -175,7 +189,7 @@ fn custom_mode_markdown_save_round_trips_empty_custom_policy() {
         None,
         Some(policy.clone()),
         CustomAgentLevel::User,
-    )
+    ))
     .expect("mode definition should be valid")
     .definition;
 
@@ -264,7 +278,7 @@ fn custom_mode_discovery_rejects_project_scoped_modes_without_dropping_valid_age
 
 #[test]
 fn custom_agent_validation_filters_invalid_tools_and_falls_back_model() {
-    let mut definition = build_mode_definition(
+    let mut definition = build_mode_definition(BuildModeDefinitionInput(
         Some("PlannerPlus"),
         Some("PlannerPlus"),
         Some("Custom planning mode"),
@@ -277,7 +291,7 @@ fn custom_agent_validation_filters_invalid_tools_and_falls_back_model() {
         Some("missing-model"),
         None,
         CustomAgentLevel::User,
-    )
+    ))
     .expect("mode definition should be valid")
     .definition;
 
@@ -435,7 +449,7 @@ impl Drop for TestTempDir {
 }
 
 fn write_mode(path: &Path, id: &str, level: CustomAgentLevel) {
-    let definition = build_mode_definition(
+    let definition = build_mode_definition(BuildModeDefinitionInput(
         Some(id),
         Some(id),
         Some("Custom planning mode"),
@@ -444,7 +458,7 @@ fn write_mode(path: &Path, id: &str, level: CustomAgentLevel) {
         None,
         None,
         level,
-    )
+    ))
     .expect("mode definition should be valid")
     .definition;
     custom_agent_save_markdown_file(path, &definition).expect("mode markdown should save");

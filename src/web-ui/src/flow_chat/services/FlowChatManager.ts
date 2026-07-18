@@ -9,6 +9,7 @@
 
 import { processingStatusManager } from './ProcessingStatusManager';
 import { FlowChatStore } from '../store/FlowChatStore';
+import { useModernFlowChatStore } from '../store/modernFlowChatStore';
 import { AgentService } from '../../shared/services/agent-service';
 import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { stateMachineManager } from '../state-machine';
@@ -374,6 +375,29 @@ export class FlowChatManager {
     this.eventListenerInitializationPromise = null;
   }
 
+  /**
+   * Clear all session UI state when entering/exiting Peer Device Mode so the
+   * next workspace bootstrap loads the target device's session list only.
+   */
+  public resetForPeerModeSwitch(): string[] {
+    this.cleanupEventListeners();
+    this.initializationRequests.clear();
+    this.latestInitializationRequestKey = null;
+    const removedSessionIds = this.context.flowChatStore.clearAllSessionsForPeerSwitch();
+    removedSessionIds.forEach(sessionId => {
+      stateMachineManager.delete(sessionId);
+      this.context.processingManager.clearSessionStatus(sessionId);
+      cleanupSaveState(this.context, sessionId);
+      cleanupSessionBuffers(this.context, sessionId);
+    });
+    try {
+      useModernFlowChatStore.getState().clear();
+    } catch (error) {
+      log.warn('Failed to clear modern FlowChat store during peer switch', error);
+    }
+    return removedSessionIds;
+  }
+
   public destroy(): void {
     if (this.disposed) {
       return;
@@ -595,6 +619,8 @@ export class FlowChatManager {
       imageContexts?: import('@/infrastructure/api/service-api/ImageContextTypes').ImageContextData[];
       imageDisplayData?: Array<{ id: string; name: string; dataUrl?: string; imagePath?: string; mimeType?: string }>;
       userMessageMetadata?: Record<string, unknown>;
+      turnId?: string;
+      preserveTurnOnStartError?: boolean;
     }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;

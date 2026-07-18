@@ -48,7 +48,7 @@ pub fn select_tool_result_indices_for_persistence(
     limit: usize,
 ) -> Vec<usize> {
     let mut sorted = candidates.to_vec();
-    sorted.sort_by(|a, b| b.visible_chars.cmp(&a.visible_chars));
+    sorted.sort_by_key(|candidate| std::cmp::Reverse(candidate.visible_chars));
 
     let mut selected = Vec::new();
     let mut remaining = total_visible_chars;
@@ -90,7 +90,7 @@ pub fn generate_tool_result_preview(content: &str, max_chars: usize) -> (String,
     let cut_point = prefix
         .char_indices()
         .filter_map(|(idx, ch)| (ch == '\n').then_some(idx))
-        .last()
+        .next_back()
         .filter(|idx| *idx > prefix.len() / 2)
         .unwrap_or(prefix.len());
 

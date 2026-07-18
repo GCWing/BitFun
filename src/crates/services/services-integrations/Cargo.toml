@@ -22,16 +22,19 @@ bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true
 aes-gcm = { workspace = true, optional = true }
 aes = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+argon2 = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 bitfun-services-core = { path = "../services-core", default-features = false, optional = true }
 chrono = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
+fs2 = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 hostname = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
+libc = { workspace = true, optional = true }
 local-ip-address = { workspace = true, optional = true }
 mac_address = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
@@ -66,6 +69,7 @@ git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 schannel = { version = "0.1", optional = true }
+windows = { workspace = true, optional = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [features]
 default = []
@@ -79,7 +83,7 @@ canvas-runtime = [
     "urlencoding",
     "uuid",
 ]
-debug-log = ["reqwest"]
+debug-log = ["anyhow", "chrono", "reqwest", "uuid"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
@@ -112,12 +116,26 @@ miniapp-runtime = [
     "uuid",
     "which",
 ]
+plugin-source = [
+    "bitfun-product-domains/plugin-source",
+    "dep:bitfun-product-domains",
+    "dunce",
+    "fs2",
+    "hex",
+    "libc",
+    "sha2",
+    "thiserror",
+    "uuid",
+    "windows",
+]
 remote-connect = [
     "anyhow",
     "aes",
     "aes-gcm",
+    "argon2",
     "async-trait",
     "base64",
+    "bitfun-agent-tools",
     "bitfun-services-core",
     "bitfun-runtime-ports",
     "chrono",
@@ -177,8 +195,10 @@ review-platform = [
     "chrono",
     "futures",
     "reqwest",
+    "sha2",
     "thiserror",
     "urlencoding",
+    "windows",
 ]
 workspace-search = [
     "async-trait",
@@ -187,6 +207,7 @@ workspace-search = [
     "thiserror",
     "which",
 ]
+script-tool-runtime = ["async-trait", "bitfun-runtime-ports", "which"]
 web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
@@ -198,11 +219,27 @@ product-full = [
     "git",
     "miniapp-runtime",
     "mcp",
+    "plugin-source",
     "remote-connect",
     "remote-ssh",
     "remote-ssh-concrete",
     "review-platform",
+    "script-tool-runtime",
     "web-tools",
     "workspace-search",
 ]
 ssh_config = ["dep:ssh_config"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[test]]
+name = "debug_log_owner_contracts"
+required-features = ["debug-log"]
+
+[[test]]
+name = "script_tool_runtime"
+required-features = ["script-tool-runtime"]
+
+[lints]
+workspace = true

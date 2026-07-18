@@ -7,12 +7,24 @@ pub struct FileReadFreshnessFacts<'a> {
     pub is_full_file_read: bool,
 }
 
+/// Normalize file content for freshness comparison only (not for diffing or
+/// content substitution).
+///
+/// The cached "last Read result" content is reconstructed from formatted
+/// `cat -n`-style tool output via a line-split/join, which always drops a
+/// trailing newline even when the real file ends with one. A fresh re-read
+/// (local `fs::read_to_string` or remote SFTP `read_file_text`) preserves it.
+/// Without normalizing this away, every full-file Edit/Write on a file that
+/// ends with a newline (the common case) would look "changed" purely from
+/// that reconstruction gap. This is most visible on remote workspaces, where
+/// there is no mtime to short-circuit the content comparison.
 pub fn normalize_tool_file_content(content: &str) -> String {
-    if content.contains("\r\n") {
+    let normalized = if content.contains("\r\n") {
         content.replace("\r\n", "\n")
     } else {
         content.to_string()
-    }
+    };
+    normalized.trim_end_matches('\n').to_string()
 }
 
 pub fn file_read_facts_content_matches(

@@ -44,7 +44,7 @@ pub(super) fn compile_canvas_component_js_with_oxc(
     if !parse_return.diagnostics.is_empty() {
         return Err(oxc_diagnostics_to_canvas(
             &module,
-            parse_return.diagnostics.into_iter(),
+            parse_return.diagnostics,
             "canvas.compile.oxc.parse",
         ));
     }
@@ -63,7 +63,7 @@ pub(super) fn compile_canvas_component_js_with_oxc(
     if !semantic_return.diagnostics.is_empty() {
         return Err(oxc_diagnostics_to_canvas(
             &module,
-            semantic_return.diagnostics.into_iter(),
+            semantic_return.diagnostics,
             "canvas.compile.oxc.semantic",
         ));
     }
@@ -87,7 +87,7 @@ pub(super) fn compile_canvas_component_js_with_oxc(
     if !transformer_return.diagnostics.is_empty() {
         return Err(oxc_diagnostics_to_canvas(
             &module,
-            transformer_return.diagnostics.into_iter(),
+            transformer_return.diagnostics,
             "canvas.compile.oxc.transform",
         ));
     }

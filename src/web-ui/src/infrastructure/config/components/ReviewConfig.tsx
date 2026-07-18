@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, ConfigPageLoading, NumberInput, Select } from '@/component-library';
+import { RotateCcw } from 'lucide-react';
+import { Button, ConfigPageLoading, NumberInput } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -8,333 +9,88 @@ import {
   ConfigPageRow,
   ConfigPageSection,
 } from './common';
-import type { AIModelConfig } from '../types';
-import { getModelDisplayName } from '../services/modelConfigs';
-import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
-import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useNotification } from '@/shared/notification-system';
 import {
-  addDefaultReviewTeamMember,
-  canUseSubagentAsReviewTeamMember,
-  DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL,
-  DEFAULT_REVIEW_TEAM_MODEL,
   loadDefaultReviewTeam,
-  removeDefaultReviewTeamMember,
-  REVIEW_STRATEGY_LEVELS,
   saveDefaultReviewTeamConcurrencyPolicy,
-  saveDefaultReviewTeamMemberStrategyOverride,
-  saveDefaultReviewTeamStrategyLevel,
-  type ReviewMemberStrategyLevel,
-  type ReviewStrategyLevel,
   type ReviewTeam,
   type ReviewTeamConcurrencyPolicy,
-  type ReviewTeamMember,
 } from '@/shared/services/reviewTeamService';
-import './ReviewConfig.scss';
-
-const MEMBER_STRATEGY_OPTIONS: ReviewMemberStrategyLevel[] = [
-  DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL,
-  ...REVIEW_STRATEGY_LEVELS,
-];
-
-function updateMemberStrategy(
-  member: ReviewTeamMember,
-  strategyOverride: ReviewMemberStrategyLevel,
-  teamStrategyLevel: ReviewStrategyLevel,
-): ReviewTeamMember {
-  const inheritsTeamStrategy = strategyOverride === DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL;
-  return {
-    ...member,
-    strategyOverride,
-    strategyLevel: inheritsTeamStrategy ? teamStrategyLevel : strategyOverride,
-    strategySource: inheritsTeamStrategy ? 'team' : 'member',
-  };
-}
-
-function updateTeamStrategy(team: ReviewTeam, strategyLevel: ReviewStrategyLevel): ReviewTeam {
-  const memberStrategyOverrides: Record<string, ReviewStrategyLevel> = {};
-  const members = team.members.map((member) => {
-    if (member.strategyOverride === DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL) {
-      return updateMemberStrategy(member, DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL, strategyLevel);
-    }
-    memberStrategyOverrides[member.subagentId] = member.strategyOverride;
-    return member;
-  });
-
-  return {
-    ...team,
-    strategyLevel,
-    memberStrategyOverrides,
-    members,
-    coreMembers: members.filter((member) => member.source === 'core'),
-    extraMembers: members.filter((member) => member.source === 'extra'),
-  };
-}
-
-function updateTeamMemberStrategy(
-  team: ReviewTeam,
-  memberId: string,
-  strategyLevel: ReviewMemberStrategyLevel,
-): ReviewTeam {
-  const members = team.members.map((member) =>
-    member.id === memberId
-      ? updateMemberStrategy(member, strategyLevel, team.strategyLevel)
-      : member,
-  );
-  const memberStrategyOverrides: Record<string, ReviewStrategyLevel> = {};
-  members.forEach((member) => {
-    if (member.strategyOverride !== DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL) {
-      memberStrategyOverrides[member.subagentId] = member.strategyOverride;
-    }
-  });
-
-  return {
-    ...team,
-    memberStrategyOverrides,
-    members,
-    coreMembers: members.filter((member) => member.source === 'core'),
-    extraMembers: members.filter((member) => member.source === 'extra'),
-  };
-}
 
 const ReviewConfig: React.FC = () => {
   const { t } = useTranslation('settings/review');
-  const { t: tModel } = useTranslation('settings/default-model');
   const { workspacePath } = useCurrentWorkspace();
   const { error: notifyError, success: notifySuccess } = useNotification();
+  const desktopRuntime = isTauriRuntime();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(desktopRuntime);
   const [team, setTeam] = useState<ReviewTeam | null>(null);
-  const [models, setModels] = useState<AIModelConfig[]>([]);
-  const [subagents, setSubagents] = useState<SubagentInfo[]>([]);
-  const [candidateId, setCandidateId] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [savingConcurrencyKey, setSavingConcurrencyKey] = useState<keyof ReviewTeamConcurrencyPolicy | null>(null);
-  const [savingMemberId, setSavingMemberId] = useState<string | null>(null);
-  const [savingStrategyTarget, setSavingStrategyTarget] = useState<string | null>(null);
-  const [addingMember, setAddingMember] = useState(false);
-  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    if (!desktopRuntime) return;
     setLoading(true);
+    setLoadError(null);
     try {
-      const [loadedTeam, loadedModels, loadedSubagents] = await Promise.all([
-        loadDefaultReviewTeam(workspacePath || undefined),
-        configAPI.getConfig('ai.models'),
-        SubagentAPI.listVisibleSubagents({
-          workspacePath: workspacePath || undefined,
-          parentAgentType: 'DeepReview',
-        }),
-      ]);
+      const loadedTeam = await loadDefaultReviewTeam(workspacePath || undefined);
       setTeam(loadedTeam);
-      setModels(Array.isArray(loadedModels) ? loadedModels as AIModelConfig[] : []);
-      setSubagents(loadedSubagents);
     } catch (error) {
-      notifyError(error instanceof Error ? error.message : t('messages.loadFailed'));
+      const message = error instanceof Error ? error.message : t('messages.loadFailed');
+      setLoadError(message);
+      notifyError(message);
     } finally {
       setLoading(false);
     }
-  }, [notifyError, t, workspacePath]);
+  }, [desktopRuntime, notifyError, t, workspacePath]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
-  const getMemberName = useCallback((member: ReviewTeamMember) => {
-    if (!member.definitionKey) return member.displayName;
-    return t(`members.${member.definitionKey}.name`, { defaultValue: member.roleName });
-  }, [t]);
-
-  const getMemberRole = useCallback((member: ReviewTeamMember) => {
-    if (!member.definitionKey) return t('extra.role', { defaultValue: member.roleName });
-    return t(`members.${member.definitionKey}.role`, { defaultValue: member.roleName });
-  }, [t]);
-
-  const getStrategyLabel = useCallback((level: ReviewStrategyLevel) => (
-    t(`strategy.${level}.label`)
-  ), [t]);
-
-  const getStrategySummary = useCallback((level: ReviewStrategyLevel) => (
-    t(`strategy.${level}.summary`)
-  ), [t]);
-
-  const getMemberStrategyLabel = useCallback((level: ReviewMemberStrategyLevel) => {
-    if (level === DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL) {
-      return t('strategy.inherit', {
-        level: team ? getStrategyLabel(team.strategyLevel) : '',
-      });
-    }
-    return getStrategyLabel(level);
-  }, [getStrategyLabel, t, team]);
-
-  const formatModelLabel = useCallback((modelId: string): string => {
-    if (!modelId || modelId === DEFAULT_REVIEW_TEAM_MODEL) {
-      return tModel('selection.fast');
-    }
-    if (modelId === 'primary') {
-      return tModel('selection.primary');
-    }
-
-    const match = models.find((model) => model.id === modelId);
-    return match ? getModelDisplayName(match) : modelId;
-  }, [models, tModel]);
-
-  const extraCandidates = useMemo(() => {
-    if (!team) return [];
-    const existingIds = new Set(team.members.map((member) => member.subagentId));
-
-    return subagents
-      .filter((subagent) => !existingIds.has(subagent.id))
-      .filter(canUseSubagentAsReviewTeamMember)
-      .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
-  }, [subagents, team]);
-
-  const modelOptions = useMemo(() => [
-    { value: DEFAULT_REVIEW_TEAM_MODEL, label: tModel('selection.fast') },
-    { value: 'primary', label: tModel('selection.primary') },
-    ...models
-      .filter((model) => Boolean(model.id))
-      .map((model) => ({
-        value: model.id as string,
-        label: getModelDisplayName(model),
-      })),
-  ], [models, tModel]);
-
-  useEffect(() => {
-    setCandidateId((currentId) =>
-      currentId && extraCandidates.some((candidate) => candidate.id === currentId)
-        ? currentId
-        : extraCandidates[0]?.id ?? '',
-    );
-  }, [extraCandidates]);
-
-  const handleTeamStrategyChange = useCallback(async (strategyLevel: ReviewStrategyLevel) => {
-    if (!team || team.strategyLevel === strategyLevel) return;
-
-    setSavingStrategyTarget('team');
-    setTeam(updateTeamStrategy(team, strategyLevel));
-    try {
-      await saveDefaultReviewTeamStrategyLevel(strategyLevel);
-      notifySuccess(t('messages.saved'));
-    } catch (error) {
-      await loadData();
-      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
-    } finally {
-      setSavingStrategyTarget(null);
-    }
-  }, [loadData, notifyError, notifySuccess, t, team]);
-
-  const handleMemberStrategyChange = useCallback(async (
-    member: ReviewTeamMember,
-    strategyLevel: ReviewMemberStrategyLevel,
-  ) => {
-    if (!team || member.strategyOverride === strategyLevel) return;
-
-    const target = `member:${member.id}`;
-    setSavingStrategyTarget(target);
-    setTeam(updateTeamMemberStrategy(team, member.id, strategyLevel));
-    try {
-      await saveDefaultReviewTeamMemberStrategyOverride(member.subagentId, strategyLevel);
-      notifySuccess(t('messages.saved'));
-    } catch (error) {
-      await loadData();
-      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
-    } finally {
-      setSavingStrategyTarget(null);
-    }
-  }, [loadData, notifyError, notifySuccess, t, team]);
-
   const handleConcurrencyPolicyChange = useCallback(async (
     key: keyof ReviewTeamConcurrencyPolicy,
     value: ReviewTeamConcurrencyPolicy[keyof ReviewTeamConcurrencyPolicy],
   ) => {
-    if (!team) return;
+    if (!team || savingConcurrencyKey !== null) return;
 
     const nextPolicy = {
       ...team.concurrencyPolicy,
       [key]: value,
     } as ReviewTeamConcurrencyPolicy;
+    const previousTeam = team;
     setSavingConcurrencyKey(key);
     setTeam({ ...team, concurrencyPolicy: nextPolicy });
     try {
       await saveDefaultReviewTeamConcurrencyPolicy(nextPolicy);
       notifySuccess(t('messages.saved'));
     } catch (error) {
-      await loadData();
+      setTeam(previousTeam);
       notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
     } finally {
       setSavingConcurrencyKey(null);
     }
-  }, [loadData, notifyError, notifySuccess, t, team]);
+  }, [notifyError, notifySuccess, savingConcurrencyKey, t, team]);
 
-  const handleModelChange = useCallback(async (member: ReviewTeamMember, modelId: string) => {
-    if (!team) return;
+  if (!desktopRuntime) {
+    return (
+      <ConfigPageLayout>
+        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+        <ConfigPageContent>
+          <ConfigPageSection
+            title={t('desktopOnly.title')}
+            description={t('desktopOnly.description')}
+          >
+            {null}
+          </ConfigPageSection>
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
+  }
 
-    setSavingMemberId(member.id);
-    const nextTeam: ReviewTeam = {
-      ...team,
-      members: team.members.map((m) =>
-        m.id === member.id ? { ...m, model: modelId } : m,
-      ),
-      coreMembers: team.coreMembers.map((m) =>
-        m.id === member.id ? { ...m, model: modelId } : m,
-      ),
-      extraMembers: team.extraMembers.map((m) =>
-        m.id === member.id ? { ...m, model: modelId } : m,
-      ),
-    };
-    setTeam(nextTeam);
-    try {
-      await SubagentAPI.updateSubagentConfig({
-        subagentId: member.subagentId,
-        model: modelId,
-        workspacePath: workspacePath || undefined,
-      });
-      notifySuccess(t('messages.saved'));
-    } catch (error) {
-      await loadData();
-      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
-    } finally {
-      setSavingMemberId(null);
-    }
-  }, [loadData, notifyError, notifySuccess, t, team, workspacePath]);
-
-  const handleAddMember = useCallback(async () => {
-    if (!candidateId) return;
-    setAddingMember(true);
-    try {
-      await addDefaultReviewTeamMember(candidateId);
-      await SubagentAPI.updateSubagentConfig({
-        subagentId: candidateId,
-        parentAgentType: 'DeepReview',
-        enabled: true,
-        workspacePath: workspacePath || undefined,
-      });
-      await loadData();
-      notifySuccess(t('messages.memberAdded'));
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
-    } finally {
-      setAddingMember(false);
-    }
-  }, [candidateId, loadData, notifyError, notifySuccess, t, workspacePath]);
-
-  const handleRemoveMember = useCallback(async (member: ReviewTeamMember) => {
-    if (member.locked) return;
-
-    setRemovingMemberId(member.id);
-    try {
-      await removeDefaultReviewTeamMember(member.subagentId);
-      await loadData();
-      notifySuccess(t('messages.memberRemoved'));
-    } catch (error) {
-      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
-    } finally {
-      setRemovingMemberId(null);
-    }
-  }, [loadData, notifyError, notifySuccess, t]);
-
-  if (loading || !team) {
+  if (loading) {
     return (
       <ConfigPageLayout>
         <ConfigPageLoading text={t('loading')} />
@@ -342,60 +98,33 @@ const ReviewConfig: React.FC = () => {
     );
   }
 
+  if (!team) {
+    return (
+      <ConfigPageLayout>
+        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+        <ConfigPageContent>
+          <ConfigPageSection
+            title={t('error.title')}
+            description={loadError ?? t('messages.loadFailed')}
+          >
+            <Button variant="secondary" size="small" onClick={() => void loadData()}>
+              <RotateCcw size={14} />
+              {t('error.retry')}
+            </Button>
+          </ConfigPageSection>
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
+  }
+
   return (
-    <ConfigPageLayout className="review-config">
+    <ConfigPageLayout>
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
       />
 
       <ConfigPageContent>
-        <ConfigPageSection
-          title={t('overview.title')}
-          description={t('overview.description')}
-          titleSuffix={<Badge variant="info">{t('shared:features.deepReview')}</Badge>}
-        >
-          <div className="review-config__overview-grid">
-            <div className="review-config__overview-item">
-              <span className="review-config__overview-label">{t('overview.command.title')}</span>
-              <p className="review-config__overview-copy">{t('overview.command.description')}</p>
-            </div>
-            <div className="review-config__overview-item">
-              <span className="review-config__overview-label">{t('overview.reviewers.title')}</span>
-              <p className="review-config__overview-copy">{t('overview.reviewers.description')}</p>
-            </div>
-            <div className="review-config__overview-item">
-              <span className="review-config__overview-label">{t('overview.qualityGate.title')}</span>
-              <p className="review-config__overview-copy">{t('overview.qualityGate.description')}</p>
-            </div>
-          </div>
-        </ConfigPageSection>
-
-        <ConfigPageSection
-          title={t('strategy.title')}
-          description={t('strategy.description')}
-          titleSuffix={<Badge variant="neutral">{getStrategyLabel(team.strategyLevel)}</Badge>}
-        >
-          <div className="review-config__strategy-options">
-            {REVIEW_STRATEGY_LEVELS.map((level) => {
-              const isSelected = team.strategyLevel === level;
-              return (
-                <button
-                  key={level}
-                  type="button"
-                  className={`review-config__strategy-option${isSelected ? ' is-selected' : ''}`}
-                  aria-pressed={isSelected}
-                  disabled={savingStrategyTarget === 'team'}
-                  onClick={() => void handleTeamStrategyChange(level)}
-                >
-                  <span className="review-config__strategy-title">{getStrategyLabel(level)}</span>
-                  <span className="review-config__strategy-summary">{getStrategySummary(level)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </ConfigPageSection>
-
         <ConfigPageSection title={t('capacity.title')} description={t('capacity.description')}>
           <ConfigPageRow label={t('capacity.maxParallelReviewers.label')} description={t('capacity.maxParallelReviewers.description')} align="center" balanced>
             <NumberInput
@@ -405,7 +134,7 @@ const ReviewConfig: React.FC = () => {
               max={16}
               step={1}
               size="small"
-              disabled={savingConcurrencyKey === 'maxParallelInstances'}
+              disabled={savingConcurrencyKey !== null}
             />
           </ConfigPageRow>
 
@@ -418,99 +147,10 @@ const ReviewConfig: React.FC = () => {
               step={60}
               unit="s"
               size="small"
-              disabled={savingConcurrencyKey === 'maxQueueWaitSeconds'}
+              disabled={savingConcurrencyKey !== null}
             />
           </ConfigPageRow>
 
-        </ConfigPageSection>
-
-        <ConfigPageSection
-          className="review-config__members-section"
-          title={t('members.title')}
-          description={t('members.description')}
-          titleSuffix={<Badge variant="neutral">{t('members.count', { count: team.members.length })}</Badge>}
-        >
-          <div className="review-config__member-list">
-            {team.members.map((member) => (
-              <div key={member.id} className="review-config__member-row">
-                <div className="review-config__member-main">
-                  <div className="review-config__member-heading">
-                    <span className="review-config__member-name">{getMemberName(member)}</span>
-                    <Badge variant={member.locked ? 'neutral' : 'info'}>
-                      {member.locked ? t('members.locked') : t('members.extra')}
-                    </Badge>
-                  </div>
-                  <p className="review-config__member-role">{getMemberRole(member)}</p>
-                </div>
-
-                <div className="review-config__member-controls">
-                  <Select
-                    value={member.strategyOverride}
-                    onChange={(value) => void handleMemberStrategyChange(
-                      member,
-                      (Array.isArray(value) ? value[0] : value) as ReviewMemberStrategyLevel,
-                    )}
-                    size="small"
-                    disabled={savingStrategyTarget === `member:${member.id}`}
-                    options={MEMBER_STRATEGY_OPTIONS.map((level) => ({
-                      value: level,
-                      label: getMemberStrategyLabel(level),
-                    }))}
-                  />
-                  <Select
-                    value={member.model || DEFAULT_REVIEW_TEAM_MODEL}
-                    size="small"
-                    disabled={savingMemberId === member.id}
-                    options={modelOptions}
-                    onChange={(value) => void handleModelChange(
-                      member,
-                      String(Array.isArray(value) ? value[0] || DEFAULT_REVIEW_TEAM_MODEL : value),
-                    )}
-                  />
-                  <span className="review-config__member-model">{formatModelLabel(member.model)}</span>
-                  {!member.locked ? (
-                    <Button
-                      variant="secondary"
-                      size="small"
-                      disabled={removingMemberId === member.id}
-                      onClick={() => void handleRemoveMember(member)}
-                    >
-                      {t('members.remove')}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        </ConfigPageSection>
-
-        <ConfigPageSection title={t('extra.title')} description={t('extra.description')}>
-          <ConfigPageRow label={t('extra.candidate')} description={t('extra.hint')} multiline>
-            <div className="review-config__add-row">
-              <Select
-                value={candidateId}
-                onChange={(value) => setCandidateId(String(Array.isArray(value) ? value[0] || '' : value))}
-                size="small"
-                disabled={extraCandidates.length === 0 || addingMember}
-                placeholder={t('extra.placeholder')}
-                options={extraCandidates.map((candidate) => ({
-                  value: candidate.id,
-                  label: `${candidate.name} - ${candidate.subagentSource ?? 'user'}`,
-                }))}
-              />
-              <Button
-                variant="primary"
-                size="small"
-                disabled={!candidateId || extraCandidates.length === 0 || addingMember}
-                onClick={() => void handleAddMember()}
-              >
-                {t('extra.add')}
-              </Button>
-            </div>
-            {extraCandidates.length === 0 ? (
-              <p className="review-config__empty">{t('extra.empty')}</p>
-            ) : null}
-          </ConfigPageRow>
         </ConfigPageSection>
       </ConfigPageContent>
     </ConfigPageLayout>

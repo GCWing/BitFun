@@ -8,6 +8,7 @@ import {
   Select,
   Switch,
   Tooltip,
+  type SelectOption,
   ConfigPageLoading,
   ConfigPageMessage,
 } from '@/component-library';
@@ -37,6 +38,110 @@ import type {
 import './BasicsConfig.scss';
 
 const log = createLogger('BasicsConfig');
+
+type TerminalShellOption = SelectOption & {
+  shell?: ShellInfo;
+};
+
+const formatShellLabel = (shell: ShellInfo): string =>
+  `${shell.name}${shell.version ? ` (${shell.version})` : ''}`;
+
+function BasicsLaunchAtLoginSection() {
+  const { t } = useTranslation('settings/basics');
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const v = await systemAPI.getLaunchAtLoginEnabled();
+        if (!cancelled) {
+          setEnabled(v);
+        }
+      } catch (error) {
+        log.error('Failed to load launch-at-login state', error);
+        if (!cancelled) {
+          showMessage('error', t('launchAtLogin.messages.loadFailed'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauri, showMessage, t]);
+
+  const handleToggle = useCallback(
+    async (next: boolean) => {
+      const previous = enabled;
+      setEnabled(next);
+      setSaving(true);
+      try {
+        await systemAPI.setLaunchAtLoginEnabled(next);
+      } catch (error) {
+        setEnabled(previous);
+        log.error('Failed to set launch-at-login', { next, error });
+        showMessage('error', t('launchAtLogin.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [enabled, showMessage, t]
+  );
+
+  if (!isTauri) {
+    return null;
+  }
+
+  if (loading) {
+    return <ConfigPageLoading text={t('launchAtLogin.messages.loading')} />;
+  }
+
+  return (
+    <div className="bitfun-launch-at-login-config">
+      <div className="bitfun-launch-at-login-config__content">
+        <ConfigPageMessage message={message} />
+        <ConfigPageSection
+          title={t('launchAtLogin.sections.title')}
+          description={t('launchAtLogin.sections.hint')}
+        >
+          <ConfigPageRow
+            label={t('launchAtLogin.toggleLabel')}
+            description={t('launchAtLogin.toggleDescription')}
+            align="center"
+          >
+            <Switch
+              checked={enabled}
+              onChange={(e) => {
+                void handleToggle(e.target.checked);
+              }}
+              disabled={saving}
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
+      </div>
+    </div>
+  );
+}
 
 function BasicsAutoUpdateSection() {
   const { t } = useTranslation('settings/basics');
@@ -289,11 +394,20 @@ function BasicsLoggingSection() {
         >
           {runtimeInfo?.previousUnexpectedExit?.detected && (
             <Alert
-              type="warning"
-              message={t('logging.previousCrash.title')}
-              description={t('logging.previousCrash.description', {
-                path: runtimeInfo.previousUnexpectedExit.sessionLogDir || '-',
-              })}
+              type={runtimeInfo.previousUnexpectedExit.category === 'crash' ? 'warning' : 'info'}
+              message={t(
+                runtimeInfo.previousUnexpectedExit.category === 'crash'
+                  ? 'logging.previousCrash.title'
+                  : 'logging.previousUncleanShutdown.title'
+              )}
+              description={t(
+                runtimeInfo.previousUnexpectedExit.category === 'crash'
+                  ? 'logging.previousCrash.description'
+                  : 'logging.previousUncleanShutdown.description',
+                {
+                  path: runtimeInfo.previousUnexpectedExit.sessionLogDir || '-',
+                }
+              )}
             />
           )}
           <ConfigPageRow
@@ -451,16 +565,66 @@ function BasicsTerminalSection() {
     [showMessage, t],
   );
 
-  const shellOptions = useMemo(
+  const shellOptions = useMemo<TerminalShellOption[]>(
     () => [
       { value: '', label: t('terminal.controls.autoDetect') },
       ...availableShells.map((shell) => ({
-        value: shell.shellType,
-        label: `${shell.name}${shell.version ? ` (${shell.version})` : ''}`,
+        value: shell.path,
+        label: formatShellLabel(shell),
+        shell,
       })),
     ],
-    [availableShells, t]
+    [availableShells, t],
   );
+
+  const selectedShell = useMemo(
+    () =>
+      availableShells.find((shell) => shell.path === defaultShell) ??
+      availableShells.find((shell) => shell.shellType === defaultShell),
+    [availableShells, defaultShell],
+  );
+  const selectedShellValue = selectedShell?.path ?? defaultShell;
+
+  const renderShellDetails = useCallback((shell: ShellInfo) => (
+    <div className="bitfun-terminal-config__shell-tooltip">
+      <div className="bitfun-terminal-config__shell-tooltip-name">{formatShellLabel(shell)}</div>
+      <div className="bitfun-terminal-config__shell-tooltip-path">{shell.path}</div>
+    </div>
+  ), []);
+
+  const renderShellOption = useCallback((option: SelectOption) => {
+    const shellOption = option as TerminalShellOption;
+    if (!shellOption.shell) {
+      return <div className="bitfun-terminal-config__shell-option-name">{option.label}</div>;
+    }
+
+    const { shell } = shellOption;
+    const content = (
+      <div className="bitfun-terminal-config__shell-option">
+        <div className="bitfun-terminal-config__shell-option-name">{formatShellLabel(shell)}</div>
+      </div>
+    );
+
+    return (
+      <Tooltip content={renderShellDetails(shell)} placement="right">
+        {content}
+      </Tooltip>
+    );
+  }, [renderShellDetails]);
+
+  const renderShellValue = useCallback((option?: SelectOption | SelectOption[]) => {
+    const selectedOption = Array.isArray(option) ? option[0] : option;
+    const shell = (selectedOption as TerminalShellOption | undefined)?.shell;
+    if (!shell) return null;
+
+    return (
+      <Tooltip content={renderShellDetails(shell)} placement="top">
+        <span className="select__value bitfun-terminal-config__shell-value">
+          <span className="bitfun-terminal-config__shell-value-name">{formatShellLabel(shell)}</span>
+        </span>
+      </Tooltip>
+    );
+  }, [renderShellDetails]);
 
   const terminalPanelPositionOptions = useMemo(
     () => [
@@ -469,7 +633,7 @@ function BasicsTerminalSection() {
     ],
     [t],
   );
-  const shouldShowCmdFallbackNotice = defaultShell === 'Cmd';
+  const shouldShowCmdFallbackNotice = selectedShell?.shellType === 'Cmd' || defaultShell === 'Cmd';
 
   if (loading) {
     return <ConfigPageLoading text={t('terminal.messages.loading')} />;
@@ -498,9 +662,11 @@ function BasicsTerminalSection() {
             <div className="bitfun-terminal-config__select-wrapper">
               {availableShells.length > 0 ? (
                 <Select
-                  value={defaultShell}
+                  value={selectedShellValue}
                   onChange={(v) => handleShellChange(v as string)}
                   options={shellOptions}
+                  renderOption={renderShellOption}
+                  renderValue={renderShellValue}
                   placeholder={t('terminal.controls.placeholder')}
                   disabled={saving}
                 />

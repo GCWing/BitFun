@@ -28,7 +28,7 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
 pub fn build_tool_call_truncation_recovery_notice(tool_name: &str) -> String {
     if is_write_like_tool_name(tool_name) {
         return format!(
-            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, issue ONE {tool_name} call with `mode`: \"a\" and `content` set only to the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT rewrite the whole file with overwrite mode.]\n\nOriginal tool result follows.\n\n"
+            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, use Edit to add only the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens).]\n\nOriginal tool result follows.\n\n"
         );
     }
 

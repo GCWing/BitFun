@@ -1,6 +1,6 @@
-pub mod custom;
-pub mod hidden;
-pub mod modes;
-pub mod review;
-pub mod shared;
-pub mod subagents;
+pub(super) mod custom;
+pub(super) mod hidden;
+pub(super) mod modes;
+pub(super) mod review;
+pub(super) mod shared;
+pub(super) mod subagents;

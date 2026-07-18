@@ -1055,7 +1055,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(virtualListMock.pinTurnToTopWithStatus.mock.calls.length).toBe(settledCallCount);
   });
 
-  it('leaves internally pending turn pins with the list instead of retrying from the container', async () => {
+  it('accepts list-owned pending turn pins without retrying from the container', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -1080,12 +1080,12 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    let accepted = true;
+    let accepted = false;
     await act(async () => {
-      accepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-1') ?? true;
+      accepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-1') ?? false;
     });
 
-    expect(accepted).toBe(false);
+    expect(accepted).toBe(true);
     expect(virtualListMock.pinTurnToTopWithStatus).toHaveBeenLastCalledWith('turn-1', {
       behavior: 'smooth',
       pinMode: 'transient',

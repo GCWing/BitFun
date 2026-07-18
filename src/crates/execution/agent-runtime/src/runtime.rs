@@ -1,8 +1,8 @@
-//! Public Agent Runtime facade over stable runtime ports.
+//! Internal Agent Runtime facade over stable runtime ports.
 //!
-//! This module is intentionally port-backed. It gives product assembly and
-//! future SDK consumers a narrow agent entrypoint without depending on
-//! `bitfun-core`, app crates, Tauri, or concrete service managers.
+//! This module is intentionally port-backed for product assembly and internal
+//! runtime owners. Client-facing SDK consumers should use `crate::sdk`, which
+//! does not expose Plugin Runtime Host ABI.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -13,23 +13,25 @@ use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
-    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
-    AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, DialogSubmitOutcome, PluginRuntimeBinding, PortError,
-    RuntimeEventEnvelope, ThreadGoal,
+    AgentSessionManagementPort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSubmitOutcome,
+    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
+    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
+use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 use crate::post_call_hooks::RuntimeHookRegistry;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RuntimeBuildError {
     #[error("agent submission port is required")]
     MissingSubmissionPort,
-    #[error("plugin runtime host binding is not supported before host gates are registered")]
+    #[error("plugin runtime client binding must report executable host availability")]
     UnsupportedPluginRuntimeHostBinding,
 }
 
@@ -43,12 +45,91 @@ pub enum RuntimeError {
     MissingCancellationPort,
     #[error("agent session management port is not registered")]
     MissingSessionManagementPort,
+    #[error("agent session restore port is not registered")]
+    MissingSessionRestorePort,
+    #[error("session transcript reader is not registered")]
+    MissingSessionTranscriptReader,
     #[error("agent thread goal management port is not registered")]
     MissingThreadGoalManagementPort,
+    #[error("agent interaction response port is not registered")]
+    MissingInteractionResponsePort,
     #[error("runtime event sink is not registered")]
     MissingEventSink,
+    #[error("agent event source is not registered")]
+    MissingEventSource,
     #[error(transparent)]
     Port(#[from] PortError),
+}
+
+impl RuntimeError {
+    /// Returns the provider message without prepending the structured port error kind.
+    pub fn into_message(self) -> String {
+        match self {
+            Self::Port(error) => error.message,
+            other => other.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRestoreRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRestoreResult {
+    pub session: AgentSessionSummary,
+    pub state: crate::session_state::SessionState,
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionRestorePort: Send + Sync {
+    async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> PortResult<AgentSessionRestoreResult>;
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Confirms a pending tool call, optionally replacing its input before execution.
+pub struct AgentToolConfirmationRequest {
+    pub tool_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_input: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Rejects a pending tool call with the user's reason.
+pub struct AgentToolRejectionRequest {
+    pub tool_id: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Delivers answers to a pending user-question tool call.
+pub struct AgentUserAnswersRequest {
+    pub tool_id: String,
+    pub answers: serde_json::Value,
+}
+
+#[async_trait::async_trait]
+/// Routes product responses to the existing tool and user-input owners.
+///
+/// Implementations do not own approval policy or interaction lifecycle state.
+pub trait AgentInteractionResponsePort: Send + Sync {
+    async fn confirm_tool(&self, request: AgentToolConfirmationRequest) -> PortResult<()>;
+    async fn reject_tool(&self, request: AgentToolRejectionRequest) -> PortResult<()>;
+    async fn submit_user_answers(&self, request: AgentUserAnswersRequest) -> PortResult<()>;
 }
 
 #[derive(Clone, Default)]
@@ -103,12 +184,17 @@ pub trait RuntimeAgentRegistry: Send + Sync {
 pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_model: Option<Arc<dyn AgentSessionModelPort>>,
+    session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
+    session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
+    interaction_response: Option<Arc<dyn AgentInteractionResponsePort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
+    event_source: Option<AgentEventSource>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
@@ -126,6 +212,27 @@ impl std::fmt::Debug for AgentRuntime {
                     .session_management
                     .as_ref()
                     .map(|_| "<dyn AgentSessionManagementPort>"),
+            )
+            .field(
+                "session_model",
+                &self
+                    .session_model
+                    .as_ref()
+                    .map(|_| "<dyn AgentSessionModelPort>"),
+            )
+            .field(
+                "session_restore",
+                &self
+                    .session_restore
+                    .as_ref()
+                    .map(|_| "<dyn AgentSessionRestorePort>"),
+            )
+            .field(
+                "session_transcript_reader",
+                &self
+                    .session_transcript_reader
+                    .as_ref()
+                    .map(|_| "<dyn SessionTranscriptReader>"),
             )
             .field(
                 "thread_goal_management",
@@ -156,12 +263,23 @@ impl std::fmt::Debug for AgentRuntime {
                     .map(|_| "<dyn AgentTurnCancellationPort>"),
             )
             .field(
+                "interaction_response",
+                &self
+                    .interaction_response
+                    .as_ref()
+                    .map(|_| "<dyn AgentInteractionResponsePort>"),
+            )
+            .field(
                 "services",
                 &self.services.as_ref().map(|_| "<RuntimeServices>"),
             )
             .field(
                 "event_stream",
                 &self.event_stream.as_ref().map(|_| "<AgentEventStream>"),
+            )
+            .field(
+                "event_source",
+                &self.event_source.as_ref().map(|_| "<AgentEventSource>"),
             )
             .field(
                 "tool_registry",
@@ -201,12 +319,17 @@ where
 pub struct AgentRuntimeBuilder {
     submission: Option<Arc<dyn AgentSubmissionPort>>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    session_model: Option<Arc<dyn AgentSessionModelPort>>,
+    session_restore: Option<Arc<dyn AgentSessionRestorePort>>,
+    session_transcript_reader: Option<Arc<dyn SessionTranscriptReader>>,
     thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
+    interaction_response: Option<Arc<dyn AgentInteractionResponsePort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
+    event_source: Option<AgentEventSource>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
@@ -229,6 +352,24 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.session_management = Some(port);
+        self
+    }
+
+    pub fn with_session_model_port(mut self, port: Arc<dyn AgentSessionModelPort>) -> Self {
+        self.session_model = Some(port);
+        self
+    }
+
+    pub fn with_session_restore_port(mut self, port: Arc<dyn AgentSessionRestorePort>) -> Self {
+        self.session_restore = Some(port);
+        self
+    }
+
+    pub fn with_session_transcript_reader(
+        mut self,
+        reader: Arc<dyn SessionTranscriptReader>,
+    ) -> Self {
+        self.session_transcript_reader = Some(reader);
         self
     }
 
@@ -258,6 +399,14 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_interaction_response_port(
+        mut self,
+        port: Arc<dyn AgentInteractionResponsePort>,
+    ) -> Self {
+        self.interaction_response = Some(port);
+        self
+    }
+
     pub fn with_services(mut self, services: RuntimeServices) -> Self {
         self.services = Some(services);
         self
@@ -265,6 +414,11 @@ impl AgentRuntimeBuilder {
 
     pub fn with_event_stream(mut self, events: AgentEventStream) -> Self {
         self.event_stream = Some(events);
+        self
+    }
+
+    pub fn with_event_source(mut self, source: AgentEventSource) -> Self {
+        self.event_source = Some(source);
         self
     }
 
@@ -297,12 +451,17 @@ impl AgentRuntimeBuilder {
         let Self {
             submission,
             session_management,
+            session_model,
+            session_restore,
+            session_transcript_reader,
             thread_goal_management,
             dialog_turn,
             lifecycle_delivery,
             cancellation,
+            interaction_response,
             services,
             event_stream,
+            event_source,
             tool_registry,
             harness_registry,
             hook_registry,
@@ -310,21 +469,24 @@ impl AgentRuntimeBuilder {
             plugin_runtime,
         } = self;
 
-        if matches!(plugin_runtime, PluginRuntimeBinding::Client(_))
-            || plugin_runtime.availability().is_executable()
-        {
+        if plugin_runtime.is_client_binding() && !plugin_runtime.availability().is_executable() {
             return Err(RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
         }
 
         Ok(AgentRuntime {
             submission: submission.ok_or(RuntimeBuildError::MissingSubmissionPort)?,
             session_management,
+            session_model,
+            session_restore,
+            session_transcript_reader,
             thread_goal_management,
             dialog_turn,
             lifecycle_delivery,
             cancellation,
+            interaction_response,
             services,
             event_stream,
+            event_source,
             tool_registry,
             harness_registry,
             hook_registry,
@@ -431,6 +593,23 @@ pub struct AgentRunHandle {
 }
 
 impl AgentRuntime {
+    pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
+        self.event_source
+            .as_ref()
+            .map(AgentEventSource::subscribe)
+            .ok_or(RuntimeError::MissingEventSource)
+    }
+
+    pub fn subscribe_session_events(
+        &self,
+        session_id: &str,
+    ) -> Result<AgentSessionEventReceiver, RuntimeError> {
+        self.event_source
+            .as_ref()
+            .map(|source| source.subscribe_session(session_id))
+            .ok_or(RuntimeError::MissingEventSource)
+    }
+
     pub fn services(&self) -> Option<&RuntimeServices> {
         self.services.as_ref()
     }
@@ -440,6 +619,42 @@ impl AgentRuntime {
             .as_ref()
             .map(|registry| registry.tool_names())
             .unwrap_or_default()
+    }
+
+    pub async fn confirm_tool(
+        &self,
+        request: AgentToolConfirmationRequest,
+    ) -> Result<(), RuntimeError> {
+        self.interaction_response
+            .as_ref()
+            .ok_or(RuntimeError::MissingInteractionResponsePort)?
+            .confirm_tool(request)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn reject_tool(
+        &self,
+        request: AgentToolRejectionRequest,
+    ) -> Result<(), RuntimeError> {
+        self.interaction_response
+            .as_ref()
+            .ok_or(RuntimeError::MissingInteractionResponsePort)?
+            .reject_tool(request)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn submit_user_answers(
+        &self,
+        request: AgentUserAnswersRequest,
+    ) -> Result<(), RuntimeError> {
+        self.interaction_response
+            .as_ref()
+            .ok_or(RuntimeError::MissingInteractionResponsePort)?
+            .submit_user_answers(request)
+            .await?;
+        Ok(())
     }
 
     pub fn harness_provider_ids(&self) -> Vec<&str> {
@@ -474,6 +689,29 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
+    pub async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        let result = self
+            .submission
+            .create_session_with_id(session_id.clone(), request)
+            .await
+            .map_err(RuntimeError::from)?;
+        if result.session_id != session_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent submission provider returned session_id '{}' for requested session_id '{}'",
+                    result.session_id, session_id
+                ),
+            )
+            .into());
+        }
+        Ok(result)
+    }
+
     pub async fn list_sessions(
         &self,
         request: AgentSessionListRequest,
@@ -498,6 +736,50 @@ impl AgentRuntime {
             .ok_or(RuntimeError::MissingSessionManagementPort)?;
         session_management
             .delete_session(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn update_session_model(
+        &self,
+        request: AgentSessionModelUpdateRequest,
+    ) -> Result<(), RuntimeError> {
+        let session_model = self.session_model.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session model port is not registered",
+            ))
+        })?;
+        session_model
+            .update_session_model(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> Result<AgentSessionRestoreResult, RuntimeError> {
+        let session_restore = self
+            .session_restore
+            .as_ref()
+            .ok_or(RuntimeError::MissingSessionRestorePort)?;
+        session_restore
+            .restore_session(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn read_session_transcript(
+        &self,
+        request: SessionTranscriptRequest,
+    ) -> Result<SessionTranscript, RuntimeError> {
+        let reader = self
+            .session_transcript_reader
+            .as_ref()
+            .ok_or(RuntimeError::MissingSessionTranscriptReader)?;
+        reader
+            .read_session_transcript(request)
             .await
             .map_err(RuntimeError::from)
     }
@@ -703,6 +985,7 @@ impl AgentRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session_state::SessionState;
     use bitfun_runtime_ports::{
         AgentBackgroundResultRequest, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
         AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
@@ -712,18 +995,22 @@ mod tests {
         DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, PermissionPort,
         PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
         PluginRuntimeClient, PluginRuntimeUnavailableReason, PortErrorKind, PortResult,
-        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort, ThreadGoal,
-        ThreadGoalStatus, WorkspacePort,
+        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort,
+        SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
+        ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
     };
     use bitfun_runtime_services::{test_support::FakeRuntimePort, RuntimeServicesBuilder};
 
     #[derive(Debug, Default)]
     struct FakeAgentRuntimePorts {
         created_sessions: Mutex<Vec<AgentSessionCreateRequest>>,
+        exact_session_result_id: Mutex<Option<String>>,
         submitted_messages: Mutex<Vec<AgentSubmissionRequest>>,
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
+        restored_sessions: Mutex<Vec<AgentSessionRestoreRequest>>,
+        transcript_requests: Mutex<Vec<SessionTranscriptRequest>>,
         workspace_binding_requests: Mutex<Vec<AgentSessionWorkspaceRequest>>,
         thread_goal_gets: Mutex<Vec<AgentThreadGoalGetRequest>>,
         thread_goal_creates: Mutex<Vec<AgentThreadGoalCreateRequest>>,
@@ -746,8 +1033,47 @@ mod tests {
             envelope: PluginDispatchEnvelope,
         ) -> PortResult<PluginResponseEnvelope> {
             Ok(PluginResponseEnvelope {
-                envelope_id: envelope.envelope_id,
-                accepted: true,
+                envelope_version: envelope.envelope_version,
+                request_event_id: envelope.event_id,
+                project_domain_id: envelope.project_domain_id,
+                workspace_id: envelope.workspace_id,
+                adapter_id: "test-plugin-runtime".to_string(),
+                plugin_id: Some(envelope.source.plugin_id),
+                completed_at_ms: 0,
+                effects: Vec::new(),
+                diagnostics: Vec::new(),
+                quarantine: None,
+                plugin_statuses: Vec::new(),
+                observed_epochs: envelope.epochs,
+            })
+        }
+    }
+
+    struct AvailablePluginRuntimeClient;
+
+    #[async_trait::async_trait]
+    impl PluginRuntimeClient for AvailablePluginRuntimeClient {
+        fn availability(&self) -> PluginRuntimeAvailability {
+            PluginRuntimeAvailability::Available
+        }
+
+        async fn dispatch(
+            &self,
+            envelope: PluginDispatchEnvelope,
+        ) -> PortResult<PluginResponseEnvelope> {
+            Ok(PluginResponseEnvelope {
+                envelope_version: envelope.envelope_version,
+                request_event_id: envelope.event_id,
+                project_domain_id: envelope.project_domain_id,
+                workspace_id: envelope.workspace_id,
+                adapter_id: "test-plugin-runtime".to_string(),
+                plugin_id: Some(envelope.source.plugin_id),
+                completed_at_ms: 0,
+                effects: Vec::new(),
+                diagnostics: Vec::new(),
+                quarantine: None,
+                plugin_statuses: Vec::new(),
+                observed_epochs: envelope.epochs,
             })
         }
     }
@@ -778,6 +1104,7 @@ mod tests {
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
                 agent_type: "agentic".to_string(),
+                turn_count: 3,
                 created_at_ms: 1000,
                 last_active_at_ms: 2000,
             }])
@@ -806,6 +1133,50 @@ mod tests {
     }
 
     #[async_trait::async_trait]
+    impl AgentSessionRestorePort for FakeAgentRuntimePorts {
+        async fn restore_session(
+            &self,
+            request: AgentSessionRestoreRequest,
+        ) -> PortResult<AgentSessionRestoreResult> {
+            self.restored_sessions.lock().unwrap().push(request);
+            Ok(AgentSessionRestoreResult {
+                session: AgentSessionSummary {
+                    session_id: "session_1".to_string(),
+                    session_name: "Main".to_string(),
+                    agent_type: "agentic".to_string(),
+                    turn_count: 3,
+                    created_at_ms: 1000,
+                    last_active_at_ms: 2000,
+                },
+                state: SessionState::Idle,
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SessionTranscriptReader for FakeAgentRuntimePorts {
+        async fn read_session_transcript(
+            &self,
+            request: SessionTranscriptRequest,
+        ) -> PortResult<SessionTranscript> {
+            self.transcript_requests
+                .lock()
+                .unwrap()
+                .push(request.clone());
+            Ok(SessionTranscript {
+                session_id: request.session_id,
+                messages: vec![TranscriptMessage {
+                    id: Some("message_1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: request.turn_id,
+                    timestamp_ms: Some(1000),
+                    content: TranscriptContent::Text("done".to_string()),
+                }],
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
     impl AgentSubmissionPort for FakeAgentRuntimePorts {
         async fn create_session(
             &self,
@@ -814,6 +1185,24 @@ mod tests {
             self.created_sessions.lock().unwrap().push(request.clone());
             Ok(AgentSessionCreateResult {
                 session_id: "session_1".to_string(),
+                session_name: request.session_name,
+                agent_type: request.agent_type,
+            })
+        }
+
+        async fn create_session_with_id(
+            &self,
+            session_id: String,
+            request: AgentSessionCreateRequest,
+        ) -> PortResult<AgentSessionCreateResult> {
+            self.created_sessions.lock().unwrap().push(request.clone());
+            Ok(AgentSessionCreateResult {
+                session_id: self
+                    .exact_session_result_id
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .unwrap_or(session_id),
                 session_name: request.session_name,
                 agent_type: request.agent_type,
             })
@@ -969,7 +1358,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn builder_rejects_plugin_runtime_client_until_host_boundary_exists() {
+    async fn builder_accepts_executable_plugin_runtime_client() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .with_plugin_runtime(PluginRuntimeBinding::client(Arc::new(
+                AvailablePluginRuntimeClient,
+            )))
+            .build()
+            .expect("executable plugin runtime clients should build");
+
+        assert_eq!(
+            runtime.plugin_runtime().availability(),
+            PluginRuntimeAvailability::Available
+        );
+    }
+
+    #[tokio::test]
+    async fn builder_rejects_plugin_runtime_client_that_reports_projection_only() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let err = AgentRuntimeBuilder::new()
             .with_submission_port(ports)
@@ -980,6 +1386,65 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err, RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
+    }
+
+    #[tokio::test]
+    async fn create_session_with_id_uses_exact_identity() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let created = runtime
+            .create_session_with_id(
+                "fixed-session-id".to_string(),
+                AgentSessionCreateRequest {
+                    session_name: "Fixed session".to_string(),
+                    agent_type: "agentic".to_string(),
+                    workspace_path: Some("/workspace/project".to_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .expect("create session");
+
+        assert_eq!(created.session_id, "fixed-session-id");
+    }
+
+    #[tokio::test]
+    async fn create_session_with_id_rejects_provider_identity_mismatch() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.exact_session_result_id.lock().unwrap() = Some("other-session-id".to_string());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .create_session_with_id(
+                "fixed-session-id".to_string(),
+                AgentSessionCreateRequest {
+                    session_name: "Fixed session".to_string(),
+                    agent_type: "agentic".to_string(),
+                    workspace_path: Some("/workspace/project".to_string()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .expect_err("runtime must reject a provider identity mismatch");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::Backend,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]
@@ -1243,6 +1708,136 @@ mod tests {
                 .as_deref(),
             Some("turn_1")
         );
+    }
+
+    #[tokio::test]
+    async fn session_restore_and_transcript_read_delegate_to_registered_ports() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_session_management_port(ports.clone())
+            .with_session_restore_port(ports.clone())
+            .with_session_transcript_reader(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let restored = runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: "/workspace/project".to_string(),
+                session_id: "session_1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("restore session");
+        let transcript = runtime
+            .read_session_transcript(SessionTranscriptRequest {
+                session_id: "session_1".to_string(),
+                turn_id: None,
+            })
+            .await
+            .expect("read transcript");
+
+        assert_eq!(restored.session.session_id, "session_1");
+        assert_eq!(transcript.messages[0].id.as_deref(), Some("message_1"));
+        assert_eq!(ports.restored_sessions.lock().unwrap().len(), 1);
+        assert_eq!(ports.transcript_requests.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn session_restore_contract_serializes_runtime_owned_state() {
+        let request = AgentSessionRestoreRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
+        let result = AgentSessionRestoreResult {
+            session: AgentSessionSummary {
+                session_id: "session_1".to_string(),
+                session_name: "Main".to_string(),
+                agent_type: "agentic".to_string(),
+                turn_count: 3,
+                created_at_ms: 1000,
+                last_active_at_ms: 2000,
+            },
+            state: SessionState::Error {
+                error: "recoverable failure".to_string(),
+                recoverable: true,
+            },
+        };
+
+        let request_json = serde_json::to_value(request).expect("serialize restore request");
+        let result_json = serde_json::to_value(result).expect("serialize restore result");
+
+        assert_eq!(request_json["workspacePath"], "/workspace/project");
+        assert_eq!(request_json["remoteConnectionId"], "conn-1");
+        assert_eq!(request_json["remoteSshHost"], "host-1");
+        assert_eq!(result_json["state"]["Error"]["recoverable"], true);
+    }
+
+    #[tokio::test]
+    async fn session_restore_requires_registered_port() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .restore_session(AgentSessionRestoreRequest {
+                workspace_path: "/workspace/project".to_string(),
+                session_id: "session_1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .unwrap_err();
+
+        assert_eq!(error, RuntimeError::MissingSessionRestorePort);
+    }
+
+    #[test]
+    fn event_subscription_requires_configured_source() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        assert_eq!(
+            runtime.subscribe_events().unwrap_err(),
+            RuntimeError::MissingEventSource
+        );
+    }
+
+    #[test]
+    fn runtime_error_message_preserves_port_error_text() {
+        let error = RuntimeError::Port(PortError::new(
+            bitfun_runtime_ports::PortErrorKind::Backend,
+            "original backend message",
+        ));
+
+        assert_eq!(error.into_message(), "original backend message");
+    }
+
+    #[tokio::test]
+    async fn transcript_read_requires_registered_reader() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .read_session_transcript(SessionTranscriptRequest {
+                session_id: "session_1".to_string(),
+                turn_id: None,
+            })
+            .await
+            .unwrap_err();
+
+        assert_eq!(error, RuntimeError::MissingSessionTranscriptReader);
     }
 
     #[tokio::test]

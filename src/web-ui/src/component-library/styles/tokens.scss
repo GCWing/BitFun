@@ -4,8 +4,6 @@
 // ==================== Primitive color literals ====================
 $color-static-white: #ffffff;
 $color-static-black: #000000;
-$color-static-emerald: #10b981;
-$color-static-orange: #f97316;
 
 $overlay-white-04: rgba(255, 255, 255, 0.04);
 $overlay-white-08: rgba(255, 255, 255, 0.08);
@@ -57,11 +55,9 @@ $color-purple-500-a40: rgba(139, 92, 246, 0.4);
 $color-bg-primary: #0e0e10;
 $color-bg-secondary: #1c1c1f;
 $color-bg-tertiary: $color-bg-primary;
-$color-bg-quaternary: #252528;
 $color-bg-elevated: $color-bg-secondary;
 $color-bg-workbench: $color-bg-primary;
 $color-bg-scene: $color-bg-secondary;
-$color-bg-tooltip: rgba(28, 28, 31, 0.96);
 
 $color-text-primary: #e8e8e8;
 $color-text-secondary: #b0b0b0;
@@ -74,7 +70,6 @@ $element-bg-soft: $overlay-white-08;
 $element-bg-base: $overlay-white-12;
 $element-bg-medium: $overlay-white-12;
 $element-bg-strong: $overlay-white-15;
-$element-bg-elevated: $overlay-white-20;
 
 // ==================== Blue system ====================
 $color-accent-50: $color-blue-500-a06;
@@ -85,16 +80,12 @@ $color-accent-400: rgba(96, 165, 250, 0.4);
 $color-accent-500: #60a5fa;
 $color-accent-600: #3b82f6;
 $color-accent-700: rgba(59, 130, 246, 0.8);
-$color-accent-800: rgba(59, 130, 246, 0.9);
 
 // ==================== Purple system ====================
-$color-purple-50: $color-purple-500-a05;
 $color-purple-100: $color-purple-500-a08;
 $color-purple-200: $color-purple-500-a15;
-$color-purple-400: $color-purple-500-a40;
 $color-purple-500: #8b5cf6;
 $color-purple-600: #7c3aed;
-$color-purple-800: rgba(124, 58, 237, 0.9);
 
 // ==================== Semantic colors ====================
 $color-success: #34d399;
@@ -119,21 +110,12 @@ $git-color-branch-bg: $overlay-white-08;
 $git-color-branch-bg-hover: $overlay-white-12;
 
 $git-color-changes: $color-warning;
-$git-color-changes-bg: rgba(245, 158, 11, 0.1);
-$git-color-changes-bg-hover: rgba(245, 158, 11, 0.15);
 
 $git-color-staged: rgb(34, 197, 94);
-$git-color-staged-bg: rgba(34, 197, 94, 0.1);
-$git-color-staged-bg-hover: rgba(34, 197, 94, 0.15);
-$git-color-staged-border: rgba(34, 197, 94, 0.3);
 
 $git-color-added: $git-color-staged;
-$git-color-added-bg: $git-color-staged-bg;
-$git-color-added-bg-hover: $git-color-staged-bg-hover;
 
 $git-color-deleted: $color-error;
-$git-color-deleted-bg: $color-error-bg;
-$git-color-deleted-bg-hover: rgba(239, 68, 68, 0.15);
 
 // ==================== Border system ====================
 $border-subtle: $overlay-white-12;
@@ -142,7 +124,6 @@ $border-medium: $overlay-white-24;
 $border-strong: $overlay-white-32;
 $border-prominent: $overlay-white-40;
 
-$border-focus: $border-strong;
 $border-accent-soft: $color-blue-600-a30;
 $border-accent-subtle: $color-blue-600-a15;
 $border-accent: $color-blue-600-a40;
@@ -187,16 +168,11 @@ $glass-base: linear-gradient(135deg,
   $overlay-white-04 50%,
   $overlay-white-04 100%);
 
-$glass-disabled: $overlay-white-04;
-
 $glass-blue-subtle: $color-blue-600-a08;
 
 $glass-red-subtle: rgba(239, 68, 68, 0.05);
 $glass-red-base: $color-error-bg;
 $glass-red-hover: rgba(239, 68, 68, 0.15);
-
-$glass-green-base: $color-success-bg;
-$glass-green-hover: rgba(52, 211, 153, 0.15);
 
 // ==================== Sizing system ====================
 
@@ -309,16 +285,6 @@ $button-bg-hover: linear-gradient(135deg,
 $button-text-hover: $color-static-white;
 
 
-$card-bg-default: $overlay-white-04;
-$card-bg-elevated: $overlay-white-08;
-$card-bg-subtle: $overlay-white-04;
-$card-bg-hover: $overlay-white-08;
-$card-bg-active: $overlay-white-08;
-$card-bg-accent: $color-blue-500-a08;
-$card-bg-accent-hover: $color-blue-500-a15;
-$card-bg-purple: $color-purple-500-a10;
-$card-bg-purple-hover: $color-purple-500-a15;
-
 // ==================== Badge/label tokens ====================
 // Badges/labels are borderless by default and use background color to differentiate
 $badge-border-radius: $size-radius-sm;
@@ -377,15 +343,11 @@ $badge-info-text: $color-info;
   --color-overlay-slate-04: rgba(var(--color-overlay-slate-rgb), 0.04);
   --color-overlay-slate-08: rgba(var(--color-overlay-slate-rgb), 0.08);
   --color-overlay-slate-12: rgba(var(--color-overlay-slate-rgb), 0.12);
-  --color-overlay-slate-22: rgba(var(--color-overlay-slate-rgb), 0.22);
   --color-bg-secondary: #{$color-bg-secondary};
   --color-bg-tertiary: #{$color-bg-tertiary};
-  --color-bg-quaternary: #{$color-bg-quaternary};
   --color-bg-elevated: #{$color-bg-elevated};
   --color-bg-workbench: #{$color-bg-workbench};
-  --bitfun-startup-bg: var(--color-bg-primary);
   --color-bg-scene: #{$color-bg-scene};
-  --color-bg-tooltip: #{$color-bg-tooltip};
 
   --color-text-primary: #{$color-text-primary};
   --color-text-secondary: #{$color-text-secondary};
@@ -397,7 +359,6 @@ $badge-info-text: $color-info;
   --element-bg-base: #{$element-bg-base};
   --element-bg-medium: #{$element-bg-medium};
   --element-bg-strong: #{$element-bg-strong};
-  --element-bg-elevated: #{$element-bg-elevated};
   --element-bg-hover: var(--element-bg-medium);
 
   --color-accent-50: #{$color-accent-50};
@@ -409,15 +370,11 @@ $badge-info-text: $color-info;
   --color-accent-500-rgb: 96 165 250;
   --color-accent-600: #{$color-accent-600};
   --color-accent-700: #{$color-accent-700};
-  --color-accent-800: #{$color-accent-800};
 
-  --color-purple-50: #{$color-purple-50};
   --color-purple-100: #{$color-purple-100};
   --color-purple-200: #{$color-purple-200};
-  --color-purple-400: #{$color-purple-400};
   --color-purple-500: #{$color-purple-500};
   --color-purple-600: #{$color-purple-600};
-  --color-purple-800: #{$color-purple-800};
   --color-indigo-500: #6366f1;
   --color-cyan-500: #06b6d4;
 
@@ -438,37 +395,19 @@ $badge-info-text: $color-info;
   --git-color-branch-bg: #{$git-color-branch-bg};
   --git-color-branch-bg-hover: #{$git-color-branch-bg-hover};
   --git-color-changes: #{$git-color-changes};
-  --git-color-changes-bg: #{$git-color-changes-bg};
   --git-color-staged: #{$git-color-staged};
-  --git-color-staged-bg: #{$git-color-staged-bg};
-  --git-color-staged-bg-hover: #{$git-color-staged-bg-hover};
-  --git-color-staged-border: #{$git-color-staged-border};
   --git-color-added: #{$git-color-added};
-  --git-color-added-bg: #{$git-color-added-bg};
-  --git-color-added-bg-hover: #{$git-color-added-bg-hover};
   --git-color-deleted: #{$git-color-deleted};
-  --git-color-deleted-bg: #{$git-color-deleted-bg};
-  --git-color-deleted-bg-hover: #{$git-color-deleted-bg-hover};
 
   --border-subtle: #{$border-subtle};
   --border-base: #{$border-base};
   --border-medium: #{$border-medium};
   --border-strong: #{$border-strong};
   --border-prominent: #{$border-prominent};
-  --border-focus: #{$border-focus};
   --border-accent-soft: #{$border-accent-soft};
   --border-accent-subtle: #{$border-accent-subtle};
   --border-accent: #{$border-accent};
   --border-accent-strong: #{$border-accent-strong};
-
-  --z-base: #{$z-base};
-  --z-decoration: #{$z-decoration};
-  --z-content: #{$z-content};
-  --z-header: #{$z-header};
-  --z-sticky: #{$z-sticky};
-  --z-floating: #{$z-floating};
-  --z-overlay: #{$z-overlay};
-  --z-modal: #{$z-modal};
 
   --shadow-xs: #{$shadow-xs};
   --shadow-sm: #{$shadow-sm};
@@ -477,7 +416,6 @@ $badge-info-text: $color-info;
   --shadow-xl: #{$shadow-xl};
   --scrollbar-thumb: var(--color-overlay-white-12);
   --scrollbar-thumb-hover: #{$overlay-white-24};
-  --color-scrollbar: var(--scrollbar-thumb);
   --btn-primary-bg: var(--color-accent-200);
   --btn-primary-color: var(--color-accent-600);
   --btn-primary-border: transparent;
@@ -496,63 +434,25 @@ $badge-info-text: $color-info;
   --btn-ghost-hover-bg: var(--color-overlay-white-08);
   --btn-ghost-hover-color: #b8b8b8;
   --btn-ghost-hover-border: transparent;
-  --mission-control-group-primary-color: var(--color-accent-600);
-  --mission-control-group-secondary-color: #{$color-static-emerald};
-  --mission-control-group-tertiary-color: var(--color-warning);
-  --markdown-code-gutter-light-rgb: 153, 153, 153;
-  --markdown-code-gutter-dark-rgb: 102, 102, 102;
-  --preview-bg: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
-  --preview-panel-bg: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
-  --preview-border: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
-  --preview-text-primary: color-mix(in srgb, var(--color-static-white) 88%, var(--color-static-black));
-  --preview-text-muted: color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black));
-  --preview-text-subtle: color-mix(in srgb, var(--color-static-white) 60%, var(--color-static-black));
-  --preview-text-disabled: color-mix(in srgb, var(--color-static-white) 40%, var(--color-static-black));
-  --preview-heading-gradient: linear-gradient(135deg, var(--color-accent-500) 0%, var(--color-purple-500) 100%);
-  --surface-stagger-index: 0;
-  --mission-control-group-color: var(--color-accent-500);
   --scene-viewport-border-width: 1px;
-  --gallery-grid-min: 320px;
-  --gallery-skeleton-height: 140px;
-  --inline-context-tag-color: var(--color-accent-500);
-  --markdown-editor-list-indent: 1.75rem;
-  --markdown-editor-list-marker-width: 1.25rem;
-  --markdown-editor-list-gap: 0.25rem;
-  --markdown-editor-task-checkbox-size: 1rem;
-  --config-page-content-inline-padding: clamp(16px, 2.2vw, 28px);
-  --config-page-content-max-width: 600px;
-  --profile-acp-left-inline-pad: var(--size-gap-6);
-  --review-team-member-accent-default: #64748b;
 
   --glow-shadow-blue: #{$glow-shadow-blue};
 
-  --glass-disabled: #{$glass-disabled};
   --glass-blue-subtle: #{$glass-blue-subtle};
   --glass-red-subtle: #{$glass-red-subtle};
   --glass-red-base: #{$glass-red-base};
   --glass-red-hover: #{$glass-red-hover};
-  --glass-green-base: #{$glass-green-base};
-  --glass-green-hover: #{$glass-green-hover};
   --glass-bg-base: #{$glass-base};
   --glass-bg-hover: var(--element-bg-medium);
   --glass-bg-active: var(--element-bg-strong);
   --glass-border-base: var(--border-base);
   --glass-border-hover: var(--border-medium);
-  --glass-border-focus: var(--border-focus);
-  --glass-blur-sm: #{$blur-subtle};
-  --glass-blur-base: #{$blur-base};
-  --glass-shadow-sm: var(--shadow-sm);
-  --glass-shadow-base: var(--shadow-base);
-  --glass-shadow-lg: var(--shadow-lg);
-  --glass-shadow-xl: var(--shadow-xl);
+  --blur-subtle: #{$blur-subtle};
 
   --size-radius-sm: #{$size-radius-sm};
   --size-radius-base: #{$size-radius-base};
   --size-radius-md: var(--size-radius-base);
   --size-radius-lg: #{$size-radius-lg};
-  --size-radius-xl: #{$size-radius-xl};
-  --size-radius-2xl: #{$size-radius-2xl};
-  --size-radius-full: #{$size-radius-full};
 
   --size-gap-1: #{$size-gap-1};
   --size-gap-2: #{$size-gap-2};
@@ -561,17 +461,11 @@ $badge-info-text: $color-info;
   --size-gap-5: #{$size-gap-5};
   --size-gap-6: #{$size-gap-6};
   --size-gap-8: #{$size-gap-8};
-  --size-gap-10: #{$size-gap-10};
-  --size-gap-12: #{$size-gap-12};
-  --size-gap-16: #{$size-gap-16};
 
-  --motion-instant: #{$motion-instant};
   --motion-fast: #{$motion-fast};
   --motion-base: #{$motion-base};
 
   --easing-standard: #{$easing-standard};
-  --easing-decelerate: #{$easing-decelerate};
-  --easing-smooth: #{$easing-smooth};
 
   --font-family-sans: #{$font-family-sans};
   --font-family-mono: #{$font-family-mono};
@@ -582,7 +476,6 @@ $badge-info-text: $color-info;
   --font-weight-normal: #{$font-weight-normal};
   --font-weight-medium: #{$font-weight-medium};
   --font-weight-semibold: #{$font-weight-semibold};
-  --font-weight-bold: #{$font-weight-bold};
 
   --font-size-xxs: #{$font-size-xxs};
   --font-size-2xs: #{$font-size-2xs};
@@ -604,7 +497,6 @@ $badge-info-text: $color-info;
   --flowchat-font-size-xl: var(--font-size-xl);
   --flowchat-font-size-2xl: var(--font-size-2xl);
   --flowchat-font-size-3xl: var(--font-size-3xl);
-  --flowchat-font-size-4xl: var(--font-size-4xl);
   --flowchat-text-line-height: 1.58;
   --flowchat-support-line-height: 1.45;
   --flowchat-compact-line-height: 1.32;
@@ -620,22 +512,14 @@ $badge-info-text: $color-info;
   --flowchat-card-radius: 8px;
   --flowchat-card-pad-y: 0.625rem;
   --flowchat-card-pad-x: 0.75rem;
-  --flowchat-card-header-pad-y: 0.44rem;
-  --flowchat-card-header-pad-x: 0;
-  --flowchat-card-header-pad-right: 0.625rem;
   --flowchat-card-expanded-pad-y: 0.5rem;
   --flowchat-card-expanded-pad-x: 0.625rem;
-  --tool-card-header-pad-y: var(--flowchat-card-header-pad-y);
-  --tool-card-header-pad-x: var(--flowchat-card-header-pad-x);
-  --tool-card-header-pad-right: var(--flowchat-card-header-pad-right);
-  --tool-card-header-icon-rail: 24px;
-  --tool-card-header-icon-slot: calc(var(--tool-card-header-icon-rail) + 10px);
-  --tool-card-icon-size: 16px;
-  --tool-card-expanded-pad-y: var(--flowchat-card-expanded-pad-y);
+  --tool-card-header-pad-y: 0.44rem;
+  --tool-card-header-pad-right: 0.625rem;
+  --tool-card-header-icon-slot: 34px;
   --tool-card-expanded-pad-x: var(--flowchat-card-expanded-pad-x);
   --tool-card-action-font-size: var(--flowchat-font-size-sm);
   --tool-card-action-line-height: var(--flowchat-support-line-height);
-  --tool-card-action-font-weight: var(--font-weight-medium);
   --flowchat-code-font-size: var(--flowchat-font-size-sm);
   --flowchat-code-line-height: 1.52;
   --flowchat-code-block-pad-y: 0.55rem;
@@ -648,18 +532,7 @@ $badge-info-text: $color-info;
   --line-height-relaxed: #{$line-height-relaxed};
 
   --opacity-disabled: #{$opacity-disabled};
-  --opacity-hover: #{$opacity-hover};
-  --opacity-focus: #{$opacity-focus};
 
-  --card-bg-default: #{$card-bg-default};
-  --card-bg-elevated: #{$card-bg-elevated};
-  --card-bg-subtle: #{$card-bg-subtle};
-  --card-bg-hover: #{$card-bg-hover};
-  --card-bg-active: #{$card-bg-active};
-  --card-bg-accent: #{$card-bg-accent};
-  --card-bg-accent-hover: #{$card-bg-accent-hover};
-  --card-bg-purple: #{$card-bg-purple};
-  --card-bg-purple-hover: #{$card-bg-purple-hover};
 }
 
 :root[data-theme="light"],

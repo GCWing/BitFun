@@ -41,10 +41,28 @@ pub fn extract_glob_base_directory(pattern: &str) -> (String, String) {
                 .map(|(idx, _)| idx);
 
             if let Some(separator_index) = last_separator {
-                (
-                    static_prefix[..separator_index].to_string(),
-                    pattern[separator_index + 1..].to_string(),
-                )
+                let mut base_dir = static_prefix[..separator_index].to_string();
+
+                // Preserve the root for patterns such as `/*.txt`. On Windows,
+                // also preserve the separator after a drive prefix: `C:/*.txt`
+                // must search from `C:/`, not from the drive-relative `C:`.
+                if base_dir.is_empty() && separator_index == 0 {
+                    base_dir = static_prefix[..1].to_string();
+                }
+                #[cfg(windows)]
+                if base_dir.len() == 2
+                    && base_dir.as_bytes()[1] == b':'
+                    && base_dir.as_bytes()[0].is_ascii_alphabetic()
+                {
+                    base_dir.push(
+                        static_prefix[separator_index..]
+                            .chars()
+                            .next()
+                            .expect("separator index must point to a character"),
+                    );
+                }
+
+                (base_dir, pattern[separator_index + 1..].to_string())
             } else {
                 (String::new(), pattern.to_string())
             }
@@ -303,16 +321,51 @@ pub fn limit_paths(paths: &[PathBuf], limit: usize) -> Vec<PathBuf> {
 }
 
 pub fn collect_remote_glob_matches(search_dir: &str, stdout: &str, limit: usize) -> Vec<PathBuf> {
-    let matches = stdout
+    collect_remote_limited_paths(search_dir, stdout, limit).0
+}
+
+fn collect_remote_limited_paths(
+    search_dir: &str,
+    stdout: &str,
+    limit: usize,
+) -> (Vec<PathBuf>, usize) {
+    let mut best_matches = BinaryHeap::with_capacity(limit.saturating_add(1));
+    let mut observed_matches = 0usize;
+
+    for relative_path in stdout
         .lines()
         .filter(|line| !line.is_empty())
         .filter_map(|line| {
             let relative_path = relativize_remote_stdout_path(search_dir, line);
-            (!relative_path.is_empty()).then(|| PathBuf::from(relative_path))
+            (!relative_path.is_empty()).then_some(relative_path)
         })
-        .collect::<Vec<_>>();
+    {
+        observed_matches += 1;
+        if limit == 0 {
+            continue;
+        }
 
-    limit_paths(&matches, limit)
+        let candidate = GlobCandidate {
+            depth: relative_path.split('/').count(),
+            path: relative_path,
+        };
+        if best_matches.len() < limit {
+            best_matches.push(candidate);
+        } else if let Some(worst_match) = best_matches.peek() {
+            if candidate < *worst_match {
+                best_matches.pop();
+                best_matches.push(candidate);
+            }
+        }
+    }
+
+    let mut matches = best_matches
+        .into_sorted_vec()
+        .into_iter()
+        .map(|candidate| PathBuf::from(candidate.path))
+        .collect::<Vec<_>>();
+    matches.sort();
+    (matches, observed_matches)
 }
 
 pub fn collect_remote_glob_result(
@@ -321,15 +374,7 @@ pub fn collect_remote_glob_result(
     limit: usize,
     exact_total: bool,
 ) -> LocalGlobResult {
-    let matches = stdout
-        .lines()
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| {
-            let relative_path = relativize_remote_stdout_path(search_dir, line);
-            (!relative_path.is_empty()).then(|| PathBuf::from(relative_path))
-        })
-        .collect::<Vec<_>>();
-    let observed_matches = matches.len();
+    let (matches, observed_matches) = collect_remote_limited_paths(search_dir, stdout, limit);
     let truncated = observed_matches > limit;
     let total_matches = if exact_total || !truncated {
         Some(observed_matches)
@@ -338,7 +383,7 @@ pub fn collect_remote_glob_result(
     };
 
     LocalGlobResult {
-        matches: limit_paths(&matches, limit),
+        matches,
         walk_root: PathBuf::from(search_dir),
         total_matches,
         truncated,
@@ -522,7 +567,7 @@ pub fn build_remote_find_command(search_dir: &str, pattern: &str, limit: usize) 
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_with_walk_fallback, normalize_path};
+    use super::{collect_with_walk_fallback, extract_glob_base_directory, normalize_path};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -593,5 +638,19 @@ mod tests {
         assert!(directory_name_matches.matches.is_empty());
         assert_eq!(directory_name_matches.total_matches, Some(0));
         assert!(!directory_name_matches.truncated);
+    }
+
+    #[test]
+    fn extract_glob_base_directory_preserves_absolute_roots() {
+        assert_eq!(
+            extract_glob_base_directory("/*.txt"),
+            ("/".to_string(), "*.txt".to_string())
+        );
+
+        #[cfg(windows)]
+        assert_eq!(
+            extract_glob_base_directory("C:/*.txt"),
+            ("C:/".to_string(), "*.txt".to_string())
+        );
     }
 }

@@ -10,6 +10,7 @@ name = "bitfun_acp"
 
 [dependencies]
 bitfun-core = { path = "../../assembly/core", default-features = false, features = ["product-full"] }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
 
@@ -24,3 +25,6 @@ chrono = { workspace = true }
 dashmap = { workspace = true }
 log = { workspace = true }
 uuid = { workspace = true }
+
+[lints]
+workspace = true

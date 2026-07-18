@@ -9,7 +9,7 @@ const SHORTCUT_NAME: &str = "BitFun.lnk";
 const LEGACY_START_MENU_DIR: &str = "BitFun";
 
 /// Create a desktop shortcut for BitFun.
-pub fn create_desktop_shortcut(install_path: &Path) -> Result<()> {
+pub(super) fn create_desktop_shortcut(install_path: &Path) -> Result<()> {
     let desktop = dirs::desktop_dir().with_context(|| "Cannot find Desktop directory")?;
     let shortcut_path = desktop.join(SHORTCUT_NAME);
     let exe_path = install_path.join(MAIN_APP_EXE);
@@ -20,7 +20,7 @@ pub fn create_desktop_shortcut(install_path: &Path) -> Result<()> {
 }
 
 /// Create a Start Menu shortcut for BitFun.
-pub fn create_start_menu_shortcut(install_path: &Path) -> Result<()> {
+pub(super) fn create_start_menu_shortcut(install_path: &Path) -> Result<()> {
     let start_menu = get_start_menu_dir()?;
     remove_legacy_start_menu_shortcut(&start_menu)?;
     let shortcut_path = start_menu.join(SHORTCUT_NAME);
@@ -32,7 +32,7 @@ pub fn create_start_menu_shortcut(install_path: &Path) -> Result<()> {
 }
 
 /// Remove desktop shortcut.
-pub fn remove_desktop_shortcut() -> Result<()> {
+pub(super) fn remove_desktop_shortcut() -> Result<()> {
     if let Some(desktop) = dirs::desktop_dir() {
         let shortcut_path = desktop.join(SHORTCUT_NAME);
         if shortcut_path.exists() {
@@ -43,7 +43,7 @@ pub fn remove_desktop_shortcut() -> Result<()> {
 }
 
 /// Remove Start Menu shortcut, including the legacy folder layout.
-pub fn remove_start_menu_shortcut() -> Result<()> {
+pub(super) fn remove_start_menu_shortcut() -> Result<()> {
     let start_menu = get_start_menu_dir()?;
     let shortcut_path = start_menu.join(SHORTCUT_NAME);
     if shortcut_path.exists() {

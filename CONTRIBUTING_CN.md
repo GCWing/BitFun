@@ -12,10 +12,15 @@
 
 ### 环境准备
 
-- Node.js（建议 LTS 版本）
-- pnpm
+- Node.js 22.12+（建议 LTS 版本）
+- pnpm 10.15.0（建议通过 Corepack 使用）
 - Rust toolchain（通过 rustup 安装）
 - 桌面端开发需准备 Tauri 依赖
+
+BitFun 将本地 JavaScript 构建和 CI 统一到 Node.js 22.12+。仓库里的
+GitHub Actions 升级使用的是兼容 Node.js 24 的 action runtime，但项目脚本
+默认仍以 Node.js 22.12+ 为基线，除非局部指南另有说明。从旧 Node.js 版本切换
+后，请重新运行 `pnpm install`。
 
 #### Windows：OpenSSL 配置
 
@@ -64,7 +69,7 @@ DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Sh
 
 - 日志只使用英文，并保持必要、可读。
 - 用户可见文案走项目 i18n 流程；不要把 Web UI locale catalog 共享给较小产品形态。
-- shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过 transport / API layer 回流。
+- shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过类型化能力接口回流；需要事件投递时使用已有生产 transport adapter。
 - Tauri command 使用 `snake_case` 命令名和结构化 `request` 参数。
 - core 拆解、feature 边界、依赖边界和构建提速重构必须遵循
   `docs/architecture/product-architecture.md`。

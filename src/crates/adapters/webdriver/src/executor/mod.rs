@@ -15,17 +15,17 @@ use crate::server::response::WebDriverErrorResponse;
 use crate::server::AppState;
 use crate::webdriver::Session;
 
-pub struct BridgeExecutor {
+pub(crate) struct BridgeExecutor {
     pub(crate) state: Arc<AppState>,
     pub(crate) session: Session,
 }
 
 impl BridgeExecutor {
-    pub fn new(state: Arc<AppState>, session: Session) -> Self {
+    fn new(state: Arc<AppState>, session: Session) -> Self {
         Self { state, session }
     }
 
-    pub async fn from_session_id(
+    pub(crate) async fn from_session_id(
         state: Arc<AppState>,
         session_id: &str,
     ) -> Result<Self, WebDriverErrorResponse> {
@@ -33,7 +33,7 @@ impl BridgeExecutor {
         Ok(Self::new(state, session))
     }
 
-    pub async fn run_script(
+    pub(crate) async fn run_script(
         &self,
         script: &str,
         args: Vec<Value>,
@@ -53,8 +53,8 @@ impl BridgeExecutor {
     pub async fn take_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
         Err(WebDriverErrorResponse::no_such_window("No such windows"))
     }
-    
-    pub async fn print_page(
+
+    pub(crate) async fn print_page(
         &self,
         options: PrintOptions,
     ) -> Result<String, WebDriverErrorResponse> {

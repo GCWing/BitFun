@@ -76,6 +76,7 @@ pub fn build_bridge_script(
     os:    {{ info: () => _call('os.info', {{}}) }},
     system: {{
       openExternal: (url) => _rpc('system.openExternal', {{ url }}),
+      revealInFolder: (path) => _rpc('system.revealInFolder', {{ path }}),
     }},
     storage: {{
       get: (key) => _call('storage.get', {{ key }}),

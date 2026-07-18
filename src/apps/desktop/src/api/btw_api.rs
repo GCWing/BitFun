@@ -119,8 +119,6 @@ pub async fn btw_ask_stream(
         .await;
     let runtime = state.side_question_runtime.clone();
     let request_id = request.request_id.clone();
-    let child_session_id = child_session_id;
-    let turn_id = turn_id;
     let coordinator = coordinator.inner().clone();
     tokio::spawn(async move {
         loop {

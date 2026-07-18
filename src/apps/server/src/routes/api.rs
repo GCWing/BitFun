@@ -7,21 +7,21 @@ use serde::Serialize;
 use crate::AppState;
 
 #[derive(Serialize)]
-pub struct ApiInfo {
+pub(crate) struct ApiInfo {
     pub name: String,
     pub version: String,
     pub endpoints: Vec<EndpointInfo>,
 }
 
 #[derive(Serialize)]
-pub struct EndpointInfo {
+pub(crate) struct EndpointInfo {
     pub path: String,
     pub method: String,
     pub description: String,
 }
 
 /// API info endpoint
-pub async fn api_info(State(_state): State<AppState>) -> Json<ApiInfo> {
+pub(crate) async fn api_info(State(_state): State<AppState>) -> Json<ApiInfo> {
     Json(ApiInfo {
         name: "BitFun Server API".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),

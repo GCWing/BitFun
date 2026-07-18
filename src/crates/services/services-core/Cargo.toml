@@ -17,11 +17,13 @@ bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true, optional = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 zip = { workspace = true, optional = true }
 thiserror = { workspace = true }
 log = { workspace = true }
+fs2 = { workspace = true }
 notify = { workspace = true, optional = true }
 ignore = { workspace = true }
 sha2 = { workspace = true }
@@ -31,11 +33,25 @@ regex = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [features]
 default = ["lsp"]
 lsp = ["dep:anyhow", "dep:notify", "dep:zip"]
+markdown = ["dep:serde_yaml"]
 workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports"]
 
 [dev-dependencies]
+filetime = { workspace = true }
 tempfile = { workspace = true }
+
+[[test]]
+name = "markdown_owner_contracts"
+required-features = ["markdown"]
+
+[[test]]
+name = "lsp_plugin_registry_contracts"
+required-features = ["lsp"]
+
+[lints]
+workspace = true

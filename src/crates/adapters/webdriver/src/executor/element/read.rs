@@ -5,7 +5,7 @@ use crate::runtime::api;
 use crate::server::response::WebDriverErrorResponse;
 
 impl BridgeExecutor {
-    pub async fn is_element_selected(
+    pub(crate) async fn is_element_selected(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {
@@ -18,7 +18,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn is_element_displayed(
+    pub(crate) async fn is_element_displayed(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {
@@ -31,7 +31,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_attribute(
+    pub(crate) async fn get_element_attribute(
         &self,
         element_id: &str,
         name: &str,
@@ -46,7 +46,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_property(
+    pub(crate) async fn get_element_property(
         &self,
         element_id: &str,
         name: &str,
@@ -61,7 +61,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_css_value(
+    pub(crate) async fn get_element_css_value(
         &self,
         element_id: &str,
         property_name: &str,
@@ -76,7 +76,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_text(
+    pub(crate) async fn get_element_text(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {
@@ -89,7 +89,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_computed_role(
+    pub(crate) async fn get_element_computed_role(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {
@@ -102,7 +102,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_computed_label(
+    pub(crate) async fn get_element_computed_label(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {
@@ -115,7 +115,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_name(
+    pub(crate) async fn get_element_name(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {
@@ -128,7 +128,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_rect(
+    pub(crate) async fn get_element_rect(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {
@@ -141,7 +141,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn is_element_enabled(
+    pub(crate) async fn is_element_enabled(
         &self,
         element_id: &str,
     ) -> Result<Value, WebDriverErrorResponse> {

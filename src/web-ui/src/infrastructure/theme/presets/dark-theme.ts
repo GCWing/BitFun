@@ -16,7 +16,6 @@ import {
   overlayBlack,
   overlayWhite,
   rgbFromHex,
-  rgbaFromHex,
   STATIC_WHITE,
 } from './shared';
 
@@ -31,9 +30,6 @@ const DARK_PURPLE_HOVER = '#7c3aed';
 const DARK_SUCCESS = '#34d399';
 const DARK_WARNING = '#f59e0b';
 const DARK_ERROR = '#ef4444';
-
-const darkWarning = (alpha: number | string) => rgbaFromHex(DARK_WARNING, alpha);
-const darkError = (alpha: number | string) => rgbaFromHex(DARK_ERROR, alpha);
 
 export const bitfunDarkTheme: ThemeConfig = {
 
@@ -50,11 +46,9 @@ export const bitfunDarkTheme: ThemeConfig = {
       primary: DARK_BACKGROUND_PRIMARY,
       secondary: DARK_BACKGROUND_SECONDARY,
       tertiary: DARK_BACKGROUND_PRIMARY,
-      quaternary: '#262626',
       elevated: DARK_BACKGROUND_SECONDARY,
       workbench: DARK_BACKGROUND_PRIMARY,
       scene: DARK_BACKGROUND_SECONDARY,
-      tooltip: rgbaFromHex(DARK_BACKGROUND_SECONDARY, 0.96),
     },
 
     text: {
@@ -87,11 +81,8 @@ export const bitfunDarkTheme: ThemeConfig = {
       branch: '#a1a1aa',
       branchBg: overlayWhite(0.06),
       changes: rgbFromHex(DARK_WARNING),
-      changesBg: darkWarning(0.1),
       added: 'rgb(34, 197, 94)',
-      addedBg: 'rgba(34, 197, 94, 0.1)',
       deleted: rgbFromHex(DARK_ERROR),
-      deletedBg: darkError(0.1),
     }),
 
     scrollbar: createDarkNeutralScrollbar(),

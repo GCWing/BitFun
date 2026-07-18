@@ -3,10 +3,41 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct TestPayload {
     label: String,
     count: u32,
+}
+
+#[tokio::test]
+async fn locked_updates_merge_independent_read_modify_write_operations() {
+    let root = TestTempDir::new("locked-update");
+    let path = root.path().join("preferences.json");
+    let first = JsonFileStore;
+    let second = JsonFileStore;
+
+    let first_update = first.update_locked(&path, TestPayload::default(), |payload| {
+        payload.label = "preserved".to_string();
+    });
+    let second_update = second.update_locked(&path, TestPayload::default(), |payload| {
+        payload.count = 7;
+    });
+    let (first_result, second_result) = tokio::join!(first_update, second_update);
+    first_result.expect("first update");
+    second_result.expect("second update");
+
+    let loaded = JsonFileStore
+        .read_locked_optional::<TestPayload>(&path)
+        .await
+        .expect("locked read")
+        .expect("persisted payload");
+    assert_eq!(
+        loaded,
+        TestPayload {
+            label: "preserved".to_string(),
+            count: 7,
+        }
+    );
 }
 
 struct TestTempDir {
@@ -38,7 +69,7 @@ impl Drop for TestTempDir {
 #[tokio::test]
 async fn json_store_returns_none_for_missing_file() {
     let root = TestTempDir::new("missing");
-    let store = JsonFileStore::default();
+    let store = JsonFileStore;
 
     let value = store
         .read_optional::<TestPayload>(&root.path().join("missing.json"))
@@ -51,7 +82,7 @@ async fn json_store_returns_none_for_missing_file() {
 #[tokio::test]
 async fn json_store_creates_parent_dirs_and_round_trips_payload() {
     let root = TestTempDir::new("round-trip");
-    let store = JsonFileStore::default();
+    let store = JsonFileStore;
     let path = root.path().join("nested").join("payload.json");
     let payload = TestPayload {
         label: "session metadata".to_string(),
@@ -72,7 +103,7 @@ async fn json_store_creates_parent_dirs_and_round_trips_payload() {
 
 #[tokio::test]
 async fn json_store_reports_no_parent_directory() {
-    let store = JsonFileStore::default();
+    let store = JsonFileStore;
 
     let error = store
         .write_atomic(

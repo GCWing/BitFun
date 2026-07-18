@@ -1,12 +1,10 @@
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteLocalFileStatus {
     Created,
     Overwritten,
-    Appended,
     AlreadyExistsSameContent,
 }
 
@@ -15,23 +13,7 @@ impl WriteLocalFileStatus {
         match self {
             Self::Created => "created",
             Self::Overwritten => "overwritten",
-            Self::Appended => "appended",
             Self::AlreadyExistsSameContent => "already_exists_same_content",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WriteLocalFileMode {
-    Write,
-    Append,
-}
-
-impl WriteLocalFileMode {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Write => "w",
-            Self::Append => "a",
         }
     }
 }
@@ -41,7 +23,6 @@ pub struct WriteLocalFileRequest {
     pub logical_path: String,
     pub resolved_path: PathBuf,
     pub content: String,
-    pub mode: WriteLocalFileMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,17 +31,6 @@ pub struct WriteLocalFileOutcome {
     pub bytes_written: usize,
     pub lines_written: usize,
     pub assistant_message: String,
-}
-
-pub fn parse_write_local_file_mode(mode: Option<&str>) -> Result<WriteLocalFileMode, String> {
-    match mode.unwrap_or("w") {
-        "w" => Ok(WriteLocalFileMode::Write),
-        "a" => Ok(WriteLocalFileMode::Append),
-        other => Err(format!(
-            "mode must be either 'w' (overwrite) or 'a' (append), got '{}'",
-            other
-        )),
-    }
 }
 
 fn count_written_lines(content: &str) -> usize {
@@ -85,31 +55,25 @@ pub fn write_same_content_outcome(logical_path: &str) -> WriteLocalFileOutcome {
 
 pub fn write_file_success_outcome(
     logical_path: &str,
-    mode: WriteLocalFileMode,
     file_already_exists: bool,
     content: &str,
 ) -> WriteLocalFileOutcome {
-    let status = match (mode, file_already_exists) {
-        (WriteLocalFileMode::Write, true) => WriteLocalFileStatus::Overwritten,
-        (WriteLocalFileMode::Write, false) => WriteLocalFileStatus::Created,
-        (WriteLocalFileMode::Append, true) => WriteLocalFileStatus::Appended,
-        (WriteLocalFileMode::Append, false) => WriteLocalFileStatus::Created,
-    };
-    let verb = match status {
-        WriteLocalFileStatus::Created => "created",
-        WriteLocalFileStatus::Overwritten => "overwrote",
-        WriteLocalFileStatus::Appended => "appended to",
-        WriteLocalFileStatus::AlreadyExistsSameContent => unreachable!(),
+    let (status, verb) = if file_already_exists {
+        (WriteLocalFileStatus::Overwritten, "overwrote")
+    } else {
+        (WriteLocalFileStatus::Created, "created")
     };
 
+    let lines_written = count_written_lines(content);
     WriteLocalFileOutcome {
         status,
         bytes_written: content.len(),
-        lines_written: count_written_lines(content),
+        lines_written,
         assistant_message: format!(
-            "Successfully {} {} ({} bytes).",
+            "Successfully {} {} ({} lines, {} bytes).",
             verb,
             logical_path,
+            lines_written,
             content.len()
         ),
     }
@@ -117,7 +81,7 @@ pub fn write_file_success_outcome(
 
 pub fn write_local_file(request: WriteLocalFileRequest) -> Result<WriteLocalFileOutcome, String> {
     let file_already_exists = request.resolved_path.exists();
-    if request.mode == WriteLocalFileMode::Write && file_already_exists {
+    if file_already_exists {
         let existing = fs::read(&request.resolved_path).map_err(|error| {
             format!(
                 "Failed to read existing file {}: {}",
@@ -134,36 +98,11 @@ pub fn write_local_file(request: WriteLocalFileRequest) -> Result<WriteLocalFile
             .map_err(|error| format!("Failed to create directory: {}", error))?;
     }
 
-    match request.mode {
-        WriteLocalFileMode::Write => {
-            fs::write(&request.resolved_path, &request.content).map_err(|error| {
-                format!("Failed to write file {}: {}", request.logical_path, error)
-            })?;
-        }
-        WriteLocalFileMode::Append => {
-            let mut file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&request.resolved_path)
-                .map_err(|error| {
-                    format!(
-                        "Failed to open file {} for append: {}",
-                        request.logical_path, error
-                    )
-                })?;
-            file.write_all(request.content.as_bytes())
-                .map_err(|error| {
-                    format!(
-                        "Failed to append to file {}: {}",
-                        request.logical_path, error
-                    )
-                })?;
-        }
-    };
+    fs::write(&request.resolved_path, &request.content)
+        .map_err(|error| format!("Failed to write file {}: {}", request.logical_path, error))?;
 
     Ok(write_file_success_outcome(
         &request.logical_path,
-        request.mode,
         file_already_exists,
         &request.content,
     ))
@@ -172,25 +111,9 @@ pub fn write_local_file(request: WriteLocalFileRequest) -> Result<WriteLocalFile
 #[cfg(test)]
 mod tests {
     use super::{
-        count_written_lines, parse_write_local_file_mode, write_file_success_outcome,
-        write_same_content_outcome, WriteLocalFileMode, WriteLocalFileStatus,
+        count_written_lines, write_file_success_outcome, write_same_content_outcome,
+        WriteLocalFileStatus,
     };
-
-    #[test]
-    fn parses_write_modes_with_default() {
-        assert_eq!(
-            parse_write_local_file_mode(None).expect("default mode"),
-            WriteLocalFileMode::Write
-        );
-        assert_eq!(
-            parse_write_local_file_mode(Some("a")).expect("append mode"),
-            WriteLocalFileMode::Append
-        );
-        assert_eq!(
-            parse_write_local_file_mode(Some("x")).expect_err("invalid mode"),
-            "mode must be either 'w' (overwrite) or 'a' (append), got 'x'"
-        );
-    }
 
     #[test]
     fn counts_empty_and_trailing_newline_writes_like_existing_tool() {
@@ -201,24 +124,22 @@ mod tests {
     }
 
     #[test]
-    fn builds_success_outcome_for_write_and_append_modes() {
-        let created =
-            write_file_success_outcome("new.txt", WriteLocalFileMode::Write, false, "alpha");
+    fn builds_success_outcome_for_create_and_overwrite() {
+        let created = write_file_success_outcome("new.txt", false, "alpha");
         assert_eq!(created.status, WriteLocalFileStatus::Created);
         assert_eq!(created.bytes_written, 5);
         assert_eq!(created.lines_written, 1);
         assert_eq!(
             created.assistant_message,
-            "Successfully created new.txt (5 bytes)."
+            "Successfully created new.txt (1 lines, 5 bytes)."
         );
 
-        let appended =
-            write_file_success_outcome("log.txt", WriteLocalFileMode::Append, true, "\nalpha");
-        assert_eq!(appended.status, WriteLocalFileStatus::Appended);
-        assert_eq!(appended.lines_written, 2);
+        let overwritten = write_file_success_outcome("existing.txt", true, "alpha");
+        assert_eq!(overwritten.status, WriteLocalFileStatus::Overwritten);
+        assert_eq!(overwritten.lines_written, 1);
         assert_eq!(
-            appended.assistant_message,
-            "Successfully appended to log.txt (6 bytes)."
+            overwritten.assistant_message,
+            "Successfully overwrote existing.txt (1 lines, 5 bytes)."
         );
     }
 

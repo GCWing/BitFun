@@ -9,12 +9,10 @@ use crate::agentic::core::{
 };
 use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
 use crate::agentic::memories::external_context::dialog_turn_uses_external_context;
-use crate::agentic::session::transcript_render::{
-    transcript_assistant_blocks, transcript_display_user_content, transcript_round_blocks,
-    transcript_text_lines, transcript_thinking_blocks, transcript_tool_blocks,
-    TranscriptRoundBlock, TranscriptRoundData, TranscriptTextBlock, TranscriptToolBlock,
+use crate::agentic::session::transcript_render::{render_transcript, transcript_fingerprint};
+use crate::agentic::session::{
+    CoreSessionStorePort, SessionPromptCache, TokenAnchor, PROMPT_CACHE_SCHEMA_VERSION,
 };
-use crate::agentic::session::{SessionPromptCache, PROMPT_CACHE_SCHEMA_VERSION};
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::PathManager;
 use crate::service::config::get_global_config_service;
@@ -24,7 +22,7 @@ use crate::service::remote_ssh::workspace_state::{
 };
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
-    SessionTranscriptIndexEntry, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
+    TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -42,19 +40,21 @@ use bitfun_services_core::{
 use futures::{stream, StreamExt};
 use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 pub use bitfun_services_core::session::SessionMetadataPage;
 
 const TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
-const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
+const COMPRESSION_TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
+const COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS: usize = 32;
+const TOKEN_ANCHOR_SCHEMA_VERSION: u32 = 1;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 
 static SESSION_METADATA_UPDATE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
@@ -118,6 +118,13 @@ struct StoredSessionPromptCacheFile {
     schema_version: u32,
     #[serde(flatten)]
     cache: SessionPromptCache,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredTokenAnchorsFile {
+    schema_version: u32,
+    session_id: String,
+    anchors: Vec<TokenAnchor>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,47 +234,36 @@ struct StoredSessionTranscriptFile {
     transcript: SessionTranscriptExport,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct CompressionTranscriptArtifact {
+    pub(crate) uri: String,
+    pub(crate) index_range: TranscriptLineRange,
+    pub(crate) transcript_path: PathBuf,
+    pub(crate) meta_path: PathBuf,
+}
+
 #[derive(Debug, Clone, Serialize)]
-struct TranscriptFingerprintPayload {
-    session_id: String,
+#[serde(rename_all = "camelCase")]
+struct CompressionTranscriptMetadata {
+    schema_version: u32,
+    boundary_turn_index: usize,
+    short_id: String,
+    compression_id: String,
+    trigger: String,
+    generated_at: u64,
+    origin_session_id: String,
+    source_fingerprint: String,
+    line_count: usize,
+    byte_count: usize,
+    options: CompressionTranscriptOptionsMetadata,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompressionTranscriptOptionsMetadata {
     tools: bool,
     tool_inputs: bool,
     thinking: bool,
-    turn_selectors: Option<Vec<String>>,
-    turns: Vec<TranscriptFingerprintTurn>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TranscriptFingerprintTurn {
-    turn_id: String,
-    turn_index: usize,
-    status: String,
-    user: String,
-    assistant: Vec<TranscriptFingerprintTextBlock>,
-    tools: Vec<TranscriptFingerprintTool>,
-    thinking: Vec<TranscriptFingerprintTextBlock>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TranscriptFingerprintTextBlock {
-    round_index: usize,
-    content: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TranscriptFingerprintTool {
-    tool_name: String,
-    tool_input: Option<String>,
-    result: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct TranscriptSectionData {
-    turn_index: usize,
-    preview: String,
-    lines: Vec<String>,
-    turn_range: TranscriptLineRange,
-    user_range: TranscriptLineRange,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -288,6 +284,8 @@ struct ParsedTranscriptTurnSelector {
 pub struct PersistenceManager {
     path_manager: Arc<PathManager>,
     runtime_service: Arc<WorkspaceRuntimeService>,
+    #[cfg(test)]
+    fail_next_session_state_write: std::sync::Mutex<Option<String>>,
 }
 
 impl PersistenceManager {
@@ -295,7 +293,13 @@ impl PersistenceManager {
         Ok(Self {
             runtime_service: Arc::new(WorkspaceRuntimeService::new(path_manager.clone())),
             path_manager,
+            #[cfg(test)]
+            fail_next_session_state_write: std::sync::Mutex::new(None),
         })
+    }
+
+    fn validate_session_id(session_id: &str) -> BitFunResult<()> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)
     }
 
     /// Get PathManager reference
@@ -305,6 +309,14 @@ impl PersistenceManager {
 
     pub fn runtime_service(&self) -> &Arc<WorkspaceRuntimeService> {
         &self.runtime_service
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_session_state_write_for_test(&self, session_id: &str) {
+        *self
+            .fail_next_session_state_write
+            .lock()
+            .expect("session state fault lock") = Some(session_id.to_string());
     }
 
     /// Resolve the on-disk sessions directory for `workspace_path`.
@@ -320,20 +332,8 @@ impl PersistenceManager {
         self.path_manager.project_sessions_dir(workspace_path)
     }
 
-    fn is_resolved_sessions_dir(&self, path: &Path) -> bool {
-        if path.file_name().and_then(|value| value.to_str()) != Some("sessions") {
-            return false;
-        }
-
-        let remote_mirror_root = self.path_manager.remote_ssh_mirror_root_dir();
-        if path.starts_with(&remote_mirror_root) {
-            return true;
-        }
-
-        let projects_root = self.path_manager.projects_root();
-        path.parent()
-            .and_then(|runtime_root| runtime_root.parent())
-            .is_some_and(|candidate| candidate == projects_root.as_path())
+    pub(crate) fn is_resolved_sessions_dir(&self, path: &Path) -> bool {
+        CoreSessionStorePort::resolved_sessions_dir_kind(self.path_manager.as_ref(), path).is_some()
     }
 
     fn metadata_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -348,6 +348,12 @@ impl PersistenceManager {
     fn prompt_cache_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
         self.session_layout(workspace_path)
             .prompt_cache_path(session_id)
+    }
+
+    fn token_anchors_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.session_layout(workspace_path)
+            .session_dir(session_id)
+            .join("token-anchors.json")
     }
 
     fn turns_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -403,6 +409,15 @@ impl PersistenceManager {
             .transcript_meta_path(session_id)
     }
 
+    pub(crate) fn compression_transcripts_dir(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> PathBuf {
+        self.session_layout(workspace_path)
+            .compression_transcripts_dir(session_id)
+    }
+
     #[cfg(test)]
     fn index_path(&self, workspace_path: &Path) -> PathBuf {
         self.session_layout(workspace_path).index_path()
@@ -410,6 +425,18 @@ impl PersistenceManager {
 
     fn session_layout(&self, workspace_path: &Path) -> SessionStorageLayout {
         SessionStorageLayout::new(self.project_sessions_dir(workspace_path))
+    }
+
+    pub(crate) fn session_storage_exists(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        Self::validate_session_id(session_id)?;
+        Ok(self
+            .session_layout(workspace_path)
+            .session_dir(session_id)
+            .exists())
     }
 
     fn session_metadata_store(&self, workspace_path: &Path) -> SessionMetadataStore {
@@ -480,14 +507,14 @@ impl PersistenceManager {
         &self,
         path: &Path,
     ) -> BitFunResult<Option<T>> {
-        JsonFileStore::default()
+        JsonFileStore
             .read_optional(path)
             .await
             .map_err(Self::json_store_error)
     }
 
     async fn write_json_atomic<T: Serialize>(&self, path: &Path, value: &T) -> BitFunResult<()> {
-        JsonFileStore::default()
+        JsonFileStore
             .write_atomic(path, value)
             .await
             .map_err(Self::json_store_error)
@@ -661,218 +688,6 @@ impl PersistenceManager {
         })
     }
 
-    fn turn_status_label(status: &crate::service::session::TurnStatus) -> &'static str {
-        match status {
-            crate::service::session::TurnStatus::InProgress => "inprogress",
-            crate::service::session::TurnStatus::Completed => "completed",
-            crate::service::session::TurnStatus::Error => "error",
-            crate::service::session::TurnStatus::Cancelled => "cancelled",
-        }
-    }
-
-    fn transcript_preview(content: &str) -> String {
-        let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
-        if normalized.is_empty() {
-            return "(empty user message)".to_string();
-        }
-
-        let mut preview: String = normalized
-            .chars()
-            .take(SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT)
-            .collect();
-        if normalized.chars().count() > SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT {
-            preview.push_str("...");
-        }
-        preview
-    }
-
-    fn transcript_text_lines(content: &str) -> Vec<String> {
-        transcript_text_lines(content)
-    }
-
-    fn transcript_display_user_content(turn: &DialogTurnData) -> String {
-        transcript_display_user_content(turn)
-    }
-
-    fn transcript_assistant_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
-        transcript_assistant_blocks(turn)
-    }
-
-    fn transcript_thinking_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
-        transcript_thinking_blocks(turn)
-    }
-
-    fn transcript_tool_blocks(
-        turn: &DialogTurnData,
-        tool_inputs: bool,
-    ) -> Vec<TranscriptToolBlock> {
-        transcript_tool_blocks(turn, tool_inputs)
-    }
-
-    fn transcript_round_blocks(
-        turn: &DialogTurnData,
-        options: &SessionTranscriptExportOptions,
-    ) -> Vec<TranscriptRoundData> {
-        transcript_round_blocks(turn, options)
-    }
-
-    fn transcript_fingerprint(
-        session_id: &str,
-        turns: &[DialogTurnData],
-        options: &SessionTranscriptExportOptions,
-    ) -> BitFunResult<String> {
-        let payload = TranscriptFingerprintPayload {
-            session_id: session_id.to_string(),
-            tools: options.tools,
-            tool_inputs: options.tool_inputs,
-            thinking: options.thinking,
-            turn_selectors: options.turns.clone(),
-            turns: turns
-                .iter()
-                .map(|turn| TranscriptFingerprintTurn {
-                    turn_id: turn.turn_id.clone(),
-                    turn_index: turn.turn_index,
-                    status: Self::turn_status_label(&turn.status).to_string(),
-                    user: Self::transcript_display_user_content(turn),
-                    assistant: Self::transcript_assistant_blocks(turn)
-                        .into_iter()
-                        .map(|block| TranscriptFingerprintTextBlock {
-                            round_index: block.round_index,
-                            content: block.content,
-                        })
-                        .collect(),
-                    tools: if options.tools {
-                        Self::transcript_tool_blocks(turn, options.tool_inputs)
-                            .into_iter()
-                            .map(|tool| TranscriptFingerprintTool {
-                                tool_name: tool.tool_name,
-                                tool_input: tool.tool_input,
-                                result: tool.result,
-                            })
-                            .collect()
-                    } else {
-                        Vec::new()
-                    },
-                    thinking: if options.thinking {
-                        Self::transcript_thinking_blocks(turn)
-                            .into_iter()
-                            .map(|block| TranscriptFingerprintTextBlock {
-                                round_index: block.round_index,
-                                content: block.content,
-                            })
-                            .collect()
-                    } else {
-                        Vec::new()
-                    },
-                })
-                .collect(),
-        };
-
-        let bytes = serde_json::to_vec(&payload).map_err(|e| {
-            BitFunError::serialization(format!("Failed to serialize transcript fingerprint: {}", e))
-        })?;
-        let mut hasher = Sha256::new();
-        hasher.update(bytes);
-        Ok(format!("{:x}", hasher.finalize()))
-    }
-
-    fn push_transcript_block(
-        lines: &mut Vec<String>,
-        label: &str,
-        body_lines: Vec<String>,
-    ) -> TranscriptLineRange {
-        let start_line = lines.len() + 1;
-        lines.push(format!("[{}]", label));
-        lines.extend(body_lines);
-        lines.push(format!("[/{}]", label));
-        TranscriptLineRange {
-            start_line,
-            end_line: lines.len(),
-        }
-    }
-
-    fn build_transcript_section(
-        turn: &DialogTurnData,
-        options: &SessionTranscriptExportOptions,
-    ) -> TranscriptSectionData {
-        let user_content = Self::transcript_display_user_content(turn);
-        let round_blocks = Self::transcript_round_blocks(turn, options);
-
-        let mut lines = Vec::new();
-        lines.push(format!("## Turn {}", turn.turn_index));
-        lines.push(String::new());
-
-        let user_range = Self::push_transcript_block(
-            &mut lines,
-            "user",
-            Self::transcript_text_lines(&user_content),
-        );
-
-        if !round_blocks.is_empty() {
-            lines.push(String::new());
-            for (round_index, round) in round_blocks.iter().enumerate() {
-                lines.push(format!("[assistant_round {}]", round.round_index));
-                for (block_index, block) in round.blocks.iter().enumerate() {
-                    match block {
-                        TranscriptRoundBlock::Thinking(content) => {
-                            lines.push("[thinking]".to_string());
-                            lines.extend(Self::transcript_text_lines(content));
-                            lines.push("[/thinking]".to_string());
-                        }
-                        TranscriptRoundBlock::Assistant(content) => {
-                            lines.push("[text]".to_string());
-                            lines.extend(Self::transcript_text_lines(content));
-                            lines.push("[/text]".to_string());
-                        }
-                        TranscriptRoundBlock::Tool(tool) => {
-                            lines.push("[tool]".to_string());
-                            lines.push(format!("name: {}", tool.tool_name));
-                            if let Some(tool_input) = tool.tool_input.as_ref() {
-                                lines.push("input:".to_string());
-                                lines.extend(Self::transcript_text_lines(tool_input));
-                            }
-                            if let Some(result) = tool.result.as_ref() {
-                                lines.push("result:".to_string());
-                                lines.extend(Self::transcript_text_lines(result));
-                            }
-                            lines.push("[/tool]".to_string());
-                        }
-                    }
-
-                    if block_index + 1 < round.blocks.len() {
-                        lines.push(String::new());
-                    }
-                }
-                lines.push(format!("[/assistant_round {}]", round.round_index));
-                if round_index + 1 < round_blocks.len() {
-                    lines.push(String::new());
-                }
-            }
-        }
-
-        TranscriptSectionData {
-            turn_index: turn.turn_index,
-            preview: Self::transcript_preview(&user_content),
-            turn_range: TranscriptLineRange {
-                start_line: 1,
-                end_line: lines.len(),
-            },
-            user_range,
-            lines,
-        }
-    }
-
-    fn offset_range(range: &TranscriptLineRange, offset: usize) -> TranscriptLineRange {
-        TranscriptLineRange {
-            start_line: range.start_line + offset,
-            end_line: range.end_line + offset,
-        }
-    }
-
-    fn format_range(range: &TranscriptLineRange) -> String {
-        format!("{}-{}", range.start_line, range.end_line)
-    }
-
     fn parse_transcript_turn_selectors(
         selectors: &[String],
     ) -> BitFunResult<Vec<ParsedTranscriptTurnSelector>> {
@@ -1002,20 +817,6 @@ impl PersistenceManager {
             .collect()
     }
 
-    fn transcript_omitted_turns_label(
-        turns: &[DialogTurnData],
-        start: usize,
-        end: usize,
-    ) -> String {
-        let start_turn = turns[start].turn_index;
-        let end_turn = turns[end].turn_index;
-        if start_turn == end_turn {
-            format!("(omitted turn {})", start_turn)
-        } else {
-            format!("(omitted turns {}-{})", start_turn, end_turn)
-        }
-    }
-
     pub async fn list_session_metadata(
         &self,
         workspace_path: &Path,
@@ -1077,6 +878,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         metadata: &SessionMetadata,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(&metadata.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.session_metadata_store(workspace_path)
             .save_metadata(metadata)
@@ -1090,6 +892,7 @@ impl PersistenceManager {
         session_id: &str,
         mode: SessionMemoryMode,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let metadata_update_lock = self
             .get_session_metadata_update_lock(workspace_path, session_id)
             .await;
@@ -1109,6 +912,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let metadata_update_lock = self
             .get_session_metadata_update_lock(workspace_path, session_id)
             .await;
@@ -1154,6 +958,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<SessionMetadata>> {
+        Self::validate_session_id(session_id)?;
         self.session_metadata_store(workspace_path)
             .load_metadata(session_id)
             .await
@@ -1186,6 +991,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<SessionPromptCache>> {
+        Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredSessionPromptCacheFile>(
                 &self.prompt_cache_path(workspace_path, session_id),
@@ -1200,6 +1006,7 @@ impl PersistenceManager {
         session_id: &str,
         cache: &SessionPromptCache,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, session_id).await?;
 
@@ -1218,11 +1025,63 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         match fs::remove_file(self.prompt_cache_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
             Err(error) => Err(BitFunError::io(format!(
                 "Failed to delete prompt cache for session {}: {}",
+                session_id, error
+            ))),
+        }
+    }
+
+    pub async fn load_token_anchors(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<Vec<TokenAnchor>>> {
+        Self::validate_session_id(session_id)?;
+        Ok(self
+            .read_json_optional::<StoredTokenAnchorsFile>(
+                &self.token_anchors_path(workspace_path, session_id),
+            )
+            .await?
+            .map(|file| file.anchors))
+    }
+
+    pub async fn save_token_anchors(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        anchors: &[TokenAnchor],
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+        self.ensure_session_dir(workspace_path, session_id).await?;
+
+        self.write_json_atomic(
+            &self.token_anchors_path(workspace_path, session_id),
+            &StoredTokenAnchorsFile {
+                schema_version: TOKEN_ANCHOR_SCHEMA_VERSION,
+                session_id: session_id.to_string(),
+                anchors: anchors.to_vec(),
+            },
+        )
+        .await
+    }
+
+    pub async fn delete_token_anchors(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
+        match fs::remove_file(self.token_anchors_path(workspace_path, session_id)).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(BitFunError::io(format!(
+                "Failed to delete token anchors for session {}: {}",
                 session_id, error
             ))),
         }
@@ -1237,6 +1096,7 @@ impl PersistenceManager {
         turn_index: usize,
         messages: &[Message],
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1261,6 +1121,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<Option<Vec<Message>>> {
+        Self::validate_session_id(session_id)?;
         let snapshot = self
             .read_json_optional::<StoredTurnContextSnapshotFile>(&self.context_snapshot_path(
                 workspace_path,
@@ -1276,6 +1137,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+        Self::validate_session_id(session_id)?;
         let started_at = Instant::now();
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
@@ -1354,6 +1216,7 @@ impl PersistenceManager {
         turn_index: usize,
         snapshot: &TurnSkillAgentSnapshot,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1376,6 +1239,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+        Self::validate_session_id(session_id)?;
         let stored = self
             .read_json_optional::<StoredTurnSkillAgentSnapshotFile>(
                 &self.skill_agent_snapshot_path(workspace_path, session_id, turn_index),
@@ -1390,6 +1254,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(());
@@ -1430,6 +1295,7 @@ impl PersistenceManager {
         session_id: &str,
         snapshot: &TurnSkillAgentSnapshot,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
@@ -1450,6 +1316,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+        Self::validate_session_id(session_id)?;
         let stored = self
             .read_json_optional::<StoredSkillAgentBaselineOverrideFile>(
                 &self.skill_agent_baseline_override_path(workspace_path, session_id),
@@ -1464,6 +1331,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(());
@@ -1504,11 +1372,78 @@ impl PersistenceManager {
 
     // ============ Session Persistence ============
 
+    /// Persist a newly created session without overwriting an existing session ID.
+    ///
+    /// The final session directory is created exclusively so this manager owns any
+    /// cleanup required by a failed first write. This also prevents a losing
+    /// creator in another runtime or process from deleting the winning session.
+    pub(crate) async fn create_session_if_absent(
+        &self,
+        workspace_path: &Path,
+        session: &Session,
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(&session.session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+
+        let sessions_dir = self.project_sessions_dir(workspace_path);
+        fs::create_dir_all(&sessions_dir).await.map_err(|error| {
+            BitFunError::io(format!(
+                "Failed to create sessions directory {}: {}",
+                sessions_dir.display(),
+                error
+            ))
+        })?;
+        let session_dir = self
+            .session_layout(workspace_path)
+            .session_dir(&session.session_id);
+        match fs::create_dir(&session_dir).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                return Err(BitFunError::Validation(format!(
+                    "Persisted session ID already exists: {}",
+                    session.session_id
+                )));
+            }
+            Err(error) => {
+                return Err(BitFunError::io(format!(
+                    "Failed to claim session directory {}: {}",
+                    session_dir.display(),
+                    error
+                )));
+            }
+        }
+
+        if let Err(error) = self.save_session_files(workspace_path, session).await {
+            if let Err(cleanup_error) = self
+                .session_metadata_store(workspace_path)
+                .delete_session_dir_and_index(&session.session_id)
+                .await
+            {
+                warn!(
+                    "Failed to clean up partial session persistence: session_id={}, error={}",
+                    session.session_id, cleanup_error
+                );
+            }
+            return Err(error);
+        }
+
+        Ok(())
+    }
+
     /// Save session
     pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
+        Self::validate_session_id(&session.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &session.session_id)
             .await?;
+        self.save_session_files(workspace_path, session).await
+    }
+
+    async fn save_session_files(
+        &self,
+        workspace_path: &Path,
+        session: &Session,
+    ) -> BitFunResult<()> {
         let existing_metadata = self
             .load_session_metadata(workspace_path, &session.session_id)
             .await?;
@@ -1527,6 +1462,17 @@ impl PersistenceManager {
             compression_state: session.compression_state.clone(),
             runtime_state: sanitize_persisted_session_state(&session.state),
         };
+        #[cfg(test)]
+        {
+            let mut fault = self
+                .fail_next_session_state_write
+                .lock()
+                .expect("session state fault lock");
+            if fault.as_deref() == Some(session.session_id.as_str()) {
+                *fault = None;
+                return Err(BitFunError::io("Injected session state write failure"));
+            }
+        }
         self.save_stored_session_state(workspace_path, &session.session_id, &state)
             .await
     }
@@ -1537,6 +1483,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
+        Self::validate_session_id(session_id)?;
         let (session, _) = self
             .load_session_with_turns(workspace_path, session_id)
             .await?;
@@ -1611,6 +1558,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        Self::validate_session_id(session_id)?;
         self.load_session_with_turns_timed(workspace_path, session_id)
             .await
             .map(|(session, turns, _)| (session, turns))
@@ -1621,6 +1569,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionTurnLoadTiming)> {
+        Self::validate_session_id(session_id)?;
         let request = SessionTurnLoadRequest {
             workspace_path: workspace_path.to_path_buf(),
             session_id: session_id.to_string(),
@@ -1706,6 +1655,7 @@ impl PersistenceManager {
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        Self::validate_session_id(session_id)?;
         self.load_session_with_tail_turns_timed(workspace_path, session_id, tail_turn_count)
             .await
             .map(|(session, turns, total_turn_count, _)| (session, turns, total_turn_count))
@@ -1717,6 +1667,7 @@ impl PersistenceManager {
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize, SessionTurnLoadTiming)> {
+        Self::validate_session_id(session_id)?;
         let request = SessionTurnLoadRequest {
             workspace_path: workspace_path.to_path_buf(),
             session_id: session_id.to_string(),
@@ -1844,6 +1795,7 @@ impl PersistenceManager {
         session_id: &str,
         state: &SessionState,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         let mut stored_state = self
             .load_stored_session_state(workspace_path, session_id)
@@ -1872,6 +1824,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         self.session_metadata_store(workspace_path)
             .delete_session_dir_and_index(session_id)
             .await
@@ -1907,7 +1860,7 @@ impl PersistenceManager {
             });
         }
 
-        summaries.sort_by(|a, b| b.last_activity_at.cmp(&a.last_activity_at));
+        summaries.sort_by_key(|summary| std::cmp::Reverse(summary.last_activity_at));
         Ok(summaries)
     }
 
@@ -1916,6 +1869,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         turn: &DialogTurnData,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(&turn.session_id)?;
         let save_started_at = Instant::now();
         self.ensure_runtime_for_write(workspace_path).await?;
         let metadata_update_lock = self
@@ -2029,6 +1983,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<Option<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredDialogTurnFile>(&self.turn_path(
                 workspace_path,
@@ -2122,6 +2077,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         let started_at = Instant::now();
         let scan_started_at = Instant::now();
         let indexed_paths = self
@@ -2160,6 +2116,7 @@ impl PersistenceManager {
         session_id: &str,
         count: usize,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         if count == 0 {
             return Ok(Vec::new());
         }
@@ -2253,6 +2210,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         if !self.turns_dir(workspace_path, session_id).exists() {
             return Ok(());
         }
@@ -2287,9 +2245,277 @@ impl PersistenceManager {
         session_id: &str,
         count: usize,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let start = turns.len().saturating_sub(count);
         Ok(turns[start..].to_vec())
+    }
+
+    fn compression_transcript_boundary_from_file_name(file_name: &str) -> Option<usize> {
+        let stem = file_name
+            .strip_suffix(".meta.json")
+            .or_else(|| file_name.strip_suffix(".txt"))?;
+        let (boundary, short_id) = stem.rsplit_once('-')?;
+        if short_id.len() != 4
+            || !short_id
+                .bytes()
+                .all(|value| value.is_ascii_digit() || (b'a'..=b'f').contains(&value))
+            || boundary.is_empty()
+            || !boundary.bytes().all(|value| value.is_ascii_digit())
+        {
+            return None;
+        }
+        boundary.parse().ok()
+    }
+
+    pub(crate) async fn create_compression_transcript(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        boundary_turn_index: usize,
+        compression_id: &str,
+        trigger: &str,
+    ) -> BitFunResult<Option<CompressionTranscriptArtifact>> {
+        Self::validate_session_id(session_id)?;
+        let all_turns = self.load_session_turns(workspace_path, session_id).await?;
+        let selected_indices = all_turns
+            .iter()
+            .enumerate()
+            .filter_map(|(index, turn)| (turn.turn_index <= boundary_turn_index).then_some(index))
+            .collect::<Vec<_>>();
+        if selected_indices.is_empty() {
+            return Ok(None);
+        }
+
+        let options = SessionTranscriptExportOptions {
+            tools: true,
+            tool_inputs: true,
+            thinking: false,
+            turns: Some(vec![format!("0:{}", boundary_turn_index.saturating_add(1))]),
+        };
+        let selected_turns = selected_indices
+            .iter()
+            .map(|&index| all_turns[index].clone())
+            .collect::<Vec<_>>();
+        let source_fingerprint = transcript_fingerprint(session_id, &selected_turns, &options)?;
+        let rendered = render_transcript(&all_turns, &selected_indices, &options);
+        let transcript_content = rendered.lines.join("\n");
+        let transcript_bytes = transcript_content.as_bytes();
+        let generated_at = Self::system_time_to_unix_ms(SystemTime::now());
+
+        let layout = self.session_layout(workspace_path);
+        layout
+            .ensure_compression_transcripts_dir(session_id)
+            .await
+            .map_err(|error| {
+                BitFunError::io(format!(
+                    "Failed to create compression transcript directory: {}",
+                    error
+                ))
+            })?;
+
+        for _ in 0..COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS {
+            let short_id = uuid::Uuid::new_v4().simple().to_string()[..4].to_string();
+            let stem = format!("{}-{}", boundary_turn_index, short_id);
+            let transcript_path = layout.compression_transcript_path(session_id, &stem);
+            let meta_path = layout.compression_transcript_meta_path(session_id, &stem);
+            let metadata = CompressionTranscriptMetadata {
+                schema_version: COMPRESSION_TRANSCRIPT_SCHEMA_VERSION,
+                boundary_turn_index,
+                short_id,
+                compression_id: compression_id.to_string(),
+                trigger: trigger.to_string(),
+                generated_at,
+                origin_session_id: session_id.to_string(),
+                source_fingerprint: source_fingerprint.clone(),
+                line_count: rendered.lines.len(),
+                byte_count: transcript_bytes.len(),
+                options: CompressionTranscriptOptionsMetadata {
+                    tools: true,
+                    tool_inputs: true,
+                    thinking: false,
+                },
+            };
+            let mut metadata_bytes = serde_json::to_vec_pretty(&metadata).map_err(|error| {
+                BitFunError::serialization(format!(
+                    "Failed to serialize compression transcript metadata: {}",
+                    error
+                ))
+            })?;
+            metadata_bytes.push(b'\n');
+
+            let mut transcript_file = match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&transcript_path)
+                .await
+            {
+                Ok(file) => file,
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+                Err(error) => {
+                    return Err(BitFunError::io(format!(
+                        "Failed to reserve compression transcript {}: {}",
+                        transcript_path.display(),
+                        error
+                    )))
+                }
+            };
+
+            let mut meta_file = match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&meta_path)
+                .await
+            {
+                Ok(file) => file,
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                    let _ = fs::remove_file(&transcript_path).await;
+                    continue;
+                }
+                Err(error) => {
+                    let _ = fs::remove_file(&transcript_path).await;
+                    return Err(BitFunError::io(format!(
+                        "Failed to reserve compression transcript metadata {}: {}",
+                        meta_path.display(),
+                        error
+                    )));
+                }
+            };
+
+            let write_result = async {
+                transcript_file.write_all(transcript_bytes).await?;
+                transcript_file.flush().await?;
+                meta_file.write_all(&metadata_bytes).await?;
+                meta_file.flush().await
+            }
+            .await;
+            if let Err(error) = write_result {
+                drop(transcript_file);
+                drop(meta_file);
+                let _ = fs::remove_file(&transcript_path).await;
+                let _ = fs::remove_file(&meta_path).await;
+                return Err(BitFunError::io(format!(
+                    "Failed to write compression transcript pair: {}",
+                    error
+                )));
+            }
+
+            let uri = bitfun_agent_tools::build_bitfun_current_session_uri(&format!(
+                "artifacts/compression-transcripts/{}.txt",
+                stem
+            ))
+            .map_err(|error| BitFunError::Validation(error.to_string()))?;
+            return Ok(Some(CompressionTranscriptArtifact {
+                uri,
+                index_range: rendered.index_range.clone(),
+                transcript_path,
+                meta_path,
+            }));
+        }
+
+        Err(BitFunError::io(format!(
+            "Failed to allocate a unique compression transcript name after {} attempts",
+            COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS
+        )))
+    }
+
+    pub(crate) async fn delete_compression_transcripts_from(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        start_turn_index: usize,
+    ) -> BitFunResult<usize> {
+        Self::validate_session_id(session_id)?;
+        let dir = self.compression_transcripts_dir(workspace_path, session_id);
+        if !dir.exists() {
+            return Ok(0);
+        }
+        let mut deleted = 0usize;
+        let mut entries = fs::read_dir(&dir).await.map_err(|error| {
+            BitFunError::io(format!(
+                "Failed to read compression transcript directory {}: {}",
+                dir.display(),
+                error
+            ))
+        })?;
+        while let Some(entry) = entries.next_entry().await.map_err(|error| {
+            BitFunError::io(format!(
+                "Failed to enumerate compression transcript directory {}: {}",
+                dir.display(),
+                error
+            ))
+        })? {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if Self::compression_transcript_boundary_from_file_name(&file_name)
+                .is_some_and(|boundary| boundary >= start_turn_index)
+            {
+                fs::remove_file(entry.path()).await.map_err(|error| {
+                    BitFunError::io(format!(
+                        "Failed to delete compression transcript artifact {}: {}",
+                        entry.path().display(),
+                        error
+                    ))
+                })?;
+                deleted += 1;
+            }
+        }
+        Ok(deleted)
+    }
+
+    pub(crate) async fn copy_compression_transcripts_through(
+        &self,
+        workspace_path: &Path,
+        source_session_id: &str,
+        target_session_id: &str,
+        end_turn_index: usize,
+    ) -> BitFunResult<usize> {
+        Self::validate_session_id(source_session_id)?;
+        Self::validate_session_id(target_session_id)?;
+        let source_dir = self.compression_transcripts_dir(workspace_path, source_session_id);
+        if !source_dir.exists() {
+            return Ok(0);
+        }
+        let target_dir = self
+            .session_layout(workspace_path)
+            .ensure_compression_transcripts_dir(target_session_id)
+            .await
+            .map_err(|error| {
+                BitFunError::io(format!(
+                    "Failed to create branched compression transcript directory: {}",
+                    error
+                ))
+            })?;
+        let mut copied = 0usize;
+        let mut entries = fs::read_dir(&source_dir).await.map_err(|error| {
+            BitFunError::io(format!(
+                "Failed to read source compression transcript directory {}: {}",
+                source_dir.display(),
+                error
+            ))
+        })?;
+        while let Some(entry) = entries.next_entry().await.map_err(|error| {
+            BitFunError::io(format!(
+                "Failed to enumerate source compression transcripts: {}",
+                error
+            ))
+        })? {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if Self::compression_transcript_boundary_from_file_name(&file_name)
+                .is_some_and(|boundary| boundary <= end_turn_index)
+            {
+                fs::copy(entry.path(), target_dir.join(&file_name))
+                    .await
+                    .map_err(|error| {
+                        BitFunError::io(format!(
+                            "Failed to copy compression transcript artifact {}: {}",
+                            entry.path().display(),
+                            error
+                        ))
+                    })?;
+                copied += 1;
+            }
+        }
+        Ok(copied)
     }
 
     pub async fn export_session_transcript(
@@ -2298,6 +2524,7 @@ impl PersistenceManager {
         session_id: &str,
         options: &SessionTranscriptExportOptions,
     ) -> BitFunResult<SessionTranscriptExport> {
+        Self::validate_session_id(session_id)?;
         if self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -2339,8 +2566,7 @@ impl PersistenceManager {
             .map(|&index| all_turns[index].clone())
             .collect::<Vec<_>>();
 
-        let source_fingerprint =
-            Self::transcript_fingerprint(session_id, &turns, &normalized_options)?;
+        let source_fingerprint = transcript_fingerprint(session_id, &turns, &normalized_options)?;
         if transcript_path.exists() {
             if let Some(stored) = self
                 .read_json_optional::<StoredSessionTranscriptFile>(&transcript_meta_path)
@@ -2359,92 +2585,10 @@ impl PersistenceManager {
             .await?;
 
         let generated_at = Self::system_time_to_unix_ms(SystemTime::now());
-        let sections = selected_indices
-            .iter()
-            .map(|&index| {
-                (
-                    index,
-                    Self::build_transcript_section(&all_turns[index], &normalized_options),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let mut lines = vec!["## Index".to_string()];
-
-        let mut index = Vec::with_capacity(sections.len());
-        if sections.is_empty() {
-            lines.push(if all_turns.is_empty() {
-                "(no persisted turns)".to_string()
-            } else {
-                "(no matching turns)".to_string()
-            });
-        } else {
-            let index_offset = lines.len() + sections.len() + 1;
-            let mut body_lines = Vec::new();
-
-            for (position, (source_index, section)) in sections.iter().enumerate() {
-                let omitted_range = if position == 0 {
-                    (*source_index > 0).then(|| (0, *source_index - 1))
-                } else {
-                    let previous_index = sections[position - 1].0;
-                    (*source_index > previous_index + 1)
-                        .then(|| (previous_index + 1, *source_index - 1))
-                };
-
-                if let Some((start, end)) = omitted_range {
-                    if !body_lines.is_empty() {
-                        body_lines.push(String::new());
-                    }
-                    body_lines.push(Self::transcript_omitted_turns_label(&all_turns, start, end));
-                    body_lines.push(String::new());
-                } else if !body_lines.is_empty() {
-                    body_lines.push(String::new());
-                }
-
-                let section_offset = index_offset + body_lines.len();
-                let turn_range = Self::offset_range(&section.turn_range, section_offset);
-                let user_range = Self::offset_range(&section.user_range, section_offset);
-
-                let index_line = format!(
-                    "- turn={} range={} preview=\"{}\"",
-                    section.turn_index,
-                    Self::format_range(&turn_range),
-                    section.preview.replace('"', "'")
-                );
-                lines.push(index_line);
-
-                index.push(SessionTranscriptIndexEntry {
-                    turn_index: section.turn_index,
-                    preview: section.preview.clone(),
-                    turn_range,
-                    user_range,
-                });
-
-                body_lines.extend(section.lines.iter().cloned());
-            }
-
-            if let Some((last_index, _)) = sections.last() {
-                if *last_index + 1 < all_turns.len() {
-                    body_lines.push(String::new());
-                    body_lines.push(Self::transcript_omitted_turns_label(
-                        &all_turns,
-                        *last_index + 1,
-                        all_turns.len() - 1,
-                    ));
-                }
-            }
-
-            lines.push(String::new());
-            lines.extend(body_lines);
-        }
-
-        let index_range = TranscriptLineRange {
-            start_line: 1,
-            end_line: lines
-                .iter()
-                .position(|line| line.is_empty())
-                .unwrap_or(lines.len()),
-        };
+        let rendered = render_transcript(&all_turns, &selected_indices, &normalized_options);
+        let lines = rendered.lines;
+        let index_range = rendered.index_range;
+        let index = rendered.index;
 
         let transcript_content = lines.join("\n");
         fs::write(&transcript_path, transcript_content)
@@ -2490,6 +2634,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<usize> {
+        Self::validate_session_id(session_id)?;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 
@@ -2531,6 +2676,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<usize> {
+        Self::validate_session_id(session_id)?;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 
@@ -2567,6 +2713,7 @@ impl PersistenceManager {
     }
 
     pub async fn touch_session(&self, workspace_path: &Path, session_id: &str) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
         if let Some(mut metadata) = self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -2586,6 +2733,7 @@ mod tests {
     };
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::agentic::memories::db::{MemoryDatabase, MemoryRow, MEMORY_PHASE2_GLOBAL_JOB_KEY};
+    use crate::agentic::session::{TokenAnchor, TokenAnchorInput};
     use crate::agentic::skill_agent_snapshot::{
         AgentSnapshotEntry, SkillSnapshotEntry, TurnSkillAgentSnapshot,
     };
@@ -2595,6 +2743,7 @@ mod tests {
         SessionRelationshipKind, SessionTranscriptExportOptions, StoredSessionIndexFile,
         TextItemData, UserMessageData,
     };
+    use crate::BitFunError;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Instant;
@@ -2627,6 +2776,144 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[tokio::test]
+    async fn unsafe_session_ids_are_rejected_before_turn_path_resolution() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        let error = manager
+            .load_session_turns(workspace.path(), "../another-project/session")
+            .await
+            .expect_err("path-like session id must be rejected");
+
+        assert!(error.to_string().contains("session_id"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn concurrent_first_session_persistence_keeps_the_winner() {
+        let workspace = TestWorkspace::new();
+        let manager_a = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("first persistence manager"),
+        );
+        let manager_b = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("second persistence manager"),
+        );
+        let session_id = format!("concurrent-session-{}", Uuid::new_v4());
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let session_a = Session::new_with_id(
+            session_id.clone(),
+            "First contender".to_string(),
+            "agent".to_string(),
+            config.clone(),
+        );
+        let session_b = Session::new_with_id(
+            session_id.clone(),
+            "Second contender".to_string(),
+            "agent".to_string(),
+            config,
+        );
+        let workspace_path = workspace.path().to_path_buf();
+        let barrier = Arc::new(tokio::sync::Barrier::new(3));
+
+        let first = tokio::spawn({
+            let manager = manager_a.clone();
+            let barrier = barrier.clone();
+            let workspace_path = workspace_path.clone();
+            async move {
+                barrier.wait().await;
+                let result = manager
+                    .create_session_if_absent(&workspace_path, &session_a)
+                    .await;
+                ("First contender", result)
+            }
+        });
+        let second = tokio::spawn({
+            let manager = manager_b.clone();
+            let barrier = barrier.clone();
+            let workspace_path = workspace_path.clone();
+            async move {
+                barrier.wait().await;
+                let result = manager
+                    .create_session_if_absent(&workspace_path, &session_b)
+                    .await;
+                ("Second contender", result)
+            }
+        });
+        barrier.wait().await;
+
+        let first = first.await.expect("first contender should finish");
+        let second = second.await.expect("second contender should finish");
+        let outcomes = [first, second];
+        let winner = outcomes
+            .iter()
+            .find_map(|(name, result)| result.is_ok().then_some(*name))
+            .expect("one contender must persist the session");
+        let failures = outcomes
+            .iter()
+            .filter_map(|(_, result)| result.as_ref().err())
+            .collect::<Vec<_>>();
+
+        assert_eq!(failures.len(), 1, "exactly one contender must fail");
+        assert!(matches!(failures[0], BitFunError::Validation(_)));
+        let persisted = manager_a
+            .load_session(workspace.path(), &session_id)
+            .await
+            .expect("the winning session must remain persisted");
+        assert_eq!(persisted.session_name, winner);
+    }
+
+    #[tokio::test]
+    async fn token_anchors_save_load_and_delete_roundtrip() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = format!("session-{}", Uuid::new_v4());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("hello".to_string()),
+        ];
+        let anchor = TokenAnchor::from_request_prefix(
+            TokenAnchorInput {
+                session_id: session_id.clone(),
+                turn_id: "turn".to_string(),
+                round_id: "round".to_string(),
+                model_id: "model".to_string(),
+                input_tokens: 100,
+                system_tokens_at_anchor: 10,
+                tool_tokens_at_anchor: 20,
+                prepended_reminder_tokens_at_anchor: 0,
+            },
+            &messages,
+        );
+
+        manager
+            .save_token_anchors(workspace.path(), &session_id, std::slice::from_ref(&anchor))
+            .await
+            .expect("token anchors should save");
+        let loaded = manager
+            .load_token_anchors(workspace.path(), &session_id)
+            .await
+            .expect("token anchors should load")
+            .expect("token anchor file should exist");
+
+        assert_eq!(loaded, vec![anchor]);
+
+        manager
+            .delete_token_anchors(workspace.path(), &session_id)
+            .await
+            .expect("token anchors should delete");
+        let loaded_after_delete = manager
+            .load_token_anchors(workspace.path(), &session_id)
+            .await
+            .expect("deleted token anchor load should succeed");
+
+        assert!(loaded_after_delete.is_none());
     }
 
     #[test]
@@ -2956,8 +3243,8 @@ mod tests {
             end_time: Some(0),
             duration_ms: Some(0),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,
@@ -2966,6 +3253,174 @@ mod tests {
             token_details: None,
             status: "completed".to_string(),
         }
+    }
+
+    #[test]
+    fn compression_transcript_file_name_parser_is_strict() {
+        assert_eq!(
+            PersistenceManager::compression_transcript_boundary_from_file_name("12-a3f9.txt"),
+            Some(12)
+        );
+        assert_eq!(
+            PersistenceManager::compression_transcript_boundary_from_file_name("12-a3f9.meta.json"),
+            Some(12)
+        );
+
+        for invalid in [
+            "12-A3F9.txt",
+            "12-a3f.txt",
+            "12-a3f90.txt",
+            "12-a3f9.txt.bak",
+            "-1-a3f9.txt",
+            "a3f9.txt",
+            "12-a3f9.json",
+        ] {
+            assert_eq!(
+                PersistenceManager::compression_transcript_boundary_from_file_name(invalid),
+                None,
+                "unexpectedly accepted {invalid}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn compression_transcripts_are_stable_unique_and_rollback_aware() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Compression transcripts".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        for turn_index in 0..=2 {
+            let turn_id = format!("turn-{}", turn_index);
+            let mut turn = DialogTurnData::new(
+                turn_id.clone(),
+                turn_index,
+                session_id.clone(),
+                user_message(&format!("user {}", turn_index)),
+            );
+            let mut current_text = text_item(
+                &format!("text-{}", turn_index),
+                &format!("assistant {}", turn_index),
+            );
+            let mut text_items = Vec::new();
+            if turn_index == 0 {
+                let mut superseded_text = text_item("text-0-attempt-1", "superseded assistant 0");
+                superseded_text.attempt_id = Some(format!("{turn_id}:attempt:1"));
+                superseded_text.attempt_index = Some(1);
+                text_items.push(superseded_text);
+
+                current_text.attempt_id = Some(format!("{turn_id}:attempt:2"));
+                current_text.attempt_index = Some(2);
+            }
+            text_items.push(current_text);
+
+            let mut round = round_with_text(&turn_id, text_items);
+            if turn_index == 0 {
+                round.attempt_count = Some(2);
+            }
+            turn.model_rounds.push(round);
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        let first = manager
+            .create_compression_transcript(
+                workspace.path(),
+                &session_id,
+                1,
+                "compression-first",
+                "auto",
+            )
+            .await
+            .expect("first transcript should create")
+            .expect("persisted turns should produce a transcript");
+        let second = manager
+            .create_compression_transcript(
+                workspace.path(),
+                &session_id,
+                2,
+                "compression-second",
+                "manual",
+            )
+            .await
+            .expect("second transcript should create")
+            .expect("persisted turns should produce a transcript");
+
+        assert_ne!(first.transcript_path, second.transcript_path);
+        assert!(first
+            .uri
+            .starts_with("bitfun://current-session/artifacts/compression-transcripts/1-"));
+        assert!(second
+            .uri
+            .starts_with("bitfun://current-session/artifacts/compression-transcripts/2-"));
+        assert_eq!(first.index_range.start_line, 1);
+        assert_eq!(first.index_range.end_line, 3);
+        assert_eq!(second.index_range.start_line, 1);
+        assert_eq!(second.index_range.end_line, 4);
+        assert!(first.transcript_path.exists());
+        assert!(first.meta_path.exists());
+        assert!(second.transcript_path.exists());
+        assert!(second.meta_path.exists());
+        assert_ne!(
+            first.transcript_path,
+            manager.transcript_path(workspace.path(), &session_id)
+        );
+
+        let transcript = std::fs::read_to_string(&first.transcript_path)
+            .expect("compression transcript should be readable");
+        assert!(transcript.contains("## Turn 0\n[user]\nuser 0\n[/user]"));
+        assert!(transcript.contains("[assistant step=0]\nassistant 0\n[/assistant]"));
+        assert!(!transcript.contains("superseded assistant 0"));
+        assert!(transcript.contains("## Turn 1"));
+        assert!(!transcript.contains("## Turn 2"));
+        assert!(!transcript.contains("[assistant_round"));
+        assert!(!transcript.contains("[text]"));
+        let metadata: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&first.meta_path).expect("metadata should be readable"),
+        )
+        .expect("metadata should be valid JSON");
+        assert_eq!(metadata["boundaryTurnIndex"], 1);
+        assert_eq!(metadata["compressionId"], "compression-first");
+        assert_eq!(metadata["options"]["tools"], true);
+        assert_eq!(metadata["options"]["toolInputs"], true);
+        assert_eq!(metadata["options"]["thinking"], false);
+
+        std::fs::write(
+            manager
+                .compression_transcripts_dir(workspace.path(), &session_id)
+                .join("not-owned.txt"),
+            "keep",
+        )
+        .expect("malformed artifact should save");
+        let deleted = manager
+            .delete_compression_transcripts_from(workspace.path(), &session_id, 2)
+            .await
+            .expect("rollback cleanup should succeed");
+        assert_eq!(deleted, 2);
+        assert!(first.transcript_path.exists());
+        assert!(first.meta_path.exists());
+        assert!(!second.transcript_path.exists());
+        assert!(!second.meta_path.exists());
+        assert!(manager
+            .compression_transcripts_dir(workspace.path(), &session_id)
+            .join("not-owned.txt")
+            .exists());
     }
 
     #[tokio::test]
@@ -3181,6 +3636,7 @@ mod tests {
             Message::tool_result(ToolResult {
                 tool_id: "tool-1".to_string(),
                 tool_name: "Bash".to_string(),
+                effective_tool_name: None,
                 result: serde_json::json!({ "output": "x".repeat(40) }),
                 result_for_assistant: Some("assistant summary".to_string()),
                 is_error: false,

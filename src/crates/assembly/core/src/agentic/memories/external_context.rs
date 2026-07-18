@@ -1,11 +1,11 @@
-use crate::service::session::DialogTurnData;
+use crate::service::session::{DialogTurnData, ToolItemIdentityExt};
 
 pub(crate) fn dialog_turn_uses_external_context(turn: &DialogTurnData) -> bool {
     turn.model_rounds.iter().any(|round| {
         round
             .tool_items
             .iter()
-            .any(|item| is_external_context_tool_name(&item.tool_name))
+            .any(|item| is_external_context_tool_name(item.effective_name()))
     })
 }
 

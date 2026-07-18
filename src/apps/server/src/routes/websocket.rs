@@ -19,7 +19,7 @@ use crate::AppState;
 /// WebSocket message protocol (JSON RPC 2.0 style)
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
-pub enum WsMessage {
+enum WsMessage {
     /// Request message
     #[serde(rename = "request")]
     Request {
@@ -45,7 +45,7 @@ pub enum WsMessage {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ErrorInfo {
+struct ErrorInfo {
     code: i32,
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,7 +53,10 @@ pub struct ErrorInfo {
 }
 
 /// WebSocket connection handler
-pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
+pub(crate) async fn websocket_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> Response {
     tracing::info!("New WebSocket connection");
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }

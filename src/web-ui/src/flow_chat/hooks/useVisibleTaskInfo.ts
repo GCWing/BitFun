@@ -11,6 +11,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import type { VirtualItem } from '../store/modernFlowChatStore';
 import type { FlowToolItem } from '../types/flow-chat';
+import { getEffectiveToolName, projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 
 const VIEWPORT_TOP_OFFSET_PX = 57; // Keep in sync with PINNED_TURN_VIEWPORT_OFFSET_PX.
 const TASK_TOOL_NAME = 'Task';
@@ -38,7 +39,7 @@ interface UseVisibleTaskInfoReturn {
 }
 
 function getTaskLabel(toolItem: FlowToolItem): string {
-  const input = toolItem.toolCall?.input;
+  const input = projectEffectiveToolItem(toolItem).toolCall?.input;
   if (!input) return '';
   const desc = input.description || input.prompt || input.task || '';
   return typeof desc === 'string' ? desc.trim() : '';
@@ -58,7 +59,7 @@ function findTaskVirtualItems(virtualItems: VirtualItem[]): Array<{
 
     const round = vItem.data;
     for (const flowItem of round.items) {
-      if (flowItem.type === 'tool' && (flowItem as FlowToolItem).toolName === TASK_TOOL_NAME) {
+      if (flowItem.type === 'tool' && getEffectiveToolName(flowItem as FlowToolItem) === TASK_TOOL_NAME) {
         result.push({
           index: i,
           itemId: flowItem.id,

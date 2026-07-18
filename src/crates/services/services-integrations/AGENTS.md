@@ -48,8 +48,9 @@ slices that are outside pure product logic but still platform-neutral.
 - Web tool network providers own concrete HTTP/Exa requests behind `web-tools`;
   product validation, readable extraction, and tool result envelopes stay in
   higher layers.
-- Debug log HTTP ingest posting lives behind `debug-log`; callers own log
-  shaping and dispatch policy.
+- Debug log file append, redaction, default path/env config, and optional HTTP
+  dispatch live behind `debug-log`; core only keeps ingest-server and product
+  workspace path adaptation.
 - Review-platform provider detection, repository discovery, token persistence,
   provider DTO mapping, pagination policy, HTTP transport, and Git provider
   integration live behind `review-platform`; core may only inject product data
@@ -58,6 +59,19 @@ slices that are outside pure product logic but still platform-neutral.
   writes, marker IO, storage/import bundle filesystem IO, and JS worker process/pool
   lifecycle. Manager workflow orchestration remains outside this crate until
   reviewed owner migration.
+- Managed plugin source integration may own bounded package discovery,
+  integrity checks, fixed package input reads, no-follow path handling,
+  trust-file locking, and atomic persistence. Product path selection stays in
+  assembly; ecosystem parsing and
+  Plugin Runtime Host behavior stay in their adapter and execution owners.
+- Script-tool runtime integration owns provider-neutral process supervision,
+  bounded framing/output, target load/invoke/cancel/dispose, timeout, and worker
+  health behind `script-tool-runtime`. It must not parse OpenCode source paths,
+  decide approval/conflicts, register product tools, or claim OS sandboxing.
+  Approved modules run in target child processes separated from the Rust host for
+  failure containment, not as a security or protocol-authentication boundary.
+  Target process trees and OS resource containment remain an explicit product
+  risk until a platform process-tree boundary is implemented.
 - Announcement remote fetch/cache lives here; product assembly supplies config
   values such as endpoint, locale, version, platform, and cache path.
 - DeepResearch report IO here may own report/citation sidecar filesystem work;
@@ -67,6 +81,8 @@ slices that are outside pure product logic but still platform-neutral.
 
 ```bash
 cargo test -p bitfun-services-integrations
+cargo test -p bitfun-services-integrations --no-default-features --features plugin-source plugin_source --lib
+cargo test -p bitfun-services-integrations --features debug-log --test debug_log_owner_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh --test remote_ssh_disabled_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh,workspace-search --test remote_workspace_search_disabled_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh,remote-ssh-concrete,workspace-search remote_ssh

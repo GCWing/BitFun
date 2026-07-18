@@ -23,10 +23,13 @@ import type { NotificationAction } from '../../../shared/notification-system/typ
 import { createLogger } from '@/shared/utils/logger';
 import { handleThreadGoalUpdated } from '../threadGoalEventService';
 import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDisplay';
+import { effectiveToolInvocation, getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 import type {
   DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
+  ModelRoundStartedEvent,
   ModelRoundCompletedEvent,
+  OpenBuiltInBrowserEvent,
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
   SubagentSessionLinkedEvent,
@@ -46,6 +49,8 @@ import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
 import { useBackgroundCommandActivityStore } from '../../store/backgroundCommandActivityStore';
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
+import { createTab } from '@/shared/utils/tabUtils';
+import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -147,6 +152,7 @@ function mergeParamsPartialEventData(
 export const __test_only__ = {
   resolveDialogTurnDisplayContent,
   mergeParamsPartialEventData,
+  findSubagentParentInfoByRound,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -259,6 +265,7 @@ function handleDeepReviewQueueStateChanged(event: DeepReviewQueueStateChangedEve
 function attachSubagentSessionToParentTool(
   parentInfo: SubagentParentInfo,
   subagentSessionId: string,
+  subagentDialogTurnId?: string,
 ): void {
   const store = FlowChatStore.getInstance();
   const parentSession = store.getState().sessions.get(parentInfo.sessionId);
@@ -276,8 +283,12 @@ function attachSubagentSessionToParentTool(
     parentInfo.dialogTurnId,
     parentInfo.toolCallId,
   );
+  const parentTaskTool = parentTool?.type === 'tool' ? parentTool as FlowToolItem : null;
 
-  if (parentTool?.subagentSessionId === subagentSessionId) {
+  if (
+    parentTaskTool?.subagentSessionId === subagentSessionId &&
+    (!subagentDialogTurnId || parentTaskTool.subagentDialogTurnId === subagentDialogTurnId)
+  ) {
     return;
   }
 
@@ -287,6 +298,7 @@ function attachSubagentSessionToParentTool(
     parentInfo.toolCallId,
     {
       subagentSessionId,
+      ...(subagentDialogTurnId ? { subagentDialogTurnId } : {}),
     } as any,
   );
 }
@@ -470,7 +482,10 @@ function handleSubagentSessionLinked(
   const parentDialogTurnId =
     event?.parentDialogTurnId ?? (event as any)?.parent_dialog_turn_id;
   const parentToolCallId = event?.parentToolCallId ?? (event as any)?.parent_tool_call_id;
+  const subagentDialogTurnId =
+    event?.subagentDialogTurnId ?? (event as any)?.subagent_dialog_turn_id;
   const agentType = event?.agentType ?? (event as any)?.agent_type;
+  const modelId = event?.modelId ?? (event as any)?.model_id;
 
   if (!childSessionId || !parentSessionId || !parentDialogTurnId || !parentToolCallId) {
     log.warn('SubagentSessionLinked missing required fields', { event });
@@ -483,8 +498,11 @@ function handleSubagentSessionLinked(
     toolCallId: parentToolCallId,
   };
 
-  attachSubagentSessionToParentTool(parentInfo, childSessionId);
+  attachSubagentSessionToParentTool(parentInfo, childSessionId, subagentDialogTurnId);
   ensureSubagentSession(context, parentInfo, childSessionId, event as Record<string, unknown>, agentType);
+  if (typeof modelId === 'string' && modelId.trim()) {
+    FlowChatStore.getInstance().updateSessionModelName(childSessionId, modelId.trim());
+  }
   reconcileBackgroundSubagentSession(childSessionId);
 }
 
@@ -509,6 +527,59 @@ function getLinkedSubagentParentInfo(sessionId: string): SubagentParentInfo | un
     dialogTurnId: parentTurnId,
     toolCallId: session.parentToolCallId,
   };
+}
+
+function findSubagentParentInfoByRound(
+  subagentSessionId: string,
+  subagentDialogTurnId: string,
+): SubagentParentInfo | undefined {
+  const state = FlowChatStore.getInstance().getState();
+
+  for (const session of state.sessions.values()) {
+    for (const turn of session.dialogTurns) {
+      for (const round of turn.modelRounds) {
+        for (const item of round.items) {
+          if (item.type !== 'tool') {
+            continue;
+          }
+
+          const toolItem = item as FlowToolItem;
+          if (
+            getEffectiveToolName(toolItem).toLowerCase() === 'task' &&
+            toolItem.subagentSessionId === subagentSessionId &&
+            toolItem.subagentDialogTurnId === subagentDialogTurnId
+          ) {
+            return {
+              sessionId: session.sessionId,
+              dialogTurnId: turn.id,
+              toolCallId: toolItem.toolCall?.id || toolItem.id,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function updateSubagentParentTaskModel(
+  context: FlowChatContext,
+  parentInfo: SubagentParentInfo,
+  modelConfigId: string | undefined,
+  effectiveModelName: string,
+): void {
+  const store = FlowChatStore.getInstance();
+  store.updateModelRoundItem(
+    parentInfo.sessionId,
+    parentInfo.dialogTurnId,
+    parentInfo.toolCallId,
+    {
+      subagentModelId: modelConfigId,
+      subagentModelDisplayName: effectiveModelName,
+    } as Partial<FlowToolItem>,
+  );
+  debouncedSaveDialogTurn(context, parentInfo.sessionId, parentInfo.dialogTurnId, 800);
 }
 
 /**
@@ -623,23 +694,23 @@ export async function initializeEventListeners(
   context: FlowChatContext,
   onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): Promise<() => void> {
-  const { listen } = await import('@tauri-apps/api/event');
-  const unlistenProgress = await listen('backend-event-toolexecutionprogress', (event: any) => {
-    handleToolExecutionProgress(event.payload);
+  const { api } = await import('@/infrastructure/api/service-api/ApiClient');
+  const unlistenProgress = api.listen('backend-event-toolexecutionprogress', (payload: any) => {
+    handleToolExecutionProgress(payload);
   });
-  const unlistenTerminalReady = await listen('backend-event-toolterminalready', (event: any) => {
-    const eventData = (event.payload as any)?.value || event.payload;
+  const unlistenTerminalReady = api.listen('backend-event-toolterminalready', (payload: any) => {
+    const eventData = (payload as any)?.value || payload;
     handleToolTerminalReady(eventData);
   });
-  const unlistenBackgroundCommandLifecycle = await listen('backend-event-backgroundcommandlifecycle', (event: any) => {
-    const eventData = (event.payload as any)?.value || event.payload;
+  const unlistenBackgroundCommandLifecycle = api.listen('backend-event-backgroundcommandlifecycle', (payload: any) => {
+    const eventData = (payload as any)?.value || payload;
     useBackgroundCommandActivityStore.getState().applyLifecycleEvent(eventData);
   });
-  const unlistenMcpInteractionRequest = await listen('backend-event-mcpinteractionrequest', (event: any) => {
-    void handleMcpInteractionRequest((event.payload as any)?.value || event.payload);
+  const unlistenMcpInteractionRequest = api.listen('backend-event-mcpinteractionrequest', (payload: any) => {
+    void handleMcpInteractionRequest((payload as any)?.value || payload);
   });
-  const unlistenAcpPermissionRequest = await listen('backend-event-acppermissionrequest', (event: any) => {
-    void handleAcpPermissionRequest((event.payload as any)?.value || event.payload);
+  const unlistenAcpPermissionRequest = api.listen('backend-event-acppermissionrequest', (payload: any) => {
+    void handleAcpPermissionRequest((payload as any)?.value || payload);
   });
 
   const callbacks: AgenticEventCallbacks = {
@@ -705,6 +776,9 @@ export async function initializeEventListeners(
     },
     onThreadGoalUpdated: (event) => {
       handleThreadGoalUpdatedEvent(event);
+    },
+    onOpenBuiltInBrowser: (event) => {
+      handleOpenBuiltInBrowser(event);
     },
     onSessionTitleGenerated: (event) => {
       handleSessionTitleGenerated(event);
@@ -1702,7 +1776,7 @@ function handleToolEvent(
 /**
  * Handle model round started event
  */
-function handleModelRoundStart(context: FlowChatContext, event: any): void {
+function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStartedEvent): void {
   const { sessionId, turnId, roundId, roundIndex, roundGroupId } = event;
   
   if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundStarted')) {
@@ -1740,6 +1814,8 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
     event.renderHints?.disableExploreGrouping === true ||
     event.metadata?.disableExploreGrouping === true ||
     event.disableExploreGrouping === true;
+  const modelConfigId = event.modelConfigId.trim();
+  const effectiveModelName = event.effectiveModelName.trim();
 
   const modelRound: ModelRound = {
     id: roundId,
@@ -1750,6 +1826,8 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
     isComplete: false,
     status: 'streaming',
     startTime: Date.now(),
+    modelConfigId,
+    effectiveModelName,
     ...(disableExploreGrouping
       ? { renderHints: { disableExploreGrouping: true } }
       : {}),
@@ -1758,15 +1836,15 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
   scheduleModelResponseStatus(context, sessionId, turnId, roundId);
 
-  const linkedParentInfo = getLinkedSubagentParentInfo(sessionId);
-  const modelIdRaw = event.modelId ?? (event as any).model_id;
-  const modelId = typeof modelIdRaw === 'string' ? modelIdRaw.trim() : '';
-  if (linkedParentInfo && modelId) {
-    store.updateModelRoundItem(
-      linkedParentInfo.sessionId,
-      linkedParentInfo.dialogTurnId,
-      linkedParentInfo.toolCallId,
-      { subagentModelId: modelId, subagentModelAlias: modelId } as Partial<FlowToolItem>,
+  const linkedParentInfo =
+    findSubagentParentInfoByRound(sessionId, turnId) ||
+    getLinkedSubagentParentInfo(sessionId);
+  if (linkedParentInfo && effectiveModelName) {
+    updateSubagentParentTaskModel(
+      context,
+      linkedParentInfo,
+      modelConfigId,
+      effectiveModelName,
     );
   }
   
@@ -1817,8 +1895,8 @@ function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCom
     endTime,
     durationMs,
     providerId: event.providerId ?? (event as any).provider_id,
-    modelId: event.modelId ?? (event as any).model_id,
-    modelAlias: event.modelAlias ?? (event as any).model_alias,
+    modelConfigId: event.modelConfigId,
+    effectiveModelName: event.effectiveModelName,
     firstChunkMs: optionalNumber(event.firstChunkMs ?? (event as any).first_chunk_ms),
     firstVisibleOutputMs: optionalNumber(event.firstVisibleOutputMs ?? (event as any).first_visible_output_ms),
     streamDurationMs: optionalNumber(event.streamDurationMs ?? (event as any).stream_duration_ms),
@@ -1899,10 +1977,10 @@ function handleAcpContextUsageUpdate(event: AcpContextUsageUpdatedEvent): void {
  * Handle context compression started event
  */
 function handleCompressionStarted(_context: FlowChatContext, event: any): void {
-  const { sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow, threshold } = event;
+  const { sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow } = event;
   
   log.info('Context compression started', {
-    sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow, threshold
+    sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow
   });
   
   const store = FlowChatStore.getInstance();
@@ -1937,7 +2015,6 @@ function handleCompressionStarted(_context: FlowChatContext, event: any): void {
         trigger,
         tokens_before: tokensBefore,
         context_window: contextWindow,
-        threshold,
       },
       id: compressionId
     },
@@ -2049,6 +2126,30 @@ function handleThreadGoalUpdatedEvent(event: any): void {
   handleThreadGoalUpdated({
     sessionId,
     goal: event?.goal ?? null,
+  });
+}
+
+function handleOpenBuiltInBrowser(event: OpenBuiltInBrowserEvent): void {
+  const url = typeof event?.url === 'string' ? event.url.trim() : '';
+  if (!url) {
+    log.warn('OpenBuiltInBrowser missing url', { event });
+    return;
+  }
+
+  const title = typeof event?.title === 'string' && event.title.trim()
+    ? event.title.trim()
+    : 'Browser';
+  const duplicateCheckKey = `browser-panel:${url}`;
+
+  createTab({
+    type: 'browser',
+    title,
+    data: { url },
+    metadata: { duplicateCheckKey },
+    checkDuplicate: true,
+    duplicateCheckKey,
+    replaceExisting: event?.replaceExisting !== false,
+    mode: 'agent',
   });
 }
 
@@ -2469,15 +2570,19 @@ function detectModifiedPlanFiles(dialogTurn: DialogTurn): string[] {
     for (const item of round.items) {
       if (item.type !== 'tool') continue;
       const toolItem = item as FlowToolItem;
+      const effective = effectiveToolInvocation(toolItem.toolName, toolItem.toolCall?.input);
       
-      if (toolItem.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
+      if (effective.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
         const planPath = toolItem.toolResult.result?.plan_file_path;
         if (planPath) createPlanFiles.add(planPath);
       }
       
-      if (['Edit', 'Write'].includes(toolItem.toolName) && toolItem.toolResult?.success) {
-        const input = toolItem.toolCall?.input;
-        const filePath = input?.file_path || input?.target_file || '';
+      if (['Edit', 'Write'].includes(effective.toolName) && toolItem.toolResult?.success) {
+        const input = effective.input as any;
+        const filePath = splitFilePathAndContent(input?.payload)?.filePath
+          || input?.file_path
+          || input?.target_file
+          || '';
         if (filePath.endsWith('.plan.md')) {
           planFiles.push(filePath);
         }

@@ -37,30 +37,21 @@ describe('builtin theme preset output', () => {
       branch: '#64748b',
       branchBg: 'rgba(100, 116, 139, 0.1)',
       changes: '#f59e0b',
-      changesBg: 'rgba(245, 158, 11, 0.1)',
       added: '#22c55e',
-      addedBg: 'rgba(34, 197, 94, 0.1)',
       deleted: '#ef4444',
-      deletedBg: 'rgba(239, 68, 68, 0.1)',
     })).toMatchObject({
       staged: '#22c55e',
-      stagedBg: 'rgba(34, 197, 94, 0.1)',
     });
 
     expect(createGitColors({
       branch: '#64748b',
       branchBg: 'rgba(100, 116, 139, 0.1)',
       changes: '#f59e0b',
-      changesBg: 'rgba(245, 158, 11, 0.1)',
       added: '#22c55e',
-      addedBg: 'rgba(34, 197, 94, 0.1)',
       deleted: '#ef4444',
-      deletedBg: 'rgba(239, 68, 68, 0.1)',
       staged: '#10b981',
-      stagedBg: 'rgba(16, 185, 129, 0.1)',
     })).toMatchObject({
       staged: '#10b981',
-      stagedBg: 'rgba(16, 185, 129, 0.1)',
     });
   });
 
@@ -77,20 +68,16 @@ describe('builtin theme preset output', () => {
       500: '#60a5fa',
       600: '#3b82f6',
       700: 'rgba(59, 130, 246, 0.8)',
-      800: 'rgba(59, 130, 246, 0.9)',
     });
 
     expect(createSecondaryAccentScale({
       base: '#8b5cf6',
       hover: '#7c3aed',
     })).toEqual({
-      50: 'rgba(139, 92, 246, 0.04)',
       100: 'rgba(139, 92, 246, 0.08)',
       200: 'rgba(139, 92, 246, 0.15)',
-      400: 'rgba(139, 92, 246, 0.4)',
       500: '#8b5cf6',
       600: '#7c3aed',
-      800: 'rgba(124, 58, 237, 0.9)',
     });
 
     expect(createSemanticColors({
@@ -106,6 +93,19 @@ describe('builtin theme preset output', () => {
       infoBg: 'rgba(161, 161, 170, 0.1)',
       infoBorder: 'rgba(161, 161, 170, 0.3)',
     });
+  });
+
+  it('does not carry retired runtime-only authoring stops in builtin theme schemas', () => {
+    for (const theme of builtinThemes) {
+      expect(theme.colors.accent).not.toHaveProperty('800');
+      expect(theme.colors.purple).not.toHaveProperty('50');
+      expect(theme.colors.purple).not.toHaveProperty('400');
+      expect(theme.colors.purple).not.toHaveProperty('800');
+      expect(theme.colors.background).not.toHaveProperty('quaternary');
+      expect(theme.colors.background).not.toHaveProperty('tooltip');
+      expect(theme.colors.element).not.toHaveProperty('elevated');
+      expect(theme.typography.weight).not.toHaveProperty('bold');
+    }
   });
 
   it('keeps near-neutral preset foregrounds on canonical stops', () => {
@@ -149,42 +149,42 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "63622f32216bbb5aea27e3ba0aec61f385a43842e57a6f17c814b341b8a54ac7",
+          "hash": "18bde3b1b694643489ccf854d6a4ec2f92b6522925b1afae71c053c84fe018a8",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "a62e5f3c6a5cbf4c7a35a2f51ed3a5f2a1eb82f6421f11e194ebb9a707517311",
+          "hash": "7def888a159fe62da73f21717777cad2fd13a048853b9264cda683220e899677",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "a527410c9bdf5ed396d82d843e19b298f8b5fe280ebc70bfe01237e753b28713",
+          "hash": "c7a28e7fde81910bb796e18afabdb7b2840a5c0ae7a471b583990b43ce804921",
           "id": "bitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "8b2f11e903371752749b5c7a44337df517dbb2ed9cf0fed29a2341ebb1890f0b",
+          "hash": "b3447ec7218ad3f9bfe9749ca5ed567aee733f8555c86fb9dbca712294484b7c",
           "id": "bitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "d198bd1a20566689f5bf2660bc47b5aa2da854e5f3dcae9e655a5408b36141d1",
+          "hash": "438f2ae26c4d1ebecbfa98e020d8e7d6559668fbf8e2c56b2dc6aa6bcadc3537",
           "id": "bitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "f93427f5952e5a7fe5882cb114a6969e8fb7564292761029d6ee071233b2bdd5",
+          "hash": "9caa3cc0deac7cf940ab550c79ea0a5d747f9496095af8ef78e4df1a64abf842",
           "id": "bitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "fffcb8a66e3a10745d155402be32b90df29e162f3b4a589862cccb9bafb215b7",
+          "hash": "6443493750d1b48805d6392fd17c11347f4f02af88943326522efee29330b417",
           "id": "bitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "81ece301a307408b2149141c7b1553bf422245d20278e98442d6c36063acfc3b",
+          "hash": "34e5b2c1ea244d28dffa9be172d3d48e65e82100b39125b21e3760b4316192d3",
           "id": "bitfun-tokyo-night",
           "type": "dark",
         },

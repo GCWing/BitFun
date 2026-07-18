@@ -1,6 +1,7 @@
 use crate::{
-    validate_collapsed_tool_usage, validate_tool_allowed_by_list, CollapsedToolUsageError,
-    ToolExecutionAccessError, ToolRestrictionError, ToolRuntimeRestrictions,
+    validate_deferred_tool_usage, validate_tool_allowed_by_list, DeferredToolUsageError,
+    LoadedDeferredToolSpec, ToolExecutionAccessError, ToolRestrictionError,
+    ToolRuntimeRestrictions,
 };
 use std::fmt;
 
@@ -9,8 +10,10 @@ pub struct ToolExecutionAdmissionRequest<'a> {
     pub tool_name: &'a str,
     pub allowed_tools: &'a [String],
     pub runtime_tool_restrictions: &'a ToolRuntimeRestrictions,
-    pub collapsed_tools: &'a [String],
-    pub loaded_collapsed_tools: &'a [String],
+    pub invocation_is_deferred: bool,
+    pub deferred_tools: &'a [String],
+    pub loaded_deferred_tool_specs: &'a [LoadedDeferredToolSpec],
+    pub current_catalog_generation: u64,
     pub get_tool_spec_tool_name: &'a str,
 }
 
@@ -18,7 +21,7 @@ pub struct ToolExecutionAdmissionRequest<'a> {
 pub enum ToolExecutionAdmissionRejection {
     AllowedList(ToolExecutionAccessError),
     RuntimeRestriction(ToolRestrictionError),
-    Collapsed(CollapsedToolUsageError),
+    Deferred(DeferredToolUsageError),
 }
 
 impl fmt::Display for ToolExecutionAdmissionRejection {
@@ -26,7 +29,7 @@ impl fmt::Display for ToolExecutionAdmissionRejection {
         match self {
             Self::AllowedList(error) => write!(formatter, "{error}"),
             Self::RuntimeRestriction(error) => write!(formatter, "{error}"),
-            Self::Collapsed(error) => write!(formatter, "{error}"),
+            Self::Deferred(error) => write!(formatter, "{error}"),
         }
     }
 }
@@ -42,11 +45,13 @@ pub fn validate_tool_execution_admission(
         .runtime_tool_restrictions
         .ensure_tool_allowed(request.tool_name)
         .map_err(ToolExecutionAdmissionRejection::RuntimeRestriction)?;
-    validate_collapsed_tool_usage(
+    validate_deferred_tool_usage(
         request.tool_name,
-        request.collapsed_tools,
-        request.loaded_collapsed_tools,
+        request.invocation_is_deferred,
+        request.deferred_tools,
+        request.loaded_deferred_tool_specs,
+        request.current_catalog_generation,
         request.get_tool_spec_tool_name,
     )
-    .map_err(ToolExecutionAdmissionRejection::Collapsed)
+    .map_err(ToolExecutionAdmissionRejection::Deferred)
 }

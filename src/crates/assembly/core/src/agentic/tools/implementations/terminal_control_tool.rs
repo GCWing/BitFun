@@ -46,7 +46,7 @@ The terminal_session_id is returned inside <terminal_session_id>...</terminal_se
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {

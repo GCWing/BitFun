@@ -6,13 +6,34 @@
     "searchClear": "清除搜尋",
     "beta": "Beta",
     "searchAliases": {
-      "archivedSessions": ["歸檔", "會話"],
-      "keyboard": ["快捷鍵", "鍵位"],
-      "sessionPersonalization": ["夥伴", "個性化"],
-      "sessionPermissions": ["權限"],
-      "quickActions": ["快捷動作", "提交"],
-      "review": ["審核", "程式碼審核"],
-      "memories": ["記憶", "長期記憶", "學習"]
+      "archivedSessions": [
+        "歸檔",
+        "會話"
+      ],
+      "keyboard": [
+        "快捷鍵",
+        "鍵位"
+      ],
+      "sessionPersonalization": [
+        "夥伴",
+        "個性化"
+      ],
+      "sessionPermissions": [
+        "權限"
+      ],
+      "quickActions": [
+        "快捷動作",
+        "提交"
+      ],
+      "review": [
+        "審核",
+        "程式碼審核"
+      ],
+      "memories": [
+        "記憶",
+        "長期記憶",
+        "學習"
+      ]
     },
     "tabDescriptions": {
       "basics": "日誌、終端 Shell、通知與開機啟動。",
@@ -20,9 +41,10 @@
       "models": "AI 模型、API 密鑰、供應商與代理。",
       "sessionPersonalization": "會話標題與 Agent 夥伴。",
       "sessionPermissions": "加速工作區搜尋、工具確認與逾時、Computer use、瀏覽器與偵錯。",
-      "review": "深度審核策略、審核員模型與額外審核 Sub-Agent。",
+      "review": "Review 策略、覆蓋深度、容量、成本和耗時控制。",
       "memories": "自動記憶生成、注入、整理窗口與記憶模型。",
       "mcpTools": "MCP 伺服器與工具集成。",
+      "externalSources": "載入其他 AI 應用中相容的命令與擴充。",
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "編輯器字體、顯示與格式化。",
       "lsp": "語言服務與代碼智能。",
@@ -45,6 +67,7 @@
       "memories": "記憶",
       "skills": "技能",
       "mcpTools": "MCP",
+      "externalSources": "外部 AI 應用",
       "acpAgents": "ACP Agent",
       "agents": "智能體",
       "editor": "編輯器",

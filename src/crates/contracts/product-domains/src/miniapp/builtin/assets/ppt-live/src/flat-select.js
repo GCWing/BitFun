@@ -207,7 +207,7 @@ export function refreshFlatSelectLabels() {
   });
 }
 
-if (!window.__pptLiveFlatSelectBound) {
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && !window.__pptLiveFlatSelectBound) {
   window.__pptLiveFlatSelectBound = true;
   document.addEventListener('click', handleOutsideClick);
   document.addEventListener('keydown', (event) => {

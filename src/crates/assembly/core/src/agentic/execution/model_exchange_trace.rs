@@ -4,9 +4,7 @@ use crate::infrastructure::ai::AIClient;
 use crate::service::config::{
     GlobalConfigManager, ModelExchangeTracingConfig, ModelExchangeTracingMode,
 };
-use crate::service::workspace_runtime::{
-    get_workspace_runtime_service_arc, WorkspaceRuntimeContext,
-};
+use crate::service::workspace_runtime::get_workspace_runtime_service_arc;
 use async_trait::async_trait;
 use bitfun_ai_adapters::{
     ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
@@ -43,7 +41,7 @@ struct ModelExchangeTraceRecord {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ModelExchangeTraceOperation<'a> {
+pub(super) struct ModelExchangeTraceOperation<'a> {
     pub kind: &'a str,
     pub id: &'a str,
     pub trigger: Option<&'a str>,
@@ -99,7 +97,7 @@ impl ModelExchangeTracePolicy {
 
 #[derive(Debug)]
 struct WorkspaceModelExchangeTraceSink {
-    runtime_context: WorkspaceRuntimeContext,
+    trace_session_dir: PathBuf,
     policy: ModelExchangeTracePolicy,
     session_id: String,
     turn_id: String,
@@ -112,39 +110,40 @@ struct WorkspaceModelExchangeTraceSink {
     trace_paths: DashMap<String, PathBuf>,
 }
 
+// Reverse declaration order preserves the previous function-parameter drop
+// order; struct literals remain in the original evaluation order.
+struct WorkspaceModelExchangeTraceInput {
+    model_id: String,
+    api_format: String,
+    provider: String,
+    operation_trigger: Option<String>,
+    operation_id: String,
+    operation_kind: String,
+    turn_id: String,
+    session_id: String,
+    policy: ModelExchangeTracePolicy,
+    trace_session_dir: PathBuf,
+}
+
 impl WorkspaceModelExchangeTraceSink {
-    fn new(
-        runtime_context: WorkspaceRuntimeContext,
-        policy: ModelExchangeTracePolicy,
-        session_id: String,
-        turn_id: String,
-        operation_kind: String,
-        operation_id: String,
-        operation_trigger: Option<String>,
-        provider: String,
-        api_format: String,
-        model_id: String,
-    ) -> Self {
+    fn new(input: WorkspaceModelExchangeTraceInput) -> Self {
         Self {
-            runtime_context,
-            policy,
-            session_id,
-            turn_id,
-            operation_kind,
-            operation_id,
-            operation_trigger,
-            provider,
-            api_format,
-            model_id,
+            trace_session_dir: input.trace_session_dir,
+            policy: input.policy,
+            session_id: input.session_id,
+            turn_id: input.turn_id,
+            operation_kind: input.operation_kind,
+            operation_id: input.operation_id,
+            operation_trigger: input.operation_trigger,
+            provider: input.provider,
+            api_format: input.api_format,
+            model_id: input.model_id,
             trace_paths: DashMap::new(),
         }
     }
 
     async fn allocate_sequence(&self) -> Result<u64, String> {
-        let session_dir = self
-            .runtime_context
-            .request_trace_session_dir(&self.session_id);
-        let key = session_dir.to_string_lossy().to_string();
+        let key = self.trace_session_dir.to_string_lossy().to_string();
         let allocator = sequence_allocators()
             .entry(key)
             .or_insert_with(|| Arc::new(Mutex::new(None)))
@@ -153,7 +152,7 @@ impl WorkspaceModelExchangeTraceSink {
         let current = match *guard {
             Some(value) => value,
             None => {
-                let detected = detect_last_sequence(&session_dir).await?;
+                let detected = detect_last_sequence(&self.trace_session_dir).await?;
                 *guard = Some(detected);
                 detected
             }
@@ -161,6 +160,11 @@ impl WorkspaceModelExchangeTraceSink {
         let next = current.saturating_add(1);
         *guard = Some(next);
         Ok(next)
+    }
+
+    fn trace_path(&self, sequence: u64) -> PathBuf {
+        self.trace_session_dir
+            .join(format!("request-{:06}.json", sequence))
     }
 
     async fn write_record(
@@ -264,9 +268,7 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
         };
 
         let trace_id = Uuid::new_v4().to_string();
-        let path = self
-            .runtime_context
-            .request_trace_path(&self.session_id, sequence);
+        let path = self.trace_path(sequence);
         let record = ModelExchangeTraceRecord {
             version: TRACE_LAYOUT_VERSION,
             trace_id: trace_id.clone(),
@@ -347,7 +349,7 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
     }
 }
 
-pub async fn prepare_model_exchange_trace(
+pub(super) async fn prepare_model_exchange_trace(
     context: &RoundContext,
     round_id: &str,
     ai_client: &AIClient,
@@ -356,6 +358,7 @@ pub async fn prepare_model_exchange_trace(
         &context.session_id,
         &context.dialog_turn_id,
         context.workspace.as_ref(),
+        context.model_exchange_trace_dir.as_deref(),
         ModelExchangeTraceOperation {
             kind: "model_round",
             id: round_id,
@@ -366,16 +369,15 @@ pub async fn prepare_model_exchange_trace(
     .await
 }
 
-pub async fn prepare_model_exchange_trace_for_workspace(
+pub(super) async fn prepare_model_exchange_trace_for_workspace(
     session_id: &str,
     turn_id: &str,
     workspace: Option<&WorkspaceBinding>,
+    model_exchange_trace_dir: Option<&Path>,
     operation: ModelExchangeTraceOperation<'_>,
     ai_client: &AIClient,
 ) -> Option<ModelExchangeTraceConfig> {
-    let Some(policy) = current_model_exchange_trace_policy().await else {
-        return None;
-    };
+    let policy = current_model_exchange_trace_policy().await?;
 
     let Some(workspace) = workspace else {
         debug!(
@@ -385,32 +387,37 @@ pub async fn prepare_model_exchange_trace_for_workspace(
         return None;
     };
 
-    let runtime_context = match get_workspace_runtime_service_arc()
-        .ensure_runtime_for_workspace_binding(workspace)
-        .await
-    {
-        Ok(result) => result.context,
-        Err(error) => {
-            warn!(
-                "Model exchange trace skipped because runtime init failed: session_id={}, operation_kind={}, operation_id={}, error={}",
-                session_id, operation.kind, operation.id, error
-            );
-            return None;
-        }
+    let trace_session_dir = match model_exchange_trace_dir {
+        Some(path) => path.to_path_buf(),
+        None => match get_workspace_runtime_service_arc()
+            .ensure_runtime_for_workspace_binding(workspace)
+            .await
+        {
+            Ok(result) => result.context.request_trace_session_dir(session_id),
+            Err(error) => {
+                warn!(
+                    "Model exchange trace skipped because runtime init failed: session_id={}, operation_kind={}, operation_id={}, error={}",
+                    session_id, operation.kind, operation.id, error
+                );
+                return None;
+            }
+        },
     };
 
     Some(ModelExchangeTraceConfig {
         sink: Arc::new(WorkspaceModelExchangeTraceSink::new(
-            runtime_context,
-            policy,
-            session_id.to_string(),
-            turn_id.to_string(),
-            operation.kind.to_string(),
-            operation.id.to_string(),
-            operation.trigger.map(str::to_string),
-            ai_client.config.format.clone(),
-            ai_client.config.format.clone(),
-            ai_client.config.model.clone(),
+            WorkspaceModelExchangeTraceInput {
+                trace_session_dir,
+                policy,
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                operation_kind: operation.kind.to_string(),
+                operation_id: operation.id.to_string(),
+                operation_trigger: operation.trigger.map(str::to_string),
+                provider: ai_client.config.format.clone(),
+                api_format: ai_client.config.format.clone(),
+                model_id: ai_client.config.model.clone(),
+            },
         )),
         capture_request_body: policy.capture_request_body,
     })
@@ -475,4 +482,77 @@ fn parse_trace_sequence(file_name: &str) -> Option<u64> {
 fn sequence_allocators() -> &'static DashMap<String, Arc<Mutex<Option<u64>>>> {
     static ALLOCATORS: OnceLock<DashMap<String, Arc<Mutex<Option<u64>>>>> = OnceLock::new();
     ALLOCATORS.get_or_init(DashMap::new)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct SequenceAllocatorCleanup(String);
+
+    impl Drop for SequenceAllocatorCleanup {
+        fn drop(&mut self) {
+            sequence_allocators().remove(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn trace_request_preserves_operation_and_model_identity() {
+        let directory = tempfile::tempdir().expect("trace directory should be created");
+        let _allocator_cleanup =
+            SequenceAllocatorCleanup(directory.path().to_string_lossy().to_string());
+        let sink = WorkspaceModelExchangeTraceSink::new(WorkspaceModelExchangeTraceInput {
+            trace_session_dir: directory.path().to_path_buf(),
+            policy: ModelExchangeTracePolicy {
+                mode: ModelExchangeTracingMode::Full,
+                capture_request_body: true,
+                capture_response_text: true,
+                capture_reasoning: true,
+                capture_tool_calls: true,
+                capture_usage: true,
+                capture_provider_metadata: true,
+            },
+            session_id: "session-identity".to_string(),
+            turn_id: "turn-identity".to_string(),
+            operation_kind: "context_compression".to_string(),
+            operation_id: "compression-identity".to_string(),
+            operation_trigger: Some("manual".to_string()),
+            provider: "provider-format".to_string(),
+            api_format: "api-format".to_string(),
+            model_id: "model-identity".to_string(),
+        });
+
+        let handle = sink
+            .request_attempt_started(&ModelExchangeRequestAttempt {
+                request_url: "https://example.invalid/model".to_string(),
+                request_body: Some(serde_json::json!({"request": "body"})),
+                attempt_number: 2,
+            })
+            .await
+            .expect("trace request should be recorded");
+        let path = sink
+            .trace_paths
+            .get(&handle.trace_id)
+            .expect("trace path should be registered")
+            .value()
+            .clone();
+        let record = sink
+            .read_record(&path)
+            .await
+            .expect("trace record should be readable");
+
+        assert_eq!(record.session_id, "session-identity");
+        assert_eq!(record.turn_id, "turn-identity");
+        assert_eq!(record.operation_kind, "context_compression");
+        assert_eq!(record.operation_id, "compression-identity");
+        assert_eq!(record.operation_trigger.as_deref(), Some("manual"));
+        assert_eq!(record.request.provider, "provider-format");
+        assert_eq!(record.request.api_format, "api-format");
+        assert_eq!(record.request.model_id, "model-identity");
+        assert_eq!(record.request.attempt_number, 2);
+        assert_eq!(
+            record.request.body,
+            Some(serde_json::json!({"request": "body"}))
+        );
+    }
 }

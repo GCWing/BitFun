@@ -1,5 +1,5 @@
 impl ChatView {
-    pub fn clear_screen(&mut self) {
+    pub(crate) fn clear_screen(&mut self) {
         self.list_state.select(None);
         self.auto_scroll = true;
         self.collapsed_tools.clear();
@@ -22,36 +22,36 @@ impl ChatView {
         crate::ui::tool_cards::clear_tool_card_cache();
     }
 
-    pub fn set_status(&mut self, status: Option<String>) {
+    pub(crate) fn set_status(&mut self, status: Option<String>) {
         self.status = status;
     }
 
-    pub fn begin_theme_preview(&mut self) {
+    pub(crate) fn begin_theme_preview(&mut self) {
         if self.theme_preview_original.is_none() {
             self.theme_preview_original = Some(self.theme.clone());
         }
     }
 
-    pub fn cancel_theme_preview(&mut self) {
+    pub(crate) fn cancel_theme_preview(&mut self) {
         if let Some(original) = self.theme_preview_original.take() {
             self.set_theme(original);
         }
         self.pending_theme_preview = None;
     }
 
-    pub fn commit_theme_preview(&mut self) {
+    pub(crate) fn commit_theme_preview(&mut self) {
         self.theme_preview_original = None;
         self.pending_theme_preview = None;
     }
 
-    pub fn set_theme(&mut self, theme: Theme) {
+    pub(crate) fn set_theme(&mut self, theme: Theme) {
         self.theme = theme.clone();
         self.markdown_renderer = MarkdownRenderer::new(theme);
         self.lines_cache_dirty = true;
         self.render_cache.clear();
     }
 
-    pub fn toggle_browse_mode(&mut self) {
+    pub(crate) fn toggle_browse_mode(&mut self) {
         self.browse_mode = !self.browse_mode;
         if self.browse_mode {
             self.auto_scroll = false;
@@ -61,7 +61,7 @@ impl ChatView {
         }
     }
 
-    pub fn scroll_up(&mut self, lines: usize, total_message_lines: usize) {
+    pub(crate) fn scroll_up(&mut self, lines: usize, total_message_lines: usize) {
         if self.browse_mode {
             self.scroll_offset = (self.scroll_offset + lines).min(total_message_lines.saturating_sub(1));
         } else {
@@ -71,7 +71,7 @@ impl ChatView {
         }
     }
 
-    pub fn scroll_down(&mut self, lines: usize) {
+    pub(crate) fn scroll_down(&mut self, lines: usize) {
         if self.scroll_offset > 0 {
             self.scroll_offset = self.scroll_offset.saturating_sub(lines);
 
@@ -82,13 +82,13 @@ impl ChatView {
         }
     }
 
-    pub fn scroll_to_top(&mut self, total_message_lines: usize) {
+    pub(crate) fn scroll_to_top(&mut self, total_message_lines: usize) {
         self.browse_mode = true;
         self.auto_scroll = false;
         self.scroll_offset = total_message_lines.saturating_sub(1);
     }
 
-    pub fn scroll_to_bottom(&mut self) {
+    pub(crate) fn scroll_to_bottom(&mut self) {
         self.browse_mode = false;
         self.auto_scroll = true;
         self.scroll_offset = 0;
@@ -96,7 +96,7 @@ impl ChatView {
 
     /// Count total rendered lines for all messages (used for scroll calculations).
     /// Uses cached value when possible to avoid O(N) full re-render on every scroll.
-    pub fn count_message_lines(&mut self, chat_state: &ChatState) -> usize {
+    pub(crate) fn count_message_lines(&mut self, chat_state: &ChatState) -> usize {
         let width = self.messages_area.map(|a| a.width).unwrap_or(80);
 
         // Return cached value if still valid (set by render_messages each frame)
@@ -135,7 +135,7 @@ impl ChatView {
     }
 
     /// Mark the line count cache as dirty (call when streaming content changes)
-    pub fn invalidate_lines_cache(&mut self) {
+    pub(crate) fn invalidate_lines_cache(&mut self) {
         self.lines_cache_dirty = true;
     }
 

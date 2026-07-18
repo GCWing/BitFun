@@ -27,12 +27,8 @@ const CHINA_NIGHT_SUCCESS = '#6bc072';
 const CHINA_NIGHT_WARNING = '#f5b555';
 const CHINA_NIGHT_ERROR = '#e85555';
 
-const chinaNightBackground = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_BACKGROUND, alpha);
 const chinaNightText = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_TEXT_PRIMARY, alpha);
 const chinaNightAccent = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ACCENT, alpha);
-const chinaNightSuccess = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_SUCCESS, alpha);
-const chinaNightWarning = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_WARNING, alpha);
-const chinaNightError = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ERROR, alpha);
 
 export const bitfunChinaNightTheme: ThemeConfig = {
 
@@ -49,11 +45,9 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       primary: CHINA_NIGHT_BACKGROUND,
       secondary: CHINA_NIGHT_BACKGROUND_SECONDARY,
       tertiary: '#262626',
-      quaternary: '#262626',
       elevated: '#262626',
       workbench: CHINA_NIGHT_BACKGROUND,
       scene: CHINA_NIGHT_BACKGROUND,
-      tooltip: chinaNightBackground(0.95),
     },
 
     text: {
@@ -89,18 +83,14 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       base: chinaNightAccent(0.12),
       medium: chinaNightAccent(0.16),
       strong: chinaNightAccent(0.2),
-      elevated: rgbaFromHex('#262626', 0.95),
     },
 
     git: createGitColors({
       branch: rgbFromHex(CHINA_NIGHT_ACCENT),
       branchBg: chinaNightAccent(0.12),
       changes: rgbFromHex(CHINA_NIGHT_WARNING),
-      changesBg: chinaNightWarning(0.12),
       added: rgbFromHex(CHINA_NIGHT_SUCCESS),
-      addedBg: chinaNightSuccess(0.12),
       deleted: rgbFromHex(CHINA_NIGHT_ERROR),
-      deletedBg: chinaNightError(0.12),
     }),
   },
 

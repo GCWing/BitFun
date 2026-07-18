@@ -7,6 +7,28 @@ use bitfun_services_integrations::announcement::{
 };
 
 #[test]
+fn announcement_enum_defaults_preserve_variants_and_wire_values() {
+    assert!(matches!(ModalSize::default(), ModalSize::Lg));
+    assert!(matches!(
+        CompletionAction::default(),
+        CompletionAction::Dismiss
+    ));
+    assert!(matches!(PageLayout::default(), PageLayout::MediaTop));
+    assert_eq!(
+        serde_json::to_string(&ModalSize::default()).unwrap(),
+        "\"lg\""
+    );
+    assert_eq!(
+        serde_json::to_string(&CompletionAction::default()).unwrap(),
+        "\"dismiss\""
+    );
+    assert_eq!(
+        serde_json::to_string(&PageLayout::default()).unwrap(),
+        "\"media_top\""
+    );
+}
+
+#[test]
 fn announcement_card_deserialization_preserves_default_contract() {
     let card: AnnouncementCard = serde_json::from_value(serde_json::json!({
         "id": "feature_v1",
@@ -123,8 +145,10 @@ async fn announcement_state_store_round_trips_state_and_defaults_missing_file() 
     assert!(missing.never_show_ids.is_empty());
     assert_eq!(missing.last_remote_fetch_at, None);
 
-    let mut state = AnnouncementState::default();
-    state.app_open_count = 7;
+    let mut state = AnnouncementState {
+        app_open_count: 7,
+        ..Default::default()
+    };
     state.seen_ids.insert("feature-a".to_string());
     state.dismissed_ids.insert("tip-b".to_string());
     store.save(&state).await.expect("save state");
@@ -141,14 +165,14 @@ async fn announcement_state_store_round_trips_state_and_defaults_missing_file() 
 fn announcement_remote_fetch_request_preserves_legacy_query_shape() {
     let request = AnnouncementRemoteFetchRequest {
         endpoint_url: "https://announcements.example.com/cards".to_string(),
-        app_version: "0.2.12".to_string(),
+        app_version: "0.2.13".to_string(),
         locale: "zh-CN".to_string(),
         platform: "desktop".to_string(),
     };
 
     assert_eq!(
         request.request_url(),
-        "https://announcements.example.com/cards?app_version=0.2.12&locale=zh-CN&platform=desktop"
+        "https://announcements.example.com/cards?app_version=0.2.13&locale=zh-CN&platform=desktop"
     );
 }
 

@@ -43,6 +43,15 @@ impl SessionStorageLayout {
         self.session_dir(session_id).join("prompt_cache.json")
     }
 
+    pub fn request_traces_dir(&self, session_id: &str) -> PathBuf {
+        self.session_dir(session_id).join("request-traces")
+    }
+
+    pub fn request_trace_path(&self, session_id: &str, sequence: u64) -> PathBuf {
+        self.request_traces_dir(session_id)
+            .join(format!("request-{:06}.json", sequence))
+    }
+
     pub fn turns_dir(&self, session_id: &str) -> PathBuf {
         self.session_dir(session_id).join("turns")
     }
@@ -85,8 +94,27 @@ impl SessionStorageLayout {
         self.artifacts_dir(session_id).join("transcript.meta.json")
     }
 
+    pub fn compression_transcripts_dir(&self, session_id: &str) -> PathBuf {
+        self.artifacts_dir(session_id)
+            .join("compression-transcripts")
+    }
+
+    pub fn compression_transcript_path(&self, session_id: &str, stem: &str) -> PathBuf {
+        self.compression_transcripts_dir(session_id)
+            .join(format!("{}.txt", stem))
+    }
+
+    pub fn compression_transcript_meta_path(&self, session_id: &str, stem: &str) -> PathBuf {
+        self.compression_transcripts_dir(session_id)
+            .join(format!("{}.meta.json", stem))
+    }
+
     pub async fn ensure_session_dir(&self, session_id: &str) -> io::Result<PathBuf> {
         self.ensure_dir(self.session_dir(session_id)).await
+    }
+
+    pub async fn ensure_request_traces_dir(&self, session_id: &str) -> io::Result<PathBuf> {
+        self.ensure_dir(self.request_traces_dir(session_id)).await
     }
 
     pub async fn ensure_turns_dir(&self, session_id: &str) -> io::Result<PathBuf> {
@@ -99,6 +127,14 @@ impl SessionStorageLayout {
 
     pub async fn ensure_artifacts_dir(&self, session_id: &str) -> io::Result<PathBuf> {
         self.ensure_dir(self.artifacts_dir(session_id)).await
+    }
+
+    pub async fn ensure_compression_transcripts_dir(
+        &self,
+        session_id: &str,
+    ) -> io::Result<PathBuf> {
+        self.ensure_dir(self.compression_transcripts_dir(session_id))
+            .await
     }
 
     pub async fn list_indexed_turn_paths(

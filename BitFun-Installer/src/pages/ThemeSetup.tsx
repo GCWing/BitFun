@@ -29,7 +29,9 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
     width: '100%',
     borderRadius: 12,
     padding: 8,
-    background: active ? 'var(--color-accent-100)' : 'var(--element-bg-subtle)',
+    background: active
+      ? 'color-mix(in srgb, var(--color-accent-500) 8%, transparent)'
+      : 'var(--element-bg-subtle)',
     border: 'none',
     cursor: 'pointer',
     transition: 'background 0.2s ease',
@@ -109,7 +111,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
                     <div style={{ width: 22, height: 22, borderRadius: 5, background: theme.colors.element.soft, opacity: 0.9 }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ height: 5, width: '62%', background: theme.colors.text.muted, opacity: 0.5, borderRadius: 3, marginBottom: 5 }} />
-                      <div style={{ height: 5, width: '78%', background: theme.colors.accent['500'], borderRadius: 3 }} />
+                      <div style={{ height: 5, width: '78%', background: theme.colors.accent, borderRadius: 3 }} />
                     </div>
                   </div>
                 </div>

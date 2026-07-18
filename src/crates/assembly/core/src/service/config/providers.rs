@@ -88,7 +88,7 @@ impl ConfigProvider for AIConfigProvider {
                     }
                 }
                 if let Some(temperature) = model.temperature {
-                    if temperature < 0.0 || temperature > 2.0 {
+                    if !temperature.is_nan() && !(0.0..=2.0).contains(&temperature) {
                         warnings.push(format!(
                             "Model '{}' temperature should be between 0 and 2",
                             model.name
@@ -97,18 +97,6 @@ impl ConfigProvider for AIConfigProvider {
                 }
             }
 
-            for (agent_name, model_id) in &ai_config.agent_models {
-                if !ai_config.models.iter().any(|m| m.id == *model_id)
-                    && model_id != "auto"
-                    && model_id != "primary"
-                    && model_id != "fast"
-                {
-                    return Err(BitFunError::validation(format!(
-                        "Primary Agent '{}' configured model '{}' does not exist",
-                        agent_name, model_id
-                    )));
-                }
-            }
             for (func_agent_name, model_id) in &ai_config.func_agent_models {
                 if !ai_config.models.iter().any(|m| m.id == *model_id)
                     && model_id != "primary"

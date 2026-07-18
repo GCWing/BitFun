@@ -1,4 +1,4 @@
-use crate::stream::types::unified::UnifiedResponse;
+use crate::stream::types::unified::{UnifiedResponse, UnifiedTokenUsage};
 use chrono::{DateTime, Local};
 use log::debug;
 use std::collections::BTreeMap;
@@ -15,6 +15,7 @@ pub(super) struct StreamStats {
     last_event_at_wall: Option<DateTime<Local>>,
     total_sse_events: usize,
     total_unified_responses: usize,
+    last_usage: Option<UnifiedTokenUsage>,
     counters: BTreeMap<String, usize>,
 }
 
@@ -30,6 +31,7 @@ impl StreamStats {
             last_event_at_wall: None,
             total_sse_events: 0,
             total_unified_responses: 0,
+            last_usage: None,
             counters: BTreeMap::new(),
         }
     }
@@ -68,7 +70,8 @@ impl StreamStats {
             self.increment("out:tool_call");
             classified = true;
         }
-        if response.usage.is_some() {
+        if let Some(usage) = response.usage.as_ref() {
+            self.last_usage = Some(usage.clone());
             self.increment("out:usage");
             classified = true;
         }
@@ -127,6 +130,20 @@ impl StreamStats {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
+
+        if let Some(usage) = self.last_usage.as_ref() {
+            debug!(
+                target: "ai::stream_usage",
+                "{} final token usage: input={}, output={}, total={}, reasoning={:?}, cache_read={:?}, cache_write={:?}",
+                self.provider,
+                usage.prompt_token_count,
+                usage.candidates_token_count,
+                usage.total_token_count,
+                usage.reasoning_token_count,
+                usage.cached_content_token_count,
+                usage.cache_creation_token_count
+            );
+        }
 
         debug!(
             target: "ai::stream_stats",

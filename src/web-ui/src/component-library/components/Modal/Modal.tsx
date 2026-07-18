@@ -2,7 +2,7 @@
  * Modal component
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/infrastructure/i18n';
 import './Modal.scss';
@@ -28,6 +28,8 @@ export interface ModalProps {
   testId?: string;
   titleTestId?: string;
   closeButtonTestId?: string;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -48,6 +50,8 @@ export const Modal: React.FC<ModalProps> = ({
   testId,
   titleTestId,
   closeButtonTestId,
+  ariaLabel,
+  ariaLabelledBy,
 }) => {
   const { t } = useI18n('components');
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -59,6 +63,8 @@ export const Modal: React.FC<ModalProps> = ({
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const modalRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const generatedTitleId = useId();
   
   useEffect(() => {
     if (isOpen) {
@@ -82,6 +88,51 @@ export const Modal: React.FC<ModalProps> = ({
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    previousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const modal = modalRef.current;
+    const focusableSelector = [
+      'button:not([disabled])',
+      '[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+    const focusable = modal?.querySelector<HTMLElement>(focusableSelector);
+    (focusable ?? modal)?.focus();
+
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !modal) return;
+      const elements = Array.from(modal.querySelectorAll<HTMLElement>(focusableSelector));
+      if (elements.length === 0) {
+        event.preventDefault();
+        modal.focus();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', trapFocus);
+
+    return () => {
+      document.removeEventListener('keydown', trapFocus);
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
+  }, [isOpen]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!draggable || !modalRef.current || !headerRef.current) return;
@@ -270,6 +321,11 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy ?? (title ? generatedTitleId : undefined)}
+        tabIndex={-1}
         className={[
           'modal',
           `modal--${size}`,
@@ -309,7 +365,7 @@ export const Modal: React.FC<ModalProps> = ({
               >
                 {title && (
                   <div className="modal__title-group">
-                    <h2 className="modal__title" data-testid={titleTestId}>{title}</h2>
+                    <h2 id={generatedTitleId} className="modal__title" data-testid={titleTestId}>{title}</h2>
                     {titleExtra && <span className="modal__title-extra">{titleExtra}</span>}
                   </div>
                 )}

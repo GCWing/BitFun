@@ -2,6 +2,9 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { CodeReviewReportExportActions } from './CodeReviewReportExportActions';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+
+const formatCodeReviewReportMarkdownMock = vi.hoisted(() => vi.fn(() => '# Review'));
 
 function Icon({ name }: { name: string }) {
   return <svg data-icon={name} />;
@@ -53,7 +56,7 @@ vi.mock('@/shared/utils/tabUtils', () => ({
 }));
 
 vi.mock('../utils/codeReviewReport', () => ({
-  formatCodeReviewReportMarkdown: () => '# Review',
+  formatCodeReviewReportMarkdown: (...args: unknown[]) => formatCodeReviewReportMarkdownMock(...args),
 }));
 
 describe('CodeReviewReportExportActions', () => {
@@ -88,5 +91,25 @@ describe('CodeReviewReportExportActions', () => {
     expect(html).toContain('aria-label="Copy Markdown"');
     expect(html).toContain('aria-label="Save Markdown"');
     expect(html).not.toContain('aria-label="Open as Markdown"');
+  });
+
+  it('passes the review run manifest into Markdown formatting', () => {
+    const runManifest = {
+      strategyLevel: 'quick',
+      skippedReviewers: [],
+    };
+
+    renderToStaticMarkup(
+      <CodeReviewReportExportActions
+        reviewData={{ summary: { recommended_action: 'approve' } }}
+        runManifest={runManifest as unknown as ReviewTeamRunManifest}
+      />,
+    );
+
+    expect(formatCodeReviewReportMarkdownMock).toHaveBeenCalledWith(
+      { summary: { recommended_action: 'approve' } },
+      expect.any(Object),
+      { runManifest },
+    );
   });
 });

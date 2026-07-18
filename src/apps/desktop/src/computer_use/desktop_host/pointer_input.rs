@@ -13,8 +13,10 @@ use super::macos;
 use super::DesktopComputerUseHost;
 #[cfg(target_os = "windows")]
 use bitfun_core::agentic::tools::computer_use_host::AppSelector;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use bitfun_core::agentic::tools::computer_use_host::ClickTarget;
 use bitfun_core::agentic::tools::computer_use_host::{
-    ClickTarget, ComputerUseHost, ComputerUseLastMutationKind,
+    ComputerUseHost, ComputerUseLastMutationKind,
 };
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
@@ -265,6 +267,7 @@ impl DesktopComputerUseHost {
         Ok(())
     }
 
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub(super) fn map_app_image_coords_to_pointer_f64(
         &self,
         pid: i32,
@@ -290,6 +293,7 @@ impl DesktopComputerUseHost {
         map.map_image_to_global_f64(x, y)
     }
 
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub(super) fn image_grid_target_to_xy(
         target: &ClickTarget,
     ) -> BitFunResult<Option<(i32, i32)>> {

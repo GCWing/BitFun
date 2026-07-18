@@ -17,6 +17,10 @@ const stateMocks = vi.hoisted(() => ({
   visibleTurnInfo: null as unknown,
   setVisibleTurnInfo: vi.fn(),
 }));
+const virtuosoMocks = vi.hoisted(() => ({
+  renderedRange: null as { start: number; end: number } | null,
+  scrollToIndex: vi.fn(),
+}));
 const flowStoreMocks = vi.hoisted(() => ({
   hasPendingSessionHistoryCompletion: vi.fn(() => false),
   hasDeferredSessionHistoryProjection: vi.fn(() => false),
@@ -45,9 +49,18 @@ vi.mock('react-i18next', () => ({
 vi.mock('react-virtuoso', () => ({
   Virtuoso: React.forwardRef((props: any, ref) => {
     const scrollerRef = React.useRef<HTMLDivElement | null>(null);
+    const [, rerender] = React.useReducer((value: number) => value + 1, 0);
     React.useImperativeHandle(ref, () => ({
       scrollTo: vi.fn(),
-      scrollToIndex: vi.fn(),
+      scrollToIndex: vi.fn((options: { index: number }) => {
+        virtuosoMocks.scrollToIndex(options);
+        const localIndex = Math.max(0, options.index - (props.firstItemIndex ?? 0));
+        virtuosoMocks.renderedRange = {
+          start: localIndex,
+          end: Math.min(props.data?.length ?? 0, localIndex + 4),
+        };
+        rerender();
+      }),
     }));
 
     React.useLayoutEffect(() => {
@@ -76,11 +89,23 @@ vi.mock('react-virtuoso', () => ({
         tabIndex={0}
       >
         {props.components?.Header ? <props.components.Header /> : null}
-        {props.data?.map((item: VirtualItem, index: number) => (
-          <div key={item.turnId} className="virtual-item-wrapper" data-turn-id={item.turnId} data-virtual-index={index} data-item-type={item.type}>
-            {item.turnId}
-          </div>
-        ))}
+        {props.data
+          ?.map((item: VirtualItem, index: number) => ({ item, index }))
+          .filter(({ index }: { index: number }) => {
+            const range = virtuosoMocks.renderedRange;
+            return !range || (index >= range.start && index < range.end);
+          })
+          .map(({ item, index }: { item: VirtualItem; index: number }) => (
+            <div
+              key={`${item.type}:${item.turnId}`}
+              className="virtual-item-wrapper"
+              data-turn-id={item.turnId}
+              data-virtual-index={index}
+              data-item-type={item.type}
+            >
+              {item.turnId}
+            </div>
+          ))}
         {props.components?.Footer ? <props.components.Footer /> : null}
       </div>
     );
@@ -318,6 +343,8 @@ describe('VirtualMessageList session boundary', () => {
     root = createRoot(container);
     stateMocks.visibleTurnInfo = null;
     stateMocks.setVisibleTurnInfo.mockReset();
+    virtuosoMocks.renderedRange = null;
+    virtuosoMocks.scrollToIndex.mockReset();
     flowStoreMocks.hasPendingSessionHistoryCompletion.mockReset();
     flowStoreMocks.hasPendingSessionHistoryCompletion.mockReturnValue(false);
     flowStoreMocks.hasDeferredSessionHistoryProjection.mockReset();
@@ -419,6 +446,84 @@ describe('VirtualMessageList session boundary', () => {
     } finally {
       nowSpy.mockRestore();
     }
+  });
+
+  it('materializes an unrendered turn with an immediate auto index jump', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const turnIds = Array.from(
+      { length: 24 },
+      (_, index) => `turn-${String(index + 1).padStart(2, '0')}`,
+    );
+    const targetTurnId = 'turn-02';
+
+    stateMocks.activeSession = createSessionWithTurns('session-a', turnIds);
+    stateMocks.virtualItems = turnIds.flatMap(turnId => [
+      createItem(turnId),
+      createModelItem(turnId),
+    ]);
+    virtuosoMocks.renderedRange = { start: 40, end: 48 };
+
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} />);
+    });
+
+    expect(
+      container.querySelector(
+        `[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`,
+      ),
+    ).toBeNull();
+    virtuosoMocks.scrollToIndex.mockClear();
+
+    let status: ReturnType<VirtualMessageListRef['pinTurnToTopWithStatus']> = 'rejected';
+    act(() => {
+      status = listRef.current?.pinTurnToTopWithStatus(targetTurnId, {
+        behavior: 'smooth',
+        pinMode: 'transient',
+      }) ?? 'rejected';
+    });
+
+    expect(status).toBe('pending');
+    expect(virtuosoMocks.scrollToIndex).toHaveBeenCalledWith(expect.objectContaining({
+      align: 'start',
+      behavior: 'auto',
+    }));
+
+    const target = container.querySelector<HTMLElement>(
+      `[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`,
+    );
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    expect(target).not.toBeNull();
+    expect(scroller).not.toBeNull();
+    if (!target || !scroller) {
+      return;
+    }
+
+    setScrollerGeometry(scroller, {
+      scrollHeight: 6_000,
+      clientHeight: 1_000,
+      scrollTop: 4_000,
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 0,
+      bottom: 1_000,
+      height: 1_000,
+    }));
+    const targetDocumentTop = 4_500;
+    vi.spyOn(target, 'getBoundingClientRect').mockImplementation(() => {
+      const top = targetDocumentTop - scroller.scrollTop;
+      return createRect({
+        top,
+        bottom: top + 40,
+        height: 40,
+      });
+    });
+
+    flushAnimationFrame();
+    flushAnimationFrame();
+    flushAnimationFrame();
+    expect(scroller.scrollTop).toBe(4_443);
+    expect(target.getBoundingClientRect().top).toBe(57);
+    expect(virtuosoMocks.scrollToIndex).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a static initial history turn pin from being pulled back to bottom by the initial guard', () => {
@@ -566,12 +671,15 @@ describe('VirtualMessageList session boundary', () => {
     expect(container.querySelector(`[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`)).toBeNull();
     expect(container.querySelector(`[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`)).not.toBeNull();
 
-    let didPin = false;
+    let pinStatus: ReturnType<VirtualMessageListRef['pinTurnToTopWithStatus']> = 'rejected';
     act(() => {
-      didPin = listRef.current?.pinTurnToTop(targetTurnId, { behavior: 'auto' }) ?? false;
+      pinStatus = listRef.current?.pinTurnToTopWithStatus(targetTurnId, {
+        behavior: 'auto',
+      }) ?? 'rejected';
     });
 
-    expect(didPin).toBe(true);
+    expect(pinStatus).toBe('pending');
+    expect(scroller.scrollTop).toBeLessThan(11_000);
     expect(container.querySelector(`[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`)).not.toBeNull();
     expect(container.querySelector(`[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`)).toBeNull();
     expect(container.querySelector('[data-history-initial-render-tail-spacer="true"]')).not.toBeNull();

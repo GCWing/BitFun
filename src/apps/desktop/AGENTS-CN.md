@@ -13,10 +13,14 @@
 主要区域：
 
 - `src/api/`：Tauri commands
+- `src/api/peer_host_invoke.rs`：Peer Device Mode host-invoke bridge 与 control attach
 - `src/lib.rs`、`src/main.rs`：应用启动与装配
 - `src/computer_use/`：操作系统相关自动化支持
 
-如果改动影响多个运行时共享的产品行为，真正实现通常应放在 `src/crates/assembly/core`。
+Peer Device Mode 的所有权和边界见 `docs/architecture/peer-device-mode.md`。
+
+如果改动影响多个运行时共享的行为，应把稳定契约、执行策略和服务放在各自的下层 owner
+crate；`src/crates/assembly/core` 只保留产品装配与兼容桥接。
 
 ## 本模块规则
 

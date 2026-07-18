@@ -6,14 +6,15 @@
 
 use crate::bootstrap::ServerAppState;
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use bitfun_core::agentic::agents::SubAgentSource;
 use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
 use bitfun_core::agentic::core::SessionConfig;
 use bitfun_core::agentic::deep_review_policy::{
     apply_deep_review_queue_control, DeepReviewQueueControlAction,
 };
+use bitfun_core::service::config::SubagentModelSelection;
 use bitfun_core::service::i18n::{sync_global_i18n_service_locale, LocaleId, LocaleMetadata};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -95,12 +96,20 @@ pub async fn dispatch(
         "read_file_content" => {
             let request = extract_request(&params)?;
             let file_path = get_string(&request, "filePath")?;
+            let encoding = request.get("encoding").and_then(|value| value.as_str());
             let result = state
                 .filesystem_service
                 .read_file(&file_path)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
-            Ok(serde_json::json!(result.content))
+            let content = if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64"))
+                && !result.encoding.eq_ignore_ascii_case("base64")
+            {
+                BASE64.encode(result.content.as_bytes())
+            } else {
+                result.content
+            };
+            Ok(serde_json::json!(content))
         }
         "write_file_content" => {
             let request = extract_request(&params)?;
@@ -207,6 +216,15 @@ pub async fn dispatch(
                 .get("model")
                 .and_then(|v| v.as_str())
                 .map(|value| value.to_string());
+            let clear_model_override = request
+                .get("clearModelOverride")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if model.is_some() && clear_model_override {
+                return Err(anyhow!(
+                    "model and clearModelOverride cannot be provided together"
+                ));
+            }
             let workspace =
                 workspace_root_from_request(request.get("workspacePath").and_then(|v| v.as_str()));
 
@@ -236,12 +254,13 @@ pub async fn dispatch(
                         .map_err(|e| anyhow!("Failed to update subagent availability: {}", e))?;
                 }
 
-                if model.is_some() {
+                if model.is_some() || clear_model_override {
                     state
                         .agent_registry
                         .update_and_save_custom_subagent_config(
                             &subagent_id,
                             model,
+                            clear_model_override,
                             workspace.as_deref(),
                         )
                         .map_err(|e| anyhow!("Failed to update configuration: {}", e))?;
@@ -282,16 +301,29 @@ pub async fn dispatch(
                         .map_err(|e| anyhow!("Failed to update subagent availability: {}", e))?;
                 }
 
-                if let Some(model) = model {
-                    let mut agent_models: HashMap<String, String> = state
+                if clear_model_override || model.is_some() {
+                    let mut builtin_models: std::collections::HashMap<
+                        String,
+                        SubagentModelSelection,
+                    > = state
                         .config_service
-                        .get_config(Some("ai.agent_models"))
+                        .get_config(Some("ai.agent_model_defaults.subagents.builtin"))
                         .await
                         .unwrap_or_default();
-                    agent_models.insert(subagent_id.clone(), model);
+                    if clear_model_override {
+                        builtin_models.remove(&subagent_id);
+                    } else {
+                        let model = model.as_deref().expect("model checked above").trim();
+                        let selection = if model == "inherit" {
+                            SubagentModelSelection::Inherit
+                        } else {
+                            SubagentModelSelection::fixed(model)
+                        };
+                        builtin_models.insert(subagent_id.clone(), selection);
+                    }
                     state
                         .config_service
-                        .set_config("ai.agent_models", &agent_models)
+                        .set_config("ai.agent_model_defaults.subagents.builtin", &builtin_models)
                         .await
                         .map_err(|e| anyhow!("Failed to update model configuration: {}", e))?;
                 }

@@ -1,8 +1,11 @@
 // Self-tests for the core boundary checker configuration and parsers.
 
+import { crateLayoutRules } from './rules/crate-layout.mjs';
+
 export function runManifestParserSelfTest({
   isManifestDependencyDeclaration,
   parseManifestDependencies,
+  manifestDependencyMatches,
   manifestDependencyDisablesDefaultFeatures,
   parseManifestDependencyFeatureNames,
   productCoreFeatureAssemblyRules,
@@ -13,13 +16,19 @@ export function runManifestParserSelfTest({
   optionalDependencyFeatureOwnerRules,
   lightweightBoundaryRules,
   dependencyProfileRules,
+  forbiddenManifestDependencyRules,
   noCoreDependencyCrates,
   requiredContentRules,
   forbiddenContentRules,
   forbiddenContentUnderRules,
+  publicApiAllowlistRules,
+  publicApiContractSlices,
   facadeOnlyFiles,
   forbiddenRuleTextForPath,
   regexSourceContainsContract,
+  collectTopLevelRustPublicSymbols,
+  collectPluginRootReexports,
+  hasPluginWildcardReexport,
   createFacadeLineChecker,
   escapeRegex,
 }) {
@@ -56,11 +65,15 @@ export function runManifestParserSelfTest({
     '    "auth",',
     '], optional = true }',
     'bitfun-core = { path = "../core", default-features = false, features = ["product-full"] }',
+    'single-quoted-opencode = { package = \'bitfun-opencode-adapter\', path = "../adapters/opencode-adapter" }',
     '[dependencies.git2]',
     'workspace = true',
     'optional = true',
     '[target.\'cfg(windows)\'.dependencies."bitfun-cli"]',
     'path = "../../apps/cli"',
+    '[dependencies.renamed-opencode]',
+    'package = "bitfun-opencode-adapter"',
+    'path = "../adapters/opencode-adapter"',
     '[features]',
     'image = []',
   ]);
@@ -79,6 +92,17 @@ export function runManifestParserSelfTest({
   }
   if (parsedByName.get('bitfun-cli')?.optional !== false) {
     throw new Error('dependency profile parser must detect non-optional target dependency tables');
+  }
+  if (parsedByName.get('renamed-opencode')?.optional !== false) {
+    throw new Error('dependency profile parser must detect renamed dependency tables');
+  }
+  if (
+    !manifestDependencyMatches(
+      parsedByName.get('single-quoted-opencode'),
+      'bitfun-opencode-adapter',
+    )
+  ) {
+    throw new Error('dependency profile parser must detect single-quoted package aliases');
   }
   const parsedCoreDep = parsedByName.get('bitfun-core');
   if (!manifestDependencyDisablesDefaultFeatures(parsedCoreDep)) {
@@ -105,6 +129,34 @@ export function runManifestParserSelfTest({
   }
   if (parsedByName.has('image')) {
     throw new Error('dependency profile parser must ignore feature entries named like dependencies');
+  }
+  const parsedWorkspaceDeps = parseManifestDependencies(
+    [
+      '[workspace.dependencies]',
+      'opencode-fixture = { path = "src/crates/adapters/opencode-adapter", package = "bitfun-opencode-adapter" }',
+      'opencode-fixture-single = { path = "src/crates/adapters/opencode-adapter", package = \'bitfun-opencode-adapter\' }',
+      '[workspace.dependencies.renamed-opencode-workspace]',
+      'package = "bitfun-opencode-adapter"',
+      'path = "src/crates/adapters/opencode-adapter"',
+    ],
+    { includeWorkspace: true },
+  );
+  const workspaceDepsByName = new Map(parsedWorkspaceDeps.map((dep) => [dep.name, dep]));
+  if (
+    !manifestDependencyMatches(
+      workspaceDepsByName.get('opencode-fixture'),
+      'bitfun-opencode-adapter',
+    ) ||
+    !manifestDependencyMatches(
+      workspaceDepsByName.get('opencode-fixture-single'),
+      'bitfun-opencode-adapter',
+    ) ||
+    !manifestDependencyMatches(
+      workspaceDepsByName.get('renamed-opencode-workspace'),
+      'bitfun-opencode-adapter',
+    )
+  ) {
+    throw new Error('manifest parser must detect workspace aliases to forbidden packages');
   }
 
   const productCoreRulePaths = new Set(
@@ -312,7 +364,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreTaskToolRuleText = forbiddenRuleTextForPath(
-    'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
   );
   if (!coreTaskToolRuleText) {
     throw new Error('missing core TaskTool DeepReview boundary rule');
@@ -549,7 +601,7 @@ export function runManifestParserSelfTest({
     'rmcp',
     'image',
     'tool-runtime',
-    'bitfun-relay-server',
+    'bitfun-relay-service',
     'htmd',
     'legible',
     'readability-js',
@@ -583,7 +635,7 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-service']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
@@ -600,11 +652,7 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerDeps = new Set(
     servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
-  const servicesIntegrationsDefaultOnlyGuardDeps = new Set(['bitfun-relay-server']);
   for (const dep of servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
-    if (servicesIntegrationsDefaultOnlyGuardDeps.has(dep)) {
-      continue;
-    }
     if (!servicesOptionalOwnerDeps.has(dep)) {
       throw new Error(
         `services-integrations optional dependency owner rule must cover forbidden dependency ${dep}`,
@@ -614,10 +662,14 @@ export function runManifestParserSelfTest({
   for (const dep of [
     'aes',
     'bitfun-services-core',
+    'bitfun-product-domains',
+    'dunce',
+    'fs2',
     'bitfun-runtime-ports',
     'git2',
     'hex',
     'hostname',
+    'libc',
     'local-ip-address',
     'mac_address',
     'md5',
@@ -627,10 +679,27 @@ export function runManifestParserSelfTest({
     'rmcp',
     'tokio-tungstenite',
     'which',
+    'windows',
     'x25519-dalek',
   ]) {
     if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
       throw new Error(`services-integrations optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  for (const dep of ['bitfun-product-domains', 'dunce', 'fs2', 'hex', 'libc', 'sha2', 'thiserror', 'uuid', 'windows']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('plugin-source')) {
+      throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
+    }
+  }
+  for (const dep of ['sha2', 'windows']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('review-platform')) {
+      throw new Error(`services-integrations review-platform must own optional dependency ${dep}`);
     }
   }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
@@ -742,6 +811,245 @@ export function runManifestParserSelfTest({
   if (!runtimePortsProfile?.forbiddenNonOptionalDeps.includes('bitfun-services-core')) {
     throw new Error('runtime-ports dependency profile must forbid service implementations');
   }
+  const pluginRuntimeContractRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
+  );
+  if (!pluginRuntimeContractRule) {
+    throw new Error('plugin runtime contracts must have a module-local owner rule');
+  }
+  const pluginRuntimeContractRuleText = pluginRuntimeContractRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'PluginRuntimeClient',
+    'PluginRuntimeBinding',
+    'read_plugins',
+    'PluginQuarantineState',
+  ]) {
+    if (!pluginRuntimeContractRuleText.includes(contract)) {
+      throw new Error(`plugin runtime contract owner rule must require: ${contract}`);
+    }
+  }
+  const pluginRuntimeForbiddenRuleText = forbiddenRuleTextForPath(
+    'src/crates/contracts/runtime-ports/src/plugin.rs',
+  );
+  for (const forbiddenContract of [
+    'serde_json::Value',
+    'accepted',
+    'product-full',
+    'requires_permission',
+    'permission_prompt',
+    'PluginMaterializeCondition',
+  ]) {
+    if (!pluginRuntimeForbiddenRuleText.includes(forbiddenContract)) {
+      throw new Error(`plugin runtime boundary rule must forbid: ${forbiddenContract}`);
+    }
+  }
+  const pluginPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
+  );
+  const pluginRootReexportRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/lib.rs',
+  );
+  const opencodeAdapterPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/adapters/opencode-adapter/src/lib.rs',
+  );
+  const managedPluginActivationPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/assembly/core/src/plugin_runtime.rs',
+  );
+  const parsedPluginReexports = collectPluginRootReexports(`
+    pub use plugin::{PluginDispatchEnvelope, PluginResponseEnvelope};
+    pub use self::plugin::{
+      PluginRuntimeReadRequest,
+      PluginRuntimeReadResponse as RuntimeReadResponse,
+    };
+    pub use crate::plugin::PluginRuntimeClient;
+    pub use plugin::*;
+  `);
+  if (
+    parsedPluginReexports.join(',') !==
+    'PluginDispatchEnvelope,PluginResponseEnvelope,PluginRuntimeReadRequest,RuntimeReadResponse,PluginRuntimeClient,*'
+  ) {
+    throw new Error('plugin root re-export parser must collect plugin path variants, aliases, and wildcard markers');
+  }
+  for (const wildcardReexport of [
+    'pub use plugin::*;',
+    'pub use crate::plugin::*;',
+    'pub use self::plugin::*;',
+  ]) {
+    if (!hasPluginWildcardReexport(wildcardReexport)) {
+      throw new Error(`plugin wildcard guard must reject path variant: ${wildcardReexport}`);
+    }
+  }
+  for (const nonWildcardReexport of [
+    'pub use plugin::PluginDispatchEnvelope;',
+    'pub use crate::not_plugin::*;',
+  ]) {
+    if (hasPluginWildcardReexport(nonWildcardReexport)) {
+      throw new Error(`plugin wildcard guard must not reject non-plugin wildcard: ${nonWildcardReexport}`);
+    }
+  }
+  const parsedPluginSymbols = collectTopLevelRustPublicSymbols(`
+    pub enum TopLevelEnum { Value }
+    impl TopLevelEnum { pub fn hidden_method(&self) {} }
+    pub use plugin::PluginDispatchEnvelope;
+    pub use crate::hidden::{HiddenType, InternalName as PublicName};
+    pub use crate::multi::{
+      MultiLineType,
+      InternalMultiLine as PublicMultiLine,
+    };
+    pub mod host;
+    pub const CONTRACT_VERSION: u16 = 1;
+  `);
+  if (
+    parsedPluginSymbols.join(',') !==
+    'TopLevelEnum,PluginDispatchEnvelope,HiddenType,PublicName,MultiLineType,PublicMultiLine,host,CONTRACT_VERSION'
+  ) {
+    throw new Error('public API parser must collect top-level items and re-exports without impl methods');
+  }
+  const pluginPublicApiSymbols = (pluginPublicApiRule?.allowedSymbolEntries || []).map(
+    (entry) => entry.symbol,
+  );
+  const pluginRootReexportSymbols = (pluginRootReexportRule?.allowedPluginReexportEntries || []).map(
+    (entry) => entry.symbol,
+  );
+  if (!pluginPublicApiSymbols.includes('PluginDispatchEnvelope')) {
+    throw new Error('plugin runtime public API allowlist must include dispatch envelope');
+  }
+  if (!pluginPublicApiSymbols.includes('PluginPermissionGate')) {
+    throw new Error('plugin runtime public API allowlist must include permission gate');
+  }
+  if (pluginPublicApiSymbols.some((symbol) => symbol.startsWith('PluginRecoveryAction'))) {
+    throw new Error('plugin runtime P0-B public API allowlist must not include recovery action API');
+  }
+  if (!pluginPublicApiSymbols.includes('PluginRuntimeReadRequest')) {
+    throw new Error('plugin runtime public API allowlist must include read request');
+  }
+  if (!pluginPublicApiSymbols.includes('PluginStatusSnapshot')) {
+    throw new Error('plugin runtime public API allowlist must include plugin status snapshot');
+  }
+  for (const entry of pluginPublicApiRule.allowedSymbolEntries) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
+      if (!entry[field]) {
+        throw new Error(`plugin runtime public API entry must declare ${field}: ${entry.symbol}`);
+      }
+    }
+    if (!publicApiContractSlices.includes(entry.contractSlice)) {
+      throw new Error(`plugin runtime public API entry uses unknown contractSlice: ${entry.symbol}`);
+    }
+    if (typeof entry.wireImpact !== 'boolean') {
+      throw new Error(`plugin runtime public API entry must declare wireImpact: ${entry.symbol}`);
+    }
+  }
+  if (!pluginRootReexportSymbols.includes('PluginDispatchEnvelope')) {
+    throw new Error('runtime-ports root re-export allowlist must include dispatch envelope');
+  }
+  if (pluginRootReexportSymbols.length !== pluginPublicApiSymbols.length) {
+    throw new Error('plugin root re-export allowlist must match plugin module public budget');
+  }
+  if (!opencodeAdapterPublicApiRule) {
+    throw new Error('OpenCode adapter must have a public API budget rule');
+  }
+  const opencodeAdapterPublicApiSymbols = (
+    opencodeAdapterPublicApiRule.allowedSymbolEntries || []
+  ).map((entry) => entry.symbol);
+  if (
+    opencodeAdapterPublicApiSymbols.join(',') !==
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions'
+  ) {
+    throw new Error(
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory, command provider, and standalone-tool provider surfaces',
+    );
+  }
+  for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
+      if (!entry[field]) {
+        throw new Error(`OpenCode adapter public API entry must declare ${field}: ${entry.symbol}`);
+      }
+    }
+    if (entry.contractSlice !== 'opencode-adapter-boundary') {
+      throw new Error(`OpenCode adapter public API entry uses wrong contractSlice: ${entry.symbol}`);
+    }
+    if (entry.wireImpact !== false) {
+      throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
+    }
+  }
+  if (
+    (managedPluginActivationPublicApiRule?.allowedSymbolEntries || [])
+      .map((entry) => entry.symbol)
+      .join(',') !==
+    'ManagedPluginCandidateView,ManagedPluginActivationView,ManagedPluginDeactivationResult,preview_managed_plugin_activation,activate_managed_plugin,deactivate_managed_plugin'
+  ) {
+    throw new Error('managed plugin activation API budget must stay limited to six product-facing symbols');
+  }
+  const appHostAbiRule = forbiddenContentUnderRules.find((rule) => rule.path === 'src/apps');
+  if (!appHostAbiRule) {
+    throw new Error('product app entrypoints must have a Host ABI import guard');
+  }
+  const appHostAbiRuleText = appHostAbiRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const forbiddenHostAbi of [
+    'PluginRuntimeReadResponse',
+    'PluginStatusSnapshot',
+    'PluginResponseEnvelope',
+    'PluginRuntimeBinding',
+  ]) {
+    if (!appHostAbiRuleText.includes(forbiddenHostAbi)) {
+      throw new Error(`product app entrypoint Host ABI guard must forbid: ${forbiddenHostAbi}`);
+    }
+  }
+  const opencodeManifestRule = forbiddenManifestDependencyRules.find((rule) =>
+    rule.dependencyNames?.includes('bitfun-opencode-adapter'),
+  );
+  if (!opencodeManifestRule) {
+    throw new Error('OpenCode adapter must have a forbidden manifest dependency rule');
+  }
+  for (const scanRoot of ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri']) {
+    if (!opencodeManifestRule.scanRoots?.includes(scanRoot)) {
+      throw new Error(`OpenCode adapter manifest guard must scan ${scanRoot}`);
+    }
+  }
+  if (opencodeManifestRule.workspaceManifestPath !== 'Cargo.toml') {
+    throw new Error('OpenCode adapter manifest guard must scan root workspace dependencies');
+  }
+  if (
+    !opencodeManifestRule.allowManifestPaths?.includes(
+      'src/crates/adapters/opencode-adapter/Cargo.toml',
+    )
+  ) {
+    throw new Error('OpenCode adapter manifest guard must allow its own manifest');
+  }
+  if (
+    !opencodeManifestRule.allowManifestPaths?.includes(
+      'src/crates/assembly/core/Cargo.toml',
+    )
+  ) {
+    throw new Error('OpenCode adapter manifest guard must allow the reviewed core composition root');
+  }
+  const opencodeSourceRules = forbiddenContentUnderRules.filter((rule) =>
+    rule.reason.includes('OpenCode adapter production imports are limited'),
+  );
+  for (const scanRoot of ['src', 'BitFun-Installer/src-tauri']) {
+    if (!opencodeSourceRules.some((rule) => rule.path === scanRoot)) {
+      throw new Error(`OpenCode adapter source guard must scan ${scanRoot}`);
+    }
+  }
+  const opencodeSourceRegex = opencodeSourceRules[0]?.patterns?.[0]?.regex;
+  if (
+    !opencodeSourceRegex?.test('use bitfun_opencode_adapter as opencode;') ||
+    !opencodeSourceRegex?.test('extern crate bitfun_opencode_adapter;') ||
+    !opencodeSourceRegex?.test('bitfun_opencode_adapter::OpenCodePluginAdapter')
+  ) {
+    throw new Error('OpenCode adapter source guard must catch direct, alias, and extern imports');
+  }
+  if (
+    !opencodeSourceRules
+      .find((rule) => rule.path === 'src')
+      ?.patterns?.[0]?.allowPaths?.includes('src/crates/assembly/core/src/plugin_runtime.rs')
+  ) {
+    throw new Error('OpenCode adapter source guard must allow only the reviewed core composition file');
+  }
   const runtimeServicesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'runtime-services',
   );
@@ -756,6 +1064,63 @@ export function runManifestParserSelfTest({
   );
   if (!runtimeServicesProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
     throw new Error('runtime-services dependency profile must forbid tool runtime implementations');
+  }
+  if (
+    crateLayoutRules.find((rule) => rule.crateName === 'plugin-runtime-host')?.path !==
+    'src/crates/execution/plugin-runtime-host'
+  ) {
+    throw new Error('plugin-runtime-host must be registered in the execution crate layout');
+  }
+  if (!noCoreDependencyCrates.includes('plugin-runtime-host')) {
+    throw new Error('plugin-runtime-host must be covered by the no-core dependency guard');
+  }
+  const pluginRuntimeHostRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'plugin-runtime-host',
+  );
+  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('plugin-runtime-host lightweight boundary must forbid bitfun-core');
+  }
+  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-opencode-adapter')) {
+    throw new Error('plugin-runtime-host must not depend on the OpenCode fixture adapter');
+  }
+  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
+    throw new Error('plugin-runtime-host must not depend on concrete service integrations');
+  }
+  const pluginRuntimeHostProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'plugin-runtime-host',
+  );
+  if (!pluginRuntimeHostProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
+    throw new Error('plugin-runtime-host dependency profile must forbid product surfaces');
+  }
+  const pluginRuntimeHostPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+  );
+  const hostPublicSymbols = (pluginRuntimeHostPublicApiRule?.allowedSymbolEntries || []).map(
+    (entry) => entry.symbol,
+  );
+  if (hostPublicSymbols.join(',') !== 'PluginHostAdapter,PluginRuntimeHost') {
+    throw new Error('plugin-runtime-host public API budget must stay narrow');
+  }
+  const hasPluginRuntimeHostMethodBudgetRule = forbiddenContentRules.some(
+    (rule) =>
+      rule.path === 'src/crates/execution/plugin-runtime-host/src/lib.rs' &&
+      rule.patterns.some((pattern) =>
+        pattern.message.includes('unexpected public PluginRuntimeHost method') &&
+        pattern.regex.test('pub fn restart(&self)') === false,
+      ),
+  );
+  if (!hasPluginRuntimeHostMethodBudgetRule) {
+    throw new Error('plugin-runtime-host public method budget forbidden rule is missing');
+  }
+  const hasPluginHostAdapterMethodBudgetRule = forbiddenContentRules.some(
+    (rule) =>
+      rule.path === 'src/crates/execution/plugin-runtime-host/src/adapter.rs' &&
+      rule.patterns.some((pattern) =>
+        pattern.message.includes('unexpected PluginHostAdapter trait method'),
+      ),
+  );
+  if (!hasPluginHostAdapterMethodBudgetRule) {
+    throw new Error('plugin-runtime-host adapter method budget forbidden rule is missing');
   }
   const agentRuntimeRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'agent-runtime',
@@ -813,7 +1178,6 @@ export function runManifestParserSelfTest({
   const agentToolsRuntimeForbiddenContracts = [
     'GetToolSpecTool',
     'manifest_resolver',
-    'unlocked_collapsed_tools',
     'ToolUseContext',
   ];
   const agentToolsManifestRuleText = agentToolsManifestRule.patterns
@@ -837,7 +1201,7 @@ export function runManifestParserSelfTest({
     'GetToolSpecTool',
     'GET_TOOL_SPEC_TOOL_NAME',
     'manifest_resolver',
-    'unlocked_collapsed_tools',
+    'loaded_deferred_tool_specs',
     'ToolExposure',
   ];
   for (const contract of toolPacksManifestContracts) {
@@ -850,6 +1214,28 @@ export function runManifestParserSelfTest({
   );
   if (!serviceAgentRuntimeRuleText.includes('self\\.scheduler')) {
     throw new Error('service agent runtime boundary rule must forbid direct scheduler submit');
+  }
+  if (!serviceAgentRuntimeRuleText.includes('strip_remote_user_input_tags')) {
+    throw new Error('service agent runtime boundary rule must forbid remote display cleanup ownership');
+  }
+  if (!serviceAgentRuntimeRuleText.includes('compress_remote_chat_data_url_for_mobile')) {
+    throw new Error('service agent runtime boundary rule must forbid remote thumbnail compression ownership');
+  }
+  if (!serviceAgentRuntimeRuleText.includes('normalize_remote_session_model_id')) {
+    throw new Error('service agent runtime boundary rule must forbid session model normalization ownership');
+  }
+  const serviceAgentRuntimeOwnerFeatureContracts = [
+    'images',
+    'image::load_from_memory',
+    'JpegEncoder',
+    "User's question",
+    'AgentInputAttachment',
+    'remote_image',
+  ];
+  for (const contract of serviceAgentRuntimeOwnerFeatureContracts) {
+    if (!serviceAgentRuntimeRuleText.includes(contract)) {
+      throw new Error(`service agent runtime boundary rule must forbid remote chat owner feature: ${contract}`);
+    }
   }
   const sessionMessageRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
@@ -1241,32 +1627,12 @@ export function runManifestParserSelfTest({
       contracts: [
         'AgenticFrontendEvent',
         'project_agentic_frontend_event',
-        'legacy_flat_message',
         'deep_review_queue_projection_preserves_camel_case_contract',
-        'legacy_flat_message_keeps_projection_type_authoritative',
-        'legacy_flat_dialog_turn_started_preserves_existing_shape',
-      ],
-    },
-    {
-      path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
-      contracts: [
-        'AGENTIC_EVENT_PROJECTION_MANIFEST',
-        'public_agentic_event_projection_manifest',
-        'is_legacy_websocket_agentic_event_type',
-        'public_event_projection_manifest_describes_projected_events_and_websocket_allowlist',
       ],
     },
     {
       path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
       contracts: ['project_agentic_frontend_event', 'projected.event_name.as_str()'],
-    },
-    {
-      path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
-      contracts: [
-        'project_agentic_frontend_event',
-        'is_legacy_websocket_agentic_event_type',
-        'websocket_keeps_legacy_agentic_event_allowlist',
-      ],
     },
     {
       path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
@@ -2088,6 +2454,46 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+      contracts: [
+        'p0_plugin_host_is_executable_only_for_product_full_desktop_and_cli',
+        'p0_plugin_host_binding_builds_agent_runtime_parts',
+        'non_p0_surfaces_cannot_inherit_executable_plugin_host',
+        'default_product_shapes_expose_only_disabled_plugin_availability',
+        'default_assembled_product_shapes_keep_profile_specific_plugin_availability',
+      ],
+    },
+    {
+      path: 'src/crates/execution/plugin-runtime-host/tests/plugin_runtime_host.rs',
+      contracts: [
+        'host_dispatches_candidates',
+        'host_replays_idempotent_dispatch_without_recalling_adapter',
+        'concurrent_idempotent_dispatch_reuses_in_flight_response',
+        'concurrent_cross_key_dispatch_observes_active_quarantine_before_success',
+        'idempotent_dispatch_cache_is_scoped_by_project_workspace_and_source',
+        'idempotent_dispatch_cache_does_not_replay_across_events',
+        'idempotent_dispatch_cache_is_scoped_by_epoch_changes',
+        'idempotent_dispatch_cache_evicts_old_entries',
+        'read_model_is_scoped_by_project_and_workspace',
+        'read_model_rejects_wrong_workspace_response',
+        'active_quarantine_blocks_new_dispatches_until_host_restart',
+        'active_quarantine_blocks_malformed_follow_up_without_new_quarantine',
+        'malformed_dispatch_with_missing_identity_observes_active_quarantine',
+        'host_owned_quarantine_is_visible_in_read_model_with_diagnostics',
+        'host_restart_clears_domain_quarantine_and_cached_dispatch',
+        'zero_deadline_quarantines_without_adapter_dispatch',
+        'malformed_dispatch_envelope_quarantines_without_adapter_dispatch',
+        'nonzero_deadline_timeout_quarantines_without_success_effects',
+        'adapter_failure_quarantines_without_writing_success',
+        'malformed_adapter_success_quarantines_without_effects',
+        'permission_prompt_target_mismatch_quarantines_without_effects',
+        'final_policy_decision_from_adapter_fails_closed',
+        'adapter_id_or_quarantine_with_effects_mismatch_fails_closed',
+        'status_quarantine_with_success_effects_fails_closed',
+        'disposed_project_rejects_dispatch_and_read_model_reports_statuses',
+      ],
+    },
+    {
       path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
       contracts: [
         'product_runtime_parts_can_build_agent_runtime_sdk_without_core',
@@ -2179,7 +2585,6 @@ export function runManifestParserSelfTest({
         'resolve_tool_manifest_policy',
         'default_exposure',
         'build_tool_manifest_policy_tools',
-        'build_collapsed_tool_stub_definition',
         'PromptVisibleToolManifestItem',
         'build_prompt_visible_tool_manifest_definitions',
         'ContextualToolManifestItem',
@@ -2194,9 +2599,9 @@ export function runManifestParserSelfTest({
         'build_get_tool_spec_catalog_description_from_provider',
         'resolve_get_tool_spec_detail_from_provider',
         'build_get_tool_spec_description',
-        'GetToolSpecCollapsedToolSummary',
+        'GetToolSpecDeferredToolSummary',
         'GetToolSpecDetail',
-        'summarize_get_tool_spec_collapsed_tools',
+        'summarize_get_tool_spec_deferred_tools',
         'resolve_get_tool_spec_detail',
         'build_get_tool_spec_catalog_description',
         'get_tool_spec_input_schema',
@@ -2216,14 +2621,14 @@ export function runManifestParserSelfTest({
         'GetToolSpecRuntime',
         'call_results',
         'GetToolSpecLoadObservation',
-        'collect_loaded_collapsed_tool_names',
-        'CollapsedToolUsageError',
+        'collect_loaded_deferred_tool_specs',
+        'DeferredToolUsageError',
         'ToolExecutionAccessError',
         'validate_tool_allowed_by_list',
-        'validate_collapsed_tool_usage',
+        'validate_deferred_tool_usage',
         'sort_tool_manifest_definitions',
-        'is_tool_collapsed',
-        'get_collapsed_tool_names',
+        'is_tool_deferred',
+        'get_deferred_tool_names',
       ],
     },
     {
@@ -2356,7 +2761,6 @@ export function runManifestParserSelfTest({
         'build_remote_model_catalog',
         'update_remote_session_model',
         'normalize_remote_session_model_id',
-        'normalize_remote_session_model_id_contract',
         'normalize_remote_model_selection',
         'normalize_remote_model_selection_contract',
         'remote_chat_messages_from_turns',
@@ -2364,8 +2768,7 @@ export function runManifestParserSelfTest({
         'remote_dialog_submit_outcome_from_scheduler',
         'RemoteChatHistoryTurn',
         'build_remote_chat_messages',
-        'strip_remote_user_input_tags',
-        'compress_remote_chat_data_url_for_mobile',
+        'project_remote_chat_user',
         'load_remote_chat_messages',
         'agent_runtime',
         'agent_runtime_with_dialog_turns',
@@ -2391,7 +2794,7 @@ export function runManifestParserSelfTest({
         'CoreRemoteSessionTrackerHost',
         'RemoteExecutionDispatcher',
         'ImageContextData',
-        'RemoteImageContextAdapter',
+        'agent_input_attachment_from_remote_image_context',
         'AgentSubmissionPort',
         'AgentDialogTurnPort',
         'AgentTurnCancellationPort',
@@ -2475,6 +2878,8 @@ export function runManifestParserSelfTest({
         'RemoteChatHistoryRound',
         'RemoteChatHistoryToolItem',
         'build_remote_chat_messages',
+        'RemoteChatUserProjection',
+        'project_remote_chat_user',
         'REMOTE_FILE_MAX_READ_BYTES',
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',
@@ -2596,7 +3001,7 @@ export function runManifestParserSelfTest({
         'from_inner',
         'ProductToolDecoratorRef',
         'ProductToolRuntime',
-        'get_collapsed_tool_names',
+        'get_deferred_tool_names',
         'resolve_product_readonly_enabled_tools',
       ],
     },
@@ -2636,7 +3041,7 @@ export function runManifestParserSelfTest({
         'resolve_product_tool_manifest',
         'resolve_product_readonly_enabled_tools',
         'resolve_product_get_tool_spec_results',
-        'unlocked_collapsed_tools',
+        'loaded_deferred_tool_specs',
         'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
         'product_resolved_manifest_owner_matches_legacy_shape',
         'GetToolSpec requires agent type context',
@@ -2762,14 +3167,14 @@ export function runManifestParserSelfTest({
         'GET_TOOL_SPEC_TOOL_NAME',
         'resolve_product_resolved_visible_tools',
         'resolve_product_resolved_tool_manifest',
-        'collapsed_tool_names',
+        'deferred_tool_names',
       ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
       contracts: [
         'GetToolSpecTool',
-        'build_collapsed_tools_context_section',
+        'build_deferred_tools_context_section',
         'product_get_tool_spec_runtime',
         'with_runtime',
         'resolve_product_get_tool_spec_results',
@@ -2796,7 +3201,7 @@ export function runManifestParserSelfTest({
         'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
         'customData',
         'cancellationToken',
-        'unlocked_collapsed_tools',
+        'loaded_deferred_tool_specs',
         'impl ToolUseContext',
         'record_light_checkpoint',
         'build_runtime_light_checkpoint',
@@ -2821,7 +3226,7 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
         'validate_tool_execution_admission',
-        'unlocked_collapsed_tools',
+        'loaded_deferred_tool_specs',
         'GetToolSpec',
         'render_tool_result_for_assistant',
         'build_tool_execution_error_presentation',
@@ -2832,21 +3237,21 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/execution/execution_engine.rs',
       contracts: [
-        'collect_product_unlocked_collapsed_tools',
-        'unlocked_collapsed_tools',
-        'collapsed_tool_names',
+        'collect_product_loaded_deferred_tool_specs',
+        'loaded_deferred_tool_specs',
+        'deferred_tool_names',
         'GetToolSpec',
         'should_post_process_research_report',
         'bitfun_services_integrations::deep_research::run_for_session_workspace',
       ],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/unlock_state.rs',
+      path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/loaded_spec_state.rs',
       contracts: [
-        'collect_product_unlocked_collapsed_tools',
+        'collect_product_loaded_deferred_tool_specs',
         'GetToolSpecLoadObservation',
-        'collect_loaded_collapsed_tool_names',
-        'product_unlock_state_dedupes_and_filters_runtime_unlocks',
+        'collect_loaded_deferred_tool_specs',
+        'product_loaded_spec_state_dedupes_and_filters_results',
       ],
     },
     {
@@ -2875,17 +3280,30 @@ export function runManifestParserSelfTest({
       contracts: ['builtin_agent_specs', 'runtime_agents::default_model_id_for_builtin_agent'],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/input.rs',
       contracts: [
         'fork_context',
         'SubagentContextMode::Fork',
-        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
         'run_in_background',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+      contracts: [
+        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
         'start_background_subagent',
         'background_task_id',
-        'Background \\{\\} started successfully',
-        '<background_task status=\\\\"started\\\\"',
-        'background_subagent_start_acknowledgement_keeps_structured_task_marker',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/background.rs',
+      contracts: ['Background subagent started successfully'],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/tests.rs',
+      contracts: [
+        'background_subagent_start_acknowledgement_uses_session_id_only',
+        '<background_task',
       ],
     },
     {
@@ -2912,7 +3330,7 @@ export function runManifestParserSelfTest({
         'SubagentSelectorAction',
         'show_list',
         'show_config',
-        'default_enabled',
+        'enabled',
         'render_subagent_line',
       ],
     },
@@ -2956,14 +3374,19 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/deep_review.rs',
       contracts: [
         'deep_review_task_adapter::should_emit_deep_review_retry_guidance',
-        'deep_review_task_adapter::deep_review_retry_guidance',
         'deep_review_task_adapter::auto_retry_suppression_reason',
         'deep_review_task_adapter::ensure_deep_review_auto_retry_allowed',
-        'deep_review_task_adapter::deep_review_task_completion_result',
         'deep_review_task_adapter::deep_review_cancelled_reviewer_result',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+      contracts: [
+        'deep_review_task_adapter::deep_review_retry_guidance',
+        'deep_review_task_adapter::deep_review_task_completion_result',
         'DeepReviewProviderCapacityRetryRuntime::default',
         'DeepReviewProviderCapacityRetryDecision::WaitForCapacity',
       ],
@@ -3224,7 +3647,6 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/contracts/product-domains/src/miniapp/builtin.rs',
       contracts: [
-        'builtin-pr-review',
         'BUILTIN_APPS',
         'BuiltinMiniAppBundle',
         'BuiltinInstallMarker',

@@ -1,10 +1,104 @@
 export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
   const document = doc;
   const view = document.defaultView || window;
+  const diagnostics = [];
+  const seenDiagnostics = new Set();
 
     const skipTags = new Set(['SCRIPT', 'STYLE', 'PRE', 'CODE', 'SVG', 'TEXTAREA']);
     const inlineSelector = 'strong,b,em,i,u,span,a,small,mark,sub,sup,code';
     const textSelector = 'p,h1,h2,h3,h4,h5,h6,li';
+    const textContainerSelector = 'p,h1,h2,h3,h4,h5,h6,li';
+    const manualBulletPattern = /^(\s*)([•●○▪‣·▸◆◇■□–—*-])\s+/u;
+    const ambiguousBulletSymbols = new Set(['-', '*', '–', '—']);
+
+    function sourceIdOf(element) {
+      return element?.dataset?.pptxSourceId || element?.id || null;
+    }
+
+    function assignSourceIds() {
+      const body = document.body;
+      if (!body) return;
+      const elements = [body, ...body.querySelectorAll('*')];
+      const reserved = new Set(
+        elements.map((element) => element.dataset.pptxSourceId?.trim()).filter(Boolean),
+      );
+      const used = new Set();
+      elements.forEach((element) => {
+        const sourceId = element.dataset.pptxSourceId?.trim();
+        if (!sourceId) return;
+        if (!used.has(sourceId)) {
+          element.dataset.pptxSourceId = sourceId;
+          used.add(sourceId);
+          return;
+        }
+        let suffix = 2;
+        let candidate = `${sourceId}-${suffix}`;
+        while (used.has(candidate) || reserved.has(candidate)) {
+          suffix += 1;
+          candidate = `${sourceId}-${suffix}`;
+        }
+        element.dataset.pptxSourceId = candidate;
+        used.add(candidate);
+        reserved.add(candidate);
+        addDiagnostic(
+          'repaired',
+          'duplicate_source_id_repaired',
+          `Duplicate source element id "${sourceId}" was reassigned to "${candidate}".`,
+          element,
+        );
+      });
+      let sequence = 1;
+      elements.forEach((element) => {
+        if (element.dataset?.pptxSourceId) return;
+        while (used.has(`pptx-source-${sequence}`) || reserved.has(`pptx-source-${sequence}`)) {
+          sequence += 1;
+        }
+        const sourceId = `pptx-source-${sequence}`;
+        sequence += 1;
+        element.dataset.pptxSourceId = sourceId;
+        used.add(sourceId);
+      });
+    }
+
+    function derivedSourceId(element, suffix) {
+      const base = sourceIdOf(element) || 'pptx-source';
+      let candidate = `${base}-${suffix}`;
+      let sequence = 2;
+      while (document.querySelector(`[data-pptx-source-id="${candidate}"]`)) {
+        candidate = `${base}-${suffix}-${sequence}`;
+        sequence += 1;
+      }
+      return candidate;
+    }
+
+    function addDiagnostic(severity, code, message, element = null) {
+      const sourceId = sourceIdOf(element);
+      const key = `${severity}:${code}:${sourceId || ''}`;
+      if (seenDiagnostics.has(key)) return;
+      seenDiagnostics.add(key);
+      const diagnostic = {
+        severity,
+        kind: severity === 'blocking' ? 'blocking' : undefined,
+        code,
+        message,
+        sourceId,
+        tag: element?.tagName?.toLowerCase?.() || null,
+      };
+      try {
+        const rect = element?.getBoundingClientRect?.();
+        if (rect && rect.width > 0 && rect.height > 0) {
+          diagnostic.bbox = {
+            x: rect.left,
+            y: rect.top,
+            width: rect.width,
+            height: rect.height,
+          };
+        }
+      } catch {
+        // Diagnostics remain useful without optional geometry.
+      }
+      diagnostics.push(diagnostic);
+    }
 
     function inferBlockTag(node) {
       const cls = String(node.className || '').toLowerCase();
@@ -43,19 +137,89 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       }
     }
 
+    function repairNestedParagraphs(root) {
+      root.querySelectorAll(textContainerSelector).forEach((outer) => {
+        const nested = [...outer.children].filter((child) => child.matches(textContainerSelector));
+        if (!nested.length || !outer.parentNode) return;
+        const fragments = [];
+        let current = document.createElement(outer.tagName.toLowerCase());
+        const copyOuterAttributes = (target) => {
+          [...outer.attributes].forEach((attribute) => {
+            if (attribute.name !== 'data-pptx-source-id') target.setAttribute(attribute.name, attribute.value);
+          });
+        };
+        copyOuterAttributes(current);
+        current.dataset.pptxSourceId = sourceIdOf(outer);
+        [...outer.childNodes].forEach((node) => {
+          if (node.nodeType === view.Node.ELEMENT_NODE && node.matches(textContainerSelector)) {
+            if (current.textContent.trim() || current.children.length) fragments.push(current);
+            fragments.push(node);
+            current = document.createElement(outer.tagName.toLowerCase());
+            copyOuterAttributes(current);
+            current.dataset.pptxSourceId = derivedSourceId(outer, `split-${fragments.length + 1}`);
+          } else {
+            current.appendChild(node);
+          }
+        });
+        if (current.textContent.trim() || current.children.length) fragments.push(current);
+        outer.replaceWith(...fragments);
+        addDiagnostic(
+          'repaired',
+          'nested_paragraph_repaired',
+          'Nested paragraph structure was split into ordered sibling paragraphs.',
+          fragments[0] || nested[0],
+        );
+      });
+    }
+
     function wrapDirectTextNodes(root) {
       root.querySelectorAll('div').forEach((div) => {
         if (skipTags.has(div.tagName)) return;
-        [...div.childNodes].forEach((node) => {
-          if (node.nodeType !== Node.TEXT_NODE) return;
-          const text = node.textContent.replace(/\s+/g, ' ').trim();
-          if (!text) {
-            node.remove();
-            return;
+        let sequence = 1;
+        let nodes = [...div.childNodes];
+        while (nodes.length) {
+          const firstDirectText = nodes.findIndex(
+            (node) => node.nodeType === view.Node.TEXT_NODE && node.textContent.trim(),
+          );
+          if (firstDirectText < 0) break;
+          let start = firstDirectText;
+          while (start > 0) {
+            const previous = nodes[start - 1];
+            if (previous.nodeType === view.Node.ELEMENT_NODE
+              && !previous.matches(inlineSelector)
+              && previous.tagName !== 'BR') break;
+            start -= 1;
           }
+          let end = firstDirectText;
+          while (end + 1 < nodes.length) {
+            const next = nodes[end + 1];
+            if (next.nodeType === view.Node.ELEMENT_NODE
+              && !next.matches(inlineSelector)
+              && next.tagName !== 'BR') break;
+            end += 1;
+          }
+          const group = nodes.slice(start, end + 1);
           const block = document.createElement(inferBlockTag(div));
-          block.textContent = text;
-          div.replaceChild(block, node);
+          block.dataset.pptxSourceId = derivedSourceId(div, `text-${sequence}`);
+          sequence += 1;
+          group[0].before(block);
+          group.forEach((node) => {
+            if (node.nodeType === view.Node.TEXT_NODE) {
+              node.textContent = node.textContent.replace(/\s+/g, ' ');
+            }
+            block.appendChild(node);
+          });
+          block.normalize();
+          addDiagnostic(
+            'repaired',
+            'direct_text_wrapped',
+            'Direct container text was wrapped in a semantic text block.',
+            block,
+          );
+          nodes = [...div.childNodes];
+        }
+        [...div.childNodes].forEach((node) => {
+          if (node.nodeType === view.Node.TEXT_NODE && !node.textContent.trim()) node.remove();
         });
       });
     }
@@ -66,11 +230,96 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
         const hasBg = computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)';
         const hasBorder = hasVisibleBorder(computed);
         if (!hasBg && !hasBorder) return;
+        if (span.closest(textContainerSelector)) return;
         const block = document.createElement('p');
         if (span.className) block.className = span.className;
         if (span.getAttribute('style')) block.setAttribute('style', span.getAttribute('style'));
-        block.textContent = span.textContent;
+        block.dataset.pptxSourceId = sourceIdOf(span);
+        while (span.firstChild) block.appendChild(span.firstChild);
         span.replaceWith(block);
+        addDiagnostic(
+          'repaired',
+          'decorated_inline_promoted',
+          'Decorated inline text was promoted to a block that can be exported as shape plus text.',
+          block,
+        );
+      });
+    }
+
+    function removeManualBullet(element) {
+      const symbol = element.textContent.match(manualBulletPattern)?.[2];
+      if (!symbol) return;
+      const walker = document.createTreeWalker(element, view.NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode();
+      let removed = false;
+      while (textNode) {
+        if (!removed) {
+          const symbolIndex = textNode.textContent.search(/\S/u);
+          if (symbolIndex >= 0) {
+            if (textNode.textContent.slice(symbolIndex).startsWith(symbol)) {
+              textNode.textContent = textNode.textContent.slice(symbolIndex + symbol.length).replace(/^\s+/u, '');
+              removed = true;
+              if (textNode.textContent) return;
+            } else {
+              return;
+            }
+          }
+        } else if (textNode.textContent) {
+          textNode.textContent = textNode.textContent.replace(/^\s+/u, '');
+          return;
+        }
+        textNode = walker.nextNode();
+      }
+    }
+
+    function normalizeManualBulletBlocks(root) {
+      root.querySelectorAll('body, div, section, article, aside, main, td, th').forEach((parent) => {
+        let group = [];
+        const flush = () => {
+          if (!group.length) return;
+          const first = group[0];
+          const firstSymbol = first.textContent.match(manualBulletPattern)?.[2];
+          if (group.length === 1 && ambiguousBulletSymbols.has(firstSymbol)) {
+            group = [];
+            return;
+          }
+          const list = document.createElement('ul');
+          list.dataset.pptxSourceId = derivedSourceId(first, 'list');
+          const firstComputed = view.getComputedStyle(first);
+          const authoredIndent = parseFloat(firstComputed.marginLeft || first.style.marginLeft || '0') || 0;
+          list.style.margin = '0';
+          list.style.paddingLeft = `${Math.max(24, authoredIndent + 24)}px`;
+          first.parentNode.insertBefore(list, first);
+          group.forEach((block) => {
+            const item = document.createElement('li');
+            [...block.attributes].forEach((attribute) => {
+              if (!['id', 'data-pptx-source-id'].includes(attribute.name)) {
+                item.setAttribute(attribute.name, attribute.value);
+              }
+            });
+            item.dataset.pptxSourceId = sourceIdOf(block);
+            while (block.firstChild) item.appendChild(block.firstChild);
+            removeManualBullet(item);
+            list.appendChild(item);
+            block.remove();
+          });
+          addDiagnostic(
+            'repaired',
+            'manual_bullet_list',
+            `${group.length} consecutive manual bullet paragraph(s) were converted to a semantic list.`,
+            list,
+          );
+          group = [];
+        };
+        [...parent.children].forEach((child) => {
+          const isTextBlock = /^(P|H[1-6])$/.test(child.tagName);
+          if (isTextBlock && manualBulletPattern.test(child.textContent || '')) {
+            group.push(child);
+          } else {
+            flush();
+          }
+        });
+        flush();
       });
     }
 
@@ -90,6 +339,75 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
           });
           div.replaceChildren(ul);
         }
+      });
+    }
+
+    function collectFallbackDiagnostics(root) {
+      root.querySelectorAll('*').forEach((element) => {
+        const computed = view.getComputedStyle(element);
+        const backgroundImage = String(computed.backgroundImage || element.style?.backgroundImage || '');
+        if (backgroundImage.includes('gradient')) {
+          addDiagnostic(
+            'fallback',
+            'css_gradient',
+            'CSS gradient requires fallback rendering; native gradient mapping is not available.',
+            element,
+          );
+        }
+        const filter = String(computed.filter || element.style?.filter || '');
+        if (filter && filter !== 'none') {
+          addDiagnostic(
+            'fallback',
+            'css_filter',
+            'CSS filter requires fallback rendering.',
+            element,
+          );
+        }
+      });
+      root.querySelectorAll('svg').forEach((svg) => {
+        if (svg.querySelector('filter,mask,foreignObject,use,pattern,textPath,clipPath,image')) {
+          addDiagnostic(
+            'fallback',
+            'complex_svg_raster',
+            'SVG filter, mask, or foreignObject requires local browser raster rendering.',
+            svg,
+          );
+        } else if (svg.querySelector('path')) {
+          addDiagnostic(
+            'fallback',
+            'complex_svg_vector',
+            'Complex SVG geometry will be preserved as a local SVG image.',
+            svg,
+          );
+        }
+      });
+      root.querySelectorAll('style').forEach((style) => {
+        let rules = [];
+        try {
+          rules = [...(style.sheet?.cssRules || [])];
+        } catch {
+          return;
+        }
+        rules.forEach((rule) => {
+          const selector = rule.selectorText || '';
+          const content = rule.style?.content;
+          if (!/::(before|after)/.test(selector)
+            || !content
+            || ['none', 'normal', '""', "''"].includes(content)) return;
+          const baseSelector = selector.replace(/::(before|after)/g, '').trim();
+          let matches = [];
+          try {
+            matches = [...root.querySelectorAll(baseSelector)];
+          } catch {
+            return;
+          }
+          matches.forEach((element) => addDiagnostic(
+            'fallback',
+            'generated_content',
+            'Pseudo-element generated content requires fallback rendering.',
+            element,
+          ));
+        });
       });
     }
 
@@ -273,14 +591,18 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       (root.head || root.documentElement).appendChild(style);
     }
 
+    assignSourceIds();
+    collectFallbackDiagnostics(document);
     ensureExportCanvas();
-    wrapDirectTextNodes(document);
+    repairNestedParagraphs(document);
     promoteDecoratedSpans(document);
+    wrapDirectTextNodes(document);
+    normalizeManualBulletBlocks(document);
     normalizeInlineLists(document);
-    flattenGradients(document);
-    stripUnsupportedDivBackgrounds(document);
 
     if (aggressive) {
+      flattenGradients(document);
+      stripUnsupportedDivBackgrounds(document);
       hoistTextDecorations(document);
       resetInlineBoxModel(document);
       enforceInlineElementsSafe(document);
@@ -297,4 +619,5 @@ export function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       // Preserve author layout/CSS; snapshot computed styles for a stable second paint.
       inlineSnapshotLayoutStyles(document);
     }
+    return { diagnostics };
 }

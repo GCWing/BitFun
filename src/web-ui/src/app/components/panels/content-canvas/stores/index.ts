@@ -16,4 +16,5 @@ export {
   useDragging,
   switchAgentCanvasWorkspace,
   removeAgentCanvasSnapshot,
+  clearAgentCanvasForPeerSwitch,
 } from './canvasStore';

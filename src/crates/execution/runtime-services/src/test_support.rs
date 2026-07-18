@@ -194,10 +194,17 @@ impl RemoteWorkspaceRuntimeHost for FakeRuntimePort {
         Vec::new()
     }
 
-    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+    async fn open_workspace(
+        &self,
+        path: &str,
+        _remote_connection_id: Option<&str>,
+        _remote_ssh_host: Option<&str>,
+    ) -> Result<RemoteWorkspaceUpdate, String> {
         Ok(RemoteWorkspaceUpdate {
             path: path.to_string(),
             name: "project".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
         })
     }
 
@@ -209,6 +216,8 @@ impl RemoteWorkspaceRuntimeHost for FakeRuntimePort {
         Ok(RemoteWorkspaceUpdate {
             path: path.to_string(),
             name: "assistant".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
         })
     }
 }

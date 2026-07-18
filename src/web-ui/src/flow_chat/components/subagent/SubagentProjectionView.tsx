@@ -16,6 +16,7 @@ interface SubagentProjectionViewProps {
   parentToolIds?: Set<string>;
   parentSessionId?: string;
   directSubagentSessionId?: string;
+  directSubagentDialogTurnId?: string;
   subagentSessionId?: string;
   items?: FlowItem[];
   turnId?: string;
@@ -126,6 +127,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
   parentToolIds,
   parentSessionId,
   directSubagentSessionId,
+  directSubagentDialogTurnId,
   subagentSessionId,
   items: itemsProp,
   turnId,
@@ -151,6 +153,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
         parentSessionId,
         parentToolIds,
         directSubagentSessionId,
+        directSubagentDialogTurnId,
       },
       { itemsMode: liveItemsMode },
     );
@@ -183,6 +186,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
           parentSessionId,
           parentToolIds,
           directSubagentSessionId,
+          directSubagentDialogTurnId,
         },
         { itemsMode: liveItemsMode },
       );
@@ -207,7 +211,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
     });
 
     return unsubscribe;
-  }, [directSubagentSessionId, liveItemsMode, parentSessionId, parentToolIds]);
+  }, [directSubagentDialogTurnId, directSubagentSessionId, liveItemsMode, parentSessionId, parentToolIds]);
 
   const liveItems = useMemo(
     () => itemsProp ?? projectionState?.items ?? [],

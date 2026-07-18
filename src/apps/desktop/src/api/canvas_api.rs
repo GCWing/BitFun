@@ -159,7 +159,7 @@ pub async fn report_canvas_runtime_error(
             .push_str(&format!(" (source revision: {})", source_revision));
     }
     if let Some(stack) = request.stack.as_deref().filter(|value| !value.is_empty()) {
-        diagnostic.message.push_str("\n");
+        diagnostic.message.push('\n');
         diagnostic.message.push_str(stack);
     }
     let snapshot = service

@@ -77,6 +77,8 @@ interface SceneState {
   closeScene:   (id: SceneTabId) => void;
   goBack:       () => void;
   goForward:    () => void;
+  /** Reset tabs/history when entering or exiting Peer Device Mode. */
+  resetForPeerSwitch: () => void;
 }
 
 function buildDefaultTabs(): SceneTab[] {
@@ -256,6 +258,17 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         return;
       }
     }
+  },
+
+  resetForPeerSwitch: () => {
+    const tabs = buildDefaultTabs();
+    const activeTabId: SceneTabId = tabs[0]?.id ?? WELCOME_SCENE_ID;
+    set({
+      openTabs: tabs,
+      activeTabId,
+      navHistory: [activeTabId],
+      navCursor: 0,
+    });
   },
 }));
 

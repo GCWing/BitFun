@@ -68,12 +68,14 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
+  const [enableDeferredToolLoading, setEnableDeferredToolLoading] = useState(true);
   const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
   const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
     useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
+  const [deferredToolLoadingConfigSaving, setDeferredToolLoadingConfigSaving] = useState(false);
 
   // ── Debug mode config state ──────────────────────────────────────────────
   const [debugConfig, setDebugConfig] = useState<DebugModeConfig>(DEFAULT_DEBUG_MODE_CONFIG);
@@ -90,6 +92,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         allModels,
         funcAgentModelsData,
         skipConfirm,
+        deferredToolLoadingEnabled,
         loadedSubagentMaxConcurrency,
         execTimeout,
         confirmTimeout,
@@ -100,6 +103,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
         configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
         configManager.getConfig<boolean>('ai.skip_tool_confirmation'),
+        configManager.getConfig<boolean>('ai.enable_deferred_tool_loading'),
         configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
@@ -111,6 +115,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setSkipToolConfirmation(skipConfirm ?? true);
+      setEnableDeferredToolLoading(deferredToolLoadingEnabled ?? true);
       setSubagentMaxConcurrency(loadedSubagentMaxConcurrency != null
         ? loadedSubagentMaxConcurrency
         : DEFAULT_SUBAGENT_MAX_CONCURRENCY);
@@ -231,6 +236,24 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSkipToolConfirmation(!checked);
     } finally {
       setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleDeferredToolLoadingChange = async (checked: boolean) => {
+    const previous = enableDeferredToolLoading;
+    setEnableDeferredToolLoading(checked);
+    setDeferredToolLoadingConfigSaving(true);
+    try {
+      await configManager.setConfig('ai.enable_deferred_tool_loading', checked);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save enable_deferred_tool_loading', error);
+      notificationService.error(
+        `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+      setEnableDeferredToolLoading(previous);
+    } finally {
+      setDeferredToolLoadingConfigSaving(false);
     }
   };
 
@@ -416,6 +439,20 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const enabledModels = models.filter((m: AIModelConfig) => m.enabled);
   const sessionTitleModelId = funcAgentModels[AGENT_SESSION_TITLE] || 'fast';
   const templateEntries = getTemplateEntries();
+  // const computerUseAccessLabel = computerUseStatusLoading
+  //   ? t('loading.text')
+  //   : computerUseAccess ? t('computerUse.granted') : t('computerUse.notGranted');
+  // const computerUseScreenLabel = computerUseStatusLoading
+  //   ? t('loading.text')
+  //   : computerUseScreen ? t('computerUse.granted') : t('computerUse.notGranted');
+  // const browserStatusLabel = browserCdpAvailable
+  //   ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
+  //   : browserStatusLoading ? t('loading.text') : t('browserControl.notConnected');
+  // const browserSelectOptions: SelectOption[] = browserOptions.map((option) => ({
+  //   value: option.value,
+  //   label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
+  //   disabled: !option.installed,
+  // }));
 
   const pageTitle = variant === 'personalization'
     ? t('personalizationPage.title')
@@ -611,11 +648,276 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
           </ConfigPageRow>
         </ConfigPageSection>
 
+        <ConfigPageSection
+          title={t('deferredToolLoading.sectionTitle')}
+          description={t('deferredToolLoading.sectionDescription')}
+        >
+          <ConfigPageRow
+            label={t('common.enable')}
+            description={!enableDeferredToolLoading ? t('deferredToolLoading.warning') : undefined}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control">
+              <Switch
+                checked={enableDeferredToolLoading}
+                onChange={(event) => handleDeferredToolLoadingChange(event.target.checked)}
+                disabled={deferredToolLoadingConfigSaving}
+                size="small"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        {/* ── Computer use (desktop) ─────────────────────────────── */}
+        <ConfigPageSection
+          title={t('computerUse.sectionTitle')}
+          description={
+            IS_TAURI_DESKTOP ? t('computerUse.sectionDescription') : t('computerUse.desktopOnly')
+          }
+        >
+          {IS_TAURI_DESKTOP ? (
+            <>
+              <ConfigPageRow label={t('computerUse.enable')} description={t('computerUse.enableDesc')} align="center">
+                <div className="bitfun-func-agent-config__row-control">
+                  <Switch
+                    checked={computerUseEnabled}
+                    onChange={(e) => handleComputerUseEnabledChange(e.target.checked)}
+                    disabled={computerUseBusy || computerUseStatusLoading}
+                    size="small"
+                  />
+                </div>
+              </ConfigPageRow>
+              <ConfigPageRow
+                label={t('computerUse.accessibility')}
+                description={t('computerUse.accessibilityDesc')}
+                align="center"
+                balanced
+              >
+                <div
+                  className="bitfun-func-agent-config__row-control"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'nowrap',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span className={!computerUseStatusLoading && computerUseAccess ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
+                      {computerUseAccessLabel}
+                    </span>
+                    <IconButton
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      aria-label={t('computerUse.refreshStatus')}
+                      tooltip={t('computerUse.refreshStatus')}
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void refreshComputerUseStatus()}
+                    >
+                      <RefreshCw size={14} />
+                    </IconButton>
+                  </span>
+                  {platform === 'macos' && (
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void handleComputerUseOpenSettings('accessibility')}
+                    >
+                      {t('computerUse.openSettings')}
+                    </Button>
+                  )}
+                </div>
+              </ConfigPageRow>
+              <ConfigPageRow
+                label={t('computerUse.screenCapture')}
+                description={t('computerUse.screenCaptureDesc')}
+                align="center"
+                balanced
+              >
+                <div
+                  className="bitfun-func-agent-config__row-control"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'nowrap',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span className={!computerUseStatusLoading && computerUseScreen ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
+                      {computerUseScreenLabel}
+                    </span>
+                    <IconButton
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      aria-label={t('computerUse.refreshStatus')}
+                      tooltip={t('computerUse.refreshStatus')}
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void refreshComputerUseStatus()}
+                    >
+                      <RefreshCw size={14} />
+                    </IconButton>
+                  </span>
+                  {platform === 'macos' && (
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void handleComputerUseOpenSettings('screen_capture')}
+                    >
+                      {t('computerUse.openSettings')}
+                    </Button>
+                  )}
+                </div>
+              </ConfigPageRow>
+              {computerUsePlatformNote && (
+                <div
+                  className="bitfun-func-agent-config__platform-note"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 6,
+                    padding: '8px 0 4px',
+                  }}
+                >
+                  <Info size={14} style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
+                  <p className="bitfun-config-page-row__description" style={{ margin: 0 }}>
+                    <strong>{t('computerUse.platformNote')}: </strong>
+                    {computerUsePlatformNote}
+                  </p>
+                </div>
+              )}
+            </>
+          ) : null}
+        </ConfigPageSection>
+
+        {/* ── Browser control (CDP) ──────────────────────────────── */}
+        <ConfigPageSection
+          title={t('browserControl.sectionTitle')}
+          description={
+            IS_TAURI_DESKTOP ? t('browserControl.sectionDescription') : t('browserControl.desktopOnly')
+          }
+        >
+          {IS_TAURI_DESKTOP ? (
+            <>
+              {/* Only show browser selector when CDP is not connected */}
+              {!browserCdpAvailable && (
+              <ConfigPageRow
+                label={t('browserControl.preferredBrowser')}
+                description={t('browserControl.preferredBrowserDesc')}
+                align="center"
+                balanced
+              >
+                <div className="bitfun-func-agent-config__row-control">
+                  <Select
+                    value={preferredBrowser}
+                    options={browserSelectOptions}
+                    size="small"
+                    disabled={browserControlBusy || browserStatusLoading || browserSelectOptions.length === 0}
+                    onChange={(value) => {
+                      if (!Array.isArray(value)) void handleBrowserControlBrowserChange(value);
+                    }}
+                  />
+                </div>
+              </ConfigPageRow>
+              )}
+              <ConfigPageRow
+                label={t('browserControl.status')}
+                description={t('browserControl.statusDesc') || undefined}
+                align="center"
+                balanced
+              >
+                <div
+                  className="bitfun-func-agent-config__row-control"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      minWidth: 0,
+                      maxWidth: '100%',
+                    }}
+                    title={browserCdpAvailable && browserVersion ? `${browserKind} ${browserVersion}` : undefined}
+                  >
+                    <span
+                      className={!browserStatusLoading && browserCdpAvailable ? 'bitfun-func-agent-config__perm-status--granted' : undefined}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                    >
+                      {browserStatusLabel}
+                    </span>
+                    <IconButton
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      aria-label={t('browserControl.refreshStatus')}
+                      tooltip={t('browserControl.refreshStatus')}
+                      disabled={browserControlBusy || browserStatusLoading}
+                      onClick={() => void refreshBrowserControlStatus()}
+                    >
+                      <RefreshCw size={14} />
+                    </IconButton>
+                  </span>
+                  {!browserCdpAvailable && (
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={browserControlBusy || browserStatusLoading}
+                      onClick={() => void handleBrowserControlLaunch()}
+                    >
+                      {t('browserControl.connect')}
+                    </Button>
+                  )}
+                </div>
+              </ConfigPageRow>
+              {platform === 'macos' && (
+                <ConfigPageRow
+                  label={t('browserControl.createLauncher')}
+                  description={t('browserControl.createLauncherDesc')}
+                  align="center"
+                >
+                  <div className="bitfun-func-agent-config__row-control">
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={browserControlBusy}
+                      onClick={() => void handleBrowserControlCreateLauncher()}
+                    >
+                      {t('browserControl.createLauncher')}
+                    </Button>
+                  </div>
+                </ConfigPageRow>
+              )}
+            </>
+          ) : null}
+        </ConfigPageSection>
+
         {/* ── Debug mode settings ───────────────────────────────── */}
         {/* <ConfigPageSection
           title={tDebug('sections.combined')}
           description={tDebug('sections.combinedDescription')}
         >
+          {/* Basic settings: log path + ingest port */}
           <ConfigPageRow
             label={tDebug('settings.logPath.label')}
             description={tDebug('settings.logPath.description')}
@@ -654,6 +956,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             />
           </ConfigPageRow>
 
+          {/* Save / cancel for basic settings changes (not shown while modal is open) */}
           {debugHasChanges && !isTemplatesModalOpen && (
             <ConfigPageRow label={tDebug('actions.save')} align="center">
               <div className="bitfun-debug-config__settings-actions">
@@ -677,6 +980,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </ConfigPageRow>
           )}
 
+          {/* Language templates entry row */}
           <ConfigPageRow
             label={tDebug('sections.templates')}
             description={tDebug('templates.description')}
@@ -820,6 +1124,44 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               </Button>
             </div>
           )}
+        </Modal>
+
+        <Modal
+          isOpen={browserRestartPrompt !== null}
+          onClose={() => {
+            if (!browserControlBusy) setBrowserRestartPrompt(null);
+          }}
+          title={t('browserControl.restartModal.title')}
+          size="small"
+          closeOnOverlayClick={!browserControlBusy}
+        >
+          <div className="bitfun-debug-config__modal-body">
+            <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
+            <p>{t('browserControl.restartModal.warning')}</p>
+            {browserRestartPrompt?.message ? (
+              <p className="bitfun-func-agent-config__hint">{browserRestartPrompt.message}</p>
+            ) : null}
+          </div>
+          <div className="bitfun-debug-config__modal-footer">
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => setBrowserRestartPrompt(null)}
+              disabled={browserControlBusy}
+            >
+              {t('browserControl.restartModal.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="small"
+              onClick={() => void handleBrowserControlRestart()}
+              disabled={browserControlBusy}
+            >
+              {browserControlBusy
+                ? t('browserControl.restartModal.restarting')
+                : t('browserControl.restartModal.confirm')}
+            </Button>
+          </div>
         </Modal>
 
           </>

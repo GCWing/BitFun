@@ -28,8 +28,9 @@ import {
   buildCodeReviewReliabilityNotices,
   buildCodeReviewReportSections,
   getDefaultExpandedCodeReviewSectionIds,
+  formatReviewCoverageSource,
   type CodeReviewReportData,
-  type CodeReviewReviewer,
+  type ReviewEvidenceStatus,
   type ReviewReliabilityNotice,
   type RemediationGroupId,
   type ReviewReportGroup,
@@ -40,13 +41,15 @@ import { CodeReviewReportExportActions } from './CodeReviewReportExportActions';
 import { DEEP_REVIEW_SCROLL_TO_EVENT, type DeepReviewScrollToRequest } from '../events/flowchatNavigation';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { normalizeDecisionEntry, type DecisionContext } from '../utils/codeReviewReport';
-import {
-  getActiveReviewTeamManifestMembers,
-  type ReviewTeamManifestMember,
-  type ReviewTeamManifestMemberReason,
-  type ReviewTeamRunManifest,
-} from '@/shared/services/reviewTeamService';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import './CodeReviewToolCard.scss';
+
+const EVIDENCE_STATUS_LABEL_KEYS: Record<ReviewEvidenceStatus, string> = {
+  complete: 'toolCards.codeReview.evidenceStatuses.complete',
+  limited: 'toolCards.codeReview.evidenceStatuses.limited',
+  stale: 'toolCards.codeReview.evidenceStatuses.stale',
+  failed: 'shared:statuses.failed',
+};
 
 const log = createLogger('CodeReviewToolCard');
 
@@ -105,6 +108,29 @@ function getStrengthGroupTitle(id: StrengthGroupId, t: Translate): string {
   });
 }
 
+function getCoverageSourceLabel(sourceReviewer: string | undefined, t: Translate): string | null {
+  return formatReviewCoverageSource(sourceReviewer, {
+    businessLogic: t('toolCards.codeReview.coverageSources.businessLogic', {
+      defaultValue: 'Logic coverage',
+    }),
+    performance: t('toolCards.codeReview.coverageSources.performance', {
+      defaultValue: 'Performance coverage',
+    }),
+    security: t('toolCards.codeReview.coverageSources.security', {
+      defaultValue: 'Security coverage',
+    }),
+    architecture: t('toolCards.codeReview.coverageSources.architecture', {
+      defaultValue: 'Architecture coverage',
+    }),
+    frontend: t('toolCards.codeReview.coverageSources.frontend', {
+      defaultValue: 'Frontend coverage',
+    }),
+    qualityGate: t('toolCards.codeReview.coverageSources.qualityGate', {
+      defaultValue: 'Quality check',
+    }),
+  });
+}
+
 function formatIssueStats(stats: { critical: number; high: number; medium: number; low: number; info: number; total: number }, t: Translate): string {
   if (stats.total === 0) {
     return t('toolCards.codeReview.noIssues', { defaultValue: 'No issues' });
@@ -113,27 +139,7 @@ function formatIssueStats(stats: { critical: number; high: number; medium: numbe
   return (['critical', 'high', 'medium', 'low', 'info'] as const)
     .filter((severity) => stats[severity] > 0)
     .map((severity) => `${stats[severity]} ${t(`toolCards.codeReview.severities.${severity}`, { defaultValue: severity })}`)
-    .join(' · ');
-}
-
-function formatReviewerStats(stats: { total: number; completed: number; degraded: number }, t: Translate): string {
-  return t('toolCards.codeReview.reviewerTeamSummary', {
-    total: stats.total,
-    completed: stats.completed,
-    degraded: stats.degraded,
-    defaultValue: '{{total}} reviewers · {{completed}} completed · {{degraded}} attention',
-  });
-}
-
-function formatReviewerStatus(status: string, t: Translate): string {
-  const normalizedStatus = status
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_');
-
-  return t(`toolCards.codeReview.reviewerStatuses.${normalizedStatus}`, {
-    defaultValue: status,
-  });
+    .join(' / ');
 }
 
 function getReliabilityNoticeLabel(notice: ReviewReliabilityNotice, t: Translate): string {
@@ -141,14 +147,15 @@ function getReliabilityNoticeLabel(notice: ReviewReliabilityNotice, t: Translate
     defaultValue: {
       context_pressure: 'Context pressure rising',
       compression_preserved: 'Compression preserved key facts',
-      cache_hit: 'Incremental cache reused reviewer output',
+      cache_hit: 'Incremental cache reused review output',
       cache_miss: 'Incremental cache missed or refreshed',
-      concurrency_limited: 'Reviewer launch was concurrency-limited',
-      partial_reviewer: 'Reviewer returned partial result',
-      reduced_scope: 'Reduced-depth coverage',
+      concurrency_limited: 'Review launch was concurrency-limited',
+      partial_reviewer: 'Review returned partial result',
+      target_evidence_limited: 'Target evidence limited',
+      reduced_scope: 'Focused review scope',
       retry_guidance: 'Retry guidance emitted',
-      skipped_reviewers: 'Skipped reviewers',
-      token_budget_limited: 'Token budget limited reviewer coverage',
+      skipped_reviewers: 'Review scope tailored',
+      token_budget_limited: 'Token budget limited review coverage',
       user_decision: 'User decision needed',
     }[notice.kind],
   });
@@ -162,29 +169,34 @@ function getReliabilityNoticeDetail(notice: ReviewReliabilityNotice, t: Translat
   return t(`toolCards.codeReview.reliabilityStatus.${notice.kind}.detail`, {
     count: notice.count ?? 0,
     defaultValue: {
-      context_pressure: '{{count}} reviewer calls planned for a large or constrained target.',
+      context_pressure: '{{count}} review checks planned for a large or constrained target.',
       compression_preserved: 'Coverage notes include preserved context from compression.',
-      cache_hit: '{{count}} reviewer packet reused matching cached output.',
-      cache_miss: '{{count}} reviewer packet ran fresh or refreshed stale cache.',
-      concurrency_limited: '{{count}} reviewer launch hit a concurrency cap.',
-      partial_reviewer: '{{count}} reviewer result is partial; confidence is reduced.',
-      reduced_scope: 'This review used a reduced-depth scope profile.',
+      cache_hit: '{{count}} previous review result reused matching cached output.',
+      cache_miss: '{{count}} review result ran fresh or refreshed stale cache.',
+      concurrency_limited: '{{count}} review launch hit a concurrency cap.',
+      partial_reviewer: '{{count}} review result is partial; confidence is limited.',
+      target_evidence_limited: 'Prepared target evidence could not safely cover every requested change.',
+      reduced_scope: 'This review used a focused scope profile.',
       retry_guidance: '{{count}} retry guidance item was emitted for partial review coverage.',
-      skipped_reviewers: '{{count}} reviewer was skipped by applicability, configuration, or budget.',
-      token_budget_limited: '{{count}} reviewer was skipped by token budget mode.',
+      skipped_reviewers: '{{count}} optional check was outside this run because of applicability, configuration, or budget.',
+      token_budget_limited: 'Token budget mode kept {{count}} optional check outside this run.',
       user_decision: '{{count}} review item needs your decision before fixing.',
     }[notice.kind],
   });
 }
 
 function getReliabilityNoticeIcon(notice: ReviewReliabilityNotice): React.ReactNode {
-  if (notice.kind === 'partial_reviewer' || notice.kind === 'retry_guidance') {
+  if (
+    notice.kind === 'partial_reviewer' ||
+    notice.kind === 'retry_guidance'
+  ) {
     return <Clock size={13} />;
   }
   if (
     notice.kind === 'user_decision' ||
     notice.kind === 'concurrency_limited' ||
-    notice.kind === 'token_budget_limited'
+    notice.kind === 'token_budget_limited' ||
+    notice.kind === 'target_evidence_limited'
   ) {
     return <AlertTriangle size={13} />;
   }
@@ -197,71 +209,6 @@ function getDeepReviewRunManifestForSession(sessionId?: string): ReviewTeamRunMa
   }
 
   return flowChatStore.getState().sessions.get(sessionId)?.deepReviewRunManifest;
-}
-
-function getReviewerLabel(member: ReviewTeamManifestMember): string {
-  return member.displayName || member.subagentId;
-}
-
-function getSkippedReasonLabel(
-  reason: ReviewTeamManifestMemberReason | undefined,
-  t: Translate,
-): string {
-  switch (reason) {
-    case 'not_applicable':
-      return t('toolCards.codeReview.runManifest.skippedReasons.notApplicable', {
-        defaultValue: 'Not applicable to this target',
-      });
-    case 'budget_limited':
-      return t('toolCards.codeReview.runManifest.skippedReasons.budgetLimited', {
-        defaultValue: 'Limited by token budget',
-      });
-    case 'invalid_tooling':
-      return t('toolCards.codeReview.runManifest.skippedReasons.invalidTooling', {
-        defaultValue: 'Configuration issue',
-      });
-    case 'disabled':
-      return t('toolCards.codeReview.runManifest.skippedReasons.disabled', {
-        defaultValue: 'Disabled',
-      });
-    case 'unavailable':
-      return t('toolCards.codeReview.runManifest.skippedReasons.unavailable', {
-        defaultValue: 'Unavailable',
-      });
-    default:
-      return t('toolCards.codeReview.runManifest.skippedReasons.skipped', {
-        defaultValue: 'Skipped',
-      });
-  }
-}
-
-function formatRunManifestSummary(
-  manifest: ReviewTeamRunManifest,
-  activeReviewers: ReviewTeamManifestMember[],
-  t: Translate,
-): string {
-  return t('toolCards.codeReview.runManifest.summary', {
-    active: activeReviewers.length,
-    skipped: manifest.skippedReviewers.length,
-    calls: manifest.tokenBudget.estimatedReviewerCalls,
-    defaultValue: '{{active}} active / {{skipped}} skipped / {{calls}} calls',
-  });
-}
-
-function formatReviewDepthLabel(reviewDepth: string, t: Translate): string {
-  return t(`toolCards.codeReview.runManifest.reviewDepthLabels.${reviewDepth}`, {
-    defaultValue: {
-      high_risk_only: 'High-risk-only',
-      risk_expanded: 'Risk-expanded',
-      full_depth: 'Full-depth',
-    }[reviewDepth] ?? reviewDepth,
-  });
-}
-
-function formatRunManifestTarget(manifest: ReviewTeamRunManifest): string {
-  return manifest.target.tags.length > 0
-    ? manifest.target.tags.join(', ')
-    : manifest.target.source;
 }
 
 function renderReportGroupList<TId extends RemediationGroupId | StrengthGroupId>(
@@ -519,7 +466,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
   const renderContent = () => {
     if (status === 'completed' && reviewData) {
-      const riskLevel = reviewData.summary?.risk_level ?? 'low';
+      const riskLevel = reviewData.summary?.risk_level;
       const reviewLabel = reviewData.review_mode === 'deep'
         ? t('toolCards.codeReview.deepReviewResult')
         : t('toolCards.codeReview.reviewResult');
@@ -567,11 +514,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
         );
       }
 
-      return (
-        <>
-          {reviewLabel} - {t(`toolCards.codeReview.riskLevels.${riskLevel}`)}
-        </>
-      );
+      return riskLevel
+        ? <>{reviewLabel} - {t(`toolCards.codeReview.riskLevels.${riskLevel}`)}</>
+        : <>{reviewLabel}</>;
     }
 
     if (status === 'running' || status === 'streaming') {
@@ -600,7 +545,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             {hasData && reviewData && (
               <CodeReviewReportExportActions
                 reviewData={reviewData}
-                runManifest={reviewData.review_mode === 'deep' ? sessionRunManifest : undefined}
+                runManifest={sessionRunManifest}
               />
             )}
             {hasData && (
@@ -630,17 +575,13 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     const issues = reviewData.issues ?? [];
     const review_mode = reviewData.review_mode;
     const review_scope = reviewData.review_scope;
-    const reviewers = reviewData.reviewers ?? [];
     const runManifest = review_mode === 'deep'
       ? sessionRunManifest
       : undefined;
-    const activeRunManifestReviewers = runManifest
-      ? getActiveReviewTeamManifestMembers(runManifest)
-      : [];
     const reportSections = buildCodeReviewReportSections(reviewData);
     const reliabilityNotices = buildCodeReviewReliabilityNotices(reviewData, runManifest);
-    const riskLevel = summary.risk_level ?? 'low';
-    const recommendedAction = summary.recommended_action ?? 'approve';
+    const riskLevel = summary.risk_level;
+    const recommendedAction = summary.recommended_action;
     const remediationItemCount = reportSections.remediationGroups
       .reduce((total, group) => total + group.items.length, 0);
     const strengthItemCount = reportSections.strengthGroups
@@ -648,8 +589,6 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     const remediationExpanded = expandedReportSectionIds.has('remediation');
     const issuesExpanded = expandedReportSectionIds.has('issues');
     const strengthsExpanded = expandedReportSectionIds.has('strengths');
-    const runManifestExpanded = expandedReportSectionIds.has('runManifest');
-    const teamExpanded = expandedReportSectionIds.has('team');
     const coverageExpanded = expandedReportSectionIds.has('coverage');
 
     return (
@@ -688,20 +627,34 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
         <div className="review-summary">
           <div className="summary-header">{t('toolCards.codeReview.overallAssessment')}</div>
           <div className="summary-rows">
-            <div className="summary-row">
-              <span className="summary-label">{t('toolCards.codeReview.riskLevel')}</span>
-              <span
-                className="summary-value risk-level"
-                style={{ color: riskLevelColors[riskLevel] }}
-              >
-                {getSeverityIcon(riskLevel)}
-                <span>{t(`toolCards.codeReview.riskLevels.${riskLevel}`)}</span>
-              </span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">{t('toolCards.codeReview.recommendedAction')}</span>
-              <span className="summary-value">{t(`toolCards.codeReview.actions.${recommendedAction}`)}</span>
-            </div>
+            {riskLevel && (
+              <div className="summary-row">
+                <span className="summary-label">{t('toolCards.codeReview.riskLevel')}</span>
+                <span
+                  className="summary-value risk-level"
+                  style={{ color: riskLevelColors[riskLevel] }}
+                >
+                  {getSeverityIcon(riskLevel)}
+                  <span>{t(`toolCards.codeReview.riskLevels.${riskLevel}`)}</span>
+                </span>
+              </div>
+            )}
+            {recommendedAction && (
+              <div className="summary-row">
+                <span className="summary-label">{t('toolCards.codeReview.recommendedAction')}</span>
+                <span className="summary-value">{t(`toolCards.codeReview.actions.${recommendedAction}`)}</span>
+              </div>
+            )}
+            {reviewData.evidence_status && (
+              <div className="summary-row">
+                <span className="summary-label">
+                  {t('toolCards.codeReview.evidenceStatus')}
+                </span>
+                <span className="summary-value">
+                  {t(EVIDENCE_STATUS_LABEL_KEYS[reviewData.evidence_status])}
+                </span>
+              </div>
+            )}
             {review_mode && (
               <div className="summary-row">
                 <span className="summary-label">{t('shared:modes.review')}</span>
@@ -733,89 +686,6 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
           </div>
         </div>
 
-        {runManifest && (
-          <ReviewReportSection
-            title={t('toolCards.codeReview.sections.runManifest')}
-            summary={formatRunManifestSummary(runManifest, activeRunManifestReviewers, t)}
-            expanded={runManifestExpanded}
-            onToggle={handleToggleReportSection('runManifest')}
-          >
-            <div className="run-manifest">
-              <div className="run-manifest__facts">
-                <div className="run-manifest__fact">
-                  <span>{t('toolCards.codeReview.runManifest.target')}</span>
-                  <strong>{formatRunManifestTarget(runManifest)}</strong>
-                </div>
-                <div className="run-manifest__fact">
-                  <span>{t('toolCards.codeReview.runManifest.budget')}</span>
-                  <strong>{runManifest.tokenBudget.mode}</strong>
-                </div>
-                <div className="run-manifest__fact">
-                  <span>{t('toolCards.codeReview.runManifest.estimatedCalls')}</span>
-                  <strong>{runManifest.tokenBudget.estimatedReviewerCalls}</strong>
-                </div>
-                {runManifest.strategyRecommendation && (
-                  <div className="run-manifest__fact">
-                    <span>
-                      {t('toolCards.codeReview.runManifest.recommendedStrategy')}
-                    </span>
-                    <strong>{runManifest.strategyRecommendation.strategyLevel}</strong>
-                  </div>
-                )}
-                {runManifest.scopeProfile && (
-                  <div className="run-manifest__fact">
-                    <span>
-                      {t('toolCards.codeReview.runManifest.reviewDepth')}
-                    </span>
-                    <strong>{formatReviewDepthLabel(runManifest.scopeProfile.reviewDepth, t)}</strong>
-                  </div>
-                )}
-              </div>
-
-              {runManifest.strategyRecommendation && (
-                <div className="run-manifest__group">
-                  <div className="run-manifest__group-title">
-                    {t('toolCards.codeReview.runManifest.riskRecommendationTitle')}
-                  </div>
-                  <p>{runManifest.strategyRecommendation.rationale}</p>
-                </div>
-              )}
-
-              {activeRunManifestReviewers.length > 0 && (
-                <div className="run-manifest__group">
-                  <div className="run-manifest__group-title">
-                    {t('toolCards.codeReview.runManifest.activeGroupTitle')}
-                  </div>
-                  <div className="run-manifest__chips">
-                    {activeRunManifestReviewers.map((member) => (
-                      <span key={`active-${member.subagentId}`} className="run-manifest__chip">
-                        <span className="run-manifest__chip-name">{getReviewerLabel(member)}</span>
-                        <span className="run-manifest__chip-meta">{member.roleName}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {runManifest.skippedReviewers.length > 0 && (
-                <div className="run-manifest__group">
-                  <div className="run-manifest__group-title run-manifest__group-title--warning">
-                    {t('toolCards.codeReview.runManifest.skippedGroupTitle')}
-                  </div>
-                  <ul className="run-manifest__skipped-list">
-                    {runManifest.skippedReviewers.map((member) => (
-                      <li key={`skipped-${member.subagentId}`}>
-                        <span>{getReviewerLabel(member)}</span>
-                        <strong>{getSkippedReasonLabel(member.reason, t)}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </ReviewReportSection>
-        )}
-
         {issues.length > 0 && (
           <ReviewReportSection
             title={t('toolCards.codeReview.issuesCount', { count: issues.length })}
@@ -825,44 +695,49 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
           >
             <div className="issues-list">
               {issues.map((issue, index) => (
-                <div
-                  key={index}
-                  id={`review-issue-${index}`}
-                  className={`review-issue-item severity-${getSeverityClass(issue.severity ?? 'info')}`}
-                >
-                  <div className="issue-header">
-                    <div className="issue-left">
-                      {getSeverityIcon(issue.severity ?? 'info')}
-                      {issue.category && (
-                        <span className="issue-category">[{issue.category}]</span>
-                      )}
-                      {issue.source_reviewer && (
-                        <span className="issue-source">{issue.source_reviewer}</span>
-                      )}
-                      {issue.file && (
-                        <span className="issue-location">
-                          {issue.file}{issue.line ? `:${issue.line}` : ''}
+                (() => {
+                  const coverageSource = getCoverageSourceLabel(issue.source_reviewer, t);
+                  return (
+                    <div
+                      key={index}
+                      id={`review-issue-${index}`}
+                      className={`review-issue-item severity-${getSeverityClass(issue.severity ?? 'info')}`}
+                    >
+                      <div className="issue-header">
+                        <div className="issue-left">
+                          {getSeverityIcon(issue.severity ?? 'info')}
+                          {issue.category && (
+                            <span className="issue-category">[{issue.category}]</span>
+                          )}
+                          {coverageSource && (
+                            <span className="issue-source">{coverageSource}</span>
+                          )}
+                          {issue.file && (
+                            <span className="issue-location">
+                              {issue.file}{issue.line ? `:${issue.line}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <span className="issue-certainty">
+                          {t(`toolCards.codeReview.certainties.${issue.certainty ?? 'possible'}`)}
                         </span>
+                      </div>
+                      <div className="issue-title">{issue.title}</div>
+                      <div className="issue-description">{issue.description}</div>
+                      {issue.validation_note && (
+                        <div className="issue-validation-note">
+                          {issue.validation_note}
+                        </div>
+                      )}
+                      {issue.suggestion && (
+                        <div className="issue-suggestion">
+                          <span className="suggestion-label">{t('toolCards.codeReview.suggestion')}:</span>
+                          <span className="suggestion-text">{issue.suggestion}</span>
+                        </div>
                       )}
                     </div>
-                    <span className="issue-certainty">
-                      {t(`toolCards.codeReview.certainties.${issue.certainty ?? 'possible'}`)}
-                    </span>
-                  </div>
-                  <div className="issue-title">{issue.title}</div>
-                  <div className="issue-description">{issue.description}</div>
-                  {issue.validation_note && (
-                    <div className="issue-validation-note">
-                      {issue.validation_note}
-                    </div>
-                  )}
-                  {issue.suggestion && (
-                    <div className="issue-suggestion">
-                      <span className="suggestion-label">{t('toolCards.codeReview.suggestion')}:</span>
-                      <span className="suggestion-text">{issue.suggestion}</span>
-                    </div>
-                  )}
-                </div>
+                  );
+                })()
               ))}
             </div>
           </ReviewReportSection>
@@ -1051,39 +926,6 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                 reportSections.strengthGroups,
                 (id) => getStrengthGroupTitle(id, t),
               )}
-            </div>
-          </ReviewReportSection>
-        )}
-
-        {reviewers.length > 0 && (
-          <ReviewReportSection
-            title={t('toolCards.codeReview.reviewerTeam')}
-            summary={formatReviewerStats(reportSections.reviewerStats, t)}
-            expanded={teamExpanded}
-            onToggle={handleToggleReportSection('team')}
-          >
-            <div className="team-list">
-              {reviewers.map((reviewer: CodeReviewReviewer, index: number) => (
-                <div key={`${reviewer.name}-${index}`} className="reviewer-item">
-                  <div className="reviewer-topline">
-                    <div className="reviewer-identity">
-                      <span className="reviewer-name">{reviewer.name}</span>
-                      <span className="reviewer-specialty">{reviewer.specialty}</span>
-                    </div>
-                    <div className="reviewer-metrics">
-                      <span className="reviewer-status">{formatReviewerStatus(reviewer.status, t)}</span>
-                      <span className="reviewer-issues">
-                        {typeof reviewer.issue_count === 'number'
-                          ? t('toolCards.codeReview.reviewerIssues', {
-                              count: reviewer.issue_count,
-                            })
-                          : t('toolCards.codeReview.reviewerIssuesUnknown')}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="reviewer-summary">{reviewer.summary}</div>
-                </div>
-              ))}
             </div>
           </ReviewReportSection>
         )}

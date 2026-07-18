@@ -8,12 +8,13 @@ use crate::agentic::agents::{
 };
 use crate::agentic::deep_review_policy::{
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
-    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
-    REVIEW_JUDGE_AGENT_TYPE,
+    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_GENERAL_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
+    REVIEWER_SECURITY_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
 };
+pub(super) use bitfun_agent_runtime::agents::SubagentOverrideState;
 pub use bitfun_agent_runtime::agents::{
-    BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope,
-    SubagentOverrideState, SubagentQueryContext, SubagentStateReason,
+    BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope, SubagentQueryContext,
+    SubagentStateReason,
 };
 use bitfun_agent_runtime::custom_agent::CustomAgentLevel;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
@@ -25,6 +26,8 @@ use std::sync::Arc;
 pub struct CustomAgentConfig {
     /// used model ID
     pub model: String,
+    /// Whether the custom agent Markdown explicitly overrides the model.
+    pub model_is_explicit: bool,
 }
 
 pub type CustomSubagentConfig = CustomAgentConfig;
@@ -95,6 +98,9 @@ pub struct AgentInfo {
     /// model configuration, only custom subagent has value (read from file)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Whether `model` is an explicit custom Subagent override.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_is_explicit: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visibility: Option<SubagentVisibilitySummary>,
 }
@@ -110,14 +116,17 @@ pub fn subagent_source_from_custom_kind(kind: CustomSubagentKind) -> SubAgentSou
     }
 }
 
-pub fn agent_source_from_custom_level(level: CustomAgentLevel) -> AgentSource {
+pub(super) fn agent_source_from_custom_level(level: CustomAgentLevel) -> AgentSource {
     match level {
         CustomAgentLevel::Project => AgentSource::Project,
         CustomAgentLevel::User => AgentSource::User,
     }
 }
 
-pub fn subagent_key_for(source: Option<SubAgentSource>, agent: &dyn Agent) -> Option<String> {
+pub(super) fn subagent_key_for(
+    source: Option<SubAgentSource>,
+    agent: &dyn Agent,
+) -> Option<String> {
     let source = source?;
     let slot = match source {
         SubAgentSource::Builtin => "builtin",
@@ -168,6 +177,10 @@ impl AgentInfo {
             .custom_config
             .as_ref()
             .map(|config| config.model.clone());
+        let model_is_explicit = entry
+            .custom_config
+            .as_ref()
+            .map(|config| config.model_is_explicit);
 
         // get path by downcast to CustomSubagent (only custom subagent has path)
         let path = custom_agent_path(agent);
@@ -197,6 +210,7 @@ impl AgentInfo {
             subagent_source: entry.subagent_source,
             path,
             model,
+            model_is_explicit,
             visibility: (entry.category == AgentCategory::SubAgent)
                 .then(|| entry.visibility_policy.summary()),
         }
@@ -216,7 +230,9 @@ pub(crate) fn is_review_agent_entry(entry: &AgentEntry) -> bool {
             | REVIEWER_SECURITY_AGENT_TYPE
             | REVIEWER_ARCHITECTURE_AGENT_TYPE
             | REVIEWER_FRONTEND_AGENT_TYPE
+            | REVIEWER_GENERAL_AGENT_TYPE
             | REVIEW_JUDGE_AGENT_TYPE
+            | "CodeReview"
     )
 }
 

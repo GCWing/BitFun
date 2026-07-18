@@ -5,7 +5,10 @@
 //! session restore, terminal pre-warm, remote image conversion, and runtime-port
 //! implementations until a reviewed port/provider migration proves equivalence.
 
-use bitfun_agent_runtime::sdk::{AgentRuntime, AgentRuntimeBuilder, RuntimeError};
+use bitfun_agent_runtime::sdk::{
+    AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
+    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRestorePort, RuntimeError,
+};
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentSessionCreateRequest, AgentSessionManagementPort, AgentSubmissionPort,
@@ -15,43 +18,41 @@ use bitfun_runtime_ports::{
     RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
 };
 use bitfun_services_integrations::remote_connect::{
-    build_remote_chat_messages, build_remote_model_catalog,
+    agent_input_attachment_from_remote_image_context, build_remote_chat_messages,
+    build_remote_model_catalog,
     normalize_remote_model_selection as normalize_remote_model_selection_contract,
-    normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
-    remote_dialog_submit_outcome_from_scheduler,
-    remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
-    ChatImageAttachment, ChatMessage, RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost,
-    RemoteChatHistoryRound, RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem,
-    RemoteChatHistoryToolCall, RemoteChatHistoryToolItem, RemoteChatHistoryTurn,
-    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
-    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
-    RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
-    RemoteImageContext, RemoteImageContextAdapter, RemoteInitialSyncRuntimeHost,
-    RemoteInteractionRuntimeHost, RemoteModelCapabilityFact, RemoteModelCatalog,
-    RemoteModelCatalogFacts, RemoteModelFacts, RemotePollRuntimeHost, RemoteReasoningModeFact,
-    RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteSessionRuntimeHost,
-    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
-    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    normalize_remote_session_model_id, project_remote_chat_user,
+    remote_dialog_submit_outcome_from_scheduler, remote_model_selection_needs_config, ChatMessage,
+    RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost, RemoteChatHistoryRound,
+    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
+    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteConnectSubmissionSource,
+    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding, RemoteImageContext,
+    RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
+    RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePollRuntimeHost,
+    RemoteReasoningModeFact, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
+    RemoteSessionRuntimeHost, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
     RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
     RemoteWorkspaceUpdate,
 };
 use log::{debug, error, info};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, ConversationCoordinator, DialogQueuePriority,
     DialogScheduler, DialogSubmissionPolicy, DialogSubmitOutcome, DialogTriggerSource,
 };
+use crate::agentic::core::{Session, SessionKind};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::workspace::WorkspaceBinding;
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
 use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability, ReasoningMode};
-use crate::service::session::{DialogTurnData, TurnStatus};
-
-/// Max thumbnail size per remote chat image sent to mobile (100 KB).
-const MOBILE_IMAGE_MAX_BYTES: usize = 100 * 1024;
+use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
@@ -118,12 +119,14 @@ async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
 async fn open_workspace_with_snapshot(
     path: &str,
     snapshot_log_context: &str,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
 ) -> Result<RemoteWorkspaceUpdate, String> {
     let workspace_service = crate::service::workspace::get_global_workspace_service()
         .ok_or_else(|| "Workspace service not available".to_string())?;
     let path_buf = std::path::PathBuf::from(path);
     let info = workspace_service
-        .open_workspace(path_buf)
+        .open_workspace_resolving_known(path_buf, remote_connection_id, remote_ssh_host)
         .await
         .map_err(|error| error.to_string())?;
     if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
@@ -134,9 +137,19 @@ async fn open_workspace_with_snapshot(
     {
         error!("Failed to initialize snapshot after {snapshot_log_context}: {error}");
     }
+    let remote_connection_id = info.remote_ssh_connection_id().map(str::to_string);
+    let remote_ssh_host = info
+        .metadata
+        .get("sshHost")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
     Ok(RemoteWorkspaceUpdate {
         path: info.root_path.to_string_lossy().to_string(),
         name: info.name,
+        remote_connection_id,
+        remote_ssh_host,
     })
 }
 
@@ -186,10 +199,6 @@ async fn load_remote_session_metadata_for_workspace(
         .collect())
 }
 
-fn normalize_remote_session_model_id(model_id: Option<String>) -> Option<String> {
-    normalize_remote_session_model_id_contract(model_id.as_deref())
-}
-
 fn normalize_remote_model_selection(
     requested_model_id: &str,
     ai_config: Option<&AIConfig>,
@@ -203,8 +212,8 @@ fn normalize_remote_model_selection(
     })
 }
 
-fn remote_model_selection_needs_config(requested_model_id: &str) -> bool {
-    remote_model_selection_needs_config_contract(requested_model_id)
+fn session_uses_shared_mode_default(session: &Session) -> bool {
+    session.kind == SessionKind::Standard
 }
 
 fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapabilityFact {
@@ -229,58 +238,6 @@ fn remote_reasoning_mode_fact(reasoning_mode: ReasoningMode) -> RemoteReasoningM
     }
 }
 
-/// Compress a base64 data-URL image to a small thumbnail for mobile display.
-/// Falls back to the original if decoding/compression fails or the image is
-/// already within `max_bytes`.
-fn compress_remote_chat_data_url_for_mobile(data_url: &str, max_bytes: usize) -> String {
-    use base64::engine::general_purpose::STANDARD as BASE64;
-    use base64::Engine;
-    use image::imageops::FilterType;
-
-    const MAX_THUMBNAIL_DIM: u32 = 400;
-
-    let Some(comma_pos) = data_url.find(',') else {
-        return data_url.to_string();
-    };
-    let b64_data = &data_url[comma_pos + 1..];
-
-    if b64_data.len() * 3 / 4 <= max_bytes {
-        return data_url.to_string();
-    }
-
-    let Ok(raw_bytes) = BASE64.decode(b64_data) else {
-        return data_url.to_string();
-    };
-
-    let Ok(img) = image::load_from_memory(&raw_bytes) else {
-        return data_url.to_string();
-    };
-
-    let resized = if img.width() > MAX_THUMBNAIL_DIM || img.height() > MAX_THUMBNAIL_DIM {
-        img.resize(MAX_THUMBNAIL_DIM, MAX_THUMBNAIL_DIM, FilterType::Triangle)
-    } else {
-        img
-    };
-
-    fn encode_jpeg(img: &image::DynamicImage, quality: u8) -> Option<Vec<u8>> {
-        let mut buf = Vec::new();
-        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality);
-        img.write_with_encoder(encoder).ok()?;
-        Some(buf)
-    }
-
-    for quality in [75u8, 60, 45, 30] {
-        if let Some(buf) = encode_jpeg(&resized, quality) {
-            if buf.len() <= max_bytes || quality == 30 {
-                let b64 = BASE64.encode(&buf);
-                return format!("data:image/jpeg;base64,{b64}");
-            }
-        }
-    }
-
-    data_url.to_string()
-}
-
 /// Convert persisted turns into mobile ChatMessages.
 /// This is the same data source the desktop frontend uses.
 fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage> {
@@ -293,34 +250,10 @@ fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage>
 }
 
 fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatHistoryTurn {
-    let user_images = turn
-        .user_message
-        .metadata
-        .as_ref()
-        .and_then(|m| m.get("images"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| {
-                    let name = v.get("name")?.as_str()?.to_string();
-                    let raw_url = v.get("data_url")?.as_str()?;
-                    let data_url =
-                        compress_remote_chat_data_url_for_mobile(raw_url, MOBILE_IMAGE_MAX_BYTES);
-                    Some(ChatImageAttachment { name, data_url })
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    // Prefer original_text from metadata (pre-enhancement) for display.
-    let user_display_content = turn
-        .user_message
-        .metadata
-        .as_ref()
-        .and_then(|m| m.get("original_text"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| strip_remote_user_input_tags(&turn.user_message.content));
+    let prompt_visible_content =
+        crate::agentic::core::strip_prompt_markup(&turn.user_message.content);
+    let user_projection =
+        project_remote_chat_user(turn.user_message.metadata.as_ref(), &prompt_visible_content);
 
     let rounds = turn
         .model_rounds
@@ -351,10 +284,10 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
                 .iter()
                 .map(|item| RemoteChatHistoryToolItem {
                     id: item.id.clone(),
-                    name: item.tool_name.clone(),
+                    name: item.effective_name().to_string(),
                     call: RemoteChatHistoryToolCall {
                         id: item.tool_call.id.clone(),
-                        input: item.tool_call.input.clone(),
+                        input: item.effective_input().clone(),
                     },
                     has_result: item.tool_result.is_some(),
                     status: item.status.clone(),
@@ -370,23 +303,13 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
     RemoteChatHistoryTurn {
         turn_id: turn.turn_id.clone(),
         user_message_id: turn.user_message.id.clone(),
-        user_display_content,
+        user_display_content: user_projection.content,
         user_timestamp_ms: turn.user_message.timestamp,
-        user_images,
+        user_images: user_projection.images,
         is_in_progress: turn.status == TurnStatus::InProgress,
         start_time_ms: turn.start_time,
         rounds,
     }
-}
-
-fn strip_remote_user_input_tags(content: &str) -> String {
-    let s = crate::agentic::core::strip_prompt_markup(content);
-    if s.starts_with("User uploaded") {
-        if let Some(pos) = s.find("User's question:\n") {
-            return s[pos + "User's question:\n".len()..].trim().to_string();
-        }
-    }
-    s
 }
 
 async fn resolve_session_model_id(session_id: &str) -> Option<String> {
@@ -394,7 +317,7 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
     let session_manager = coordinator.get_session_manager();
 
     if let Some(session) = session_manager.get_session(session_id) {
-        return normalize_remote_session_model_id(session.config.model_id.clone());
+        return normalize_remote_session_model_id(session.config.model_id.as_deref());
     }
 
     let session_storage_dir =
@@ -403,7 +326,7 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
         .restore_session_from_storage_path(&session_storage_dir, session_id)
         .await
         .ok()
-        .and_then(|session| normalize_remote_session_model_id(session.config.model_id.clone()))
+        .and_then(|session| normalize_remote_session_model_id(session.config.model_id.as_deref()))
 }
 
 fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> DialogSubmissionPolicy {
@@ -445,58 +368,173 @@ fn remote_dialog_scheduler_outcome_fact(
     }
 }
 
-fn agent_input_attachment_from_image_context(context: ImageContextData) -> AgentInputAttachment {
-    let mut metadata = serde_json::Map::new();
-    if let Some(image_path) = context.image_path {
-        metadata.insert(
-            "imagePath".to_string(),
-            serde_json::Value::String(image_path),
-        );
-    }
-    if let Some(data_url) = context.data_url {
-        metadata.insert("dataUrl".to_string(), serde_json::Value::String(data_url));
-    }
-    metadata.insert(
-        "mimeType".to_string(),
-        serde_json::Value::String(context.mime_type),
-    );
-    if let Some(context_metadata) = context.metadata {
-        metadata.insert("metadata".to_string(), context_metadata);
-    }
-
-    AgentInputAttachment {
-        kind: "remote_image".to_string(),
+fn remote_image_context_from_image_context(context: ImageContextData) -> RemoteImageContext {
+    RemoteImageContext {
         id: context.id,
-        metadata,
+        image_path: context.image_path,
+        data_url: context.data_url,
+        mime_type: context.mime_type,
+        metadata: context.metadata,
     }
+}
+
+fn image_context_from_remote_image_context(context: RemoteImageContext) -> ImageContextData {
+    ImageContextData {
+        id: context.id,
+        image_path: context.image_path,
+        data_url: context.data_url,
+        mime_type: context.mime_type,
+        metadata: context.metadata,
+    }
+}
+
+fn agent_input_attachment_from_image_context(context: ImageContextData) -> AgentInputAttachment {
+    agent_input_attachment_from_remote_image_context(remote_image_context_from_image_context(
+        context,
+    ))
 }
 
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
+    session_model: Arc<dyn AgentSessionModelPort>,
+    session_restore: Arc<dyn AgentSessionRestorePort>,
+    transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
     thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
+    interaction_response: Arc<dyn AgentInteractionResponsePort>,
 ) -> AgentRuntimeBuilder {
     let agent_registry: Arc<dyn bitfun_agent_runtime::sdk::RuntimeAgentRegistry> =
         crate::agentic::agents::get_agent_registry();
     AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
+        .with_session_model_port(session_model)
+        .with_session_restore_port(session_restore)
+        .with_session_transcript_reader(transcript_reader)
         .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
+        .with_interaction_response_port(interaction_response)
         .with_agent_registry(agent_registry)
 }
 
-impl RemoteImageContextAdapter for ImageContextData {
-    fn from_remote_image_context(context: RemoteImageContext) -> Self {
+#[derive(Clone)]
+struct ScheduledSessionManagementPort {
+    coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
+}
+
+impl ScheduledSessionManagementPort {
+    fn new(coordinator: Arc<ConversationCoordinator>, scheduler: Arc<DialogScheduler>) -> Self {
         Self {
-            id: context.id,
-            image_path: context.image_path,
-            data_url: context.data_url,
-            mime_type: context.mime_type,
-            metadata: context.metadata,
+            coordinator,
+            scheduler,
         }
     }
+}
+
+/// ACP accepts one prompt at a time per session. Keep that protocol-specific
+/// admission rule in the product assembly instead of changing the shared
+/// scheduler policy used by GUI, TUI, and remote-control surfaces.
+struct RejectBusyAgentDialogTurnPort(Arc<DialogScheduler>);
+
+#[async_trait::async_trait]
+impl AgentDialogTurnPort for RejectBusyAgentDialogTurnPort {
+    async fn submit_dialog_turn(
+        &self,
+        request: AgentDialogTurnRequest,
+    ) -> bitfun_runtime_ports::PortResult<DialogSubmitOutcome> {
+        self.0
+            .submit_agent_dialog_turn_reject_if_busy(request)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentSessionManagementPort for ScheduledSessionManagementPort {
+    async fn list_sessions(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionListRequest,
+    ) -> bitfun_runtime_ports::PortResult<Vec<bitfun_runtime_ports::AgentSessionSummary>> {
+        AgentSessionManagementPort::list_sessions(self.coordinator.as_ref(), request).await
+    }
+
+    async fn delete_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionDeleteRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        let storage_path = CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: std::path::PathBuf::from(&request.workspace_path),
+                remote_connection_id: request.remote_connection_id.clone(),
+                remote_ssh_host: request.remote_ssh_host.clone(),
+            })
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                    error.to_string(),
+                )
+            })?;
+        self.coordinator
+            .get_session_manager()
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                    error.to_string(),
+                )
+            })?;
+        let _maintenance = self
+            .scheduler
+            .begin_session_deletion(&request.session_id, &storage_path, Duration::from_secs(2))
+            .await
+            .map_err(|error| {
+                let kind = match error {
+                    crate::util::errors::BitFunError::Validation(_) => {
+                        bitfun_runtime_ports::PortErrorKind::InvalidRequest
+                    }
+                    crate::util::errors::BitFunError::NotFound(_) => {
+                        bitfun_runtime_ports::PortErrorKind::NotFound
+                    }
+                    crate::util::errors::BitFunError::Timeout(_) => {
+                        bitfun_runtime_ports::PortErrorKind::Timeout
+                    }
+                    crate::util::errors::BitFunError::Cancelled(_) => {
+                        bitfun_runtime_ports::PortErrorKind::Cancelled
+                    }
+                    _ => bitfun_runtime_ports::PortErrorKind::Backend,
+                };
+                bitfun_runtime_ports::PortError::new(kind, error.to_string())
+            })?;
+        AgentSessionManagementPort::delete_session(self.coordinator.as_ref(), request).await
+    }
+
+    async fn resolve_session_workspace_binding(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionWorkspaceRequest,
+    ) -> bitfun_runtime_ports::PortResult<Option<bitfun_runtime_ports::AgentSessionWorkspaceBinding>>
+    {
+        AgentSessionManagementPort::resolve_session_workspace_binding(
+            self.coordinator.as_ref(),
+            request,
+        )
+        .await
+    }
+}
+
+fn scheduled_session_management_port(
+    coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
+) -> Arc<dyn AgentSessionManagementPort> {
+    Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
 }
 
 pub(crate) struct CoreServiceAgentRuntime;
@@ -590,7 +628,7 @@ impl CoreServiceAgentRuntime {
     }
 
     pub(crate) fn remote_image_context(context: RemoteImageContext) -> ImageContextData {
-        ImageContextData::from_remote_image_context(context)
+        image_context_from_remote_image_context(context)
     }
 
     pub(crate) async fn load_remote_chat_messages(
@@ -674,6 +712,7 @@ impl CoreServiceAgentRuntime {
 
     pub(crate) async fn update_remote_session_model(
         coordinator: &ConversationCoordinator,
+        runtime: &AgentRuntime,
         session_id: &str,
         model_id: &str,
     ) -> Result<String, String> {
@@ -709,51 +748,35 @@ impl CoreServiceAgentRuntime {
                 .map_err(|e| format!("Failed to restore session: {e}"))?;
         }
 
-        coordinator
-            .get_session_manager()
-            .update_session_model_id(session_id, &normalized_model_id)
+        runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: session_id.to_string(),
+                model_id: normalized_model_id.clone(),
+            })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(Self::runtime_error_message)?;
 
-        // Propagate the model choice to every agent type already present in
-        // `ai.agent_models` so that newly created sessions of any type
-        // (including different agent types like Cowork/Claw) inherit it.
-        // Also ensure the current session's agent type is present.  This
-        // covers mobile-web and IM-bot paths; the desktop client handles
-        // its own `ai.agent_models` writing in the frontend.
-        Self::persist_model_for_all_agents(&normalized_model_id, || {
-            coordinator
-                .get_session_manager()
-                .get_session(session_id)
-                .map(|s| s.agent_type.clone())
-        })
-        .await;
+        if coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .is_some_and(|session| session_uses_shared_mode_default(&session))
+        {
+            // New sessions of every mode share one selector. Delegated
+            // subagents intentionally keep their own defaults.
+            Self::persist_mode_model(&normalized_model_id).await;
+        }
 
         Ok(normalized_model_id)
     }
 
-    /// Write `model_id` to `ai.agent_models` for **every** agent type already
-    /// present in the config, plus the current session's agent type if it is
-    /// not yet listed.  This ensures newly created sessions of any type pick
-    /// up the same model without hardcoding a fixed list of agent types.
-    async fn persist_model_for_all_agents<F>(model_id: &str, current_agent_type: F)
-    where
-        F: FnOnce() -> Option<String>,
-    {
+    /// Persist the shared selector used by future mode sessions.
+    async fn persist_mode_model(model_id: &str) {
         let Ok(config_service) = crate::service::config::get_global_config_service().await else {
             return;
         };
-        let mut current: std::collections::HashMap<String, String> = config_service
-            .get_config(Some("ai.agent_models"))
-            .await
-            .unwrap_or_default();
-        for value in current.values_mut() {
-            *value = model_id.to_string();
-        }
-        if let Some(agent_type) = current_agent_type() {
-            current.insert(agent_type, model_id.to_string());
-        }
-        let _ = config_service.set_config("ai.agent_models", &current).await;
+        let _ = config_service
+            .set_config("ai.agent_model_defaults.mode", model_id)
+            .await;
     }
 
     pub(crate) fn remote_control_state_port(
@@ -767,13 +790,22 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
-        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .build()
         .map_err(|error| error.to_string())
@@ -784,16 +816,26 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
-        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
@@ -806,15 +848,25 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
-        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -826,21 +878,110 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
-        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
             session_management,
+            session_model,
+            session_restore,
+            transcript_reader,
             thread_goal_management,
             cancellation,
+            interaction_response,
         )
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
         .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn product_agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        services: bitfun_runtime_services::RuntimeServices,
+        harness_registry: bitfun_harness::HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        Self::product_agent_runtime_with_dialog_turn(
+            coordinator,
+            scheduler,
+            dialog_turn,
+            None,
+            services,
+            harness_registry,
+        )
+    }
+
+    pub(crate) fn acp_product_agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        event_source: AgentEventSource,
+        services: bitfun_runtime_services::RuntimeServices,
+        harness_registry: bitfun_harness::HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> =
+            Arc::new(RejectBusyAgentDialogTurnPort(scheduler.clone()));
+        Self::product_agent_runtime_with_dialog_turn(
+            coordinator,
+            scheduler,
+            dialog_turn,
+            Some(event_source),
+            services,
+            harness_registry,
+        )
+    }
+
+    fn product_agent_runtime_with_dialog_turn(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        dialog_turn: Arc<dyn AgentDialogTurnPort>,
+        event_source: Option<AgentEventSource>,
+        services: bitfun_runtime_services::RuntimeServices,
+        harness_registry: bitfun_harness::HarnessRegistry,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
+            coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
+        let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
+
+        let builder = core_agent_runtime_builder(
+            submission,
+            session_management,
+            session_model,
+            session_restore,
+            transcript_reader,
+            thread_goal_management,
+            cancellation,
+            interaction_response,
+        )
+        .with_dialog_turn_port(dialog_turn)
+        .with_lifecycle_delivery_port(lifecycle_delivery);
+        let builder = match event_source {
+            Some(event_source) => builder.with_event_source(event_source),
+            None => builder,
+        };
+        builder
+            .with_services(services)
+            .with_harness_registry(Arc::new(harness_registry))
+            .build()
+            .map_err(|error| error.to_string())
     }
 
     pub(crate) fn global_agent_runtime_with_lifecycle_delivery() -> Result<AgentRuntime, String> {
@@ -852,10 +993,7 @@ impl CoreServiceAgentRuntime {
     }
 
     pub(crate) fn runtime_error_message(error: RuntimeError) -> String {
-        match error {
-            RuntimeError::Port(error) => error.message,
-            other => other.to_string(),
-        }
+        error.into_message()
     }
 }
 
@@ -1202,15 +1340,31 @@ impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
             .into_iter()
             .map(|workspace| RemoteRecentWorkspaceFacts {
                 path: workspace.root_path.to_string_lossy().to_string(),
-                name: workspace.name,
+                name: workspace.name.clone(),
                 last_opened: workspace.last_accessed.to_rfc3339(),
                 kind: remote_workspace_kind(workspace.workspace_kind),
+                remote_connection_id: workspace_metadata_string(
+                    &workspace.metadata,
+                    "connectionId",
+                ),
+                remote_ssh_host: workspace_metadata_string(&workspace.metadata, "sshHost"),
             })
             .collect()
     }
 
-    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
-        open_workspace_with_snapshot(path, "remote workspace set").await
+    async fn open_workspace(
+        &self,
+        path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> Result<RemoteWorkspaceUpdate, String> {
+        open_workspace_with_snapshot(
+            path,
+            "remote workspace set",
+            remote_connection_id,
+            remote_ssh_host,
+        )
+        .await
     }
 
     async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts> {
@@ -1231,7 +1385,7 @@ impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
     }
 
     async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
-        open_workspace_with_snapshot(path, "remote assistant set").await
+        open_workspace_with_snapshot(path, "remote assistant set", None, None).await
     }
 }
 
@@ -1300,6 +1454,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     ) -> Result<String, String> {
         CoreServiceAgentRuntime::update_remote_session_model(
             self.coordinator.as_ref(),
+            &self.runtime,
             session_id,
             model_id,
         )
@@ -1426,6 +1581,7 @@ impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
     fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String> {
         crate::agentic::tools::user_input_manager::get_user_input_manager()
             .send_answer(tool_id, answers)
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -1497,6 +1653,7 @@ mod tests {
         fn assert_runtime_ports<T>()
         where
             T: AgentSubmissionPort
+                + AgentInteractionResponsePort
                 + AgentSessionManagementPort
                 + AgentThreadGoalManagementPort
                 + AgentTurnCancellationPort
@@ -1622,15 +1779,15 @@ mod tests {
             Some("auto".to_string())
         );
         assert_eq!(
-            normalize_remote_session_model_id(Some("".to_string())),
+            normalize_remote_session_model_id(Some("")),
             Some("auto".to_string())
         );
         assert_eq!(
-            normalize_remote_session_model_id(Some("  default  ".to_string())),
+            normalize_remote_session_model_id(Some("  default  ")),
             Some("auto".to_string())
         );
         assert_eq!(
-            normalize_remote_session_model_id(Some(" model-1 ".to_string())),
+            normalize_remote_session_model_id(Some(" model-1 ")),
             Some("model-1".to_string())
         );
     }
@@ -1661,6 +1818,24 @@ mod tests {
             normalize_remote_model_selection("custom-alias", None).unwrap_err(),
             "Config service not available"
         );
+    }
+
+    #[test]
+    fn core_service_agent_runtime_only_shares_model_defaults_for_standard_sessions() {
+        let mut session = Session::new_with_id(
+            "session-model-scope".to_string(),
+            "Model scope".to_string(),
+            "agentic".to_string(),
+            Default::default(),
+        );
+
+        assert!(session_uses_shared_mode_default(&session));
+
+        session.kind = SessionKind::Subagent;
+        assert!(!session_uses_shared_mode_default(&session));
+
+        session.kind = SessionKind::EphemeralChild;
+        assert!(!session_uses_shared_mode_default(&session));
     }
 
     #[test]
@@ -1714,9 +1889,13 @@ mod tests {
 
     #[test]
     fn core_service_agent_runtime_owner_strips_enhanced_remote_user_input() {
-        let content = "User uploaded a file.\nUser's question:\n  explain this  ";
+        let mut turn = remote_history_test_turn(TurnStatus::Completed, None);
+        turn.user_message.content =
+            "User uploaded a file.\nUser's question:\n  explain this  ".to_string();
 
-        assert_eq!(strip_remote_user_input_tags(content), "explain this");
+        let messages = remote_chat_messages_from_turns(&[turn]);
+
+        assert_eq!(messages[0].content, "explain this");
     }
 
     fn remote_history_test_turn(
@@ -1792,10 +1971,11 @@ mod tests {
                     is_subagent_item: None,
                     parent_task_tool_id: None,
                     subagent_session_id: None,
+                    subagent_dialog_turn_id: None,
                     attempt_id: None,
                     attempt_index: None,
                     subagent_model_id: None,
-                    subagent_model_alias: None,
+                    subagent_model_display_name: None,
                     status: Some("running".to_string()),
                     interruption_reason: None,
                 }],
@@ -1817,8 +1997,8 @@ mod tests {
                 end_time: Some(1_200),
                 duration_ms: Some(100),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,

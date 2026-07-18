@@ -1,1 +1,1 @@
-pub mod remote_workspace_layout;
+pub(super) mod remote_workspace_layout;

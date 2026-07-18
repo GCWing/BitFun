@@ -1,3 +1,5 @@
+@use './motion' as motion;
+
 * {
   margin: 0;
   padding: 0;
@@ -81,11 +83,6 @@ body {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
-@keyframes cubeRotate {
-  0% { transform: rotateX(-20deg) rotateY(0deg); }
-  100% { transform: rotateX(-20deg) rotateY(360deg); }
-}
-
 @keyframes focusBorderFlow {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -94,7 +91,7 @@ body {
 
 // Page transition wrapper
 .page-transition {
-  animation: fadeIn var(--motion-base) var(--easing-decelerate);
+  animation: fadeIn var(--motion-base) motion.$easing-decelerate;
 }
 
 // Nav-stack page transitions (iOS-style push/pop)
@@ -140,6 +137,16 @@ body {
 @keyframes navPopOut {
   from { transform: translateX(0); }
   to   { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .nav-push-enter,
+  .nav-push-exit,
+  .nav-pop-enter,
+  .nav-pop-exit {
+    animation: none;
+  }
 }
 
 // Spinner utility

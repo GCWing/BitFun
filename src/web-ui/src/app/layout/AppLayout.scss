@@ -85,7 +85,7 @@ html, body {
   // ==================== Modifier - loading ====================
   &--loading {
     pointer-events: none;
-    opacity: var(--opacity-focus);
+    opacity: 0.9;
   }
 
   // ==================== Modifier - error ====================

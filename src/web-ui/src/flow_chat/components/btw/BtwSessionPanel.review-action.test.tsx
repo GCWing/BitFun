@@ -230,6 +230,26 @@ function createInterruptedDeepReviewWithoutResult(): Session {
   } as Session;
 }
 
+function createTerminalStandardReviewWithoutResult(status: 'error' | 'cancelled'): Session {
+  const childSession = createCompletedDeepReviewWithoutResult();
+  return {
+    ...childSession,
+    title: 'Review',
+    sessionKind: 'review',
+    status: status === 'error' ? 'error' : 'idle',
+    error: status === 'error' ? 'provider failed' : null,
+    dialogTurns: childSession.dialogTurns.map((turn) => ({
+      ...turn,
+      status,
+      error: status === 'error' ? 'provider failed' : undefined,
+      modelRounds: turn.modelRounds.map((round) => ({
+        ...round,
+        items: [],
+      })),
+    })),
+  } as Session;
+}
+
 function createRunningDeepReviewSession(): Session {
   const childSession = createCompletedDeepReviewWithoutResult();
   return {
@@ -487,6 +507,41 @@ describe('BtwSessionPanel review action bar integration', () => {
     });
   });
 
+  it.each(['error', 'cancelled'] as const)(
+    'settles a standard Review action when the turn ends as %s without a report',
+    async (status) => {
+      const store = useReviewActionBarStore.getState();
+      store.showRunningActionBar({
+        childSessionId: 'deep-review-child',
+        parentSessionId: 'parent-session',
+        reviewMode: 'standard',
+      });
+      flowChatState = {
+        ...flowChatState,
+        sessions: new Map([
+          ['deep-review-child', createTerminalStandardReviewWithoutResult(status)],
+          ['parent-session', flowChatState.sessions.get('parent-session')!],
+        ]),
+      } as FlowChatState;
+
+      await act(async () => {
+        root.render(
+          <BtwSessionPanel
+            childSessionId="deep-review-child"
+            parentSessionId="parent-session"
+            workspacePath="D:/workspace/project"
+          />,
+        );
+      });
+
+      expect(useReviewActionBarStore.getState()).toMatchObject({
+        childSessionId: 'deep-review-child',
+        phase: 'review_error',
+        minimized: false,
+      });
+    },
+  );
+
   it('keeps minimized running review action bars isolated across simultaneous reviews', async () => {
     const firstParent = createParentSessionWithId('parent-session-1');
     const secondParent = createParentSessionWithId('parent-session-2');
@@ -650,6 +705,170 @@ describe('BtwSessionPanel review action bar integration', () => {
       phase: 'fix_running',
       minimized: true,
       customInstructions: 'Keep the fix focused.',
+    });
+  });
+
+  it('restores persisted follow-up and review scope only when the child still exists', async () => {
+    vi.mocked(loadPersistedReviewState).mockResolvedValueOnce({
+      version: 1,
+      phase: 'fix_completed',
+      completedRemediationIds: [],
+      minimized: false,
+      customInstructions: '',
+      followUpReviewSessionId: 'follow-up-review',
+      reviewTargetFilePaths: ['src/original.ts'],
+      remediationModifiedFilePaths: ['src/helper.ts'],
+      remediationScopeRequiresWorkspaceFallback: true,
+      persistedAt: 2,
+    });
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createRunningDeepReviewSession()],
+        ['follow-up-review', { ...createReviewSession(), sessionId: 'follow-up-review' }],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      followUpReviewSessionId: 'follow-up-review',
+      reviewTargetFilePaths: ['src/original.ts'],
+      remediationModifiedFilePaths: ['src/helper.ts'],
+      remediationScopeRequiresWorkspaceFallback: true,
+    });
+  });
+
+  it('reconciles a persisted follow-up reservation through the child request id', async () => {
+    vi.mocked(loadPersistedReviewState).mockResolvedValueOnce({
+      version: 1,
+      phase: 'fix_completed',
+      completedRemediationIds: [],
+      minimized: false,
+      customInstructions: '',
+      followUpReviewSessionId: '__pending_follow_up_review__:review-operation-1',
+      persistedAt: 2,
+    });
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createRunningDeepReviewSession()],
+        ['follow-up-review', {
+          ...createReviewSession(),
+          sessionId: 'follow-up-review',
+          sessionKind: 'review',
+          btwOrigin: {
+            requestId: 'review-operation-1',
+            parentSessionId: 'parent-session',
+          },
+        }],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(useReviewActionBarStore.getState().getSessionState('deep-review-child')
+      ?.followUpReviewSessionId).toBe('follow-up-review');
+  });
+
+  it('keeps a persisted follow-up reservation retryable when no child was created', async () => {
+    vi.mocked(loadPersistedReviewState).mockResolvedValueOnce({
+      version: 1,
+      phase: 'fix_completed',
+      completedRemediationIds: [],
+      minimized: false,
+      customInstructions: '',
+      followUpReviewSessionId: '__pending_follow_up_review__:missing-operation',
+      persistedAt: 2,
+    });
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(useReviewActionBarStore.getState().getSessionState('deep-review-child')
+      ?.followUpReviewSessionId).toBe('__pending_follow_up_review__:missing-operation');
+  });
+
+  it('restores only unfinished items from an interrupted persisted fix run', async () => {
+    const reviewSession = createCancelledFixDeepReview();
+    reviewSession.status = 'running';
+    reviewSession.dialogTurns[0].modelRounds[0].items[0].toolResult = {
+      success: true,
+      result: JSON.stringify({
+        summary: {
+          overall_assessment: 'Two fixes remain.',
+          risk_level: 'medium',
+          recommended_action: 'request_changes',
+        },
+        issues: [],
+        positive_points: [],
+        review_mode: 'deep',
+        remediation_plan: ['Fix issue 1', 'Fix issue 2'],
+      }),
+    };
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', reviewSession],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    const completedId = 'remediation-0';
+    const unfinishedId = 'remediation-1';
+    vi.mocked(loadPersistedReviewState).mockResolvedValueOnce({
+      version: 1,
+      phase: 'fix_running',
+      completedRemediationIds: [completedId],
+      fixingRemediationIds: [completedId, unfinishedId],
+      minimized: true,
+      customInstructions: '',
+      fixingBaselineTurnId: 'turn-1',
+      persistedAt: 2,
+    });
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(useReviewActionBarStore.getState().getSessionState('deep-review-child')).toMatchObject({
+      phase: 'fix_interrupted',
+      remainingFixIds: [unfinishedId],
     });
   });
 

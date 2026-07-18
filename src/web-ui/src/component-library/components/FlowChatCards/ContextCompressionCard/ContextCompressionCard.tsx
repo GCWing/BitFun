@@ -41,13 +41,15 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
 }) => {
   const { t, formatNumber } = useI18n('components');
 
-  const resolvedCompressionCount = compressionCount || result?.compression_count || 1;
-  const resolvedTokensBefore = tokensBefore || result?.tokens_before || input?.tokens_before;
-  const resolvedTokensAfter = tokensAfter || result?.tokens_after || input?.tokens_after;
-  const resolvedCompressionRatio = compressionRatio || result?.compression_ratio || 
-    (resolvedTokensBefore && resolvedTokensAfter ? (resolvedTokensAfter / resolvedTokensBefore) : undefined);
-  const resolvedDuration = duration || result?.duration;
-  const resolvedTrigger = trigger || result?.trigger || input?.trigger || 'manual';
+  const resolvedCompressionCount = compressionCount ?? result?.compression_count ?? 1;
+  const resolvedTokensBefore = tokensBefore ?? result?.tokens_before ?? input?.tokens_before;
+  const resolvedTokensAfter = tokensAfter ?? result?.tokens_after ?? input?.tokens_after;
+  const resolvedCompressionRatio = compressionRatio ?? result?.compression_ratio ??
+    (typeof resolvedTokensBefore === 'number' && resolvedTokensBefore > 0 && typeof resolvedTokensAfter === 'number'
+      ? (resolvedTokensAfter / resolvedTokensBefore)
+      : undefined);
+  const resolvedDuration = duration ?? result?.duration;
+  const resolvedTrigger = trigger ?? result?.trigger ?? input?.trigger ?? 'manual';
 
   const getTriggerText = (triggerType: string) => {
     switch (triggerType) {
@@ -64,8 +66,14 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
     }
   };
 
-  const savedTokens = resolvedTokensBefore && resolvedTokensAfter ? 
-    resolvedTokensBefore - resolvedTokensAfter : undefined;
+  const savedTokens =
+    typeof resolvedTokensBefore === 'number' && typeof resolvedTokensAfter === 'number'
+      ? resolvedTokensBefore - resolvedTokensAfter
+      : undefined;
+  const savedRatio =
+    typeof resolvedCompressionRatio === 'number'
+      ? 1 - resolvedCompressionRatio
+      : undefined;
 
   const getStatusIcon = (size: number = 14) => {
     switch (status) {
@@ -96,9 +104,9 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
           </span>
         )}
         
-        {status === 'completed' && savedTokens !== undefined && resolvedCompressionRatio !== undefined && (
+        {status === 'completed' && savedTokens !== undefined && savedRatio !== undefined && (
           <span className="context-compression-card__result">
-            {t('flowChatCards.contextCompressionCard.savedTokens', { count: formatNumber(savedTokens), ratio: (resolvedCompressionRatio * 100).toFixed(0) })}
+            {t('flowChatCards.contextCompressionCard.savedTokens', { count: formatNumber(savedTokens), ratio: (savedRatio * 100).toFixed(0) })}
           </span>
         )}
       </div>
@@ -144,9 +152,9 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
               <span className="context-compression-card__simple-tokens">
                 {formatNumber(resolvedTokensBefore)} → {formatNumber(resolvedTokensAfter)} tokens
               </span>
-              {savedTokens !== undefined && resolvedCompressionRatio !== undefined && (
+              {savedTokens !== undefined && savedRatio !== undefined && (
                 <span className="context-compression-card__simple-savings">
-                  {t('flowChatCards.contextCompressionCard.savedTokens', { count: formatNumber(savedTokens), ratio: (resolvedCompressionRatio * 100).toFixed(1) })}
+                  {t('flowChatCards.contextCompressionCard.savedTokens', { count: formatNumber(savedTokens), ratio: (savedRatio * 100).toFixed(1) })}
                 </span>
               )}
             </div>

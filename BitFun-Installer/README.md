@@ -13,6 +13,8 @@ Instead of relying on the generic NSIS wizard UI from Tauri's built-in bundler, 
 
 ## Common tasks
 
+Requires Node.js 22.12+ and pnpm 10.15.0, matching the workspace baseline.
+
 ### Install dependencies
 
 ```bash
@@ -103,9 +105,9 @@ Language Select → Options → Progress → Model Setup → Theme Setup
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.12+
 - Rust (latest stable)
-- pnpm
+- pnpm 10.15.0 via Corepack
 
 ### Setup
 
@@ -226,6 +228,17 @@ During `cargo build`, the payload directory is packed into an embedded zip insid
 Add to your GitHub Actions workflow:
 
 ```yaml
+- uses: actions/checkout@v5
+- name: Setup pnpm
+  uses: pnpm/action-setup@v5
+  with:
+    version: 10.15.0
+- name: Setup Node.js
+  uses: actions/setup-node@v5
+  with:
+    node-version: '22'
+    cache: pnpm
+
 - name: Build Installer
   run: |
     cd BitFun-Installer
@@ -233,7 +246,7 @@ Add to your GitHub Actions workflow:
     pnpm run installer:build:only
 
 - name: Upload Installer
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@v6
   with:
     name: BitFun-Installer-Exe
     path: BitFun-Installer/src-tauri/target/release/bitfun-installer.exe

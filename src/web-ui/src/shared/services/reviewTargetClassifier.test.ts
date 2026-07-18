@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyReviewTargetFromFiles,
+  classifyReviewTargetFromPathChanges,
   createUnknownReviewTargetClassification,
   getReviewerApplicabilityRule,
   normalizeReviewPath,
@@ -8,6 +9,18 @@ import {
 } from './reviewTargetClassifier';
 
 describe('reviewTargetClassifier', () => {
+  it('preserves repository-owned whitespace and literal backslashes', () => {
+    const target = classifyReviewTargetFromFiles(
+      [' leading.rs ', 'src/literal\\name.rs'],
+      'workspace_diff',
+    );
+
+    expect(target.files.map((file) => file.normalizedPath)).toEqual([
+      ' leading.rs ',
+      'src/literal\\name.rs',
+    ]);
+  });
+
   it('normalizes Windows and relative paths for review classification', () => {
     expect(normalizeReviewPath('.\\src\\web-ui\\src\\App.tsx')).toBe(
       'src/web-ui/src/App.tsx',
@@ -51,6 +64,25 @@ describe('reviewTargetClassifier', () => {
 
     expect(target.resolution).toBe('resolved');
     expect(target.tags).toEqual(['backend_core']);
+  });
+
+  it('unions old and new rename risk while counting one logical file', () => {
+    const target = classifyReviewTargetFromPathChanges([
+      {
+        path: 'docs/guard.md',
+        oldPath: 'src/crates/assembly/core/src/auth/guard.rs',
+        status: 'renamed',
+      },
+    ], 'slash_command_git_ref');
+
+    expect(target.files).toHaveLength(1);
+    expect(target.files[0]).toMatchObject({
+      normalizedPath: 'docs/guard.md',
+      normalizedOldPath: 'src/crates/assembly/core/src/auth/guard.rs',
+      status: 'renamed',
+      tags: expect.arrayContaining(['docs', 'backend_core']),
+    });
+    expect(target.tags).toEqual(expect.arrayContaining(['docs', 'backend_core']));
   });
 
   it('classifies layered Rust crate paths from the current Cargo layout', () => {

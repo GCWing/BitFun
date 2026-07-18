@@ -8,6 +8,11 @@ pub const REVIEWER_PERFORMANCE_AGENT_TYPE: &str = "ReviewPerformance";
 pub const REVIEWER_SECURITY_AGENT_TYPE: &str = "ReviewSecurity";
 pub const REVIEWER_ARCHITECTURE_AGENT_TYPE: &str = "ReviewArchitecture";
 pub const REVIEWER_FRONTEND_AGENT_TYPE: &str = "ReviewFrontend";
+pub const REVIEWER_GENERAL_AGENT_TYPE: &str = "ReviewGeneral";
+pub(crate) const MANAGED_REVIEW_MAX_FILES_PER_BATCH: usize = 40;
+pub(crate) const MANAGED_REVIEW_MAX_BATCHES: usize = 8;
+pub(crate) const MANAGED_REVIEW_MAX_PARALLEL_INSTANCES: usize = 2;
+pub(crate) const MANAGED_REVIEW_MAX_WORKER_TIMEOUT_SECONDS: u64 = 120;
 
 pub const CORE_REVIEWER_AGENT_TYPES: [&str; 4] = [
     REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,

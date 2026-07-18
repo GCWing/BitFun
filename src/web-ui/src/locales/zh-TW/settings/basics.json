@@ -98,9 +98,13 @@
       "title": "上次會話異常結束",
       "description": "上次會話日誌位於 {{path}}。"
     },
+    "previousUncleanShutdown": {
+      "title": "上次會話未記錄到正常關閉",
+      "description": "上次會話日誌位於 {{path}}。重新啟動、系統關機或開發熱重載後也可能出現這種記錄。"
+    },
     "startupRecovery": {
-      "title": "上次沒有正常關閉",
-      "message": "BitFun 已從一次異常退出後重新開啟。如需回報問題，可以匯出診斷包。"
+      "title": "上次會話異常結束",
+      "message": "BitFun 發現上次會話留下了崩潰報告。如需回報問題，可以匯出診斷包。"
     },
     "levels": {
       "trace": "Trace",

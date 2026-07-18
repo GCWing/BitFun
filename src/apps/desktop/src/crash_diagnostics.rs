@@ -31,7 +31,16 @@ pub struct UnexpectedExitInfo {
     pub started_at: Option<String>,
     pub session_log_dir: Option<String>,
     pub crash_report_path: Option<String>,
+    pub category: UnexpectedExitCategory,
+    pub notify_on_startup: bool,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UnexpectedExitCategory {
+    Crash,
+    UncleanShutdown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,12 +134,20 @@ pub fn previous_unexpected_exit() -> Option<UnexpectedExitInfo> {
 
 pub fn log_previous_unexpected_exit_if_any() {
     if let Some(info) = previous_unexpected_exit() {
-        log::warn!(
-            "Previous desktop session ended unexpectedly: session_log_dir={:?}, crash_report_path={:?}, reason={}",
-            info.session_log_dir,
-            info.crash_report_path,
-            info.reason
-        );
+        if info.notify_on_startup {
+            log::warn!(
+                "Previous desktop session ended unexpectedly: session_log_dir={:?}, crash_report_path={:?}, reason={}",
+                info.session_log_dir,
+                info.crash_report_path,
+                info.reason
+            );
+        } else {
+            log::info!(
+                "Previous desktop session did not record a clean shutdown: session_log_dir={:?}, reason={}",
+                info.session_log_dir,
+                info.reason
+            );
+        }
     }
 }
 
@@ -269,12 +286,29 @@ fn detect_previous_unexpected_exit(run_state_path: &Path) -> Option<UnexpectedEx
         .filter(|path| path.exists())
         .map(|path| path.to_string_lossy().to_string());
 
+    let category = if crash_report_path.is_some() {
+        UnexpectedExitCategory::Crash
+    } else {
+        UnexpectedExitCategory::UncleanShutdown
+    };
+    let notify_on_startup = matches!(category, UnexpectedExitCategory::Crash);
+    let reason = match category {
+        UnexpectedExitCategory::Crash => {
+            "Previous run wrote a crash report before shutdown".to_string()
+        }
+        UnexpectedExitCategory::UncleanShutdown => {
+            "Previous run state was not marked as clean shutdown".to_string()
+        }
+    };
+
     Some(UnexpectedExitInfo {
         detected: true,
         started_at: Some(state.started_at),
         session_log_dir,
         crash_report_path,
-        reason: "Previous run state was not marked as clean shutdown".to_string(),
+        category,
+        notify_on_startup,
+        reason,
     })
 }
 
@@ -463,6 +497,8 @@ mod tests {
             Some(session_dir.to_string_lossy().as_ref())
         );
         assert!(info.crash_report_path.is_some());
+        assert_eq!(info.category, UnexpectedExitCategory::Crash);
+        assert!(info.notify_on_startup);
 
         let _ = fs::remove_dir_all(temp_dir);
     }
@@ -492,6 +528,42 @@ mod tests {
         write_json_file(&run_state_path, &run_state).expect("test run state should be written");
 
         assert!(detect_previous_unexpected_exit(&run_state_path).is_none());
+
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn records_unclean_shutdown_without_startup_notification_when_no_crash_report() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "bitfun-crash-diagnostics-unclean-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time should be after unix epoch")
+                .as_nanos()
+        ));
+        let session_dir = temp_dir.join("20260528T120000");
+        fs::create_dir_all(&session_dir).expect("test session directory should be created");
+
+        let run_state = RunState {
+            app_version: "test".to_string(),
+            pid: 123,
+            started_at: "2026-05-28T12:00:00Z".to_string(),
+            updated_at: "2026-05-28T12:00:01Z".to_string(),
+            session_log_dir: session_dir.to_string_lossy().to_string(),
+            clean_shutdown: false,
+            shutdown_at: None,
+            exit_reason: None,
+            startup_trace_id: "test-trace".to_string(),
+        };
+        let run_state_path = temp_dir.join(RUN_STATE_FILE);
+        write_json_file(&run_state_path, &run_state).expect("test run state should be written");
+
+        let info = detect_previous_unexpected_exit(&run_state_path)
+            .expect("unclean run state should still be recorded");
+        assert!(info.detected);
+        assert!(info.crash_report_path.is_none());
+        assert_eq!(info.category, UnexpectedExitCategory::UncleanShutdown);
+        assert!(!info.notify_on_startup);
 
         let _ = fs::remove_dir_all(temp_dir);
     }

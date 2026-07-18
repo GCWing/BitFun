@@ -1,154 +1,140 @@
 # BitFun Core 拆解与运行时迁移计划
 
-本文只维护后续执行计划。稳定目标以
-[`product-architecture.md`](../architecture/product-architecture.md)、
-[`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md) 和
-[`plugin-runtime-host-design.md`](../architecture/plugin-runtime-host-design.md)
-为准；已完成事实归档在 [`core-decomposition-completed.md`](core-decomposition-completed.md)。
-设计文档默认保持稳定，只有目标架构本身需要修正时才修改。
-本计划文件名继续保留 `core-decomposition`，因为它记录的是 `bitfun-core` 收敛和 owner 迁移的执行路径。
+本文件只维护 Core 边界债务、迁移顺序和退出条件。稳定架构以
+[产品运行时架构](../architecture/product-architecture.md)为准；Agent Runtime、产品定制和 OpenCode 扩展分别由
+[运行时设计](../architecture/agent-runtime-services-design.md)、
+[产品定制设计](../architecture/product-customization-blueprint.md)和
+[OpenCode 扩展兼容设计](../architecture/extensions/opencode-extension-compatibility.md)负责；OpenCode 交付阶段与
+退出条件见[扩展兼容计划](opencode-extension-compatibility-plan.md)。已完成事实归档在
+[core-decomposition-completed.md](core-decomposition-completed.md)。
 
 ## 1. 执行原则
 
-- `bitfun-core` 最终收敛为 compatibility facade、`product-full` 组装边界和少量迁移期 adapter。
-- 迁移按概念 owner 判断：Product Surface、Product Assembly、Product Feature、Agent Kernel、Execution、Extension、Cross-platform Adapter、Stable Contracts。
-- 外部系统不是 owner 层级；OS、Git、MCP server、AI provider、remote host、browser runtime 和 plugin package 只在
-  adapter I/O 边界出现。除 Product Assembly 外，调用方应依赖 port、descriptor 或 stable contract，而不是 concrete provider。
-- 新抽象必须同步删除、迁移或显著简化旧 core 主体路径；纯 facade、纯 guard、纯文档或空接口不算完成。
-- Product Assembly 是 composition root；除它以外，普通层级只能依赖稳定 contract、port、descriptor 或被注入的 typed part。
-- 产品特性和内核能力分开：长程任务、调度、权限、上下文、session/workspace、memory、DFX、hook/event 属于 Agent Kernel；
-  `/goal`、UI、settings、命令和默认策略属于 Product Feature。
-- 主体进程插件 API 分阶段开放：当前只落地 `PluginRuntimeClient`、binding、availability 和 dispatch/response envelope；effect candidate、trust policy、descriptor 与 lifecycle 语义必须在后续 Host / UI Extension 阶段成组落地。任何阶段都不得让主体进程感知具体生态 adapter。
-- 任何会改变权限、工具 schema、事件语义、session 生命周期、remote 行为、MiniApp 行为、UI extension contract 或交付形态的变更必须暂停并单独评审。
+- 依赖方向固定为产品入口 / interfaces → assembly → adapters / services / execution → contracts。
+- DTO 或端口抽取不等于运行时 owner 已迁移；只有生产入口切换、行为等价成立且旧写入方退出后才算完成。
+- 每次只迁移一条端到端调用链，不按目录或类型数量拆 PR。
+- 新接口必须有当前生产消费方、版本边界、验证方式和退场条件；空 profile、re-export、测试桩或未来矩阵不算消费方。
+- 入口、Remote 和 SDK 的不支持状态必须类型化且可解释，不得静默回到 `product-full` 或本机执行。
+- Core 拆解与生态兼容并行演进。任何一条路线不得为了等待另一条路线而预建通用接口。
 
-## 2. 当前基线
+## 2. 已核实基线
 
-- workspace 已按六层物理目录展开：`interfaces -> assembly -> adapters -> services -> execution -> contracts`。
-- Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立。
-- `bitfun-core --no-default-features` 已裁掉多批 concrete provider 和 direct provider 依赖；Desktop、CLI、ACP 仍通过 `bitfun-core/product-full` 获取完整产品能力。
-- Computer Use 系统动作错误码、memory workspace Git baseline / diff / render、MCP OAuth credential store、本地/远端 workspace runtime provider 已继续收口到 services owner；core 只保留既有工具 envelope、产品路径注入、授权入口、workspace binding/re-export 和 deprecated 兼容 wrapper。
-- Agentic frontend event projection 和 AgenticEvent projection manifest 已进入 `bitfun-events`；Tauri/WebSocket transport 不再内联事件字段映射或 legacy event allowlist。
-- Tool ABI 基础合同已进入 `tool-contracts`：materialized snapshot、provider identity、default permission/effect filter、cancellation contract 和 stale-call guard 由 owner crate 提供，core 只投射现有产品 Tool 元数据。
-- Terminal / ExecCommand、remote SSH concrete execution、workspace search、debug ingest、AI provider adapter runtime、browser CDP、WebFetch/WebSearch、review platform provider service 等多批 owner 已迁出或收口到 port/provider。
-- Boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
-
-## 3. 目标差距
-
-| 差距 | 影响 | 收敛要求 |
+| 事实 | 当前状态 | 结论 |
 |---|---|---|
-| 部分 concrete owner 仍在 core 或产品命令路径 | 层级依赖和平台差异仍可能回流 | 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择和其他仍由 core 持有的 I/O owner |
-| SDK readiness 仍未闭环 | 独立 Agent Runtime SDK 可能牵引 product-full 或 concrete provider | fake-provider smoke、minimal feature、cargo tree/metadata 对比和 API version 保护 |
-| UI Extension Contract 与产品形态矩阵仍需实现 | Desktop/Web/CLI/SDK/ACP 的插件 UI 行为可能不一致 | 建立 descriptor round-trip、fallback、unsupported/unavailable 和只读 state view |
-| Plugin Runtime Host 仍缺少真实执行 Host 和生态 adapter | 插件能力只能表达 disabled / projection-only，不能加载或执行外部插件 | 在 UI Extension Contract 后落地受控 Host facade、effect / trust / diagnostics / deadline / epoch；生态 adapter 在 Host 边界稳定后接入 |
-| OpenCode compatibility adapter 仍缺少真实消费路径 | OpenCode 插件能力无法受控进入 BitFun | 插件 Host 边界稳定后再接入；具体生态 adapter、JS/TS runtime 和可写插件能力后置 |
+| 产品能力组装 | `DeliveryProfile`、`ProductAssembler`、能力计划、服务可用性和测试已存在 | 这些是可测试的 assembly facts，不代表产品入口已接入 |
+| CLI / Desktop / ACP | 三者仍按需启用 `bitfun-core/product-full`；CLI 与 ACP 已分别提交对应 `DeliveryProfile` 并消费 Runtime Parts/SDK，Desktop 主交互已消费由现有 owner 构造的窄口径 SDK 门面 | 三个入口均复用单一 Core owner；完整 Desktop profile 和剩余兼容操作仍需逐项迁移 |
+| Server | 当前生产路由只形成 health/info/ping 基线 | 没有插件状态或独立产品组装闭环 |
+| Server / Remote / Web / Mobile Web / SDK profile | 当前为空计划、未接入入口或仅有 preview 测试 | 不得据枚举值宣称产品能力已交付 |
+| Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v1 preview 门面和 smoke test | 发布边界仍需真实嵌入方证明 |
+| 插件运行时 | 现有路径只覆盖 BitFun 原生包和 OpenCode custom tool 静态名称预览 | 不能据通用 envelope 或静态候选扩张稳定 ABI |
+| Relay | room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router 已归属 `services/relay-service`，standalone 与 embedded 入口同向消费；embedded 宿主逻辑仍在 assembly 兼容路径 | Cargo metadata 门禁覆盖 workspace、独立 manifest、normal/build/dev 依赖及 optional/target 变体；宿主归位是独立后续工作 |
+| CLI CI | 独立 Linux job 运行 CLI test，通用三平台 workspace check 覆盖 CLI 编译；Linux PTY 与 Windows ConPTY 有启动页生命周期进程冒烟，发布归档上传前校验 SHA-256 并解压执行 | 参数/序列化/前置失败和组装已有 focused contract；resize 静默期已有状态单测，活动流式内容窄屏 reflow 已有 TestBackend 回归，真实模型/PTY 活动 turn、终端故障注入与 Patch I/O 失败仍需补齐 |
 
-## 4. 后续大型阶段
+## 3. 目标依赖与归属
 
-### Stage D：剩余 Concrete Owner 与 SDK Readiness
-
-目标：继续把 concrete owner 从 `bitfun-core` / 产品命令路径收口到对应 owner crate，并验证独立 Agent Runtime SDK 边界不会牵引完整产品实现。
-
-范围：
-
-- 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择和其他仍由 core 持有的 I/O owner。
-- Product Assembly 负责选择 provider；Kernel、Execution、Extension、Product Feature 不直接依赖 platform concrete。
-- 建立 SDK minimal fake-provider smoke，确认 minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
-
-准出：
-
-- 至少完成 2-3 个 concrete owner 的实际迁移，并同步删除或简化 core 旧主体路径。
-- `cargo check --workspace`、`cargo check -p bitfun-core --no-default-features`、SDK minimal smoke、cargo metadata/tree 对比和必要 product checks 通过。
-
-### Stage E：UI Extension Contract 与产品形态矩阵
-
-目标：为插件 UI contribution 提供声明式 descriptor，并明确不同交付形态的支持、禁用和降级行为。
-
-准入：本阶段不得只新增 descriptor、registry 或 matrix。任何 UI Extension Contract 代码都必须绑定至少一条既有
-实际消费方或旧路径迁移，例如输入框命令、settings entry、状态投影或插件候选 UI 的实际接入，并同步删除或显著简化旧
-实现；否则只允许保留在设计文档中。
-
-范围：
-
-- 定义 slot、route、command/keymap、prompt augmentation、dialog/toast、settings entry、state view descriptor。
-- UI state view 只读；descriptor 不包含 React component、Tauri window、DOM node、renderer handle 或可执行代码。
-- Product Assembly 维护 UI contribution registry、capability matrix 和 unsupported/unavailable fallback。
-- 建立 Desktop、Web、CLI、Server、Remote、ACP、SDK、Mobile Web 的插件能力矩阵。
-
-Stage E 目标 UI Extension 形态矩阵：
-
-| 形态 | UI Extension 状态 | 降级要求 |
+| 层 | 负责 | 禁止 |
 |---|---|---|
-| ProductFull / Desktop / Web / Mobile Web | disabled: NotBuilt | 可声明 UI 扩展能力缺口，但不能执行、渲染或加载外部 UI |
-| CLI / Server / Remote / ACP / SDK | disabled: UnsupportedProfile | 必须返回 typed unsupported，不得隐式复用桌面或 Web UI 实现 |
+| apps / interfaces | 选择唯一入口形态，提交 profile，投影协议或界面 | 成为共享运行时 owner，复制会话/工具/权限逻辑 |
+| assembly | 选择能力、提供方和兼容门面，输出类型化 runtime parts | 依赖 app crate，持有平台进程/协议实现，重新解释动态配置 |
+| adapters / services | 协议转换、平台 I/O、可复用具体实现 | 反向依赖 assembly 或产品入口 |
+| execution | Agent、Tool、Harness、Plugin Host 的可移植执行语义 | 读取交付形态，依赖 app/adapter 具体实现 |
+| contracts | 稳定 DTO、事实和端口 | 依赖上层或持有运行时行为 |
 
-准出：
+需要同时被独立应用和嵌入式模式复用的能力，先下沉为 services/adapters owner，再由 app 与 assembly 同向消费。
+Relay 已按该规则完成首个修复；后续共享实现仍不得以 app crate 充当下层库。
 
-- UI descriptor round-trip、host fallback、unsupported/unavailable 和 product-shape focused tests 通过。
-- Web、Desktop、CLI 不因 UI Extension Contract 引入互相依赖。
+## 4. 迁移顺序
 
-### Stage F：Plugin Runtime Host 执行边界
+### 4.1 已完成边界保护
 
-目标：在 disabled/projection-only 边界和 UI Extension Contract 之后，建立真实插件 Host 的受控执行边界，但仍不直接绑定 OpenCode、Claude Code 或 Codex 等具体生态实现。
+1. relay router、room、存储与 asset-store 已归属 `services/relay-service`。
+2. standalone relay app 和嵌入式入口共同依赖该 owner，`assembly/core -> apps/relay-server` 已删除。
+3. crate 层级依赖已增加 Cargo metadata 通用检查和反向用例，不再只保护已知 crate 名称。
 
-范围：
+共享 owner 与 Cargo 方向的退出条件已满足：standalone 与 embedded 入口共用同一已测试 router，Cargo 图不再包含
+assembly → apps。embedded 的 bind、静态 fallback 和任务生命周期移出 assembly 是独立后续工作。
 
-- 定义插件 lifecycle、deadline、epoch、idempotency、failure quarantine、diagnostics 和 dispose 语义。
-- 定义 effect candidate、trust policy、permission/audit 只读投射和拒绝路径；插件 Host 不直接写 kernel 权威状态、permission decision、audit event 或 UI implementation。
-- Product Assembly 只注册 Host facade 和 typed capability；具体 runtime、worker、subprocess、package discovery 由上层组装器选择并注入。
-- 建立 Desktop、CLI、Server、Remote、ACP、Web、Mobile Web、SDK 的 Host availability / unavailable / unsupported 行为矩阵。
+### 4.2 切换 CLI 纵向路径
 
-准出：
+CLI 是首个入口迁移对象，因为它已有独立产品诉求、显式设计和最小 CI 命令。
 
-- Host facade 不暴露具体生态 adapter 类型、UI implementation handle、Tauri handle、full `RuntimeServices` bundle 或 `bitfun-core/product-full`。
-- disabled、projection-only、unavailable、host failure、dispose 和 permission/effect focused tests 通过。
-- 默认不开放可写 transform 或外部 JS/TS plugin runtime；这些能力需要单独安全评审。
+当前纵向切片已经完成：入口只提交一次 `DeliveryProfile::Cli`，通过现有 `ProductAssembler` 获得计划、服务可用性、
+Harness 和禁用的插件 binding；TUI、Exec、Session 与 Usage 共用一个 `CliRuntimeContext`。会话创建（包括
+`exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/
+删除、会话模型更新、轮次提交和取消走 Agent Runtime SDK；SDK v1 缺口集中在一个 Core 兼容门面。Agentic Event Queue 仍是唯一
+owner，各入口只建立独立广播订阅，有界兼容队列满载不再阻断广播。TUI 与 Exec 审批均为调用级策略，不写全局
+配置；CLI 本地路径不获取具体 PersistenceManager。交互、执行和管理入口分别控制 Peer Host/MCP 生命周期，管理查询不启动
+这两类外部服务。结构化输出复用现有 Agentic envelope；会话 ID 与
+存储路径绑定并在删除前校验；TUI 终端恢复由 RAII guard 覆盖错误和 panic 展开路径。
 
-### Stage G：OpenCode Compatibility Adapter
+Peer Host 的 Runtime 接入和跨 Relay/Desktop/Web 的协议切换保持独立；本切片不改变其 HostInvoke、身份、确认或
+重连语义。
 
-目标：在 Plugin Runtime Host、Tool ABI、Event Manifest 和 UI Extension Contract 可用后，实现受控 OpenCode 兼容适配。
+下一步按独立纵向切片推进：
 
-范围：
+1. 以真实调用方和行为等价测试补齐 SDK 端口，逐项缩小分支、用量、快照和持久化维护兼容面；会话模型更新已迁移，模型目录与配置仍保留在产品入口。
+2. 继续迁移 ACP 尚未接入 SDK 的持久化历史、模型目录/模式和 MCP 操作；ACP stdio 与协议投影生命周期保留在接口入口。
+3. 继续按真实故障样例拆分 TUI 副作用边界，不以大规模重写替代现有回归保护。
 
-- 建立 OpenCode server plugin hook support matrix：event、tool、permission.ask、tool.execute.before/after、tool.definition、config/provider/model/skill/MCP transform。
-- 建立 OpenCode TUI plugin support matrix：slot、route、command/keymap、prompt、toast/dialog、theme、只读 state view。
-- 将 OpenCode tool、event、permission、workspace/worktree、remote path、artifact ref 映射为 BitFun canonical contract。
-- 不支持能力返回 typed unsupported；可写 transform 和外部 JS/TS plugin runtime 单独安全评审后再开放。
+当前 assembly 切换条件已经满足：CLI 生产入口消费真实组装结果，目标链路没有第二套状态，独立测试与三平台
+编译门禁存在，启动页 PTY/ConPTY 生命周期与发布归档冒烟测试已接入门禁。CLI-P0 整体退出条件尚未满足；
+真实模型交互、真实 PTY 活动 turn 的 resize、终端故障注入、兼容门面退出以及 ACP/Desktop 切换仍需分别验收。
 
-准出：
+### 4.3 依次切换 ACP 与 Desktop
 
-- OpenCode adapter 不依赖 `bitfun-core/product-full`、full `RuntimeServices` bundle、UI implementation 或 concrete provider handle。
-- adapter、permission/effect、event manifest、UI contribution 和 Desktop/CLI/Server/Remote/ACP/Web/Mobile Web/SDK product shape checks 通过。
+- ACP 在 CLI 之后迁移，优先收敛协议投影和权限/会话桥接，不把 ACP 生命周期下沉到 Agent Runtime。
+- Desktop 最后迁移，因为当前 `product-full` 覆盖最广；按服务簇逐步切换，保留 Tauri 与窗口行为在 app/adapter。
+- 每个入口独立提交自己的 profile；禁止 assembly 根据调用栈、feature 或全局状态再次猜测交付形态。
 
-## 5. 固定执行流程
+退出条件与 CLI 相同：生产消费、行为等价、单一 owner、旧路径退出和入口级验证缺一不可。
 
-1. 同步最新 `main`，检查主干新增的 CLI、tool、terminal、session、scheduler、remote、MiniApp、ACP、OpenCode、plugin、UI 或 product interface 变更。
-2. 对照设计文档和 Issue #970 明确本次 owner 边界，不从旧计划标签继承完成判断。
-3. 先补等价保护和 boundary guard，再迁移实现主体。
-4. 删除、迁移或显著简化 core 中对应旧路径。
-5. 运行 focused verification、boundary check 和必要的 feature / dependency / product-shape 对比。
-6. 从独立第三方角度审查功能漂移、性能劣化、依赖回流、产品形态遗漏、安全绕过和文档一致性。
-7. 合入后只更新 completed 摘要和 issue 状态；设计文档只有目标架构变更时才修改。
+### 4.4 最后晋级 Server、Remote 与 SDK
 
-## 6. 验证矩阵
+- Server 先从现有 health/info/ping 基线选择一个真实 API 消费方，不预建完整产品 surface。
+- Remote 必须在实际工作区执行域完成能力协商，不以本地 provider 代替。
+- SDK 只有在外部或仓库内独立嵌入方无需 `bitfun-core/product-full` 即可完成最小 session/turn/event 流程后，才从 preview 晋级。
+- 空 capability plan、disabled stub 和单元测试用于保护降级，不构成产品完成证据。
 
-| 触达范围 | 最小验证 |
+## 5. 与插件兼容的交叉点
+
+Core 只为插件兼容提供已有 owner 的窄接口：真实工具、类型化 Hook 变换、公开事件、权限请求和诊断。OpenCode
+来源发现、执行准备与兼容语义由对应架构设计和适配器 owner 负责；计划只维护交付顺序与退出条件。
+
+首个可执行切片应只闭环一种 standalone custom tool：真实来源 → worker → 原始校验 → Tool Runtime → 调用结果。
+在该切片完成前：
+
+- 不扩张 `PluginDispatchEnvelope` / `PluginEffectCandidate` 去承载 Hook、Client 或 TUI；
+- 不为未来生态新增公共注册表或多用途 DTO；
+- 不把静态名称、`ready` 或 adapter fixture 当作工具可调用；
+- 不让 SDLC Harness 定义第二套插件接口。
+
+## 6. 固定执行流程
+
+1. 同步最新 `gcwing/main`，记录入口、依赖图和生产消费方。
+2. 选择一个用户可见纵向切片，写清当前 owner、目标 owner、唯一写入方和删除条件。
+3. 先补行为等价与边界失败用例，再切换生产调用方。
+4. 删除或冻结被替代路径，复核 Remote、错误、取消和恢复语义。
+5. 运行最小可信验证，再由独立审查者检查过度设计、旧路径残留和能力过度声明。
+6. PR 明确当前能力、变更后的能力、未覆盖项、用户影响和回退方式。
+
+## 7. 验证矩阵
+
+| 范围 | 最小验证 |
 |---|---|
-| docs / boundary / layout | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
-| Workspace layout / Cargo path | `cargo metadata --no-deps --format-version 1` |
-| Product Feature / capability matrix | `cargo test -p bitfun-product-capabilities`，feature pack focused tests，UI descriptor focused tests |
-| Agent Kernel / permission / event | `cargo test -p bitfun-agent-runtime`，`cargo check -p bitfun-core --no-default-features` |
-| Runtime Services / backend events | `cargo test -p bitfun-runtime-services`，backend event delivery focused tests |
-| Tool / MCP / terminal / sandbox | `cargo test -p bitfun-agent-tools`，`cargo test -p tool-runtime`，terminal / exec-command / MCP focused tests |
-| Harness / Product Domains | `cargo test -p bitfun-harness`，`cargo test -p bitfun-product-domains`，DeepReview / MiniApp focused tests |
-| Extension / OpenCode / ACP | plugin runtime host focused tests，UI contribution descriptor tests，OpenCode adapter focused tests，ACP permission / external tool focused tests |
-| Product shape / SDK | SDK fake-provider smoke，Desktop / CLI / Web / Server / Remote / ACP / SDK / Mobile Web capability matrix checks，cargo tree / metadata 对比 |
-| 大范围 owner 迁移 | `cargo check --workspace`，必要时补 `cargo test --workspace` |
+| 文档与仓库边界 | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
+| 入口 profile 迁移 | 对应 app 的 check/test、入口级 smoke、profile/服务可用性断言、旧路径等价用例 |
+| Relay 共享 owner / Cargo 方向 | standalone 与 embedded focused tests、Cargo 依赖方向失败用例；embedded 宿主归位另行验证生命周期等价 |
+| Agent Runtime / SDK | `cargo test -p bitfun-agent-runtime`，最小 no-`bitfun-core` 嵌入测试 |
+| 插件首个执行切片 | runtime ports、Host、adapter、Tool Runtime 与真实冻结 fixture 的端到端调用 |
+| CLI | `cargo check -p bitfun-cli`，`cargo test -p bitfun-cli`，结构化协议和 package smoke |
 
-## 7. 暂停条件
+## 8. 暂停条件
 
-- 新 owner crate 必须依赖回 `bitfun-core` 才能编译或测试。
-- Agent Kernel 吸收 product feature、UI state、Tauri、产品命令、AI provider、MCP client、process execution、Git provider 等 concrete dependency。
-- Product Assembly 变成无类型 service locator 或全局 mutable app state。
-- Plugin Runtime Host 直接写 permission、audit、kernel state、tool result 或 UI implementation。
-- PR 只新增抽象，没有迁移、删除或显著简化旧 core 主体路径。
-- SDK facade 必须暴露 `bitfun-core`、`product-full`、concrete service manager 或产品命令 registry 才能完成基本 agent 执行。
+出现以下任一情况时，不继续扩接口：
+
+- 只有枚举、空计划、re-export、测试桩或未来矩阵，没有生产消费方；
+- assembly 新增 app 依赖，或下层读取 profile/产品入口状态；
+- 同一事实在兼容门面与目标 owner 中同时计算或写入；
+- 泛 envelope、候选效果或描述符开始承载工具、Hook、Client、TUI 等不同语义；
+- Remote 不支持时静默回本机，或 SDK 仍需要 `product-full` 却被描述为独立可用；
+- 为迁移一次性重写全部 CLI、Desktop 或 Core，而没有可单独验收的纵向切片。

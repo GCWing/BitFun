@@ -2,6 +2,7 @@
 
 use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
+use crate::agentic::tools::product_runtime::CallDeferredTool;
 use crate::agentic::tools::registry::ProductToolDecoratorRef;
 use bitfun_agent_tools::{
     StaticToolProviderFactory, ToolRegistry as AgentToolRegistry, ToolRuntimeAssembly,
@@ -29,6 +30,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "ExecControl" => Some(Arc::new(ExecControlTool::new())),
             "GetTime" => Some(Arc::new(GetTimeTool::new())),
             "Task" => Some(Arc::new(TaskTool::new())),
+            "LaunchReviewAgent" => Some(Arc::new(LaunchReviewAgentTool::new())),
             "Skill" => Some(Arc::new(SkillTool::new())),
             "AskUserQuestion" => Some(Arc::new(AskUserQuestionTool::new())),
             "TodoWrite" => Some(Arc::new(TodoWriteTool::new())),
@@ -46,6 +48,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "CreatePlan" => Some(Arc::new(CreatePlanTool::new())),
             "submit_code_review" => Some(Arc::new(CodeReviewTool::new())),
             "GetToolSpec" => Some(Arc::new(GetToolSpecTool::new())),
+            "CallDeferredTool" => Some(Arc::new(CallDeferredTool::new())),
             "GetFileDiff" => Some(Arc::new(GetFileDiffTool::new())),
             "SessionControl" => Some(Arc::new(SessionControlTool::new())),
             "SessionMessage" => Some(Arc::new(SessionMessageTool::new())),

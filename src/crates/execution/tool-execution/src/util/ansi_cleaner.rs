@@ -297,16 +297,14 @@ impl Perform for AnsiCleaner {
                     _ => {}
                 }
             }
-            'J' => {
+            'J' if *param == 2 => {
                 // \033[J - Erase in Display
-                if *param == 2 {
-                    // \033[2J - Erase entire display
-                    self.lines.clear();
-                    self.line_is_real.clear();
-                    self.current_line.clear();
-                    self.cursor_col = 0;
-                    self.cursor_row = 0;
-                }
+                // \033[2J - Erase entire display
+                self.lines.clear();
+                self.line_is_real.clear();
+                self.current_line.clear();
+                self.cursor_col = 0;
+                self.cursor_row = 0;
             }
             // All other CSI sequences are ignored (colors, etc.)
             _ => {}

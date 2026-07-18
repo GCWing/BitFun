@@ -11,6 +11,7 @@ use crate::agentic::core::{
     CompressionContract, CompressionEntry, CompressionPayload, Message, MessageContent,
     MessageHelper, MessageRole, MessageSemanticKind,
 };
+use crate::service::session::TranscriptLineRange;
 use crate::util::errors::BitFunResult;
 use log::{debug, trace};
 
@@ -225,12 +226,37 @@ impl ContextCompressor {
         })
     }
 
+    pub fn append_transcript_reference(
+        &self,
+        result: &mut CompressionResult,
+        transcript_uri: &str,
+        transcript_index_range: &TranscriptLineRange,
+    ) -> bool {
+        let has_model_summary = result.has_model_summary;
+        let Some(boundary) = result.messages.iter_mut().find(|message| {
+            message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionBoundaryMarker)
+        }) else {
+            return false;
+        };
+        if !matches!(&boundary.content, MessageContent::Text(_)) {
+            return false;
+        }
+        boundary.content =
+            MessageContent::Text(render_system_reminder(&Self::render_boundary_marker_text(
+                has_model_summary,
+                Some((transcript_uri, transcript_index_range)),
+            )));
+        boundary.metadata.tokens = None;
+        true
+    }
+
     fn create_summary_turn(
         &self,
         summary_artifact: CompressionSummaryArtifact,
     ) -> (Message, Message) {
         let boundary = Message::user(render_system_reminder(&Self::render_boundary_marker_text(
             summary_artifact.used_model_summary,
+            None,
         )))
         .with_semantic_kind(MessageSemanticKind::CompressionBoundaryMarker);
 
@@ -323,10 +349,19 @@ impl ContextCompressor {
         lines.join("\n")
     }
 
-    fn render_boundary_marker_text(used_model_summary: bool) -> String {
+    fn render_boundary_marker_text(
+        used_model_summary: bool,
+        transcript: Option<(&str, &TranscriptLineRange)>,
+    ) -> String {
         let mut msg = "The earlier conversation is summarized in the next assistant message. Use it as prior context.".to_string();
         if !used_model_summary {
             msg.push_str(" This is a partial reconstructed record. Message text, tool arguments, task lists, and tool results may be truncated or omitted.");
+        }
+        if let Some((transcript_uri, index_range)) = transcript {
+            msg.push_str(&format!(
+                "\n\nThe complete conversation history from before compression is available at:\n{}\nThe transcript index is at lines {}-{}. Inspect this file if historical details are needed. The file may be large. Recommended ways to access it: 1. Read the index first, then inspect the relevant line ranges. 2. Use Grep to search for the needed content.",
+                transcript_uri, index_range.start_line, index_range.end_line
+            ));
         }
         msg
     }
@@ -410,7 +445,7 @@ impl ContextCompressor {
     }
 
     pub(crate) fn build_compact_prompt(&self) -> String {
-        format!(
+        String::from(
             r#"Your current task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
 
@@ -494,7 +529,7 @@ Here's an example of how your output should be structured:
 
 Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.
 REMINDER: Do NOT call any tools. Respond with plain text only inside a single <summary> block. Tool calls will be rejected and you will fail the task.
-"#
+"#,
         )
     }
 }
@@ -514,6 +549,7 @@ mod tests {
     use crate::agentic::core::{
         render_system_reminder, CompressionEntry, CompressionPayload, Message, MessageSemanticKind,
     };
+    use crate::service::session::TranscriptLineRange;
 
     fn make_turn(messages: Vec<Message>) -> TurnWithTokens {
         TurnWithTokens::new(messages)
@@ -575,6 +611,48 @@ mod tests {
             _ => panic!("expected assistant text summary"),
         };
         assert!(summary_text.contains("Continue the refactor"));
+    }
+
+    #[test]
+    fn compression_boundary_can_append_plain_text_transcript_reference() {
+        let compressor = ContextCompressor::new(Default::default());
+        let mut result = compressor
+            .compress_turns(
+                "session",
+                8000,
+                vec![todo_turn()],
+                CompressionMode::Manual,
+                Some("Model summary".to_string()),
+            )
+            .expect("compression succeeds");
+        let uri = "bitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt";
+        let index_range = TranscriptLineRange {
+            start_line: 1,
+            end_line: 14,
+        };
+
+        assert!(compressor.append_transcript_reference(&mut result, uri, &index_range));
+        let boundary_text = match &result.messages[0].content {
+            crate::agentic::core::MessageContent::Text(text) => text,
+            _ => panic!("expected boundary marker text"),
+        };
+        assert!(boundary_text.contains(uri));
+        assert!(boundary_text.contains("complete conversation history from before compression"));
+        assert!(boundary_text.contains("transcript index is at lines 1-14"));
+        assert!(boundary_text.contains("Recommended ways to access it"));
+        assert!(boundary_text.contains("1. Read the index first"));
+        assert!(boundary_text.contains("2. Use Grep"));
+        assert!(boundary_text.ends_with("\n</system_reminder>"));
+
+        let summary_text = match &result.messages[1].content {
+            crate::agentic::core::MessageContent::Text(text) => text,
+            _ => panic!("expected assistant text summary"),
+        };
+        assert!(!summary_text.contains(uri));
+        assert_eq!(
+            result.messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionBoundaryMarker)
+        );
     }
 
     #[test]

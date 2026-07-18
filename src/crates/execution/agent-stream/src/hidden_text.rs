@@ -148,12 +148,12 @@ fn longest_tag_prefix_suffix_len(text: &str, tags: &[HiddenTextTag]) -> usize {
     tags.iter()
         .filter(|tag| !tag.open.is_empty())
         .flat_map(|tag| {
-            (1..tag.open.len()).filter_map(move |len| {
+            (1..tag.open.len()).filter(move |&len| {
                 if text.len() < len || !text.is_char_boundary(text.len() - len) {
-                    return None;
+                    return false;
                 }
                 let suffix = &text[text.len() - len..];
-                tag.open.starts_with(suffix).then_some(len)
+                tag.open.starts_with(suffix)
             })
         })
         .max()

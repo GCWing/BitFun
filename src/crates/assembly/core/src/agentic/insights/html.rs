@@ -498,7 +498,7 @@ fn render_basic_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         .iter()
         .map(|(k, v)| (k.clone(), *v))
         .collect();
-    lang_items.sort_by(|a, b| b.1.cmp(&a.1));
+    lang_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     lang_items.truncate(6);
     let lang_chart = render_bar_chart(l.chart_languages, &lang_items, "#10b981", 6);
 
@@ -507,7 +507,7 @@ fn render_basic_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         .iter()
         .map(|(k, v)| (k.clone(), *v))
         .collect();
-    type_items.sort_by(|a, b| b.1.cmp(&a.1));
+    type_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     type_items.truncate(6);
     let types_chart = render_bar_chart(l.chart_session_types, &type_items, "#8b5cf6", 6);
 
@@ -532,7 +532,7 @@ fn render_usage_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         .iter()
         .map(|(k, v)| (k.clone(), *v))
         .collect();
-    tool_error_items.sort_by(|a, b| b.1.cmp(&a.1));
+    tool_error_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     tool_error_items.truncate(6);
     let tool_errors_chart = render_bar_chart(l.chart_tool_errors, &tool_error_items, "#dc2626", 6);
 
@@ -543,7 +543,7 @@ fn render_usage_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
-        agent_type_items.sort_by(|a, b| b.1.cmp(&a.1));
+        agent_type_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         agent_type_items.truncate(6);
         agent_types_chart = render_bar_chart(l.chart_agent_types, &agent_type_items, "#f97316", 6);
     }
@@ -566,7 +566,7 @@ fn render_outcome_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
 
     let mut success_items: Vec<(String, u32)> =
         stats.success.iter().map(|(k, v)| (k.clone(), *v)).collect();
-    success_items.sort_by(|a, b| b.1.cmp(&a.1));
+    success_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     success_items.truncate(6);
     let success_chart = render_bar_chart(l.chart_what_helped, &success_items, "#16a34a", 6);
 
@@ -575,7 +575,7 @@ fn render_outcome_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         .iter()
         .map(|(k, v)| (k.clone(), *v))
         .collect();
-    outcome_items.sort_by(|a, b| b.1.cmp(&a.1));
+    outcome_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     outcome_items.truncate(6);
     let outcomes_chart = render_bar_chart(l.chart_outcomes, &outcome_items, "#8b5cf6", 6);
 
@@ -595,7 +595,7 @@ fn render_friction_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         .iter()
         .map(|(k, v)| (k.clone(), *v))
         .collect();
-    friction_items.sort_by(|a, b| b.1.cmp(&a.1));
+    friction_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     friction_items.truncate(6);
     let friction_chart = render_bar_chart(l.chart_friction_types, &friction_items, "#dc2626", 6);
 
@@ -604,7 +604,7 @@ fn render_friction_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         .iter()
         .map(|(k, v)| (k.clone(), *v))
         .collect();
-    satisfaction_items.sort_by(|a, b| b.1.cmp(&a.1));
+    satisfaction_items.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     satisfaction_items.truncate(6);
     let satisfaction_chart =
         render_bar_chart(l.chart_satisfaction, &satisfaction_items, "#eab308", 6);

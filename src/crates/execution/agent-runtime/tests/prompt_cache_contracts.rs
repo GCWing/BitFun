@@ -78,14 +78,16 @@ fn prompt_cache_scope_key_preserves_legacy_mode_switch_shape() {
 
 #[test]
 fn prompt_cache_restore_decision_prunes_expired_persisted_entries() {
-    let mut restored = SessionPromptCache::default();
-    restored.system_prompt = Some(CachedSystemPrompt {
-        text: CachedPromptText {
-            content: "stale prompt".to_string(),
-            created_at_ms: 0,
-        },
-        identity: SystemPromptCacheIdentity::new("template:agentic_mode"),
-    });
+    let mut restored = SessionPromptCache {
+        system_prompt: Some(CachedSystemPrompt {
+            text: CachedPromptText {
+                content: "stale prompt".to_string(),
+                created_at_ms: 0,
+            },
+            identity: SystemPromptCacheIdentity::new("template:agentic_mode"),
+        }),
+        ..Default::default()
+    };
     restored.user_context = Some(CachedUserContext::new(
         UserContextCacheIdentity::new("workspace_context"),
         "fresh context",
@@ -107,14 +109,16 @@ fn prompt_cache_restore_decision_prunes_expired_persisted_entries() {
 
 #[test]
 fn prompt_cache_restore_decision_deletes_empty_expired_cache() {
-    let mut restored = SessionPromptCache::default();
-    restored.system_prompt = Some(CachedSystemPrompt {
-        text: CachedPromptText {
-            content: "stale prompt".to_string(),
-            created_at_ms: 0,
-        },
-        identity: SystemPromptCacheIdentity::new("template:agentic_mode"),
-    });
+    let restored = SessionPromptCache {
+        system_prompt: Some(CachedSystemPrompt {
+            text: CachedPromptText {
+                content: "stale prompt".to_string(),
+                created_at_ms: 0,
+            },
+            identity: SystemPromptCacheIdentity::new("template:agentic_mode"),
+        }),
+        ..Default::default()
+    };
 
     let decision =
         reconcile_prompt_cache_restore(restored, Some(Duration::from_secs(60 * 60 * 24 * 365)));
@@ -129,11 +133,13 @@ fn prompt_cache_persist_action_deletes_empty_cache_and_saves_non_empty_cache() {
         PromptCachePersistenceWriteAction::Delete
     );
 
-    let mut cache = SessionPromptCache::default();
-    cache.user_context = Some(CachedUserContext::new(
-        UserContextCacheIdentity::new("workspace_context"),
-        "context",
-    ));
+    let cache = SessionPromptCache {
+        user_context: Some(CachedUserContext::new(
+            UserContextCacheIdentity::new("workspace_context"),
+            "context",
+        )),
+        ..Default::default()
+    };
     assert_eq!(
         prompt_cache_persist_action(&cache),
         PromptCachePersistenceWriteAction::Save

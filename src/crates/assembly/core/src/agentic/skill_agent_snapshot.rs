@@ -115,10 +115,8 @@ fn build_tool_listing_sections(
         agent_listing: has_tool("Task")
             .then(|| render_full_agent_listing_body(&snapshot.subagents))
             .filter(|body| !body.is_empty()),
-        collapsed_tool_listing: if has_tool("GetToolSpec") {
-            GetToolSpecTool::build_collapsed_tools_context_section(
-                &manifest.collapsed_tool_summaries,
-            )
+        deferred_tool_listing: if has_tool("GetToolSpec") {
+            GetToolSpecTool::build_deferred_tools_context_section(&manifest.deferred_tool_summaries)
         } else {
             None
         },

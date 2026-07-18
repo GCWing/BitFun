@@ -6,7 +6,7 @@ use super::types::{
 };
 
 #[async_trait]
-pub trait FlashgrepRepoSession: Send + Sync {
+pub(crate) trait FlashgrepRepoSession: Send + Sync {
     async fn status(&self) -> Result<RepoStatus>;
     async fn task_status(&self, task_id: String) -> Result<TaskStatus>;
     async fn build_index(&self) -> Result<TaskStatus>;

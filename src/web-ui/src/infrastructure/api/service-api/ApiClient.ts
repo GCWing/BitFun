@@ -197,6 +197,11 @@ export class ApiClient implements IApiClient {
     return this.adapter;
   }
 
+  /** Re-bind to the process-global transport after Peer Mode enter/exit. */
+  reattachTransportAdapter(): void {
+    this.adapter = getTransportAdapter();
+  }
+
   async waitForListenerRegistrations(): Promise<void> {
     await this.adapter.waitForListenerRegistrations?.();
   }
@@ -585,7 +590,9 @@ export const api = {
     apiClient.waitForListenerRegistrations(),
   
   
-  getAdapter: (): ITransportAdapter => apiClient.getAdapter()
+  getAdapter: (): ITransportAdapter => apiClient.getAdapter(),
+
+  reattachTransportAdapter: (): void => apiClient.reattachTransportAdapter(),
 };
 
 

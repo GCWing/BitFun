@@ -13,7 +13,7 @@ import { Input } from '@/component-library';
 import { Select } from '@/component-library';
 import { Alert } from '@/component-library';
 import { IconButton } from '@/component-library';
-import { FolderOpen, Loader2, Server, User, Key, Lock, Trash2, Plus, Pencil, Play, ArrowDownToLine, Search } from 'lucide-react';
+import { FolderOpen, Loader2, Server, User, Key, Lock, Trash2, Plus, Pencil, Play, ArrowDownToLine, Search, Eye, EyeOff } from 'lucide-react';
 import type {
   SSHConnectionConfig,
   SSHAuthMethod,
@@ -56,6 +56,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     keyPath: '~/.ssh/id_rsa',
     passphrase: '',
   });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPassphrase, setShowPassphrase] = useState(false);
 
   async function loadSavedConnections() {
     setLocalError(null);
@@ -602,12 +605,17 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               <div className="ssh-connection-dialog__field">
                 <Input
                   label={t('ssh.remote.password')}
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   placeholder=""
                   prefix={<Lock size={16} />}
                   size="medium"
+                  suffix={
+                    <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassword(s => !s)} tabIndex={-1}>
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  }
                 />
               </div>
             )}
@@ -642,11 +650,16 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 <div className="ssh-connection-dialog__field">
                   <Input
                     label={t('ssh.remote.passphrase')}
-                    type="password"
+                    type={showPassphrase ? 'text' : 'password'}
                     value={formData.passphrase}
                     onChange={(e) => handleInputChange('passphrase', e.target.value)}
                     placeholder={t('ssh.remote.passphraseOptional')}
                     size="medium"
+                    suffix={
+                      <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassphrase(s => !s)} tabIndex={-1}>
+                        {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    }
                   />
                 </div>
               </>

@@ -753,7 +753,7 @@ impl MiniAppStorage {
 
     fn is_cleanup_safe_drafts_root(&self, path: &Path) -> bool {
         let root = &self.miniapps_dir;
-        if !path.starts_with(&root) {
+        if !path.starts_with(root) {
             return false;
         }
         let Some(name) = path.file_name().and_then(|value| value.to_str()) else {

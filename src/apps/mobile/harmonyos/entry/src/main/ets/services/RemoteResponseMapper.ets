@@ -1,0 +1,258 @@
+import {
+  ActiveTurnSnapshotResponse,
+  ChatMessage,
+  ChatMessageItemResponse,
+  ChatMessageResponse,
+  InitialSyncResponse,
+  RecentWorkspaceEntry,
+  RecentWorkspaceEntryResponse,
+  RemoteSession,
+  RemoteToolStatusResponse,
+  SessionItemResponse,
+  WorkspaceInfo,
+  WorkspaceInfoResponse
+} from '../model/RemoteModels';
+
+export class RemoteResponseMapper {
+  static workspaceFromInitialSync(response: InitialSyncResponse): WorkspaceInfo {
+    const workspacePath = response.path || '';
+    const workspaceName = response.project_name || RemoteResponseMapper.basename(workspacePath);
+    return {
+      path: workspacePath,
+      name: workspaceName || 'Workspace',
+      hasWorkspace: response.has_workspace !== false && workspacePath.length > 0,
+      gitBranch: response.git_branch || '',
+      workspaceKind: response.workspace_kind || 'normal',
+      assistantId: response.assistant_id
+    };
+  }
+
+  static workspaceFromResponse(response: WorkspaceInfoResponse): WorkspaceInfo {
+    const workspacePath = response.path || response.workspace_path || '';
+    const workspaceName = response.project_name || response.workspace_name || RemoteResponseMapper.basename(workspacePath);
+    return {
+      path: workspacePath,
+      name: workspaceName || 'Workspace',
+      hasWorkspace: response.has_workspace !== false && workspacePath.length > 0,
+      gitBranch: response.git_branch || '',
+      workspaceKind: response.workspace_kind || 'normal',
+      assistantId: response.assistant_id
+    };
+  }
+
+  static recentWorkspaces(items: RecentWorkspaceEntryResponse[]): RecentWorkspaceEntry[] {
+    return items.map((item: RecentWorkspaceEntryResponse) => {
+      const workspace: RecentWorkspaceEntry = {
+        path: item.path || '',
+        name: item.name || RemoteResponseMapper.basename(item.path || '') || 'Workspace',
+        lastOpened: RemoteResponseMapper.firstTimeValue([
+          item.last_opened,
+          item.lastOpened,
+          item.updated_at,
+          item.updatedAt
+        ]),
+        workspaceKind: item.workspace_kind || 'normal'
+      };
+      return workspace;
+    }).filter((item: RecentWorkspaceEntry) => item.path.length > 0);
+  }
+
+  static sessions(items: SessionItemResponse[]): RemoteSession[] {
+    return items.map((item: SessionItemResponse) => {
+      const id = item.id || item.session_id || '';
+      const session: RemoteSession = {
+        id,
+        title: item.title || item.name || `Session ${id.slice(0, 6)}`,
+        agentType: item.agent_type || 'code',
+        status: item.status || 'idle',
+        updatedAt: RemoteResponseMapper.firstTimeValue([
+          item.updated_at,
+          item.updatedAt,
+          item.updated,
+          item.updated_time,
+          item.update_time,
+          item.modified_at,
+          item.last_active_at,
+          item.last_activity_at,
+          item.last_message_at,
+          item.last_interaction_at,
+          item.lastUpdated,
+          item.lastActivityAt,
+          item.lastMessageAt,
+          item.timestamp
+        ]),
+        createdAt: RemoteResponseMapper.firstTimeValue([
+          item.created_at,
+          item.createdAt,
+          item.created,
+          item.created_time,
+          item.create_time,
+          item.inserted_at,
+          item.started_at,
+          item.start_time
+        ]),
+        messageCount: item.message_count || 0,
+        workspacePath: item.workspace_path,
+        workspaceName: item.workspace_name
+      };
+      return session;
+    });
+  }
+
+  static chatMessage(item: ChatMessageResponse): ChatMessage {
+    const text = RemoteResponseMapper.messageText(item);
+    const tools = RemoteResponseMapper.toolsFromExplicitOrItems(item.tools || [], item.items || []);
+    const message: ChatMessage = {
+      id: RemoteResponseMapper.messageId(item, text),
+      role: item.role,
+      text: text || item.content || '',
+      status: item.role === 'assistant' ? 'done' : 'sent',
+      detail: RemoteResponseMapper.messageDetail(tools),
+      timestamp: item.timestamp,
+      thinking: item.thinking,
+      tools,
+      items: item.items || [],
+      images: item.images || []
+    };
+    return message;
+  }
+
+  static activeTurnToMessage(turn: ActiveTurnSnapshotResponse, renderVersion: number = 0): ChatMessage {
+    const body = RemoteResponseMapper.activeTurnText(turn);
+    const tools = RemoteResponseMapper.toolsFromExplicitOrItems(turn.tools || [], turn.items || []);
+    const message: ChatMessage = {
+      id: `active-${turn.turn_id}`,
+      turnId: turn.turn_id,
+      role: 'assistant',
+      text: body,
+      status: turn.status || 'active',
+      renderVersion,
+      detail: RemoteResponseMapper.messageDetail(tools),
+      thinking: turn.thinking,
+      tools,
+      items: turn.items || []
+    };
+    return message;
+  }
+
+  static basename(path: string): string {
+    if (!path) {
+      return '';
+    }
+    const normalized = path.replace(/\\/g, '/');
+    const parts = normalized.split('/');
+    return parts[parts.length - 1] || normalized;
+  }
+
+  private static messageText(item: ChatMessageResponse): string {
+    if (item.content && item.content.trim().length > 0) {
+      return item.content;
+    }
+    const topLevelText = RemoteResponseMapper.lastTopLevelText(item.items || []);
+    if (topLevelText.length > 0) {
+      return topLevelText;
+    }
+    return '';
+  }
+
+  private static messageId(item: ChatMessageResponse, text: string): string {
+    if (item.id && item.id.length > 0) {
+      return item.id;
+    }
+    if (item.message_id && item.message_id.length > 0) {
+      return item.message_id;
+    }
+    const timestamp = item.timestamp || '';
+    return `${item.role || 'message'}-${timestamp}-${RemoteResponseMapper.stableTextHash(text || item.content || '')}`;
+  }
+
+  private static stableTextHash(text: string): string {
+    let hash = 0;
+    for (let index = 0; index < text.length; index++) {
+      hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  private static activeTurnText(turn: ActiveTurnSnapshotResponse): string {
+    if (turn.text && turn.text.trim().length > 0) {
+      return turn.text;
+    }
+    const topLevelText = RemoteResponseMapper.lastTopLevelText(turn.items || []);
+    if (topLevelText.length > 0) {
+      return topLevelText;
+    }
+    return '';
+  }
+
+  private static lastTopLevelText(items: ChatMessageItemResponse[]): string {
+    for (let index = items.length - 1; index >= 0; index--) {
+      if (RemoteResponseMapper.isFinalTextItem(items[index])) {
+        return (items[index].content || '').trim();
+      }
+    }
+    return '';
+  }
+
+  private static isFinalTextItem(item: ChatMessageItemResponse): boolean {
+    const type = (item.type || '').toLowerCase();
+    if ((item.content || '').trim().length === 0 || item.tool || item.is_subagent === true) {
+      return false;
+    }
+    if (type === 'thinking' || type === 'tool' || type === 'subagent' || type === 'agent') {
+      return false;
+    }
+    return type === 'text' || type === 'message' || type.length === 0;
+  }
+
+  private static firstTimeValue(values: (string | number | undefined)[]): string {
+    for (const value of values) {
+      if (value === undefined) {
+        continue;
+      }
+      if (typeof value === 'number') {
+        return `${value}`;
+      }
+      if (value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+    return '';
+  }
+
+  private static toolsFromExplicitOrItems(
+    explicitTools: RemoteToolStatusResponse[],
+    items: ChatMessageItemResponse[]
+  ): RemoteToolStatusResponse[] {
+    if (explicitTools.length > 0) {
+      return explicitTools;
+    }
+    return RemoteResponseMapper.itemTools(items);
+  }
+
+  private static messageDetail(tools: RemoteToolStatusResponse[]): string {
+    if (tools.length === 0) {
+      return '';
+    }
+    const labels: string[] = [];
+    tools.forEach((tool: RemoteToolStatusResponse) => {
+      labels.push(`${tool.name || 'Tool'} · ${tool.status || 'pending'}`);
+    });
+    return labels.join('\n');
+  }
+
+  private static itemTools(items: ChatMessageItemResponse[]): RemoteToolStatusResponse[] {
+    const tools: RemoteToolStatusResponse[] = [];
+    items.forEach((item: ChatMessageItemResponse) => {
+      if (item.tool) {
+        tools.push(item.tool);
+      }
+      if (item.subItems) {
+        RemoteResponseMapper.itemTools(item.subItems).forEach((tool: RemoteToolStatusResponse) => {
+          tools.push(tool);
+        });
+      }
+    });
+    return tools;
+  }
+}

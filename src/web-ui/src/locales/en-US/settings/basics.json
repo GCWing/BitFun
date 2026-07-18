@@ -112,9 +112,13 @@
       "title": "Previous session ended unexpectedly",
       "description": "Last session logs are available at {{path}}."
     },
+    "previousUncleanShutdown": {
+      "title": "Previous session did not record a normal shutdown",
+      "description": "Last session logs are available at {{path}}. This can happen after a restart, system shutdown, or development reload."
+    },
     "startupRecovery": {
-      "title": "Previous session did not close normally",
-      "message": "BitFun reopened after an unexpected quit. You can export diagnostics if you want to report the issue."
+      "title": "Previous session ended unexpectedly",
+      "message": "BitFun found a crash report from the previous session. You can export diagnostics if you want to report the issue."
     },
     "levels": {
       "trace": "Trace",

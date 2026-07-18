@@ -332,6 +332,9 @@ impl FeishuBotApi {
     }
 
     pub async fn connect_ws(&self, url: &str) -> Result<FeishuWsConnection> {
+        // Feishu uses wss:// and bypasses RelayClient::dial; ensure CryptoProvider
+        // is installed so rustls does not panic when ring + aws-lc-rs are both linked.
+        crate::remote_connect::ensure_rustls_crypto_provider();
         let (ws_stream, _) = tokio_tungstenite::connect_async(url)
             .await
             .map_err(|e| anyhow!("feishu ws connect: {e}"))?;

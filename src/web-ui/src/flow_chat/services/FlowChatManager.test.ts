@@ -19,6 +19,12 @@ vi.mock('../store/FlowChatStore', () => ({
   FlowChatStore: {
     getInstance: () => storeMocks.store,
   },
+  flowChatStore: {
+    getState: () => ({
+      activeSessionId: null,
+      sessions: new Map(),
+    }),
+  },
 }));
 
 vi.mock('../../shared/services/agent-service', () => ({

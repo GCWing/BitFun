@@ -8,7 +8,6 @@ interface DecisionExecutionGateProps {
   items: ReviewRemediationItem[];
   decisionSelections: Record<string, number>;
   customInstructions: string;
-  rerunReview: boolean;
   confirmDisabled: boolean;
   onSelectDecision: (itemId: string, optionIndex: number) => void;
   onCustomInstructionsChange: (value: string) => void;
@@ -20,7 +19,6 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
   items,
   decisionSelections,
   customInstructions,
-  rerunReview,
   confirmDisabled,
   onSelectDecision,
   onCustomInstructionsChange,
@@ -124,9 +122,7 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
           disabled={confirmDisabled}
           onClick={() => void onConfirm()}
         >
-          {t(rerunReview
-            ? 'deepReviewActionBar.decisionGate.confirmFixAndReview'
-            : 'deepReviewActionBar.decisionGate.confirmFix')}
+          {t('deepReviewActionBar.decisionGate.confirmFix')}
         </Button>
         <Button
           variant="secondary"

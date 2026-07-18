@@ -24,9 +24,10 @@ use super::control_hub::{coded_tool_error, err_response, ControlHubError, ErrorC
 /// row the dispatcher injects an `app_state.loop_warning` so the model is
 /// forced off the failing path on its **next** turn (`/Screenshot policy/
 /// Mandatory screenshot moments` in `claw_mode.md`).
-static APP_LOOP_TRACKER: std::sync::OnceLock<
-    std::sync::Mutex<std::collections::HashMap<i32, (String, String, u32)>>,
-> = std::sync::OnceLock::new();
+type AppLoopTracker =
+    std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<i32, (String, String, u32)>>>;
+
+static APP_LOOP_TRACKER: AppLoopTracker = std::sync::OnceLock::new();
 
 fn loop_tracker_observe(
     pid: Option<i32>,

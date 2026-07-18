@@ -5,10 +5,10 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 /// Estimated install size in bytes (~200MB for typical Tauri app with WebView)
-pub const ESTIMATED_INSTALL_SIZE: u64 = 200 * 1024 * 1024;
+pub(super) const ESTIMATED_INSTALL_SIZE: u64 = 200 * 1024 * 1024;
 
 /// Extract a zip archive to the target directory with an entry filter.
-pub fn extract_zip_with_filter(
+pub(super) fn extract_zip_with_filter(
     archive_path: &Path,
     target_dir: &Path,
     should_extract: fn(&Path) -> bool,
@@ -21,7 +21,7 @@ pub fn extract_zip_with_filter(
 }
 
 /// Extract a zip archive from in-memory bytes with an entry filter.
-pub fn extract_zip_bytes_with_filter(
+pub(super) fn extract_zip_bytes_with_filter(
     archive_bytes: &[u8],
     target_dir: &Path,
     should_extract: fn(&Path) -> bool,
@@ -59,7 +59,7 @@ fn extract_zip_archive<R: io::Read + io::Seek>(
 }
 
 /// Copy files from source to target with a relative-path file filter.
-pub fn copy_directory_with_filter(
+pub(super) fn copy_directory_with_filter(
     source: &Path,
     target: &Path,
     should_copy_file: fn(&Path) -> bool,

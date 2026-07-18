@@ -189,6 +189,15 @@ pub struct SessionMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todos: Option<serde_json::Value>,
 
+    /// Persisted Review action-bar state, including follow-up linkage and scope.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "review_action_state",
+        alias = "reviewActionState"
+    )]
+    pub review_action_state: Option<serde_json::Value>,
+
     /// Deep Review run manifest for this session, when the session was launched
     /// from Code Review Team.
     #[serde(
@@ -198,6 +207,15 @@ pub struct SessionMetadata {
         alias = "deepReviewRunManifest"
     )]
     pub deep_review_run_manifest: Option<serde_json::Value>,
+
+    /// Narrow target evidence for a standard Review session.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "review_target_evidence",
+        alias = "reviewTargetEvidence"
+    )]
+    pub review_target_evidence: Option<serde_json::Value>,
 
     /// Cached reviewer outputs from previous deep review runs in this session.
     /// Keyed by packet_id, value is the reviewer's output text.
@@ -499,14 +517,10 @@ pub struct ModelRoundData {
         alias = "provider_id"
     )]
     pub provider_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "model_id")]
-    pub model_id: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        alias = "model_alias"
-    )]
-    pub model_alias: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_config_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_model_name: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -691,6 +705,12 @@ pub struct ToolItemData {
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
 
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        alias = "subagent_dialog_turn_id"
+    )]
+    pub subagent_dialog_turn_id: Option<String>,
+
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "attempt_id")]
     pub attempt_id: Option<String>,
 
@@ -706,9 +726,9 @@ pub struct ToolItemData {
 
     #[serde(
         skip_serializing_if = "Option::is_none",
-        alias = "subagent_model_alias"
+        alias = "subagent_model_display_name"
     )]
-    pub subagent_model_alias: Option<String>,
+    pub subagent_model_display_name: Option<String>,
 
     /// Status field
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -855,7 +875,9 @@ impl SessionMetadata {
             custom_metadata: None,
             relationship: None,
             todos: None,
+            review_action_state: None,
             deep_review_run_manifest: None,
+            review_target_evidence: None,
             deep_review_cache: None,
             workspace_path: None,
             workspace_hostname: None,
@@ -1204,6 +1226,33 @@ mod tests {
     }
 
     #[test]
+    fn review_target_evidence_round_trips_through_metadata_contract() {
+        let mut metadata = SessionMetadata::new(
+            "session-target".to_string(),
+            "Review child".to_string(),
+            "CodeReview".to_string(),
+            "model".to_string(),
+        );
+        metadata.review_target_evidence = Some(serde_json::json!({
+            "version": 1,
+            "fingerprint": "target-fingerprint"
+        }));
+
+        let json = serde_json::to_value(&metadata).expect("metadata should serialize");
+        assert_eq!(
+            json["reviewTargetEvidence"]["fingerprint"],
+            "target-fingerprint"
+        );
+        let round_trip: SessionMetadata =
+            serde_json::from_value(json).expect("metadata should deserialize");
+
+        assert_eq!(
+            round_trip.review_target_evidence,
+            metadata.review_target_evidence
+        );
+    }
+
+    #[test]
     fn session_metadata_keeps_normal_sessions_visible() {
         let metadata = SessionMetadata::new(
             "session-1".to_string(),
@@ -1234,7 +1283,7 @@ mod tests {
         let legacy_round: ModelRoundData =
             serde_json::from_value(legacy_round_payload).expect("legacy round should deserialize");
         assert_eq!(legacy_round.duration_ms, None);
-        assert_eq!(legacy_round.model_id, None);
+        assert_eq!(legacy_round.model_config_id, None);
         assert_eq!(legacy_round.first_chunk_ms, None);
 
         let round_payload = serde_json::json!({
@@ -1249,8 +1298,8 @@ mod tests {
             "endTime": 121,
             "durationMs": 120,
             "providerId": "provider-a",
-            "modelId": "model-a",
-            "modelAlias": "Model A",
+            "modelConfigId": "model-config-a",
+            "effectiveModelName": "model-a",
             "firstChunkMs": 10,
             "firstVisibleOutputMs": 12,
             "streamDurationMs": 90,
@@ -1264,14 +1313,16 @@ mod tests {
             serde_json::from_value(round_payload).expect("P1 round should deserialize");
         assert_eq!(round.duration_ms, Some(120));
         assert_eq!(round.provider_id.as_deref(), Some("provider-a"));
-        assert_eq!(round.model_id.as_deref(), Some("model-a"));
+        assert_eq!(round.model_config_id.as_deref(), Some("model-config-a"));
+        assert_eq!(round.effective_model_name.as_deref(), Some("model-a"));
         assert_eq!(round.first_visible_output_ms, Some(12));
         assert_eq!(round.attempt_count, Some(2));
         assert_eq!(round.failure_category.as_deref(), Some("rate_limit"));
 
         let encoded = serde_json::to_value(&round).expect("round should serialize");
         assert_eq!(encoded["durationMs"], 120);
-        assert_eq!(encoded["modelId"], "model-a");
+        assert_eq!(encoded["modelConfigId"], "model-config-a");
+        assert_eq!(encoded["effectiveModelName"], "model-a");
         assert_eq!(encoded["firstChunkMs"], 10);
 
         let tool_payload = serde_json::json!({
@@ -1335,6 +1386,7 @@ mod tests {
             "toolName": "write_file",
             "toolCall": { "id": "call-2", "input": {} },
             "startTime": 1,
+            "subagentDialogTurnId": "child-turn-1",
             "attemptId": "round-1:attempt:2",
             "attemptIndex": 2
         });
@@ -1345,6 +1397,13 @@ mod tests {
             Some("round-1:attempt:2")
         );
         assert_eq!(tool_with_attempt.attempt_index, Some(2));
+        assert_eq!(
+            tool_with_attempt.subagent_dialog_turn_id.as_deref(),
+            Some("child-turn-1")
+        );
+
+        let encoded_tool = serde_json::to_value(&tool_with_attempt).expect("tool should serialize");
+        assert_eq!(encoded_tool["subagentDialogTurnId"], "child-turn-1");
     }
 
     #[test]
@@ -1385,5 +1444,37 @@ mod tests {
             serialized["deepReviewRunManifest"]["coreReviewers"][0]["subagentId"],
             "ReviewBusinessLogic"
         );
+    }
+
+    #[test]
+    fn session_metadata_preserves_review_action_state() {
+        let payload = serde_json::json!({
+            "sessionId": "review-session",
+            "sessionName": "Review",
+            "agentType": "CodeReview",
+            "modelName": "default",
+            "createdAt": 1,
+            "lastActiveAt": 1,
+            "turnCount": 1,
+            "messageCount": 1,
+            "toolCallCount": 1,
+            "status": "active",
+            "tags": [],
+            "reviewActionState": {
+                "version": 1,
+                "phase": "fix_completed",
+                "followUpReviewSessionId": "follow-up-review"
+            }
+        });
+
+        let metadata: SessionMetadata =
+            serde_json::from_value(payload).expect("metadata should deserialize");
+        assert_eq!(
+            metadata.review_action_state.as_ref().unwrap()["followUpReviewSessionId"],
+            "follow-up-review"
+        );
+
+        let serialized = serde_json::to_value(metadata).expect("metadata should serialize");
+        assert_eq!(serialized["reviewActionState"]["phase"], "fix_completed");
     }
 }

@@ -4,6 +4,6 @@
 
 pub mod cleanup;
 pub mod persistence;
-pub use cleanup::{CleanupPolicy, CleanupResult, CleanupService};
+pub use cleanup::{CleanupCategory, CleanupPolicy, CleanupResult, CleanupService};
 
 pub use persistence::{PersistenceService, StorageOptions};

@@ -31,7 +31,7 @@ const CIRCLE_R: i32 = 5;
 /// `color` is alpha-composited over the existing pixels, so a semi-transparent
 /// color (e.g. alpha 180) blends with the underlying screenshot instead of
 /// fully occluding it.
-pub fn draw_crosshair(img: &mut RgbaImage, x: u32, y: u32, color: Rgba<u8>) {
+fn draw_crosshair(img: &mut RgbaImage, x: u32, y: u32, color: Rgba<u8>) {
     let (w, h) = img.dimensions();
     if x >= w || y >= h {
         return;
@@ -70,7 +70,7 @@ pub fn draw_crosshair(img: &mut RgbaImage, x: u32, y: u32, color: Rgba<u8>) {
 /// Convenience wrapper around [`draw_crosshair`] using a semi-transparent
 /// red marker `(255, 0, 0, 180)` — visible over both light and dark UI
 /// without fully hiding the pixel underneath.
-pub fn draw_click_marker(img: &mut RgbaImage, x: u32, y: u32) {
+fn draw_click_marker(img: &mut RgbaImage, x: u32, y: u32) {
     let red = Rgba([255u8, 0, 0, 180]);
     draw_crosshair(img, x, y, red);
 }
@@ -83,7 +83,7 @@ pub fn draw_click_marker(img: &mut RgbaImage, x: u32, y: u32) {
 /// crate so a slightly mismatched mime still decodes when the magic bytes
 /// are valid. The output is always JPEG so it can drop into the existing
 /// screenshot pipeline without changing any downstream wiring.
-pub fn annotate_screenshot_with_click(
+pub(super) fn annotate_screenshot_with_click(
     raw: &[u8],
     mime: &str,
     x: u32,

@@ -187,7 +187,9 @@ pub async fn lsp_open_workspace(
 
     let transport = Arc::new(TauriTransportAdapter::new(app_handle));
     let emitter: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
-        Arc::new(TransportEmitter::new(transport));
+        crate::api::remote_connect_api::wrap_peer_aware_emitter(Arc::new(TransportEmitter::new(
+            transport,
+        )));
 
     open_workspace_with_emitter(workspace_path, Some(emitter))
         .await

@@ -8,7 +8,7 @@ use crate::runtime::api;
 use crate::server::response::WebDriverErrorResponse;
 
 impl BridgeExecutor {
-    pub async fn navigate_to(&self, url: &str) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn navigate_to(&self, url: &str) -> Result<(), WebDriverErrorResponse> {
         api::navigation::exec_navigation_action(
             self.state.clone(),
             &self.session.id,
@@ -18,7 +18,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn go_back(&self) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn go_back(&self) -> Result<(), WebDriverErrorResponse> {
         api::navigation::exec_navigation_action(
             self.state.clone(),
             &self.session.id,
@@ -28,7 +28,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn go_forward(&self) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn go_forward(&self) -> Result<(), WebDriverErrorResponse> {
         api::navigation::exec_navigation_action(
             self.state.clone(),
             &self.session.id,
@@ -38,7 +38,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn refresh_page(&self) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn refresh_page(&self) -> Result<(), WebDriverErrorResponse> {
         api::navigation::exec_navigation_action(
             self.state.clone(),
             &self.session.id,
@@ -48,7 +48,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_title(&self) -> Result<Value, WebDriverErrorResponse> {
+    pub(crate) async fn get_title(&self) -> Result<Value, WebDriverErrorResponse> {
         api::navigation::exec_document_value(
             self.state.clone(),
             &self.session.id,
@@ -57,7 +57,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_source(&self) -> Result<Value, WebDriverErrorResponse> {
+    pub(crate) async fn get_source(&self) -> Result<Value, WebDriverErrorResponse> {
         api::navigation::exec_document_value(
             self.state.clone(),
             &self.session.id,
@@ -66,7 +66,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn wait_for_page_load(&self) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn wait_for_page_load(&self) -> Result<(), WebDriverErrorResponse> {
         let page_load_timeout = Duration::from_millis(self.session.timeouts.page_load);
         if page_load_timeout.is_zero() {
             return Ok(());

@@ -42,6 +42,10 @@ impl MCPServerRuntimeState {
         self.registry.register(config).await
     }
 
+    pub async fn ensure_registered(&self, config: &MCPServerConfig) -> MCPRuntimeResult<bool> {
+        self.registry.ensure_registered(config).await
+    }
+
     pub async fn unregister(&self, server_id: &str) -> MCPRuntimeResult<()> {
         self.registry.unregister(server_id).await
     }

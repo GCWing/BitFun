@@ -258,56 +258,6 @@ impl Default for I18nService {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn translate_resolves_generated_shared_terms() {
-        let service = I18nService::new();
-        service.initialize().await.unwrap();
-
-        assert_eq!(
-            service
-                .translate_with_locale(&LocaleId::EnUS, "shared.features.deepReview", None)
-                .await,
-            "Deep Review"
-        );
-    }
-
-    #[tokio::test]
-    async fn translate_keeps_legacy_app_name_alias_on_shared_product_name() {
-        let service = I18nService::new();
-        service.initialize().await.unwrap();
-
-        assert_eq!(
-            service
-                .translate_with_locale(&LocaleId::EnUS, "app-name", None)
-                .await,
-            "BitFun"
-        );
-        assert_eq!(
-            service
-                .translate_with_locale(&LocaleId::ZhTW, "app-name", None)
-                .await,
-            "BitFun"
-        );
-    }
-
-    #[tokio::test]
-    async fn translate_returns_key_when_shared_term_and_fluent_message_are_missing() {
-        let service = I18nService::new();
-        service.initialize().await.unwrap();
-
-        assert_eq!(
-            service
-                .translate_with_locale(&LocaleId::EnUS, "shared.features.notReal", None)
-                .await,
-            "shared.features.notReal"
-        );
-    }
-}
-
 // Global singleton (optional)
 static GLOBAL_I18N_SERVICE: LazyLock<Arc<RwLock<Option<Arc<I18nService>>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(None)));
@@ -346,4 +296,54 @@ pub async fn initialize_global_i18n_service(
     set_global_i18n_service(service.clone()).await;
 
     Ok(service)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn translate_resolves_generated_shared_terms() {
+        let service = I18nService::new();
+        service.initialize().await.unwrap();
+
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::EnUS, "shared.features.deepReview", None)
+                .await,
+            "Review: Strict"
+        );
+    }
+
+    #[tokio::test]
+    async fn translate_keeps_legacy_app_name_alias_on_shared_product_name() {
+        let service = I18nService::new();
+        service.initialize().await.unwrap();
+
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::EnUS, "app-name", None)
+                .await,
+            "BitFun"
+        );
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::ZhTW, "app-name", None)
+                .await,
+            "BitFun"
+        );
+    }
+
+    #[tokio::test]
+    async fn translate_returns_key_when_shared_term_and_fluent_message_are_missing() {
+        let service = I18nService::new();
+        service.initialize().await.unwrap();
+
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::EnUS, "shared.features.notReal", None)
+                .await,
+            "shared.features.notReal"
+        );
+    }
 }

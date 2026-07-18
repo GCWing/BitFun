@@ -68,9 +68,9 @@
   background: var(--glass-bg-base);
   border: 1px solid var(--glass-border-base);
   border-radius: var(--size-radius-base);
-  backdrop-filter: var(--glass-blur-sm);
-  -webkit-backdrop-filter: var(--glass-blur-sm);
-  box-shadow: var(--glass-shadow-sm);
+  backdrop-filter: var(--blur-subtle);
+  -webkit-backdrop-filter: var(--blur-subtle);
+  box-shadow: var(--shadow-sm);
   
   transition: all var(--motion-base) var(--easing-standard);
   outline: none;
@@ -145,9 +145,9 @@
 .form-select.success:focus,
 .form-textarea.success:focus {
   box-shadow: 
-    0 4px 16px var(--glass-green-hover),
+    0 4px 16px var(--color-success-bg),
     0 2px 8px var(--color-overlay-black-08),
-    0 0 0 2px color-mix(in srgb, var(--color-success) 20%, transparent);
+    0 0 0 2px var(--color-success-border);
 }
 
 /* Disabled state */
@@ -303,7 +303,7 @@
   -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='7' cy='7' r='5' fill='none' stroke='black' stroke-width='2'/><path d='M11 11L15 15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/></svg>") no-repeat center / contain;
   mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='7' cy='7' r='5' fill='none' stroke='black' stroke-width='2'/><path d='M11 11L15 15' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/></svg>") no-repeat center / contain;
   pointer-events: none;
-  z-index: var(--z-content);
+  z-index: 2;
 }
 
 /* ========== Form validation messages ========== */

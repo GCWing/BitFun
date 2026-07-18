@@ -53,7 +53,7 @@ struct EnumState {
 /// window, sorted by name. `include_hidden` is accepted for parity with the
 /// macOS host; on Windows there is no per-app hidden flag, so every windowed
 /// process is returned regardless.
-pub fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
+pub(super) fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
     let windows = enumerate_windows();
 
     // Group by pid: keep the first non-empty title as a fallback display name.
@@ -78,26 +78,32 @@ pub fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
         });
     }
 
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    sort_apps_by_name(&mut apps);
     Ok(apps)
+}
+
+fn sort_apps_by_name(apps: &mut [AppInfo]) {
+    apps.sort_by_cached_key(|app| app.name.to_lowercase());
 }
 
 /// Find a visible top-level window owned by `pid`, for callers (e.g.
 /// `get_app_shortcuts`) that need an `HWND` to hand to UI Automation but
 /// only have a pid. Returns the first visible, non-minimized window found
 /// by `EnumWindows` order; does not require the window to be foreground.
-pub fn find_top_window_for_pid(pid: u32) -> Option<HWND> {
+pub(super) fn find_top_window_for_pid(pid: u32) -> Option<HWND> {
     struct FindState {
         target_pid: u32,
         found: Option<isize>,
     }
     unsafe extern "system" fn cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let state = &mut *(lparam.0 as *mut FindState);
-        if IsWindowVisible(hwnd).0 == 0 || IsIconic(hwnd).0 != 0 {
+        // SAFETY: `lparam` is the unique `FindState` pointer supplied to the
+        // synchronous `EnumWindows` call below and remains live for the callback.
+        let state = unsafe { &mut *(lparam.0 as *mut FindState) };
+        if unsafe { IsWindowVisible(hwnd) }.0 == 0 || unsafe { IsIconic(hwnd) }.0 != 0 {
             return TRUE;
         }
         let mut pid: u32 = 0;
-        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
         if pid == state.target_pid {
             state.found = Some(hwnd.0 as isize);
             return windows::Win32::Foundation::FALSE;
@@ -127,19 +133,21 @@ fn enumerate_windows() -> Vec<WindowEntry> {
 }
 
 unsafe extern "system" fn enum_windows_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    let state = &*(lparam.0 as *const Mutex<EnumState>);
+    // SAFETY: `lparam` points to the live `Mutex<EnumState>` supplied to the
+    // synchronous `EnumWindows` call in `enumerate_windows`.
+    let state = unsafe { &*(lparam.0 as *const Mutex<EnumState>) };
 
     // Skip invisible or minimized windows.
-    if IsWindowVisible(hwnd).0 == 0 || IsIconic(hwnd).0 != 0 {
+    if unsafe { IsWindowVisible(hwnd) }.0 == 0 || unsafe { IsIconic(hwnd) }.0 != 0 {
         return TRUE;
     }
 
-    let title_len = GetWindowTextLengthW(hwnd);
+    let title_len = unsafe { GetWindowTextLengthW(hwnd) };
     if title_len == 0 {
         return TRUE;
     }
     let mut buf = vec![0u16; (title_len + 1) as usize];
-    let n = GetWindowTextW(hwnd, &mut buf);
+    let n = unsafe { GetWindowTextW(hwnd, &mut buf) };
     let title = {
         let len = (n as usize).min(buf.len());
         String::from_utf16_lossy(&buf[..len])
@@ -149,7 +157,7 @@ unsafe extern "system" fn enum_windows_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
     }
 
     let mut pid: u32 = 0;
-    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == 0 {
         return TRUE;
     }
@@ -176,11 +184,7 @@ fn exe_basename_for_pid(pid: u32) -> Option<String> {
         return None;
     }
     let path = String::from_utf16_lossy(&buf[..len as usize]);
-    let name = path
-        .rsplit(|c: char| c == '\\' || c == '/')
-        .next()
-        .unwrap_or(&path)
-        .to_string();
+    let name = path.rsplit(['\\', '/']).next().unwrap_or(&path).to_string();
     if name.is_empty() {
         None
     } else {
@@ -198,5 +202,33 @@ fn strip_exe_suffix(basename: &str) -> String {
         stripped.to_string()
     } else {
         basename.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app(name: &str, pid: i32) -> AppInfo {
+        AppInfo {
+            name: name.to_string(),
+            bundle_id: None,
+            pid: Some(pid),
+            running: true,
+            last_used_ms: None,
+            launch_count: 0,
+        }
+    }
+
+    #[test]
+    fn app_name_sort_is_case_insensitive_ascending_and_stable() {
+        let mut apps = vec![app("beta", 1), app("ALPHA", 2), app("Beta", 3)];
+
+        sort_apps_by_name(&mut apps);
+
+        assert_eq!(
+            apps.iter().map(|app| app.pid).collect::<Vec<_>>(),
+            [Some(2), Some(1), Some(3)]
+        );
     }
 }

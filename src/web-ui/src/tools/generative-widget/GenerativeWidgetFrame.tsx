@@ -99,7 +99,7 @@ ${createWidgetThemeFallbackCss()}
 ${createWidgetThemeStaticShellCss()}
 ${createWidgetThemeCompatibilityAliasCss()}
       --font-size-xs: 12px;
-      --font-size-sm: 14px;
+      --font-size-sm: 13px;
       --font-size-base: 14px;
       --font-size-lg: 15px;
       --font-size-2xl: 18px;
@@ -950,6 +950,44 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   }, [onHeightChange, onWidgetEvent, widgetId]);
 
   useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return undefined;
+
+    let cancelled = false;
+    setIsLoaded(false);
+
+    const writeShellHtml = () => {
+      const doc = iframe.contentDocument;
+      if (!doc) return false;
+      doc.open();
+      doc.write(GENERATIVE_WIDGET_SHELL_HTML);
+      doc.close();
+      if (!cancelled) {
+        setIsLoaded(true);
+      }
+      return true;
+    };
+
+    if (writeShellHtml()) {
+      return undefined;
+    }
+
+    const handleLoad = () => {
+      writeShellHtml();
+    };
+
+    iframe.addEventListener('load', handleLoad);
+    if (iframe.src !== 'about:blank') {
+      iframe.src = 'about:blank';
+    }
+
+    return () => {
+      cancelled = true;
+      iframe.removeEventListener('load', handleLoad);
+    };
+  }, []);
+
+  useEffect(() => {
     const updateTheme = () => {
       setThemePayload(readWidgetThemePayload());
     };
@@ -1008,9 +1046,8 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
         title={title || 'Generative widget'}
         className="bitfun-generative-widget-frame__iframe"
         style={{ width: '100%', minWidth: '100%' }}
-        sandbox="allow-scripts allow-forms allow-modals allow-popups"
-        srcDoc={GENERATIVE_WIDGET_SHELL_HTML}
-        onLoad={() => setIsLoaded(true)}
+        sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
+        src="about:blank"
       />
     </div>
   );

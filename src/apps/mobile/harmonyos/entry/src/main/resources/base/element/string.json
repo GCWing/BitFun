@@ -1,0 +1,28 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "BitFun remote control client"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Connect to BitFun desktop and control remote sessions"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "BitFun"
+    },
+    {
+      "name": "permission_camera_reason",
+      "value": "用于扫描 BitFun 桌面端远程连接二维码。"
+    },
+    {
+      "name": "permission_read_pasteboard_reason",
+      "value": "用于粘贴 BitFun 桌面端远程连接链接。"
+    },
+    {
+      "name": "permission_microphone_reason",
+      "value": "用于在会话详情页将语音转成待发送文字。"
+    }
+  ]
+}

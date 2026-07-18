@@ -34,10 +34,6 @@ const SLATE_SUCCESS = '#7eb09b';
 const SLATE_WARNING = '#f59e0b';
 const SLATE_ERROR = '#c9878d';
 
-const slateSuccess = (alpha: number | string) => rgbaFromHex(SLATE_SUCCESS, alpha);
-const slateWarning = (alpha: number | string) => rgbaFromHex(SLATE_WARNING, alpha);
-const slateError = (alpha: number | string) => rgbaFromHex(SLATE_ERROR, alpha);
-
 export const bitfunSlateTheme: ThemeConfig = {
 
   id: 'bitfun-slate',
@@ -56,11 +52,9 @@ export const bitfunSlateTheme: ThemeConfig = {
       primary: SLATE_BACKGROUND_PRIMARY,
       secondary: SLATE_BACKGROUND_SECONDARY,
       tertiary: SLATE_BACKGROUND_PRIMARY,
-      quaternary: '#313335',
       elevated: SLATE_BACKGROUND_SECONDARY,
       workbench: SLATE_BACKGROUND_PRIMARY,
       scene: SLATE_BACKGROUND_SECONDARY,
-      tooltip: rgbaFromHex(SLATE_BACKGROUND_SECONDARY, 0.96),
     },
 
     text: {
@@ -82,7 +76,6 @@ export const bitfunSlateTheme: ThemeConfig = {
         200: 'rgba(203, 213, 225, 0.14)',
         300: 'rgba(203, 213, 225, 0.24)',
         400: 'rgba(148, 163, 184, 0.45)',
-        800: 'rgba(71, 85, 105, 0.92)',
       },
     }),
 
@@ -108,11 +101,8 @@ export const bitfunSlateTheme: ThemeConfig = {
       branch: SLATE_ACCENT,
       branchBg: overlayWhite(0.06),
       changes: rgbFromHex(SLATE_WARNING),
-      changesBg: slateWarning(0.1),
       added: rgbFromHex(SLATE_SUCCESS),
-      addedBg: slateSuccess(0.1),
       deleted: rgbFromHex(SLATE_ERROR),
-      deletedBg: slateError(0.1),
     }),
 
     scrollbar: createDarkNeutralScrollbar(),

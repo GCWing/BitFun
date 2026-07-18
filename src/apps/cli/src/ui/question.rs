@@ -22,14 +22,14 @@ use super::theme::{StyleKind, Theme};
 
 /// A single question option
 #[derive(Debug, Clone)]
-pub struct QuestionOption {
+struct QuestionOption {
     pub label: String,
     pub description: String,
 }
 
 /// A single question with its options
 #[derive(Debug, Clone)]
-pub struct QuestionData {
+struct QuestionData {
     pub question: String,
     pub header: String,
     pub options: Vec<QuestionOption>,
@@ -38,24 +38,24 @@ pub struct QuestionData {
 
 /// Interactive question prompt state
 #[derive(Debug, Clone)]
-pub struct QuestionPrompt {
-    pub tool_id: String,
-    pub questions: Vec<QuestionData>,
+pub(crate) struct QuestionPrompt {
+    pub(crate) tool_id: String,
+    questions: Vec<QuestionData>,
     /// Current active question tab (0-based); equals questions.len() when on confirm page
-    pub current_tab: usize,
+    current_tab: usize,
     /// Per-question answers: question_index -> selected option labels
-    pub answers: Vec<Vec<String>>,
+    answers: Vec<Vec<String>>,
     /// Per-question custom input text
-    pub custom_inputs: Vec<String>,
+    custom_inputs: Vec<String>,
     /// Selected option index within current question (includes "Other" as last)
-    pub selected_option: usize,
+    selected_option: usize,
     /// Whether in custom text editing mode
-    pub editing_custom: bool,
+    editing_custom: bool,
 }
 
 /// Result of handling a key event in the question prompt
 #[derive(Debug, Clone)]
-pub enum QuestionAction {
+pub(crate) enum QuestionAction {
     /// No action, continue showing the prompt
     None,
     /// User confirmed all answers — submit to core
@@ -66,7 +66,7 @@ pub enum QuestionAction {
 
 impl QuestionPrompt {
     /// Create from parsed AskUserQuestion params
-    pub fn from_params(tool_id: String, params: &serde_json::Value) -> Option<Self> {
+    pub(crate) fn from_params(tool_id: String, params: &serde_json::Value) -> Option<Self> {
         let questions_val = params.get("questions")?.as_array()?;
         let mut questions = Vec::new();
 
@@ -207,7 +207,7 @@ impl QuestionPrompt {
     }
 
     /// Handle a key event. Returns a QuestionAction.
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> QuestionAction {
+    pub(crate) fn handle_key_event(&mut self, key: KeyEvent) -> QuestionAction {
         if key.kind != KeyEventKind::Press && key.kind != KeyEventKind::Repeat {
             return QuestionAction::None;
         }
@@ -431,7 +431,7 @@ impl QuestionPrompt {
 // ============ Rendering ============
 
 /// Render the question overlay on top of the message area.
-pub fn render_question_overlay(
+pub(super) fn render_question_overlay(
     frame: &mut Frame,
     prompt: &QuestionPrompt,
     theme: &Theme,

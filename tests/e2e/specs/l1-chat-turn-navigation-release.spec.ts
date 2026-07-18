@@ -440,6 +440,10 @@ describe('Release long-session turn navigation', () => {
     expect(before.maxScrollTop).toBeGreaterThan(300);
 
     const revealState = await revealHistoryUntilTurnListContains(targetTitle);
+    await closeHeaderTurnList();
+    const beforeDeferredSelection = await scrollToLatest(targetTurnId);
+    expect(beforeDeferredSelection.targetExists).toBe(false);
+
     const clickResult = await clickHeaderTurnListItemByTitle(targetTitle);
     expect(clickResult.itemCount).toBeGreaterThan(0);
     await browser.waitUntil(async () => {
@@ -468,6 +472,7 @@ describe('Release long-session turn navigation', () => {
         targetTurnId,
         targetTitle,
         revealState,
+        beforeDeferredSelection,
         clickResult,
         lastMetrics,
         shellState: await readSessionShellState(),
@@ -476,7 +481,16 @@ describe('Release long-session turn navigation', () => {
 
     await browser.pause(600);
     const after = await readTurnViewportMetrics(targetTurnId);
-    const diagnostics = { sessionId, targetTurnId, targetTitle, revealState, clickResult, before, after };
+    const diagnostics = {
+      sessionId,
+      targetTurnId,
+      targetTitle,
+      revealState,
+      before,
+      beforeDeferredSelection,
+      clickResult,
+      after,
+    };
     console.log('[ReleaseTurnNav] diagnostics:', JSON.stringify(diagnostics));
 
     expect(after.targetExists).toBe(true);

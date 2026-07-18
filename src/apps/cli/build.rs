@@ -72,7 +72,7 @@ fn generate_prompts_code(
     writeln!(f)?;
     writeln!(
         f,
-        "pub static CLI_PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {{"
+        "static CLI_PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {{"
     )?;
     writeln!(f, "    let mut m = HashMap::new();")?;
 
@@ -91,7 +91,7 @@ fn generate_prompts_code(
     writeln!(f, "/// Get an embedded CLI prompt by name")?;
     writeln!(
         f,
-        "pub fn get_cli_prompt(name: &str) -> Option<&'static str> {{"
+        "pub(crate) fn get_cli_prompt(name: &str) -> Option<&'static str> {{"
     )?;
     writeln!(f, "    CLI_PROMPTS.get(name).copied()")?;
     writeln!(f, "}}")?;

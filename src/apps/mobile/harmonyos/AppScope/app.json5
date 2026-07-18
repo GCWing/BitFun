@@ -1,0 +1,11 @@
+{
+  "app": {
+    "bundleName": "com.example.bitfun_mobile",
+    "vendor": "example",
+    "versionCode": 1000000,
+    "versionName": "1.0.0",
+    "buildVersion": "1",
+    "icon": "$media:bitfun_icon",
+    "label": "$string:app_name"
+  }
+}

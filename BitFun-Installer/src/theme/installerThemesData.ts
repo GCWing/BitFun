@@ -1,8 +1,5 @@
 import type { ThemeId } from '../types/installer';
 
-type AccentStop = '50' | '100' | '200' | '300' | '400' | '500' | '600';
-type AccentRamp = Record<AccentStop, string>;
-type RampAlphas = readonly [string, string, string, string, string];
 type BackgroundColors = InstallerTheme['colors']['background'];
 type TextColors = InstallerTheme['colors']['text'];
 type SemanticColors = InstallerTheme['colors']['semantic'];
@@ -23,7 +20,7 @@ export type InstallerTheme = {
       secondary: string;
       muted: string;
     };
-    accent: AccentRamp;
+    accent: string;
     semantic: {
       success: string;
       warning: string;
@@ -32,44 +29,22 @@ export type InstallerTheme = {
     border: {
       subtle: string;
       base: string;
-      medium: string;
     };
     element: {
       subtle: string;
       soft: string;
       medium: string;
-      strong: string;
     };
   };
 };
 
-const DEFAULT_RAMP_ALPHAS: RampAlphas = ['0.04', '0.08', '0.15', '0.25', '0.4'];
-const DEFAULT_BLUE_RGB = '96, 165, 250';
-const DEFAULT_BLUE_500 = '#60a5fa';
-const DEFAULT_BLUE_600 = '#3b82f6';
+const DEFAULT_BLUE = '#60a5fa';
 const DARK_CARD_BACKGROUND = '#121214';
 const DARK_CARD_SURFACE = '#1a1c1e';
 const MIDNIGHT_CARD_BACKGROUND = '#2b2d30';
 
 function alpha(rgb: string, opacity: string): string {
   return `rgba(${rgb}, ${opacity})`;
-}
-
-function createAccentRamp(
-  rgb: string,
-  solid500: string,
-  solid600: string,
-  alphas: RampAlphas = DEFAULT_RAMP_ALPHAS,
-): AccentRamp {
-  return {
-    '50': alpha(rgb, alphas[0]),
-    '100': alpha(rgb, alphas[1]),
-    '200': alpha(rgb, alphas[2]),
-    '300': alpha(rgb, alphas[3]),
-    '400': alpha(rgb, alphas[4]),
-    '500': solid500,
-    '600': solid600,
-  };
 }
 
 type TonePreset = {
@@ -87,9 +62,7 @@ type ThemeSeed = {
     primary: string;
     secondary?: string;
   };
-  accentRgb: string;
-  accent500: string;
-  accent600: string;
+  accent: string;
   semantic?: Partial<SemanticColors>;
 };
 
@@ -101,11 +74,10 @@ function createBackground(seed: ThemeSeed['background']): BackgroundColors {
   };
 }
 
-function createBorderRamp(rgb: string, alphas: readonly [string, string, string]): BorderColors {
+function createBorderRamp(rgb: string, alphas: readonly [string, string]): BorderColors {
   return {
     subtle: alpha(rgb, alphas[0]),
     base: alpha(rgb, alphas[1]),
-    medium: alpha(rgb, alphas[2]),
   };
 }
 
@@ -114,7 +86,6 @@ function createElementRamp(rgb: string): ElementColors {
     subtle: alpha(rgb, '0.06'),
     soft: alpha(rgb, '0.12'),
     medium: alpha(rgb, '0.18'),
-    strong: alpha(rgb, '0.24'),
   };
 }
 
@@ -125,7 +96,7 @@ const DARK_TONE: TonePreset = {
     warning: '#f59e0b',
     error: '#ef4444',
   },
-  border: createBorderRamp('255, 255, 255', ['0.12', '0.18', '0.24']),
+  border: createBorderRamp('255, 255, 255', ['0.12', '0.18']),
   element: createElementRamp('255, 255, 255'),
 };
 
@@ -136,12 +107,11 @@ const LIGHT_TONE: TonePreset = {
     warning: '#c08c42',
     error: '#c26565',
   },
-  border: createBorderRamp('100, 116, 139', ['0.15', '0.22', '0.32']),
+  border: createBorderRamp('100, 116, 139', ['0.15', '0.22']),
   element: createElementRamp('71, 102, 143'),
 };
 
 function createInstallerTheme(seed: ThemeSeed): InstallerTheme {
-  const accent = createAccentRamp(seed.accentRgb, seed.accent500, seed.accent600);
   const tone = seed.type === 'light' ? LIGHT_TONE : DARK_TONE;
 
   return {
@@ -151,7 +121,7 @@ function createInstallerTheme(seed: ThemeSeed): InstallerTheme {
     colors: {
       background: createBackground(seed.background),
       text: { ...tone.text },
-      accent,
+      accent: seed.accent,
       semantic: {
         success: tone.semantic.success,
         warning: tone.semantic.warning,
@@ -173,27 +143,21 @@ export const THEMES: InstallerTheme[] = [
       primary: DARK_CARD_BACKGROUND,
       secondary: DARK_CARD_SURFACE,
     },
-    accentRgb: DEFAULT_BLUE_RGB,
-    accent500: DEFAULT_BLUE_500,
-    accent600: DEFAULT_BLUE_600,
+    accent: DEFAULT_BLUE,
   }),
   createInstallerTheme({
     id: 'bitfun-light',
     name: 'Light',
     type: 'light',
     background: { primary: '#f7f8fa', secondary: '#ffffff' },
-    accentRgb: '71, 102, 143',
-    accent500: '#5a7bb2',
-    accent600: '#4a6694',
+    accent: '#5a7bb2',
   }),
   createInstallerTheme({
     id: 'bitfun-midnight',
     name: 'Midnight',
     type: 'dark',
     background: { primary: MIDNIGHT_CARD_BACKGROUND, secondary: DARK_CARD_SURFACE },
-    accentRgb: DEFAULT_BLUE_RGB,
-    accent500: DEFAULT_BLUE_500,
-    accent600: DEFAULT_BLUE_600,
+    accent: DEFAULT_BLUE,
     semantic: {
       success: '#6aab73',
       warning: '#e0a055',
@@ -205,9 +169,7 @@ export const THEMES: InstallerTheme[] = [
     name: 'Ink Charm',
     type: 'light',
     background: { primary: '#faf8f0', secondary: '#f5f3e8' },
-    accentRgb: '46, 94, 138',
-    accent500: '#2e5e8a',
-    accent600: '#234a6d',
+    accent: '#2e5e8a',
     semantic: {
       success: '#52ad5a',
       warning: '#f0a020',
@@ -219,9 +181,7 @@ export const THEMES: InstallerTheme[] = [
     name: 'Ink Night',
     type: 'dark',
     background: { primary: '#1a1814', secondary: DARK_CARD_SURFACE },
-    accentRgb: '115, 165, 204',
-    accent500: '#73a5cc',
-    accent600: '#5a8bb3',
+    accent: '#73a5cc',
     semantic: {
       success: '#6bc072',
       warning: '#f5b555',
@@ -233,9 +193,7 @@ export const THEMES: InstallerTheme[] = [
     name: 'Cyber',
     type: 'dark',
     background: { primary: '#0e0e10', secondary: DARK_CARD_SURFACE },
-    accentRgb: '0, 230, 255',
-    accent500: '#00e6ff',
-    accent600: '#00ccff',
+    accent: '#00e6ff',
     semantic: {
       success: '#00ff9f',
       warning: '#ffcc00',
@@ -247,9 +205,7 @@ export const THEMES: InstallerTheme[] = [
     name: 'Tokyo Night',
     type: 'dark',
     background: { primary: '#1a1b26', secondary: DARK_CARD_SURFACE },
-    accentRgb: '122, 162, 247',
-    accent500: '#7aa2f7',
-    accent600: '#6183bb',
+    accent: '#7aa2f7',
     semantic: {
       success: '#9ece6a',
       warning: '#e0af68',
@@ -261,9 +217,7 @@ export const THEMES: InstallerTheme[] = [
     name: 'Slate',
     type: 'dark',
     background: { primary: DARK_CARD_SURFACE },
-    accentRgb: '122, 176, 238',
-    accent500: '#7ab0ee',
-    accent600: '#689ad8',
+    accent: '#7ab0ee',
     semantic: {
       success: '#7eb09b',
       warning: '#f59e0b',

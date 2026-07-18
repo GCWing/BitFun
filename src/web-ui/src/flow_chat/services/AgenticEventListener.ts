@@ -16,10 +16,12 @@ import type {
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
+  ModelRoundStartedEvent,
   ModelRoundCompletedEvent,
   UserSteeringInjectedEvent,
   DeepReviewQueueStateChangedEvent,
   AcpContextUsageUpdatedEvent,
+  OpenBuiltInBrowserEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -34,7 +36,7 @@ export interface AgenticEventCallbacks {
   onImageAnalysisStarted?: (event: ImageAnalysisEvent) => void;
   onImageAnalysisCompleted?: (event: ImageAnalysisEvent) => void;
   onDialogTurnStarted?: (event: AgenticEvent) => void;
-  onModelRoundStarted?: (event: AgenticEvent) => void;
+  onModelRoundStarted?: (event: ModelRoundStartedEvent) => void;
   onModelRoundCompleted?: (event: ModelRoundCompletedEvent) => void;
   onTextChunk?: (event: TextChunkEvent) => void;
   onToolEvent?: (event: ToolEvent) => void;
@@ -49,6 +51,7 @@ export interface AgenticEventCallbacks {
   onContextCompressionCompleted?: (event: AgenticEvent) => void;
   onContextCompressionFailed?: (event: AgenticEvent) => void;
   onThreadGoalUpdated?: (event: { sessionId: string; goal?: Record<string, unknown> | null }) => void;
+  onOpenBuiltInBrowser?: (event: OpenBuiltInBrowserEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
   onUserSteeringInjected?: (event: UserSteeringInjectedEvent) => void;
@@ -229,6 +232,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onThreadGoalUpdated((event) => {
           logger.debug('Thread goal updated:', event);
           callbacks.onThreadGoalUpdated?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onOpenBuiltInBrowser) {
+        const unlisten = agentAPI.onOpenBuiltInBrowser((event) => {
+          logger.debug('Open built-in browser requested:', event);
+          callbacks.onOpenBuiltInBrowser?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

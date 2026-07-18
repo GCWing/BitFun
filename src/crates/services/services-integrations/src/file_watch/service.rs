@@ -4,7 +4,7 @@ use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watche
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::types::{FileWatchEvent, FileWatchEventKind, FileWatcherConfig};
 
@@ -25,6 +25,7 @@ pub struct FileWatchService {
     watcher: Arc<Mutex<Option<RecommendedWatcher>>>,
     watched_paths: Arc<RwLock<HashMap<PathBuf, FileWatcherConfig>>>,
     event_buffer: Arc<StdMutex<Vec<FileWatchEvent>>>,
+    event_sender: broadcast::Sender<Vec<FileWatchEvent>>,
     config: FileWatcherConfig,
 }
 
@@ -42,13 +43,20 @@ fn lock_event_buffer(
 
 impl FileWatchService {
     pub fn new(config: FileWatcherConfig) -> Self {
+        let (event_sender, _) = broadcast::channel(64);
         Self {
             emitter: Arc::new(Mutex::new(None)),
             watcher: Arc::new(Mutex::new(None)),
             watched_paths: Arc::new(RwLock::new(HashMap::new())),
             event_buffer: Arc::new(StdMutex::new(Vec::new())),
+            event_sender,
             config,
         }
+    }
+
+    /// Subscribe to the same debounced event batches emitted to product surfaces.
+    pub fn subscribe(&self) -> broadcast::Receiver<Vec<FileWatchEvent>> {
+        self.event_sender.subscribe()
     }
 
     pub async fn set_emitter(&self, emitter: Arc<dyn EventEmitter>) {
@@ -69,10 +77,23 @@ impl FileWatchService {
 
         {
             let mut watched_paths = self.watched_paths.write().await;
-            watched_paths.insert(
-                path_buf.clone(),
-                config.unwrap_or_else(|| self.config.clone()),
-            );
+            let config = config.unwrap_or_else(|| self.config.clone());
+            watched_paths
+                .entry(path_buf.clone())
+                .and_modify(|existing| {
+                    // Multiple product services may share a root. Registering a
+                    // narrower observer must not silently downgrade an existing
+                    // recursive or hidden-file-aware watch.
+                    existing.watch_recursively |= config.watch_recursively;
+                    existing.ignore_hidden_files &= config.ignore_hidden_files;
+                    existing.debounce_interval_ms = existing
+                        .debounce_interval_ms
+                        .min(config.debounce_interval_ms);
+                    existing.max_events_per_interval = existing
+                        .max_events_per_interval
+                        .max(config.max_events_per_interval);
+                })
+                .or_insert(config);
         }
 
         self.create_watcher().await?;
@@ -107,6 +128,12 @@ impl FileWatchService {
             .map_err(|e| format!("Failed to create watcher: {}", e))?;
 
         for (path, config) in watched_paths.iter() {
+            // A watched source directory may be removed between events. Its
+            // stable parent watch remains active and the missing path will be
+            // re-registered when it reappears.
+            if !path.exists() {
+                continue;
+            }
             let mode = if config.watch_recursively {
                 RecursiveMode::Recursive
             } else {
@@ -125,34 +152,41 @@ impl FileWatchService {
 
         let event_buffer = self.event_buffer.clone();
         let emitter_arc = self.emitter.clone();
-        let config = self.config.clone();
+        let debounce_interval_ms = watched_paths
+            .values()
+            .map(|config| config.debounce_interval_ms)
+            .min()
+            .unwrap_or(self.config.debounce_interval_ms);
         let watched_paths = self.watched_paths.clone();
+        let event_sender = self.event_sender.clone();
 
         tokio::task::spawn_blocking(move || {
             let rt = tokio::runtime::Handle::current();
-            let debounce = std::time::Duration::from_millis(config.debounce_interval_ms);
+            let debounce = std::time::Duration::from_millis(debounce_interval_ms);
             let poll = std::time::Duration::from_millis(50);
             let mut last_event_time: Option<std::time::Instant> = None;
 
             loop {
                 match rx.recv_timeout(poll) {
                     Ok(Ok(event)) => {
-                        let ignore = rt.block_on(Self::should_ignore_event(&event, &watched_paths));
-                        if !ignore {
-                            if let Some(file_event) = Self::convert_event(&event) {
-                                lock_event_buffer(&event_buffer).push(file_event);
-                                last_event_time = Some(std::time::Instant::now());
-                            }
+                        let file_events = rt.block_on(Self::convert_events(&event, &watched_paths));
+                        if !file_events.is_empty() {
+                            lock_event_buffer(&event_buffer).extend(file_events);
+                            last_event_time = Some(std::time::Instant::now());
                         }
                     }
-                    Ok(Err(e)) => eprintln!("Watch error: {:?}", e),
+                    Ok(Err(e)) => error!("File watch error: {}", e),
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                 }
 
                 if let Some(t) = last_event_time {
                     if t.elapsed() >= debounce {
-                        rt.block_on(Self::flush_events_static(&event_buffer, &emitter_arc));
+                        rt.block_on(Self::flush_events_static(
+                            &event_buffer,
+                            &emitter_arc,
+                            &event_sender,
+                        ));
                         last_event_time = None;
                     }
                 }
@@ -162,49 +196,33 @@ impl FileWatchService {
         Ok(())
     }
 
-    async fn should_ignore_event(
+    async fn convert_events(
         event: &Event,
         watched_paths: &Arc<RwLock<HashMap<PathBuf, FileWatcherConfig>>>,
-    ) -> bool {
+    ) -> Vec<FileWatchEvent> {
         let paths = watched_paths.read().await;
-
-        let event_path = match event.paths.first() {
-            Some(path) => path,
-            None => return true,
-        };
-
-        let mut matching_config = None;
-        for (watch_path, config) in paths.iter() {
-            if event_path.starts_with(watch_path) {
-                matching_config = Some(config);
-                break;
-            }
-        }
-
-        let config = match matching_config {
-            Some(config) => config,
-            None => return true,
-        };
-
-        if Self::is_in_excluded_directory(event_path) {
-            return true;
-        }
-
-        if Self::is_temporary_file(event_path) {
-            return true;
-        }
-
-        if config.ignore_hidden_files {
-            if let Some(file_name) = event_path.file_name() {
-                if let Some(name_str) = file_name.to_str() {
-                    if name_str.starts_with('.') {
-                        return true;
-                    }
+        event
+            .paths
+            .iter()
+            .filter_map(|event_path| {
+                let config = paths
+                    .iter()
+                    .filter(|(watch_path, _)| event_path.starts_with(watch_path))
+                    .max_by_key(|(watch_path, _)| watch_path.components().count())
+                    .map(|(_, config)| config)?;
+                if Self::is_in_excluded_directory(event_path)
+                    || Self::is_temporary_file(event_path)
+                    || config.ignore_hidden_files
+                        && event_path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| name.starts_with('.'))
+                {
+                    return None;
                 }
-            }
-        }
-
-        false
+                Self::convert_event(&event.kind, event_path)
+            })
+            .collect()
     }
 
     fn is_in_excluded_directory(path: &Path) -> bool {
@@ -274,9 +292,8 @@ impl FileWatchService {
         false
     }
 
-    fn convert_event(event: &Event) -> Option<FileWatchEvent> {
-        let path = event.paths.first()?.to_string_lossy().to_string();
-        let kind = match &event.kind {
+    fn convert_event(kind: &EventKind, path: &Path) -> Option<FileWatchEvent> {
+        let kind = match kind {
             EventKind::Create(_) => FileWatchEventKind::Create,
             EventKind::Modify(_) => FileWatchEventKind::Modify,
             EventKind::Remove(_) => FileWatchEventKind::Remove,
@@ -285,7 +302,7 @@ impl FileWatchService {
         };
 
         Some(FileWatchEvent {
-            path,
+            path: path.to_string_lossy().to_string(),
             kind,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -297,6 +314,7 @@ impl FileWatchService {
     async fn flush_events_static(
         event_buffer: &Arc<StdMutex<Vec<FileWatchEvent>>>,
         emitter_arc: &Arc<Mutex<Option<Arc<dyn EventEmitter>>>>,
+        event_sender: &broadcast::Sender<Vec<FileWatchEvent>>,
     ) {
         let events = {
             let mut buffer = lock_event_buffer(event_buffer);
@@ -305,6 +323,10 @@ impl FileWatchService {
             }
             buffer.drain(..).collect::<Vec<_>>()
         };
+
+        // No active backend subscriber is a normal state; the frontend emitter
+        // may still consume this batch.
+        let _ = event_sender.send(events.clone());
 
         let emitter_guard = emitter_arc.lock().await;
         if let Some(emitter) = emitter_guard.as_ref() {

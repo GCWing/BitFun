@@ -2006,7 +2006,7 @@ fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
     let metadata = apply_draft_customization_metadata(
         None,
         MiniAppCustomizationBaseline::Builtin {
-            builtin_id: "builtin-pr-review".to_string(),
+            builtin_id: "builtin-gomoku".to_string(),
             builtin_version: 4,
         },
         "draft-1",
@@ -2019,7 +2019,7 @@ fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
     );
     assert_eq!(
         metadata.origin.builtin_id.as_deref(),
-        Some("builtin-pr-review")
+        Some("builtin-gomoku")
     );
     assert_eq!(metadata.origin.builtin_version, Some(4));
     assert!(metadata.local_override);
@@ -2030,7 +2030,7 @@ fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
     let updated = apply_draft_customization_metadata(
         Some(metadata),
         MiniAppCustomizationBaseline::Builtin {
-            builtin_id: "builtin-pr-review".to_string(),
+            builtin_id: "builtin-gomoku".to_string(),
             builtin_version: 5,
         },
         "draft-2",
@@ -2057,7 +2057,7 @@ fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
     let user_created_update = apply_draft_customization_metadata(
         Some(user_created),
         MiniAppCustomizationBaseline::Builtin {
-            builtin_id: "builtin-pr-review".to_string(),
+            builtin_id: "builtin-gomoku".to_string(),
             builtin_version: 6,
         },
         "draft-3",
@@ -2081,7 +2081,7 @@ fn miniapp_customization_builtin_update_policy_preserves_decline_contract() {
     let mut metadata = apply_draft_customization_metadata(
         None,
         MiniAppCustomizationBaseline::Builtin {
-            builtin_id: "builtin-pr-review".to_string(),
+            builtin_id: "builtin-gomoku".to_string(),
             builtin_version: 4,
         },
         "draft-1",
@@ -2156,7 +2156,7 @@ fn miniapp_customization_decline_policy_updates_existing_and_trims_old_records()
     let mut metadata = apply_draft_customization_metadata(
         None,
         MiniAppCustomizationBaseline::Builtin {
-            builtin_id: "builtin-pr-review".to_string(),
+            builtin_id: "builtin-gomoku".to_string(),
             builtin_version: 4,
         },
         "draft-1",

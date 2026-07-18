@@ -4,29 +4,37 @@
 /// - Interactive TUI
 /// - Single command execution
 /// - Batch task processing
+mod account;
+mod account_sync;
 mod acp_cli;
+mod actions;
 mod agent;
 #[allow(dead_code)]
 mod chat_state;
-mod commands;
 mod config;
+mod daemon;
 mod diagnostics;
 mod logging;
 mod management;
+mod model_selection;
 mod modes;
+mod peer_host;
+mod plugin_diagnostics;
+mod product_assembly;
 mod prompts;
 mod root_handlers;
+mod runtime;
 mod ui;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use bitfun_core::service::remote_connect::DeviceIdentity;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
 use config::CliConfig;
 use modes::chat::ChatMode;
-use modes::exec::ExecOutputFormat;
+use modes::exec::{ExecApprovalMode, ExecOutputFormat};
 
 // ======================== Global MCP Service ========================
 
@@ -115,12 +123,18 @@ enum Commands {
 
         /// Output git diff patch after execution (for SWE-bench evaluation)
         /// Without path outputs to terminal, with path saves to file
+        /// The snapshot is captured before writing an explicit output artifact;
+        /// the artifact itself is not included in the captured diff
         /// Example: --output-patch or --output-patch ./result.patch
         #[arg(long, num_args = 0..=1, default_missing_value = "-")]
         output_patch: Option<String>,
 
-        /// Tool execution requires confirmation (default: no confirmation to avoid blocking non-interactive mode)
-        #[arg(long)]
+        /// Auto-approve tool permissions that are not explicitly denied
+        #[arg(long, conflicts_with = "confirm")]
+        auto: bool,
+
+        /// Deprecated compatibility flag; confirmations are rejected in non-interactive mode
+        #[arg(long, hide = true, conflicts_with = "auto")]
         confirm: bool,
     },
 
@@ -145,6 +159,14 @@ enum Commands {
         action: Option<McpAction>,
     },
 
+    /// Inspect and review BitFun-managed plugin packages
+    ///
+    /// Package layout: <package-root>/<package-id>/bitfun.plugin.json
+    Plugins {
+        #[command(subcommand)]
+        action: Option<PluginAction>,
+    },
+
     /// Usage reporting
     Usage {
         /// Session ID to inspect; defaults to the most recent session in the current workspace
@@ -162,6 +184,16 @@ enum Commands {
 
     /// Health check
     Health,
+
+    /// Manage the always-on account device host daemon
+    ///
+    /// The daemon holds the relay device-routing connection in a headless
+    /// process so this device stays reachable by account peers whenever the
+    /// machine is up, even without an interactive CLI running.
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonAction,
+    },
 
     /// Start or inspect the Agent Client Protocol (ACP) server
     Acp {
@@ -185,7 +217,7 @@ enum ModelAction {
 enum McpAction {
     /// List configured MCP servers
     List,
-    /// Check MCP readiness
+    /// Show the configured MCP entries without probing readiness
     Doctor,
     /// Enable an MCP server by id
     Enable {
@@ -199,6 +231,27 @@ enum McpAction {
     },
     /// Print the stored MCP JSON config
     Config,
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+    /// List discovered packages and trust status
+    List,
+    /// Approve the current manifest and declared files without enabling execution
+    ApproveSource { package_id: String },
+    /// Deny the current manifest and declared files for this workspace
+    Deny { package_id: String },
+    /// Revoke the current package approval for this workspace
+    Revoke { package_id: String },
+    /// Preview or confirm activation of one source-approved package
+    Activate {
+        package_id: String,
+        /// Confirm the exact content hash displayed by the activation preview
+        #[arg(long, value_name = "CONTENT_HASH")]
+        confirm: Option<String>,
+    },
+    /// Deactivate one package for this workspace
+    Deactivate { package_id: String },
 }
 
 #[derive(Subcommand)]
@@ -311,6 +364,34 @@ enum SessionAction {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BootstrapProfile {
+    Interactive,
+    Execution,
+    Management,
+}
+
+impl BootstrapProfile {
+    const fn starts_peer_host(self) -> bool {
+        matches!(self, Self::Interactive)
+    }
+
+    const fn starts_mcp(self) -> bool {
+        matches!(self, Self::Interactive | Self::Execution)
+    }
+}
+
+impl SessionAction {
+    const fn bootstrap_profile(&self) -> BootstrapProfile {
+        match self {
+            Self::Resume { .. } | Self::Continue => BootstrapProfile::Interactive,
+            Self::List | Self::Show { .. } | Self::Delete { .. } | Self::Fork { .. } => {
+                BootstrapProfile::Management
+            }
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum ConfigAction {
     /// Show configuration
@@ -319,6 +400,18 @@ enum ConfigAction {
     Edit,
     /// Reset to default configuration
     Reset,
+}
+
+#[derive(Subcommand)]
+enum DaemonAction {
+    /// Run the daemon in the foreground (used by the service manager)
+    Run,
+    /// Install and start the auto-start service (systemd user unit / LaunchAgent)
+    Install,
+    /// Stop and remove the auto-start service
+    Uninstall,
+    /// Show daemon and auto-start service status
+    Status,
 }
 
 // ======================== System Initialization ========================
@@ -339,11 +432,24 @@ fn terminal_scripts_dir() -> std::path::PathBuf {
 }
 
 async fn initialize_terminal_service() {
+    use bitfun_core::infrastructure::try_get_path_manager_arc;
     use bitfun_core::service::runtime::RuntimeManager;
     use bitfun_core::service::terminal::{TerminalApi, TerminalConfig};
 
     let mut terminal_config = TerminalConfig::default();
     terminal_config.shell_integration.scripts_dir = Some(terminal_scripts_dir());
+    match try_get_path_manager_arc() {
+        Ok(path_manager) => {
+            terminal_config.transcript.root_dir =
+                Some(path_manager.user_data_dir().join("terminals"));
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Failed to configure terminal transcript storage; recording is disabled: {}",
+                error
+            );
+        }
+    }
 
     if let Ok(runtime_manager) = RuntimeManager::new() {
         let current_path = std::env::var("PATH").ok();
@@ -364,87 +470,100 @@ async fn initialize_terminal_service() {
     tracing::info!("Terminal service initialized");
 }
 
-/// Initialize all core services (config, AI client, agentic system).
-/// Returns (agentic_system, original_skip_confirmation).
+/// Initialize Core owners and assemble one invocation-scoped CLI runtime.
 async fn initialize_core_services(
-    skip_tool_confirmation: bool,
-) -> Result<(agent::agentic_system::AgenticSystem, bool)> {
+    workspace_root: &std::path::Path,
+    approval_policy: runtime::approval::CliApprovalPolicy,
+    bootstrap_profile: BootstrapProfile,
+) -> Result<std::sync::Arc<runtime::CliRuntimeContext>> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
     bitfun_core::service::config::initialize_global_config()
         .await
-        .expect("Failed to initialize global config service");
+        .map_err(|error| anyhow!("Failed to initialize global config service: {error}"))?;
     tracing::info!("Global config service initialized");
 
-    // Save and override tool confirmation setting
     let config_service = bitfun_core::service::config::get_global_config_service()
         .await
         .ok();
-    let original_skip_confirmation = if let Some(ref svc) = config_service {
-        let ai_config: bitfun_core::service::config::types::AIConfig =
-            svc.get_config(Some("ai")).await.unwrap_or_default();
-        ai_config.skip_tool_confirmation
-    } else {
-        false
-    };
-    if let Some(ref svc) = config_service {
-        let _ = svc
-            .set_config("ai.skip_tool_confirmation", skip_tool_confirmation)
-            .await;
-    }
 
     AIClientFactory::initialize_global()
         .await
-        .expect("Failed to initialize global AIClientFactory");
+        .map_err(|error| anyhow!("Failed to initialize global AIClientFactory: {error}"))?;
     tracing::info!("Global AI client factory initialized");
 
     initialize_terminal_service().await;
 
     let agentic_system = agent::agentic_system::init_agentic_system()
         .await
-        .expect("Failed to initialize agentic system");
+        .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
     tracing::info!("Agentic system initialized");
 
+    let runtime = std::sync::Arc::new(runtime::CliRuntimeContext::build(
+        agentic_system,
+        workspace_root,
+        approval_policy,
+    )?);
+    debug_assert!(runtime
+        .product()
+        .service_availability()
+        .iter()
+        .all(|entry| {
+            runtime
+                .services()
+                .has_capability(entry.requirement().service_capability())
+        }));
+    tracing::info!(
+        "CLI product runtime assembled: profile={}, services={}, harnesses={}, plugin_runtime={:?}",
+        runtime.product().plan().profile().id(),
+        runtime.product().service_availability().len(),
+        runtime.product().harness_provider_ids().len(),
+        runtime.product().plugin_runtime(),
+    );
+
+    if bootstrap_profile.starts_peer_host() {
+        if let Err(e) = peer_host::ensure_peer_host_ready(runtime.as_ref()).await {
+            tracing::warn!("Failed to initialize CLI peer host services: {e}");
+        } else {
+            tracing::info!("CLI peer host services initialized");
+        }
+    }
+
     // Initialize MCP service in background (non-blocking)
-    if let Some(ref cfg_svc) = config_service {
-        match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
-            Ok(mcp_service) => {
-                let mcp_service = std::sync::Arc::new(mcp_service);
-                MCP_SERVICE.set(mcp_service.clone()).ok();
+    if bootstrap_profile.starts_mcp() {
+        if let Some(ref cfg_svc) = config_service {
+            match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
+                Ok(mcp_service) => {
+                    let mcp_service = std::sync::Arc::new(mcp_service);
+                    MCP_SERVICE.set(mcp_service.clone()).ok();
 
-                // Mark as in progress
-                get_mcp_init_status().store(1, Ordering::Relaxed);
+                    // Mark as in progress
+                    get_mcp_init_status().store(1, Ordering::Relaxed);
 
-                // Background async initialization
-                tokio::spawn(async move {
-                    let result = mcp_service.server_manager().initialize_all().await;
-                    match result {
-                        Ok(_) => {
-                            tracing::info!("MCP servers initialized successfully");
-                            get_mcp_init_status().store(2, Ordering::Relaxed);
+                    // Background async initialization
+                    tokio::spawn(async move {
+                        let result = mcp_service.server_manager().initialize_all().await;
+                        match result {
+                            Ok(_) => {
+                                tracing::info!("MCP servers initialized successfully");
+                                get_mcp_init_status().store(2, Ordering::Relaxed);
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to initialize MCP servers: {}", e);
+                                get_mcp_init_status().store(3, Ordering::Relaxed);
+                            }
                         }
-                        Err(e) => {
-                            tracing::warn!("Failed to initialize MCP servers: {}", e);
-                            get_mcp_init_status().store(3, Ordering::Relaxed);
-                        }
-                    }
-                });
-            }
-            Err(e) => {
-                tracing::warn!("Failed to create MCP service: {}", e);
-                get_mcp_init_status().store(3, Ordering::Relaxed);
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to create MCP service: {}", e);
+                    get_mcp_init_status().store(3, Ordering::Relaxed);
+                }
             }
         }
     }
 
-    Ok((agentic_system, original_skip_confirmation))
-}
-
-/// Restore original tool confirmation setting
-async fn restore_tool_confirmation(original: bool) {
-    if let Ok(svc) = bitfun_core::service::config::get_global_config_service().await {
-        let _ = svc.set_config("ai.skip_tool_confirmation", original).await;
-    }
+    Ok(runtime)
 }
 
 /// Shutdown MCP servers gracefully
@@ -462,7 +581,7 @@ async fn shutdown_mcp_servers() {
 
 /// Run the full interactive TUI flow: loading screen → startup page → chat
 async fn run_interactive(
-    _config: CliConfig,
+    config: CliConfig,
     default_agent: String,
     _workspace_str: String,
 ) -> Result<()> {
@@ -474,27 +593,53 @@ async fn run_interactive(
 
     // 2. Set workspace path
     let workspace = setup_workspace();
+    let workspace_path = workspace
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
 
     // 3. Initialize core services
-    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
+    let runtime = initialize_core_services(
+        &workspace_path,
+        runtime::approval::CliApprovalPolicy::Ask,
+        BootstrapProfile::Interactive,
+    )
+    .await?;
+    // 3.5 Restore persisted account session (if any)
+    if let Some(user_id) = account::try_restore_session().await {
+        tracing::info!("Restored account session for user {user_id}");
+        // Re-establish device routing so the CLI becomes RPC-controllable.
+        // The daemon owns device routing when it is running: same-machine
+        // processes share one device_id and last AuthConnect wins.
+        if daemon::is_daemon_running() {
+            tracing::info!(
+                "CLI daemon is running; skipping in-process device routing (daemon owns it)"
+            );
+        } else {
+            let device = DeviceIdentity::from_current_machine()
+                .map_err(|e| anyhow!("detect device: {e}"))?;
+            if let Err(e) = account::restore_device_routing(&device.device_name).await {
+                tracing::warn!("Failed to restore device routing: {e}");
+            }
+        }
+    }
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
-        agentic_system.coordinator.clone(),
+        config,
+        runtime.agent_runtime().clone(),
+        runtime.compatibility().clone(),
         default_agent,
         workspace.clone(),
     );
     let startup_result = startup_page.run(&mut terminal)?;
 
-    match startup_result {
-        StartupResult::Exit => {
-            shutdown_mcp_servers().await;
-            restore_tool_confirmation(original_skip_confirmation).await;
-            ui::restore_terminal(terminal)?;
-            println!("Goodbye!");
-            return Ok(());
-        }
-        _ => {}
+    if let StartupResult::Exit = startup_result {
+        shutdown_mcp_servers().await;
+        ui::restore_terminal(terminal)?;
+        println!("Goodbye!");
+        return Ok(());
     }
 
     // 5. Parse startup result and enter chat
@@ -508,18 +653,18 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, &agentic_system);
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone());
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
     if let Some(prompt) = initial_prompt {
         chat_mode = chat_mode.with_initial_prompt(prompt);
     }
-    let _exit_reason = chat_mode.run(Some(terminal))?;
+    let chat_result = chat_mode.run(Some(terminal));
 
-    // 6. Cleanup
+    // 6. Cleanup, including fatal event-stream exits.
     shutdown_mcp_servers().await;
-    restore_tool_confirmation(original_skip_confirmation).await;
+    let _exit_reason = chat_result?;
     println!("Goodbye!");
 
     Ok(())
@@ -527,11 +672,50 @@ async fn run_interactive(
 
 // ======================== Main ========================
 
+#[derive(Debug)]
+struct ReportedCliError {
+    exit_code: i32,
+}
+
+impl std::fmt::Display for ReportedCliError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("CLI error was already reported")
+    }
+}
+
+impl std::error::Error for ReportedCliError {}
+
 async fn run_cli() -> Result<()> {
-    let cli = Cli::parse();
+    let raw_args = std::env::args_os().collect::<Vec<_>>();
+    let cli = match Cli::try_parse_from(&raw_args) {
+        Ok(cli) => cli,
+        Err(error)
+            if exec_requests_json_output(&raw_args)
+                && matches!(
+                    error.kind(),
+                    clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+                ) =>
+        {
+            error.print()?;
+            return Ok(());
+        }
+        Err(error) if exec_requests_json_output(&raw_args) => {
+            let exit_code = error.exit_code();
+            let error = anyhow!(error.to_string());
+            modes::exec::emit_preflight_json_error(ExecOutputFormat::Json, &error)?;
+            return Err(anyhow::Error::new(ReportedCliError { exit_code }));
+        }
+        Err(error) => error.exit(),
+    };
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    let is_daemon_run = matches!(
+        cli.command,
+        Some(Commands::Daemon {
+            action: DaemonAction::Run,
+        })
+    );
     let file_log_level = logging::default_log_level(cli.verbose);
     let stderr_log_level = if cli.verbose {
         tracing::Level::TRACE
@@ -539,7 +723,7 @@ async fn run_cli() -> Result<()> {
         tracing::Level::ERROR
     };
 
-    if is_tui_mode || is_exec_mode {
+    if is_tui_mode || is_exec_mode || is_daemon_run {
         logging::init_file_logging(file_log_level);
     } else {
         tracing_subscriber::fmt()
@@ -574,8 +758,19 @@ async fn run_cli() -> Result<()> {
             fork_session,
             output_format,
             output_patch,
+            auto,
             confirm,
         }) => {
+            let approval_mode = if auto {
+                ExecApprovalMode::Auto
+            } else {
+                if confirm {
+                    eprintln!(
+                        "Warning: --confirm is deprecated; non-interactive confirmations are rejected by default"
+                    );
+                }
+                ExecApprovalMode::Reject
+            };
             root_handlers::handle_exec_command(
                 config,
                 root_handlers::ExecCommandArgs {
@@ -588,15 +783,17 @@ async fn run_cli() -> Result<()> {
                     fork_session,
                     output_format,
                     output_patch,
-                    confirm,
+                    approval_mode,
                 },
             )
             .await?;
         }
 
         Some(Commands::Sessions { action }) => {
-            if let Some(session_id) = root_handlers::handle_session_action(action).await? {
-                run_interactive_with_session(config, session_id).await?;
+            if let Some((session_id, runtime)) =
+                root_handlers::handle_session_action(action).await?
+            {
+                run_interactive_with_session(config, session_id, runtime).await?;
             }
         }
 
@@ -614,11 +811,7 @@ async fn run_cli() -> Result<()> {
 
         Some(Commands::Mcp { action }) => match action {
             None | Some(McpAction::List) => management::print_mcp_servers().await?,
-            Some(McpAction::Doctor) => {
-                if !management::print_doctor().await? {
-                    std::process::exit(1);
-                }
-            }
+            Some(McpAction::Doctor) => management::print_mcp_config_summary().await?,
             Some(McpAction::Enable { server_id }) => {
                 management::set_mcp_server_enabled(&server_id, true).await?;
             }
@@ -630,12 +823,60 @@ async fn run_cli() -> Result<()> {
             }
         },
 
+        Some(Commands::Plugins { action }) => match action {
+            None | Some(PluginAction::List) => management::print_plugins().await?,
+            Some(PluginAction::ApproveSource { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::ApproveSource,
+                )
+                .await?;
+            }
+            Some(PluginAction::Deny { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::Denied,
+                )
+                .await?;
+            }
+            Some(PluginAction::Revoke { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::Revoked,
+                )
+                .await?;
+            }
+            Some(PluginAction::Activate {
+                package_id,
+                confirm,
+            }) => {
+                management::activate_plugin(&package_id, confirm.as_deref()).await?;
+            }
+            Some(PluginAction::Deactivate { package_id }) => {
+                management::deactivate_plugin(&package_id).await?;
+            }
+        },
+
         Some(Commands::Usage { session_id }) => {
             management::print_usage_report(session_id.as_deref()).await?;
         }
 
         Some(Commands::Doctor) => {
-            if !management::print_doctor().await? {
+            use std::sync::Arc;
+
+            use runtime::approval::{CliApprovalPolicy, CliPermissionService};
+            use runtime::services::{CliClock, CliRuntimeEventSink, CliRuntimeServicesProvider};
+
+            let workspace = std::env::current_dir()?;
+            let services = CliRuntimeServicesProvider::new(
+                &workspace,
+                Arc::new(CliPermissionService::new(CliApprovalPolicy::Reject)),
+                Arc::new(CliRuntimeEventSink::new(16)),
+                Arc::new(CliClock),
+            )?
+            .build()?;
+            let product_runtime = product_assembly::assemble_cli_runtime_parts(services)?;
+            if !management::print_doctor(&product_runtime).await? {
                 std::process::exit(1);
             }
         }
@@ -647,6 +888,13 @@ async fn run_cli() -> Result<()> {
         Some(Commands::Health) => {
             root_handlers::handle_health_command()?;
         }
+
+        Some(Commands::Daemon { action }) => match action {
+            DaemonAction::Run => daemon::run_daemon().await?,
+            DaemonAction::Install => daemon::install_service()?,
+            DaemonAction::Uninstall => daemon::uninstall_service()?,
+            DaemonAction::Status => daemon::print_status()?,
+        },
 
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
@@ -717,28 +965,57 @@ async fn run_cli() -> Result<()> {
     Ok(())
 }
 
-async fn run_interactive_with_session(config: CliConfig, session_id: String) -> Result<()> {
+fn exec_requests_json_output(args: &[std::ffi::OsString]) -> bool {
+    let values = args
+        .iter()
+        .skip(1)
+        .map(|value| value.to_string_lossy())
+        .collect::<Vec<_>>();
+    if !values.iter().any(|value| value == "exec") {
+        return false;
+    }
+
+    values.iter().enumerate().any(|(index, value)| {
+        value == "--output-format=json"
+            || (value == "--output-format"
+                && values.get(index + 1).is_some_and(|format| format == "json"))
+    })
+}
+
+async fn run_interactive_with_session(
+    config: CliConfig,
+    session_id: String,
+    runtime: std::sync::Arc<runtime::CliRuntimeContext>,
+) -> Result<()> {
     let mut terminal = ui::init_terminal()?;
     ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
 
-    let workspace = setup_workspace();
-    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
-    let workspace_path = workspace
-        .clone()
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("."));
-    let session = agentic_system
-        .coordinator
-        .restore_session(&workspace_path, &session_id)
-        .await?;
+    let workspace = Some(runtime.workspace_root().to_string_lossy().to_string());
+    let sessions = runtime
+        .agent_runtime()
+        .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
+            workspace_path: runtime.workspace_root().to_string_lossy().to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+    let agent_type = sessions
+        .iter()
+        .find(|session| session.session_id == session_id)
+        .map(|session| session.agent_type.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Session {session_id} was not found in the current workspace: {}",
+                runtime.workspace_root().display()
+            )
+        })?;
 
-    let mut chat_mode = ChatMode::new(config, session.agent_type, workspace, &agentic_system)
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, runtime.clone())
         .with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
     shutdown_mcp_servers().await;
-    restore_tool_confirmation(original_skip_confirmation).await;
     println!("Goodbye!");
 
     run_result?;
@@ -746,6 +1023,11 @@ async fn run_interactive_with_session(config: CliConfig, session_id: String) -> 
 }
 
 fn main() {
+    // Install rustls CryptoProvider before any TLS-capable work (relay WS,
+    // reqwest rustls paths, Feishu wss). Required when both ring and aws-lc-rs
+    // are linked: rustls cannot auto-select a provider.
+    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+
     let worker = std::thread::Builder::new()
         .stack_size(16 * 1024 * 1024)
         .spawn(|| {
@@ -760,6 +1042,9 @@ fn main() {
     match worker.join() {
         Ok(Ok(())) => {}
         Ok(Err(err)) => {
+            if let Some(reported) = err.downcast_ref::<ReportedCliError>() {
+                std::process::exit(reported.exit_code);
+            }
             eprintln!("Error: {err}");
             std::process::exit(1);
         }
@@ -767,5 +1052,156 @@ fn main() {
             eprintln!("Error: bitfun-cli worker thread panicked");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod plugin_command_tests {
+    use super::{Cli, Commands, PluginAction};
+    use clap::Parser;
+
+    #[test]
+    fn plugin_commands_parse_list_and_source_review_actions() {
+        let list = Cli::try_parse_from(["bitfun-cli", "plugins"]).expect("parse plugin list");
+        assert!(matches!(
+            list.command,
+            Some(Commands::Plugins { action: None })
+        ));
+
+        let approval =
+            Cli::try_parse_from(["bitfun-cli", "plugins", "approve-source", "acme.demo"])
+                .expect("parse plugin source approval");
+        assert!(matches!(
+            approval.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::ApproveSource { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let deny = Cli::try_parse_from(["bitfun-cli", "plugins", "deny", "acme.demo"])
+            .expect("parse plugin deny");
+        assert!(matches!(
+            deny.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Deny { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let revoke = Cli::try_parse_from(["bitfun-cli", "plugins", "revoke", "acme.demo"])
+            .expect("parse plugin revoke");
+        assert!(matches!(
+            revoke.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Revoke { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let preview = Cli::try_parse_from(["bitfun-cli", "plugins", "activate", "acme.demo"])
+            .expect("parse plugin activation preview");
+        assert!(matches!(
+            preview.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: None,
+                })
+            }) if package_id == "acme.demo"
+        ));
+
+        let confirm = Cli::try_parse_from([
+            "bitfun-cli",
+            "plugins",
+            "activate",
+            "acme.demo",
+            "--confirm",
+            "sha256:previewed",
+        ])
+        .expect("parse confirmed plugin activation");
+        assert!(matches!(
+            confirm.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: Some(content_hash),
+                })
+            }) if package_id == "acme.demo" && content_hash == "sha256:previewed"
+        ));
+
+        let deactivate = Cli::try_parse_from(["bitfun-cli", "plugins", "deactivate", "acme.demo"])
+            .expect("parse plugin deactivation");
+        assert!(matches!(
+            deactivate.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Deactivate { package_id })
+            }) if package_id == "acme.demo"
+        ));
+    }
+}
+
+#[cfg(test)]
+mod bootstrap_profile_tests {
+    use super::{exec_requests_json_output, BootstrapProfile, SessionAction};
+
+    #[test]
+    fn profiles_start_only_their_requested_background_services() {
+        let cases = [
+            (BootstrapProfile::Interactive, true, true),
+            (BootstrapProfile::Execution, false, true),
+            (BootstrapProfile::Management, false, false),
+        ];
+
+        for (profile, starts_peer_host, starts_mcp) in cases {
+            assert_eq!(profile.starts_peer_host(), starts_peer_host);
+            assert_eq!(profile.starts_mcp(), starts_mcp);
+        }
+    }
+
+    #[test]
+    fn session_resume_and_continue_use_interactive_bootstrap() {
+        let resume = SessionAction::Resume {
+            id: "session-1".to_string(),
+        };
+
+        assert_eq!(resume.bootstrap_profile(), BootstrapProfile::Interactive);
+        assert_eq!(
+            SessionAction::Continue.bootstrap_profile(),
+            BootstrapProfile::Interactive
+        );
+    }
+
+    #[test]
+    fn session_management_actions_use_management_bootstrap() {
+        let actions = [
+            SessionAction::List,
+            SessionAction::Show {
+                id: "session-1".to_string(),
+            },
+            SessionAction::Delete {
+                id: "session-1".to_string(),
+            },
+            SessionAction::Fork {
+                id: "session-1".to_string(),
+                id_only: false,
+            },
+        ];
+
+        for action in actions {
+            assert_eq!(action.bootstrap_profile(), BootstrapProfile::Management);
+        }
+    }
+
+    #[test]
+    fn json_exec_parse_failures_are_detected_before_clap_exits() {
+        let args = [
+            "bitfun",
+            "exec",
+            "task",
+            "--output-format",
+            "json",
+            "--unknown-option",
+        ]
+        .map(std::ffi::OsString::from);
+
+        assert!(exec_requests_json_output(&args));
     }
 }

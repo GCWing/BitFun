@@ -13,6 +13,10 @@ import { WIDGET_IFRAME_FALLBACK_COLOR } from '@/shared/theme/themeBoundaryFallba
 import { readWidgetThemePayload } from '@/tools/generative-widget/themePayload';
 import { exportCanvasHtml } from './canvasHtmlExportService';
 import { buildReactCanvasHtmlResult } from './reactRuntime';
+import {
+  isPeerDeviceModeActive,
+  PEER_MODE_CANVAS_POLL_MS,
+} from '@/infrastructure/peer-device/peerModeFlag';
 import './BitfunCanvasPanel.scss';
 
 const log = createLogger('BitfunCanvasPanel');
@@ -251,11 +255,12 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   const reportedRuntimeErrorsRef = useRef(new Set<string>());
   const autoRepairRuntimeErrorsRef = useRef(new Set<string>());
   const loadedCanvasSignatureRef = useRef<string | null>(null);
+  const injectedFrameKeyRef = useRef<string | null>(null);
   const [sourceVisible, setSourceVisible] = useState(false);
   const [designMode, setDesignMode] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
   const [loadedCanvas, setLoadedCanvas] = useState<CanvasSnapshotValue | null>(null);
-  const [frameSrc, setFrameSrc] = useState<string | undefined>();
+  const [frameReadyKey, setFrameReadyKey] = useState<string | null>(null);
   const resolvedHtml = loadedCanvas?.compiledPayload?.html || html;
   const resolvedSource = loadedCanvas?.source?.source || source;
   const resolvedStatus = loadedCanvas?.artifact?.status || status;
@@ -268,6 +273,8 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   const renderedHtml = renderedCanvas.html;
   const hasHtml = typeof renderedHtml === 'string' && renderedHtml.trim().length > 0;
   const renderedHtmlKey = `${renderedCanvas.runtime}:${renderedCanvas.revision ?? ''}:${renderedHtml?.length ?? 0}`;
+  const frameDocumentKey = `${artifactReference ?? 'inline'}:${renderedHtmlKey}`;
+  const isFrameReady = frameReadyKey === frameDocumentKey;
   const sourcePreview = useMemo(() => {
     if (!resolvedSource) return '';
     return resolvedSource.length > 5000 ? `${resolvedSource.slice(0, 5000)}\n...` : resolvedSource;
@@ -306,19 +313,6 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     resolvedHtml,
     resolvedStatus,
   ]);
-
-  useEffect(() => {
-    if (!hasHtml || !renderedHtml) {
-      setFrameSrc(undefined);
-      return undefined;
-    }
-
-    const url = URL.createObjectURL(new Blob([renderedHtml], { type: 'text/html;charset=utf-8' }));
-    setFrameSrc(url);
-    return () => {
-      URL.revokeObjectURL(url);
-    };
-  }, [hasHtml, renderedHtml, renderedHtmlKey]);
 
   const postToIframe = useCallback((message: Record<string, unknown>) => {
     const win = iframeRef.current?.contentWindow;
@@ -570,7 +564,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
 
     const interval = window.setInterval(() => {
       void refresh('poll');
-    }, 2000);
+    }, isPeerDeviceModeActive() ? PEER_MODE_CANVAS_POLL_MS : 2000);
     const handleFocus = () => {
       void refresh('focus');
     };
@@ -690,7 +684,11 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   ]);
 
   useLayoutEffect(() => {
-    if (!hasHtml || !artifactReference || !frameSrc) return;
+    if (!hasHtml || !artifactReference) {
+      setFrameReadyKey(null);
+      injectedFrameKeyRef.current = null;
+      return;
+    }
     iframeStatusRef.current = {
       bootStarted: false,
       moduleStarted: false,
@@ -866,6 +864,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     };
 
     window.addEventListener('message', handleMessage);
+    setFrameReadyKey(frameDocumentKey);
     const timer = window.setTimeout(() => {
       const status = iframeStatusRef.current;
       if (renderedCanvas.runtime === 'react' && !status.moduleStarted && !status.ready && !status.runtimeError) {
@@ -874,7 +873,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           runtime: renderedCanvas.runtime,
           revision: renderedCanvas.revision,
           renderedHtmlLength: renderedHtml?.length ?? 0,
-          frameTransport: 'blob',
+          frameTransport: 'document-write',
           bootStarted: status.bootStarted,
         });
       }
@@ -886,9 +885,9 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   }, [
     artifactReference,
     designMode,
+    frameDocumentKey,
     handleCanvasAction,
     hasHtml,
-    frameSrc,
     initializeIframe,
     loadState,
     postDesignModeToIframe,
@@ -903,6 +902,53 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     resolvedTitle,
     remoteSshHost,
     workspacePath,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!isFrameReady || !renderedHtml) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const doc = iframe.contentDocument;
+    if (!doc) {
+      log.warn('Canvas iframe document is unavailable for HTML injection', {
+        artifactReference,
+        runtime: renderedCanvas.runtime,
+        revision: renderedCanvas.revision,
+        frameTransport: 'document-write',
+      });
+      return;
+    }
+
+    try {
+      injectedFrameKeyRef.current = frameDocumentKey;
+      doc.open();
+      doc.write(renderedHtml);
+      doc.close();
+      log.info('Canvas iframe HTML written', {
+        artifactReference,
+        runtime: renderedCanvas.runtime,
+        revision: renderedCanvas.revision,
+        renderedHtmlLength: renderedHtml.length,
+        frameTransport: 'document-write',
+      });
+    } catch (error) {
+      injectedFrameKeyRef.current = null;
+      log.error('Failed to write Canvas iframe HTML', {
+        artifactReference,
+        runtime: renderedCanvas.runtime,
+        revision: renderedCanvas.revision,
+        frameTransport: 'document-write',
+        error,
+      });
+    }
+  }, [
+    artifactReference,
+    frameDocumentKey,
+    isFrameReady,
+    renderedCanvas.revision,
+    renderedCanvas.runtime,
+    renderedHtml,
   ]);
 
   useEffect(() => {
@@ -986,23 +1032,27 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           {exportingHtml ? <Loader2 size={15} className="bitfun-canvas-panel__toolbar-icon--spin" /> : <Download size={15} />}
         </button>
       </div>
-      <iframe
-        ref={iframeRef}
-        className="bitfun-canvas-panel__frame"
-        title={resolvedTitle}
-        src={frameSrc}
-        sandbox="allow-scripts"
-        data-artifact-reference={artifactReference}
-        onLoad={() => {
-          log.info('Canvas iframe loaded', {
-            artifactReference,
-            runtime: renderedCanvas.runtime,
-            revision: renderedCanvas.revision,
-            frameTransport: 'blob',
-          });
-          void initializeIframe('load');
-        }}
-      />
+      {isFrameReady && (
+        <iframe
+          key={frameDocumentKey}
+          ref={iframeRef}
+          className="bitfun-canvas-panel__frame"
+          title={resolvedTitle}
+          src="about:blank"
+          sandbox="allow-scripts allow-same-origin"
+          data-artifact-reference={artifactReference}
+          onLoad={() => {
+            if (injectedFrameKeyRef.current !== frameDocumentKey) return;
+            log.info('Canvas iframe loaded', {
+              artifactReference,
+              runtime: renderedCanvas.runtime,
+              revision: renderedCanvas.revision,
+              frameTransport: 'document-write',
+            });
+            void initializeIframe('load');
+          }}
+        />
+      )}
       {sourceVisible && (
         <div className="bitfun-canvas-panel__source-overlay" role="dialog" aria-modal="true">
           <div className="bitfun-canvas-panel__source-dialog">

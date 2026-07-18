@@ -2,6 +2,13 @@ import { escapeHtml, extractHtmlSlideBackground, getActiveIndex, getActiveSlide,
 import { translate as t, getLocale } from './i18n.js';
 import { refreshFlatSelect } from './flat-select.js';
 import { DEFAULT_STYLE_PRESET } from './style-presets.js';
+import {
+  elementModelElementHtml,
+  resolveElementColor,
+} from './element-model-html.js';
+import { sanitizeSlideMarkup } from './sanitize-slide-markup.js';
+
+export { resolveElementColor as resolveColor };
 
 export function applyI18n() {
   document.documentElement.lang = getLocale();
@@ -174,6 +181,33 @@ const HTML_SLIDE_PREVIEW_HOST_CLASS = 'html-slide-preview-host';
 const HTML_SLIDE_PREVIEW_SCALER_CLASS = 'html-slide-preview-scaler';
 const DEFAULT_SLIDE_DESIGN = { width: 1280, height: 720 };
 
+function writeSandboxIframeDocument(frame, sanitizedHtml) {
+  const doc = frame.contentDocument;
+  if (!doc) return false;
+  doc.open();
+  doc.write(sanitizedHtml);
+  doc.close();
+  return true;
+}
+
+function mountSandboxIframeHtml(frame, html, onMounted) {
+  const sanitizedHtml = sanitizeSlideMarkup(normalizeSlideDocument(html));
+  frame.setAttribute('sandbox', 'allow-same-origin');
+  frame.srcdoc = sanitizedHtml;
+  frame.src = 'about:blank';
+
+  const mount = () => {
+    if (!writeSandboxIframeDocument(frame, sanitizedHtml)) return false;
+    onMounted?.();
+    return true;
+  };
+
+  if (mount()) return;
+  frame.addEventListener('load', () => {
+    mount();
+  }, { once: true });
+}
+
 /** Parse author slide canvas from inline CSS (960pt×540pt → 1280×720px). */
 export function parseSlideDesignSizeFromHtml(html) {
   const text = String(html || '');
@@ -343,22 +377,6 @@ export function fitHtmlSlidePreviewSurface(host) {
 const SLIDE_SHADOW_ROOT_CLASS = 'ppt-slide-shadow-root';
 const SLIDE_SHADOW_BODY_CLASS = 'ppt-slide-shadow-body';
 
-/** Strip active content (scripts, inline handlers, javascript: URLs) from a parsed slide document. */
-function sanitizeParsedSlideDocument(parsed) {
-  parsed.querySelectorAll('script, iframe, object, embed, meta[http-equiv="refresh" i]').forEach((node) => node.remove());
-  parsed.querySelectorAll('*').forEach((node) => {
-    for (const attr of [...node.attributes]) {
-      const name = attr.name.toLowerCase();
-      if (name.startsWith('on')) {
-        node.removeAttribute(attr.name);
-      } else if ((name === 'href' || name === 'src' || name === 'xlink:href') && /^\s*javascript:/i.test(attr.value)) {
-        node.removeAttribute(attr.name);
-      }
-    }
-  });
-  return parsed;
-}
-
 /**
  * Build the in-document editable slide stage. The PPT Live app document
  * itself lives in a sandboxed host iframe without `allow-same-origin`
@@ -376,9 +394,8 @@ function createEditableSlideStage(html, frameClass) {
   const designW = Number(stage.dataset.designW);
   const designH = Number(stage.dataset.designH);
 
-  const parsed = sanitizeParsedSlideDocument(
-    new DOMParser().parseFromString(normalizeSlideDocument(html), 'text/html'),
-  );
+  const sanitizedMarkup = sanitizeSlideMarkup(normalizeSlideDocument(html));
+  const parsed = new DOMParser().parseFromString(sanitizedMarkup, 'text/html');
 
   const shadow = stage.attachShadow({ mode: 'open' });
   const rootEl = document.createElement('div');
@@ -434,7 +451,7 @@ function createEditableSlideStage(html, frameClass) {
 
   rootEl.appendChild(bodyEl);
   shadow.appendChild(rootEl);
-  stage._pptLiveSourceHtml = String(html || '');
+  stage._pptLiveSourceHtml = sanitizedMarkup;
   return stage;
 }
 
@@ -458,16 +475,12 @@ function createHtmlSlidePreviewSurface({ hostClass = '', frameClass, html, onRea
 
   const frame = document.createElement('iframe');
   frame.className = frameClass;
-  frame.setAttribute('sandbox', 'allow-same-origin');
   frame.setAttribute('loading', 'lazy');
   stampFrameDesignSize(frame, html);
-  frame.srcdoc = normalizeSlideDocument(html);
-
-  const runFit = () => {
+  mountSandboxIframeHtml(frame, html, () => {
     fitHtmlSlidePreviewSurface(host);
     onReady?.(frame, host);
-  };
-  frame.addEventListener('load', runFit, { once: true });
+  });
 
   scaler.appendChild(frame);
   host.appendChild(scaler);
@@ -888,6 +901,7 @@ export function renderThumbs(state, handlers) {
       const slideNode = document.createElement('div');
       slideNode.className = 'thumb-preview-slide';
       slideNode.innerHTML = slideHtml(slide);
+      hydrateHtmlSlideIframes(slideNode);
       preview.appendChild(slideNode);
     }
     button.appendChild(preview);
@@ -1103,6 +1117,7 @@ export function renderSlideCanvas(state, handlers) {
   }
   canvas.classList.remove('is-html-slide');
   canvas.innerHTML = slide ? slideHtml(slide, { selectedElementId: state.selectedElementId, editable: true }) : '';
+  hydrateHtmlSlideIframes(canvas);
   canvas.querySelectorAll('.slide-element').forEach((node) => {
     const elementId = node.dataset.elementId;
     node.addEventListener('click', (event) => {
@@ -1227,9 +1242,29 @@ function bindSlideFields(panel, handlers) {
   });
 }
 
+const pendingSlideHtmlMounts = new Map();
+let pendingSlideHtmlMountSeq = 0;
+
+export function hydrateHtmlSlideIframes(root = document) {
+  const scope = root?.querySelectorAll ? root : document;
+  scope.querySelectorAll('iframe.html-slide-frame[data-ppt-live-mount]').forEach((frame) => {
+    const mountId = frame.getAttribute('data-ppt-live-mount');
+    if (!mountId) return;
+    const html = pendingSlideHtmlMounts.get(mountId);
+    if (!html) return;
+    pendingSlideHtmlMounts.delete(mountId);
+    frame.removeAttribute('data-ppt-live-mount');
+    mountSandboxIframeHtml(frame, html, () => {
+      fitHtmlSlideFrame(frame);
+    });
+  });
+}
+
 export function slideHtml(slide, options = {}) {
   if (slide?.html) {
-    return `<iframe class="html-slide-frame" sandbox="allow-same-origin" srcdoc="${escapeHtml(normalizeSlideDocument(slide.html))}"></iframe>`;
+    const mountId = `slide-${++pendingSlideHtmlMountSeq}`;
+    pendingSlideHtmlMounts.set(mountId, sanitizeSlideMarkup(normalizeSlideDocument(slide.html)));
+    return `<iframe class="html-slide-frame" sandbox="allow-same-origin" src="about:blank" data-ppt-live-mount="${mountId}"></iframe>`;
   }
   const editable = Boolean(options.editable);
   const selectedId = options.selectedElementId || '';
@@ -1245,7 +1280,12 @@ export function slideHtml(slide, options = {}) {
     ${slide.kicker ? `<div class="slide-kicker"><span></span><b>${escapeHtml(slide.kicker)}</b></div>` : ''}
     ${slide.proofObject ? `<div class="slide-proof-tag">${escapeHtml(slide.proofObject)}</div>` : ''}
     ${slideQualityBadge(slide)}
-    ${(slide.elements || []).map((element) => elementHtml(element, slide.theme, editable, selectedId)).join('')}
+    ${(slide.elements || []).map((element) => elementModelElementHtml(element, slide.theme, {
+      mode: 'editor',
+      editable,
+      selectedId,
+      mediaPlaceholder: t('mediaPlaceholder'),
+    })).join('')}
     ${slide.sourceNote ? `<div class="slide-source-note">${escapeHtml(slide.sourceNote)}</div>` : ''}
   </div>`;
 }
@@ -1353,68 +1393,6 @@ export function normalizeSlideDocument(html) {
   if (!source) return '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body></body></html>';
   if (/<!doctype|<html[\s>]/i.test(source)) return source;
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${source}</body></html>`;
-}
-
-function elementHtml(element, theme, editable, selectedId) {
-  const selected = editable && selectedId === element.id;
-  const style = [
-    `left:${element.x}%`,
-    `top:${element.y}%`,
-    `width:${element.w}%`,
-    `height:${element.h}%`,
-    `font-size:${fontSizeCss(element.style.fontSize)}`,
-    `font-weight:${element.style.fontWeight}`,
-    `color:${resolveColor(element.style.color, theme)}`,
-    `text-align:${element.style.align || 'left'}`,
-    `background:${resolveColor(element.style.background, theme)}`,
-    `opacity:${element.style.opacity}`,
-    `border-radius:${element.style.borderRadius}px`,
-  ].join(';');
-  let content = '';
-  if (element.type === 'list') {
-    content = `<ul>${(element.items || []).map((item, index) => editable
-      ? `<li data-edit-list="${escapeHtml(element.id)}" data-item-index="${index}" contenteditable="true" spellcheck="false">${escapeHtml(item)}</li>`
-      : `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
-  } else if (element.type === 'metric') {
-    content = `<strong>${escapeHtml(element.text)}</strong><span>${escapeHtml(element.label)}</span>`;
-  } else if (element.type === 'chart') {
-    const max = Math.max(1, ...(element.data || []).map((point) => Number(point.value) || 0));
-    content = `<b>${escapeHtml(element.text)}</b><div class="chart-bars">${(element.data || []).map((point) => `<span><i style="height:${Math.max(8, (Number(point.value) || 0) / max * 100)}%"></i><em>${escapeHtml(point.label)}</em></span>`).join('')}</div>`;
-  } else if (element.type === 'media') {
-    content = `<span>${escapeHtml(element.text || t('mediaPlaceholder'))}</span>`;
-  } else {
-    content = editable
-      ? `<span class="editable-text" data-edit-text="${escapeHtml(element.id)}" contenteditable="true" spellcheck="false">${escapeHtml(element.text || '')}</span>`
-      : escapeHtml(element.text || '');
-  }
-  return `<div class="slide-element element-${element.type}${selected ? ' is-selected' : ''}" data-element-id="${escapeHtml(element.id)}" data-editable="${editable ? 'true' : 'false'}" style="${style}">${content}${selected ? '<i class="resize-handle"></i>' : ''}</div>`;
-}
-
-export function resolveColor(value, theme) {
-  if (!value || value === 'transparent') return 'transparent';
-  if (value === 'ink') return theme.ink;
-  if (value === 'muted') return theme.muted;
-  if (value === 'primary') return theme.primary;
-  if (value === 'accent') return theme.accent;
-  if (value === 'panel') return theme.panel || '#ffffff';
-  if (value === 'soft') return colorMix(theme.primary, 0.1);
-  if (value === 'background') return theme.background;
-  return value;
-}
-
-function colorMix(hex, alpha) {
-  const raw = String(hex || '#0f766e').replace('#', '');
-  const int = parseInt(raw.length === 3 ? raw.split('').map((x) => x + x).join('') : raw, 16);
-  const r = (int >> 16) & 255;
-  const g = (int >> 8) & 255;
-  const b = int & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function fontSizeCss(value) {
-  const size = Math.max(8, Number(value) || 24);
-  const cqw = Math.round((size / 10.2) * 1000) / 1000;
-  return `clamp(8px, ${cqw}cqw, ${size}px)`;
 }
 
 function byId(id) {

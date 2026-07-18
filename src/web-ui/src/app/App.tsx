@@ -25,6 +25,7 @@ import {
   isStartupOverlayPresent,
 } from './startup/startupOverlay';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
+import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
 
 const log = createLogger('App');
 
@@ -725,7 +726,7 @@ function App() {
       try {
         const { configAPI, workspaceAPI } = await import('@/infrastructure/api');
         const runtimeInfo = await configAPI.getRuntimeLoggingInfo();
-        if (cancelled || !runtimeInfo.previousUnexpectedExit?.detected) {
+        if (cancelled || !runtimeInfo.previousUnexpectedExit?.notifyOnStartup) {
           return;
         }
         const recoveryKey = `bitfun:unexpected-exit-notice:${runtimeInfo.previousUnexpectedExit.sessionLogDir || 'unknown'}`;
@@ -802,6 +803,11 @@ function App() {
 
             {/* Announcement / feature-demo / tips system */}
             <AnnouncementProvider />
+
+            {/* AskUserQuestion waiting-state aria-live announcer.
+                Mounted here (inside ToolbarModeProvider, outside LazyAppLayout)
+                so it persists across both normal and Toolbar Mode. */}
+            <AskUserAnnouncer />
 
           </ToolbarModeProvider>
         </SSHRemoteProvider>

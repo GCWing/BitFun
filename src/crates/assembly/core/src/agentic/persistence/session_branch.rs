@@ -12,6 +12,8 @@ impl PersistenceManager {
         workspace_path: &Path,
         request: &SessionBranchRequest,
     ) -> BitFunResult<SessionBranchResult> {
+        bitfun_core_types::validate_session_id(&request.source_session_id)
+            .map_err(BitFunError::Validation)?;
         let source_session = self
             .load_session(workspace_path, &request.source_session_id)
             .await?;
@@ -116,6 +118,14 @@ impl PersistenceManager {
             for turn in &branched_turns {
                 self.save_dialog_turn(workspace_path, turn).await?;
             }
+
+            self.copy_compression_transcripts_through(
+                workspace_path,
+                &request.source_session_id,
+                &target_session_id,
+                source_turn_index,
+            )
+            .await?;
 
             if let Some(cache) = source_prompt_cache.as_ref() {
                 self.save_prompt_cache(workspace_path, &target_session_id, cache)
@@ -267,6 +277,29 @@ mod tests {
             .await
             .expect("turn 1 should save");
 
+        let kept_transcript = manager
+            .create_compression_transcript(
+                workspace.path(),
+                &source_session.session_id,
+                0,
+                "compression-kept",
+                "auto",
+            )
+            .await
+            .expect("kept transcript should create")
+            .expect("kept transcript should exist");
+        let omitted_transcript = manager
+            .create_compression_transcript(
+                workspace.path(),
+                &source_session.session_id,
+                1,
+                "compression-omitted",
+                "auto",
+            )
+            .await
+            .expect("omitted transcript should create")
+            .expect("omitted transcript should exist");
+
         manager
             .save_turn_context_snapshot(
                 workspace.path(),
@@ -360,6 +393,37 @@ mod tests {
         assert_eq!(branched_turns[0].turn_id, "turn-0");
         assert_eq!(branched_turns[0].turn_index, 0);
         assert_eq!(branched_turns[0].session_id, result.session_id);
+
+        let target_transcript_dir =
+            manager.compression_transcripts_dir(workspace.path(), &result.session_id);
+        let kept_name = kept_transcript
+            .transcript_path
+            .file_name()
+            .expect("kept file name")
+            .to_owned();
+        let kept_meta_name = kept_transcript
+            .meta_path
+            .file_name()
+            .expect("kept metadata file name")
+            .to_owned();
+        assert!(target_transcript_dir.join(kept_name).exists());
+        assert!(target_transcript_dir.join(kept_meta_name).exists());
+        assert!(!target_transcript_dir
+            .join(
+                omitted_transcript
+                    .transcript_path
+                    .file_name()
+                    .expect("omitted file name")
+            )
+            .exists());
+        assert!(!target_transcript_dir
+            .join(
+                omitted_transcript
+                    .meta_path
+                    .file_name()
+                    .expect("omitted metadata file name")
+            )
+            .exists());
 
         let branched_snapshot = manager
             .load_turn_context_snapshot(workspace.path(), &result.session_id, 0)

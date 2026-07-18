@@ -583,7 +583,7 @@ impl fmt::Display for ProductAssemblyError {
             } => {
                 write!(
                     f,
-                    "delivery profile {profile} does not support plugin runtime host binding before host gates: {availability:?}"
+                    "delivery profile {profile} does not support executable P0 plugin runtime host binding: {availability:?}"
                 )
             }
         }
@@ -621,12 +621,19 @@ impl ProductAssembler {
             }
         })?;
 
-        let plugin_runtime = input.plugin_runtime.unwrap_or_else(|| {
-            PluginRuntimeBinding::disabled(PluginRuntimeUnavailableReason::NotBuilt)
-        });
+        let plugin_runtime = input
+            .plugin_runtime
+            .unwrap_or_else(|| default_plugin_runtime_binding_for_profile(input.profile));
         let plugin_runtime_availability = plugin_runtime.availability();
-        if matches!(plugin_runtime, PluginRuntimeBinding::Client(_))
-            || plugin_runtime_availability.is_executable()
+        let is_plugin_client = plugin_runtime.is_client_binding();
+        if is_plugin_client && !plugin_runtime_availability.is_executable() {
+            return Err(ProductAssemblyError::UnsupportedPluginRuntime {
+                profile: input.profile,
+                availability: plugin_runtime_availability,
+            });
+        }
+        if (is_plugin_client || plugin_runtime_availability.is_executable())
+            && !delivery_profile_supports_p0_plugin_host(input.profile)
         {
             return Err(ProductAssemblyError::UnsupportedPluginRuntime {
                 profile: input.profile,
@@ -646,6 +653,29 @@ impl ProductAssembler {
             service_availability,
             missing_service_requirements,
         })
+    }
+}
+
+const fn delivery_profile_supports_p0_plugin_host(profile: DeliveryProfile) -> bool {
+    matches!(
+        profile,
+        DeliveryProfile::ProductFull | DeliveryProfile::Desktop | DeliveryProfile::Cli
+    )
+}
+
+fn default_plugin_runtime_binding_for_profile(profile: DeliveryProfile) -> PluginRuntimeBinding {
+    match product_extension_capabilities_for_profile(profile).plugin_runtime() {
+        PluginRuntimeAvailability::Disabled { reason }
+        | PluginRuntimeAvailability::Unavailable { reason } => {
+            PluginRuntimeBinding::disabled(reason)
+        }
+        PluginRuntimeAvailability::ProjectionOnly { reason } => {
+            PluginRuntimeBinding::projection_only(reason)
+        }
+        PluginRuntimeAvailability::Available => {
+            PluginRuntimeBinding::disabled(PluginRuntimeUnavailableReason::NotBuilt)
+        }
+        _ => PluginRuntimeBinding::disabled(PluginRuntimeUnavailableReason::NotBuilt),
     }
 }
 
@@ -880,16 +910,15 @@ pub fn product_extension_capabilities_for_profile(
     profile: DeliveryProfile,
 ) -> ProductExtensionCapabilitySet {
     let plugin_runtime_reason = match profile {
-        DeliveryProfile::ProductFull
-        | DeliveryProfile::Desktop
-        | DeliveryProfile::Cli
-        | DeliveryProfile::Server
+        DeliveryProfile::ProductFull | DeliveryProfile::Desktop | DeliveryProfile::Cli => {
+            PluginRuntimeUnavailableReason::NotBuilt
+        }
+        DeliveryProfile::Server
         | DeliveryProfile::Remote
         | DeliveryProfile::Acp
-        | DeliveryProfile::Sdk => PluginRuntimeUnavailableReason::NotBuilt,
-        DeliveryProfile::Web | DeliveryProfile::MobileWeb => {
-            PluginRuntimeUnavailableReason::UnsupportedProfile
-        }
+        | DeliveryProfile::Web
+        | DeliveryProfile::MobileWeb
+        | DeliveryProfile::Sdk => PluginRuntimeUnavailableReason::UnsupportedProfile,
     };
 
     ProductExtensionCapabilitySet::new(PluginRuntimeAvailability::disabled(plugin_runtime_reason))

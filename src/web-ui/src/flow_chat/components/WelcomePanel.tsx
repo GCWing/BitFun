@@ -169,7 +169,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     } finally {
       setIsSelectingWorkspace(false);
     }
-  }, [openWorkspace]);
+  }, [openWorkspace, tCommon]);
 
   const handleCreateWorkspace = useCallback(() => {
     setWorkspaceDropdownOpen(false);

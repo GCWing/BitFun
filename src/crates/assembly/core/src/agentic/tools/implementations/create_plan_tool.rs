@@ -90,7 +90,7 @@ Additional guidelines:
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {
@@ -311,10 +311,10 @@ mod tests {
     use crate::agentic::tools::framework::{Tool, ToolExposure};
 
     #[test]
-    fn create_plan_is_collapsed_and_plan_mode_specific() {
+    fn create_plan_is_deferred_and_plan_mode_specific() {
         let tool = CreatePlanTool::new();
 
-        assert_eq!(tool.default_exposure(), ToolExposure::Collapsed);
+        assert_eq!(tool.default_exposure(), ToolExposure::Deferred);
         assert_eq!(
             tool.short_description(),
             "Create and store a concise implementation plan; only for Plan mode."

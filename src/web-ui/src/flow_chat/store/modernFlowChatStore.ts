@@ -16,6 +16,7 @@ import {
 } from '../tool-cards/toolCardMetadata';
 import { isCompletedToolInTransientWindow } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
+import { getEffectiveToolName } from '../utils/toolInvocationIdentity';
 import {
   getTurnCompletionNotice,
   type TurnCompletionNotice,
@@ -174,7 +175,7 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   }
   
   const hasCollapsibleTool = round.items.some(item => 
-    item.type === 'tool' && isCollapsibleTool((item as FlowToolItem).toolName)
+    item.type === 'tool' && isCollapsibleTool(getEffectiveToolName(item as FlowToolItem))
   );
   
   const hasAnyTool = round.items.some(item => item.type === 'tool');
@@ -184,7 +185,7 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   
   const allItemsCollapsible = round.items.every(item => {
     if (item.type === 'tool') {
-      return isCollapsibleTool((item as FlowToolItem).toolName);
+      return isCollapsibleTool(getEffectiveToolName(item as FlowToolItem));
     }
     return item.type === 'text' || item.type === 'thinking';
   });
@@ -264,7 +265,7 @@ function computeRoundStats(round: ModelRound): ExploreGroupStats {
   
   for (const item of round.items) {
     if (item.type === 'tool') {
-      const toolName = (item as FlowToolItem).toolName;
+      const toolName = getEffectiveToolName(item as FlowToolItem);
       if (READ_TOOL_NAMES.has(toolName)) readCount++;
       else if (SEARCH_TOOL_NAMES.has(toolName)) searchCount++;
       else if (COMMAND_TOOL_NAMES.has(toolName)) commandCount++;

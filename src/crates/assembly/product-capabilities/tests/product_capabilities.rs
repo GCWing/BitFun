@@ -32,8 +32,18 @@ impl PluginRuntimeClient for AvailablePluginRuntimeClient {
         envelope: PluginDispatchEnvelope,
     ) -> PortResult<PluginResponseEnvelope> {
         Ok(PluginResponseEnvelope {
-            envelope_id: envelope.envelope_id,
-            accepted: true,
+            envelope_version: envelope.envelope_version,
+            request_event_id: envelope.event_id,
+            project_domain_id: envelope.project_domain_id,
+            workspace_id: envelope.workspace_id,
+            adapter_id: "test-plugin-runtime".to_string(),
+            plugin_id: Some(envelope.source.plugin_id),
+            completed_at_ms: 0,
+            effects: Vec::new(),
+            diagnostics: Vec::new(),
+            quarantine: None,
+            plugin_statuses: Vec::new(),
+            observed_epochs: envelope.epochs,
         })
     }
 }
@@ -53,8 +63,18 @@ impl PluginRuntimeClient for MisreportedPluginRuntimeClient {
         envelope: PluginDispatchEnvelope,
     ) -> PortResult<PluginResponseEnvelope> {
         Ok(PluginResponseEnvelope {
-            envelope_id: envelope.envelope_id,
-            accepted: true,
+            envelope_version: envelope.envelope_version,
+            request_event_id: envelope.event_id,
+            project_domain_id: envelope.project_domain_id,
+            workspace_id: envelope.workspace_id,
+            adapter_id: "test-plugin-runtime".to_string(),
+            plugin_id: Some(envelope.source.plugin_id),
+            completed_at_ms: 0,
+            effects: Vec::new(),
+            diagnostics: Vec::new(),
+            quarantine: None,
+            plugin_statuses: Vec::new(),
+            observed_epochs: envelope.epochs,
         })
     }
 }
@@ -404,15 +424,14 @@ fn product_assembly_plan_follows_core_dependency_matrix() {
 }
 
 #[test]
-fn product_assembly_plan_keeps_plugin_runtime_disabled_until_host_exists() {
+fn product_assembly_plan_keeps_plugin_runtime_disabled_until_explicit_host_binding() {
     for profile in DeliveryProfile::all_current_product_profiles() {
         let extension_capabilities = product_assembly_plan_for_profile(*profile)
             .extension_capabilities()
             .clone();
 
-        assert_eq!(
-            extension_capabilities.plugin_runtime().is_executable(),
-            false,
+        assert!(
+            !extension_capabilities.plugin_runtime().is_executable(),
             "{profile} must not imply executable plugin runtime support"
         );
     }
@@ -609,7 +628,7 @@ fn product_assembler_preserves_explicit_plugin_runtime_binding() {
 }
 
 #[test]
-fn product_assembler_rejects_executable_plugin_runtime_binding() {
+fn product_assembler_rejects_executable_plugin_runtime_binding_for_non_p0_profile() {
     let services = FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
         .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
@@ -620,16 +639,16 @@ fn product_assembler_rejects_executable_plugin_runtime_binding() {
 
     let error = ProductAssembler::new()
         .assemble(
-            ProductAssemblyInput::new(DeliveryProfile::Desktop, services).with_plugin_runtime(
+            ProductAssemblyInput::new(DeliveryProfile::Acp, services).with_plugin_runtime(
                 PluginRuntimeBinding::client(Arc::new(AvailablePluginRuntimeClient)),
             ),
         )
-        .expect_err("executable plugin runtime binding must wait for host-stage gates");
+        .expect_err("ACP must not inherit executable P0 plugin host binding");
 
     assert_eq!(
         error,
         ProductAssemblyError::UnsupportedPluginRuntime {
-            profile: DeliveryProfile::Desktop,
+            profile: DeliveryProfile::Acp,
             availability: PluginRuntimeAvailability::Available
         }
     );

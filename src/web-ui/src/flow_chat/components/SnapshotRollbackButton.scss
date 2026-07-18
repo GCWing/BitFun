@@ -113,7 +113,7 @@
     --border-base: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 82%, var(--color-static-white));
     --color-bg-elevated: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 94%, var(--color-static-white));
     --color-text-secondary: rgb(var(--snapshot-rollback-dark-secondary-rgb));
-    --color-accent-100: var(--card-bg-accent);
+    --color-accent-100: var(--element-bg-soft);
     --snapshot-rollback-error-color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
     --snapshot-rollback-error-bg: color-mix(in srgb, var(--snapshot-rollback-error-color) 10%, transparent);
   }

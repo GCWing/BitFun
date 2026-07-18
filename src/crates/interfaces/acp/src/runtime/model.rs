@@ -4,6 +4,7 @@ use agent_client_protocol::schema::{
     SetSessionModelRequest, SetSessionModelResponse,
 };
 use agent_client_protocol::{Error, Result};
+use bitfun_agent_runtime::sdk::AgentSessionModelUpdateRequest;
 use bitfun_core::agentic::agents::get_agent_registry;
 use bitfun_core::service::config::types::AIConfig;
 use bitfun_core::service::config::{GlobalConfig, GlobalConfigManager};
@@ -73,11 +74,13 @@ impl BitfunAcpRuntime {
 
         let normalized_model_id = normalize_model_selection(model_id).await?;
 
-        self.agentic_system
-            .coordinator
-            .update_session_model(&bitfun_session_id, &normalized_model_id)
+        self.agent_runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: bitfun_session_id,
+                model_id: normalized_model_id.clone(),
+            })
             .await
-            .map_err(Self::internal_error)?;
+            .map_err(|error| Self::internal_error(error.into_message()))?;
 
         if let Some(mut state) = self.sessions.get_mut(session_id) {
             state.model_id = normalized_model_id;
@@ -230,6 +233,17 @@ mod tests {
     use bitfun_core::service::config::types::{AIConfig, AIModelConfig};
 
     #[test]
+    fn acp_session_model_mutation_uses_the_runtime_sdk() {
+        let source = include_str!("model.rs");
+        let runtime_update = ["agent_runtime", "\n            .update_session_model"].concat();
+        let compatibility_update =
+            ["compatibility", "\n            .update_session_model"].concat();
+
+        assert!(source.contains(&runtime_update));
+        assert!(!source.contains(&compatibility_update));
+    }
+
+    #[test]
     fn normalize_session_model_defaults_to_auto() {
         assert_eq!(normalize_session_model_id(None), AUTO_MODEL_ID);
         assert_eq!(normalize_session_model_id(Some("")), AUTO_MODEL_ID);
@@ -249,18 +263,14 @@ mod tests {
     }
 
     #[test]
-    fn current_model_resolves_name_to_model_id() {
+    fn current_model_accepts_enabled_canonical_model_id() {
         let mut ai_config = AIConfig::default();
         ai_config.models.push(AIModelConfig {
             id: "model-a".to_string(),
-            name: "Readable Model".to_string(),
             enabled: true,
             ..Default::default()
         });
 
-        assert_eq!(
-            current_model_id(&ai_config, Some("Readable Model")),
-            "model-a"
-        );
+        assert_eq!(current_model_id(&ai_config, Some("model-a")), "model-a");
     }
 }

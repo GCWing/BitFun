@@ -5,7 +5,10 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { DialogTurnData, SessionRelationship } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 import type { AgentSource } from './CustomAgentAPI';
-import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type {
+  ReviewTargetEvidence,
+  ReviewTeamRunManifest,
+} from '@/shared/services/reviewTeamService';
 
 
 
@@ -32,7 +35,6 @@ export interface SessionConfig {
   safeMode?: boolean;
   maxTurns?: number;
   enableContextCompression?: boolean;
-  compressionThreshold?: number;
   remoteConnectionId?: string;
   remoteSshHost?: string;
 }
@@ -49,6 +51,7 @@ export interface CreateSessionRequest {
   sessionKind?: 'standard' | 'subagent';
   relationship?: SessionRelationship;
   deepReviewRunManifest?: ReviewTeamRunManifest;
+  reviewTargetEvidence?: ReviewTargetEvidence;
   config?: SessionConfig;
 }
 
@@ -67,6 +70,8 @@ export interface StartDialogTurnRequest {
   turnId?: string; 
   agentType: string; 
   workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
   /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */
   imageContexts?: ImageInputContextData[];
   userMessageMetadata?: Record<string, unknown>;
@@ -90,6 +95,8 @@ export interface SessionInfo {
   /** Current/default mode selection for the next dialog turn. */
   sessionName: string;
   agentType: string;
+  /** Current/default model selection for the next dialog turn. */
+  modelName?: string;
   /** Mode of the last surviving user dialog turn in session history. */
   lastUserDialogAgentType?: string;
   /** Mode of the most recent user submission accepted by the runtime. */
@@ -300,6 +307,12 @@ export interface AgenticEvent {
 
 export type DialogTurnStartedEvent = AgenticEvent;
 
+export interface OpenBuiltInBrowserEvent {
+  url: string;
+  title?: string;
+  replaceExisting?: boolean;
+}
+
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
   attemptId?: string;
@@ -317,10 +330,12 @@ export interface ToolEvent extends AgenticEvent {
 }
 
 export interface SubagentSessionLinkedEvent extends AgenticEvent {
+  subagentDialogTurnId?: string;
   parentSessionId: string;
   parentDialogTurnId: string;
   parentToolCallId: string;
   agentType?: string;
+  modelId?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -391,8 +406,10 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   hasToolCalls?: boolean;
   durationMs?: number;
   providerId?: string;
-  modelId?: string;
-  modelAlias?: string;
+  /** Resolved AI model configuration ID. */
+  modelConfigId: string;
+  /** Provider model name sent on the request. */
+  effectiveModelName: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
@@ -406,7 +423,10 @@ export interface ModelRoundStartedEvent extends AgenticEvent {
   roundId: string;
   roundGroupId?: string;
   roundIndex: number;
-  modelId?: string;
+  /** Resolved AI model configuration ID. */
+  modelConfigId: string;
+  /** Provider model name sent on the request. */
+  effectiveModelName: string;
 }
 
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {
@@ -425,7 +445,6 @@ export interface CompressionEvent extends AgenticEvent {
   trigger?: string;                // "auto" | "manual" | "user_message"
   tokensBefore?: number;           
   contextWindow?: number;          
-  threshold?: number;              
   
   compressionCount?: number;       
   tokensAfter?: number;            
@@ -873,8 +892,8 @@ export class AgentAPI {
   }
 
    
-  onModelRoundStarted(callback: (event: AgenticEvent) => void): () => void {
-    return api.listen<AgenticEvent>('agentic://model-round-started', callback);
+  onModelRoundStarted(callback: (event: ModelRoundStartedEvent) => void): () => void {
+    return api.listen<ModelRoundStartedEvent>('agentic://model-round-started', callback);
   }
 
   onModelRoundCompleted(callback: (event: ModelRoundCompletedEvent) => void): () => void {
@@ -963,6 +982,10 @@ export class AgentAPI {
     callback: (event: { sessionId: string; goal?: Record<string, unknown> | null }) => void
   ): () => void {
     return api.listen('agentic://thread-goal-updated', callback);
+  }
+
+  onOpenBuiltInBrowser(callback: (event: OpenBuiltInBrowserEvent) => void): () => void {
+    return api.listen<OpenBuiltInBrowserEvent>('agentic://open-built-in-browser', callback);
   }
 
   onImageAnalysisStarted(callback: (event: ImageAnalysisEvent) => void): () => void {

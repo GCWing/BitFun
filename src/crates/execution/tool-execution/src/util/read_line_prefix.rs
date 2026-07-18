@@ -44,7 +44,7 @@ pub fn all_lines_have_read_prefix(text: &str) -> bool {
         return false;
     }
 
-    text.lines().all(|line| line_has_read_prefix(line))
+    text.lines().all(line_has_read_prefix)
 }
 
 fn line_has_read_prefix(line: &str) -> bool {

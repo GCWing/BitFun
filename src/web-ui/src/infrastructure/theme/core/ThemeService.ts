@@ -32,20 +32,29 @@ const FLOW_CHAT_LINK_COLORS = {
   },
 } as const;
 
+const GIT_COLOR_CONTRACT_KEYS = ['branch', 'branchBg', 'changes', 'added', 'deleted', 'staged'] as const;
+const GIT_COLOR_CONTRACT_KEY_SET = new Set<string>(GIT_COLOR_CONTRACT_KEYS);
+const RETIRED_ACCENT_COLOR_KEYS = ['800'] as const;
+const RETIRED_BACKGROUND_COLOR_KEYS = ['quaternary', 'tooltip'] as const;
+const RETIRED_PURPLE_COLOR_KEYS = ['50', '400', '800'] as const;
+const RETIRED_ELEMENT_BACKGROUND_KEYS = ['elevated'] as const;
+const RETIRED_FONT_WEIGHT_KEYS = ['bold'] as const;
+const RETIRED_COMPONENT_KEYS = ['windowControls'] as const;
+
 const THEME_STATIC_COLORS = {
   white: '#ffffff',
   black: '#000000',
 } as const;
 
-const ACCENT_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800] as const;
-const SECONDARY_ACCENT_STOPS = [50, 100, 200, 400, 500, 600, 800] as const;
+const ACCENT_STOPS = [50, 100, 200, 300, 400, 500, 600, 700] as const;
+const SECONDARY_ACCENT_STOPS = [100, 200, 500, 600] as const;
 const SHADOW_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl'] as const;
 const BLUR_TOKENS = ['subtle', 'base'] as const;
-const RADIUS_TOKENS = ['sm', 'base', 'lg', 'xl', '2xl', 'full'] as const;
-const SPACING_TOKENS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16] as const;
+const RADIUS_TOKENS = ['sm', 'base', 'lg', 'xl'] as const;
+const SPACING_TOKENS = [1, 2, 3, 4, 5, 6, 8] as const;
 const MOTION_DURATION_TOKENS = ['instant', 'fast', 'base', 'slow'] as const;
 const EASING_TOKENS = ['standard', 'decelerate', 'smooth'] as const;
-const FONT_WEIGHT_TOKENS = ['normal', 'medium', 'semibold', 'bold'] as const;
+const FONT_WEIGHT_TOKENS = ['normal', 'medium', 'semibold'] as const;
 const FONT_SIZE_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl'] as const;
 const LINE_HEIGHT_TOKENS = ['tight', 'base', 'relaxed'] as const;
 
@@ -107,17 +116,76 @@ function accentColorToRgbChannels(accent: string): string | null {
   return null;
 }
 
-function colorWithAlpha(color: string, alpha: number): string {
-  const channels = accentColorToRgbChannels(color);
-  if (channels) {
-    return `rgba(${channels.replace(/\s+/g, ', ')}, ${alpha})`;
-  }
-  const percent = `${Math.round(alpha * 1000) / 10}%`;
-  return `color-mix(in srgb, ${color} ${percent}, transparent)`;
-}
-
 function cloneThemeConfig(theme: ThemeConfig): ThemeConfig {
   return JSON.parse(JSON.stringify(theme)) as ThemeConfig;
+}
+
+function hasNonContractGitColorKeys(theme: Partial<ThemeConfig>): boolean {
+  const gitColors = theme.colors?.git as unknown as Record<string, unknown> | undefined;
+  return Boolean(
+    gitColors &&
+    Object.keys(gitColors).some(key => !GIT_COLOR_CONTRACT_KEY_SET.has(key)),
+  );
+}
+
+function hasAnyRecordKey(record: Record<string, unknown> | undefined, keys: readonly string[]): boolean {
+  return Boolean(record && keys.some(key => Object.prototype.hasOwnProperty.call(record, key)));
+}
+
+function hasRetiredThemeAuthoringKeys(theme: Partial<ThemeConfig>): boolean {
+  const accentColors = theme.colors?.accent as unknown as Record<string, unknown> | undefined;
+  const backgroundColors = theme.colors?.background as unknown as Record<string, unknown> | undefined;
+  const purpleColors = theme.colors?.purple as unknown as Record<string, unknown> | undefined;
+  const elementColors = theme.colors?.element as unknown as Record<string, unknown> | undefined;
+  const fontWeights = theme.typography?.weight as unknown as Record<string, unknown> | undefined;
+  const components = theme.components as unknown as Record<string, unknown> | undefined;
+  return (
+    hasAnyRecordKey(accentColors, RETIRED_ACCENT_COLOR_KEYS) ||
+    hasAnyRecordKey(backgroundColors, RETIRED_BACKGROUND_COLOR_KEYS) ||
+    hasAnyRecordKey(purpleColors, RETIRED_PURPLE_COLOR_KEYS) ||
+    hasAnyRecordKey(elementColors, RETIRED_ELEMENT_BACKGROUND_KEYS) ||
+    hasAnyRecordKey(fontWeights, RETIRED_FONT_WEIGHT_KEYS) ||
+    hasAnyRecordKey(components, RETIRED_COMPONENT_KEYS)
+  );
+}
+
+function hasNonContractThemeKeys(theme: Partial<ThemeConfig>): boolean {
+  return hasNonContractGitColorKeys(theme) || hasRetiredThemeAuthoringKeys(theme);
+}
+
+function stripNonContractThemeKeys(theme: ThemeConfig): ThemeConfig {
+  const sanitized = cloneThemeConfig(theme);
+  const gitColors = sanitized.colors?.git as unknown as Record<string, unknown> | undefined;
+  Object.keys(gitColors ?? {}).forEach(key => {
+    if (!GIT_COLOR_CONTRACT_KEY_SET.has(key)) {
+      delete gitColors?.[key];
+    }
+  });
+  const accentColors = sanitized.colors?.accent as unknown as Record<string, unknown> | undefined;
+  RETIRED_ACCENT_COLOR_KEYS.forEach(key => {
+    delete accentColors?.[key];
+  });
+  const backgroundColors = sanitized.colors?.background as unknown as Record<string, unknown> | undefined;
+  RETIRED_BACKGROUND_COLOR_KEYS.forEach(key => {
+    delete backgroundColors?.[key];
+  });
+  const purpleColors = sanitized.colors?.purple as unknown as Record<string, unknown> | undefined;
+  RETIRED_PURPLE_COLOR_KEYS.forEach(key => {
+    delete purpleColors?.[key];
+  });
+  const elementColors = sanitized.colors?.element as unknown as Record<string, unknown> | undefined;
+  RETIRED_ELEMENT_BACKGROUND_KEYS.forEach(key => {
+    delete elementColors?.[key];
+  });
+  const fontWeights = sanitized.typography?.weight as unknown as Record<string, unknown> | undefined;
+  RETIRED_FONT_WEIGHT_KEYS.forEach(key => {
+    delete fontWeights?.[key];
+  });
+  const components = sanitized.components as unknown as Record<string, unknown> | undefined;
+  RETIRED_COMPONENT_KEYS.forEach(key => {
+    delete components?.[key];
+  });
+  return sanitized;
 }
 
 function mergeThemeConfig(base: ThemeConfig, override: Partial<ThemeConfig>): ThemeConfig {
@@ -278,11 +346,17 @@ export class ThemeService {
 
       if (Array.isArray(themes) && themes.length > 0) {
         let loadedCount = 0;
-        themes.forEach(theme => {
+        let migratedThemeKeys = false;
+        const persistedThemes = [...themes];
+        themes.forEach((theme, index) => {
           try {
             const normalizedTheme = this.normalizeCustomTheme(theme);
             this.themes.set(normalizedTheme.id, normalizedTheme);
             loadedCount += 1;
+            if (hasNonContractThemeKeys(theme)) {
+              persistedThemes[index] = normalizedTheme;
+              migratedThemeKeys = true;
+            }
           } catch (error) {
             log.warn('Skipped invalid user theme', {
               id: theme?.id,
@@ -291,6 +365,13 @@ export class ThemeService {
           }
         });
         log.info('Loaded user themes', { count: loadedCount, skipped: themes.length - loadedCount });
+        if (migratedThemeKeys) {
+          try {
+            await configAPI.setConfig('themes.custom', persistedThemes);
+          } catch (error) {
+            log.warn('Failed to migrate custom theme keys', error);
+          }
+        }
       }
     } catch (_error) {
 
@@ -342,7 +423,7 @@ export class ThemeService {
     const baseTheme = theme.type === 'light'
       ? builtinThemes.find(item => item.type === 'light') || builtinThemes[0]
       : builtinThemes.find(item => item.id === 'bitfun-dark') || builtinThemes.find(item => item.type === 'dark') || builtinThemes[0];
-    const normalized = mergeThemeConfig(baseTheme, theme);
+    const normalized = stripNonContractThemeKeys(mergeThemeConfig(baseTheme, theme));
     const validation = this.validateTheme(normalized);
 
     if (!validation.valid) {
@@ -556,13 +637,9 @@ export class ThemeService {
     });
     root.style.setProperty('--color-bg-secondary', colors.background.secondary);
     root.style.setProperty('--color-bg-tertiary', colors.background.tertiary);
-    root.style.setProperty('--color-bg-quaternary', colors.background.quaternary);
     root.style.setProperty('--color-bg-elevated', colors.background.elevated);
     root.style.setProperty('--color-bg-workbench', colors.background.workbench);
     root.style.setProperty('--color-bg-scene', colors.background.scene);
-    if (colors.background.tooltip) {
-      root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
-    }
 
     root.style.setProperty('--color-text-primary', colors.text.primary);
     root.style.setProperty('--color-text-secondary', colors.text.secondary);
@@ -627,7 +704,6 @@ export class ThemeService {
     root.style.setProperty('--element-bg-base', colors.element.base);
     root.style.setProperty('--element-bg-medium', colors.element.medium);
     root.style.setProperty('--element-bg-strong', colors.element.strong);
-    root.style.setProperty('--element-bg-elevated', colors.element.elevated);
     root.style.setProperty('--element-bg-hover', colors.element.medium);
 
 
@@ -635,17 +711,9 @@ export class ThemeService {
     root.style.setProperty('--git-color-branch-bg', colors.git.branchBg);
     root.style.setProperty('--git-color-branch-bg-hover', colors.element.medium);
     root.style.setProperty('--git-color-changes', colors.git.changes);
-    root.style.setProperty('--git-color-changes-bg', colors.git.changesBg);
     root.style.setProperty('--git-color-added', colors.git.added);
-    root.style.setProperty('--git-color-added-bg', colors.git.addedBg);
-    root.style.setProperty('--git-color-added-bg-hover', colorWithAlpha(colors.git.added, 0.15));
     root.style.setProperty('--git-color-deleted', colors.git.deleted);
-    root.style.setProperty('--git-color-deleted-bg', colors.git.deletedBg);
-    root.style.setProperty('--git-color-deleted-bg-hover', colorWithAlpha(colors.git.deleted, 0.15));
     root.style.setProperty('--git-color-staged', colors.git.staged);
-    root.style.setProperty('--git-color-staged-bg', colors.git.stagedBg);
-    root.style.setProperty('--git-color-staged-bg-hover', colorWithAlpha(colors.git.staged, 0.15));
-    root.style.setProperty('--git-color-staged-border', colorWithAlpha(colors.git.staged, 0.3));
 
 
 
@@ -662,7 +730,6 @@ export class ThemeService {
     );
     root.style.setProperty('--scrollbar-thumb', scrollbarThumb);
     root.style.setProperty('--scrollbar-thumb-hover', scrollbarThumbHover);
-    root.style.setProperty('--color-scrollbar', scrollbarThumb);
 
 
     const shadows = effects?.shadow;
@@ -671,10 +738,6 @@ export class ThemeService {
         const value = shadows[key];
         root.style.setProperty(`--shadow-${key}`, value);
       });
-      root.style.setProperty('--glass-shadow-sm', shadows.sm);
-      root.style.setProperty('--glass-shadow-base', shadows.base);
-      root.style.setProperty('--glass-shadow-lg', shadows.lg);
-      root.style.setProperty('--glass-shadow-xl', shadows.xl);
     }
 
 
@@ -684,8 +747,6 @@ export class ThemeService {
         const value = blurs[key];
         root.style.setProperty(`--blur-${key}`, value);
       });
-      root.style.setProperty('--glass-blur-sm', blurs.subtle);
-      root.style.setProperty('--glass-blur-base', blurs.base);
     }
 
 
@@ -712,8 +773,6 @@ export class ThemeService {
 
     if (effects?.opacity) {
       root.style.setProperty('--opacity-disabled', String(effects.opacity.disabled));
-      root.style.setProperty('--opacity-hover', String(effects.opacity.hover));
-      root.style.setProperty('--opacity-focus', String(effects.opacity.focus));
     }
 
 
@@ -820,45 +879,10 @@ export class ThemeService {
       root.style.setProperty('--btn-ghost-hover-border', 'transparent');
     }
 
-    const legacyWindowCloseHover = theme.components?.windowControls?.close.hoverColor;
-    if (legacyWindowCloseHover) {
-      root.style.setProperty('--window-control-close-hover-color', legacyWindowCloseHover);
-      root.setAttribute('data-window-control-close-hover-override', 'true');
-    } else {
-      root.removeAttribute('data-window-control-close-hover-override');
-      root.style.removeProperty('--window-control-close-hover-color');
-    }
-
-    if (theme.type === 'dark') {
-
-      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white04);
-      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.white08);
-      root.style.setProperty('--card-bg-subtle', 'transparent');
-      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white08);
-      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white12);
-      root.style.setProperty('--card-bg-accent', THEME_OVERLAYS.white08);
-      root.style.setProperty('--card-bg-accent-hover', THEME_OVERLAYS.white12);
-      root.style.setProperty('--card-bg-purple', 'rgba(139, 92, 246, 0.08)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
-    } else {
-
-      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black08);
-      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black12);
-      root.style.setProperty('--card-bg-subtle', 'transparent');
-      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black12);
-      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black15);
-      root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');
-      root.style.setProperty('--card-bg-accent-hover', 'rgba(15, 23, 42, 0.12)');
-      root.style.setProperty('--card-bg-purple', 'rgba(124, 58, 237, 0.12)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
-    }
-
-
     root.setAttribute('data-theme', theme.id);
     root.setAttribute('data-theme-type', theme.type);
 
     const bgPrimary = colors.background.primary;
-    root.style.setProperty('--bitfun-startup-bg', bgPrimary);
     root.style.backgroundColor = bgPrimary;
     if (document.body) {
       document.body.style.backgroundColor = bgPrimary;

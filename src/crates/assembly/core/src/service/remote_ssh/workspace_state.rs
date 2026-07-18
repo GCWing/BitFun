@@ -53,7 +53,24 @@ pub async fn resolve_workspace_session_identity(
         });
     }
 
-    workspace_session_identity(workspace_path, None, None)
+    if let Some(identity) = workspace_session_identity(workspace_path, None, None) {
+        return Some(identity);
+    }
+
+    // The path cannot be resolved as a local workspace root (remote workspace
+    // paths do not exist on the local filesystem). Callers such as dialog-turn
+    // submission may legitimately lose the remote connection id, so fall back
+    // to the remote workspace registry before failing: a registered remote
+    // workspace must never be misclassified as an invalid local path.
+    if let Some(entry) = lookup_remote_connection_with_hint(workspace_path, None).await {
+        return Some(WorkspaceSessionIdentity {
+            hostname: entry.ssh_host,
+            logical_workspace_path: entry.remote_root,
+            remote_connection_id: Some(entry.connection_id),
+        });
+    }
+
+    None
 }
 /// Local directory where persisted sessions for this remote workspace root are stored.
 pub fn remote_workspace_runtime_root(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
@@ -479,6 +496,55 @@ mod tests {
         m.set_active_connection_hint(Some("c1".to_string())).await;
         let x = m.lookup_connection("/x", Some("c2")).await.unwrap();
         assert_eq!(x.connection_id, "c2");
+    }
+
+    #[tokio::test]
+    async fn identity_falls_back_to_registry_when_connection_id_is_missing() {
+        let manager = super::init_remote_workspace_manager();
+        manager
+            .register_remote_workspace(
+                "/bitfun-tests/identity-fallback/repo".to_string(),
+                "conn-identity-fallback".to_string(),
+                "Fallback Server".to_string(),
+                "fallback-host".to_string(),
+            )
+            .await;
+
+        let identity = super::resolve_workspace_session_identity(
+            "/bitfun-tests/identity-fallback/repo",
+            None,
+            None,
+        )
+        .await
+        .expect("registered remote workspace must resolve without an explicit connection id");
+
+        assert_eq!(identity.hostname, "fallback-host");
+        assert_eq!(
+            identity.remote_connection_id.as_deref(),
+            Some("conn-identity-fallback")
+        );
+        assert_eq!(
+            identity.logical_workspace_path(),
+            "/bitfun-tests/identity-fallback/repo"
+        );
+
+        manager
+            .unregister_remote_workspace(
+                "conn-identity-fallback",
+                "/bitfun-tests/identity-fallback/repo",
+            )
+            .await;
+
+        assert!(
+            super::resolve_workspace_session_identity(
+                "/bitfun-tests/identity-fallback/repo",
+                None,
+                None,
+            )
+            .await
+            .is_none(),
+            "unregistered non-local paths must still fail to resolve"
+        );
     }
 
     #[tokio::test]

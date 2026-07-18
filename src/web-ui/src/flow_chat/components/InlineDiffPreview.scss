@@ -81,23 +81,23 @@
   }
   
   &--added {
-    background: var(--git-color-staged-bg);
+    background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
 
     .diff-line__gutter {
-      background: var(--git-color-staged-bg-hover);
+      background: color-mix(in srgb, var(--git-color-added) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--git-color-staged);
+      color: var(--git-color-added);
       font-weight: 500;
     }
   }
 
   &--removed {
-    background: var(--git-color-deleted-bg);
+    background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
 
     .diff-line__gutter {
-      background: var(--git-color-deleted-bg-hover);
+      background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
     }
 
     .diff-line__prefix {
@@ -225,19 +225,19 @@
 .light .inline-diff-preview {
   .diff-line {
     &--added {
-      background: var(--git-color-staged-bg);
+      background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--git-color-staged) 18%, transparent);
+        background: color-mix(in srgb, var(--git-color-added) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--git-color-staged);
+        color: var(--git-color-added);
       }
     }
 
     &--removed {
-      background: var(--git-color-deleted-bg);
+      background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
 
       .diff-line__gutter {
         background: color-mix(in srgb, var(--git-color-deleted) 18%, transparent);

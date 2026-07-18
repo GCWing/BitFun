@@ -1,6 +1,7 @@
 //! Shared desktop resolution and access helpers for local, runtime, and remote paths.
 
 use crate::api::app_state::AppState;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use bitfun_core::agentic::tools::workspace_paths::{
     is_bitfun_runtime_uri, parse_bitfun_runtime_uri,
 };
@@ -164,6 +165,7 @@ pub struct LocalFileMetadata {
     pub size: u64,
     pub is_file: bool,
     pub is_dir: bool,
+    pub is_symlink: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_remote: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -178,6 +180,7 @@ pub struct RemoteFileMetadata {
     pub size: u64,
     pub is_file: bool,
     pub is_dir: bool,
+    pub is_symlink: bool,
     pub is_remote: bool,
 }
 
@@ -186,6 +189,13 @@ pub fn stat_local_path_metadata(
     resolved_path: &Path,
     is_runtime_artifact: bool,
 ) -> Result<LocalFileMetadata, String> {
+    let link_metadata = std::fs::symlink_metadata(resolved_path).map_err(|e| {
+        format!(
+            "Failed to inspect local file type '{}': {}",
+            resolved_path.display(),
+            e
+        )
+    })?;
     let metadata = std::fs::metadata(resolved_path).map_err(|e| {
         format!(
             "Failed to stat local file '{}': {}",
@@ -193,6 +203,21 @@ pub fn stat_local_path_metadata(
             e
         )
     })?;
+
+    let is_symlink = if link_metadata.file_type().is_symlink() {
+        true
+    } else {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+            link_metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    };
 
     let modified = metadata
         .modified()
@@ -208,6 +233,7 @@ pub fn stat_local_path_metadata(
         size: metadata.len(),
         is_file: metadata.is_file(),
         is_dir: metadata.is_dir(),
+        is_symlink,
         is_remote: Some(false),
         is_runtime_artifact: is_runtime_artifact.then_some(true),
     })
@@ -216,17 +242,26 @@ pub fn stat_local_path_metadata(
 pub async fn read_text_file(
     app_state: &AppState,
     raw_path: &str,
+    encoding: Option<&str>,
     preferred_remote_connection_id: Option<&str>,
 ) -> Result<String, String> {
     let target =
         resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await?;
     match &target {
-        DesktopPathTarget::Local { resolved_path, .. } => app_state
-            .filesystem_service
-            .read_file(&resolved_path.to_string_lossy())
-            .await
-            .map(|result| result.content)
-            .map_err(|e| format!("Failed to read file content: {}", e)),
+        DesktopPathTarget::Local { resolved_path, .. } => {
+            let result = app_state
+                .filesystem_service
+                .read_file(&resolved_path.to_string_lossy())
+                .await
+                .map_err(|e| format!("Failed to read file content: {}", e))?;
+            if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64"))
+                && !result.encoding.eq_ignore_ascii_case("base64")
+            {
+                Ok(BASE64.encode(result.content.as_bytes()))
+            } else {
+                Ok(result.content)
+            }
+        }
         DesktopPathTarget::Remote {
             requested_path,
             entry,
@@ -239,8 +274,39 @@ pub async fn read_text_file(
                 .read_file(&entry.connection_id, requested_path)
                 .await
                 .map_err(|e| format!("Failed to read remote file: {}", e))?;
-            String::from_utf8(bytes).map_err(|e| format!("File is not valid UTF-8: {}", e))
+            encode_remote_file_bytes(bytes, encoding)
         }
+    }
+}
+
+fn encode_remote_file_bytes(bytes: Vec<u8>, encoding: Option<&str>) -> Result<String, String> {
+    if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64")) {
+        return Ok(BASE64.encode(bytes));
+    }
+
+    String::from_utf8(bytes).map_err(|e| format!("File is not valid UTF-8: {}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::encode_remote_file_bytes;
+
+    #[test]
+    fn remote_file_bytes_support_explicit_base64_encoding() {
+        let png_header = vec![0x89, b'P', b'N', b'G'];
+        assert_eq!(
+            encode_remote_file_bytes(png_header, Some("base64")).expect("base64 should encode"),
+            "iVBORw=="
+        );
+    }
+
+    #[test]
+    fn remote_file_bytes_preserve_text_default() {
+        assert_eq!(
+            encode_remote_file_bytes(b"hello".to_vec(), None).expect("text should decode"),
+            "hello"
+        );
+        assert!(encode_remote_file_bytes(vec![0xff], None).is_err());
     }
 }
 
@@ -327,14 +393,15 @@ pub async fn get_path_metadata(
                 .await
                 .map_err(|e| format!("Failed to stat remote file: {}", e))?;
 
-            let (is_file, is_dir, size, modified) = match stat_entry {
+            let (is_file, is_dir, is_symlink, size, modified) = match stat_entry {
                 Some(entry) => (
                     entry.is_file,
                     entry.is_dir,
+                    entry.is_symlink,
                     entry.size.unwrap_or(0),
                     entry.modified.unwrap_or(0),
                 ),
-                None => (false, false, 0, 0),
+                None => (false, false, false, 0, 0),
             };
 
             serde_json::to_value(RemoteFileMetadata {
@@ -343,6 +410,7 @@ pub async fn get_path_metadata(
                 size,
                 is_file,
                 is_dir,
+                is_symlink,
                 is_remote: true,
             })
             .map_err(|e| format!("Failed to serialize remote file metadata: {}", e))

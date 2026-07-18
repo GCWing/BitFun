@@ -2,7 +2,7 @@
 
 .aqi {
   // Horizontal inset: shadow fade + align with .acp-sessions-area
-  padding: $size-gap-4 var(--profile-acp-left-inline-pad) $size-gap-5;
+  padding: $size-gap-4 $size-gap-6 $size-gap-5;
 
   &__box {
     display: flex;
@@ -28,7 +28,7 @@
 
     &:focus-within {
       transform: translateY(-2px);
-      border-color: var(--border-focus);
+      border-color: var(--border-strong);
       background: var(--element-bg-soft);
       box-shadow:
         0 22px 52px -12px color-mix(in srgb, var(--color-accent-500) 18%, transparent),

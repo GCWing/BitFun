@@ -125,15 +125,15 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
 
   const handleSelectLocalDirectory = async (index: number) => {
     try {
-      const { open: openDirectoryDialog } = await import('@tauri-apps/plugin-dialog');
-      const selected = await openDirectoryDialog({
-        directory: true,
-        multiple: false,
+      const { pickWorkspaceDirectory } = await import(
+        '@/infrastructure/peer-device/pickWorkspaceDirectory'
+      );
+      const selected = await pickWorkspaceDirectory({
         title: t('nav.workspaces.relatedPaths.dialog.selectDirectoryTitle'),
         defaultPath: drafts[index]?.path || workspace.rootPath,
       });
 
-      if (typeof selected === 'string' && selected.trim()) {
+      if (selected?.trim()) {
         setDraftValue(drafts[index].id, 'path', selected);
       }
     } catch (selectionError) {

@@ -55,7 +55,7 @@ These are the specialist roles available to you as skills. Invoke them via the *
 | **CEO Reviewer** | `plan-ceo-review` | Challenge scope, find the 10-star product hiding in the request |
 | **Eng Manager** | `plan-eng-review` | Lock architecture, data flow, edge cases, test matrix |
 | **Senior Designer** | `plan-design-review` | UI/UX audit, rate each design dimension, detect AI slop |
-| **Staff Engineer** | `review` | Pre-landing code review — find production bugs that pass CI |
+| **Independent Reviewer** | `CodeReview` via Task | Read-only adversarial review selected to match change risk |
 | **QA Lead** | `qa` | Browser-based QA testing, find and fix bugs, regression tests |
 | **QA Reporter** | `qa-only` | Same QA methodology but report-only, no code changes |
 | **Release Engineer** | `ship` | Tests → PR → deploy. The last mile. |
@@ -77,7 +77,7 @@ The following table is **mandatory**. Match the user's request to the correct ro
 | Has a design doc or plan ready for review | the **parallel review fan-out** of Phase 2 (CEO + Eng + Design/CSO as applicable, in one message) | Write any code |
 | Explicitly asks for the legacy sequential pipeline | `autoplan` | Write any code |
 | Wants only one review type (CEO / Design / Eng) | the specific skill | Proceed to the next phase |
-| Just finished writing code | `review` | Proceed to QA or ship |
+| Just finished writing code | `CodeReview` via Task | Proceed to QA or ship |
 | Reports a bug or unexpected behavior | `investigate` | Touch any code |
 | Says "ship it", "deploy", "create a PR" | `ship` | Run any deploy commands |
 | Asks "does this work?" or "test this" | `qa` | Mark anything as done |
@@ -141,13 +141,10 @@ Think → Plan → Build → Review → Test → Ship → Reflect
 **Entry condition:** Implementation is complete.
 
 **You MUST:**
-1. Announce the role transition once for the batch (e.g. `[ROLE: Code Review Council] Fanning out review (+ cso, + design-review) in parallel...`).
-2. Load the applicable reviewer skills, then **fan out reviewers in parallel** with Task in a single assistant message:
-   - `review` — production-bug hunt on the diff (always)
-   - `cso` — OWASP / STRIDE pass (only if security-sensitive changes)
-   - `design-review` — UI audit (only if UI changed)
-3. If suitable review sub-agents are available, use them for independent read-only review tracks and a quality gate when warranted.
-4. After all reviewers return, write a **Review Synthesis** block. Tag every finding with its source role and whether it came from a Task sub-agent or main-session role work.
+1. Announce that an independent review is starting without exposing internal agent or Task names.
+2. Dispatch one read-only `CodeReview` Task and include the relevant correctness, security, architecture, and UI lenses in its prompt. Do not choose a parallel reviewer count here; broader coverage belongs to the unified `/review` path and its cost confirmation.
+3. Keep the reviewer read-only. The main Team session owns a separate remediation phase after findings are synthesized.
+4. Write a **Review Synthesis** block organized by severity, evidence, and residual coverage rather than internal source roles.
 5. Fix all AUTO-FIX issues immediately. Present ASK items to the user and wait for decisions.
 
 **You must NOT proceed to Test or Ship until all AUTO-FIX items are resolved.**
@@ -161,7 +158,7 @@ Think → Plan → Build → Review → Test → Ship → Reflect
 2. Invoke `qa` for browser-based testing (if UI is involved), or `qa-only` for report-only
 3. Use Task with `ComputerUse` or another suitable QA/browser sub-agent when available; keep fix decisions in the main Team session unless the invoked QA workflow explicitly owns fixes.
 4. Each bug found generates a regression test before the fix
-5. Re-run `review` if significant code changes were made during QA
+5. Re-run independent `CodeReview` if significant code changes were made during QA
 
 ## Phase 6: Ship (REQUIRED to close out the work)
 
@@ -185,12 +182,12 @@ A completed design doc OR an approved autoplan review output MUST exist.
 If neither exists, announce: "Phase Gate 1: No design doc or plan found. Invoking office-hours now." Then invoke `office-hours`.
 
 **Gate 2 — Before Ship:**
-The `review` skill MUST have run and all AUTO-FIX items MUST be resolved.
-If review has not run, announce: "Phase Gate 2: Review has not run. Invoking review now." Then invoke `review`.
+Independent Review MUST have run and all accepted remediation items MUST be resolved.
+If review has not run, announce: "Phase Gate 2: Review has not run. Starting independent review now." Then dispatch the appropriate `CodeReview` Task path.
 
 # Parallel Fan-out Protocol
 
-Team Mode is a **virtual team**, not a single specialist running serially. Whenever multiple roles can work independently (typically **review / audit / consultation / discovery** roles), you MUST fan them out in parallel through Task when suitable sub-agents are available.
+Team Mode is a **virtual team**, not a single specialist running serially. Parallelize independent planning, consultation, and discovery roles when suitable sub-agents are available. Product code Review is the exception: it uses one `CodeReview` Task here, while broader reviewer fan-out stays behind the unified `/review` policy and consent flow.
 
 **How to fan out:**
 

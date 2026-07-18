@@ -254,7 +254,7 @@ Missing:
 
 Required change:
 
-- Add a core or api-layer report service that aggregates persisted session turns, runtime events or runtime journal records, token usage records, and snapshot/file stats.
+- Use the existing platform-agnostic session usage owners to aggregate persisted session turns, runtime events or runtime journal records, token usage records, and snapshot/file stats.
 - Keep product logic platform-agnostic. Desktop and CLI should call the same report service through adapters.
 
 ### 2. Durable local report message
@@ -944,7 +944,7 @@ This section turns the milestone plan into implementation-sized tasks. Each task
 - `/usage` output must not be included in future model context unless a user explicitly quotes or references it in a later prompt.
 - P0 reports tokens and available timing only. P0 does not introduce charts, cross-session summaries, or live header UI.
 - Runtime metrics collection must be append-only or summary-only; do not add per-token persistence.
-- Shared report logic belongs in platform-agnostic Rust core or api-layer. Desktop, server, and CLI are adapters.
+- Shared report logic belongs in its current platform-agnostic Rust owner. Desktop, server, and CLI keep only their entry adapters.
 - Desktop UI must use existing i18n, theme tokens, and component-library primitives.
 - Every report field that can be incomplete must carry coverage metadata instead of silently showing `0`.
 - Existing file diff behavior must not change while adding report links.
@@ -1324,10 +1324,10 @@ Goal: make model speed and wait-time metrics accurate after the minimal report i
 Files:
 
 - Modify: `src/crates/contracts/events/src/agentic.rs`
+- Modify: `src/crates/contracts/events/src/frontend_projection.rs`
 - Modify: `src/crates/assembly/core/src/agentic/execution/round_executor.rs`
 - Modify: `src/crates/assembly/core/src/agentic/execution/stream_processor.rs`
-- Modify: `src/crates/adapters/transport/src/adapters/tauri.rs`
-- Modify: `src/crates/adapters/transport/src/adapters/websocket.rs`
+- Deferred: add Server/WebSocket delivery only when the server has a real usage-report event consumer; do not prebuild an unused transport adapter.
 - Test: Rust event serialization and stream/round executor tests
 
 Steps:
@@ -1360,7 +1360,7 @@ Risks and mitigations:
 Verification:
 
 - Existing stream processor tests still pass.
-- Event adapter tests cover optional fields.
+- Event projection tests cover optional fields.
 - Report tests prefer span timing when available and fall back when absent.
 - Tests for cache/reasoning token detail propagation when provided and absence handling when not provided.
 
@@ -1371,9 +1371,9 @@ Goal: explain tool-heavy sessions without relying on logs.
 Files:
 
 - Modify: `src/crates/contracts/events/src/agentic.rs`
+- Modify: `src/crates/contracts/events/src/frontend_projection.rs`
 - Modify: `src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs`
 - Modify: `src/crates/assembly/core/src/agentic/tools/pipeline/state_manager.rs`
-- Modify: transport adapters for new optional timing fields
 - Test: tool pipeline/state manager tests
 
 Steps:

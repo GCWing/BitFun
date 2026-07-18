@@ -16,14 +16,18 @@ use serde_json::Value;
 use super::config::AcpClientConfig;
 use super::manager::AcpClientService;
 
-pub struct AcpAgentTool {
+pub(super) struct AcpAgentTool {
     client_id: String,
     service: Arc<AcpClientService>,
     definition: AcpExternalAgentToolDefinition,
 }
 
 impl AcpAgentTool {
-    pub fn new(client_id: String, config: AcpClientConfig, service: Arc<AcpClientService>) -> Self {
+    pub(super) fn new(
+        client_id: String,
+        config: AcpClientConfig,
+        service: Arc<AcpClientService>,
+    ) -> Self {
         let definition = acp_external_agent_definition_for_config(&client_id, &config);
         Self {
             client_id,
@@ -32,7 +36,7 @@ impl AcpAgentTool {
         }
     }
 
-    pub fn tool_name_for(client_id: &str) -> String {
+    pub(super) fn tool_name_for(client_id: &str) -> String {
         build_acp_external_agent_tool_name(client_id)
     }
 
@@ -41,7 +45,7 @@ impl AcpAgentTool {
     }
 }
 
-pub fn acp_external_agent_definition_for_config(
+fn acp_external_agent_definition_for_config(
     client_id: &str,
     config: &AcpClientConfig,
 ) -> AcpExternalAgentToolDefinition {

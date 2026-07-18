@@ -661,9 +661,11 @@ describe('startup performance contract', () => {
     expect(footerActionsSource).toContain('{showRemoteConnect && (');
 
     expect(newProjectDialogSource).not.toMatch(/from\s+['"]@tauri-apps\/plugin-dialog['"]/);
-    expect(newProjectDialogSource).toContain("await import('@tauri-apps/plugin-dialog')");
+    expect(newProjectDialogSource).not.toContain("await import('@tauri-apps/plugin-dialog')");
+    expect(newProjectDialogSource).toContain('@/infrastructure/peer-device/pickWorkspaceDirectory');
     expect(relatedPathsDialogSource).not.toMatch(/from\s+['"]@tauri-apps\/plugin-dialog['"]/);
-    expect(relatedPathsDialogSource).toContain("await import('@tauri-apps/plugin-dialog')");
+    expect(relatedPathsDialogSource).not.toContain("await import('@tauri-apps/plugin-dialog')");
+    expect(relatedPathsDialogSource).toContain('@/infrastructure/peer-device/pickWorkspaceDirectory');
   });
 
   it('keeps startup session metadata paging on the narrow SessionAPI entrypoint', () => {

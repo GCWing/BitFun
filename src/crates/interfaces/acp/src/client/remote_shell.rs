@@ -25,7 +25,7 @@ pub(super) fn render_remote_env_assignments(env: &HashMap<String, String>) -> Ve
         .iter()
         .filter(|(key, _)| is_shell_env_key(key))
         .collect::<Vec<_>>();
-    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    entries.sort_by_key(|(key, _)| *key);
     entries
         .into_iter()
         .map(|(key, value)| format!("{key}={}", shell_escape(value)))

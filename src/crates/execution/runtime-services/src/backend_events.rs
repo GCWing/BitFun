@@ -65,8 +65,8 @@ impl BackendEventSystem {
     pub async fn emit(&self, event: BackendEvent) -> Result<()> {
         trace!("Emitting event: {:?}", event);
 
-        let emitter_guard = self.emitter.lock().await;
-        if let Some(ref emitter) = *emitter_guard {
+        let emitter = { self.emitter.lock().await.clone() };
+        if let Some(emitter) = emitter {
             let event_name = event.event_name();
             let event_data = match event.payload() {
                 Ok(value) => value,

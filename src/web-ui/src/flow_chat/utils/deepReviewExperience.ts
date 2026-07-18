@@ -11,6 +11,7 @@ import type { Session } from '../types/flow-chat';
 import type { CodeReviewRemediationData } from './codeReviewRemediation';
 import type { DeepReviewInterruption, DeepReviewReviewerProgress } from './deepReviewContinuation';
 import { collectReviewerProgress } from './deepReviewContinuation';
+import { getEffectiveToolName } from './toolInvocationIdentity';
 
 // ---------------------------------------------------------------------------
 // Reviewer progress
@@ -203,7 +204,7 @@ export function extractPartialReviewData(
   for (const turn of session.dialogTurns) {
     for (const round of turn.modelRounds) {
       for (const item of round.items) {
-        if (item.type !== 'tool' || item.toolName !== 'Task') {
+        if (item.type !== 'tool' || getEffectiveToolName(item) !== 'Task') {
           continue;
         }
         const reviewer = String(
@@ -377,7 +378,7 @@ export function buildRecoveryPlan(
 // ---------------------------------------------------------------------------
 
 export interface DegradationOption {
-  type: 'reduce_reviewers' | 'compress_context' | 'view_partial';
+  type: 'view_partial';
   labelKey: string;
   descriptionKey: string;
   enabled: boolean;
@@ -394,26 +395,14 @@ export function evaluateDegradationOptions(
     (r) => r.status === 'completed',
   );
 
-  return [
-    {
-      type: 'reduce_reviewers',
-      labelKey: 'deepReviewActionBar.degradation.reduceReviewers',
-      descriptionKey: 'deepReviewActionBar.degradation.reduceReviewersDesc',
-      enabled: false, // Requires backend support
-    },
-    {
-      type: 'compress_context',
-      labelKey: 'deepReviewActionBar.degradation.compressContext',
-      descriptionKey: 'deepReviewActionBar.degradation.compressContextDesc',
-      enabled: false, // Requires backend support
-    },
-    {
+  return hasPartialResults
+    ? [{
       type: 'view_partial',
       labelKey: 'deepReviewActionBar.degradation.viewPartial',
       descriptionKey: 'deepReviewActionBar.degradation.viewPartialDesc',
-      enabled: hasPartialResults,
-    },
-  ];
+      enabled: true,
+    }]
+    : [];
 }
 
 // ---------------------------------------------------------------------------

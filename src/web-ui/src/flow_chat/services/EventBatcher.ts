@@ -255,7 +255,10 @@ export type ToolEventType =
 interface BaseToolEvent<T extends ToolEventType> {
   event_type: T;
   tool_id: string;
+  /** Provider-facing name. Deferred calls remain CallDeferredTool. */
   tool_name: string;
+  /** Runtime target when it differs from the provider-facing name. */
+  effective_tool_name?: string;
 }
 
 export type EarlyDetectedToolEvent = BaseToolEvent<'EarlyDetected'>;

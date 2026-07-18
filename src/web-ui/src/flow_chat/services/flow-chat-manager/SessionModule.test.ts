@@ -27,6 +27,10 @@ const configApiMocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
 }));
 
+const configManagerMocks = vi.hoisted(() => ({
+  getConfigs: vi.fn(),
+}));
+
 const sessionApiMocks = vi.hoisted(() => ({
   archiveSession: vi.fn(),
 }));
@@ -47,6 +51,10 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
 
 vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
   configAPI: configApiMocks,
+}));
+
+vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
+  configManager: configManagerMocks,
 }));
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
@@ -279,6 +287,13 @@ describe('resolveAgentTypeForSessionCreation', () => {
 });
 
 describe('createChatSession', () => {
+  beforeEach(() => {
+    configApiMocks.getConfig.mockResolvedValue(null);
+    configManagerMocks.getConfigs.mockResolvedValue({});
+    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
+    agentApiMocks.createSession.mockResolvedValue({ sessionId: 'created-1' });
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -287,15 +302,10 @@ describe('createChatSession', () => {
     // This keeps the first create suspended in the model config path while the
     // second create enters with the same creation key.
     const modelConfig = createDeferred<Record<string, unknown>>();
-    configApiMocks.getConfig.mockImplementation(async (key: string) => {
-      if (key === 'chat.default_mode') {
-        return null;
-      }
+    configManagerMocks.getConfigs.mockImplementation(async () => {
       await modelConfig.promise;
-      return key === 'ai.models' ? [] : {};
+      return {};
     });
-    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
-    agentApiMocks.createSession.mockResolvedValue({ sessionId: 'created-1' });
 
     const { context } = createContext(createSession({
       workspacePath: '/home/wsp/projects/Test',
@@ -314,6 +324,81 @@ describe('createChatSession', () => {
     ]);
 
     expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('snapshots the current mode model into a newly created session', async () => {
+    configManagerMocks.getConfigs.mockImplementation(async (paths: string[]) => {
+      if (paths.length === 1 && paths[0] === 'ai.agent_model_defaults') {
+        return { 'ai.agent_model_defaults': { mode: 'model-b' } };
+      }
+      return {
+        'ai.agent_model_defaults': { mode: 'model-b' },
+        'ai.models': [{ id: 'model-b', enabled: true, context_window: 64000 }],
+        'ai.default_models': { primary: 'model-b' },
+      };
+    });
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: '/home/wsp/projects/Test',
+    }));
+
+    await createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        modelName: 'model-b',
+        maxContextTokens: 64000,
+      }),
+    }));
+    expect(flowChatStore.createSession).toHaveBeenCalledWith(
+      'created-1',
+      expect.objectContaining({ modelName: 'model-b' }),
+      undefined,
+      expect.any(String),
+      64000,
+      'agentic',
+      '/home/wsp/projects/Test',
+      undefined,
+      undefined,
+      expect.any(Object),
+    );
+  });
+
+  it('preserves an explicit session model instead of applying the mode default', async () => {
+    configManagerMocks.getConfigs.mockResolvedValue({
+      'ai.agent_model_defaults': { mode: 'model-b' },
+      'ai.models': [
+        { id: 'model-a', enabled: true, context_window: 32000 },
+        { id: 'model-b', enabled: true, context_window: 64000 },
+      ],
+      'ai.default_models': { primary: 'model-b' },
+    });
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: '/home/wsp/projects/Test',
+    }));
+
+    await createChatSession(context, {
+      workspacePath: '/home/wsp/projects/Test',
+      modelName: 'model-a',
+    }, 'agentic');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        modelName: 'model-a',
+        maxContextTokens: 32000,
+      }),
+    }));
+    expect(flowChatStore.createSession).toHaveBeenCalledWith(
+      'created-1',
+      expect.objectContaining({ modelName: 'model-a' }),
+      undefined,
+      expect.any(String),
+      32000,
+      'agentic',
+      '/home/wsp/projects/Test',
+      undefined,
+      undefined,
+      expect.any(Object),
+    );
   });
 });
 
@@ -862,6 +947,32 @@ describe('SessionModule historical session coordination', () => {
     });
   });
 
+  it('restores view-restored subagent sessions as internal coordinator sessions before send', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [{ id: 'turn-1' } as any],
+      sessionKind: 'subagent',
+      parentSessionId: 'parent-1',
+      subagentType: 'GeneralPurpose',
+    } as any));
+    agentApiMocks.ensureCoordinatorSession.mockResolvedValueOnce(undefined);
+
+    await ensureBackendSession(context, 'history-1');
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'history-1',
+        includeInternal: true,
+      }),
+    );
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+    expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      contextRestoreState: 'ready',
+    });
+  });
+
   it('dedupes concurrent backend context restore for a view-restored session', async () => {
     const { context } = createContext(createSession({
       isHistorical: false,
@@ -970,6 +1081,39 @@ describe('SessionModule historical session coordination', () => {
         },
         deepReviewRunManifest,
       })
+    );
+  });
+
+  it('recreates standard Review sessions with prepared target evidence', async () => {
+    const reviewTargetEvidence = {
+      version: 1,
+      source: 'pull_request',
+      fingerprint: 'review-target-fingerprint',
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      completeness: 'complete',
+      workspaceBinding: 'unavailable',
+      files: [],
+      limitations: [],
+      omittedFileCount: 0,
+    } as Session['reviewTargetEvidence'];
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      sessionKind: 'review',
+      parentSessionId: 'parent-1',
+      reviewTargetEvidence,
+    }));
+    agentApiMocks.ensureCoordinatorSession.mockRejectedValueOnce(
+      new Error('Session metadata not found')
+    );
+    agentApiMocks.createSession.mockResolvedValueOnce(undefined);
+
+    await ensureBackendSession(context, 'history-1');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ reviewTargetEvidence })
     );
   });
 

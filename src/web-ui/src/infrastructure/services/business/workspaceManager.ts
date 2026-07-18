@@ -573,6 +573,19 @@ class WorkspaceManager {
     }
   }
 
+  /**
+   * Tear down local workspace product state and reload opened/recent
+   * workspaces from the current transport target (local or peer).
+   */
+  public async reinitializeForPeerModeSwitch(): Promise<void> {
+    log.info('Reinitializing workspace state for peer mode switch');
+    this.isInitialized = false;
+    this.isInitializing = false;
+    this.updateWorkspaceState(null, [], [], false, null);
+    this.emit({ type: 'workspace:loading', loading: true });
+    await this.initialize();
+  }
+
   public async openWorkspace(path: string): Promise<WorkspaceInfo> {
     try {
       this.setLoading(true);

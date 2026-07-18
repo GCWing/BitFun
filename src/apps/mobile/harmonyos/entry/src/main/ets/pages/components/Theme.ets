@@ -1,0 +1,10 @@
+export const PAGE_BG: string = '#FDFDFB';
+export const INK: string = '#171717';
+export const MUTED: string = '#706F6A';
+export const SUBTLE: string = '#A5A39B';
+export const LINE: string = '#E9E7E2';
+export const CARD: string = '#FFFFFF';
+export const ACCENT: string = '#111111';
+export const SOFT: string = '#F4F3F0';
+export const GREEN: string = '#27C46A';
+export const RED: string = '#E04F4F';

@@ -150,18 +150,8 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
         esm_dependencies_json: "[]",
     },
     BuiltinMiniAppBundle {
-        id: "builtin-pr-review",
-        version: 3,
-        meta_json: include_str!("builtin/assets/pr-review/meta.json"),
-        html: include_str!("builtin/assets/pr-review/index.html"),
-        css: include_str!("builtin/assets/pr-review/style.css"),
-        ui_js: include_str!("builtin/assets/pr-review/ui.js"),
-        worker_js: include_str!("builtin/assets/pr-review/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-    BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 194,
+        version: 217,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -377,7 +367,6 @@ mod tests {
                 "builtin-daily-divination",
                 "builtin-regex-playground",
                 "builtin-coding-selfie",
-                "builtin-pr-review",
                 "builtin-ppt-live",
             ]
         );
@@ -571,20 +560,22 @@ mod tests {
         );
         assert!(app.ui_js.contains("Unsupported PPT Live action"));
         // A single cowork agent turn loads the ppt-design skill and produces
-        // the whole deck end to end. The prompt is intentionally minimal — the
-        // skill owns all design rules via progressive disclosure.
+        // the whole deck end to end. Prompt construction is isolated from the
+        // host adapter so its generated-file contract can be tested directly.
         let adapter_source = include_str!("builtin/assets/ppt-live/src/bitfun-backend-adapter.js");
+        let prompt_source = include_str!("builtin/assets/ppt-live/src/agent-prompt.js");
         assert!(adapter_source.contains("sessionId: options.sessionId"));
-        assert!(adapter_source.contains("user::bitfun-system::ppt-design"));
         assert!(adapter_source.contains("buildAgentPrompt"));
+        assert!(prompt_source.contains("user::bitfun-system::ppt-design"));
+        assert!(prompt_source.contains("export function buildAgentPrompt"));
         assert!(!adapter_source.contains("app.ai"));
         assert!(!adapter_source.contains("installFallbackBackend"));
         // The prompt must delegate design rules to the skill, not restate them.
-        assert!(!adapter_source.contains("EDITABLE_PPTX_HARD_RULES"));
-        assert!(!adapter_source.contains("PPT_DESIGN_REQUIRED_REFERENCES"));
-        assert!(!adapter_source.contains("comparisons -> tables/matrices"));
-        assert!(!adapter_source.contains("Design quality bar"));
-        assert!(!adapter_source.contains("Müller-Brockmann"));
+        assert!(!prompt_source.contains("EDITABLE_PPTX_HARD_RULES"));
+        assert!(!prompt_source.contains("PPT_DESIGN_REQUIRED_REFERENCES"));
+        assert!(!prompt_source.contains("comparisons -> tables/matrices"));
+        assert!(!prompt_source.contains("Design quality bar"));
+        assert!(!prompt_source.contains("Müller-Brockmann"));
         assert!(app.ui_js.contains("Unknown MiniApp agent session"));
         // Generation follows the ppt-design skill's native file protocol: the
         // agent works inside a deck project directory under the app's appdata
@@ -610,8 +601,8 @@ mod tests {
         assert!(!meta["permissions"]["ai"]["enabled"]
             .as_bool()
             .unwrap_or(true));
-        // The single cowork agent turn loads the ppt-design skill itself.
-        assert!(adapter_source.contains("user::bitfun-system::ppt-design"));
+        // The single cowork agent turn loads the stable ppt-design skill key.
+        assert!(prompt_source.contains("user::bitfun-system::ppt-design"));
         let ppt_live_source = include_str!("builtin/assets/ppt-live/ui.js");
         // Single-turn cowork generation: one agent turn produces the whole deck.
         assert!(ppt_live_source.contains("runCoworkDeckGeneration"));

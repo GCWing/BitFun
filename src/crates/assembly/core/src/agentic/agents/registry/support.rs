@@ -24,7 +24,11 @@ pub(super) async fn get_subagent_overrides() -> AgentSubagentOverrideConfig {
         .await
         .into_iter()
         .filter_map(|(profile_id, config)| {
-            (!config.subagent_overrides.is_empty()).then(|| (profile_id, config.subagent_overrides))
+            if config.subagent_overrides.is_empty() {
+                None
+            } else {
+                Some((profile_id, config.subagent_overrides))
+            }
         })
         .collect()
 }

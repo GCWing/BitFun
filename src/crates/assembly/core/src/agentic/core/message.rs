@@ -38,6 +38,8 @@ pub enum MessageContent {
     ToolResult {
         tool_id: String,
         tool_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effective_tool_name: Option<String>,
         result: serde_json::Value,
         result_for_assistant: Option<String>,
         is_error: bool,
@@ -346,6 +348,7 @@ impl From<Message> for AIMessage {
             MessageContent::ToolResult {
                 tool_id,
                 tool_name,
+                effective_tool_name: _,
                 result,
                 result_for_assistant,
                 is_error,
@@ -484,6 +487,7 @@ impl Message {
             content: MessageContent::ToolResult {
                 tool_id: result.tool_id.clone(),
                 tool_name: result.tool_name.clone(),
+                effective_tool_name: result.effective_tool_name.clone(),
                 result: result.result.clone(),
                 result_for_assistant: result.result_for_assistant.clone(),
                 is_error: result.is_error,
@@ -667,6 +671,7 @@ impl Display for MessageContent {
             MessageContent::ToolResult {
                 tool_id,
                 tool_name,
+                effective_tool_name: _,
                 result,
                 result_for_assistant,
                 is_error,
@@ -762,7 +767,11 @@ impl From<bitfun_agent_stream::ToolCall> for ToolCall {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolResult {
     pub tool_id: String,
+    /// Provider-facing tool name. Deferred calls retain the gateway name.
     pub tool_name: String,
+    /// Runtime target for internal persistence, classification, and UI projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_tool_name: Option<String>,
     pub result: serde_json::Value,
     /// Result text specifically for passing to AI assistant (if None, then use result)
     pub result_for_assistant: Option<String>,

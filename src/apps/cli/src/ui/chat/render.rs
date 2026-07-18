@@ -1,6 +1,51 @@
+fn build_shortcut_display(
+    shortcuts: &[(String, &'static str)],
+    style: Style,
+) -> (Vec<Span<'static>>, String) {
+    let mut spans = Vec::new();
+    let mut text = String::new();
+    for (index, (key, description)) in shortcuts.iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::styled(" ", style));
+            text.push(' ');
+        }
+        let key_text = format!("[{key}]");
+        spans.push(Span::styled(key_text.clone(), style));
+        spans.push(Span::styled((*description).to_string(), style));
+        text.push_str(&key_text);
+        text.push_str(description);
+    }
+    (spans, text)
+}
+
+fn build_shortcut_display_for_width(
+    shortcuts: &[(String, &'static str)],
+    style: Style,
+    max_width: usize,
+) -> (Vec<Span<'static>>, String) {
+    let (_, full_text) = build_shortcut_display(shortcuts, style);
+    if UnicodeWidthStr::width(full_text.as_str()) <= max_width || shortcuts.len() <= 1 {
+        return build_shortcut_display(shortcuts, style);
+    }
+
+    let last = shortcuts.last().expect("checked non-empty shortcuts");
+    let last_width = UnicodeWidthStr::width(format!("[{}]{}", last.0, last.1).as_str());
+    let mut used_width = last_width;
+    let mut visible = Vec::new();
+    for hint in &shortcuts[..shortcuts.len() - 1] {
+        let hint_width = UnicodeWidthStr::width(format!("[{}]{}", hint.0, hint.1).as_str());
+        if used_width + 1 + hint_width <= max_width {
+            visible.push(hint.clone());
+            used_width += 1 + hint_width;
+        }
+    }
+    visible.push(last.clone());
+    build_shortcut_display(&visible, style)
+}
+
 impl ChatView {
     /// Render interface
-    pub fn render(&mut self, frame: &mut Frame, chat_state: &ChatState) {
+    pub(crate) fn render(&mut self, frame: &mut Frame, chat_state: &ChatState) {
         let size = frame.area();
         frame.render_widget(
             Block::default().style(Style::default().bg(self.theme.background)),
@@ -15,7 +60,12 @@ impl ChatView {
         let input_height = content_lines + 2; // +2 for top/bottom borders
 
         // Calculate shortcuts area height based on content
-        let shortcuts_height = Self::calculate_shortcuts_height(size.width, chat_state, self.browse_mode);
+        let shortcuts_height = Self::calculate_shortcuts_height(
+            size.width,
+            chat_state,
+            self.browse_mode,
+            &self.shortcut_hints,
+        );
         // Status area can grow for long status messages to avoid horizontal truncation.
         let raw_status_height =
             Self::calculate_status_height(size.width, chat_state, self.status.as_deref());
@@ -30,10 +80,10 @@ impl ChatView {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),            // header
-                Constraint::Min(10),              // messages area
-                Constraint::Length(status_height), // status bar (dynamic)
-                Constraint::Length(input_height), // input area (dynamic)
+                Constraint::Length(3),                // header
+                Constraint::Min(10),                  // messages area
+                Constraint::Length(status_height),    // status bar (dynamic)
+                Constraint::Length(input_height),     // input area (dynamic)
                 Constraint::Length(shortcuts_height), // shortcuts hint (dynamic)
             ])
             .split(size);
@@ -68,9 +118,20 @@ impl ChatView {
         // Command palette overlay (Ctrl+P)
         self.command_palette.render(frame, size, &self.theme);
 
+        // Dedicated login page (full viewport takeover)
+        self.login_form.render(frame, size, &self.theme);
+
         // Info popup overlay (topmost)
         if let Some(ref msg) = self.info_popup {
-            super::widgets::render_info_popup(frame, size, msg, self.theme.primary);
+            let (scroll, max_scroll) = super::widgets::render_info_popup_scrolled(
+                frame,
+                size,
+                msg,
+                self.theme.primary,
+                self.info_popup_scroll,
+            );
+            self.info_popup_scroll = scroll;
+            self.info_popup_max_scroll = max_scroll;
         }
     }
 
@@ -115,7 +176,7 @@ impl ChatView {
 
     fn render_messages(&mut self, frame: &mut Frame, area: Rect, chat_state: &ChatState) {
         let title = if self.browse_mode {
-            format!(" Conversation [Browse Mode \u{2195}] ")
+            " Conversation [Browse Mode \u{2195}] ".to_string()
         } else {
             " Conversation ".to_string()
         };
@@ -251,7 +312,8 @@ impl ChatView {
                 total_lines.saturating_sub(visible_lines)
             };
 
-            let view_end_line = (view_start_line + visible_lines + visible_lines / 2).min(total_lines); // buffer: render half a screen extra
+            let view_end_line =
+                (view_start_line + visible_lines + visible_lines / 2).min(total_lines); // buffer: render half a screen extra
 
             // ── Step 4: Binary search for visible message range ──
             // Find first message that overlaps [view_start_line, view_end_line)
@@ -293,8 +355,8 @@ impl ChatView {
                             y_cursor.saturating_add(*y_end),
                         ));
                     }
-                    y_cursor = y_cursor
-                        .saturating_add(entry.items.len().min(u16::MAX as usize) as u16);
+                    y_cursor =
+                        y_cursor.saturating_add(entry.items.len().min(u16::MAX as usize) as u16);
                 }
             }
 
@@ -325,7 +387,8 @@ impl ChatView {
                     selected_in_subset.min(messages.len().saturating_sub(1)),
                 ));
             } else if self.auto_scroll {
-                self.list_state.select(Some(messages.len().saturating_sub(1)));
+                self.list_state
+                    .select(Some(messages.len().saturating_sub(1)));
                 self.scroll_offset = 0;
             }
 
@@ -364,7 +427,11 @@ impl ChatView {
 
     /// Render a single message into a list of owned ListItems.
     /// Returns owned items plus message-local clickable regions so results can be cached across frames.
-    fn render_message(&mut self, message: &ChatMessage, available_width: u16) -> MessageRenderResult {
+    fn render_message(
+        &mut self,
+        message: &ChatMessage,
+        available_width: u16,
+    ) -> MessageRenderResult {
         let mut items: Vec<ListItem<'static>> = Vec::new();
         let mut plain_lines: Vec<String> = Vec::new();
         let mut tool_regions: Vec<(String, u16, u16)> = Vec::new();
@@ -457,7 +524,10 @@ impl ChatView {
         if !message.flow_items.is_empty() {
             for flow_item in &message.flow_items {
                 match flow_item {
-                    FlowItem::Text { content, is_streaming } => {
+                    FlowItem::Text {
+                        content,
+                        is_streaming,
+                    } => {
                         if message.role == MessageRole::Assistant
                             && MarkdownRenderer::has_markdown_syntax(content)
                         {
@@ -499,8 +569,7 @@ impl ChatView {
                             }
                             for line in content.lines() {
                                 if message.role == MessageRole::User {
-                                    let max_text_width =
-                                        available_width.saturating_sub(3) as usize;
+                                    let max_text_width = available_width.saturating_sub(3) as usize;
                                     let wrapped = wrap_hard_display_width(line, max_text_width);
                                     if !user_bubble_open {
                                         items.push(user_padding_line(
@@ -527,8 +596,7 @@ impl ChatView {
                                         plain_lines.push(plain);
                                     }
                                 } else {
-                                    let max_text_width =
-                                        available_width.saturating_sub(2) as usize;
+                                    let max_text_width = available_width.saturating_sub(2) as usize;
                                     for wrapped_line in
                                         wrap_hard_display_width(line, max_text_width)
                                     {
@@ -546,20 +614,14 @@ impl ChatView {
                         if *is_streaming {
                             if message.role == MessageRole::User {
                                 if !user_bubble_open {
-                                    items.push(user_padding_line(
-                                        user_bg_style,
-                                        user_border_style,
-                                    ));
+                                    items.push(user_padding_line(user_bg_style, user_border_style));
                                     plain_lines.push(" | ".to_string());
                                     user_bubble_open = true;
                                 }
                                 items.push(
                                     ListItem::new(Line::from(vec![
                                         Span::raw(" ".to_string()),
-                                        Span::styled(
-                                            "\u{258f}".to_string(),
-                                            user_border_style,
-                                        ), // ▏
+                                        Span::styled("\u{258f}".to_string(), user_border_style), // ▏
                                         Span::raw(" ".to_string()),
                                         Span::styled(
                                             "\u{2588}".to_string(),
@@ -606,7 +668,8 @@ impl ChatView {
                             && !self.thinking_auto_collapsed.contains(&thinking_block_id)
                         {
                             self.collapsed_thinking.insert(thinking_block_id.clone());
-                            self.thinking_auto_collapsed.insert(thinking_block_id.clone());
+                            self.thinking_auto_collapsed
+                                .insert(thinking_block_id.clone());
                         }
 
                         let collapsed = self.collapsed_thinking.contains(&thinking_block_id);
@@ -663,19 +726,14 @@ impl ChatView {
                             ])));
                             plain_lines.push("    (empty)".to_string());
                         } else {
-                            let thinking_max_width =
-                                available_width.saturating_sub(4) as usize; // 4 = indent "    "
+                            let thinking_max_width = available_width.saturating_sub(4) as usize; // 4 = indent "    "
                             for line in content_lines {
-                                let wrapped =
-                                    wrap_hard_display_width(line, thinking_max_width);
+                                let wrapped = wrap_hard_display_width(line, thinking_max_width);
                                 for wl in wrapped {
                                     let plain = format!("    {}", wl);
                                     items.push(ListItem::new(Line::from(vec![
                                         Span::raw("    ".to_string()),
-                                        Span::styled(
-                                            wl,
-                                            self.theme.style(StyleKind::Muted),
-                                        ),
+                                        Span::styled(wl, self.theme.style(StyleKind::Muted)),
                                     ])));
                                     plain_lines.push(plain);
                                 }
@@ -708,10 +766,7 @@ impl ChatView {
                         let y_start = items.len().min(u16::MAX as usize) as u16;
                         items.extend(tool_render.items);
                         plain_lines.extend(tool_render.plain_lines);
-                        let y_end = items
-                            .len()
-                            .saturating_sub(1)
-                            .min(u16::MAX as usize) as u16;
+                        let y_end = items.len().saturating_sub(1).min(u16::MAX as usize) as u16;
                         tool_regions.push((tool_state.tool_id.clone(), y_start, y_end));
                     }
                 }
@@ -753,8 +808,8 @@ impl ChatView {
             let loading_text = format!(" {} Thinking...", self.spinner.current());
             let stats_text = format!("Tokens: {} ", chat_state.metadata.total_tokens);
 
-            let padding_len = (area.width as usize)
-                .saturating_sub(loading_text.len() + stats_text.len());
+            let padding_len =
+                (area.width as usize).saturating_sub(loading_text.len() + stats_text.len());
 
             let loading_span = Span::styled(loading_text, self.theme.style(StyleKind::Primary));
             let stats_span = Span::styled(stats_text, self.theme.style(StyleKind::Muted));
@@ -809,7 +864,8 @@ impl ChatView {
             placeholder_style: self.theme.style(StyleKind::Muted),
         };
 
-        self.text_input.render(frame, inner, &style, !chat_state.is_processing);
+        self.text_input
+            .render(frame, inner, &style, !chat_state.is_processing);
     }
 
     fn render_command_menu(&mut self, frame: &mut Frame, area: Rect) {
@@ -873,38 +929,17 @@ impl ChatView {
         ];
 
         // Build right side shortcuts with proper styling
-        let shortcuts = vec![
-            ("Tab", "Switch Agent"),
-            ("Alt+\u{21b5}", "Newline"),
-            ("Ctrl+P", "Commands"),
-            ("\u{2191}\u{2193}", "History"),
-            ("Ctrl+E", "Browse"),
-            ("Esc", "Interrupt"),
-            ("Ctrl+C", "Quit"),
-        ];
-
-        let mut right_spans = Vec::new();
-        let mut right_text = String::new();
-        for (i, (key, desc)) in shortcuts.iter().enumerate() {
-            if i > 0 {
-                right_spans.push(Span::styled(" ", muted));
-                right_text.push(' ');
-            }
-            let key_text = format!("[{}]", key);
-            right_spans.push(Span::styled(key_text.clone(), muted));
-            right_spans.push(Span::styled(*desc, muted));
-            right_text.push_str(&key_text);
-            right_text.push_str(desc);
-        }
+        let (full_right_spans, full_right_text) =
+            build_shortcut_display(&self.shortcut_hints, muted);
 
         // Render lines based on available width
         let available_width = area.width as usize;
         let left_line = Line::from(left_spans);
-        let right_line = Line::from(right_spans);
+        let full_right_line = Line::from(full_right_spans);
 
         // Calculate widths using unicode_width
         let left_width = UnicodeWidthStr::width(left_text.as_str());
-        let right_width = UnicodeWidthStr::width(right_text.as_str());
+        let right_width = UnicodeWidthStr::width(full_right_text.as_str());
 
         let mut lines = Vec::new();
 
@@ -914,12 +949,14 @@ impl ChatView {
             let mut combined_spans = Vec::new();
             combined_spans.extend(left_line.spans);
             combined_spans.push(Span::raw(" ".repeat(gap)));
-            combined_spans.extend(right_line.spans);
+            combined_spans.extend(full_right_line.spans);
             lines.push(Line::from(combined_spans));
         } else {
             // Need multiple lines: render left and right separately
+            let (right_spans, _) =
+                build_shortcut_display_for_width(&self.shortcut_hints, muted, available_width);
             lines.push(left_line);
-            lines.push(right_line);
+            lines.push(Line::from(right_spans));
         }
 
         let paragraph = Paragraph::new(lines);
@@ -927,14 +964,19 @@ impl ChatView {
     }
 
     /// Calculate the required height for the shortcuts area
-    fn calculate_shortcuts_height(available_width: u16, chat_state: &ChatState, browse_mode: bool) -> u16 {
+    fn calculate_shortcuts_height(
+        available_width: u16,
+        chat_state: &ChatState,
+        browse_mode: bool,
+        shortcut_hints: &[(String, &'static str)],
+    ) -> u16 {
         let mode_text = if browse_mode { " Browse " } else { " Chat " };
         let left_text = format!("{} | Model: {}", mode_text, chat_state.current_model_name);
 
-        let right_text = "[Tab]Switch Agent [Alt+\u{21b5}]Newline [Ctrl+P]Commands [\u{2191}\u{2193}]History [Ctrl+E]Browse [Esc]Interrupt [Ctrl+C]Quit";
+        let (_, right_text) = build_shortcut_display(shortcut_hints, Style::default());
 
         let left_width = UnicodeWidthStr::width(left_text.as_str());
-        let right_width = UnicodeWidthStr::width(right_text);
+        let right_width = UnicodeWidthStr::width(right_text.as_str());
 
         // If both fit on one line (with at least 2 spaces gap), height is 1
         if left_width + right_width + 2 <= available_width as usize {
@@ -979,5 +1021,91 @@ impl ChatView {
         }
 
         lines as u16
+    }
+}
+
+#[cfg(test)]
+mod shortcut_contract_tests {
+    use super::*;
+    use crate::actions::{ActionState, ResolvedKeymap};
+    use crate::config::ShortcutsConfig;
+    use ratatui::style::Color;
+
+    #[test]
+    fn chat_shortcuts_keep_visible_order_and_muted_style() {
+        let muted = Style::default().fg(Color::DarkGray);
+
+        let keymap = ResolvedKeymap::new(&ShortcutsConfig::default());
+        let shortcuts = keymap.compact_hints(ActionState::chat(false, false));
+        let (spans, text) = build_shortcut_display(&shortcuts, muted);
+
+        assert_eq!(
+            text,
+            "[Tab]Switch Agent [Alt+↵]Newline [Ctrl+P]Commands [↑↓]History [Ctrl+E]Browse [Ctrl+C]Quit"
+        );
+        assert_eq!(
+            spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<Vec<_>>(),
+            [
+                "[Tab]",
+                "Switch Agent",
+                " ",
+                "[Alt+↵]",
+                "Newline",
+                " ",
+                "[Ctrl+P]",
+                "Commands",
+                " ",
+                "[↑↓]",
+                "History",
+                " ",
+                "[Ctrl+E]",
+                "Browse",
+                " ",
+                "[Ctrl+C]",
+                "Quit",
+            ]
+        );
+        assert!(spans.iter().all(|span| span.style == muted));
+    }
+
+    #[test]
+    fn shortcut_registry_contract_footer_uses_resolved_keymap() {
+        let shortcuts = ResolvedKeymap::new(&ShortcutsConfig::default())
+            .compact_hints(ActionState::chat(false, false));
+        let (_, text) = build_shortcut_display(&shortcuts, Style::default());
+        assert!(text.contains("[Ctrl+P]Commands"));
+    }
+
+    #[test]
+    fn processing_footer_shows_interrupt_without_quit() {
+        let shortcuts = ResolvedKeymap::new(&ShortcutsConfig::default())
+            .compact_hints(ActionState::chat(true, false));
+        let (_, text) = build_shortcut_display(&shortcuts, Style::default());
+
+        assert!(text.contains("[Esc]Interrupt"));
+        assert!(!text.contains("Quit"));
+        assert!(!text.contains("Switch Agent"));
+    }
+
+    #[test]
+    fn narrow_footer_keeps_the_recovery_hint_visible() {
+        let idle = ResolvedKeymap::new(&ShortcutsConfig::default())
+            .compact_hints(ActionState::chat(false, false));
+        let (_, idle_text) = build_shortcut_display_for_width(&idle, Style::default(), 80);
+        assert!(idle_text.contains("[Ctrl+C]Quit"), "{idle_text}");
+        assert!(UnicodeWidthStr::width(idle_text.as_str()) <= 80);
+
+        let processing = ResolvedKeymap::new(&ShortcutsConfig::default())
+            .compact_hints(ActionState::chat(true, false));
+        let (_, processing_text) =
+            build_shortcut_display_for_width(&processing, Style::default(), 80);
+        assert!(
+            processing_text.contains("[Esc]Interrupt"),
+            "{processing_text}"
+        );
+        assert!(UnicodeWidthStr::width(processing_text.as_str()) <= 80);
     }
 }

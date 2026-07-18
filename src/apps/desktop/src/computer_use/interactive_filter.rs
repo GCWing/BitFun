@@ -93,7 +93,7 @@ pub(crate) fn build_interactive_elements(
                     "AXPress" | "AXConfirm" | "AXOpen" | "AXShowMenu" | "AXPick"
                 )
             }),
-            area: (gw * gh) as f64,
+            area: gw * gh,
         });
     }
 
@@ -286,12 +286,13 @@ fn is_interactive(n: &AxNode) -> bool {
 }
 
 fn best_label(n: &AxNode) -> Option<String> {
-    for cand in [&n.title, &n.description, &n.help, &n.value, &n.identifier] {
-        if let Some(s) = cand {
-            let trimmed = s.trim();
-            if !trimmed.is_empty() {
-                return Some(clip(trimmed, 80));
-            }
+    for s in [&n.title, &n.description, &n.help, &n.value, &n.identifier]
+        .into_iter()
+        .flatten()
+    {
+        let trimmed = s.trim();
+        if !trimmed.is_empty() {
+            return Some(clip(trimmed, 80));
         }
     }
     None

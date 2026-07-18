@@ -19,101 +19,104 @@ const HeartIcon = () => (
   </svg>
 );
 
+const previewBackground = 'color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white))';
+const previewTextMuted = 'color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black))';
+
 export const IconButtonExample: React.FC = () => {
   const { t } = useI18n('components');
 
   return (
-    <div style={{ padding: '24px', background: 'var(--preview-bg)', minHeight: '100vh' }}>
+    <div style={{ padding: '24px', background: previewBackground, minHeight: '100vh' }}>
       <h2 style={{ color: 'var(--color-static-white)', marginBottom: '24px' }}>
         {t('componentLibrary.iconButtonExample.title')}
       </h2>
       
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
+        <h3 style={{ color: previewTextMuted, marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.basic')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <IconButton variant="default" size="small">
+          <IconButton variant="default" size="small" aria-label="Add small">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="default" size="medium">
+          <IconButton variant="default" size="medium" aria-label="Add medium">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="default" size="large">
+          <IconButton variant="default" size="large" aria-label="Add large">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="default" size="medium" disabled>
+          <IconButton variant="default" size="medium" disabled aria-label="Add disabled">
             <PlusIcon />
           </IconButton>
         </div>
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
+        <h3 style={{ color: previewTextMuted, marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.ghost')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <IconButton variant="ghost" size="small">
+          <IconButton variant="ghost" size="small" aria-label="Favorite small">
             <HeartIcon />
           </IconButton>
-          <IconButton variant="ghost" size="medium">
+          <IconButton variant="ghost" size="medium" aria-label="Favorite medium">
             <HeartIcon />
           </IconButton>
-          <IconButton variant="ghost" size="large">
+          <IconButton variant="ghost" size="large" aria-label="Favorite large">
             <HeartIcon />
           </IconButton>
         </div>
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
+        <h3 style={{ color: previewTextMuted, marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.primary')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <IconButton variant="primary" size="small">
+          <IconButton variant="primary" size="small" aria-label="Create small">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="primary" size="medium">
+          <IconButton variant="primary" size="medium" aria-label="Create medium">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="primary" size="large">
+          <IconButton variant="primary" size="large" aria-label="Create large">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="primary" size="medium" disabled>
+          <IconButton variant="primary" size="medium" disabled aria-label="Create disabled">
             <PlusIcon />
           </IconButton>
         </div>
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
+        <h3 style={{ color: previewTextMuted, marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.shape')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <IconButton variant="default" shape="circle" size="medium">
+          <IconButton variant="default" shape="circle" size="medium" aria-label="Add circle">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="primary" shape="circle" size="medium">
+          <IconButton variant="primary" shape="circle" size="medium" aria-label="Favorite circle">
             <HeartIcon />
           </IconButton>
         </div>
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
+        <h3 style={{ color: previewTextMuted, marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.other')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <IconButton variant="danger" size="medium">
+          <IconButton variant="danger" size="medium" aria-label="Danger action">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="success" size="medium">
+          <IconButton variant="success" size="medium" aria-label="Success action">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="warning" size="medium">
+          <IconButton variant="warning" size="medium" aria-label="Warning action">
             <PlusIcon />
           </IconButton>
-          <IconButton variant="ai" size="medium">
+          <IconButton variant="ai" size="medium" aria-label="AI action">
             <PlusIcon />
           </IconButton>
         </div>
@@ -123,7 +126,7 @@ export const IconButtonExample: React.FC = () => {
         <h3 style={{ color: 'var(--color-static-white)', marginBottom: '12px' }}>
           {t('componentLibrary.iconButtonExample.sections.usage')}
         </h3>
-        <ul style={{ color: 'var(--preview-text-muted)', lineHeight: '1.8' }}>
+        <ul style={{ color: previewTextMuted, lineHeight: '1.8' }}>
           <li>
             <strong>{t('componentLibrary.iconButtonExample.usage.defaultGhost.label')}</strong>
             {t('componentLibrary.iconButtonExample.usage.defaultGhost.text')}

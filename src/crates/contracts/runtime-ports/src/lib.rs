@@ -11,6 +11,30 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+mod plugin;
+mod script_tool;
+pub use plugin::{
+    validate_plugin_dispatch_response, validate_plugin_runtime_read_response,
+    DisabledPluginRuntimeClient, ExtensionCapabilityAvailability, PermissionPromptDenyState,
+    PermissionPromptDescriptor, PermissionPromptEffectKind, PluginArtifactRef, PluginAuditRef,
+    PluginCapabilityRef, PluginConfigValidationIssue, PluginConfigValidationState,
+    PluginConfigValidationStatus, PluginDataClassification, PluginDiagnostic,
+    PluginDiagnosticDetail, PluginDiagnosticSeverity, PluginDispatchEnvelope,
+    PluginEffectCandidate, PluginEffectCandidatePayload, PluginHostLifecyclePhase,
+    PluginManifestRef, PluginOwnerKind, PluginOwnerRef, PluginPayloadRedaction, PluginPayloadRef,
+    PluginPermissionGate, PluginQuarantineClearCondition, PluginQuarantineReason,
+    PluginQuarantineScope, PluginQuarantineState, PluginResponseEnvelope, PluginRiskLevel,
+    PluginRollbackMode, PluginRollbackPolicy, PluginRuntimeAvailability, PluginRuntimeBinding,
+    PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest, PluginRuntimeReadResponse,
+    PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef, PluginStatusKind,
+    PluginStatusSnapshot, PluginTargetRef, PluginTrustLevel, ProjectionOnlyPluginRuntimeClient,
+};
+pub use script_tool::{
+    ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,
+    ScriptToolInvokeResponse, ScriptToolLoadRequest, ScriptToolLoadResponse, ScriptToolRuntime,
+    ScriptToolRuntimeAvailability,
+};
+
 pub type PortResult<T> = Result<T, PortError>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,214 +123,6 @@ impl std::fmt::Display for RuntimeServiceCapability {
 
 pub trait RuntimeServicePort: Send + Sync {
     fn capability(&self) -> RuntimeServiceCapability;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PluginRuntimeUnavailableReason {
-    NotBuilt,
-    UnsupportedProfile,
-    DisabledByPolicy,
-    HostUnavailable,
-}
-
-impl PluginRuntimeUnavailableReason {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::NotBuilt => "not_built",
-            Self::UnsupportedProfile => "unsupported_profile",
-            Self::DisabledByPolicy => "disabled_by_policy",
-            Self::HostUnavailable => "host_unavailable",
-        }
-    }
-}
-
-impl std::fmt::Display for PluginRuntimeUnavailableReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "status")]
-pub enum ExtensionCapabilityAvailability {
-    Disabled {
-        reason: PluginRuntimeUnavailableReason,
-    },
-    ProjectionOnly {
-        reason: PluginRuntimeUnavailableReason,
-    },
-    Available,
-    Unavailable {
-        reason: PluginRuntimeUnavailableReason,
-    },
-}
-
-impl ExtensionCapabilityAvailability {
-    pub const fn disabled(reason: PluginRuntimeUnavailableReason) -> Self {
-        Self::Disabled { reason }
-    }
-
-    pub const fn projection_only(reason: PluginRuntimeUnavailableReason) -> Self {
-        Self::ProjectionOnly { reason }
-    }
-
-    pub const fn is_executable(self) -> bool {
-        matches!(self, Self::Available)
-    }
-}
-
-pub type PluginRuntimeAvailability = ExtensionCapabilityAvailability;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginDispatchEnvelope {
-    pub envelope_id: String,
-    pub event_name: String,
-    #[serde(default)]
-    pub payload: serde_json::Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginResponseEnvelope {
-    pub envelope_id: String,
-    pub accepted: bool,
-}
-
-#[async_trait::async_trait]
-pub trait PluginRuntimeClient: Send + Sync {
-    fn availability(&self) -> PluginRuntimeAvailability;
-
-    async fn dispatch(
-        &self,
-        envelope: PluginDispatchEnvelope,
-    ) -> PortResult<PluginResponseEnvelope>;
-}
-
-#[derive(Debug, Clone)]
-pub struct DisabledPluginRuntimeClient {
-    reason: PluginRuntimeUnavailableReason,
-}
-
-impl DisabledPluginRuntimeClient {
-    pub const fn new(reason: PluginRuntimeUnavailableReason) -> Self {
-        Self { reason }
-    }
-
-    fn not_available(&self) -> PortError {
-        PortError::new(
-            PortErrorKind::NotAvailable,
-            format!("plugin runtime is disabled: {}", self.reason),
-        )
-    }
-}
-
-impl Default for DisabledPluginRuntimeClient {
-    fn default() -> Self {
-        Self::new(PluginRuntimeUnavailableReason::NotBuilt)
-    }
-}
-
-#[async_trait::async_trait]
-impl PluginRuntimeClient for DisabledPluginRuntimeClient {
-    fn availability(&self) -> PluginRuntimeAvailability {
-        PluginRuntimeAvailability::Disabled {
-            reason: self.reason,
-        }
-    }
-
-    async fn dispatch(
-        &self,
-        _envelope: PluginDispatchEnvelope,
-    ) -> PortResult<PluginResponseEnvelope> {
-        Err(self.not_available())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ProjectionOnlyPluginRuntimeClient {
-    reason: PluginRuntimeUnavailableReason,
-}
-
-impl ProjectionOnlyPluginRuntimeClient {
-    pub const fn new(reason: PluginRuntimeUnavailableReason) -> Self {
-        Self { reason }
-    }
-
-    fn not_available(&self) -> PortError {
-        PortError::new(
-            PortErrorKind::NotAvailable,
-            format!("plugin runtime is projection-only: {}", self.reason),
-        )
-    }
-}
-
-#[async_trait::async_trait]
-impl PluginRuntimeClient for ProjectionOnlyPluginRuntimeClient {
-    fn availability(&self) -> PluginRuntimeAvailability {
-        PluginRuntimeAvailability::ProjectionOnly {
-            reason: self.reason,
-        }
-    }
-
-    async fn dispatch(
-        &self,
-        _envelope: PluginDispatchEnvelope,
-    ) -> PortResult<PluginResponseEnvelope> {
-        Err(self.not_available())
-    }
-}
-
-#[derive(Clone)]
-pub enum PluginRuntimeBinding {
-    Disabled(DisabledPluginRuntimeClient),
-    ProjectionOnly(ProjectionOnlyPluginRuntimeClient),
-    Client(Arc<dyn PluginRuntimeClient>),
-}
-
-impl PluginRuntimeBinding {
-    pub const fn disabled(reason: PluginRuntimeUnavailableReason) -> Self {
-        Self::Disabled(DisabledPluginRuntimeClient::new(reason))
-    }
-
-    pub const fn projection_only(reason: PluginRuntimeUnavailableReason) -> Self {
-        Self::ProjectionOnly(ProjectionOnlyPluginRuntimeClient::new(reason))
-    }
-
-    pub fn client(client: Arc<dyn PluginRuntimeClient>) -> Self {
-        Self::Client(client)
-    }
-
-    pub fn availability(&self) -> PluginRuntimeAvailability {
-        match self {
-            Self::Disabled(client) => client.availability(),
-            Self::ProjectionOnly(client) => client.availability(),
-            Self::Client(client) => client.availability(),
-        }
-    }
-
-    pub fn as_client(&self) -> Arc<dyn PluginRuntimeClient> {
-        match self {
-            Self::Disabled(client) => Arc::new(client.clone()),
-            Self::ProjectionOnly(client) => Arc::new(client.clone()),
-            Self::Client(client) => Arc::clone(client),
-        }
-    }
-}
-
-impl Default for PluginRuntimeBinding {
-    fn default() -> Self {
-        Self::disabled(PluginRuntimeUnavailableReason::NotBuilt)
-    }
-}
-
-impl std::fmt::Debug for PluginRuntimeBinding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PluginRuntimeBinding")
-            .field("availability", &self.availability())
-            .finish()
-    }
 }
 
 pub trait FileSystemPort: RuntimeServicePort {}
@@ -1026,6 +842,10 @@ pub struct RemoteRecentWorkspaceFacts {
     pub name: String,
     pub last_opened: String,
     pub kind: RemoteWorkspaceKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1042,6 +862,10 @@ pub struct RemoteAssistantWorkspaceFacts {
 pub struct RemoteWorkspaceUpdate {
     pub path: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1092,7 +916,12 @@ pub struct RemoteFileChunkRange {
 pub trait RemoteWorkspaceRuntimeHost: Send + Sync {
     async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts>;
     async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts>;
-    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
+    async fn open_workspace(
+        &self,
+        path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> Result<RemoteWorkspaceUpdate, String>;
     async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts>;
     async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
 }
@@ -1171,6 +1000,8 @@ pub struct AgentSessionSummary {
     pub session_id: String,
     pub session_name: String,
     pub agent_type: String,
+    #[serde(default)]
+    pub turn_count: usize,
     pub created_at_ms: u64,
     pub last_active_at_ms: u64,
 }
@@ -1184,6 +1015,13 @@ pub struct AgentSessionDeleteRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionModelUpdateRequest {
+    pub session_id: String,
+    pub model_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1358,6 +1196,10 @@ impl DialogSubmissionPolicy {
     pub const fn with_skip_tool_confirmation(mut self, skip_tool_confirmation: bool) -> Self {
         self.skip_tool_confirmation = skip_tool_confirmation;
         self
+    }
+
+    pub const fn requires_tool_confirmation(self) -> bool {
+        matches!(self.trigger_source, DialogTriggerSource::Cli) && !self.skip_tool_confirmation
     }
 }
 
@@ -1544,6 +1386,15 @@ pub trait DialogRoundInjectionSource: Send + Sync {
         turn_id: &str,
     ) -> RoundInjectionToolPreemption;
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection>;
+
+    fn acknowledge_consumed(
+        &self,
+        _session_id: &str,
+        _turn_id: &str,
+        _injection_id: &str,
+        _kind: RoundInjectionKind,
+    ) {
+    }
 }
 
 /// Legacy session metadata key for the pre-Codex goal mode experiment.
@@ -1806,6 +1657,23 @@ pub trait AgentSubmissionPort: Send + Sync {
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult>;
 
+    /// Creates a session with an exact caller-provided identity.
+    ///
+    /// Providers that do not support exact identity creation keep the default
+    /// typed unsupported response. A successful response must preserve
+    /// `session_id` exactly.
+    async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> PortResult<AgentSessionCreateResult> {
+        let _ = (session_id, request);
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "exact session identity creation is not supported by this provider",
+        ))
+    }
+
     async fn submit_message(
         &self,
         request: AgentSubmissionRequest,
@@ -1827,6 +1695,12 @@ pub trait AgentSessionManagementPort: Send + Sync {
         &self,
         request: AgentSessionWorkspaceRequest,
     ) -> PortResult<Option<AgentSessionWorkspaceBinding>>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionModelPort: Send + Sync {
+    async fn update_session_model(&self, request: AgentSessionModelUpdateRequest)
+        -> PortResult<()>;
 }
 
 #[async_trait::async_trait]
@@ -2003,14 +1877,54 @@ pub struct SessionTranscript {
     pub messages: Vec<TranscriptMessage>,
 }
 
+/// Read-only transcript content shared by runtime consumers.
+///
+/// This projection preserves portable history facts without exposing the Core persistence
+/// message type. Multimodal entries report attachment counts rather than transporting image
+/// payloads; callers that need attachment content require a separate, authorized capability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TranscriptContent {
+    Text(String),
+    Multimodal {
+        text: String,
+        image_count: usize,
+    },
+    ToolResult {
+        tool_id: String,
+        tool_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effective_tool_name: Option<String>,
+        result: serde_json::Value,
+        is_error: bool,
+    },
+    Mixed {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_content: Option<String>,
+        text: String,
+        #[serde(default)]
+        tool_calls: Vec<TranscriptToolCall>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptToolCall {
+    pub tool_id: String,
+    pub tool_name: String,
+    #[serde(default)]
+    pub arguments: serde_json::Value,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptMessage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub turn_id: Option<String>,
-    #[serde(default)]
-    pub content: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<u64>,
+    pub content: TranscriptContent,
 }
 
 #[async_trait::async_trait]
@@ -2070,6 +1984,35 @@ impl SubagentContextMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agent_session_create_request_keeps_rust_literal_compatible() {
+        let request = AgentSessionCreateRequest {
+            session_name: "Generated session".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            metadata: serde_json::Map::new(),
+        };
+
+        let json = serde_json::to_value(request).expect("serialize create request");
+
+        assert!(json.get("sessionId").is_none());
+    }
+
+    #[test]
+    fn agent_session_create_request_keeps_legacy_payload_compatible() {
+        let request: AgentSessionCreateRequest = serde_json::from_value(serde_json::json!({
+            "sessionName": "Generated session",
+            "agentType": "agentic",
+            "workspacePath": "/workspace/project"
+        }))
+        .expect("deserialize legacy create request");
+
+        let json = serde_json::to_value(request).expect("serialize create request");
+        assert!(json.get("sessionId").is_none());
+    }
 
     #[test]
     fn port_error_display_keeps_kind_and_message() {
@@ -2142,6 +2085,25 @@ mod tests {
         let cli = DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli);
         assert_eq!(cli.queue_priority, DialogQueuePriority::Normal);
         assert!(!cli.skip_tool_confirmation);
+        assert!(cli.requires_tool_confirmation());
+        let cli_json = serde_json::to_value(cli).expect("serialize cli policy");
+        assert!(cli_json.get("requireToolConfirmation").is_none());
+
+        let auto = cli.with_skip_tool_confirmation(true);
+        assert!(auto.skip_tool_confirmation);
+        assert!(!auto.requires_tool_confirmation());
+    }
+
+    #[test]
+    fn legacy_cli_policy_without_require_field_still_requires_confirmation() {
+        let policy: DialogSubmissionPolicy = serde_json::from_value(serde_json::json!({
+            "triggerSource": "cli",
+            "queuePriority": "normal",
+            "skipToolConfirmation": false
+        }))
+        .expect("legacy policy");
+
+        assert!(policy.requires_tool_confirmation());
     }
 
     #[test]
@@ -2731,6 +2693,7 @@ mod tests {
             session_id: "session_1".to_string(),
             session_name: "Main".to_string(),
             agent_type: "agentic".to_string(),
+            turn_count: 3,
             created_at_ms: 1000,
             last_active_at_ms: 2000,
         };
@@ -2739,6 +2702,10 @@ mod tests {
             session_id: "session_1".to_string(),
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
+        };
+        let model_request = AgentSessionModelUpdateRequest {
+            session_id: "session_1".to_string(),
+            model_id: "provider/model".to_string(),
         };
         let workspace_request = AgentSessionWorkspaceRequest {
             session_id: "session_1".to_string(),
@@ -2753,6 +2720,7 @@ mod tests {
         let list_json = serde_json::to_value(list_request).expect("serialize list request");
         let summary_json = serde_json::to_value(summary).expect("serialize summary");
         let delete_json = serde_json::to_value(delete_request).expect("serialize delete request");
+        let model_json = serde_json::to_value(model_request).expect("serialize model request");
         let workspace_json =
             serde_json::to_value(workspace_request).expect("serialize workspace request");
         let binding_json =
@@ -2762,11 +2730,14 @@ mod tests {
         assert_eq!(list_json["remoteConnectionId"], "conn-1");
         assert_eq!(list_json["remoteSshHost"], "host-1");
         assert_eq!(summary_json["sessionId"], "session_1");
+        assert_eq!(summary_json["turnCount"], 3);
         assert_eq!(summary_json["createdAtMs"], 1000);
         assert_eq!(summary_json["lastActiveAtMs"], 2000);
         assert_eq!(delete_json["sessionId"], "session_1");
         assert_eq!(delete_json["remoteConnectionId"], "conn-1");
         assert_eq!(delete_json["remoteSshHost"], "host-1");
+        assert_eq!(model_json["sessionId"], "session_1");
+        assert_eq!(model_json["modelId"], "provider/model");
         assert_eq!(workspace_json["sessionId"], "session_1");
         assert_eq!(binding_json["workspaceId"], "workspace_1");
         assert_eq!(binding_json["workspacePath"], "/workspace/project");
@@ -2823,6 +2794,23 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["turnId"], "turn_1");
         assert!(json.get("fromTurnId").is_none());
+    }
+
+    #[test]
+    fn transcript_contract_keeps_portable_message_identity_and_content() {
+        let message = TranscriptMessage {
+            id: Some("message_1".to_string()),
+            role: "assistant".to_string(),
+            turn_id: Some("turn_1".to_string()),
+            timestamp_ms: Some(3000),
+            content: TranscriptContent::Text("done".to_string()),
+        };
+
+        let message_json = serde_json::to_value(message).expect("serialize transcript message");
+
+        assert_eq!(message_json["id"], "message_1");
+        assert_eq!(message_json["timestampMs"], 3000);
+        assert_eq!(message_json["content"]["Text"], "done");
     }
 
     #[test]

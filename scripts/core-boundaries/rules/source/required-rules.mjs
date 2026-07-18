@@ -2,9 +2,245 @@
 
 export const requiredContentRules = [
   {
+    path: 'src/crates/services/services-core/src/persistence.rs',
+    reason:
+      'services-core must own generic JSON persistence storage while core keeps only PathManager compatibility adapters',
+    patterns: [
+      {
+        regex: /\bpub struct PersistenceService\b/,
+        message: 'missing services-owned generic persistence service',
+      },
+      {
+        regex: /\bpub async fn save_json\b/,
+        message: 'missing services-owned JSON save path',
+      },
+      {
+        regex: /\bpub async fn load_json\b/,
+        message: 'missing services-owned JSON load path',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/storage_cleanup.rs',
+    reason:
+      'services-core must own reusable storage cleanup traversal and cleanup policy execution',
+    patterns: [
+      {
+        regex: /\bpub struct CleanupRoots\b/,
+        message: 'missing explicit cleanup roots contract',
+      },
+      {
+        regex: /\bpub struct CleanupService\b/,
+        message: 'missing services-owned cleanup service',
+      },
+      {
+        regex: /\bpub async fn cleanup_all\b/,
+        message: 'missing services-owned cleanup entrypoint',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/token_usage/service.rs',
+    reason:
+      'services-core must own token usage persistence and query aggregation while core keeps compatibility construction',
+    patterns: [
+      {
+        regex: /\bpub struct TokenUsageService\b/,
+        message: 'missing services-owned token usage service',
+      },
+      {
+        regex: /\bpub async fn record_usage\b/,
+        message: 'missing token usage record owner',
+      },
+      {
+        regex: /\bpub async fn get_model_stats_filtered\b/,
+        message: 'missing token usage filtered query owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/workspace_instructions.rs',
+    reason:
+      'services-core must own workspace instruction file IO and file ordering while core keeps prompt rendering',
+    patterns: [
+      {
+        regex: /\bpub struct WorkspaceInstructionFile\b/,
+        message: 'missing workspace instruction file DTO',
+      },
+      {
+        regex: /\bpub async fn read_workspace_instruction_files\b/,
+        message: 'missing workspace instruction file reader',
+      },
+      {
+        regex: /\bAGENTS\.md\b/,
+        message: 'missing AGENTS.md instruction file order anchor',
+      },
+      {
+        regex: /\bCLAUDE\.md\b/,
+        message: 'missing CLAUDE.md instruction file order anchor',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/markdown.rs',
+    reason:
+      'services-core must own front-matter markdown file parsing and persistence',
+    patterns: [
+      {
+        regex: /\bpub struct FrontMatterMarkdown\b/,
+        message: 'missing front-matter markdown owner',
+      },
+      {
+        regex: /\bpub fn load_str\b/,
+        message: 'missing front-matter string parser',
+      },
+      {
+        regex: /\bpub fn save\b/,
+        message: 'missing front-matter save entrypoint',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/Cargo.toml',
+    reason:
+      'services-core markdown owner must keep serde_yaml behind an explicit feature to avoid growing the minimal service dependency set',
+    patterns: [
+      {
+        regex: /serde_yaml = \{ workspace = true, optional = true \}/,
+        message: 'serde_yaml must remain optional in services-core',
+      },
+      {
+        regex: /markdown = \["dep:serde_yaml"\]/,
+        message: 'missing explicit markdown feature for services-core',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/debug_log.rs',
+    reason:
+      'services-integrations must own debug log file append, redaction, default config, and HTTP dispatch behind the debug-log feature',
+    patterns: [
+      {
+        regex: /\bpub struct DebugLogConfig\b/,
+        message: 'missing debug log config owner',
+      },
+      {
+        regex: /\bpub struct DebugLogEntry\b/,
+        message: 'missing debug log entry owner',
+      },
+      {
+        regex: /\bpub async fn append_log_async\b/,
+        message: 'missing debug log append owner',
+      },
+      {
+        regex: /\bfn redact_value\b/,
+        message: 'missing debug log redaction owner',
+      },
+      {
+        regex: /\bpub async fn post_debug_log\b/,
+        message: 'missing debug log HTTP dispatch owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/tests/storage_owner_contracts.rs',
+    reason:
+      'services-core owner migrations must keep persistence, cleanup, workspace instruction, and token usage behavior contracts',
+    patterns: [
+      {
+        regex: /\bpersistence_service_keeps_atomic_json_shape_and_backups\b/,
+        message: 'missing persistence owner behavior regression',
+      },
+      {
+        regex: /\bcleanup_service_deletes_old_temp_and_log_files_without_product_paths\b/,
+        message: 'missing storage cleanup owner behavior regression',
+      },
+      {
+        regex: /\bworkspace_instruction_files_reads_agents_then_claude_and_skips_empty_files\b/,
+        message: 'missing workspace instruction owner behavior regression',
+      },
+      {
+        regex: /\btoken_usage_service_persists_records_and_filters_subagents_by_default\b/,
+        message: 'missing token usage owner behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/tests/markdown_owner_contracts.rs',
+    reason:
+      'services-core markdown owner must keep front-matter behavior contracts behind the markdown feature',
+    patterns: [
+      {
+        regex: /\bfront_matter_markdown_preserves_metadata_and_trimmed_body_contract\b/,
+        message: 'missing front-matter owner behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/tests/debug_log_owner_contracts.rs',
+    reason:
+      'services-integrations debug log migration must keep file append, redaction, and optional HTTP behavior contracts',
+    patterns: [
+      {
+        regex:
+          /\bdebug_log_owner_appends_legacy_partially_redacted_ndjson_and_skips_http_when_disabled\b/,
+        message: 'missing debug log file append and legacy partial redaction behavior regression',
+      },
+      {
+        regex: /\bdebug_log_owner_dispatches_the_same_redacted_payload_when_http_is_enabled\b/,
+        message: 'missing debug log HTTP dispatch behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/debug_log/mod.rs',
+    reason:
+      'core debug log module must stay a compatibility facade over services-integrations for log append and redaction behavior',
+    patterns: [
+      {
+        regex: /\bpub use bitfun_services_integrations::debug_log::\{/,
+        message: 'missing debug log owner re-export',
+      },
+      {
+        regex: /\bappend_log_async\b/,
+        message: 'missing append_log_async compatibility export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/storage/cleanup.rs',
+    reason:
+      'core storage cleanup compatibility path must preserve the legacy cleanup DTO imports while delegating behavior to services-core',
+    patterns: [
+      {
+        regex: /\bCleanupCategory\b/,
+        message: 'missing CleanupCategory compatibility re-export',
+      },
+      {
+        regex: /\bbitfun_services_core::storage_cleanup\b/,
+        message: 'missing services-core cleanup owner delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/token_usage/service.rs',
+    reason:
+      'core token usage service must stay a compatibility wrapper over services-core',
+    patterns: [
+      {
+        regex: /\bbitfun_services_core::token_usage::TokenUsageService\b/,
+        message: 'missing services-core token usage delegation',
+      },
+      {
+        regex: /\buser_data_dir\(\)\.join\(TOKEN_USAGE_DIR\)/,
+        message: 'missing legacy token usage base directory adapter',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/events/src/frontend_projection.rs',
     reason:
-      'events contract must own framework-neutral agentic frontend event projection for Tauri, WebSocket, and future extension hosts',
+      'events contract must own the framework-neutral agentic frontend event projection used by current hosts',
     patterns: [
       {
         regex: /\bpub struct AgenticFrontendEvent\b/,
@@ -15,43 +251,8 @@ export const requiredContentRules = [
         message: 'missing shared agentic frontend event projection function',
       },
       {
-        regex: /\bpub fn legacy_flat_message\b/,
-        message: 'missing legacy flat payload projection helper',
-      },
-      {
         regex: /\bdeep_review_queue_projection_preserves_camel_case_contract\b/,
         message: 'missing camelCase queue projection regression test',
-      },
-      {
-        regex: /\blegacy_flat_message_keeps_projection_type_authoritative\b/,
-        message: 'missing WebSocket type precedence regression test',
-      },
-      {
-        regex: /\blegacy_flat_dialog_turn_started_preserves_existing_shape\b/,
-        message: 'missing WebSocket dialog-turn-started shape regression test',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
-    reason:
-      'events contract must own the public AgenticEvent projection manifest, event versions, aggregate classification, and legacy transport allowlist',
-    patterns: [
-      {
-        regex: /\bpub const AGENTIC_EVENT_PROJECTION_MANIFEST\b/,
-        message: 'missing public AgenticEvent projection manifest',
-      },
-      {
-        regex: /\bpub fn public_agentic_event_projection_manifest\b/,
-        message: 'missing public AgenticEvent projection manifest accessor',
-      },
-      {
-        regex: /\bpub fn is_legacy_websocket_agentic_event_type\b/,
-        message: 'missing manifest-owned legacy WebSocket event allowlist helper',
-      },
-      {
-        regex: /\bpublic_event_projection_manifest_describes_projected_events_and_websocket_allowlist\b/,
-        message: 'missing public projection manifest regression test',
       },
     ],
   },
@@ -67,25 +268,6 @@ export const requiredContentRules = [
       {
         regex: /\.emit\(projected\.event_name\.as_str\(\), projected\.payload\)/,
         message: 'Tauri transport must emit projected event name and payload',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
-    reason:
-      'WebSocket transport adapter must consume shared event projection while preserving the legacy WebSocket event allowlist',
-    patterns: [
-      {
-        regex: /\bproject_agentic_frontend_event\b/,
-        message: 'missing shared frontend projection usage in WebSocket transport',
-      },
-      {
-        regex: /\bis_legacy_websocket_agentic_event_type\b/,
-        message: 'missing legacy WebSocket agentic event allowlist',
-      },
-      {
-        regex: /\bwebsocket_keeps_legacy_agentic_event_allowlist\b/,
-        message: 'missing WebSocket legacy event allowlist regression',
       },
     ],
   },
@@ -1228,6 +1410,33 @@ export const requiredContentRules = [
       {
         regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
         message: 'missing legacy harness route non-execution regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+    reason:
+      'product-capabilities plugin shape tests must protect P0 host-capable profiles, non-P0 rejection, default availability reasons, and runtime handoff',
+    patterns: [
+      {
+        regex: /\bp0_plugin_host_is_executable_only_for_product_full_desktop_and_cli\b/,
+        message: 'missing P0 host-capable profile regression',
+      },
+      {
+        regex: /\bp0_plugin_host_binding_builds_agent_runtime_parts\b/,
+        message: 'missing ProductAssembler to AgentRuntimeBuilder host handoff regression',
+      },
+      {
+        regex: /\bnon_p0_surfaces_cannot_inherit_executable_plugin_host\b/,
+        message: 'missing non-P0 executable plugin host rejection regression',
+      },
+      {
+        regex: /\bdefault_product_shapes_expose_only_disabled_plugin_availability\b/,
+        message: 'missing default plugin availability reason regression',
+      },
+      {
+        regex: /\bdefault_assembled_product_shapes_keep_profile_specific_plugin_availability\b/,
+        message: 'missing assembled default plugin availability reason regression',
       },
     ],
   },
@@ -2400,17 +2609,13 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/deep_review.rs',
     reason:
       'TaskTool must keep DeepReview retry/result presentation as a facade call instead of re-owning provider-neutral policy text or data shaping',
     patterns: [
       {
         regex: /deep_review_task_adapter::should_emit_deep_review_retry_guidance/,
         message: 'missing TaskTool DeepReview retry guidance emission facade call',
-      },
-      {
-        regex: /deep_review_task_adapter::deep_review_retry_guidance/,
-        message: 'missing TaskTool DeepReview retry guidance facade call',
       },
       {
         regex: /deep_review_task_adapter::auto_retry_suppression_reason/,
@@ -2421,12 +2626,23 @@ export const requiredContentRules = [
         message: 'missing TaskTool DeepReview auto-retry admission facade call',
       },
       {
-        regex: /deep_review_task_adapter::deep_review_task_completion_result/,
-        message: 'missing TaskTool DeepReview completion result facade call',
-      },
-      {
         regex: /deep_review_task_adapter::deep_review_cancelled_reviewer_result/,
         message: 'missing TaskTool DeepReview cancelled reviewer result facade call',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+    reason:
+      'TaskTool execution must keep DeepReview retry/result presentation as facade calls instead of re-owning provider-neutral policy text or data shaping',
+    patterns: [
+      {
+        regex: /deep_review_task_adapter::deep_review_retry_guidance/,
+        message: 'missing TaskTool DeepReview retry guidance facade call',
+      },
+      {
+        regex: /deep_review_task_adapter::deep_review_task_completion_result/,
+        message: 'missing TaskTool DeepReview completion result facade call',
       },
       {
         regex: /DeepReviewProviderCapacityRetryRuntime::default/,
@@ -4473,6 +4689,213 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/contracts/runtime-ports/src/plugin.rs',
+    reason:
+      'runtime-ports plugin module must own typed Plugin Runtime Contract DTOs and host boundary client traits',
+    patterns: [
+      {
+        regex: /\bpub trait PluginRuntimeClient\b/,
+        message: 'missing plugin runtime client boundary contract',
+      },
+      {
+        regex: /\bread_plugins\b/,
+        message: 'missing plugin discovery/status read boundary contract',
+      },
+      {
+        regex: /\bPluginQuarantineState\b/,
+        message: 'missing plugin quarantine read-model contract',
+      },
+      {
+        regex: /\bpub enum PluginRuntimeBinding\b/,
+        message: 'missing plugin runtime binding boundary contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_contracts.rs',
+    reason:
+      'runtime-ports plugin contract tests must cover typed envelopes, candidate effects, and disabled/projection-only behavior',
+    patterns: [
+      {
+        regex: /\bdispatch_envelope_serializes_typed_host_boundary_without_raw_payload\b/,
+        message: 'missing typed dispatch envelope regression',
+      },
+      {
+        regex: /\bresponse_envelope_carries_effect_candidates_and_observed_epochs\b/,
+        message: 'missing typed response envelope regression',
+      },
+      {
+        regex: /\bpermission_required_effects_keep_auditable_candidate_facts\b/,
+        message: 'missing auditable permission-required candidate effect regression',
+      },
+      {
+        regex: /\bread_plugins_contract_supports_discovery_status_and_config_projection\b/,
+        message: 'missing plugin read-model contract regression',
+      },
+      {
+        regex: /\bPluginStatusSnapshot\b/,
+        message: 'missing plugin status snapshot regression coverage',
+      },
+      {
+        regex: /\bdisabled_plugin_runtime_binding_reports_not_available\b/,
+        message: 'missing disabled runtime binding regression',
+      },
+      {
+        regex: /\bprojection_only_plugin_runtime_rejects_dispatch_without_host\b/,
+        message: 'missing projection-only runtime binding regression',
+      },
+      {
+        regex: /\bclient_binding_rejects_unchecked_available_client_responses\b/,
+        message: 'missing contract-checked executable runtime binding regression',
+      },
+      {
+        regex: /\bclient_binding_rejects_read_sources_outside_request\b/,
+        message: 'missing contract-checked read source isolation regression',
+      },
+      {
+        regex: /\bclient_binding_rejects_executable_read_quarantine\b/,
+        message: 'missing contract-checked read quarantine availability regression',
+      },
+      {
+        regex:
+          /\bclient_binding_rejects_dispatch_quarantine_without_host_restart_clear_condition\b/,
+        message: 'missing dispatch quarantine clear-condition regression',
+      },
+      {
+        regex:
+          /\bclient_binding_rejects_read_quarantine_without_host_restart_clear_condition\b/,
+        message: 'missing read quarantine clear-condition regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_host_contracts.rs',
+    reason:
+      'runtime-ports plugin host contract tests must cover permission prompts, diagnostics, and quarantine facts',
+    patterns: [
+      {
+        regex: /\bpermission_prompt_descriptor_contains_minimum_user_decision_facts\b/,
+        message: 'missing permission prompt descriptor regression',
+      },
+      {
+        regex: /\bdiagnostic_and_quarantine_state_are_auditable_projection_facts\b/,
+        message: 'missing diagnostic and quarantine regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/plugin-runtime-host/tests/plugin_runtime_host.rs',
+    reason:
+      'plugin-runtime-host owner tests must cover dispatch, idempotency, deadline quarantine, adapter failure quarantine, and disposed project behavior',
+    patterns: [
+      {
+        regex: /\bhost_dispatches_candidates\b/,
+        message: 'missing host dispatch regression',
+      },
+      {
+        regex: /\bhost_replays_idempotent_dispatch_without_recalling_adapter\b/,
+        message: 'missing host idempotency regression',
+      },
+      {
+        regex: /\bconcurrent_idempotent_dispatch_reuses_in_flight_response\b/,
+        message: 'missing concurrent host idempotency regression',
+      },
+      {
+        regex:
+          /\bconcurrent_cross_key_dispatch_observes_active_quarantine_before_success\b/,
+        message: 'missing cross-key active quarantine concurrency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_is_scoped_by_project_workspace_and_source\b/,
+        message: 'missing host execution-domain scoped idempotency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_does_not_replay_across_events\b/,
+        message: 'missing host event-scoped idempotency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_is_scoped_by_epoch_changes\b/,
+        message: 'missing host epoch-scoped idempotency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_evicts_old_entries\b/,
+        message: 'missing host bounded idempotency cache regression',
+      },
+      {
+        regex: /\bread_model_is_scoped_by_project_and_workspace\b/,
+        message: 'missing host read-model execution-domain isolation regression',
+      },
+      {
+        regex: /\bread_model_rejects_wrong_workspace_response\b/,
+        message: 'missing host wrong-workspace read-model rejection regression',
+      },
+      {
+        regex: /\bactive_quarantine_blocks_new_dispatches_until_host_restart\b/,
+        message: 'missing active quarantine dispatch blocking regression',
+      },
+      {
+        regex: /\bactive_quarantine_blocks_malformed_follow_up_without_new_quarantine\b/,
+        message: 'missing active quarantine malformed follow-up regression',
+      },
+      {
+        regex: /\bmalformed_dispatch_with_missing_identity_observes_active_quarantine\b/,
+        message: 'missing malformed dispatch missing-identity quarantine regression',
+      },
+      {
+        regex: /\bhost_owned_quarantine_is_visible_in_read_model_with_diagnostics\b/,
+        message: 'missing host-owned quarantine diagnostic read-model projection regression',
+      },
+      {
+        regex: /\bhost_restart_clears_domain_quarantine_and_cached_dispatch\b/,
+        message: 'missing host restart quarantine/cache cleanup regression',
+      },
+      {
+        regex: /\bzero_deadline_quarantines_without_adapter_dispatch\b/,
+        message: 'missing host deadline quarantine regression',
+      },
+      {
+        regex: /\bmalformed_dispatch_envelope_quarantines_without_adapter_dispatch\b/,
+        message: 'missing host dispatch request preflight regression',
+      },
+      {
+        regex: /\bnonzero_deadline_timeout_quarantines_without_success_effects\b/,
+        message: 'missing host nonzero timeout regression',
+      },
+      {
+        regex: /\badapter_failure_quarantines_without_writing_success\b/,
+        message: 'missing host adapter failure quarantine regression',
+      },
+      {
+        regex: /\bmalformed_adapter_success_quarantines_without_effects\b/,
+        message: 'missing host malformed adapter success quarantine regression',
+      },
+      {
+        regex: /\bpermission_prompt_target_mismatch_quarantines_without_effects\b/,
+        message: 'missing host permission prompt/effect mismatch regression',
+      },
+      {
+        regex: /\bpermission_prompt_authority_mismatch_quarantines_without_effects\b/,
+        message: 'missing host permission authority mismatch regression',
+      },
+      {
+        regex: /\bfinal_policy_decision_from_adapter_fails_closed\b/,
+        message: 'missing host final policy outcome rejection regression',
+      },
+      {
+        regex: /\badapter_id_or_quarantine_with_effects_mismatch_fails_closed\b/,
+        message: 'missing host adapter id and mixed quarantine/effects regression',
+      },
+      {
+        regex: /\bstatus_quarantine_with_success_effects_fails_closed\b/,
+        message: 'missing host nested status quarantine/effects rejection regression',
+      },
+      {
+        regex: /\bdisposed_project_rejects_dispatch_and_read_model_reports_statuses\b/,
+        message: 'missing host dispose/read-model regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/runtime-ports/src/lib.rs',
     reason:
       'runtime-ports must keep remote and subagent runtime boundary contracts DTO/trait-only',
@@ -4488,18 +4911,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub trait RuntimeEventSink\b/,
         message: 'missing runtime event sink contract',
-      },
-      {
-        regex: /\bpub trait PluginRuntimeClient\b/,
-        message: 'missing plugin runtime client boundary contract',
-      },
-      {
-        regex: /\bpub enum PluginRuntimeBinding\b/,
-        message: 'missing plugin runtime binding boundary contract',
-      },
-      {
-        regex: /\bpub struct DisabledPluginRuntimeClient\b/,
-        message: 'missing disabled plugin runtime client contract',
       },
       {
         regex: /\bpub struct AgentSessionCreateResult\b[\s\S]*\bpub session_name: String\b/,
@@ -4848,10 +5259,6 @@ export const requiredContentRules = [
         message: 'missing registry snapshot to manifest policy input helper',
       },
       {
-        regex: /\bpub fn build_collapsed_tool_stub_definition\b/,
-        message: 'missing collapsed-tool prompt stub contract',
-      },
-      {
         regex: /\bpub enum PromptVisibleToolManifestItem\b/,
         message: 'missing prompt-visible manifest item contract',
       },
@@ -4908,16 +5315,16 @@ export const requiredContentRules = [
         message: 'missing pure GetToolSpec prompt description contract',
       },
       {
-        regex: /\bpub struct GetToolSpecCollapsedToolSummary\b/,
-        message: 'missing pure GetToolSpec collapsed catalog summary',
+        regex: /\bpub struct GetToolSpecDeferredToolSummary\b/,
+        message: 'missing pure GetToolSpec deferred catalog summary',
       },
       {
         regex: /\bpub struct GetToolSpecDetail\b/,
         message: 'missing pure GetToolSpec detail contract',
       },
       {
-        regex: /\bpub fn summarize_get_tool_spec_collapsed_tools\b/,
-        message: 'missing pure GetToolSpec collapsed summary helper',
+        regex: /\bpub fn summarize_get_tool_spec_deferred_tools\b/,
+        message: 'missing pure GetToolSpec deferred summary helper',
       },
       {
         regex: /\bpub async fn resolve_get_tool_spec_detail\b/,
@@ -4996,12 +5403,12 @@ export const requiredContentRules = [
         message: 'missing pure GetToolSpec load observation contract',
       },
       {
-        regex: /\bpub fn collect_loaded_collapsed_tool_names\b/,
-        message: 'missing pure collapsed-tool load collection contract',
+        regex: /\bpub fn collect_loaded_deferred_tool_specs\b/,
+        message: 'missing pure deferred-tool load collection contract',
       },
       {
-        regex: /\bpub enum CollapsedToolUsageError\b/,
-        message: 'missing collapsed-tool execution gate error contract',
+        regex: /\bpub enum DeferredToolUsageError\b/,
+        message: 'missing deferred-tool execution gate error contract',
       },
       {
         regex: /\bpub enum ToolExecutionAccessError\b/,
@@ -5012,8 +5419,8 @@ export const requiredContentRules = [
         message: 'missing tool execution allowed-list gate policy',
       },
       {
-        regex: /\bpub fn validate_collapsed_tool_usage\b/,
-        message: 'missing collapsed-tool execution gate policy',
+        regex: /\bpub fn validate_deferred_tool_usage\b/,
+        message: 'missing deferred-tool execution gate policy',
       },
       {
         regex: /\bpub fn is_tool_path_allowed_by_resolved_roots\b/,
@@ -5088,12 +5495,12 @@ export const requiredContentRules = [
         message: 'missing generic static-provider plan-to-registry assembly helper',
       },
       {
-        regex: /\bpub fn is_tool_collapsed\b/,
-        message: 'missing generic collapsed-tool registry query',
+        regex: /\bpub fn is_tool_deferred\b/,
+        message: 'missing generic deferred-tool registry query',
       },
       {
-        regex: /\bpub fn get_collapsed_tool_names\b/,
-        message: 'missing generic collapsed-tool registry catalog query',
+        regex: /\bpub fn get_deferred_tool_names\b/,
+        message: 'missing generic deferred-tool registry catalog query',
       },
       {
         regex: /\bpub async fn resolve_readonly_enabled_tools\b/,
@@ -5504,11 +5911,7 @@ export const requiredContentRules = [
         message: 'missing remote session model update owner adapter',
       },
       {
-        regex: /\bfn normalize_remote_session_model_id\b/,
-        message: 'missing remote session model id normalization regression hook',
-      },
-      {
-        regex: /\bnormalize_remote_session_model_id_contract\b/,
+        regex: /\bnormalize_remote_session_model_id\(\s*session\.config\.model_id\.as_deref\(\)\s*\)/,
         message: 'missing remote session model id owner delegation',
       },
       {
@@ -5540,12 +5943,8 @@ export const requiredContentRules = [
         message: 'missing remote chat history assembly delegation',
       },
       {
-        regex: /\bfn strip_remote_user_input_tags\b/,
-        message: 'missing remote user input display cleanup owner adapter',
-      },
-      {
-        regex: /\bfn compress_remote_chat_data_url_for_mobile\b/,
-        message: 'missing remote chat thumbnail compression owner adapter',
+        regex: /\bproject_remote_chat_user\(\s*turn\.user_message\.metadata\.as_ref\(\),\s*&prompt_visible_content\s*\)/,
+        message: 'missing remote chat user projection owner delegation',
       },
       {
         regex: /\bfn load_remote_chat_messages\b/,
@@ -5664,8 +6063,8 @@ export const requiredContentRules = [
         message: 'missing core image context binding',
       },
       {
-        regex: /\bRemoteImageContextAdapter\b/,
-        message: 'missing remote image context adapter implementation',
+        regex: /\bagent_input_attachment_from_remote_image_context\(\s*remote_image_context_from_image_context\(/,
+        message: 'missing remote image lifecycle attachment owner delegation',
       },
       {
         regex: /\bAgentSubmissionPort\b/,
@@ -5965,6 +6364,14 @@ export const requiredContentRules = [
         message: 'missing remote chat history assembly owner',
       },
       {
+        regex: /\bRemoteChatUserProjection\b/,
+        message: 'missing remote chat user projection compatibility export',
+      },
+      {
+        regex: /\bproject_remote_chat_user\b/,
+        message: 'missing remote chat user projection compatibility export',
+      },
+      {
         regex: /\bpub const REMOTE_FILE_MAX_READ_BYTES\b/,
         message: 'missing remote file max-read policy',
       },
@@ -6223,6 +6630,33 @@ export const requiredContentRules = [
       {
         regex: /\bremote_interaction_handler_preserves_default_reject_reason\b/,
         message: 'missing remote interaction default reject regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_connect/chat_projection.rs',
+    reason:
+      'remote chat projection helpers must own image metadata/display projection without leaking separate helper APIs',
+    patterns: [
+      {
+        regex: /\bpub struct RemoteChatUserProjection\b/,
+        message: 'missing remote chat user projection DTO',
+      },
+      {
+        regex: /\bpub fn project_remote_chat_user\b/,
+        message: 'missing remote chat user projection owner',
+      },
+      {
+        regex: /\bfn remote_chat_user_images_from_metadata\b/,
+        message: 'remote chat image metadata extraction must stay private to the projection owner',
+      },
+      {
+        regex: /\bfn remote_chat_user_display_content\b/,
+        message: 'remote chat display cleanup must stay private to the projection owner',
+      },
+      {
+        regex: /\bfn compress_remote_chat_data_url_for_mobile\b/,
+        message: 'remote chat thumbnail compression must stay private to the projection owner',
       },
     ],
   },
@@ -6594,8 +7028,8 @@ export const requiredContentRules = [
         message: 'missing product tool runtime owner delegation',
       },
       {
-        regex: /\bget_collapsed_tool_names\b/,
-        message: 'missing collapsed-tool catalog owner',
+        regex: /\bget_deferred_tool_names\b/,
+        message: 'missing deferred-tool catalog owner',
       },
       {
         regex: /\bresolve_product_readonly_enabled_tools\b/,
@@ -6603,11 +7037,11 @@ export const requiredContentRules = [
       },
       {
         regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
-        message: 'missing collapsed-tool manifest migration baseline',
+        message: 'missing deferred-tool manifest migration baseline',
       },
       {
-        regex: /\binner\.is_tool_collapsed\b/,
-        message: 'missing collapsed exposure lookup delegation',
+        regex: /\binner\.is_tool_deferred\b/,
+        message: 'missing deferred exposure lookup delegation',
       },
     ],
   },
@@ -6762,8 +7196,8 @@ export const requiredContentRules = [
         message: 'missing product GetToolSpec Tool-result vector facade',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'missing product runtime collapsed-tool unlock state source',
+        regex: /\bloaded_deferred_tool_specs\b/,
+        message: 'missing product runtime deferred-tool loaded-spec state source',
       },
       {
         regex: /\bproduct_catalog_provider_default_get_tool_spec_catalog_matches_registry\b/,
@@ -7004,8 +7438,8 @@ export const requiredContentRules = [
         message: 'missing core product manifest facade delegation',
       },
       {
-        regex: /\bcollapsed_tool_names\b/,
-        message: 'missing collapsed-tool name tracking',
+        regex: /\bdeferred_tool_names\b/,
+        message: 'missing deferred-tool name tracking',
       },
       {
         regex: /\bmanifest_resolver_facade_preserves_product_owner_output\b/,
@@ -7031,8 +7465,8 @@ export const requiredContentRules = [
         message: 'missing core GetToolSpec execution error mapping boundary',
       },
       {
-        regex: /\bbuild_collapsed_tools_context_section\b/,
-        message: 'missing core collapsed-tool request-context section renderer',
+        regex: /\bbuild_deferred_tools_context_section\b/,
+        message: 'missing core deferred-tool request-context section renderer',
       },
       {
         regex: /\bproduct_get_tool_spec_runtime\b/,
@@ -7101,8 +7535,8 @@ export const requiredContentRules = [
         message: 'missing cancellation token runtime-only facts guard',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'missing collapsed-tool unlock state',
+        regex: /\bloaded_deferred_tool_specs\b/,
+        message: 'missing deferred-tool loaded-spec state',
       },
       {
         regex: /\bimpl ToolUseContext\b/,
@@ -7205,15 +7639,15 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core must continue carrying collapsed-tool unlock state while delegating provider-neutral execution gate policy to agent-tools',
+      'core must continue carrying deferred-tool loaded-spec state while delegating provider-neutral execution gate policy to agent-tools',
     patterns: [
       {
         regex: /\bvalidate_tool_execution_admission\b/,
         message: 'missing provider-neutral tool execution admission gate delegation',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'missing collapsed-tool unlock state propagation',
+        regex: /\bloaded_deferred_tool_specs\b/,
+        message: 'missing deferred-tool loaded-spec state propagation',
       },
       {
         regex: /\bpipeline_preserves_core_owned_tool_context_without_portable_runtime_leak\b/,
@@ -7248,19 +7682,19 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/execution/execution_engine.rs',
     reason:
-      'core execution must pass collapsed-tool unlock state through product runtime owner and keep DeepResearch post-turn hooks',
+      'core execution must pass deferred-tool loaded-spec state through product runtime owner and keep DeepResearch post-turn hooks',
     patterns: [
       {
-        regex: /\bcollect_product_unlocked_collapsed_tools\b/,
-        message: 'missing product runtime collapsed-tool unlock state handoff',
+        regex: /\bcollect_product_loaded_deferred_tool_specs\b/,
+        message: 'missing product runtime deferred-tool loaded-spec state handoff',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'missing collapsed-tool unlock propagation into round context',
+        regex: /\bloaded_deferred_tool_specs\b/,
+        message: 'missing deferred-tool loaded-spec propagation into round context',
       },
       {
-        regex: /\bcollapsed_tool_names\b/,
-        message: 'missing manifest collapsed-tool handoff',
+        regex: /\bdeferred_tool_names\b/,
+        message: 'missing manifest deferred-tool handoff',
       },
       {
         regex: /\bGetToolSpec\b/,
@@ -7277,25 +7711,25 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/unlock_state.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/loaded_spec_state.rs',
     reason:
-      'product runtime owns collapsed-tool unlock observation adaptation while preserving generic agent-tools policy',
+      'product runtime owns deferred-tool loaded-spec observation adaptation while preserving generic agent-tools policy',
     patterns: [
       {
-        regex: /\bcollect_product_unlocked_collapsed_tools\b/,
-        message: 'missing product runtime collapsed-tool unlock collector',
+        regex: /\bcollect_product_loaded_deferred_tool_specs\b/,
+        message: 'missing product runtime deferred-tool loaded-spec collector',
       },
       {
         regex: /\bGetToolSpecLoadObservation\b/,
         message: 'missing GetToolSpec load observation adapter',
       },
       {
-        regex: /\bcollect_loaded_collapsed_tool_names\b/,
-        message: 'missing generic collapsed-tool load collector delegation',
+        regex: /\bcollect_loaded_deferred_tool_specs\b/,
+        message: 'missing generic deferred-tool load collector delegation',
       },
       {
-        regex: /\bproduct_unlock_state_dedupes_and_filters_runtime_unlocks\b/,
-        message: 'missing collapsed-tool unlock filtering regression',
+        regex: /\bproduct_loaded_spec_state_dedupes_and_filters_results\b/,
+        message: 'missing deferred-tool loaded-spec filtering regression',
       },
     ],
   },
@@ -7305,11 +7739,11 @@ export const requiredContentRules = [
       'core agent registry must adapt config and AgentEntry facts while bitfun-agent-runtime owns mode-scoped subagent availability decisions',
     patterns: [
       {
-        regex: /\bpub fn resolve_availability\b/,
+        regex: /\bfn resolve_availability\b/,
         message: 'missing core compatibility availability adapter',
       },
       {
-        regex: /\bpub fn resolve_override_layers\b/,
+        regex: /\bfn resolve_override_layers\b/,
         message: 'missing project/user override layering adapter',
       },
       {
@@ -7332,7 +7766,11 @@ export const requiredContentRules = [
       'core agent registry must preserve legacy DTO fields while bitfun-agent-runtime owns query scope and availability reason contracts',
     patterns: [
       {
-        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*SubAgentSource[\s\S]*SubagentListScope[\s\S]*SubagentOverrideState[\s\S]*SubagentQueryContext[\s\S]*SubagentStateReason[\s\S]*\};/,
+        regex: /\bSubagentOverrideState\b/,
+        message: 'missing agent-runtime subagent override contract',
+      },
+      {
+        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*SubAgentSource[\s\S]*SubagentListScope[\s\S]*SubagentQueryContext[\s\S]*SubagentStateReason[\s\S]*\};/,
         message: 'missing agent-runtime subagent registry contract re-export',
       },
       {
@@ -7418,9 +7856,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/input.rs',
     reason:
-      'core Task tool must continue owning fork-aware background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+      'core Task input must continue owning fork-aware background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
     patterns: [
       {
         regex: /\bfork_context\b/,
@@ -7431,12 +7869,19 @@ export const requiredContentRules = [
         message: 'missing forked subagent context mode path',
       },
       {
-        regex: /delegation_policy\(\)\.spawn_child\(\)/,
-        message: 'missing child delegation policy propagation',
-      },
-      {
         regex: /"run_in_background"/,
         message: 'missing Task run_in_background schema flag',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+    reason:
+      'core Task execution must continue owning background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+    patterns: [
+      {
+        regex: /delegation_policy\(\)\.spawn_child\(\)/,
+        message: 'missing child delegation policy propagation',
       },
       {
         regex: /\bstart_background_subagent\b/,
@@ -7446,17 +7891,31 @@ export const requiredContentRules = [
         regex: /\bbackground_task_id\b/,
         message: 'missing background task id result contract',
       },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/background.rs',
+    reason:
+      'core Task background acknowledgement must remain assistant-visible and not expose internal background task ids',
+    patterns: [
       {
-        regex: /Background \{\} started successfully/,
+        regex: /Background subagent started successfully/,
         message: 'missing assistant-visible background start acknowledgement',
       },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/tests.rs',
+    reason:
+      'core Task tests must preserve background acknowledgement shape',
+    patterns: [
       {
-        regex: /<background_task status=\\"started\\"/,
-        message: 'missing structured background task start acknowledgement',
+        regex: /\bbackground_subagent_start_acknowledgement_uses_session_id_only\b/,
+        message: 'missing background task start acknowledgement regression',
       },
       {
-        regex: /\bbackground_subagent_start_acknowledgement_keeps_structured_task_marker\b/,
-        message: 'missing background task start acknowledgement regression',
+        regex: /<background_task/,
+        message: 'missing regression that started background tasks do not expose structured task markers',
       },
     ],
   },
@@ -7512,20 +7971,20 @@ export const requiredContentRules = [
       'CLI subagent selector presentation must remain app-layer UI while registry availability semantics stay in core',
     patterns: [
       {
-        regex: /\bpub enum SubagentSelectorAction\b/,
+        regex: /\bSubagentSelectorAction\b/,
         message: 'missing CLI subagent selector action contract',
       },
       {
-        regex: /\bpub fn show_list\b/,
+        regex: /\bshow_list\b/,
         message: 'missing CLI subagent list mode',
       },
       {
-        regex: /\bpub fn show_config\b/,
+        regex: /\bshow_config\b/,
         message: 'missing CLI subagent config mode',
       },
       {
-        regex: /\bdefault_enabled\b/,
-        message: 'missing CLI default availability display',
+        regex: /\benabled\b/,
+        message: 'missing CLI effective availability state',
       },
       {
         regex: /\bfn render_subagent_line\b/,
@@ -9081,10 +9540,6 @@ export const requiredContentRules = [
     reason:
       'product-domains owns built-in MiniApp bundle assets, marker, hash, seed orchestration, and host adapter contract while core keeps concrete IO and recompilation',
     patterns: [
-      {
-        regex: /id: "builtin-pr-review"/,
-        message: 'missing built-in PR Review MiniApp bundle anchor',
-      },
       {
         regex: /\bpub const BUILTIN_APPS\b/,
         message: 'missing built-in MiniApp bundle asset owner',

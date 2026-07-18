@@ -7,11 +7,19 @@
 
 #[cfg(feature = "product-full")]
 pub mod agentic; // Agent system, tool system, and product runtime orchestration
+#[cfg(feature = "product-full")]
+pub mod external_sources;
+#[cfg(feature = "product-full")]
+mod external_tools;
 #[cfg(feature = "product-domains")]
 pub mod function_agents; // Function-based agents
 pub mod infrastructure; // AI clients, storage, logging, events
 #[cfg(feature = "product-domains")]
 pub mod miniapp; // AI-generated instant apps (Zero-Dialect Runtime)
+#[cfg(feature = "product-full")]
+pub mod plugin_runtime;
+#[cfg(any(feature = "plugin-source", feature = "product-domains"))]
+pub mod plugin_source;
 #[cfg(feature = "product-full")]
 pub mod product_assembly;
 #[cfg(feature = "product-domains")]

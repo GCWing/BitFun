@@ -4,7 +4,20 @@ use base64::Engine as _;
 use super::types::ElementScreenshotMetadata;
 use crate::server::response::WebDriverErrorResponse;
 
-pub fn crop_screenshot(
+pub async fn crop_screenshot(
+    screenshot_base64: String,
+    metadata: ElementScreenshotMetadata,
+) -> Result<String, WebDriverErrorResponse> {
+    tokio::task::spawn_blocking(move || crop_screenshot_blocking(screenshot_base64, metadata))
+        .await
+        .map_err(|error| {
+            WebDriverErrorResponse::unknown_error(format!(
+                "Failed to join screenshot crop task: {error}"
+            ))
+        })?
+}
+
+fn crop_screenshot_blocking(
     screenshot_base64: String,
     metadata: ElementScreenshotMetadata,
 ) -> Result<String, WebDriverErrorResponse> {

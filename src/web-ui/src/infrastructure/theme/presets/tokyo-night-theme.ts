@@ -35,12 +35,8 @@ const TOKYO_GIT_ADDED = '#41a6b5';
 const TOKYO_PRIMARY_BUTTON = '#3d59a1';
 
 const tokyoAccent = (alpha: number | string) => rgbaFromHex(TOKYO_ACCENT, alpha);
-const tokyoSuccess = (alpha: number | string) => rgbaFromHex(TOKYO_SUCCESS, alpha);
-const tokyoWarning = (alpha: number | string) => rgbaFromHex(TOKYO_WARNING, alpha);
-const tokyoError = (alpha: number | string) => rgbaFromHex(TOKYO_ERROR, alpha);
 const tokyoBorder = (alpha: number | string) => rgbaFromHex(TOKYO_BORDER, alpha);
 const tokyoScrollbar = (alpha: number | string) => rgbaFromHex(TOKYO_SCROLLBAR, alpha);
-const tokyoGitAdded = (alpha: number | string) => rgbaFromHex(TOKYO_GIT_ADDED, alpha);
 const tokyoPrimaryButton = (alpha: number | string) => rgbaFromHex(TOKYO_PRIMARY_BUTTON, alpha);
 
 /** Colors aligned with the Tokyo Night palette (Enkia / VS Code Tokyo Night). */
@@ -58,11 +54,9 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       primary: TOKYO_BACKGROUND_PRIMARY,
       secondary: TOKYO_BACKGROUND_SECONDARY,
       tertiary: TOKYO_BACKGROUND_SECONDARY,
-      quaternary: TOKYO_BACKGROUND_SECONDARY,
       elevated: TOKYO_BACKGROUND_SECONDARY,
       workbench: TOKYO_BACKGROUND_SECONDARY,
       scene: TOKYO_BACKGROUND_PRIMARY,
-      tooltip: rgbaFromHex(TOKYO_BACKGROUND_SECONDARY, 0.94),
     },
 
     text: {
@@ -75,13 +69,12 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
     accent: createAccentScale({
       base: TOKYO_ACCENT,
       hover: TOKYO_ACCENT_HOVER,
-      alpha: { 50: 0.05, 700: 0.85, 800: 0.95 },
+      alpha: { 50: 0.05, 700: 0.85 },
     }),
 
     purple: createSecondaryAccentScale({
       base: TOKYO_PURPLE,
       hover: TOKYO_PURPLE_HOVER,
-      alpha: { 50: 0.05, 800: 0.95 },
     }),
 
     semantic: createSemanticColors({
@@ -107,20 +100,15 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       base: tokyoAccent(0.11),
       medium: tokyoAccent(0.14),
       strong: tokyoAccent(0.18),
-      elevated: tokyoAccent(0.22),
     },
 
     git: createGitColors({
       branch: rgbFromHex(TOKYO_ACCENT),
       branchBg: tokyoAccent(0.12),
       changes: rgbFromHex(TOKYO_WARNING),
-      changesBg: tokyoWarning(0.12),
       added: rgbFromHex(TOKYO_GIT_ADDED),
-      addedBg: tokyoGitAdded(0.12),
       deleted: rgbFromHex(TOKYO_ERROR),
-      deletedBg: tokyoError(0.12),
       staged: rgbFromHex(TOKYO_SUCCESS),
-      stagedBg: tokyoSuccess(0.12),
     }),
 
     scrollbar: {

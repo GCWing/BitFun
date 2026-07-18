@@ -21,11 +21,50 @@ permissions:
   contents: read
 
 jobs:
+  # ── CLI: independent tests ─────────────────────────────────────────
+  cli-test:
+    name: CLI Tests (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "cli-ci-v2-ubuntu"
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Run CLI, ACP, and agent runtime tests
+        run: cargo test --locked -p bitfun-cli -p bitfun-acp -p bitfun-agent-runtime
+
   # ── Rust: build check ─────────────────────────────────────────────
   rust-build-check:
     name: Rust Build Check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: frontend-build
+    env:
+      # Keep the workspace check plus desktop test profiles within hosted-runner disk limits.
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +73,7 @@ jobs:
           - macos-15
           - windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup OpenSSL (Windows, prebuilt)
         if: runner.os == 'Windows'
@@ -42,7 +81,7 @@ jobs:
         run: ./scripts/ci/setup-openssl-windows.ps1
 
       - name: Download frontend build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: frontend-dist
           path: dist
@@ -84,15 +123,22 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+
       - uses: swatinem/rust-cache@v2
         with:
-          shared-key: "ci-check-v2-${{ runner.os }}-no-cargo-bin-v1"
+          shared-key: "ci-check-v3-${{ runner.os }}-no-cargo-bin-v1"
           cache-bin: false
           # PR caches are scoped to merge refs; main pushes own shared cache refreshes.
           save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Check compilation
-        run: cargo check --workspace --exclude bitfun-cli
+        run: cargo check --locked --workspace
+
+      - name: Run Windows ConPTY CLI smoke test
+        if: runner.os == 'Windows'
+        run: cargo test --locked -p bitfun-cli --test tui_terminal_process
 
       - name: Run core and desktop Rust tests
         run: cargo test --locked -p bitfun-core -p bitfun-desktop
@@ -104,23 +150,29 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Check repository hygiene
         run: pnpm run check:repo-hygiene
 
+      - name: Check core boundaries
+        run: node --test scripts/check-core-boundaries.test.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate PPT Live generated-file contract
+        run: pnpm run test:ppt-live
 
       - name: Validate GitHub config
         run: pnpm run check:github-config
@@ -143,7 +195,7 @@ jobs:
         run: pnpm run theme:color-audit:test
 
       - name: Audit theme color governance
-        run: pnpm run theme:color-audit
+        run: pnpm run theme:color-audit:all
 
       - name: Validate theme visual governance contract
         run: pnpm run theme:visual-contract
@@ -164,7 +216,7 @@ jobs:
         run: pnpm run build:mobile-web
 
       - name: Upload frontend build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-dist
           path: dist

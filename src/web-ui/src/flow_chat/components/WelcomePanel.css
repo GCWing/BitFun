@@ -86,7 +86,7 @@
 
 .welcome-panel__heading {
   margin: 0;
-  font-size: var(--flowchat-font-size-4xl);
+  font-size: calc(var(--flowchat-font-size-3xl) + 4px);
   font-weight: 700;
   color: var(--color-text-primary);
   line-height: var(--flowchat-compact-line-height);

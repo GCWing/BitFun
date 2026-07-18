@@ -5,20 +5,23 @@ use agent_client_protocol::schema::{
     SessionUpdate, StopReason,
 };
 use agent_client_protocol::{Client, ConnectionTo, Error, Result};
-use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
-use bitfun_core::agentic::events::EventEnvelope;
+use bitfun_agent_runtime::sdk::{
+    AgentDialogTurnRequest, AgentSessionEventReceiver, AgentSubmissionSource,
+    AgentToolConfirmationRequest, AgentToolRejectionRequest, AgentTurnCancellationRequest,
+    DialogSubmissionPolicy, DialogSubmitOutcome,
+};
 use bitfun_events::AgenticEvent as CoreEvent;
 use log::warn;
 use serde_json::json;
 use tokio::sync::broadcast;
 
-use super::content::parse_prompt_blocks;
+use super::content::{parse_prompt_blocks, ParsedPrompt};
 use super::events::{
     permission_request, send_update, tool_event_updates, PERMISSION_ALLOW_ONCE,
     PERMISSION_REJECT_ONCE,
 };
 use super::thinking::{InlineThinkRouter, InlineThinkSegment};
-use super::BitfunAcpRuntime;
+use super::{AcpSessionState, BitfunAcpRuntime};
 
 impl BitfunAcpRuntime {
     pub(super) async fn run_prompt(&self, request: PromptRequest) -> Result<PromptResponse> {
@@ -36,47 +39,34 @@ impl BitfunAcpRuntime {
 
         let parsed_prompt = parse_prompt_blocks(&session_id, request.prompt);
 
-        if parsed_prompt.user_message.trim().is_empty() && parsed_prompt.image_contexts.is_empty() {
+        if parsed_prompt.user_message.trim().is_empty() && parsed_prompt.attachments.is_empty() {
             return Err(Error::invalid_params().data("empty prompt"));
         }
 
-        let mut event_rx = self.agentic_system.event_queue.subscribe();
-        if parsed_prompt.image_contexts.is_empty() {
-            self.agentic_system
-                .coordinator
-                .start_dialog_turn(
-                    acp_session.bitfun_session_id.clone(),
-                    parsed_prompt.user_message,
-                    parsed_prompt.original_user_message,
-                    None,
-                    acp_session.mode_id.clone(),
-                    Some(acp_session.cwd.clone()),
-                    None,
-                    None,
-                    DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
-                    Some(acp_user_message_metadata()),
-                )
-                .await
-                .map_err(Self::internal_error)?;
-        } else {
-            self.agentic_system
-                .coordinator
-                .start_dialog_turn_with_image_contexts(
-                    acp_session.bitfun_session_id.clone(),
-                    parsed_prompt.user_message,
-                    parsed_prompt.original_user_message,
-                    parsed_prompt.image_contexts,
-                    None,
-                    acp_session.mode_id.clone(),
-                    Some(acp_session.cwd.clone()),
-                    None,
-                    None,
-                    DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
-                    Some(acp_user_message_metadata()),
-                )
-                .await
-                .map_err(Self::internal_error)?;
-        }
+        let mut event_rx = self
+            .agent_runtime
+            .subscribe_session_events(&acp_session.bitfun_session_id)
+            .map_err(Self::runtime_error)?;
+        let outcome = self
+            .agent_runtime
+            .submit_dialog_turn(dialog_turn_request(&acp_session, parsed_prompt))
+            .await
+            .map_err(Self::runtime_error)?;
+        let turn_id = match resolve_started_prompt_turn(outcome) {
+            Ok(turn_id) => turn_id,
+            Err(queued_turn_id) => {
+                self.agent_runtime
+                    .cancel_turn(turn_cancellation_request(
+                        &acp_session.bitfun_session_id,
+                        Some(&queued_turn_id),
+                        "acp_busy_rejected",
+                    ))
+                    .await
+                    .map_err(Self::runtime_error)?;
+                return Err(Error::internal_error()
+                    .data("Session state does not allow starting new dialog: Processing"));
+            }
+        };
 
         let stop_reason = wait_for_prompt_completion(
             self,
@@ -84,6 +74,7 @@ impl BitfunAcpRuntime {
             &connection,
             &acp_session.acp_session_id,
             &acp_session.bitfun_session_id,
+            &turn_id,
         )
         .await?;
 
@@ -98,29 +89,75 @@ impl BitfunAcpRuntime {
             .ok_or_else(|| Error::resource_not_found(Some(session_id.clone())))?;
         let acp_session = acp_session.clone();
 
-        self.agentic_system
-            .coordinator
-            .cancel_active_turn_for_session(
+        self.agent_runtime
+            .cancel_turn(turn_cancellation_request(
                 &acp_session.bitfun_session_id,
-                std::time::Duration::from_secs(5),
-            )
+                None,
+                "acp_client_cancelled",
+            ))
             .await
-            .map_err(Self::internal_error)?;
+            .map_err(Self::runtime_error)?;
 
         Ok(())
     }
 }
 
-fn acp_user_message_metadata() -> serde_json::Value {
+fn dialog_turn_request(session: &AcpSessionState, prompt: ParsedPrompt) -> AgentDialogTurnRequest {
+    AgentDialogTurnRequest {
+        session_id: session.bitfun_session_id.clone(),
+        message: prompt.user_message,
+        original_message: prompt.original_user_message,
+        turn_id: None,
+        agent_type: session.mode_id.clone(),
+        workspace_path: Some(session.cwd.clone()),
+        remote_connection_id: None,
+        remote_ssh_host: None,
+        policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+        reply_route: None,
+        prepended_reminders: Vec::new(),
+        attachments: prompt.attachments,
+        metadata: acp_user_message_metadata(),
+    }
+}
+
+fn resolve_started_prompt_turn(
+    outcome: DialogSubmitOutcome,
+) -> std::result::Result<String, String> {
+    match outcome {
+        DialogSubmitOutcome::Started { turn_id, .. } => Ok(turn_id),
+        DialogSubmitOutcome::Queued { turn_id, .. } => Err(turn_id),
+    }
+}
+
+fn turn_cancellation_request(
+    session_id: &str,
+    turn_id: Option<&str>,
+    reason: &str,
+) -> AgentTurnCancellationRequest {
+    AgentTurnCancellationRequest {
+        session_id: session_id.to_string(),
+        turn_id: turn_id.map(ToOwned::to_owned),
+        source: Some(AgentSubmissionSource::Cli),
+        requester_session_id: None,
+        reason: Some(reason.to_string()),
+        wait_timeout_ms: Some(5_000),
+    }
+}
+
+fn acp_user_message_metadata() -> serde_json::Map<String, serde_json::Value> {
     json!({ "acp_transport": true })
+        .as_object()
+        .cloned()
+        .expect("ACP metadata must be an object")
 }
 
 async fn wait_for_prompt_completion(
     runtime: &BitfunAcpRuntime,
-    event_rx: &mut broadcast::Receiver<EventEnvelope>,
+    event_rx: &mut AgentSessionEventReceiver,
     connection: &ConnectionTo<Client>,
     acp_session_id: &str,
     bitfun_session_id: &str,
+    turn_id: &str,
 ) -> Result<StopReason> {
     let mut seen_tool_calls = HashSet::new();
     let mut inline_think = InlineThinkRouter::new();
@@ -129,15 +166,34 @@ async fn wait_for_prompt_completion(
         let event = match event_rx.recv().await {
             Ok(envelope) => envelope.event,
             Err(broadcast::error::RecvError::Lagged(count)) => {
-                warn!("ACP event receiver lagged: skipped {} events", count);
-                continue;
+                let message = format!(
+                    "agent event stream lagged; cancelled turn after skipping {count} events"
+                );
+                cancel_turn_after_event_stream_failure(
+                    runtime,
+                    bitfun_session_id,
+                    turn_id,
+                    "acp_event_stream_lagged",
+                )
+                .await;
+                return Err(Error::internal_error().data(message));
             }
             Err(broadcast::error::RecvError::Closed) => {
+                cancel_turn_after_event_stream_failure(
+                    runtime,
+                    bitfun_session_id,
+                    turn_id,
+                    "acp_event_stream_closed",
+                )
+                .await;
                 return Err(Error::internal_error().data("event stream closed"));
             }
         };
 
         if event.session_id() != Some(bitfun_session_id) {
+            continue;
+        }
+        if !prompt_event_matches_turn(&event, turn_id) {
             continue;
         }
 
@@ -162,19 +218,18 @@ async fn wait_for_prompt_completion(
                 }
 
                 if let bitfun_events::ToolEventData::ConfirmationNeeded {
-                    tool_id,
-                    tool_name,
-                    params,
-                    ..
+                    identity, params, ..
                 } = tool_event
                 {
+                    let (effective_tool_name, effective_params) =
+                        bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, &params);
                     handle_permission_request(
                         runtime,
                         connection,
                         acp_session_id,
-                        &tool_id,
-                        &tool_name,
-                        &params,
+                        &identity.tool_id,
+                        effective_tool_name,
+                        effective_params,
                     )
                     .await?;
                 }
@@ -200,6 +255,40 @@ async fn wait_for_prompt_completion(
             }
             _ => {}
         }
+    }
+}
+
+async fn cancel_turn_after_event_stream_failure(
+    runtime: &BitfunAcpRuntime,
+    session_id: &str,
+    turn_id: &str,
+    reason: &str,
+) {
+    if let Err(error) = runtime
+        .agent_runtime
+        .cancel_turn(turn_cancellation_request(session_id, Some(turn_id), reason))
+        .await
+    {
+        warn!(
+            "Failed to cancel ACP turn after event stream failure: session_id={}, turn_id={}, error={}",
+            session_id,
+            turn_id,
+            error.into_message()
+        );
+    }
+}
+
+fn prompt_event_matches_turn(event: &CoreEvent, expected_turn_id: &str) -> bool {
+    match event {
+        CoreEvent::DialogTurnStarted { turn_id, .. }
+        | CoreEvent::DialogTurnCompleted { turn_id, .. }
+        | CoreEvent::DialogTurnCancelled { turn_id, .. }
+        | CoreEvent::DialogTurnFailed { turn_id, .. }
+        | CoreEvent::TextChunk { turn_id, .. }
+        | CoreEvent::ThinkingChunk { turn_id, .. }
+        | CoreEvent::ToolEvent { turn_id, .. } => turn_id == expected_turn_id,
+        CoreEvent::SystemError { .. } => true,
+        _ => false,
     }
 }
 
@@ -237,9 +326,11 @@ async fn handle_permission_request(
         Err(error) => {
             let reason = format!("ACP permission request failed: {}", error);
             let _ = runtime
-                .agentic_system
-                .coordinator
-                .reject_tool(tool_id, reason.clone())
+                .agent_runtime
+                .reject_tool(AgentToolRejectionRequest {
+                    tool_id: tool_id.to_string(),
+                    reason: reason.clone(),
+                })
                 .await;
             return Err(error);
         }
@@ -250,29 +341,35 @@ async fn handle_permission_request(
             if selected.option_id.to_string() == PERMISSION_ALLOW_ONCE =>
         {
             runtime
-                .agentic_system
-                .coordinator
-                .confirm_tool(tool_id, None)
+                .agent_runtime
+                .confirm_tool(AgentToolConfirmationRequest {
+                    tool_id: tool_id.to_string(),
+                    updated_input: None,
+                })
                 .await
-                .map_err(BitfunAcpRuntime::internal_error)?;
+                .map_err(BitfunAcpRuntime::runtime_error)?;
         }
         RequestPermissionOutcome::Selected(selected)
             if selected.option_id.to_string() == PERMISSION_REJECT_ONCE =>
         {
             runtime
-                .agentic_system
-                .coordinator
-                .reject_tool(tool_id, "Rejected by ACP client".to_string())
+                .agent_runtime
+                .reject_tool(AgentToolRejectionRequest {
+                    tool_id: tool_id.to_string(),
+                    reason: "Rejected by ACP client".to_string(),
+                })
                 .await
-                .map_err(BitfunAcpRuntime::internal_error)?;
+                .map_err(BitfunAcpRuntime::runtime_error)?;
         }
         RequestPermissionOutcome::Cancelled => {
             runtime
-                .agentic_system
-                .coordinator
-                .reject_tool(tool_id, "ACP permission request cancelled".to_string())
+                .agent_runtime
+                .reject_tool(AgentToolRejectionRequest {
+                    tool_id: tool_id.to_string(),
+                    reason: "ACP permission request cancelled".to_string(),
+                })
                 .await
-                .map_err(BitfunAcpRuntime::internal_error)?;
+                .map_err(BitfunAcpRuntime::runtime_error)?;
         }
         RequestPermissionOutcome::Selected(selected) => {
             let reason = format!(
@@ -280,21 +377,123 @@ async fn handle_permission_request(
                 selected.option_id
             );
             runtime
-                .agentic_system
-                .coordinator
-                .reject_tool(tool_id, reason)
+                .agent_runtime
+                .reject_tool(AgentToolRejectionRequest {
+                    tool_id: tool_id.to_string(),
+                    reason,
+                })
                 .await
-                .map_err(BitfunAcpRuntime::internal_error)?;
+                .map_err(BitfunAcpRuntime::runtime_error)?;
         }
         _ => {
             runtime
-                .agentic_system
-                .coordinator
-                .reject_tool(tool_id, "Unsupported ACP permission outcome".to_string())
+                .agent_runtime
+                .reject_tool(AgentToolRejectionRequest {
+                    tool_id: tool_id.to_string(),
+                    reason: "Unsupported ACP permission outcome".to_string(),
+                })
                 .await
-                .map_err(BitfunAcpRuntime::internal_error)?;
+                .map_err(BitfunAcpRuntime::runtime_error)?;
         }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use bitfun_agent_runtime::sdk::{
+        AgentInputAttachment, AgentSubmissionSource, DialogSubmitOutcome,
+    };
+    use bitfun_events::AgenticEvent;
+
+    use super::{
+        dialog_turn_request, prompt_event_matches_turn, resolve_started_prompt_turn,
+        turn_cancellation_request, AcpSessionState, ParsedPrompt,
+    };
+
+    fn session() -> AcpSessionState {
+        AcpSessionState {
+            acp_session_id: "acp-session".to_string(),
+            bitfun_session_id: "bitfun-session".to_string(),
+            cwd: "/workspace".to_string(),
+            mode_id: "agentic".to_string(),
+            model_id: "auto".to_string(),
+            mcp_server_ids: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn dialog_request_preserves_cli_confirmation_and_acp_metadata() {
+        let request = dialog_turn_request(
+            &session(),
+            ParsedPrompt {
+                user_message: "describe".to_string(),
+                original_user_message: Some("describe".to_string()),
+                attachments: vec![AgentInputAttachment::remote_image(
+                    "image-1",
+                    "clip.png",
+                    "data:image/png;base64,QQ==",
+                )],
+            },
+        );
+
+        assert_eq!(request.session_id, "bitfun-session");
+        assert_eq!(request.workspace_path.as_deref(), Some("/workspace"));
+        assert_eq!(request.policy.trigger_source, AgentSubmissionSource::Cli);
+        assert!(request.policy.requires_tool_confirmation());
+        assert_eq!(request.metadata["acp_transport"], true);
+        assert_eq!(request.attachments.len(), 1);
+    }
+
+    #[test]
+    fn cancellation_request_keeps_bounded_wait_and_active_turn_semantics() {
+        let request =
+            turn_cancellation_request(&session().bitfun_session_id, None, "acp_client_cancelled");
+
+        assert_eq!(request.session_id, "bitfun-session");
+        assert_eq!(request.turn_id, None);
+        assert_eq!(request.source, Some(AgentSubmissionSource::Cli));
+        assert_eq!(request.wait_timeout_ms, Some(5_000));
+    }
+
+    #[test]
+    fn queued_prompt_is_rejected_with_its_exact_turn_identity() {
+        let queued_turn_id = resolve_started_prompt_turn(DialogSubmitOutcome::Queued {
+            session_id: "bitfun-session".to_string(),
+            turn_id: "turn-queued".to_string(),
+        })
+        .expect_err("queued prompt must not be treated as started");
+        let cancellation =
+            turn_cancellation_request("bitfun-session", Some(&queued_turn_id), "acp_busy_rejected");
+
+        assert_eq!(cancellation.turn_id.as_deref(), Some("turn-queued"));
+        assert_eq!(cancellation.reason.as_deref(), Some("acp_busy_rejected"));
+    }
+
+    #[test]
+    fn prompt_events_are_scoped_to_the_submitted_turn() {
+        let current = AgenticEvent::TextChunk {
+            session_id: "bitfun-session".to_string(),
+            turn_id: "turn-current".to_string(),
+            round_id: "round".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "current".to_string(),
+        };
+        let other = AgenticEvent::DialogTurnCompleted {
+            session_id: "bitfun-session".to_string(),
+            turn_id: "turn-other".to_string(),
+            total_rounds: 1,
+            total_tools: 0,
+            duration_ms: 1,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: None,
+            has_final_response: Some(true),
+        };
+
+        assert!(prompt_event_matches_turn(&current, "turn-current"));
+        assert!(!prompt_event_matches_turn(&other, "turn-current"));
+    }
 }

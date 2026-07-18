@@ -88,8 +88,8 @@ Agent 执行是否经济，需要综合评估端到端 Token 消耗、执行耗�
 
 **前置依赖：**
 
-- [Node.js](https://nodejs.org/)（推荐 LTS）
-- [pnpm](https://pnpm.io/)
+- [Node.js](https://nodejs.org/) 22.12+（推荐 LTS）
+- [pnpm](https://pnpm.io/) 10.15.0（建议通过 Corepack 使用）
 - [Rust 工具链](https://rustup.rs/)
 - [Tauri 前置依赖](https://v2.tauri.app/start/prerequisites/)（桌面端开发需要）
 - [ohos-rs](https://ohos.rs/docs/basic/quick-start)

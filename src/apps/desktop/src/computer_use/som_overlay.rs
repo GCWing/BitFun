@@ -74,7 +74,20 @@ pub(crate) fn render_overlay(
         // with another element's badge (cap retries to avoid blowups).
         for _ in 0..6 {
             let collides = placed_badges.iter().any(|(px, py, pw, ph)| {
-                rects_overlap(bx, by, badge_w, badge_h, *px, *py, *pw, *ph)
+                rects_overlap(
+                    Rectangle {
+                        x: bx,
+                        y: by,
+                        width: badge_w,
+                        height: badge_h,
+                    },
+                    Rectangle {
+                        x: *px,
+                        y: *py,
+                        width: *pw,
+                        height: *ph,
+                    },
+                )
             });
             if !collides {
                 break;
@@ -129,8 +142,18 @@ fn role_color(role: &str, subrole: Option<&str>) -> Rgba<u8> {
     }
 }
 
-fn rects_overlap(ax: i32, ay: i32, aw: i32, ah: i32, bx: i32, by: i32, bw: i32, bh: i32) -> bool {
-    !(ax + aw <= bx || bx + bw <= ax || ay + ah <= by || by + bh <= ay)
+struct Rectangle {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+fn rects_overlap(first: Rectangle, second: Rectangle) -> bool {
+    !(first.x + first.width <= second.x
+        || second.x + second.width <= first.x
+        || first.y + first.height <= second.y
+        || second.y + second.height <= first.y)
 }
 
 fn draw_rect_outline(
@@ -329,5 +352,55 @@ mod tests {
         let out = render_overlay(&jpeg, &elements, None).expect("overlay");
         let decoded = image::load_from_memory(&out).expect("decode overlay");
         assert_eq!(decoded.width(), 80);
+    }
+
+    #[test]
+    fn rectangles_touching_edges_do_not_overlap() {
+        assert!(!rects_overlap(
+            Rectangle {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+            },
+            Rectangle {
+                x: 10,
+                y: 0,
+                width: 5,
+                height: 5,
+            },
+        ));
+        assert!(!rects_overlap(
+            Rectangle {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+            },
+            Rectangle {
+                x: 0,
+                y: 10,
+                width: 5,
+                height: 5,
+            },
+        ));
+    }
+
+    #[test]
+    fn rectangles_with_shared_area_overlap() {
+        assert!(rects_overlap(
+            Rectangle {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+            },
+            Rectangle {
+                x: 9,
+                y: 9,
+                width: 5,
+                height: 5,
+            },
+        ));
     }
 }
