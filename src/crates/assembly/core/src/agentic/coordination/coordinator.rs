@@ -495,13 +495,19 @@ pub(crate) struct HiddenSubagentExecutionRequest {
     external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
 }
 
+fn ensure_hidden_subagent_dialog_turn_id(dialog_turn_id: &mut Option<String>) -> String {
+    dialog_turn_id
+        .get_or_insert_with(|| uuid::Uuid::new_v4().to_string())
+        .clone()
+}
+
 impl HiddenSubagentExecutionRequest {
     pub(super) fn target_session_id(&self) -> Option<&str> {
         self.target_session_id.as_deref()
     }
 
-    pub(super) fn set_dialog_turn_id(&mut self, dialog_turn_id: String) {
-        self.dialog_turn_id = Some(dialog_turn_id);
+    pub(super) fn ensure_dialog_turn_id(&mut self) -> String {
+        ensure_hidden_subagent_dialog_turn_id(&mut self.dialog_turn_id)
     }
 
     pub(super) fn logical_agent_type(&self) -> &str {
@@ -5336,7 +5342,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         let turn_index = self.session_manager.get_turn_count(&session_id);
         let requested_dialog_turn_id =
-            dialog_turn_id.unwrap_or_else(|| format!("subagent-{}", uuid::Uuid::new_v4()));
+            dialog_turn_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let dialog_turn_id = self
             .session_manager
             .start_dialog_turn_with_existing_context(
@@ -7191,23 +7197,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let request = self
             .resolve_hidden_subagent_execution_request(request, Some(allow_review_follow_up))
             .await?;
-        let request = self
+        let mut request = self
             .prepare_hidden_subagent_execution_request(request)
             .await?;
+        let subagent_dialog_turn_id = request.ensure_dialog_turn_id();
         let subagent_session_id = request
             .target_session_id()
             .ok_or_else(|| {
                 BitFunError::Validation(
                     "prepared hidden subagent request is missing target_session_id".to_string(),
-                )
-            })?
-            .to_string();
-        let subagent_dialog_turn_id = request
-            .dialog_turn_id
-            .as_deref()
-            .ok_or_else(|| {
-                BitFunError::Validation(
-                    "prepared hidden subagent request is missing dialog_turn_id".to_string(),
                 )
             })?
             .to_string();
@@ -8860,6 +8858,23 @@ mod tests {
             "Investigate",
         );
         assert!(!non_peer_metadata.contains_key("require_tool_confirmation"));
+    }
+
+    #[test]
+    fn hidden_subagent_dialog_turn_id_reuses_existing_or_generates_raw_uuid() {
+        let mut missing = None;
+        let generated = super::ensure_hidden_subagent_dialog_turn_id(&mut missing);
+
+        assert_eq!(missing.as_deref(), Some(generated.as_str()));
+        assert!(uuid::Uuid::parse_str(&generated).is_ok());
+        assert!(!generated.starts_with("subagent-"));
+
+        let mut existing = Some("child-turn".to_string());
+        assert_eq!(
+            super::ensure_hidden_subagent_dialog_turn_id(&mut existing),
+            "child-turn"
+        );
+        assert_eq!(existing.as_deref(), Some("child-turn"));
     }
 
     #[test]

@@ -1014,8 +1014,7 @@ impl DialogScheduler {
                 "prepared hidden subagent request is missing target_session_id".to_string()
             })?
             .to_string();
-        let resolved_turn_id = format!("subagent-{}", Uuid::new_v4());
-        request.set_dialog_turn_id(resolved_turn_id.clone());
+        let resolved_turn_id = request.ensure_dialog_turn_id();
         let agent_type = request.logical_agent_type().to_string();
         let user_input = request.user_input_text().to_string();
         let session = self
