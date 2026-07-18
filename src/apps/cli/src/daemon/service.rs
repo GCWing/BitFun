@@ -85,6 +85,7 @@ fn render_launch_agent(executable: &Path) -> String {
     )
 }
 
+#[cfg(target_os = "linux")]
 fn run_command(program: &str, args: &[&str]) -> Result<std::process::Output> {
     std::process::Command::new(program)
         .args(args)
@@ -92,6 +93,7 @@ fn run_command(program: &str, args: &[&str]) -> Result<std::process::Output> {
         .with_context(|| format!("run `{program} {}`", args.join(" ")))
 }
 
+#[cfg(target_os = "linux")]
 fn ensure_success(program: &str, args: &[&str]) -> Result<()> {
     let output = run_command(program, args)?;
     if output.status.success() {
