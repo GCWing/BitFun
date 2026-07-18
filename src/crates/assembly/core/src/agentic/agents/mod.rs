@@ -5,7 +5,6 @@
 mod definitions;
 mod prompt_builder;
 mod registry;
-pub mod team_presets;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
