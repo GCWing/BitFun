@@ -793,10 +793,11 @@ impl ScriptToolRuntime for NodeScriptToolRuntime {
         match &self.executable {
             Some(executable) => ScriptToolRuntimeAvailability::Available {
                 executable: executable.to_string_lossy().into_owned(),
-                version: "verified when first enabled".to_string(),
+                version: "not checked".to_string(),
             },
             None => ScriptToolRuntimeAvailability::Unavailable {
-                reason: "Node.js was not found; discovered tools remain disabled".to_string(),
+                reason: "BitFun could not find Node.js for external tools; install or repair Node.js, then restart BitFun"
+                    .to_string(),
             },
         }
     }

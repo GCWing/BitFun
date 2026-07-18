@@ -93,6 +93,11 @@
   "agentDiagnostics": {
     "activationBlocked": "暫時無法啟用此 Agent。",
     "degradedOnly": "部分設定在 BitFun 中不會生效。請查看說明，確認實際結果符合預期。",
+    "configurationUnavailable": {
+      "reason": "BitFun 無法讀取模型設定。",
+      "impact": "{{impact}}",
+      "nextStep": "請開啟 BitFun 的模型設定並確認可以正常載入；若無法載入，請重新啟動 BitFun。問題仍存在時，請確認 BitFun 可以正常讀取與儲存設定，然後重新整理。"
+    },
     "modelUnavailable": {
       "reason": "此 Agent 要求的模型在 BitFun 中不可用。",
       "impact": "{{impact}}",
@@ -182,7 +187,7 @@
     "active": "無需操作。若要停止使用該來源的所有工具，請停用這些工具。",
     "conflict": "請在下方選擇要使用的工具，或繼續保持停用。",
     "unsupported": "請將來源改為 BitFun 目前支援的單一 JavaScript 檔案格式，然後重新整理。",
-    "runtime_unavailable": "請恢復所需的 JavaScript 執行環境，然後重新整理。",
+    "runtime_unavailable": "請安裝或修復 Node.js，然後重新啟動 BitFun 以再次檢查。",
     "load_failed": "請修正來源後重新整理，或繼續停用這些工具。"
   },
   "toolConflicts": {

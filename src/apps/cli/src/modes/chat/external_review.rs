@@ -283,7 +283,7 @@ fn external_tool_next_step(activation: &ExternalToolActivationState) -> &'static
             "Change the code to a single JavaScript file supported by BitFun, then refresh."
         }
         ExternalToolActivationState::RuntimeUnavailable { .. } => {
-            "Restore the required JavaScript environment, then refresh."
+            "Please install or repair Node.js, then restart BitFun."
         }
         ExternalToolActivationState::LoadFailed { .. } => {
             "Refresh to retry. If it still fails, fix the source code or keep these tools disabled."
@@ -895,7 +895,12 @@ fn external_agent_diagnostic_lines(
     blocks_activation: bool,
     indent: &str,
 ) -> Vec<String> {
-    let (reason, next_step) = if code.contains("model_unavailable") {
+    let (reason, next_step) = if code.contains("configuration_unavailable") {
+        (
+            "BitFun could not read its model settings.",
+            "Open BitFun model settings and confirm they load. If not, restart BitFun. If the problem continues, check that BitFun can read and save its settings; then refresh.",
+        )
+    } else if code.contains("model_unavailable") {
         (
             "The requested model is not available in BitFun.",
             "Choose an available model in the source application, or set a fixed Sub-Agent model in BitFun, then refresh.",

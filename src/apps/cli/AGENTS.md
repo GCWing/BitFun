@@ -46,8 +46,13 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   external-source approval, conflict, Tool Runtime, and script-worker owners.
   CLI/TUI consumes typed snapshots and actions; it must not import modules,
   spawn tool workers, bypass a pending decision, or implement a second approval
-  store. TypeScript, dependency loading, package plugins, hooks, and subagents
-  remain non-executable until their own reviewed capability slice lands.
+  store. TypeScript, dependency loading, package plugins, and hooks remain
+  non-executable until their own reviewed capability slice lands.
+- OpenCode external subagents may execute only through the shared source
+  decision and existing Subagent owner. TUI consumes typed summaries and
+  generation-checked actions; it must not parse agent files, inject source
+  prompts directly, invent model fallbacks, or offer follow-up for the current
+  fresh single-run compatibility slice.
 - The managed-package OpenCode adapter remains a static-preview path. Other
   OpenCode plugin capabilities, Codex, and Claude remain import/reference sources
   unless their own reviewed adapter design explicitly changes. Never copy

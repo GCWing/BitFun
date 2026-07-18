@@ -93,6 +93,11 @@
   "agentDiagnostics": {
     "activationBlocked": "This agent cannot be enabled yet.",
     "degradedOnly": "Some settings will not apply in BitFun. Review the details to confirm the resulting behavior is acceptable.",
+    "configurationUnavailable": {
+      "reason": "BitFun could not read its model settings.",
+      "impact": "{{impact}}",
+      "nextStep": "Open BitFun model settings and confirm they load. If not, restart BitFun. If the problem continues, check that BitFun can read and save its settings; then refresh."
+    },
     "modelUnavailable": {
       "reason": "The requested model is not available in BitFun.",
       "impact": "{{impact}}",
@@ -182,7 +187,7 @@
     "active": "No action needed. Disable these tools to stop using this source's tools.",
     "conflict": "Choose which tool to use below, or leave them disabled.",
     "unsupported": "Change the source to a single JavaScript file supported by BitFun, then refresh.",
-    "runtime_unavailable": "Restore the required JavaScript environment, then refresh.",
+    "runtime_unavailable": "Install or repair Node.js, then restart BitFun to check again.",
     "load_failed": "Fix the source and refresh, or keep these tools disabled."
   },
   "toolConflicts": {

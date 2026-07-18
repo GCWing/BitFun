@@ -16,6 +16,7 @@ use crate::external_tools::resolve_external_tool_for_workspace;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig, AIModelConfig};
 use crate::service::config::SubagentModelSelection;
+use crate::util::BitFunError;
 use bitfun_external_sources::ExternalSubagentCoordinatorSnapshot;
 use bitfun_product_domains::external_sources::{ExternalSourceScope, ProviderId, SourceKey};
 use bitfun_product_domains::external_subagents::{
@@ -27,9 +28,11 @@ use bitfun_product_domains::external_subagents::{
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 pub(super) const DISABLED_SUBAGENT_CONFLICT_CHOICE: &str = "__bitfun_disabled__";
+static MODEL_CONFIG_UNAVAILABLE_LOGGED: AtomicBool = AtomicBool::new(false);
 
 pub(super) struct ExternalSubagentDecisions<'a> {
     pub approved_envelopes: &'a BTreeSet<String>,
@@ -66,7 +69,7 @@ struct LocalCandidateFact {
 
 #[derive(Default)]
 struct ProductFacts {
-    ai_config: AIConfig,
+    ai_config: Option<AIConfig>,
     tools: BTreeMap<String, ResolvedToolFact>,
     locals: BTreeMap<String, LocalCandidateFact>,
 }
@@ -110,11 +113,20 @@ async fn gather_product_facts(
     definitions: &[ExternalSubagentDefinition],
 ) -> ProductFacts {
     let ai_config = match GlobalConfigManager::get_service().await {
-        Ok(service) => service
-            .get_config::<AIConfig>(Some("ai"))
-            .await
-            .unwrap_or_default(),
-        Err(_) => AIConfig::default(),
+        Ok(service) => match service.get_config::<AIConfig>(Some("ai")).await {
+            Ok(config) => {
+                MODEL_CONFIG_UNAVAILABLE_LOGGED.store(false, Ordering::Relaxed);
+                Some(config)
+            }
+            Err(error) => {
+                log_model_config_unavailable("config_read", &error);
+                None
+            }
+        },
+        Err(error) => {
+            log_model_config_unavailable("config_service", &error);
+            None
+        }
     };
 
     let requested_names = definitions
@@ -178,15 +190,20 @@ async fn gather_product_facts(
             // offering a candidate that the Local route could not execute.
             continue;
         }
-        let model_selection = registry
-            .get_explicit_subagent_model_selection(&info.id, workspace_root)
-            .unwrap_or_else(|| {
-                ai_config
-                    .agent_model_defaults
-                    .builtin_subagent_selection(&info.id)
-            });
-        let model =
-            serde_json::to_string(&model_selection).unwrap_or_else(|_| "unavailable".to_string());
+        let model = match ai_config.as_ref() {
+            Some(ai_config) => {
+                let model_selection = registry
+                    .get_explicit_subagent_model_selection(&info.id, workspace_root)
+                    .unwrap_or_else(|| {
+                        ai_config
+                            .agent_model_defaults
+                            .builtin_subagent_selection(&info.id)
+                    });
+                serde_json::to_string(&model_selection)
+                    .unwrap_or_else(|_| "unavailable".to_string())
+            }
+            None => "configuration-unavailable".to_string(),
+        };
         locals.insert(logical_key, local_candidate_fact(&info, &model));
     }
 
@@ -194,6 +211,45 @@ async fn gather_product_facts(
         ai_config,
         tools,
         locals,
+    }
+}
+
+fn log_model_config_unavailable(stage: &str, error: &BitFunError) {
+    if claim_model_config_outage_log(&MODEL_CONFIG_UNAVAILABLE_LOGGED) {
+        log::warn!(
+            "External subagent model configuration unavailable: stage={}, category={}",
+            stage,
+            model_config_error_category(error)
+        );
+    }
+}
+
+fn claim_model_config_outage_log(logged: &AtomicBool) -> bool {
+    !logged.swap(true, Ordering::Relaxed)
+}
+
+fn model_config_error_category(error: &BitFunError) -> &'static str {
+    match error {
+        BitFunError::Configuration(message) if message.contains("not initialized") => {
+            "service_not_initialized"
+        }
+        BitFunError::Configuration(message) if message.contains("service is None") => {
+            "service_missing"
+        }
+        BitFunError::Configuration(message)
+            if message.contains("Failed to deserialize config value") =>
+        {
+            "config_deserialization_failed"
+        }
+        BitFunError::Configuration(message) if message.contains("Config path") => {
+            "config_path_unavailable"
+        }
+        BitFunError::Configuration(_) => "configuration_error",
+        BitFunError::Deserialization(_) => "deserialization_error",
+        BitFunError::Serialization(_) => "serialization_error",
+        BitFunError::Io(_) => "io_error",
+        BitFunError::Service(_) => "service_error",
+        _ => "other_error",
     }
 }
 
@@ -361,6 +417,16 @@ fn reconcile_with_facts(
             facts,
         );
         let summary = summary_for(&resolved, initial_activation_state(&resolved));
+        if facts.ai_config.is_none() {
+            if !resolved.definition.disabled {
+                state.routes.insert(
+                    resolved.definition.logical_id.clone(),
+                    ExternalSubagentRoute::Unavailable,
+                );
+            }
+            state.summaries.push(summary);
+            continue;
+        }
         if resolved.definition.disabled {
             state.summaries.push(summary);
             continue;
@@ -373,10 +439,32 @@ fn reconcile_with_facts(
             state.summaries.push(summary);
             continue;
         }
+        if has_configuration_unavailable_diagnostic(&resolved) {
+            state.summaries.push(summary);
+            continue;
+        }
         by_logical
             .entry(normalize_logical_id(&definition.logical_id))
             .or_default()
             .push(resolved);
+    }
+
+    if facts.ai_config.is_none() {
+        for lineage in decisions.conflict_lineage_current_keys.keys() {
+            if let Some((domain, scope, logical_id)) = parse_conflict_lineage(lineage) {
+                if domain == execution_domain_id && scope == workspace_scope {
+                    state
+                        .routes
+                        .insert(logical_id.to_string(), ExternalSubagentRoute::Unavailable);
+                }
+            }
+        }
+        state.summaries.sort_by(|left, right| {
+            left.logical_id
+                .cmp(&right.logical_id)
+                .then(left.candidate_id.cmp(&right.candidate_id))
+        });
+        return state;
     }
 
     let tracked_logical_ids = decisions
@@ -477,23 +565,34 @@ fn resolve_external_candidate(
             ),
         })
         .collect::<Vec<_>>();
-    let model = match &definition.requested_model {
-        ExternalSubagentModelRequest::Default => {
-            resolve_bitfun_subagent_model(&definition.logical_id, &facts.ai_config)
+    let model = match facts.ai_config.as_ref() {
+        Some(ai_config) => match &definition.requested_model {
+            ExternalSubagentModelRequest::Default => {
+                resolve_bitfun_subagent_model(&definition.logical_id, ai_config)
+            }
+            ExternalSubagentModelRequest::Exact {
+                provider_hint,
+                model_name,
+            } => resolve_exact_external_model(provider_hint.as_deref(), model_name, ai_config),
+        },
+        None => {
+            diagnostics.push(ExternalSubagentDiagnosticSummary {
+                code: "external_subagent.configuration_unavailable".to_string(),
+                blocks_activation: true,
+            });
+            None
         }
-        ExternalSubagentModelRequest::Exact {
-            provider_hint,
-            model_name,
-        } => resolve_exact_external_model(provider_hint.as_deref(), model_name, &facts.ai_config),
     };
     let model = match model {
         Some(model) => model,
         None => {
-            compatibility = ExternalSubagentCompatibilityState::Blocked;
-            diagnostics.push(ExternalSubagentDiagnosticSummary {
-                code: "external_subagent.model_unavailable".to_string(),
-                blocks_activation: true,
-            });
+            if facts.ai_config.is_some() {
+                compatibility = ExternalSubagentCompatibilityState::Blocked;
+                diagnostics.push(ExternalSubagentDiagnosticSummary {
+                    code: "external_subagent.model_unavailable".to_string(),
+                    blocks_activation: true,
+                });
+            }
             ResolvedModelFact {
                 runtime_id: "unavailable".to_string(),
                 display_label: "unavailable".to_string(),
@@ -850,9 +949,18 @@ fn initial_activation_state(
         ExternalSubagentCompatibilityState::Blocked | ExternalSubagentCompatibilityState::Invalid
     ) {
         ExternalSubagentActivationState::Blocked
+    } else if has_configuration_unavailable_diagnostic(candidate) {
+        ExternalSubagentActivationState::Unavailable
     } else {
         ExternalSubagentActivationState::ApprovalRequired
     }
+}
+
+fn has_configuration_unavailable_diagnostic(candidate: &ResolvedExternalCandidate) -> bool {
+    candidate.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "external_subagent.configuration_unavailable"
+            && diagnostic.blocks_activation
+    })
 }
 
 fn workspace_scope_key(workspace_root: Option<&Path>) -> String {
@@ -1014,7 +1122,7 @@ mod tests {
         };
         ai_config.default_models.fast = Some("model_fast".to_string());
         ProductFacts {
-            ai_config,
+            ai_config: Some(ai_config),
             tools: BTreeMap::from([(
                 "Read".to_string(),
                 ResolvedToolFact {
@@ -1157,6 +1265,95 @@ mod tests {
     }
 
     #[test]
+    fn unavailable_bitfun_model_config_is_recoverable_without_claiming_model_mismatch() {
+        let empty_set = BTreeSet::new();
+        let empty_map = BTreeMap::new();
+        let definition_snapshot = snapshot("behavior-v1", "catalog-v1");
+        let healthy_facts = facts();
+        let preview = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+            },
+            &healthy_facts,
+        );
+        let approved = BTreeSet::from([preview.summaries[0].decision_key.clone()]);
+        let mut unavailable_facts = facts();
+        unavailable_facts.ai_config = None;
+
+        let state = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                approved_envelopes: &approved,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+            },
+            &unavailable_facts,
+        );
+
+        assert_eq!(
+            state.summaries[0].activation_state,
+            ExternalSubagentActivationState::Unavailable
+        );
+        assert_eq!(
+            state.summaries[0].compatibility_state,
+            ExternalSubagentCompatibilityState::Ready
+        );
+        assert!(state.summaries[0].diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "external_subagent.configuration_unavailable"
+                && diagnostic.blocks_activation
+        }));
+        assert!(!state.summaries[0]
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "external_subagent.model_unavailable"));
+        assert!(state.pending_approvals.is_empty());
+        assert!(state.registrations.is_empty());
+
+        let recovered = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                approved_envelopes: &approved,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+            },
+            &healthy_facts,
+        );
+        assert_eq!(
+            recovered.summaries[0].activation_state,
+            ExternalSubagentActivationState::Active
+        );
+        assert_eq!(recovered.registrations.len(), 1);
+    }
+
+    #[test]
+    fn model_config_outage_logging_is_deduplicated_and_does_not_expose_error_values() {
+        let logged = AtomicBool::new(false);
+        assert!(claim_model_config_outage_log(&logged));
+        assert!(!claim_model_config_outage_log(&logged));
+        logged.store(false, Ordering::Relaxed);
+        assert!(claim_model_config_outage_log(&logged));
+
+        let error = BitFunError::config(
+            "Failed to deserialize config value at 'ai': invalid value 'sk-sensitive'",
+        );
+        let category = model_config_error_category(&error);
+        assert_eq!(category, "config_deserialization_failed");
+        assert!(!category.contains("sk-sensitive"));
+    }
+
+    #[test]
     fn catalog_only_update_reuses_behavior_approval() {
         let first = snapshot("behavior-v1", "catalog-v1");
         let empty_set = BTreeSet::new();
@@ -1255,13 +1452,14 @@ mod tests {
         let approved = BTreeSet::from([first.summaries[0].decision_key.clone()]);
 
         let mut updated_facts = facts();
-        updated_facts.ai_config.models = vec![active_model(
+        let updated_config = updated_facts.ai_config.as_mut().unwrap();
+        updated_config.models = vec![active_model(
             "model_new",
             "New provider",
             "fake",
             "new-model",
         )];
-        updated_facts.ai_config.default_models.fast = Some("model_new".to_string());
+        updated_config.default_models.fast = Some("model_new".to_string());
         let updated = reconcile_with_facts(
             Some(Path::new("C:/repo")),
             "local-user",
@@ -1306,9 +1504,10 @@ mod tests {
         let approved = BTreeSet::from([first.summaries[0].decision_key.clone()]);
 
         let mut updated_facts = facts();
-        updated_facts.ai_config.models[0].provider = "other-provider".to_string();
-        updated_facts.ai_config.models[0].model_name = "replacement-model".to_string();
-        updated_facts.ai_config.models[0].base_url = "https://models.example/v2".to_string();
+        let updated_config = updated_facts.ai_config.as_mut().unwrap();
+        updated_config.models[0].provider = "other-provider".to_string();
+        updated_config.models[0].model_name = "replacement-model".to_string();
+        updated_config.models[0].base_url = "https://models.example/v2".to_string();
         let updated = reconcile_with_facts(
             Some(Path::new("C:/repo")),
             "local-user",
@@ -1340,6 +1539,8 @@ mod tests {
         let mut unavailable_facts = facts();
         unavailable_facts
             .ai_config
+            .as_mut()
+            .unwrap()
             .agent_model_defaults
             .subagents
             .default_selection = SubagentModelSelection::Inherit;
@@ -1422,6 +1623,95 @@ mod tests {
             active.routes.get("reviewer"),
             Some(ExternalSubagentRoute::External(_))
         ));
+    }
+
+    #[test]
+    fn model_config_outage_preserves_conflict_choice_for_recovery() {
+        for select_external in [false, true] {
+            let (preview, mut product_facts) = conflict_preview_with_local();
+            let conflict = &preview.conflicts[0];
+            let external_id = conflict
+                .candidates
+                .iter()
+                .find(|candidate| candidate.external)
+                .unwrap()
+                .candidate_id
+                .clone();
+            let selected_id = if select_external {
+                external_id
+            } else {
+                "local_subagent:reviewer".to_string()
+            };
+            let choices = BTreeMap::from([(conflict.conflict_key.clone(), selected_id.clone())]);
+            let approved = BTreeSet::from([preview.summaries[0].decision_key.clone()]);
+            let empty_map = BTreeMap::new();
+            let healthy_ai_config = product_facts.ai_config.take();
+
+            let unavailable = reconcile_with_facts(
+                Some(Path::new("C:/repo")),
+                "local-user",
+                &snapshot("behavior-v1", "catalog-v1"),
+                ExternalSubagentDecisions {
+                    approved_envelopes: &approved,
+                    declined_decisions: &empty_map,
+                    conflict_choices: &choices,
+                    conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                },
+                &product_facts,
+            );
+
+            assert_eq!(
+                unavailable.routes.get("reviewer"),
+                Some(&ExternalSubagentRoute::Unavailable)
+            );
+            assert!(unavailable
+                .summaries
+                .iter()
+                .all(|summary| summary.activation_state
+                    == ExternalSubagentActivationState::Unavailable));
+            assert!(unavailable.conflicts.is_empty());
+            assert!(unavailable
+                .observed_conflict_lineage_current_keys
+                .is_empty());
+            assert!(unavailable.pending_approvals.is_empty());
+            assert!(unavailable.registrations.is_empty());
+
+            product_facts.ai_config = healthy_ai_config;
+            let recovered = reconcile_with_facts(
+                Some(Path::new("C:/repo")),
+                "local-user",
+                &snapshot("behavior-v1", "catalog-v1"),
+                ExternalSubagentDecisions {
+                    approved_envelopes: &approved,
+                    declined_decisions: &empty_map,
+                    conflict_choices: &choices,
+                    conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                },
+                &product_facts,
+            );
+
+            assert_eq!(
+                recovered.conflicts[0].selected_candidate_id.as_deref(),
+                Some(selected_id.as_str())
+            );
+            assert_eq!(
+                recovered.observed_conflict_lineage_current_keys,
+                preview.observed_conflict_lineage_current_keys
+            );
+            if select_external {
+                assert!(matches!(
+                    recovered.routes.get("reviewer"),
+                    Some(ExternalSubagentRoute::External(_))
+                ));
+                assert_eq!(recovered.registrations.len(), 1);
+            } else {
+                assert_eq!(
+                    recovered.routes.get("reviewer"),
+                    Some(&ExternalSubagentRoute::Local)
+                );
+                assert!(recovered.registrations.is_empty());
+            }
+        }
     }
 
     fn conflict_preview_with_local() -> (ExternalSubagentProductState, ProductFacts) {

@@ -407,6 +407,50 @@ describe('ExternalSourcesConfig', () => {
     );
   });
 
+  it('shows model-setting read failures as temporarily unavailable', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      commandConflicts: [],
+      subagentGeneration: 4,
+      preferenceRevision: 7,
+      subagents: [{
+        candidateId: 'external-agent-review-v1',
+        logicalId: 'review',
+        displayName: 'External Review',
+        description: 'Review a change',
+        providerLabel: 'Future AI',
+        scope: 'project',
+        sourceKeys: [{ providerId: 'future.agents', sourceId: 'review' }],
+        sourceLocationLabels: ['<workspace>/.future/agents/review.md'],
+        sourceCount: 1,
+        effectiveToolLabels: ['Read'],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [{
+          code: 'external_subagent.configuration_unavailable',
+          blocksActivation: true,
+        }],
+        activationState: { state: 'unavailable' },
+        decisionKey: 'agent-decision-unavailable',
+      }],
+      subagentConflicts: [],
+      pendingSubagentApprovals: [],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const details = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('common.details'));
+    await act(async () => details?.click());
+    expect(container.textContent).toContain('agentState.unavailable');
+    expect(container.textContent).not.toContain('agentState.blocked');
+    expect(container.textContent).toContain('agentDiagnostics.configurationUnavailable.reason');
+    expect(container.textContent).not.toContain('agents.enable');
+  });
+
   it('non-blockingly reports when an enabled external agent becomes unavailable', async () => {
     const activeAgent = {
       candidateId: 'external-agent-review-v1',

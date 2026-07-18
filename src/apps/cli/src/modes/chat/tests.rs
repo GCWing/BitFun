@@ -229,6 +229,19 @@ mod tests {
     }
 
     #[test]
+    fn external_tool_runtime_recovery_explains_that_bitfun_must_restart() {
+        let mut snapshot = external_tool_review_snapshot();
+        snapshot.tools[0].activation = ExternalToolActivationState::RuntimeUnavailable {
+            reason: "BitFun could not find Node.js for external tools".to_string(),
+        };
+
+        let summary = external_tool_review_text(Some(&snapshot));
+        assert!(summary.contains("install or repair Node.js, then restart BitFun"));
+        assert!(!summary.contains("environment, then refresh"));
+        assert!(!summary.contains("when BitFun started"));
+    }
+
+    #[test]
     fn external_tool_review_commands_resolve_indices_to_stable_keys() {
         let snapshot = external_tool_review_snapshot();
 
@@ -877,5 +890,15 @@ mod tests {
             external_agent_diagnostic_lines("opencode_agent_definition_type_invalid", true, "")
                 .join(" ");
         assert!(invalid.contains("invalid or missing required value"));
+
+        let config = external_agent_diagnostic_lines(
+            "external_subagent.configuration_unavailable",
+            true,
+            "",
+        )
+        .join(" ");
+        assert!(config.contains("could not read its model settings"));
+        assert!(config.contains("can read and save its settings"));
+        assert!(!config.contains("requested model is not available"));
     }
 }

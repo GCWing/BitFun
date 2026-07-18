@@ -36,6 +36,7 @@ function matchesToolSource(
 }
 
 function agentDiagnosticCategory(code: string, blocksActivation: boolean): string {
+  if (code.includes('configuration_unavailable')) return 'configurationUnavailable';
   if (code.includes('model_unavailable')) return 'modelUnavailable';
   if (code.includes('tool_unavailable')) return 'toolUnavailable';
   if (code.includes('type_invalid') || code.includes('definition_invalid')
