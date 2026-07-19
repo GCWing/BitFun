@@ -37,7 +37,7 @@ interface SelectedModelDraft {
   modelName: string;
   category: ModelCategory;
   contextWindow: number;
-  maxTokens: number;
+  maxTokens?: number;
   reasoningMode: ReasoningMode;
   reasoningEffort?: string;
   thinkingBudgetTokens?: number;
@@ -67,7 +67,7 @@ function createModelDraft(
     modelName: trimmedModelName,
     category: overrides?.category ?? baseConfig?.category ?? 'general_chat',
     contextWindow: overrides?.contextWindow ?? baseConfig?.context_window ?? 200000,
-    maxTokens: overrides?.maxTokens ?? baseConfig?.max_tokens ?? 32000,
+    maxTokens: overrides?.maxTokens ?? baseConfig?.max_tokens,
     reasoningMode: overrides?.reasoningMode ?? getEffectiveReasoningMode(baseConfig),
     reasoningEffort: overrides?.reasoningEffort ?? baseConfig?.reasoning_effort,
     thinkingBudgetTokens: overrides?.thinkingBudgetTokens ?? baseConfig?.thinking_budget_tokens,
@@ -160,6 +160,24 @@ function formatTokenCountShort(n: number): string {
     return `${s}K`;
   }
   return String(n);
+}
+
+function automaticMaxOutputTokens(contextWindow: number): number {
+  const quarterContext = Math.floor(contextWindow / 4);
+  return [64000, 32000, 24000, 16000, 8000].find(tier => tier <= quarterContext) ?? quarterContext;
+}
+
+function effectiveMaxOutputTokens(draft: SelectedModelDraft): number {
+  const configuredMaxTokens = draft.maxTokens;
+  if (
+    configuredMaxTokens != null
+    && configuredMaxTokens > 0
+    && configuredMaxTokens * 100 <= draft.contextWindow * 40
+  ) {
+    return configuredMaxTokens;
+  }
+
+  return automaticMaxOutputTokens(draft.contextWindow);
 }
 
 function parseOptionalPositiveIntegerInput(value: string): number | null | undefined {
@@ -609,7 +627,7 @@ const AIModelConfig: React.FC = () => {
     configs.map(config => createModelDraft(config.model_name, config, {
       configId: config.id,
       contextWindow: config.context_window || 200000,
-      maxTokens: config.max_tokens || 32000,
+      maxTokens: config.max_tokens,
       reasoningMode: getEffectiveReasoningMode(config),
       reasoningEffort: config.reasoning_effort,
       thinkingBudgetTokens: config.thinking_budget_tokens,
@@ -660,7 +678,11 @@ const AIModelConfig: React.FC = () => {
           }, reasoningProviderConfig);
         }
 
-        return normalizeDraftReasoningForProvider(createModelDraft(modelName, baseConfig, {
+        const draftBaseConfig = baseConfig
+          ? { ...baseConfig, max_tokens: undefined }
+          : undefined;
+
+        return normalizeDraftReasoningForProvider(createModelDraft(modelName, draftBaseConfig, {
           configId: pinnedRowId,
         }), reasoningProviderConfig);
       })
@@ -782,7 +804,7 @@ const AIModelConfig: React.FC = () => {
       request_url: config.request_url || resolveRequestUrl(resolvedBaseUrl, resolvedProvider, resolvedModelName),
       model_name: resolvedModelName,
       context_window: config.context_window || 200000,
-      max_tokens: config.max_tokens || 32000,
+      max_tokens: config.max_tokens,
       temperature: config.temperature,
       top_p: config.top_p,
       enabled: config.enabled ?? true,
@@ -905,7 +927,6 @@ const AIModelConfig: React.FC = () => {
       model_name: '',
       enabled: true,
       context_window: 200000,
-      max_tokens: 32000,
       category: 'general_chat',
       capabilities: ['text_chat', 'function_calling'],
       recommended_for: [],
@@ -956,7 +977,6 @@ const AIModelConfig: React.FC = () => {
       provider: template.format,
       enabled: true,
       context_window: 200000,
-      max_tokens: 32000,
       category: 'general_chat',
       capabilities: ['text_chat', 'function_calling'],
       recommended_for: [],
@@ -966,7 +986,6 @@ const AIModelConfig: React.FC = () => {
     setSelectedModelDrafts(
       defaultModel ? [createModelDraft(defaultModel, {
             context_window: 200000,
-            max_tokens: 32000,
             reasoning_mode: DEFAULT_REASONING_MODE,
           })] : []
     );
@@ -992,8 +1011,6 @@ const AIModelConfig: React.FC = () => {
       provider: 'openai',  
       enabled: true,
       context_window: 200000,
-      max_tokens: 32000,  
-      
       category: 'general_chat',
       capabilities: ['text_chat'],
       recommended_for: [],
@@ -1032,7 +1049,7 @@ const AIModelConfig: React.FC = () => {
       provider: config.provider,
       enabled: true,
       context_window: config.context_window || 200000,
-      max_tokens: config.max_tokens || 32000,
+      max_tokens: config.max_tokens,
       category: config.category || 'general_chat',
       capabilities: config.capabilities || getCapabilitiesByCategory(config.category || 'general_chat'),
       recommended_for: config.recommended_for || [],
@@ -1064,7 +1081,7 @@ const AIModelConfig: React.FC = () => {
     setSelectedModelDrafts([
       createModelDraft(config.model_name, config, {
         contextWindow: config.context_window || 200000,
-        maxTokens: config.max_tokens || 32000,
+        maxTokens: config.max_tokens,
         reasoningMode: getEffectiveReasoningMode(config),
         reasoningEffort: config.reasoning_effort,
         thinkingBudgetTokens: config.thinking_budget_tokens,
@@ -1106,6 +1123,10 @@ const AIModelConfig: React.FC = () => {
         return;
       }
       const draftsToSave = dedupeSelectedModelDraftsByModelName(selectedModelDrafts);
+      if (draftsToSave.some(draft => draft.contextWindow < 32000)) {
+        notification.warning(t('messages.contextWindowTooSmall'));
+        return;
+      }
       const existingProviderInstanceId = getProviderInstanceId(editingConfig);
       const isProviderGroupEdit = !editingConfig.id && editingProviderModelIds.size > 0;
       const providerInstanceId = existingProviderInstanceId || generateProviderInstanceId();
@@ -1716,7 +1737,7 @@ const AIModelConfig: React.FC = () => {
               && draft.reasoningMode === 'enabled'
               && supportsAnthropicThinkingBudget(draft.modelName);
             const displayedThinkingBudget = draft.thinkingBudgetTokens
-              ?? Math.min(Math.floor(draft.maxTokens * 0.75), 10000);
+              ?? Math.min(Math.floor(effectiveMaxOutputTokens(draft) * 0.75), 10000);
 
             return (
               <div
@@ -1781,8 +1802,6 @@ const AIModelConfig: React.FC = () => {
                         {' · '}
                         {formatTokenCountShort(draft.contextWindow)} ctx
                         {' · '}
-                        {formatTokenCountShort(draft.maxTokens)} out
-                        {' · '}
                         {formatReasoningSummary(draft)}
                       </span>
                     </div>
@@ -1818,20 +1837,8 @@ const AIModelConfig: React.FC = () => {
                       <NumberInput
                         value={draft.contextWindow}
                         onChange={(value) => updateModelDraft(draft.modelName, { contextWindow: value })}
-                        min={1000}
+                        min={32000}
                         max={2000000}
-                        step={1000}
-                        size="small"
-                        disableWheel
-                      />
-                    </div>
-                    <div className="bitfun-ai-model-config__selected-model-field">
-                      <span>{t('form.maxTokens')}</span>
-                      <NumberInput
-                        value={draft.maxTokens}
-                        onChange={(value) => updateModelDraft(draft.modelName, { maxTokens: value })}
-                        min={1000}
-                        max={1000000}
                         step={1000}
                         size="small"
                         disableWheel
@@ -1872,7 +1879,7 @@ const AIModelConfig: React.FC = () => {
                           value={displayedThinkingBudget}
                           onChange={(value) => updateModelDraft(draft.modelName, { thinkingBudgetTokens: value || undefined })}
                           min={1024}
-                          max={50000}
+                          max={Math.min(effectiveMaxOutputTokens(draft), 50000)}
                           step={1024}
                           size="small"
                           disableWheel
@@ -2443,10 +2450,6 @@ const AIModelConfig: React.FC = () => {
             <div className="bitfun-ai-model-config__details-item">
               <span className="bitfun-ai-model-config__details-label">{t('details.contextWindow')}</span>
               <span className="bitfun-ai-model-config__details-value">{config.context_window != null ? i18nService.formatNumber(config.context_window) : '128,000'}</span>
-            </div>
-            <div className="bitfun-ai-model-config__details-item">
-              <span className="bitfun-ai-model-config__details-label">{t('details.maxOutput')}</span>
-              <span className="bitfun-ai-model-config__details-value">{config.max_tokens != null ? i18nService.formatNumber(config.max_tokens) : '-'}</span>
             </div>
             <div className="bitfun-ai-model-config__details-item bitfun-ai-model-config__details-item--wide">
               <span className="bitfun-ai-model-config__details-label">{t('details.apiUrl')}</span>

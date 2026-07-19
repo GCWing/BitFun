@@ -308,6 +308,7 @@
     "fillModelName": "Please fill in model name",
     "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
     "invalidBaseUrlScheme": "API URL must start with http:// or https://",
+    "contextWindowTooSmall": "Context window must be at least 32K tokens",
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
     "loadFailed": "Failed to load AI configuration",
