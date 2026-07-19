@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 [dependencies]
 # Internal crates
 bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-relay-service = { path = "../../crates/services/relay-service" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false }
 bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime"] }
@@ -72,6 +73,8 @@ zstd = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
 async-trait = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
 sha1 = { workspace = true }
 screenshots = { workspace = true }
 enigo = { workspace = true }

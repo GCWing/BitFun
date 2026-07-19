@@ -4,6 +4,7 @@
 pub mod api;
 pub mod computer_use;
 pub mod crash_diagnostics;
+mod embedded_relay_host;
 pub mod logging;
 pub mod macos_menubar;
 pub mod runtime;

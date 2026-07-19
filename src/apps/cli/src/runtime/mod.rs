@@ -100,11 +100,8 @@ impl CliRuntimeContext {
         )
         .map_err(anyhow::Error::msg)
         .context("Failed to build CLI Agent Runtime SDK")?;
-        let compatibility = CoreAgentRuntimeCompatibility::build(
-            agentic_system.coordinator.clone(),
-            scheduler,
-            agentic_system.token_usage_service.clone(),
-        );
+        let compatibility =
+            CoreAgentRuntimeCompatibility::build(agentic_system.coordinator.clone(), scheduler);
 
         debug_assert_eq!(
             agent_runtime.harness_provider_ids(),
@@ -193,11 +190,8 @@ impl AcpRuntimeContext {
         )
         .map_err(anyhow::Error::msg)
         .context("Failed to build ACP Agent Runtime SDK")?;
-        let compatibility = CoreAgentRuntimeCompatibility::build(
-            agentic_system.coordinator,
-            scheduler,
-            agentic_system.token_usage_service,
-        );
+        let compatibility =
+            CoreAgentRuntimeCompatibility::build(agentic_system.coordinator, scheduler);
 
         Ok(Self {
             _agent_events: agent_events,

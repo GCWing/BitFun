@@ -618,6 +618,7 @@ export function runManifestParserSelfTest({
   );
   const coreFullyMigratedDeps = new Set([
     'aes',
+    'bitfun-relay-service',
     'hostname',
     'htmd',
     'legible',
@@ -635,7 +636,7 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-service']) {
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }

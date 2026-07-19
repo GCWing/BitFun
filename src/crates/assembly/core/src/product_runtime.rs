@@ -27,13 +27,11 @@ use crate::agentic::coordination::{
 };
 use crate::agentic::core::{Session, SessionConfig};
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
-use crate::agentic::persistence::session_branch::{SessionBranchRequest, SessionBranchResult};
+use crate::agentic::persistence::session_branch::SessionBranchRequest;
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
 use crate::agentic::session::CoreSessionStorePort;
 use crate::service::session::{DialogTurnData, SessionMetadata, SessionStatus};
-use crate::service::session_usage::{
-    generate_session_usage_report, SessionUsageReport, SessionUsageReportRequest,
-};
+use crate::service::session_usage::{generate_session_usage_report, SessionUsageReport};
 use crate::service::snapshot::{
     get_snapshot_manager_for_workspace, initialize_snapshot_manager_for_workspace, SnapshotManager,
 };
@@ -59,6 +57,24 @@ pub struct CoreSessionMaintenancePermit {
 
 fn validate_persisted_session_id(session_id: &str) -> BitFunResult<()> {
     bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)
+}
+
+fn latest_persisted_turn_id(turns: &[DialogTurnData]) -> BitFunResult<String> {
+    turns
+        .last()
+        .map(|turn| turn.turn_id.clone())
+        .ok_or_else(|| {
+            BitFunError::Validation("Session has no persisted turns to fork".to_string())
+        })
+}
+
+async fn generate_core_session_usage_report(
+    persistence: &PersistenceManager,
+    token_usage_service: &TokenUsageService,
+    request: AgentSessionUsageRequest,
+) -> BitFunResult<SessionUsageReport> {
+    validate_persisted_session_id(&request.session_id)?;
+    generate_session_usage_report(persistence, Some(token_usage_service), request).await
 }
 
 async fn ensure_snapshot_manager(workspace_path: &Path) -> BitFunResult<Arc<SnapshotManager>> {
@@ -93,7 +109,6 @@ impl CoreProductAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let session_operations = Arc::new(CoreSessionOperationsPort::new(
             coordinator.clone(),
-            scheduler.clone(),
             token_usage_service,
         ));
         CoreServiceAgentRuntime::product_agent_runtime(
@@ -136,14 +151,12 @@ pub struct CoreAgentRuntimeCompatibility {
     coordinator: Arc<ConversationCoordinator>,
     scheduler: Arc<DialogScheduler>,
     persistence: Arc<PersistenceManager>,
-    token_usage_service: Arc<TokenUsageService>,
 }
 
 impl CoreAgentRuntimeCompatibility {
     pub fn build(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
-        token_usage_service: Arc<TokenUsageService>,
     ) -> Self {
         let persistence = coordinator.get_session_manager().persistence_manager();
 
@@ -151,40 +164,7 @@ impl CoreAgentRuntimeCompatibility {
             coordinator,
             scheduler,
             persistence,
-            token_usage_service,
         }
-    }
-
-    /// Compatibility shim for callers migrating to the Agent Runtime SDK.
-    #[deprecated(note = "use AgentRuntime::create_session_with_id")]
-    pub async fn create_session_with_id(
-        &self,
-        session_id: String,
-        session_name: String,
-        agent_type: String,
-        workspace_path: String,
-    ) -> BitFunResult<Session> {
-        self.coordinator
-            .create_session_with_id(
-                Some(session_id),
-                session_name,
-                agent_type,
-                SessionConfig {
-                    workspace_path: Some(workspace_path),
-                    ..Default::default()
-                },
-            )
-            .await
-    }
-
-    pub async fn update_session_agent_type(
-        &self,
-        session_id: &str,
-        agent_type: &str,
-    ) -> BitFunResult<()> {
-        self.coordinator
-            .update_session_agent_type(session_id, agent_type)
-            .await
     }
 
     pub async fn create_session_with_workspace(
@@ -287,46 +267,6 @@ impl CoreAgentRuntimeCompatibility {
                 .restore_session_for_workspace(request, session_id)
                 .await
         }
-    }
-
-    pub async fn branch_session_at_latest_turn(
-        &self,
-        workspace_path: &Path,
-        source_session_id: &str,
-    ) -> BitFunResult<SessionBranchResult> {
-        let (_, turns) = self
-            .coordinator
-            .restore_session_view(workspace_path, source_session_id)
-            .await?;
-        let source_turn_id = turns
-            .last()
-            .map(|turn| turn.turn_id.clone())
-            .ok_or_else(|| {
-                BitFunError::Validation("Session has no persisted turns to fork".to_string())
-            })?;
-
-        self.persistence
-            .branch_session(
-                workspace_path,
-                &SessionBranchRequest {
-                    source_session_id: source_session_id.to_string(),
-                    source_turn_id,
-                },
-            )
-            .await
-    }
-
-    pub async fn generate_session_usage_report(
-        &self,
-        request: SessionUsageReportRequest,
-    ) -> BitFunResult<SessionUsageReport> {
-        validate_persisted_session_id(&request.session_id)?;
-        generate_session_usage_report(
-            self.persistence.as_ref(),
-            Some(self.token_usage_service.as_ref()),
-            request,
-        )
-        .await
     }
 
     pub async fn list_persisted_sessions(
@@ -644,23 +584,21 @@ impl CoreAgentRuntimeCompatibility {
 
 #[derive(Clone)]
 struct CoreSessionOperationsPort {
-    compatibility: CoreAgentRuntimeCompatibility,
     coordinator: Arc<ConversationCoordinator>,
+    persistence: Arc<PersistenceManager>,
+    token_usage_service: Arc<TokenUsageService>,
 }
 
 impl CoreSessionOperationsPort {
     fn new(
         coordinator: Arc<ConversationCoordinator>,
-        scheduler: Arc<DialogScheduler>,
         token_usage_service: Arc<TokenUsageService>,
     ) -> Self {
+        let persistence = coordinator.get_session_manager().persistence_manager();
         Self {
-            compatibility: CoreAgentRuntimeCompatibility::build(
-                coordinator.clone(),
-                scheduler,
-                token_usage_service,
-            ),
             coordinator,
+            persistence,
+            token_usage_service,
         }
     }
 }
@@ -694,11 +632,21 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
         request: AgentSessionForkRequest,
     ) -> PortResult<AgentSessionForkResult> {
         validate_local_session_fork_request(&request)?;
+        let workspace_path = Path::new(&request.workspace_path);
+        let (_, turns) = self
+            .coordinator
+            .restore_session_view(workspace_path, &request.source_session_id)
+            .await
+            .map_err(runtime_port_error)?;
+        let source_turn_id = latest_persisted_turn_id(&turns).map_err(runtime_port_error)?;
         let result = self
-            .compatibility
-            .branch_session_at_latest_turn(
-                Path::new(&request.workspace_path),
-                &request.source_session_id,
+            .persistence
+            .branch_session(
+                workspace_path,
+                &SessionBranchRequest {
+                    source_session_id: request.source_session_id,
+                    source_turn_id,
+                },
             )
             .await
             .map_err(runtime_port_error)?;
@@ -716,10 +664,13 @@ impl AgentSessionUsagePort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionUsageRequest,
     ) -> PortResult<SessionUsageReport> {
-        self.compatibility
-            .generate_session_usage_report(request)
-            .await
-            .map_err(runtime_port_error)
+        generate_core_session_usage_report(
+            self.persistence.as_ref(),
+            self.token_usage_service.as_ref(),
+            request,
+        )
+        .await
+        .map_err(runtime_port_error)
     }
 }
 
@@ -748,20 +699,60 @@ impl AgentTurnSettlementPort for CoreSessionOperationsPort {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
     use bitfun_agent_runtime::sdk::AgentRuntime;
     use bitfun_harness::HarnessRegistry;
     use bitfun_runtime_services::RuntimeServices;
+    use uuid::Uuid;
 
     use super::{
-        runtime_port_error, validate_local_session_fork_request, validate_persisted_session_id,
-        CoreAgentRuntimeCompatibility, CoreProductAgentRuntime,
+        generate_core_session_usage_report, latest_persisted_turn_id, runtime_port_error,
+        validate_local_session_fork_request, validate_persisted_session_id,
+        CoreAgentRuntimeCompatibility, CoreProductAgentRuntime, CoreSessionOperationsPort,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::infrastructure::PathManager;
+    use crate::service::session::{DialogTurnData, SessionMetadata, UserMessageData};
+    use crate::service::session_usage::UsageTokenSource;
     use crate::service::token_usage::TokenUsageService;
     use crate::util::errors::BitFunError;
-    use bitfun_agent_runtime::sdk::{AgentSessionForkRequest, PortErrorKind};
+    use bitfun_agent_runtime::sdk::{
+        AgentSessionForkRequest, AgentSessionUsageRequest, PortErrorKind,
+    };
+
+    struct TestWorkspace {
+        path: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "bitfun-product-runtime-compatibility-test-{}",
+                Uuid::new_v4()
+            ));
+            std::fs::create_dir_all(&path).expect("test workspace should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+
+        fn path_manager(&self) -> Arc<PathManager> {
+            Arc::new(PathManager::with_user_root_for_tests(
+                self.path.join("user-root"),
+            ))
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
 
     #[test]
     fn product_agent_runtime_has_one_sdk_safe_builder_boundary() {
@@ -786,24 +777,31 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn compatibility_operations_have_one_core_owned_facade() {
+    fn sdk_session_operations_depend_directly_on_core_owners() {
         fn build(
             coordinator: Arc<ConversationCoordinator>,
-            scheduler: Arc<DialogScheduler>,
             token_usage_service: Arc<TokenUsageService>,
-        ) -> CoreAgentRuntimeCompatibility {
-            CoreAgentRuntimeCompatibility::build(coordinator, scheduler, token_usage_service)
+        ) -> CoreSessionOperationsPort {
+            CoreSessionOperationsPort::new(coordinator, token_usage_service)
         }
 
         let _ = build;
-        let _ = CoreAgentRuntimeCompatibility::create_session_with_id;
-        let _ = CoreAgentRuntimeCompatibility::branch_session_at_latest_turn;
-        let _ = CoreAgentRuntimeCompatibility::generate_session_usage_report;
+    }
+
+    #[test]
+    fn remaining_compatibility_operations_have_one_core_owned_facade() {
+        fn build(
+            coordinator: Arc<ConversationCoordinator>,
+            scheduler: Arc<DialogScheduler>,
+        ) -> CoreAgentRuntimeCompatibility {
+            CoreAgentRuntimeCompatibility::build(coordinator, scheduler)
+        }
+
+        let _ = build;
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
-        let _ = CoreAgentRuntimeCompatibility::update_session_agent_type;
         let _ = CoreAgentRuntimeCompatibility::unload_persisted_session;
+        let _ = CoreAgentRuntimeCompatibility::append_completed_local_command_turn;
     }
 
     #[test]
@@ -837,5 +835,138 @@ mod tests {
         .expect_err("the local fork provider must reject remote identity");
 
         assert_eq!(error.kind, PortErrorKind::NotAvailable);
+    }
+
+    #[test]
+    fn local_session_fork_uses_latest_persisted_turn_and_preserves_empty_error() {
+        let turns = [
+            DialogTurnData::new(
+                "turn-1".to_string(),
+                0,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-1".to_string(),
+                    content: "first".to_string(),
+                    timestamp: 1,
+                    metadata: None,
+                },
+            ),
+            DialogTurnData::new(
+                "turn-2".to_string(),
+                1,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-2".to_string(),
+                    content: "second".to_string(),
+                    timestamp: 2,
+                    metadata: None,
+                },
+            ),
+        ];
+
+        assert_eq!(
+            latest_persisted_turn_id(&turns).expect("latest turn should be selected"),
+            "turn-2"
+        );
+
+        let error = runtime_port_error(
+            latest_persisted_turn_id(&[]).expect_err("empty sessions cannot be forked"),
+        );
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+        assert_eq!(
+            error.message,
+            "Validation error: Session has no persisted turns to fork"
+        );
+    }
+
+    #[tokio::test]
+    async fn sdk_usage_provider_validates_ids_and_keeps_live_token_enrichment() {
+        let workspace = TestWorkspace::new();
+        let persistence =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let token_usage_service = TokenUsageService::new_in_base_dir(workspace.path.join("tokens"))
+            .await
+            .expect("token usage service");
+
+        let invalid = generate_core_session_usage_report(
+            &persistence,
+            &token_usage_service,
+            AgentSessionUsageRequest {
+                session_id: "../other-session".to_string(),
+                workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                include_hidden_subagents: false,
+            },
+        )
+        .await
+        .expect_err("path-like session ids must be rejected before persistence access");
+        assert_eq!(
+            runtime_port_error(invalid).kind,
+            PortErrorKind::InvalidRequest
+        );
+
+        let session_id = "session-usage";
+        persistence
+            .save_session_metadata(
+                workspace.path(),
+                &SessionMetadata::new(
+                    session_id.to_string(),
+                    "Usage session".to_string(),
+                    "agentic".to_string(),
+                    "model-a".to_string(),
+                ),
+            )
+            .await
+            .expect("session metadata should persist");
+        let mut turn = DialogTurnData::new(
+            "turn-usage".to_string(),
+            0,
+            session_id.to_string(),
+            UserMessageData {
+                id: "user-usage".to_string(),
+                content: "measure this session".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        turn.mark_completed();
+        persistence
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("dialog turn should persist");
+        token_usage_service
+            .record_usage(
+                "model-config-a".to_string(),
+                "model-a".to_string(),
+                session_id.to_string(),
+                turn.turn_id.clone(),
+                10,
+                5,
+                Some(2),
+                None,
+                false,
+            )
+            .await
+            .expect("live token usage should persist");
+
+        let report = generate_core_session_usage_report(
+            &persistence,
+            &token_usage_service,
+            AgentSessionUsageRequest {
+                session_id: session_id.to_string(),
+                workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                include_hidden_subagents: false,
+            },
+        )
+        .await
+        .expect("usage provider should generate a report");
+
+        assert_eq!(report.tokens.source, UsageTokenSource::TokenUsageRecords);
+        assert_eq!(report.tokens.input_tokens, Some(10));
+        assert_eq!(report.tokens.output_tokens, Some(5));
+        assert_eq!(report.tokens.total_tokens, Some(15));
     }
 }

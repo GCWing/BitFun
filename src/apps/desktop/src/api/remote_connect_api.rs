@@ -1,6 +1,7 @@
 //! Tauri commands for Remote Connect.
 
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::embedded_relay_host::DesktopEmbeddedRelayHost;
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::service::remote_connect::session_store::{
     clear_credential_hint, load_credential_hint, save_credential_hint, AccountHint,
@@ -488,13 +489,17 @@ async fn ensure_service() -> Result<(), String> {
         ..RemoteConnectConfig::default()
     };
     let service =
-        RemoteConnectService::new(config).map_err(|e| format!("init remote connect: {e}"))?;
+        new_remote_connect_service(config).map_err(|e| format!("init remote connect: {e}"))?;
     *holder.write().await = Some(service);
 
     // Auto-restore previously paired bots
     restore_saved_bots().await;
 
     Ok(())
+}
+
+fn new_remote_connect_service(config: RemoteConnectConfig) -> anyhow::Result<RemoteConnectService> {
+    RemoteConnectService::new(config, Arc::new(DesktopEmbeddedRelayHost::default()))
 }
 
 /// Restore any bot connections that were previously saved to disk.
@@ -1047,7 +1052,7 @@ pub async fn remote_connect_configure_custom_server(url: String) -> Result<(), S
             custom_server_url: Some(url),
             ..RemoteConnectConfig::default()
         };
-        let service = RemoteConnectService::new(config).map_err(|e| format!("init: {e}"))?;
+        let service = new_remote_connect_service(config).map_err(|e| format!("init: {e}"))?;
         *guard = Some(service);
     }
     Ok(())
@@ -1114,7 +1119,7 @@ pub async fn remote_connect_configure_bot(request: ConfigureBotRequest) -> Resul
                 ..RemoteConnectConfig::default()
             },
         };
-        let service = RemoteConnectService::new(config).map_err(|e| format!("init: {e}"))?;
+        let service = new_remote_connect_service(config).map_err(|e| format!("init: {e}"))?;
         *guard = Some(service);
     } else if let Some(service) = guard.as_mut() {
         service.update_bot_config(bot_config);

@@ -11,7 +11,6 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-ai-adapters', ownerFeatures: ['ai-adapter-runtime'] },
       { depName: 'bitfun-product-capabilities', ownerFeatures: ['product-capabilities'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['product-domains'] },
-      { depName: 'bitfun-relay-service', ownerFeatures: ['service-integrations'] },
       { depName: 'bitfun-tool-packs', ownerFeatures: ['tool-packs'] },
       { depName: 'chrono-tz', ownerFeatures: ['product-full'] },
       { depName: 'cron', ownerFeatures: ['product-full'] },

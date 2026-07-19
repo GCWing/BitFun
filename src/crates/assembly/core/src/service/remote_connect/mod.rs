@@ -9,7 +9,7 @@
 //! `stop_all()` to shut everything down.
 
 pub mod bot;
-pub mod embedded_relay;
+pub mod embedded_relay_host;
 pub mod lan;
 pub mod ngrok;
 pub mod remote_server;
@@ -61,10 +61,11 @@ pub use remote_server::RemoteServer;
 
 use anyhow::Result;
 use bitfun_services_integrations::remote_connect::upload_mobile_web_to_relay;
+use embedded_relay_host::EmbeddedRelayHost;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 /// Supported connection methods.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,7 +146,8 @@ pub struct RemoteConnectService {
     remote_server: Arc<RwLock<Option<RemoteServer>>>,
     active_method: Arc<RwLock<Option<ConnectionMethod>>>,
     ngrok_tunnel: Arc<RwLock<Option<ngrok::NgrokTunnel>>>,
-    embedded_relay: Arc<RwLock<Option<embedded_relay::EmbeddedRelayHandle>>>,
+    embedded_relay_host: Arc<dyn EmbeddedRelayHost>,
+    relay_lifecycle: Mutex<()>,
     // Bot handles live independently of relay connections
     bot_telegram_handle: Arc<RwLock<Option<BotHandle>>>,
     bot_feishu_handle: Arc<RwLock<Option<BotHandle>>>,
@@ -180,7 +182,10 @@ type DelegatedIdentityFn = Arc<
 >;
 
 impl RemoteConnectService {
-    pub fn new(config: RemoteConnectConfig) -> Result<Self> {
+    pub fn new(
+        config: RemoteConnectConfig,
+        embedded_relay_host: Arc<dyn EmbeddedRelayHost>,
+    ) -> Result<Self> {
         let device_identity = DeviceIdentity::from_current_machine()?;
         let pairing = PairingProtocol::new(device_identity.clone());
 
@@ -192,7 +197,8 @@ impl RemoteConnectService {
             remote_server: Arc::new(RwLock::new(None)),
             active_method: Arc::new(RwLock::new(None)),
             ngrok_tunnel: Arc::new(RwLock::new(None)),
-            embedded_relay: Arc::new(RwLock::new(None)),
+            embedded_relay_host,
+            relay_lifecycle: Mutex::new(()),
             bot_telegram_handle: Arc::new(RwLock::new(None)),
             bot_feishu_handle: Arc::new(RwLock::new(None)),
             bot_weixin_handle: Arc::new(RwLock::new(None)),
@@ -375,16 +381,19 @@ impl RemoteConnectService {
             _ => {}
         }
 
-        // Relay methods: clean up previous relay (but leave bots alone)
-        self.stop_relay().await;
+        let _lifecycle = self.relay_lifecycle.lock().await;
 
+        // Relay methods: clean up previous relay (but leave bots alone)
+        self.stop_relay_inner().await;
+
+        let result: Result<ConnectionResult> = async {
         let static_dir = self.config.mobile_web_dir.as_deref();
 
         let relay_url = match &method {
             ConnectionMethod::Lan { ip } => {
-                let handle =
-                    embedded_relay::start_embedded_relay(self.config.lan_port, static_dir).await?;
-                *self.embedded_relay.write().await = Some(handle);
+                self.embedded_relay_host
+                    .start(self.config.lan_port, self.config.mobile_web_dir.clone())
+                    .await?;
                 let url_result = match ip {
                     Some(ip) => lan::build_lan_relay_url_with_ip(self.config.lan_port, ip),
                     None => lan::build_lan_relay_url(self.config.lan_port),
@@ -392,26 +401,18 @@ impl RemoteConnectService {
                 match url_result {
                     Ok(url) => url,
                     Err(e) => {
-                        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-                            relay.stop();
-                        }
-                        *self.embedded_relay.write().await = None;
                         return Err(e);
                     }
                 }
             }
             ConnectionMethod::Ngrok => {
-                let handle =
-                    embedded_relay::start_embedded_relay(self.config.lan_port, static_dir).await?;
-                *self.embedded_relay.write().await = Some(handle);
+                self.embedded_relay_host
+                    .start(self.config.lan_port, self.config.mobile_web_dir.clone())
+                    .await?;
 
                 let tunnel = match ngrok::start_ngrok_tunnel(self.config.lan_port).await {
                     Ok(tunnel) => tunnel,
                     Err(e) => {
-                        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-                            relay.stop();
-                        }
-                        *self.embedded_relay.write().await = None;
                         return Err(e);
                     }
                 };
@@ -774,6 +775,13 @@ impl RemoteConnectService {
             bot_link: None,
             pairing_state: state,
         })
+        }
+        .await;
+
+        if result.is_err() {
+            self.stop_relay_inner().await;
+        }
+        result
     }
 
     async fn start_bot_connection(&self, method: &ConnectionMethod) -> Result<ConnectionResult> {
@@ -1094,6 +1102,11 @@ impl RemoteConnectService {
     /// Stop relay connections (LAN / ngrok / BitFun Server / Custom Server).
     /// Bot connections are left running.
     pub async fn stop_relay(&self) {
+        let _lifecycle = self.relay_lifecycle.lock().await;
+        self.stop_relay_inner().await;
+    }
+
+    async fn stop_relay_inner(&self) {
         if let Some(ref client) = *self.relay_client.read().await {
             client.disconnect().await;
         }
@@ -1106,10 +1119,7 @@ impl RemoteConnectService {
         }
         *self.ngrok_tunnel.write().await = None;
 
-        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-            relay.stop();
-        }
-        *self.embedded_relay.write().await = None;
+        self.embedded_relay_host.stop().await;
 
         self.pairing.write().await.reset().await;
         *self.trusted_mobile_identity.write().await = None;
