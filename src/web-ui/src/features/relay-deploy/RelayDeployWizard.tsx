@@ -113,7 +113,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   const [activeTask, setActiveTask] = useState<RelayDeployTask | null>(null);
   const [taskLog, setTaskLog] = useState('');
   const [taskStatus, setTaskStatus] = useState<RelayTaskStatus | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollActiveRef = useRef(false);
   const cursorRef = useRef(0);
   const pollFailuresRef = useRef(0);
   const logViewRef = useRef<HTMLPreElement>(null);
@@ -131,8 +132,9 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   const relayUrl = `http://${serverHost}:${RELAY_PORT}`;
 
   const stopPolling = useCallback(() => {
+    pollActiveRef.current = false;
     if (pollRef.current) {
-      clearInterval(pollRef.current);
+      clearTimeout(pollRef.current);
       pollRef.current = null;
     }
   }, []);
@@ -352,17 +354,34 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   }, [t]);
 
   // ── task polling ─────────────────────────────────────────────────────────
+  // Serial setTimeout chain (not setInterval): immediate first poll, no overlap
+  // when an SSH round-trip takes longer than POLL_INTERVAL_MS.
   const startTaskPolling = useCallback((task: RelayDeployTask, connId: string) => {
     stopPolling();
     cursorRef.current = 0;
     pollFailuresRef.current = 0;
-    pollRef.current = setInterval(async () => {
+    pollActiveRef.current = true;
+
+    const scheduleNext = () => {
+      if (!pollActiveRef.current) return;
+      pollRef.current = setTimeout(() => {
+        void tick();
+      }, POLL_INTERVAL_MS);
+    };
+
+    const tick = async () => {
+      if (!pollActiveRef.current) return;
       try {
         const res = await relayDeployApi.poll(connId, task, cursorRef.current);
+        if (!pollActiveRef.current) return;
         cursorRef.current = res.cursor;
         pollFailuresRef.current = 0;
         if (res.output) {
-          setTaskLog((prev) => (prev + res.output).slice(-MAX_LOG_CHARS));
+          setTaskLog((prev) => {
+            const waiting = t('relayDeploy.waitingRemoteOutput');
+            const base = prev === waiting ? '' : prev;
+            return (base + res.output).slice(-MAX_LOG_CHARS);
+          });
         }
         if (res.status !== 'running') {
           stopPolling();
@@ -375,25 +394,31 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               window.setTimeout(() => setStep('register'), 800);
             }
           }
+          return;
         }
       } catch (e) {
         // Transient SSH blips are expected (the manager auto-reconnects);
         // only give up after repeated failures.
+        if (!pollActiveRef.current) return;
         pollFailuresRef.current += 1;
         log.warn('task poll failed', e);
         if (pollFailuresRef.current >= MAX_POLL_FAILURES) {
           stopPolling();
           setTaskStatus('failed');
           setTaskLog((prev) => `${prev}\n[poll] ${errMsg(e)}`);
+          return;
         }
       }
-    }, POLL_INTERVAL_MS);
-  }, [runPreflight, stopPolling]);
+      scheduleNext();
+    };
+
+    void tick();
+  }, [runPreflight, stopPolling, t]);
 
   const handleInstallDocker = async () => {
     if (!connectionId) return;
     setError(null);
-    setTaskLog('');
+    setTaskLog(t('relayDeploy.waitingRemoteOutput'));
     setTaskStatus('running');
     setActiveTask('install_docker');
     try {
@@ -409,7 +434,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     if (!connectionId) return;
     setError(null);
     setStep('deploy');
-    setTaskLog('');
+    setTaskLog(t('relayDeploy.waitingRemoteOutput'));
     setTaskStatus('running');
     setActiveTask('deploy');
     try {

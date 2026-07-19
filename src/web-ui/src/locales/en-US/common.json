@@ -590,6 +590,7 @@
     "startDeploy": "Start Deployment",
     "deployingTitle": "Deploying relay server…",
     "deployingHint": "The first build compiles Rust in Docker and can take several minutes. The deployment continues on the server even if you close this window.",
+    "waitingRemoteOutput": "Waiting for remote output…",
     "deploySucceeded": "Deployment succeeded",
     "deployFailed": "Deployment failed",
     "retry": "Retry",

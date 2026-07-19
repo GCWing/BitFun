@@ -590,6 +590,7 @@
     "startDeploy": "開始部署",
     "deployingTitle": "正在部署 relay server…",
     "deployingHint": "首次建構需要在 Docker 中編譯 Rust，可能持續幾分鐘。即使關閉本視窗，部署也會在伺服器上繼續進行。",
+    "waitingRemoteOutput": "正在等待遠端輸出…",
     "deploySucceeded": "部署成功",
     "deployFailed": "部署失敗",
     "retry": "重試",

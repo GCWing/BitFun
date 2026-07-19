@@ -87,9 +87,16 @@ else
     BUILD_ARGS+=(--build-arg "CARGO_BUILD_JOBS=${RELAY_CARGO_BUILD_JOBS}")
     echo "  Using CARGO_BUILD_JOBS=${RELAY_CARGO_BUILD_JOBS}"
   fi
+  # Plain progress so nohup/file-redirected deploys still stream build lines.
+  export BUILDKIT_PROGRESS="${BUILDKIT_PROGRESS:-plain}"
   # Do not pass --platform unless the user explicitly set DOCKER_DEFAULT_PLATFORM;
   # native builds on amd64/arm64 servers are the supported path.
-  compose build "${BUILD_ARGS[@]}"
+  # Compose V2 wants --progress as a global flag; legacy docker-compose has none.
+  if [ "${#COMPOSE[@]}" -ge 2 ] && [ "${COMPOSE[0]}" = "docker" ] && [ "${COMPOSE[1]}" = "compose" ]; then
+    docker compose --progress=plain build "${BUILD_ARGS[@]}"
+  else
+    compose build "${BUILD_ARGS[@]}"
+  fi
 fi
 
 echo "[2/2] Starting / recreating services..."

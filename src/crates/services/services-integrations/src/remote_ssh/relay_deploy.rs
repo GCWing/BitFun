@@ -197,9 +197,12 @@ pub async fn start_task(
 
     // Detach fully: stdio redirected, stdin from /dev/null, so the SSH exec
     // channel closes immediately and the task survives disconnects.
+    // Prefer stdbuf line buffering so docker/cargo output reaches the log file
+    // while the task is still running (file redirects otherwise fully buffer).
     let launch = format!(
         "cd {dir} && chmod 700 {stem}.sh && rm -f {stem}.log {stem}.pid \
-         && nohup bash {stem}.sh > {stem}.log 2>&1 < /dev/null & echo $! > {stem}.pid"
+         && (command -v stdbuf >/dev/null 2>&1 && RUNNER='stdbuf -oL -eL bash' || RUNNER=bash) \
+         && nohup $RUNNER ./{stem}.sh > {stem}.log 2>&1 < /dev/null & echo $! > {stem}.pid"
     );
     exec_ok(manager, connection_id, &launch).await?;
     Ok(())
@@ -236,10 +239,7 @@ if [ -f "$LOG" ]; then tail -c +{from} "$LOG"; fi
     if code != 0 {
         return Err(anyhow!("poll failed (exit {code})"));
     }
-    let (head, output) = match stdout.split_once("---\n") {
-        Some((h, o)) => (h, o.to_string()),
-        None => (stdout.as_str(), String::new()),
-    };
+    let (head, output) = split_poll_stdout(&stdout);
     let get = |key: &str| -> String {
         head.lines()
             .find_map(|l| l.strip_prefix(key).and_then(|v| v.strip_prefix('=')))
@@ -259,9 +259,30 @@ if [ -f "$LOG" ]; then tail -c +{from} "$LOG"; fi
     };
     Ok(RelayTaskPoll {
         cursor: size,
-        output,
+        output: output.to_string(),
         status,
     })
+}
+
+/// Split poll script stdout into the metadata head and incremental log body.
+///
+/// Accepts LF, CRLF, or a standalone `---` line so SSH/OS line endings cannot
+/// drop the entire log payload.
+fn split_poll_stdout(stdout: &str) -> (&str, &str) {
+    if let Some((head, output)) = stdout.split_once("---\r\n") {
+        return (head, output);
+    }
+    if let Some((head, output)) = stdout.split_once("---\n") {
+        return (head, output);
+    }
+    let mut offset = 0usize;
+    for line in stdout.split_inclusive('\n') {
+        if line.trim_end_matches(['\r', '\n']) == "---" {
+            return (&stdout[..offset], &stdout[offset + line.len()..]);
+        }
+        offset += line.len();
+    }
+    (stdout, "")
 }
 
 /// Import a locally-provisioned account into the running relay container.
@@ -415,13 +436,42 @@ if [ "${{RELAY_CARGO_BUILD_JOBS:-}}" = "" ] && [ "$MEM_KB" -lt 2097152 ]; then
   export RELAY_CARGO_BUILD_JOBS=1
   echo ">>> Low memory detected; using RELAY_CARGO_BUILD_JOBS=1"
 fi
+# Stream BuildKit lines into the detached log file (avoid fancy TTY progress).
+export BUILDKIT_PROGRESS=plain
 echo ">>> Building and starting the relay container (this can take a while)..."
 if [ "$DOCKER" = "sudo docker" ]; then
-  sudo -E env RELAY_CARGO_BUILD_JOBS="${{RELAY_CARGO_BUILD_JOBS:-}}" bash deploy.sh
+  sudo -E env RELAY_CARGO_BUILD_JOBS="${{RELAY_CARGO_BUILD_JOBS:-}}" \
+    BUILDKIT_PROGRESS=plain bash deploy.sh
 else
   bash deploy.sh
 fi
 echo {TASK_DONE_MARKER}
 "#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_poll_stdout;
+
+    #[test]
+    fn split_poll_stdout_accepts_lf() {
+        let (head, out) = split_poll_stdout("running=1\nsize=12\nmarker=0\n---\nhello\n");
+        assert!(head.contains("running=1"));
+        assert_eq!(out, "hello\n");
+    }
+
+    #[test]
+    fn split_poll_stdout_accepts_crlf() {
+        let (head, out) = split_poll_stdout("running=1\r\nsize=12\r\nmarker=0\r\n---\r\nworld\r\n");
+        assert!(head.contains("running=1"));
+        assert_eq!(out, "world\r\n");
+    }
+
+    #[test]
+    fn split_poll_stdout_missing_marker_yields_empty_body() {
+        let (head, out) = split_poll_stdout("running=0\nsize=0\nmarker=0\n");
+        assert!(head.contains("running=0"));
+        assert_eq!(out, "");
+    }
 }
