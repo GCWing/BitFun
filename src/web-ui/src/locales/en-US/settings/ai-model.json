@@ -23,6 +23,26 @@
     },
     "loadFailed": "Failed to load Subagent model settings"
   },
+  "sessionTitle": {
+    "title": "Auto Session Title",
+    "subtitle": "AI automatically generates concise titles for new conversations",
+    "enable": "Enable",
+    "loadFailed": "Failed to load session title settings",
+    "model": {
+      "label": "Model",
+      "primary": "Primary Model",
+      "fast": "Fast Model"
+    },
+    "models": {
+      "empty": "No available models. Please add models in \"Models\" first.",
+      "updateSuccess": "{{agentName}} will use {{modelName}}"
+    },
+    "messages": {
+      "saveSuccess": "Settings saved",
+      "saveFailed": "Save failed",
+      "updateFailed": "Update failed"
+    }
+  },
   "cliAuth": {
     "sectionTitle": "Local CLI accounts",
     "sectionDescription": "Import Codex CLI / Gemini CLI accounts already signed in on this machine and use them as models",

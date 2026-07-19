@@ -38,8 +38,8 @@
     "tabDescriptions": {
       "basics": "日志、终端 Shell、通知与开机启动。",
       "appearance": "语言、主题与界面字体大小。",
-      "models": "AI 模型、API 密钥、供应商与代理。",
-      "sessionPersonalization": "会话标题与 Agent 伙伴。",
+      "models": "AI 模型、API 密钥、供应商、代理与会话标题。",
+      "sessionPersonalization": "Agent 伙伴。",
       "sessionPermissions": "加速工作区搜索、工具确认与超时、Computer use、浏览器与调试。",
       "quickActions": "代码完成后的一键 AI 动作，支持内置和自定义指令。",
       "review": "Review 策略、覆盖深度、容量、成本和耗时控制。",

@@ -23,6 +23,26 @@
     },
     "loadFailed": "載入 Subagent 模型設定失敗"
   },
+  "sessionTitle": {
+    "title": "會話標題自動生成",
+    "subtitle": "新對話時 AI 自動生成簡潔標題",
+    "enable": "啟用",
+    "loadFailed": "載入會話標題設定失敗",
+    "model": {
+      "label": "模型",
+      "primary": "主力模型",
+      "fast": "快速模型"
+    },
+    "models": {
+      "empty": "暫無可用模型，請先在「模型」中新增模型。",
+      "updateSuccess": "{{agentName}} 將使用 {{modelName}}"
+    },
+    "messages": {
+      "saveSuccess": "設定已儲存",
+      "saveFailed": "儲存失敗",
+      "updateFailed": "設定失敗"
+    }
+  },
   "cliAuth": {
     "sectionTitle": "本機已登錄賬號",
     "sectionDescription": "可直接匯入本機 Codex CLI / Gemini CLI 已登錄賬號作為模型使用",

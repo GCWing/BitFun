@@ -41,6 +41,9 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/default-model', key: 'subtitle' },
     { ns: 'settings/default-model', key: 'tabs.models' },
     { ns: 'settings/ai-model', key: 'subtitle' },
+    { ns: 'settings/ai-model', key: 'subagentModels.title' },
+    { ns: 'settings/ai-model', key: 'sessionTitle.title' },
+    { ns: 'settings/ai-model', key: 'sessionTitle.subtitle' },
     { ns: 'settings/default-model', key: 'tabs.proxy' },
     { ns: 'settings/ai-model', key: 'proxy.enableHint' },
   ],
@@ -56,11 +59,8 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
   'session-personalization': [
     { ns: 'settings/session-config', key: 'personalizationPage.title' },
     { ns: 'settings/session-config', key: 'personalizationPage.subtitle' },
-    { ns: 'settings/session-config', key: 'features.sessionTitle.title' },
-    { ns: 'settings/session-config', key: 'features.sessionTitle.subtitle' },
     { ns: 'settings/session-config', key: 'features.agentCompanion.title' },
     { ns: 'settings/session-config', key: 'features.agentCompanion.subtitle' },
-    { ns: 'settings/session-config', key: 'models.empty' },
   ],
 
   'session-permissions': [

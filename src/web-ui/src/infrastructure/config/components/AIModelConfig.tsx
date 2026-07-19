@@ -18,6 +18,7 @@ import { useNotification } from '@/shared/notification-system';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
 import DefaultModelConfig from './DefaultModelConfig';
 import SubagentModelConfig from './SubagentModelConfig';
+import SessionTitleConfig from './SessionTitleConfig';
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import { i18nService } from '@/infrastructure/i18n';
@@ -2584,6 +2585,8 @@ const AIModelConfig: React.FC = () => {
         <ConfigPageSection title={t('subagentModels.title')}>
           <SubagentModelConfig />
         </ConfigPageSection>
+
+        <SessionTitleConfig />
 
         <ConfigPageSection
           title={t('cliAuth.sectionTitle')}
