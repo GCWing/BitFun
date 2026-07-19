@@ -41,7 +41,10 @@ pub fn validate_model(
 #[serde(rename_all = "camelCase")]
 pub struct MiniAppAiModelInfo {
     pub id: String,
+    /// User-defined configuration name.
     pub name: String,
+    /// Actual model identifier shown in the host model picker.
+    pub model_name: String,
     pub provider: String,
     pub is_default: bool,
 }
@@ -50,8 +53,10 @@ pub struct MiniAppAiModelInfo {
 pub struct MiniAppAiModelDescriptor {
     pub id: String,
     pub name: String,
+    pub model_name: String,
     pub provider: String,
     pub enabled: bool,
+    pub supports_text_chat: bool,
 }
 
 pub fn available_models_for_permissions<I>(
@@ -66,6 +71,8 @@ where
     models
         .into_iter()
         .filter(|model| model.enabled)
+        // Match the host chat ModelSelector: only chat-capable models.
+        .filter(|model| model.supports_text_chat)
         .filter(|model| {
             if allowed_models.is_empty() {
                 return true;
@@ -73,13 +80,14 @@ where
             allowed_models.iter().any(|allowed| match allowed.as_str() {
                 "primary" => model.id == primary_id,
                 "fast" => model.id == fast_id,
-                other => model.id == other || model.name == other,
+                other => model.id == other || model.name == other || model.model_name == other,
             })
         })
         .map(|model| MiniAppAiModelInfo {
             is_default: model.id == primary_id,
             id: model.id,
             name: model.name,
+            model_name: model.model_name,
             provider: model.provider,
         })
         .collect()
@@ -272,20 +280,34 @@ mod tests {
             MiniAppAiModelDescriptor {
                 id: "m-primary".to_string(),
                 name: "Primary Model".to_string(),
+                model_name: "gpt-primary".to_string(),
                 provider: "openai".to_string(),
                 enabled: true,
+                supports_text_chat: true,
             },
             MiniAppAiModelDescriptor {
                 id: "m-fast".to_string(),
                 name: "Fast Model".to_string(),
+                model_name: "gpt-fast".to_string(),
                 provider: "openai".to_string(),
                 enabled: true,
+                supports_text_chat: true,
+            },
+            MiniAppAiModelDescriptor {
+                id: "embedding".to_string(),
+                name: "Embed".to_string(),
+                model_name: "text-embedding".to_string(),
+                provider: "openai".to_string(),
+                enabled: true,
+                supports_text_chat: false,
             },
             MiniAppAiModelDescriptor {
                 id: "disabled".to_string(),
                 name: "Disabled".to_string(),
+                model_name: "disabled-model".to_string(),
                 provider: "openai".to_string(),
                 enabled: false,
+                supports_text_chat: true,
             },
         ];
 
@@ -298,6 +320,7 @@ mod tests {
 
         assert_eq!(visible.len(), 2);
         assert!(visible[0].is_default);
+        assert_eq!(visible[0].model_name, "gpt-primary");
         assert_eq!(visible[1].id, "m-fast");
     }
 

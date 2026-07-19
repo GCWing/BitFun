@@ -1881,7 +1881,9 @@ test('production fixtures lock OOXML under a WebKit border-box regression simula
     const secondText = second.nodes.filter((node) => node.type === 'text');
     assert.deepEqual(
       { shapes: secondShapes.length, lines: secondLines.length, text: secondText.length },
-      { shapes: 8, lines: 10, text: 25 },
+      // Dense <li><p> lists (unwrapped to ul>p) now keep their body text runs
+      // instead of being deleted by empty-list degrade. Fixture text count rose.
+      { shapes: 8, lines: 10, text: 30 },
     );
     const secondMap = svgPointMapper({
       leftPt: 600, topPt: 108, widthPt: 300, heightPt: 215, viewWidth: 300, viewHeight: 240,
@@ -2133,5 +2135,96 @@ test('unsupported CSS filter is stripped instead of aborting the export', async 
       `expected a css_filter_removed degradation, got ${JSON.stringify(degradations)}`,
     );
     assert.equal(renderPageCalls, 0);
+  });
+});
+
+test('text box width safety scales with font size to prevent false wraps', async () => {
+  const {
+    textBoxWidthSafetyInches,
+    safeTextBoxGeometry,
+    buildSlideFromScene,
+    createPptxDeck,
+  } = await import('../src/pptx-html-build.js');
+
+  assertNear(textBoxWidthSafetyInches(14), 0.36, '14pt keeps the calibrated body-text safety');
+  assertNear(textBoxWidthSafetyInches(28), 0.72, '28pt doubles the body-text safety');
+  assertNear(textBoxWidthSafetyInches(42), 1.08, '42pt triples the body-text safety');
+  assert.ok(textBoxWidthSafetyInches(8) >= 0.28, 'tiny text still keeps a floor');
+  assert.ok(textBoxWidthSafetyInches(72) <= 1.6, 'huge titles are capped');
+
+  const body = safeTextBoxGeometry(1, 4, 'left', false, 14);
+  const title = safeTextBoxGeometry(1, 4, 'left', false, 42);
+  assertNear(body.w, 4.36, '14pt left text widens by 0.36"');
+  assertNear(title.w, 5.08, '42pt left text widens by 1.08"');
+
+  const centered = safeTextBoxGeometry(2, 4, 'center', false, 28);
+  assertNear(centered.x, 2 - 0.36, 'center align shifts x by half the scaled safety');
+  assertNear(centered.w, 4.72, 'center align keeps the full scaled width');
+
+  const boldTitle = safeTextBoxGeometry(1, 4, 'left', false, 42, { bold: true });
+  assert.ok(boldTitle.w > title.w, 'bold titles get a little extra width safety');
+
+  // Near the slide's right edge: still apply the full safety margin even if the
+  // box extends past 13.333" — PowerPoint accepts off-slide shape extents.
+  const nearRight = safeTextBoxGeometry(12.5, 0.7, 'left', false, 14);
+  assertNear(nearRight.w, 0.7 + 0.36, 'right-edge boxes keep the full safety width');
+  assert.ok(nearRight.x + nearRight.w > 13.333, 'safety may extend past the slide edge');
+
+  const pptx = createPptxDeck({ title: 'Width safety' });
+  await buildSlideFromScene({
+    slideNumber: 1,
+    width: 13.333,
+    height: 7.5,
+    nodes: [{
+      type: 'text',
+      sourceId: 'title-42',
+      x: 1,
+      y: 1,
+      w: 4,
+      h: 1,
+      text: '大号标题防换行',
+      style: {
+        fontSize: 42,
+        fontFace: 'PingFang SC',
+        color: '111111',
+        align: 'left',
+        valign: 'top',
+      },
+    }],
+  }, pptx);
+  const zip = await writeAndOpen(pptx);
+  const slideXml = await zipText(zip, 'ppt/slides/slide1.xml');
+  const titleShape = [...slideXml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)]
+    .map((match) => match[0])
+    .find((xml) => xml.includes('大号标题防换行'));
+  assert.ok(titleShape, 'title shape must serialize');
+  const expectedCx = Math.round(5.08 * 914400);
+  assert.match(titleShape, new RegExp(`<a:ext cx="${expectedCx}"`));
+});
+
+test('CSS letter-spacing is preserved as PPTX charSpacing', async () => {
+  await withControllableExportDom(async () => {
+    const { prepareEditableSlides } = await import('../src/export-slide-browser.js');
+    const { exportEditablePptx } = await import('../src/export-deck-browser.js');
+    const html = `<!doctype html><html><body style="width:1280px;height:720px;margin:0">
+      <h1 data-pptx-source-id="tracked-title"
+        style="position:absolute;left:80px;top:120px;width:900px;height:80px;margin:0;
+          font-size:48px;letter-spacing:-0.8px;color:#111">紧排标题</h1>
+    </body></html>`;
+    const deck = { title: 'Letter spacing', slides: [{ id: 'tracked', html }] };
+    const scenes = await prepareEditableSlides(deck.slides);
+    const title = scenes[0].nodes.find((node) => node.sourceId === 'tracked-title');
+    assert.ok(title, 'tracked title must extract');
+    assertNear(title.style.charSpacing, -0.8 * 0.75, 'letter-spacing px maps to charSpacing pt');
+
+    const exported = await exportEditablePptx(deck, scenes);
+    const zip = await JSZip.loadAsync(Buffer.from(exported.base64, 'base64'));
+    const slideXml = await zipText(zip, 'ppt/slides/slide1.xml');
+    const titleShape = [...slideXml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)]
+      .map((match) => match[0])
+      .find((xml) => xml.includes('紧排标题'));
+    assert.ok(titleShape, 'tracked title must serialize');
+    const expectedSpc = Math.round((-0.8 * 0.75) * 100);
+    assert.match(titleShape, new RegExp(`spc="${expectedSpc}"`));
   });
 });

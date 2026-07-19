@@ -126,16 +126,29 @@ function seedPersistenceError(code, phase, missingPaths) {
   });
 }
 
+function shouldPersistSeedProjectJson(seed) {
+  const slideFiles = Array.isArray(seed?.slideFiles) ? seed.slideFiles : [];
+  if (slideFiles.length > 0) return true;
+  const outline = seed?.plan?.outline;
+  if (Array.isArray(outline) && outline.length > 0) return true;
+  if (String(seed?.plan?.status || '') === 'complete') return true;
+  // Empty new-deck skeleton: skip project.json so the agent can Write it
+  // fresh without a Read-before-Write round trip on a host-seeded file.
+  return false;
+}
+
 export async function persistDeckProjectSeed(fs, projectDir, seed) {
   try {
     await fs.mkdir(`${projectDir}/slides`, { recursive: true });
   } catch {
     throw seedPersistenceError('seed_fs_mkdir_failed', 'mkdir', ['slides']);
   }
-  try {
-    await fs.writeFile(`${projectDir}/project.json`, `${JSON.stringify(seed.plan, null, 2)}\n`);
-  } catch {
-    throw seedPersistenceError('seed_fs_write_failed', 'project-write', ['project.json']);
+  if (shouldPersistSeedProjectJson(seed)) {
+    try {
+      await fs.writeFile(`${projectDir}/project.json`, `${JSON.stringify(seed.plan, null, 2)}\n`);
+    } catch {
+      throw seedPersistenceError('seed_fs_write_failed', 'project-write', ['project.json']);
+    }
   }
   for (const slideFile of seed.slideFiles || []) {
     try {
@@ -456,7 +469,50 @@ async function readCompleteSlideWithRetry(readFile, relPath, options) {
   return typeof result === 'string' ? result.trim() : null;
 }
 
+/**
+ * If outline/slide files are already complete but status is still "planning",
+ * host-side mark complete so the agent need not spend an extra Glob/Edit round.
+ * Returns true when project.json was updated (or already complete).
+ */
+export async function finalizeDeckProjectIfReady(readFile, writeFile, options = {}) {
+  if (typeof writeFile !== 'function') return false;
+  let plan;
+  try {
+    plan = await readProjectPlanWithRetry(readFile, { ...options, requireComplete: false });
+  } catch {
+    return false;
+  }
+  if (!plan) return false;
+  if (plan.status === 'complete') return true;
+
+  let slideOrder;
+  try {
+    slideOrder = validateCompletedPlan({ ...plan, status: 'complete' });
+  } catch {
+    return false;
+  }
+
+  for (const slideId of slideOrder) {
+    const html = await readCompleteSlideWithRetry(readFile, `slides/${slideId}.html`, options);
+    if (!html) return false;
+  }
+
+  const nextPlan = { ...plan, status: 'complete' };
+  try {
+    await writeFile('project.json', `${JSON.stringify(nextPlan, null, 2)}\n`);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 export async function readDeckProjectContract(readFile, options = {}) {
+  const { writeFile } = options;
+  // Prefer host-side complete marking before the requireComplete retry loop,
+  // so a finished deck with status still "planning" does not sit in delays.
+  if (typeof writeFile === 'function') {
+    await finalizeDeckProjectIfReady(readFile, writeFile, options);
+  }
   const plan = await readProjectPlanWithRetry(readFile, { ...options, requireComplete: true });
   const slideOrder = validateCompletedPlan(plan);
   const outlineById = new Map(plan.outline.map((item) => [String(item.slide_id), item]));

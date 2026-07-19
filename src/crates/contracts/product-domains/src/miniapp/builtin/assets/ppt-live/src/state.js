@@ -4,6 +4,13 @@ import { normalizeStylePresetKey } from './style-presets.js';
 export const STORAGE_KEY = 'pptLiveStudioStateV6';
 export const HISTORY_KEY = 'pptLiveDeckHistoryV1';
 export const SCHEMA_VERSION = 6;
+/** Default Cowork model selector when the user has not chosen one yet. */
+export const DEFAULT_PREFERRED_MODEL = 'primary';
+
+export function normalizePreferredModel(value) {
+  const raw = String(value || '').trim();
+  return raw || DEFAULT_PREFERRED_MODEL;
+}
 export const ELEMENT_TYPES = ['text', 'list', 'shape', 'metric', 'chart', 'media'];
 
 export const THEME_PRESETS = {
@@ -182,6 +189,7 @@ export function createInitialState() {
       runId: '',
       skillKey: '',
     },
+    preferredModel: DEFAULT_PREFERRED_MODEL,
     style: defaultStyle(),
     outline: [],
     sources: { items: [], facts: [], warnings: [], summary: '', fetchedAt: 0 },
@@ -223,6 +231,7 @@ export function ensureState(value) {
     runId: String(state.agentSession?.runId || ''),
     skillKey: String(state.agentSession?.skillKey || ''),
   };
+  state.preferredModel = normalizePreferredModel(state.preferredModel);
   state.style = { ...defaultStyle(), ...(state.style || {}) };
   delete state.style.brandPrimary;
   delete state.style.brandAccent;
@@ -276,13 +285,15 @@ export function normalizeSources(value = {}) {
   };
 }
 
+/** File-protocol phases shown in the Process panel (not the legacy planning spine). */
+export const GENERATION_PHASE_ORDER = ['skill', 'outline', 'slides', 'verify'];
+
 export function generationSteps() {
   return [
-    { id: 'brief', label: t('generationStepBrief'), detail: t('generationStepBriefDetail') },
-    { id: 'spine', label: t('generationStepSpine'), detail: t('generationStepSpineDetail') },
-    { id: 'proof', label: t('generationStepProof'), detail: t('generationStepProofDetail') },
-    { id: 'design', label: t('generationStepDesign'), detail: t('generationStepDesignDetail') },
-    { id: 'compile', label: t('generationStepCompile'), detail: t('generationStepCompileDetail') },
+    { id: 'skill', label: t('generationStepSkill'), detail: t('generationStepSkillDetail') },
+    { id: 'outline', label: t('generationStepOutline'), detail: t('generationStepOutlineDetail') },
+    { id: 'slides', label: t('generationStepSlides'), detail: t('generationStepSlidesDetail') },
+    { id: 'verify', label: t('generationStepVerify'), detail: t('generationStepVerifyDetail') },
   ];
 }
 

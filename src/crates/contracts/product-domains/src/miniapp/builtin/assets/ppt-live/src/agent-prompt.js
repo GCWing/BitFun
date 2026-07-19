@@ -49,18 +49,28 @@ export function buildAgentPrompt(input) {
 
   prompt += `
 
+## 节奏（必须，影响用户等待时间）
+
+硬性禁令（违反会白白烧掉数分钟模型时间）：
+
+1. Skill 返回后**下一轮工具调用必须是 Write \`project.json\`**（\`status: "planning"\` + 完整 \`outline\` / \`slide_order\`）。禁止先 Read seed 的 \`project.json\`、禁止先 Read style-presets、禁止长篇思考规划。
+2. Input JSON 已含 \`style.palette\` / \`style.stylePreset\` 时：**禁止** \`Read references/style-presets/*\`；直接用 palette + Skill 表里的一句话 DNA。
+3. **禁止**为审计反复 Read / Grep / Glob 已写页面；每页一次 Write 写对。
+4. **按需研究**：仅当用户提供 URL、明确要求事实核验，或主题依赖外部时效数据时才 WebSearch / WebFetch；否则跳过。
+5. 写页节奏：每轮并行 Write **2 页** HTML（payload 过大时才降到 1 页）。最后一轮写完剩余页时，**同轮**再 Write/Edit \`project.json\` 把 \`status\` 设为 \`"complete"\` 并结束——不要单独开一轮只做 Glob/LS/Edit。
+6. 详细设计规则以 Skill 与下方 Authoring subset 为准；不要加载无关 reference；不要做「先打样 2 页再批量」的额外 showcase 轮次。
+
 ## 生成文件协议
 
 - 当前 agent 工作区根目录就是 deck 根目录；所有路径均相对该工作区根目录。
 - 先写工作区根目录下的 \`project.json\`，再写工作区根目录下的 \`slides/slide-NN.html\`。
 - 只有在 \`slide_order\` 引用的每一页都已有完整 HTML 后，才将 \`project.json\` 的 \`status\` 设为 \`"complete"\`。
-- 完成前做一次有界检查：核对 \`outline[].slide_id\`、\`slide_order\` 和对应页面文件；缺什么只补什么，检查后立即结束。
+- 完成检查只在最后一轮工具批内完成（写完最后一页的同时改 status）；缺什么只补什么，然后立即结束。
 
 ## 约束
 
 - 用户只能看到 PPT Live UI，无法回答提问。如有歧义自行判断最优方案并记录假设。
 - 不要调用 AskUserQuestion、ControlHub、GenerativeUI、ComputerUse 等交互工具。
-- 研究用 WebSearch / WebFetch 即可。
 
 ## Authoring subset（生成规则）
 

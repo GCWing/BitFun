@@ -18,6 +18,7 @@ import {
   defaultElement,
   ensureState,
   escapeHtml,
+  GENERATION_PHASE_ORDER,
   getActiveIndex,
   getActiveSlide,
   getSelectedElement,
@@ -29,6 +30,8 @@ import {
   densityToIndex,
   indexToDensity,
   uid,
+  DEFAULT_PREFERRED_MODEL,
+  normalizePreferredModel,
 } from './src/state.js';
 import { getAllStylePresets, getStylePreset, DEFAULT_STYLE_PRESET, resolveStylePalette } from './src/style-presets.js';
 import { enhanceFlatSelect, refreshFlatSelect } from './src/flat-select.js';
@@ -73,7 +76,6 @@ let promptSubmitGuard = false;
 let backendRunInFlight = false;
 let historyItems = [];
 let lastHistoryWriteAt = 0;
-
 const $ = (id) => document.getElementById(id);
 const runtime = () => window.app || {};
 installBitFunBackendAdapter(runtime());
@@ -200,11 +202,14 @@ async function saveHistorySnapshot(reason = 'autosave') {
 
 function isRecoverableWorkingOnlyState(value) {
   const slides = Array.isArray(value?.slides) ? value.slides : [];
+  const title = String(value?.title || '');
+  if (value?.generation?.active) return false;
+  if (title !== t('agentWorkingTitle')) return false;
+  // Legacy fake working slide, or the empty generating surface.
+  if (!slides.length) return true;
   return slides.length === 1
     && !slides[0]?.html
-    && String(slides[0]?.id || '').startsWith('agent-working-slide')
-    && String(value?.title || '') === t('agentWorkingTitle')
-    && !value?.generation?.active;
+    && String(slides[0]?.id || '').startsWith('agent-working-slide');
 }
 
 function normalizeHistoryItem(item) {
@@ -310,12 +315,25 @@ function setBusy(nextBusy, message) {
 }
 
 function setGenerationStep(id, status, message) {
+  const targetIdx = GENERATION_PHASE_ORDER.indexOf(id);
   state.generation.current = id;
-  state.generation.steps = state.generation.steps.map((step) => ({
-    ...step,
-    status: step.id === id ? status : step.status,
-  }));
-  state.generation.active = status === 'running' || state.generation.steps.some((step) => step.status === 'running');
+  state.generation.steps = state.generation.steps.map((step) => {
+    const stepIdx = GENERATION_PHASE_ORDER.indexOf(step.id);
+    if (step.id === id) return { ...step, status };
+    // Advancing to a later phase marks earlier phases done so the bar stays honest.
+    if (
+      status === 'running'
+      && targetIdx >= 0
+      && stepIdx >= 0
+      && stepIdx < targetIdx
+      && step.status !== 'error'
+    ) {
+      return { ...step, status: 'done' };
+    }
+    return step;
+  });
+  state.generation.active = status === 'running'
+    || state.generation.steps.some((step) => step.status === 'running');
   renderGeneration(state);
   renderGenerationOverlay(state);
   if (message) setStatus(message);
@@ -370,7 +388,7 @@ function addGenerationEvent(event, detail = '', kind = 'info') {
 /**
  * Push a raw Agent stream entry (tool call, text chunk, or turn lifecycle)
  * into the live process panel so users can see exactly what the Cowork
- * session is doing — not just the abstracted 5-step state machine.
+ * session is doing — not just the abstracted file-protocol phase bar.
  * Entries are capped (see GENERATION_STREAM_LIMIT) and rendered by
  * renderGeneration's agent-stream section.
  */
@@ -871,21 +889,46 @@ async function tryReadDeckPlanFile(project) {
   }
 }
 
+/** True when HTML looks like a finished slide document. */
+function isCompleteSlideHtml(raw) {
+  return /<\/html>\s*$/i.test(String(raw || '').trim());
+}
+
+/** True when HTML is far enough along to preview during generation. */
+function isPreviewableSlideHtml(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return false;
+  if (isCompleteSlideHtml(text)) return true;
+  // Progressive reads may catch a flush before the final closing tag lands.
+  return text.length >= 240 && /<html[\s>]/i.test(text) && /<body[\s>]/i.test(text);
+}
+
 /** Complete slide HTML from disk, or null when missing or incomplete. */
-async function tryReadDeckSlideFile(project, slideNumber) {
+async function tryReadDeckSlideFile(project, slideNumber, options = {}) {
+  const requireComplete = options.requireComplete !== false;
   try {
     const raw = String(await readDeckProjectFile(project, deckSlideFileName(slideNumber)) || '').trim();
-    if (!raw || !/<\/html>\s*$/i.test(raw)) return null;
+    if (!raw) return null;
+    if (requireComplete ? !isCompleteSlideHtml(raw) : !isPreviewableSlideHtml(raw)) return null;
     return raw;
   } catch {
     return null;
   }
 }
 
-/** Retry slide reads briefly after Write completes — disk/fs bridge may lag the tool event. */
-async function tryReadDeckSlideFileWithRetry(project, slideNumber, maxAttempts = 6, delayMs = 120) {
+/** Retry slide reads after Write completes — disk/fs bridge may lag the tool event. */
+async function tryReadDeckSlideFileWithRetry(
+  project,
+  slideNumber,
+  maxAttempts = 8,
+  delayMs = 120,
+  options = {},
+) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const html = await tryReadDeckSlideFile(project, slideNumber);
+    // Prefer a complete document; after a few misses accept a previewable body
+    // so the canvas can advance while the final bytes flush.
+    const requireComplete = options.requireComplete !== false && attempt <= Math.max(2, maxAttempts - 3);
+    const html = await tryReadDeckSlideFile(project, slideNumber, { requireComplete });
     if (html) return html;
     if (attempt < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -894,14 +937,32 @@ async function tryReadDeckSlideFileWithRetry(project, slideNumber, maxAttempts =
   return null;
 }
 
+/** Extract 1-based slide number from a Write/Edit path, or 0 when unrelated. */
+function matchSlideNumberFromPath(filePath) {
+  const normalized = String(filePath || '').trim().replace(/\\/g, '/');
+  if (!normalized) return 0;
+  const match = normalized.match(/(?:^|\/)slides\/slide-(\d{1,2})\.html$/i)
+    || normalized.match(/(?:^|\/)slide-(\d{1,2})\.html$/i);
+  if (!match) return 0;
+  const slideNumber = parseInt(match[1], 10);
+  return Number.isFinite(slideNumber) && slideNumber > 0 ? slideNumber : 0;
+}
+
 /**
  * Read every slide HTML file referenced by `project.json` from the deck
  * project directory. Returns `{ title, language, outline, researchReport,
  * design, slides }` shaped for `applyDeckPayload`.
  */
 async function readDeckFromProjectFiles(project) {
+  const host = runtime();
+  const writeFile = typeof host.fs?.writeFile === 'function'
+    ? async (relPath, content) => {
+      await host.fs.writeFile(`${project.dir}/${relPath}`, content);
+    }
+    : undefined;
   const result = await readDeckProjectContract(
     (relPath) => readDeckProjectFile(project, relPath),
+    writeFile ? { writeFile } : {},
   );
   const { plan } = result;
   const slides = result.slides.map((slide) => ({
@@ -1029,11 +1090,15 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
   const activity = { lastEventAt: Date.now() };
 
   try {
+    const preferredModel = normalizePreferredModel(
+      options.model || state.preferredModel || DEFAULT_PREFERRED_MODEL,
+    );
     const result = await host.backend.call('ppt.generate', requestInput, {
       entityId: 'deck',
       idempotencyKey: `ppt-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sessionId: options.sessionId || undefined,
       appDataWorkspace: options.appDataWorkspace || undefined,
+      model: preferredModel,
     });
     sessionId = result?.sessionId || null;
     turnId = result?.turnId || result?.actionRunId || null;
@@ -1118,7 +1183,8 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
               text: paramSummary,
             });
           } else if (eventType === 'Completed' && rawToolName) {
-            const resultSummary = summarizeToolResult(rawToolName, toolEvent.result || {});
+            const donePath = resolveToolEventFilePath(toolEvent, toolTrace);
+            const resultSummary = summarizeToolResult(rawToolName, toolEvent.result || {}, donePath);
             if (resultSummary) {
               pushAgentStreamEntry({
                 kind: 'tool-done',
@@ -1147,20 +1213,28 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
             hooks.onToolPhase?.('completed');
             if (toolName === 'skill') {
               progressTracker.note(t('eventToolSkillReady'), '', 'phase');
+              hooks.onToolPhase?.('skill-ready');
             } else if (toolName === 'websearch' || toolName === 'webfetch') {
               hooks.onToolPhase?.('research');
             }
-            // Progressive preview: when the agent writes/edits a slide file,
-            // notify the caller so it can read the file from disk and render
-            // the completed page immediately instead of waiting for the whole
-            // turn to finish.
-            if ((toolName === 'write' || toolName === 'edit') && typeof hooks.onSlideFileWritten === 'function') {
+            // Progressive preview: when the agent writes project.json or a slide
+            // file, notify the caller so the UI can show outline/pages early.
+            if (
+              toolName === 'write'
+              || toolName === 'edit'
+              || toolName === 'apply_patch'
+              || toolName === 'strreplace'
+              || toolName === 'search_replace'
+            ) {
               const filePath = resolveToolEventFilePath(toolEvent, toolTrace);
-              const slideMatch = filePath.match(/slides\/slide-(\d{2})\.html/i);
-              if (slideMatch) {
-                const slideNumber = parseInt(slideMatch[1], 10);
-                if (Number.isFinite(slideNumber) && slideNumber > 0) {
-                  // Completed tool events carry file_path in result, not params.
+              if (/project\.json$/i.test(filePath) && typeof hooks.onPlanFileWritten === 'function') {
+                void Promise.resolve(hooks.onPlanFileWritten()).catch(() => {
+                  // Outline preview is best-effort; never break the turn.
+                });
+              }
+              if (typeof hooks.onSlideFileWritten === 'function') {
+                const slideNumber = matchSlideNumberFromPath(filePath);
+                if (slideNumber > 0) {
                   void Promise.resolve(hooks.onSlideFileWritten(slideNumber)).catch(() => {
                     // Progressive preview is best-effort; never break the turn.
                   });
@@ -1232,10 +1306,29 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
       const heartbeat = setInterval(() => {
         if (settled) return;
         const now = Date.now();
-        if (now - progressTracker.lastProgressLogAt < 12000) return;
+        if (now - progressTracker.lastProgressLogAt < 3000) return;
+        const drafted = Number(state.generation?.draftedCount) || 0;
+        const target = Number(state.generation?.slideTarget) || 0;
         const current = (state.generation?.steps || []).find((step) => step.status === 'running');
-        progressTracker.note(current?.label ? `${current.label}…` : t('generationProgressPulse'), current?.detail || '', 'pulse', 0);
-      }, 12000);
+        let title = t('generationProgressPulse');
+        let detail = '';
+        if (current?.id === 'slides' && (drafted > 0 || target > 0)) {
+          title = t('generationWritingSlideProgress', {
+            done: drafted,
+            total: target || Math.max(drafted, 1),
+          });
+        } else if (current?.id === 'outline') {
+          title = t('generationWritingClaims');
+        } else if (current?.id === 'skill') {
+          title = t('generationLoadingSkill');
+        } else if (current?.id === 'verify') {
+          title = t('generationVerifyingDeck');
+        } else if (current?.label) {
+          title = `${current.label}…`;
+          detail = current.detail || '';
+        }
+        progressTracker.note(title, detail, 'pulse', 0);
+      }, 3000);
       cleanup.push(() => clearInterval(heartbeat));
     });
 
@@ -1300,7 +1393,7 @@ async function runCoworkDeckGeneration(operation, instruction) {
   const runEpoch = deckEpoch;
   setBusy(true, t('working'));
   resetGeneration();
-  setGenerationStep('brief', 'running', t('generationReadingBrief'));
+  setGenerationStep('skill', 'running', t('generationLoadingSkill'));
   addGenerationEvent({ title: t('processEventStarted'), detail: t('processEventWaiting'), kind: 'start' });
   prepareAgentGenerationSurface(operation, instruction);
   let completed = false;
@@ -1340,6 +1433,142 @@ async function runCoworkDeckGeneration(operation, instruction) {
   // on every slide write is wasteful IO. Refreshed lazily when a new slide
   // number appears that isn't in the cached plan's outline.
   let progressivePlan = null;
+  let progressivePublishChain = Promise.resolve();
+  let progressivePollTimer = null;
+  const announcedSlideReady = new Set();
+
+  const applyProgressivePlan = (plan) => {
+    if (!plan) return null;
+    progressivePlan = plan;
+    const titles = planOutlineTitles(plan);
+    const total = titles.length
+      || (Array.isArray(plan.outline) ? plan.outline.length : 0)
+      || (Array.isArray(plan.slide_order) ? plan.slide_order.length : 0);
+    if (total > 0) state.generation.slideTarget = total;
+    const planTitle = resolveDeckTitle({ plan, state, instruction });
+    if (!isEphemeralDeckTitle(planTitle)) state.title = planTitle;
+    if (titles.length) state.outline = titles;
+    return { titles, total };
+  };
+
+  const publishProgressiveDeck = (focusSlideNumber = 0) => {
+    if (!progressiveSlides.size) return;
+    const plan = progressivePlan || {};
+    const total = Number(state.generation.slideTarget)
+      || (Array.isArray(plan.outline) ? plan.outline.length : 0)
+      || progressiveSlides.size;
+    const knownSlides = [...progressiveSlides.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([number, slideHtml]) => ({
+        id: `ppt-live-slide-${number}`,
+        slideNumber: number,
+        title: typeof plan?.outline?.[number - 1] === 'string'
+          ? plan.outline[number - 1]
+          : (plan?.outline?.[number - 1]?.title || `${t('newSlideTitle')} ${number}`),
+        html: slideHtml,
+      }));
+    const deckTitle = resolveDeckTitle({
+      plan,
+      state,
+      instruction,
+      slides: knownSlides,
+    });
+    const activeNumber = focusSlideNumber > 0
+      ? focusSlideNumber
+      : knownSlides[knownSlides.length - 1]?.slideNumber;
+    applyDeckPayload({
+      title: deckTitle,
+      language: plan?.language || '',
+      outline: planOutlineTitles(plan || {}),
+      researchReport: plan?.researchReport || null,
+      design: plan?.design || {},
+      slides: knownSlides,
+    }, {
+      instruction,
+      activeSlideId: activeNumber ? `ppt-live-slide-${activeNumber}` : '',
+    });
+    state.selectedElementId = '';
+    state.generation.draftedCount = progressiveSlides.size;
+    if (activeNumber > 0) {
+      setGenerationStep('slides', 'running', t('generationRenderingSlide', {
+        slide: activeNumber,
+        total,
+      }));
+      if (!announcedSlideReady.has(activeNumber)) {
+        announcedSlideReady.add(activeNumber);
+        addGenerationEvent({
+          title: t('generationSlideReady', {
+            slide: activeNumber,
+            total,
+          }),
+          detail: '',
+          kind: 'slide',
+        });
+      }
+    }
+    rerender();
+  };
+
+  const ingestProgressiveSlide = (slideNumber, html) => {
+    if (!(slideNumber > 0) || !html) return false;
+    const previous = progressiveSlides.get(slideNumber);
+    if (previous === html) return false;
+    progressiveSlides.set(slideNumber, html);
+    return true;
+  };
+
+  const refreshProgressiveSlide = async (slideNumber) => {
+    if (!project || !(slideNumber > 0) || isDeckEpochStale(runEpoch)) return false;
+    const html = await tryReadDeckSlideFileWithRetry(project, slideNumber);
+    if (!html) {
+      runtime().log?.debug?.('PPT Live progressive slide read missed', { slideNumber });
+      return false;
+    }
+    const planOutlineLen = Array.isArray(progressivePlan?.outline) ? progressivePlan.outline.length : 0;
+    if (!progressivePlan || slideNumber > planOutlineLen) {
+      applyProgressivePlan(await tryReadDeckPlanFile(project));
+    }
+    if (!ingestProgressiveSlide(slideNumber, html)) return false;
+    publishProgressiveDeck(slideNumber);
+    return true;
+  };
+
+  const scanProgressiveSlides = async () => {
+    if (!project || isDeckEpochStale(runEpoch)) return;
+    if (!progressivePlan) {
+      applyProgressivePlan(await tryReadDeckPlanFile(project));
+    }
+    const total = Number(state.generation.slideTarget)
+      || (Array.isArray(progressivePlan?.outline) ? progressivePlan.outline.length : 0)
+      || (Array.isArray(progressivePlan?.slide_order) ? progressivePlan.slide_order.length : 0)
+      || 0;
+    if (!(total > 0)) return;
+    let newest = 0;
+    let changed = false;
+    for (let slideNumber = 1; slideNumber <= total; slideNumber += 1) {
+      // Keep re-reading incomplete previews until a complete document lands.
+      const existing = progressiveSlides.get(slideNumber);
+      if (existing && isCompleteSlideHtml(existing)) continue;
+      const html = await tryReadDeckSlideFile(project, slideNumber, {
+        requireComplete: Boolean(existing),
+      });
+      if (!html) continue;
+      if (ingestProgressiveSlide(slideNumber, html)) {
+        changed = true;
+        newest = slideNumber;
+      }
+    }
+    if (changed) publishProgressiveDeck(newest);
+  };
+
+  const enqueueProgressive = (work) => {
+    progressivePublishChain = progressivePublishChain
+      .then(work)
+      .catch((error) => {
+        runtime().log?.warn?.('PPT Live progressive preview failed', { error: String(error) });
+      });
+    return progressivePublishChain;
+  };
 
   try {
     let lastError = null;
@@ -1370,86 +1599,60 @@ async function runCoworkDeckGeneration(operation, instruction) {
           requestInput.currentSlideIndex = getActiveIndex(state);
           requestInput.currentDeck = buildCurrentDeckSnapshot(instruction);
         }
+
+        if (project && !progressivePollTimer) {
+          // Tool events can miss a path/id; polling the deck directory keeps
+          // progressive preview honest even when Write completion metadata is thin.
+          progressivePollTimer = setInterval(() => {
+            void enqueueProgressive(() => scanProgressiveSlides());
+          }, 900);
+        }
+
         const { sessionId } = await executeBackendTurn(requestInput, {
           onToolPhase: (kind) => {
             if (kind === 'detected') {
-              setGenerationStep('brief', 'running', t('generationReadingBrief'));
-            } else if (kind === 'completed') {
-              setGenerationStep('brief', 'done');
+              setGenerationStep('skill', 'running', t('generationLoadingSkill'));
+            } else if (kind === 'skill-ready') {
+              setGenerationStep('outline', 'running', t('generationWritingClaims'));
             } else if (kind === 'research') {
-              setGenerationStep('proof', 'running', t('generationChoosingProof'));
+              // Research is optional; keep the outline phase running with a clearer label.
+              setGenerationStep('outline', 'running', t('generationResearching'));
+              addGenerationEvent({ title: t('generationResearching'), detail: '', kind: 'phase' });
             }
             // 'round' = new model round; don't override the current phase —
             // the stream entries already show what the agent is doing.
           },
           onTextProgress: (buffer) => noteTextStreamProgress(buffer, progressShim, lastStreamPhase),
+          onPlanFileWritten: project
+            ? async () => {
+                const plan = await tryReadDeckPlanFile(project);
+                const applied = applyProgressivePlan(plan);
+                if (!applied?.total) return;
+                setGenerationStep(
+                  'slides',
+                  'running',
+                  t('generationOutlineReady', { count: applied.total }),
+                );
+                addGenerationEvent({
+                  title: t('generationOutlineReady', { count: applied.total }),
+                  detail: applied.titles.slice(0, 4).join(' · '),
+                  kind: 'phase',
+                });
+                // Keep the canvas empty until the first real slide file lands.
+                if (!progressiveSlides.size && !state.slides?.some((slide) => slide?.html)) {
+                  state.slides = [];
+                  state.activeSlideId = '';
+                }
+                rerender();
+                void enqueueProgressive(() => scanProgressiveSlides());
+              }
+            : undefined,
           // Progressive preview: when the agent writes a slide file during the
           // turn, read it from disk and show it immediately so the user sees
           // pages appearing one by one instead of all at once at the end.
           onSlideFileWritten: project
             ? async (slideNumber) => {
-                const html = await tryReadDeckSlideFileWithRetry(project, slideNumber);
-                if (!html) return;
-                progressiveSlides.set(slideNumber, html);
-                // Read project.json lazily; cache it so we don't re-read on
-                // every slide write. Re-read only if a new slide number beyond
-                // the cached plan's outline appears.
-                const planOutlineLen = Array.isArray(progressivePlan?.outline) ? progressivePlan.outline.length : 0;
-                if (!progressivePlan || slideNumber > planOutlineLen) {
-                  const fresh = await tryReadDeckPlanFile(project);
-                  if (fresh) {
-                    progressivePlan = fresh;
-                    const planTitle = resolveDeckTitle({ plan: fresh, state, instruction });
-                    if (!isEphemeralDeckTitle(planTitle)) {
-                      state.title = planTitle;
-                    }
-                  }
-                }
-                const plan = progressivePlan || {};
-                // Build an incremental payload from all slides known so far.
-                const knownSlides = [...progressiveSlides.entries()]
-                  .sort((a, b) => a[0] - b[0])
-                  .map(([number, slideHtml]) => ({
-                    id: `ppt-live-slide-${number}`,
-                    slideNumber: number,
-                    title: typeof plan?.outline?.[number - 1] === 'string'
-                      ? plan.outline[number - 1]
-                      : (plan?.outline?.[number - 1]?.title || `${t('newSlideTitle')} ${number}`),
-                    html: slideHtml,
-                  }));
-                const deckTitle = resolveDeckTitle({
-                  plan,
-                  state,
-                  instruction,
-                  slides: knownSlides,
-                });
-                setGenerationStep('design', 'running', t('generationSlideReady', {
-                  slide: slideNumber,
-                  total: knownSlides.length,
-                }));
-                setStatus(t('generationRenderingSlide', {
-                  slide: slideNumber,
-                  total: plan?.outline?.length || knownSlides.length,
-                }));
-                addGenerationEvent({
-                  title: t('generationSlideReady', {
-                    slide: slideNumber,
-                    total: plan?.outline?.length || knownSlides.length,
-                  }),
-                  detail: '',
-                  kind: 'slide',
-                });
-                applyDeckPayload({
-                  title: deckTitle,
-                  language: plan?.language || '',
-                  outline: planOutlineTitles(plan || {}),
-                  researchReport: plan?.researchReport || null,
-                  design: plan?.design || {},
-                  slides: knownSlides,
-                }, { instruction });
-                state.activeSlideId = `ppt-live-slide-${slideNumber}`;
-                state.selectedElementId = '';
-                rerender();
+                await enqueueProgressive(() => refreshProgressiveSlide(slideNumber));
               }
             : undefined,
         }, {
@@ -1464,11 +1667,12 @@ async function runCoworkDeckGeneration(operation, instruction) {
           runId: retrySession?.project?.runId || '',
           skillKey: PPT_DESIGN_SKILL_KEY,
         };
+        state.preferredModel = normalizePreferredModel(state.preferredModel);
 
         // The agent delivered through files; read them back.
         addGenerationEvent({ title: t('generationParsingDeck'), detail: '', kind: 'parsing' });
-        setStatus(t('generationParsingDeck'));
-        setGenerationStep('design', 'running', t('generationDesigningLayouts'));
+        setGenerationStep('verify', 'running', t('generationVerifyingDeck'));
+        await progressivePublishChain.catch(() => {});
         const payload = project
           ? await readDeckFromProjectFiles(project)
           : null;
@@ -1476,10 +1680,7 @@ async function runCoworkDeckGeneration(operation, instruction) {
         applyDeckPayload(payload, { instruction });
         await saveHistorySnapshot(`agent:${operation}`);
         addGenerationEvent({ title: t('processEventDone'), detail: '', kind: 'done' });
-        setGenerationStep('spine', 'done');
-        setGenerationStep('proof', 'done');
-        setGenerationStep('design', 'done');
-        setGenerationStep('compile', 'done', t('generationCompiled'));
+        setGenerationStep('verify', 'done', t('generationCompiled'));
         finishGenerationUi(t('deckReady'));
         completed = true;
         rerender();
@@ -1501,6 +1702,10 @@ async function runCoworkDeckGeneration(operation, instruction) {
       }
     }
   } finally {
+    if (progressivePollTimer) {
+      clearInterval(progressivePollTimer);
+      progressivePollTimer = null;
+    }
     const ownsEpoch = !isDeckEpochStale(runEpoch);
     if (ownsEpoch) {
       if (state.generation.active && !completed) state.generation.active = false;
@@ -1515,96 +1720,18 @@ function prepareAgentGenerationSurface(operation, instruction) {
   setStatus(t('generationAgentWorking'));
   addGenerationEvent({ title: t('generationAgentWorking'), detail: compactText(instruction || ''), kind: 'start' });
   if (operation === 'auto' && (isDefaultDraft() || isStarterDeck())) {
+    // Do not inject a fake "working" slide. Clear the starter deck so the
+    // canvas stays on the generating empty-state until the first real page
+    // file is written and progressive preview can show it.
     state.title = t('agentWorkingTitle');
+    state.slides = [];
+    state.outline = [];
+    state.activeSlideId = '';
+    state.selectedElementId = '';
+    rerender();
+    return;
   }
   rerender();
-}
-
-function showAgentWorkingCanvas(instruction) {
-  try {
-    const slide = normalizeSlide({
-      id: uid('agent-working-slide'),
-      title: t('agentWorkingTitle'),
-      subtitle: '',
-      kicker: t('agentWorkingKicker'),
-      claim: t('agentWorkingClaim'),
-      proofObject: t('agentWorkingProof'),
-      supportNote: instruction || t('agentWorkingDetail'),
-      sourceNote: t('agentWorkingSourceNote'),
-      notes: t('agentWorkingSourceNote'),
-      layout: 'brief',
-      theme: {
-        background: '#fbfcff',
-        ink: '#111827',
-        muted: '#5b6575',
-        primary: '#ff4f46',
-        accent: '#14b8a6',
-        panel: '#ffffff',
-      },
-      elements: [
-        {
-          type: 'text',
-          text: t('agentWorkingTitle'),
-          x: 9,
-          y: 16,
-          w: 72,
-          h: 13,
-          style: { fontSize: 32, fontWeight: 820, color: 'ink', background: 'transparent', borderRadius: 0, opacity: 1, align: 'left' },
-        },
-        {
-          type: 'text',
-          text: t('agentWorkingDetail'),
-          x: 10,
-          y: 34,
-          w: 58,
-          h: 10,
-          style: { fontSize: 16, fontWeight: 650, color: 'muted', background: 'transparent', borderRadius: 0, opacity: 1, align: 'left' },
-        },
-        {
-          type: 'list',
-          items: [
-            t('generationReadingBrief'),
-            t('generationWritingClaims'),
-            t('generationChoosingProof'),
-            t('generationDesigningLayouts'),
-          ],
-          x: 10,
-          y: 50,
-          w: 50,
-          h: 29,
-          style: { fontSize: 18, fontWeight: 650, color: 'ink', background: 'transparent', borderRadius: 0, opacity: 1, align: 'left' },
-        },
-        {
-          type: 'shape',
-          x: 67,
-          y: 20,
-          w: 22,
-          h: 52,
-          style: { fontSize: 18, fontWeight: 700, color: 'accent', background: 'primary', borderRadius: 24, opacity: 0.12, align: 'center' },
-        },
-        {
-          type: 'metric',
-          text: t('agentWorkingMetric'),
-          label: t('agentWorkingMetricLabel'),
-          x: 65,
-          y: 42,
-          w: 26,
-          h: 20,
-          style: { fontSize: 34, fontWeight: 830, color: 'primary', background: 'panel', borderRadius: 14, opacity: 1, align: 'left' },
-        },
-      ],
-    }, 0, { ...state, slides: [] });
-    state.title = t('agentWorkingTitle');
-    state.slides = [slide];
-    state.outline = [slide.title];
-    state.activeSlideId = slide.id;
-    state.selectedElementId = getActiveSlide(state)?.elements[0]?.id || '';
-    setStatus(t('generationAgentWorking'));
-    addGenerationEvent(t('generationAgentWorking'));
-    rerender();
-  } catch (error) {
-    runtime().log?.warn?.('PPT Live working canvas failed', { instruction, error: String(error) });
-  }
 }
 
 const SILENT_TOOL_EVENT_TYPES = new Set([
@@ -1741,7 +1868,7 @@ function summarizeToolParams(toolName, params = {}) {
 }
 
 /** Compact a tool's result into a human-readable single line for the live agent stream. */
-function summarizeToolResult(toolName, result = {}) {
+function summarizeToolResult(toolName, result = {}, filePath = '') {
   const name = String(toolName || '').toLowerCase();
   const r = result && typeof result === 'object' ? result : {};
   if (name === 'websearch') {
@@ -1754,13 +1881,18 @@ function summarizeToolResult(toolName, result = {}) {
   }
   if (name === 'read') {
     const lines = Number(r.lineCount || (Array.isArray(r.lines) ? r.lines.length : 0));
+    const path = shortFilePath(filePath || String(r.file_path || r.path || ''));
+    if (path && lines) return `${path} · ${lines} 行`;
+    if (path) return path;
     return lines ? `${lines} 行` : '';
   }
-  // write/edit completion is signaled by the slide-ready event; skip the
-  // raw "written" message to keep the timeline clean.
-  if (name === 'write' || name === 'edit') return '';
+  // Keep write/edit completions visible so the timeline does not go quiet
+  // between slide-ready events (especially for project.json and non-slide files).
+  if (name === 'write' || name === 'edit') {
+    return shortFilePath(filePath || String(r.file_path || r.path || '')) || '✓';
+  }
   if (name === 'grep' || name === 'glob') return '';
-  if (name === 'skill') return '';
+  if (name === 'skill') return t('eventToolSkillReady');
   if (name === 'task') return compactText(String(r.result || r.message || ''), 160);
   return '';
 }
@@ -1926,23 +2058,40 @@ function userFacingToolDetail(eventType, toolEvent) {
 }
 
 function resolveToolEventFilePath(toolEvent, toolTrace = []) {
+  const pickPath = (value) => {
+    if (!value || typeof value !== 'object') return '';
+    return String(
+      value.file_path
+      || value.filePath
+      || value.path
+      || value.target_file
+      || value.targetFile
+      || '',
+    ).trim();
+  };
+
   const params = toolEvent?.params && typeof toolEvent.params === 'object' ? toolEvent.params : {};
-  const directPath = String(params.file_path || params.path || '').trim();
+  const directPath = pickPath(params);
   if (directPath) return directPath;
 
   const result = toolEvent?.result && typeof toolEvent.result === 'object' ? toolEvent.result : {};
-  const resultPath = String(result.file_path || result.path || '').trim();
+  const resultPath = pickPath(result);
   if (resultPath) return resultPath;
 
   const toolId = String(toolEvent?.tool_id || toolEvent?.toolId || '').trim();
-  if (!toolId) return '';
+  if (!toolId) {
+    // Fall back to the latest Started write-like event when Completed omits ids.
+    const started = [...toolTrace].reverse().find((entry) => (
+      entry.eventType === 'Started' && pickPath(entry.params)
+    ));
+    return pickPath(started?.params);
+  }
 
   const started = [...toolTrace].reverse().find((entry) => (
     entry.eventType === 'Started'
     && String(entry.toolId || entry.tool_id || '') === toolId
   ));
-  const startedParams = started?.params && typeof started.params === 'object' ? started.params : {};
-  return String(startedParams.file_path || startedParams.path || '').trim();
+  return pickPath(started?.params);
 }
 
 function normalizeToolEvent(toolEvent) {
@@ -2040,6 +2189,7 @@ function applyDeckPayload(payload, options = {}) {
     instruction: options.instruction || '',
     slides: payload?.slides || [],
   });
+  const preferredActiveId = String(options.activeSlideId || '').trim();
   const htmlSlides = normalizeHtmlSlides(payload);
   if (htmlSlides.length) {
     state.title = resolvedTitle;
@@ -2048,7 +2198,11 @@ function applyDeckPayload(payload, options = {}) {
       slides: htmlSlides,
     }));
     state.outline = state.slides.map((slide) => slide.title);
-    state.activeSlideId = state.slides[0]?.id || '';
+    state.activeSlideId = (
+      preferredActiveId && state.slides.some((slide) => slide.id === preferredActiveId)
+        ? preferredActiveId
+        : (state.slides[0]?.id || '')
+    );
     state.selectedElementId = '';
   } else if (!Array.isArray(payload?.slides) || payload.slides.length === 0) {
     throw new Error('PPT Live deck payload has no slides');
@@ -2062,7 +2216,11 @@ function applyDeckPayload(payload, options = {}) {
       slides: payload.slides,
     }));
     state.outline = state.slides.map((slide) => slide.title);
-    state.activeSlideId = state.slides[0]?.id || '';
+    state.activeSlideId = (
+      preferredActiveId && state.slides.some((slide) => slide.id === preferredActiveId)
+        ? preferredActiveId
+        : (state.slides[0]?.id || '')
+    );
     state.selectedElementId = state.slides[0]?.elements[0]?.id || '';
   }
   if (Array.isArray(payload.outline) && payload.outline.length) {
@@ -3070,17 +3228,12 @@ function setCanvasZoom(zoom) {
   const stage = document.querySelector('.canvas-stage');
   if (stage) stage.style.transform = currentZoom === 1 ? '' : `scale(${currentZoom})`;
   const zoomValue = $('zoomValue');
-  const statusZoomValue = $('statusZoomValue');
-  const pct = Math.round(currentZoom * 100) + '%';
-  if (zoomValue) zoomValue.textContent = pct;
-  if (statusZoomValue) statusZoomValue.textContent = pct;
+  if (zoomValue) zoomValue.textContent = `${Math.round(currentZoom * 100)}%`;
 }
 
 function bindCanvasZoom() {
   $('zoomIn')?.addEventListener('click', () => setCanvasZoom(currentZoom + ZOOM_STEP));
   $('zoomOut')?.addEventListener('click', () => setCanvasZoom(currentZoom - ZOOM_STEP));
-  $('statusZoomIn')?.addEventListener('click', () => setCanvasZoom(currentZoom + ZOOM_STEP));
-  $('statusZoomOut')?.addEventListener('click', () => setCanvasZoom(currentZoom - ZOOM_STEP));
   document.querySelector('.canvas-area')?.addEventListener('wheel', (e) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
@@ -3226,6 +3379,27 @@ function bindPropertyPanels() {
         setDensitySliderUi(densityToIndex(preset.density || 'standard'));
       }
       refreshFlatSelect(stylePresetSelect);
+    });
+  }
+
+  /* Cowork model selector */
+  const modelSelect = $('modelSelect');
+  if (modelSelect) {
+    enhanceFlatSelect(modelSelect);
+    modelSelect.addEventListener('change', () => {
+      const selected = normalizePreferredModel(modelSelect.value);
+      if (selected === state.preferredModel) return;
+      state.preferredModel = selected;
+      // Drop the reused session so the next turn starts with the newly chosen model
+      // context cleanly when host-side model update is unavailable.
+      if (state.agentSession?.id) {
+        state.agentSession = {
+          ...state.agentSession,
+          id: '',
+        };
+      }
+      refreshFlatSelect(modelSelect);
+      void persist(true);
     });
   }
 }
@@ -3398,12 +3572,16 @@ async function confirmExportFromModal() {
     const { filename, exportSummary } = await executeExport(format);
     const savedMessage = t('exportSavedTo', { path: filename });
     const diagnosticMessage = formatExportDiagnostics(exportSummary);
-    const completedMessage = diagnosticMessage
-      ? `${savedMessage} ${diagnosticMessage}`
-      : savedMessage;
+    if (diagnosticMessage) {
+      runtime().log?.info?.(`PPT Live ${format} export completed with visual adjustments`, {
+        filename,
+        summary: diagnosticMessage,
+        counts: exportSummary?.counts || null,
+      });
+    }
     $('exportOverlay')?.classList.remove('is-exporting');
-    setExportModalFeedback('success', completedMessage);
-    setExportStatus(completedMessage);
+    setExportModalFeedback('success', savedMessage);
+    setExportStatus(savedMessage);
     revealDownloadFolder();
     await new Promise((resolve) => setTimeout(resolve, 1600));
     closeExportModal();
@@ -3535,10 +3713,67 @@ function renderStylePresetOptions() {
   refreshFlatSelect(stylePresetSelect);
 }
 
+function appendModelOption(select, value, label) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = label;
+  select.append(option);
+}
+
+/** Match host chat ModelSelector: concrete options use model_name. */
+function modelOptionLabel(model) {
+  const modelName = String(model?.modelName || model?.model_name || '').trim();
+  if (modelName) return modelName;
+  const configName = String(model?.name || '').trim();
+  if (configName) return configName;
+  return String(model?.id || '').trim();
+}
+
+function renderModelOptions(models = []) {
+  const modelSelect = $('modelSelect');
+  if (!modelSelect) return;
+  const selected = normalizePreferredModel(state.preferredModel);
+  modelSelect.textContent = '';
+
+  // Same special entries as chat ModelSelector: auto / primary / fast, then concrete models.
+  appendModelOption(modelSelect, 'auto', t('modelOptionAuto'));
+  appendModelOption(modelSelect, 'primary', t('modelOptionPrimary'));
+  appendModelOption(modelSelect, 'fast', t('modelOptionFast'));
+
+  for (const model of Array.isArray(models) ? models : []) {
+    const id = String(model?.id || '').trim();
+    if (!id || id === 'auto' || id === 'primary' || id === 'fast') continue;
+    appendModelOption(modelSelect, id, modelOptionLabel(model));
+  }
+
+  if (![...modelSelect.options].some((option) => option.value === selected)) {
+    appendModelOption(modelSelect, selected, selected);
+  }
+  modelSelect.value = selected;
+  if (modelSelect.selectedIndex < 0) modelSelect.value = DEFAULT_PREFERRED_MODEL;
+  state.preferredModel = normalizePreferredModel(modelSelect.value);
+  refreshFlatSelect(modelSelect);
+}
+
+async function loadModelOptions() {
+  renderModelOptions([]);
+  const getModels = runtime()?.ai?.getModels;
+  if (typeof getModels !== 'function') return;
+  try {
+    const models = await getModels();
+    renderModelOptions(models);
+  } catch (error) {
+    runtime().log?.warn?.('PPT Live failed to list AI models', { error: String(error) });
+    renderModelOptions([]);
+  }
+}
+
 function syncLocale() {
   state.generation = normalizeGeneration(state.generation);
   applyI18n();
   renderStylePresetOptions();
+  renderModelOptions([]);
+  void loadModelOptions();
   const pill = $('aiStatusPill');
   if (pill) pill.textContent = busy ? t('statusPillBusy') : t('statusPillReady');
   rerender();
@@ -3551,6 +3786,7 @@ async function init() {
     await recoverFromRestart();
     syncLocale();
     syncStylePanelFromState(state);
+    await loadModelOptions();
     await persist(true);
   } catch (error) {
     runtime().log?.error?.('PPT Live init failed', { error: String(error) });

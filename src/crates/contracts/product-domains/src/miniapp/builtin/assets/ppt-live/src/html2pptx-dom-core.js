@@ -454,6 +454,38 @@ export function extractSlideDataFromDocument(doc = document) {
 
     const outerShadowOf = (effect) => (effect?.mode === 'outer' ? effect.shadow : null);
 
+    // Inline tags keep per-run style. Block wrappers (especially <li><p>…</p></li>
+    // authored by the deck skill / element-model path) must also be flattened —
+    // skipping them yields empty list items, scene validation fails, and degrade
+    // removes the entire UL/OL (dropping all dense body copy).
+    const INLINE_FORMAT_TAGS = new Set([
+      'SPAN', 'B', 'STRONG', 'I', 'EM', 'U', 'SMALL', 'LABEL', 'A', 'CODE', 'MARK', 'SUB', 'SUP',
+    ]);
+    const BLOCK_TEXT_WRAPPER_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+
+    const applyTextRunComputedStyle = (node, options, textTransform) => {
+      const computed = view.getComputedStyle(node);
+      const nextOptions = { ...options };
+      let nextTransform = textTransform;
+      const isBold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600;
+      if (isBold && !shouldSkipBold(computed.fontFamily)) nextOptions.bold = true;
+      if (computed.fontStyle === 'italic') nextOptions.italic = true;
+      if (computed.textDecoration && computed.textDecoration.includes('underline')) {
+        nextOptions.underline = true;
+      }
+      if (computed.color && computed.color !== 'rgb(0, 0, 0)') {
+        nextOptions.color = rgbToHex(computed.color);
+        const transparency = extractAlpha(computed.color);
+        if (transparency !== null) nextOptions.transparency = transparency;
+      }
+      if (computed.fontSize) nextOptions.fontSize = pxToPoints(computed.fontSize);
+      if (computed.textTransform && computed.textTransform !== 'none') {
+        const transformStr = computed.textTransform;
+        nextTransform = (text) => applyTextTransform(text, transformStr);
+      }
+      return { options: nextOptions, textTransform: nextTransform, computed };
+    };
+
     // Parse inline formatting tags (<b>, <i>, <u>, <strong>, <em>, <span>) into text runs
     const parseInlineFormatting = (element, baseOptions = {}, runs = [], baseTextTransform = (x) => x) => {
       let prevNodeIsText = false;
@@ -472,43 +504,30 @@ export function extractSlideDataFromDocument(doc = document) {
           }
 
         } else if (node.nodeType === view.Node.ELEMENT_NODE && node.textContent.trim()) {
-          const options = { ...baseOptions };
-          const computed = view.getComputedStyle(node);
-
-          // Handle inline elements with computed styles
-          if (['SPAN', 'B', 'STRONG', 'I', 'EM', 'U', 'SMALL', 'LABEL', 'A', 'CODE', 'MARK', 'SUB', 'SUP'].includes(node.tagName)) {
-            const isBold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight) >= 600;
-            if (isBold && !shouldSkipBold(computed.fontFamily)) options.bold = true;
-            if (computed.fontStyle === 'italic') options.italic = true;
-            if (computed.textDecoration && computed.textDecoration.includes('underline')) options.underline = true;
-            if (computed.color && computed.color !== 'rgb(0, 0, 0)') {
-              options.color = rgbToHex(computed.color);
-              const transparency = extractAlpha(computed.color);
-              if (transparency !== null) options.transparency = transparency;
-            }
-            if (computed.fontSize) options.fontSize = pxToPoints(computed.fontSize);
-
-            // Apply text-transform on the span element itself
-            if (computed.textTransform && computed.textTransform !== 'none') {
-              const transformStr = computed.textTransform;
-              textTransform = (text) => applyTextTransform(text, transformStr);
-            }
+          if (INLINE_FORMAT_TAGS.has(node.tagName) || BLOCK_TEXT_WRAPPER_TAGS.has(node.tagName)) {
+            const styled = applyTextRunComputedStyle(node, baseOptions, textTransform);
+            const options = styled.options;
+            textTransform = styled.textTransform;
+            const computed = styled.computed;
 
             // Validate: Check for margins on inline elements
-            if (computed.marginLeft && parseFloat(computed.marginLeft) > 0) {
-              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-left.`, node);
-            }
-            if (computed.marginRight && parseFloat(computed.marginRight) > 0) {
-              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-right.`, node);
-            }
-            if (computed.marginTop && parseFloat(computed.marginTop) > 0) {
-              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-top.`, node);
-            }
-            if (computed.marginBottom && parseFloat(computed.marginBottom) > 0) {
-              addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-bottom.`, node);
+            if (INLINE_FORMAT_TAGS.has(node.tagName)) {
+              if (computed.marginLeft && parseFloat(computed.marginLeft) > 0) {
+                addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-left.`, node);
+              }
+              if (computed.marginRight && parseFloat(computed.marginRight) > 0) {
+                addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-right.`, node);
+              }
+              if (computed.marginTop && parseFloat(computed.marginTop) > 0) {
+                addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-top.`, node);
+              }
+              if (computed.marginBottom && parseFloat(computed.marginBottom) > 0) {
+                addDiagnostic('blocking', 'inline_margin', `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-bottom.`, node);
+              }
             }
 
-            // Recursively process the child node. This will flatten nested spans into multiple runs.
+            // Recursively process the child node. This will flatten nested spans
+            // and block wrappers (li > p) into multiple runs.
             parseInlineFormatting(node, options, runs, textTransform);
           }
         }
@@ -824,6 +843,17 @@ export function extractSlideDataFromDocument(doc = document) {
       return pxToPoints(lh) || fontSize * 1.2;
     };
 
+    // CSS letter-spacing → PPTX charSpacing (pt). Negative tracking is common
+    // on titles; dropping it makes PowerPoint glyphs looser and can wrap a
+    // line that fit in the browser.
+    const resolveCharSpacing = (computed) => {
+      const raw = computed.letterSpacing;
+      if (!raw || raw === 'normal') return undefined;
+      const px = parseFloat(raw);
+      if (!Number.isFinite(px) || Math.abs(px) < 0.01) return undefined;
+      return px * PT_PER_PX;
+    };
+
     const emitTextElement = (el, type = el.tagName.toLowerCase(), exactFrame = false, rectOverride = null) => {
       const rect = rectOverride || rectFor(el);
       const text = el.textContent.replace(/\s+/g, ' ').trim();
@@ -875,6 +905,8 @@ export function extractSlideDataFromDocument(doc = document) {
         paraSpaceAfter: 0,
         margin: textInset,
       };
+      const charSpacing = resolveCharSpacing(computed);
+      if (charSpacing !== undefined) baseStyle.charSpacing = charSpacing;
 
       const transparency = extractAlpha(computed.color);
       if (transparency !== null) baseStyle.transparency = transparency;
@@ -1907,23 +1939,34 @@ export function extractSlideDataFromDocument(doc = document) {
         const rect = rectFor(el);
         if (rect.width === 0 || rect.height === 0) return;
 
-        const liElements = Array.from(el.querySelectorAll('li'));
+        // Prefer real <li> children. After repairNestedParagraphs unwraps
+        // <li><p>…</p></li> into sibling <p> under the UL, fall back to those
+        // direct semantic blocks so dense list body text is not lost.
+        const liElements = Array.from(el.querySelectorAll(':scope > li'));
+        const listItemElements = liElements.length
+          ? liElements
+          : Array.from(el.querySelectorAll(':scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6'));
         const items = [];
         const ulComputed = view.getComputedStyle(el);
-        const ulPaddingLeftPt = pxToPoints(ulComputed.paddingLeft);
+        // jsdom / stripped lists may report paddingLeft as "" → NaN. A non-finite
+        // indent makes scene validation reject the whole list payload.
+        const ulPaddingLeftPt = (() => {
+          const value = pxToPoints(ulComputed.paddingLeft);
+          return Number.isFinite(value) && value >= 0 ? value : 18;
+        })();
 
         // Split: margin-left for bullet position, indent for text position
         // margin-left + indent = ul padding-left
         const marginLeft = ulPaddingLeftPt * 0.5;
         const textIndent = ulPaddingLeftPt * 0.5;
 
-        const computed = view.getComputedStyle(liElements[0] || el);
+        const computed = view.getComputedStyle(listItemElements[0] || el);
         const textHex = rgbToHex(computed.color);
         const bulletColor = resolveListBulletColor(el, liElements, textHex);
 
-        liElements.forEach((li, idx) => {
-          const isLast = idx === liElements.length - 1;
-          const runs = parseInlineFormatting(li, { breakLine: false });
+        listItemElements.forEach((itemEl, idx) => {
+          const isLast = idx === listItemElements.length - 1;
+          const runs = parseInlineFormatting(itemEl, { breakLine: false });
           // Clean manual bullets from first run
           if (runs.length > 0) {
             runs[0].text = runs[0].text.replace(/^[•\-\*▪▸]\s*/, '');
@@ -1952,9 +1995,22 @@ export function extractSlideDataFromDocument(doc = document) {
         // UL/OL padding: paddingLeft is already split into bullet margin +
         // text indent below. The remaining padding (top/right/bottom) must
         // be preserved as PPTX internal margin so text doesn't shift.
-        const ulPadR = pxToInch(parseFloat(ulComputed.paddingRight) || 0);
-        const ulPadT = pxToInch(parseFloat(ulComputed.paddingTop) || 0);
-        const ulPadB = pxToInch(parseFloat(ulComputed.paddingBottom) || 0);
+        const inchPad = (value) => {
+          const px = parseFloat(value);
+          return Number.isFinite(px) && px > 0 ? pxToInch(px) : 0;
+        };
+        const ulPadR = inchPad(ulComputed.paddingRight);
+        const ulPadT = inchPad(ulComputed.paddingTop);
+        const ulPadB = inchPad(ulComputed.paddingBottom);
+        const listCharSpacing = resolveCharSpacing(computed);
+
+        // Empty list payloads fail scene validation; degrade then deletes the
+        // whole UL/OL and every nested body line with it. Leave the list
+        // unmarked so nested semantic paragraphs can still export.
+        if (!items.length) {
+          listItemElements.forEach((itemEl) => processed.add(itemEl));
+          return;
+        }
 
         pushElement({
           type: 'list',
@@ -1969,18 +2025,28 @@ export function extractSlideDataFromDocument(doc = document) {
             fontSize: pxToPoints(computed.fontSize) || 12,
             fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim() || 'Arial',
             color: textHex,
-            bulletColor,
-            transparency: extractAlpha(computed.color),
+            ...(bulletColor ? { bulletColor } : {}),
+            ...(extractAlpha(computed.color) != null
+              ? { transparency: extractAlpha(computed.color) }
+              : {}),
             align: resolveTextAlign(computed),
             lineSpacing: resolveLineSpacing(computed),
             paraSpaceBefore: 0,
             paraSpaceAfter: pxToPoints(computed.marginBottom) || 0,
             // PptxGenJS margin array is [top, right, bottom, left].
-            margin: [ulPadT, ulPadR, ulPadB, marginLeft / 72]
+            margin: [ulPadT, ulPadR, ulPadB, marginLeft / 72],
+            ...(listCharSpacing !== undefined ? { charSpacing: listCharSpacing } : {}),
           }
         }, el);
 
-        liElements.forEach(li => processed.add(li));
+        listItemElements.forEach((itemEl) => {
+          processed.add(itemEl);
+          // Nested semantic blocks were flattened into the list runs above.
+          itemEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6').forEach((child) => processed.add(child));
+        });
+        // Any leftover LI wrappers (when items came from unwrapped paragraphs)
+        // must not emit a second empty list pass.
+        liElements.forEach((li) => processed.add(li));
         processed.add(el);
         return;
       }

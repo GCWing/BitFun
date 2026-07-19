@@ -570,6 +570,8 @@ export function renderGeneration(state) {
   document.querySelector('.ppt-live')?.classList.toggle('is-generating', isActive);
   document.querySelector('.ppt-live')?.classList.toggle('has-generation-error', hasError);
 
+  renderGenerationProgress(state, { isActive, hasError });
+
   if (!list) return;
 
   // Merge high-level phase events and granular agent-stream entries into a
@@ -604,6 +606,44 @@ export function renderGeneration(state) {
     }
   }
   scrollGenerationListToLatest(list);
+}
+
+function renderGenerationProgress(state, { isActive, hasError }) {
+  const panel = byId('generationProgress');
+  const labelEl = byId('generationProgressLabel');
+  const countEl = byId('generationProgressCount');
+  const fillEl = byId('generationProgressFill');
+  const phaseList = byId('generationPhaseList');
+  if (!panel || !labelEl || !countEl || !fillEl || !phaseList) return;
+
+  const steps = state.generation?.steps || [];
+  const show = Boolean(isActive || hasError || steps.some((step) => step.status === 'done'));
+  panel.hidden = !show;
+  if (!show) return;
+
+  const drafted = Number(state.generation?.draftedCount) || 0;
+  const target = Number(state.generation?.slideTarget) || 0;
+  const running = steps.find((step) => step.status === 'running');
+  const ratio = target > 0
+    ? Math.max(0, Math.min(1, drafted / target))
+    : (running ? Math.max(0.08, steps.filter((step) => step.status === 'done').length / Math.max(steps.length, 1)) : (isActive ? 0.08 : 1));
+
+  labelEl.textContent = running?.label
+    || (hasError ? t('eventTurnFailed') : t('processEventDone'));
+  countEl.textContent = target > 0
+    ? `${Math.min(drafted, target)} / ${target}`
+    : (drafted > 0 ? String(drafted) : '');
+  fillEl.style.width = `${Math.round(ratio * 100)}%`;
+  panel.classList.toggle('is-error', hasError);
+  panel.classList.toggle('is-active', isActive && !hasError);
+
+  phaseList.innerHTML = '';
+  for (const step of steps) {
+    const li = document.createElement('li');
+    li.className = `generation-phase is-${step.status || 'pending'}`;
+    li.textContent = step.label || step.id;
+    phaseList.append(li);
+  }
 }
 
 function mergeTimeline(events, stream) {
@@ -705,22 +745,35 @@ function renderLiveIndicator(state, merged) {
 }
 
 function currentActivityLabel(state, merged) {
+  const drafted = Number(state.generation?.draftedCount) || 0;
+  const target = Number(state.generation?.slideTarget) || 0;
+  const currentStep = (state.generation?.steps || []).find((s) => s.status === 'running');
+  if (currentStep?.id === 'slides' && (drafted > 0 || target > 0)) {
+    return t('generationWritingSlideProgress', {
+      done: drafted,
+      total: target || Math.max(drafted, 1),
+    });
+  }
   // Derive the most specific "what is happening right now" label.
   for (let i = merged.length - 1; i >= 0; i--) {
     const item = merged[i];
     if (item.source === 'stream') {
       if (item.kind === 'tool-start') {
+        const tool = String(item.toolName || '').toLowerCase();
+        const detail = truncateText(String(item.text || ''), 80);
+        if ((tool === 'write' || tool === 'edit') && detail) {
+          return `${friendlyStreamToolName(item.toolName)} ${detail}…`;
+        }
         return `${friendlyStreamToolName(item.toolName)}…`;
       }
       if (item.kind === 'text') {
         return t('processEventText');
       }
     }
-    if (item.source === 'event' && item.title) {
+    if (item.source === 'event' && item.title && item.kind !== 'pulse') {
       return item.title;
     }
   }
-  const currentStep = (state.generation?.steps || []).find((s) => s.status === 'running');
   if (currentStep?.label) return `${currentStep.label}…`;
   return t('generationProgressPulse');
 }
@@ -875,6 +928,9 @@ export function renderOutline(state, handlers) {
 export function renderThumbs(state, handlers) {
   const holder = byId('slideThumbs');
   if (!holder) return;
+  // Full rebuild resets scrollTop; keep the filmstrip viewport stable when
+  // the user clicks a non-visible thumb or when selection only changes.
+  const previousScrollTop = holder.scrollTop;
   holder.innerHTML = '';
   if (!state.slides.length) {
     const empty = document.createElement('div');
@@ -923,7 +979,9 @@ export function renderThumbs(state, handlers) {
     button.addEventListener('click', () => handlers.selectSlide(slide.id));
     holder.append(button);
   });
+  holder.scrollTop = previousScrollTop;
   requestAnimationFrame(() => {
+    holder.scrollTop = previousScrollTop;
     fitThumbPreviews();
     observeThumbPreviews();
   });

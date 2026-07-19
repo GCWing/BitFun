@@ -171,6 +171,38 @@ test('prompt pins the stable skill key and workspace-relative delivery contract'
   assert.match(prompt, /工作区根目录下的 `slides\/slide-NN\.html`/);
   assert.match(prompt, /`project\.json` 的 `status` 设为 `"complete"`/);
   assert.match(prompt, /`slide_order`.*每一页.*完整 HTML/s);
+  assert.match(prompt, /节奏（必须，影响用户等待时间）/);
+  assert.match(prompt, /按需研究/);
+  assert.match(prompt, /硬性禁令/);
+  assert.match(prompt, /下一轮工具调用必须是 Write `project\.json`/);
+  assert.match(prompt, /禁止.*Read references\/style-presets/);
+});
+
+test('backend adapter forwards preferred model into agent.run options', async () => {
+  const { installBitFunBackendAdapter } = await import('../src/bitfun-backend-adapter.js');
+  const calls = [];
+  const app = {
+    agent: {
+      run: async (_prompt, options) => {
+        calls.push(options);
+        return { sessionId: 's1', turnId: 't1', actionRunId: 't1' };
+      },
+      onEvent() {},
+      cancel: async () => {},
+      turnText: async () => ({ text: '' }),
+      cancelStaleRuns: async () => ({ cancelledRuns: 0 }),
+    },
+  };
+  installBitFunBackendAdapter(app);
+  await app.backend.call('ppt.generate', { instruction: 'hi' }, {
+    sessionId: 's1',
+    appDataWorkspace: 'decks/demo',
+    model: 'fast',
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].model, 'fast');
+  assert.equal(calls[0].sessionId, 's1');
+  assert.equal(calls[0].appDataWorkspace, 'decks/demo');
 });
 
 test('prompt carries a targeted contract diagnostic into same-session continuation', () => {
@@ -626,6 +658,72 @@ test('persistDeckProjectSeed creates slides directory before ordered writes', as
   assert.deepEqual(calls[0][2], { recursive: true });
 });
 
+test('persistDeckProjectSeed skips empty new-deck project.json to avoid Read-before-Write', async () => {
+  const calls = [];
+  const fs = {
+    async mkdir(path, options) {
+      calls.push(['mkdir', path, options]);
+    },
+    async writeFile(path) {
+      calls.push(['write', path]);
+    },
+  };
+  const seed = deckProjectContract.createDeckProjectSeed({
+    hasExistingDeck: false,
+    title: '',
+    style: { stylePreset: 'clean-business' },
+  });
+  assert.equal(seed.plan.status, 'planning');
+  assert.deepEqual(seed.plan.outline, []);
+  assert.deepEqual(seed.slideFiles, []);
+
+  await persistDeckProjectSeed(fs, '/deck', seed);
+
+  assert.deepEqual(calls.map(([operation, path]) => [operation, path]), [
+    ['mkdir', '/deck/slides'],
+  ]);
+});
+
+test('finalizeDeckProjectIfReady marks planning decks complete when slides exist', async () => {
+  const { finalizeDeckProjectIfReady } = deckProjectContract;
+  const plan = {
+    status: 'planning',
+    title: 'Ready deck',
+    outline: [
+      { id: 's1', title: 'One', bullets: [], slide_id: 'slide-01' },
+      { id: 's2', title: 'Two', bullets: [], slide_id: 'slide-02' },
+    ],
+    slide_order: ['slide-01', 'slide-02'],
+  };
+  let written = null;
+  const files = new Map([
+    ['project.json', JSON.stringify(plan)],
+    ['slides/slide-01.html', completeSlide('one')],
+    ['slides/slide-02.html', completeSlide('two')],
+  ]);
+  const ok = await finalizeDeckProjectIfReady(
+    async (relPath) => files.get(relPath),
+    async (relPath, content) => {
+      written = { relPath, content };
+      files.set(relPath, content);
+    },
+    { maxAttempts: 1 },
+  );
+  assert.equal(ok, true);
+  assert.equal(written?.relPath, 'project.json');
+  assert.equal(JSON.parse(written.content).status, 'complete');
+
+  const deck = await readDeckProjectContract(
+    async (relPath) => files.get(relPath),
+    {
+      maxAttempts: 1,
+      writeFile: async (relPath, content) => files.set(relPath, content),
+    },
+  );
+  assert.equal(deck.plan.status, 'complete');
+  assert.equal(deck.slides.length, 2);
+});
+
 test('persistDeckProjectSeed reports mkdir and slide write failures for same-session continuation', async (t) => {
   await t.test('mkdir failure', async () => {
     await assert.rejects(
@@ -714,9 +812,12 @@ test('skill defines the workspace root unambiguously and bounded plan-first comp
 
   assert.doesNotMatch(skill, /\{\{ppt_project_dir\}\}/);
   assert.match(skill, /当前工作区根目录就是当前 deck 根目录/);
-  assert.match(skill, /先.*project\.json.*再.*slides\/slide-NN\.html/s);
-  assert.match(skill, /有界完成检查/);
-  assert.match(skill, /仅检查一次/);
+  assert.match(skill, /下一轮工具必须是 Write `project\.json`/);
+  assert.match(skill, /马上 Write `project\.json`/);
+  assert.match(skill, /直接按 outline 写页/);
+  assert.match(skill, /同轮收尾/);
+  assert.match(skill, /禁止单独开一轮只做 Glob\/LS\/Edit/);
+  assert.match(skill, /禁止.*Read references\/style-presets/);
 });
 
 function contractSection(source, startLabel, endLabel) {
