@@ -117,6 +117,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("account_login", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "account_finalize_login",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     ("account_logout", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
         "account_online_devices",
@@ -1101,6 +1105,13 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("reload_subagents", RemoteWorkspacePolicy::LegacyUnaudited),
+    // One-click self-hosted relay (SSH to user host). WorkspaceAgnostic: uses
+    // an SSH connection id, not the open project workspace. See
+    // src/web-ui/src/features/relay-deploy/README.md.
+    (
+        "relay_deploy_cancel",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     (
         "relay_deploy_install_docker",
         RemoteWorkspacePolicy::WorkspaceAgnostic,

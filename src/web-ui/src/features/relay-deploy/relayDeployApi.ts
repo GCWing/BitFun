@@ -10,21 +10,49 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 export type RelayDeployTask = 'install_docker' | 'deploy';
 export type RelayTaskStatus = 'running' | 'succeeded' | 'failed';
 
+export type DockerAccessMode =
+  | 'ok'
+  | 'group_inactive'
+  | 'sudo_nopass'
+  | 'sudo_needs_password'
+  | 'broken_docker_home'
+  | 'daemon_down'
+  | 'missing';
+
 export interface RelayPreflight {
   os: string;
   arch: string;
   archSupported: boolean;
   dockerInstalled: boolean;
   composeAvailable: boolean;
-  /** "ok" | "sudo" | "unreachable" */
+  /** Legacy coarse string: "ok" | "sudo" | "unreachable" */
   dockerDaemon: string;
+  dockerAccessMode: DockerAccessMode;
+  activeHasDockerGroup: boolean;
+  inDockerGroupFile: boolean;
+  dockerHomeWritable: boolean;
+  tarAvailable: boolean;
   curlAvailable: boolean;
   sudoAvailable: boolean;
+  sudoNeedsPassword: boolean;
   memTotalMb: number;
   portBusy: boolean;
+  /** Port that was probed for busy/selected-port health checks. */
+  probedPort: number;
+  /** Selected port belongs to the existing bitfun-relay (not an unrelated process). */
+  portOwnedByRelay: boolean;
   containerExists: boolean;
+  /** bitfun-relay container is currently running. */
+  containerRunning: boolean;
+  /** Host port published by the running relay (0 if unknown). */
+  existingRelayPort: number;
+  /** Relay answers /health on the selected port and/or the existing container port. */
   relayHealthy: boolean;
   homeDir: string;
+}
+
+export interface RelayTaskStart {
+  scriptPath: string;
 }
 
 export interface RelayTaskPoll {
@@ -40,27 +68,38 @@ export interface RelayVerifyResult {
 
 export const relayDeployApi = {
   /** Probe the remote environment (OS/arch, Docker, memory, port, existing relay). */
-  async preflight(connectionId: string): Promise<RelayPreflight> {
-    return api.invoke<RelayPreflight>('relay_deploy_preflight', { connectionId });
+  async preflight(connectionId: string, port?: number): Promise<RelayPreflight> {
+    return api.invoke<RelayPreflight>('relay_deploy_preflight', {
+      connectionId,
+      port: port && port > 0 ? port : undefined,
+    });
   },
 
-  /** Start Docker installation on the remote host (detached; poll for progress). */
-  async installDocker(connectionId: string): Promise<void> {
-    return api.invoke('relay_deploy_install_docker', { connectionId });
+  /** Stage the interactive Docker-install driver; run scriptPath in a remote PTY. */
+  async installDocker(connectionId: string): Promise<RelayTaskStart> {
+    return api.invoke<RelayTaskStart>('relay_deploy_install_docker', { connectionId });
   },
 
-  /** Start the relay deployment on the remote host (detached; poll for progress). */
-  async startDeploy(connectionId: string): Promise<void> {
-    return api.invoke('relay_deploy_start', { connectionId });
+  /** Stage the interactive deploy driver; run scriptPath in a remote PTY. */
+  async startDeploy(connectionId: string, port?: number): Promise<RelayTaskStart> {
+    return api.invoke<RelayTaskStart>('relay_deploy_start', {
+      connectionId,
+      port: port && port > 0 ? port : undefined,
+    });
   },
 
-  /** Poll a detached task: incremental log output plus status. */
+  /** Poll detached build status (marker/pid); PTY shows live output. */
   async poll(
     connectionId: string,
     task: RelayDeployTask,
     cursor: number,
   ): Promise<RelayTaskPoll> {
     return api.invoke<RelayTaskPoll>('relay_deploy_poll', { connectionId, task, cursor });
+  },
+
+  /** Stop a running install/deploy task (wizard closed or navigated away). */
+  async cancel(connectionId: string, task: RelayDeployTask): Promise<void> {
+    return api.invoke('relay_deploy_cancel', { connectionId, task });
   },
 
   /**

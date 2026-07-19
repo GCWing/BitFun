@@ -1258,9 +1258,33 @@ impl StartupPage {
                 }
             }
             LoginFormAction::SyncUseLocal => {
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(crate::account::finalize_login_after_sync_choice())
+                }) {
+                    self.login_form
+                        .set_error(format!("Finalize login failed: {e}"));
+                    let _ = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    });
+                    self.login_form.show();
+                    return None;
+                }
                 self.start_sync_and_show_account(true);
             }
             LoginFormAction::SyncUseCloud => {
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(crate::account::finalize_login_after_sync_choice())
+                }) {
+                    self.login_form
+                        .set_error(format!("Finalize login failed: {e}"));
+                    let _ = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    });
+                    self.login_form.show();
+                    return None;
+                }
                 self.start_sync_and_show_account(false);
             }
             LoginFormAction::SyncCancel => {

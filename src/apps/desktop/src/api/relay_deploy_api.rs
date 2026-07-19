@@ -5,9 +5,13 @@
 //! download + compose deploy → account import). The account is provisioned
 //! locally: the plaintext password never leaves this machine — only Argon2id
 //! derived artifacts are transferred and handed to `relay-admin import-user`.
+//!
+//! Orchestration: `bitfun_services_integrations::remote_ssh::relay_deploy`.
+//! Product invariants / wizard entry points:
+//! `src/web-ui/src/features/relay-deploy/README.md`.
 
 use bitfun_core::service::remote_ssh::relay_deploy::{
-    self, RelayDeployTask, RelayPreflight, RelayTaskPoll,
+    self, RelayDeployTask, RelayPreflight, RelayTaskPoll, RelayTaskStart,
 };
 use serde::Serialize;
 use tauri::State;
@@ -18,46 +22,53 @@ use super::app_state::AppState;
 pub async fn relay_deploy_preflight(
     state: State<'_, AppState>,
     connection_id: String,
+    port: Option<u16>,
 ) -> Result<RelayPreflight, String> {
     let manager = state
         .get_ssh_manager_async()
         .await
         .map_err(|e| e.to_string())?;
-    relay_deploy::run_preflight(&manager, &connection_id)
+    relay_deploy::run_preflight(&manager, &connection_id, port.unwrap_or(0))
         .await
         .map_err(|e| e.to_string())
 }
 
-/// Start Docker installation on the remote host (detached; poll via
+/// Stage the interactive Docker-install driver (run it in a remote PTY; poll via
 /// `relay_deploy_poll` with task `install_docker`).
 #[tauri::command]
 pub async fn relay_deploy_install_docker(
     state: State<'_, AppState>,
     connection_id: String,
-) -> Result<(), String> {
+) -> Result<RelayTaskStart, String> {
     let manager = state
         .get_ssh_manager_async()
         .await
         .map_err(|e| e.to_string())?;
-    relay_deploy::start_task(&manager, &connection_id, RelayDeployTask::InstallDocker)
+    relay_deploy::start_task(&manager, &connection_id, RelayDeployTask::InstallDocker, 0)
         .await
         .map_err(|e| e.to_string())
 }
 
-/// Start the relay deployment on the remote host (detached; poll via
+/// Stage the interactive deploy driver (run it in a remote PTY; poll via
 /// `relay_deploy_poll` with task `deploy`).
 #[tauri::command]
 pub async fn relay_deploy_start(
     state: State<'_, AppState>,
     connection_id: String,
-) -> Result<(), String> {
+    port: Option<u16>,
+) -> Result<RelayTaskStart, String> {
     let manager = state
         .get_ssh_manager_async()
         .await
         .map_err(|e| e.to_string())?;
-    relay_deploy::start_task(&manager, &connection_id, RelayDeployTask::Deploy)
-        .await
-        .map_err(|e| e.to_string())
+    relay_deploy::start_task(
+        &manager,
+        &connection_id,
+        RelayDeployTask::Deploy,
+        port.unwrap_or(0),
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -72,6 +83,22 @@ pub async fn relay_deploy_poll(
         .await
         .map_err(|e| e.to_string())?;
     relay_deploy::poll_task(&manager, &connection_id, task, cursor)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Cancel a running install/deploy task (wizard closed or user navigated away).
+#[tauri::command]
+pub async fn relay_deploy_cancel(
+    state: State<'_, AppState>,
+    connection_id: String,
+    task: RelayDeployTask,
+) -> Result<(), String> {
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|e| e.to_string())?;
+    relay_deploy::cancel_task(&manager, &connection_id, task)
         .await
         .map_err(|e| e.to_string())
 }

@@ -297,6 +297,20 @@ class RemoteConnectAPIService {
     }
   }
 
+  /**
+   * Persist an in-memory login after the user accepts the cloud/local settings
+   * choice. Without this, a process kill during the choice dialog must not
+   * restore a logged-in session.
+   */
+  async accountFinalizeLogin(): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_finalize_login');
+    } catch (e) {
+      log.error('accountFinalizeLogin failed', e);
+      throw e;
+    }
+  }
+
   async accountStatus(): Promise<AccountStatus> {
     try {
       return await this.adapter.request<AccountStatus>('account_status');

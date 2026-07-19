@@ -91,12 +91,23 @@ else
   export BUILDKIT_PROGRESS="${BUILDKIT_PROGRESS:-plain}"
   # Do not pass --platform unless the user explicitly set DOCKER_DEFAULT_PLATFORM;
   # native builds on amd64/arm64 servers are the supported path.
-  # Compose V2 wants --progress as a global flag; legacy docker-compose has none.
-  if [ "${#COMPOSE[@]}" -ge 2 ] && [ "${COMPOSE[0]}" = "docker" ] && [ "${COMPOSE[1]}" = "compose" ]; then
-    docker compose --progress=plain build "${BUILD_ARGS[@]}"
-  else
-    compose build "${BUILD_ARGS[@]}"
-  fi
+  # Compose V2 wants --progress as a global flag; honor BITFUN_DOCKER_MODE from common.sh.
+  case "${BITFUN_DOCKER_MODE:-direct}" in
+    sudo)
+      sudo docker compose --progress=plain build "${BUILD_ARGS[@]}"
+      ;;
+    sg)
+      # shellcheck disable=SC2086
+      sg docker -c "docker compose --progress=plain build ${BUILD_ARGS[*]}"
+      ;;
+    *)
+      if [ "${#COMPOSE[@]}" -ge 2 ] && [ "${COMPOSE[0]}" = "docker" ] && [ "${COMPOSE[1]}" = "compose" ]; then
+        docker compose --progress=plain build "${BUILD_ARGS[@]}"
+      else
+        compose build "${BUILD_ARGS[@]}"
+      fi
+      ;;
+  esac
 fi
 
 echo "[2/2] Starting / recreating services..."
@@ -108,14 +119,15 @@ if [ "$SKIP_HEALTH_CHECK" = false ]; then
   wait_for_relay_health 12
 fi
 
+RELAY_PORT="${RELAY_PORT:-9700}"
 echo ""
 echo "=== Deploy complete ==="
-echo "Relay server running on port 9700 (host arch: ${HOST_ARCH})"
+echo "Relay server running on port ${RELAY_PORT} (host arch: ${HOST_ARCH})"
 echo ""
 check_relay_accounts_or_remind
 echo ""
 echo "Point BitFun Desktop / CLI Auth Server URL to:"
-echo "  Direct:   http://<YOUR_SERVER_IP>:9700"
+echo "  Direct:   http://<YOUR_SERVER_IP>:${RELAY_PORT}"
 echo "  Proxy:    https://<YOUR_DOMAIN>/relay  (recommended, matches official server)"
 echo "See README.md for reverse proxy setup, sync, and Peer Device Mode."
 echo ""

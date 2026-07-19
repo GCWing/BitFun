@@ -2,14 +2,12 @@
  * Relay Deploy Wizard — one-click self-hosted relay server deployment.
  *
  * Steps: connect (pick an SSH server) → preflight (environment checks, optional
- * Docker install) → deploy (source download + docker compose up, with streamed
- * logs) → register (create the first account, provisioned locally so the
- * plaintext password never leaves this device) → done (reachability check and
- * hand the credentials back to the login dialog for automatic sign-in).
+ * Docker install) → deploy (interactive remote PTY + background build) →
+ * register (create the first account, provisioned locally so the plaintext
+ * password never leaves this device) → done.
  *
- * Long remote operations run detached on the server (nohup + log file), so the
- * deployment survives this window being closed: reopening the wizard and
- * reconnecting lands on a healthy-relay preflight and skips to registration.
+ * Deploy/install run inside an embedded remote PTY so sudo passwords work.
+ * Closing the wizard cancels any in-progress remote task.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -35,16 +33,26 @@ import {
   type RelayDeployTask,
   type RelayTaskStatus,
   type RelayVerifyResult,
+  type DockerAccessMode,
 } from './relayDeployApi';
+import { ConnectedTerminal, getTerminalService } from '@/tools/terminal';
 import { createLogger } from '@/shared/utils/logger';
 import './RelayDeployWizard.scss';
 
 const log = createLogger('RelayDeployWizard');
 
-const RELAY_PORT = 9700;
+const DEFAULT_RELAY_PORT = 9700;
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLL_FAILURES = 10;
-const MAX_LOG_CHARS = 40_000;
+
+function parseRelayPort(raw: string): number | null {
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(n) || n < 1 || n > 65535) return null;
+  return n;
+}
+/** Default terminal font is 14; embed two levels smaller to fit the dialog. */
+const DEPLOY_TERMINAL_FONT_SIZE = 12;
+const DEPLOY_TERMINAL_OPTIONS = { fontSize: DEPLOY_TERMINAL_FONT_SIZE };
 
 type Step = 'connect' | 'preflight' | 'deploy' | 'register' | 'done';
 
@@ -99,6 +107,31 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   const [credentialsPrompt, setCredentialsPrompt] = useState<SavedConnection | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showPassphrase, setShowPassphrase] = useState(false);
+  const connectFormRef = useRef<HTMLDivElement>(null);
+  const connectFormHighlightTimerRef = useRef<number | null>(null);
+  const [connectFormHighlighted, setConnectFormHighlighted] = useState(false);
+
+  const revealConnectForm = useCallback(() => {
+    const el = connectFormRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setConnectFormHighlighted(true);
+    if (connectFormHighlightTimerRef.current != null) {
+      window.clearTimeout(connectFormHighlightTimerRef.current);
+    }
+    connectFormHighlightTimerRef.current = window.setTimeout(() => {
+      setConnectFormHighlighted(false);
+      connectFormHighlightTimerRef.current = null;
+    }, 1200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (connectFormHighlightTimerRef.current != null) {
+        window.clearTimeout(connectFormHighlightTimerRef.current);
+      }
+    };
+  }, []);
 
   // ── connected session ────────────────────────────────────────────────────
   const [connectionId, setConnectionId] = useState<string | null>(null);
@@ -108,16 +141,20 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   // ── preflight ────────────────────────────────────────────────────────────
   const [preflight, setPreflight] = useState<RelayPreflight | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
+  const [relayPortInput, setRelayPortInput] = useState(String(DEFAULT_RELAY_PORT));
 
-  // ── detached task (install docker / deploy) ──────────────────────────────
+  // ── interactive PTY task (install docker / deploy) ───────────────────────
   const [activeTask, setActiveTask] = useState<RelayDeployTask | null>(null);
-  const [taskLog, setTaskLog] = useState('');
   const [taskStatus, setTaskStatus] = useState<RelayTaskStatus | null>(null);
+  const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollActiveRef = useRef(false);
   const cursorRef = useRef(0);
   const pollFailuresRef = useRef(0);
-  const logViewRef = useRef<HTMLPreElement>(null);
+  const terminalSessionIdRef = useRef<string | null>(null);
+  const connectionIdRef = useRef<string | null>(null);
+  const activeTaskRef = useRef<RelayDeployTask | null>(null);
+  const taskStatusRef = useRef<RelayTaskStatus | null>(null);
 
   // ── register ─────────────────────────────────────────────────────────────
   const [regUsername, setRegUsername] = useState('');
@@ -129,7 +166,18 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   // ── done ─────────────────────────────────────────────────────────────────
   const [verify, setVerify] = useState<RelayVerifyResult | null>(null);
 
-  const relayUrl = `http://${serverHost}:${RELAY_PORT}`;
+  const relayPort = parseRelayPort(relayPortInput) ?? DEFAULT_RELAY_PORT;
+  const existingRelayPort =
+    preflight && preflight.existingRelayPort > 0 ? preflight.existingRelayPort : null;
+  const relayUrl = `http://${serverHost}:${relayPort}`;
+  // Unrelated process on the selected port — block deploy. Busy-because-our
+  // relay is handled by alreadyDeployed / portOwnedByRelay instead.
+  const portConflict = !!preflight && preflight.portBusy && !preflight.portOwnedByRelay;
+  // Container-aware: health on the typed port alone misses a running
+  // bitfun-relay when the user changes RELAY_PORT. See feature README.
+  const alreadyDeployed = !!preflight && (
+    preflight.relayHealthy || preflight.containerRunning
+  );
 
   const stopPolling = useCallback(() => {
     pollActiveRef.current = false;
@@ -139,10 +187,65 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     }
   }, []);
 
+  const closeDeployTerminal = useCallback(async () => {
+    const sid = terminalSessionIdRef.current;
+    terminalSessionIdRef.current = null;
+    setTerminalSessionId(null);
+    if (!sid) return;
+    try {
+      await getTerminalService().closeSession(sid, true);
+    } catch (e) {
+      log.warn('failed to close deploy terminal', e);
+    }
+  }, []);
+
+  /** Snapshot refs first — close/reset must not clear them before cancel runs. */
+  const cancelRemoteTaskIfRunning = useCallback(async (
+    snapshot?: {
+      connectionId: string | null;
+      task: RelayDeployTask | null;
+      status: RelayTaskStatus | null;
+    },
+  ) => {
+    const connId = snapshot?.connectionId ?? connectionIdRef.current;
+    const task = snapshot?.task ?? activeTaskRef.current;
+    const status = snapshot?.status ?? taskStatusRef.current;
+    if (!connId || !task || status !== 'running') return;
+    try {
+      await relayDeployApi.cancel(connId, task);
+    } catch (e) {
+      log.warn('failed to cancel remote deploy task', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    connectionIdRef.current = connectionId;
+  }, [connectionId]);
+
+  useEffect(() => {
+    activeTaskRef.current = activeTask;
+  }, [activeTask]);
+
+  useEffect(() => {
+    taskStatusRef.current = taskStatus;
+  }, [taskStatus]);
+
   // ── lifecycle ────────────────────────────────────────────────────────────
+  // Closing the wizard MUST cancel the remote task (kill pid tree / best-effort
+  // compose stop). Never leave a nohup Docker build running after dismiss.
   useEffect(() => {
     if (!isOpen) {
       stopPolling();
+      // Capture before any state reset so cancel still has connection/task ids.
+      const cancelSnapshot = {
+        connectionId: connectionIdRef.current,
+        task: activeTaskRef.current,
+        status: taskStatusRef.current,
+      };
+      void (async () => {
+        await cancelRemoteTaskIfRunning(cancelSnapshot);
+        await closeDeployTerminal();
+      })();
       setStep('connect');
       setError(null);
       setSavedSearch('');
@@ -158,8 +261,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       setServerLabel('');
       setPreflight(null);
       setPreflightLoading(false);
+      setRelayPortInput(String(DEFAULT_RELAY_PORT));
       setActiveTask(null);
-      setTaskLog('');
       setTaskStatus(null);
       setRegUsername('');
       setRegPassword('');
@@ -170,19 +273,23 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     }
     sshApi.listSavedConnections().then(setSavedConnections).catch(() => setSavedConnections([]));
     sshApi.listSSHConfigHosts().then(setSSHConfigHosts).catch(() => setSSHConfigHosts([]));
-  }, [isOpen, stopPolling]);
+  }, [isOpen, stopPolling, closeDeployTerminal, cancelRemoteTaskIfRunning]);
 
-  // Auto-scroll the log view.
+  // Stop polling / cancel remote task / close PTY on unmount.
   useEffect(() => {
-    const el = logViewRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [taskLog]);
-
-  // Stop polling when the wizard unmounts (the remote task itself keeps
-  // running on the server; only the local log follower stops).
-  useEffect(() => {
-    return () => stopPolling();
-  }, [stopPolling]);
+    return () => {
+      stopPolling();
+      const cancelSnapshot = {
+        connectionId: connectionIdRef.current,
+        task: activeTaskRef.current,
+        status: taskStatusRef.current,
+      };
+      void (async () => {
+        await cancelRemoteTaskIfRunning(cancelSnapshot);
+        await closeDeployTerminal();
+      })();
+    };
+  }, [stopPolling, closeDeployTerminal, cancelRemoteTaskIfRunning]);
 
   // Auto-fill the form from ~/.ssh/config when the host changes (same behavior
   // as the SSH connection dialog).
@@ -209,11 +316,12 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   }, [formData.host]);
 
   // ── preflight ────────────────────────────────────────────────────────────
-  const runPreflight = useCallback(async (connId: string) => {
+  const runPreflight = useCallback(async (connId: string, portOverride?: number) => {
+    const port = portOverride ?? parseRelayPort(relayPortInput) ?? DEFAULT_RELAY_PORT;
     setPreflightLoading(true);
     setError(null);
     try {
-      const pf = await relayDeployApi.preflight(connId);
+      const pf = await relayDeployApi.preflight(connId, port);
       setPreflight(pf);
       setStep('preflight');
     } catch (e) {
@@ -222,7 +330,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     } finally {
       setPreflightLoading(false);
     }
-  }, [t]);
+  }, [t, relayPortInput]);
 
   const onConnected = useCallback((connId: string, host: string, label: string) => {
     setConnectionId(connId);
@@ -230,6 +338,18 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     setServerLabel(label);
     void runPreflight(connId);
   }, [runPreflight]);
+
+  // Re-probe when the user changes the relay listen port on the check step.
+  useEffect(() => {
+    if (step !== 'preflight' || !connectionId || activeTask) return;
+    const port = parseRelayPort(relayPortInput);
+    if (port == null) return;
+    if (preflight?.probedPort === port) return;
+    const timer = window.setTimeout(() => {
+      void runPreflight(connectionId, port);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [step, connectionId, relayPortInput, preflight?.probedPort, activeTask, runPreflight]);
 
   // ── connect handlers ─────────────────────────────────────────────────────
   const buildAuthMethod = (): SSHAuthMethod => {
@@ -346,6 +466,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       keyPath: entry.identityFile?.trim() || '~/.ssh/id_rsa',
       passphrase: '',
     });
+    // Config list sits above the form; scroll so the filled fields are visible.
+    requestAnimationFrame(() => revealConnectForm());
   };
 
   const handleBrowsePrivateKey = useCallback(async () => {
@@ -353,9 +475,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     if (path) setFormData((prev) => ({ ...prev, keyPath: path }));
   }, [t]);
 
-  // ── task polling ─────────────────────────────────────────────────────────
-  // Serial setTimeout chain (not setInterval): immediate first poll, no overlap
-  // when an SSH round-trip takes longer than POLL_INTERVAL_MS.
+  // ── status polling (PTY shows live output; poll only drives wizard state) ─
   const startTaskPolling = useCallback((task: RelayDeployTask, connId: string) => {
     stopPolling();
     cursorRef.current = 0;
@@ -369,19 +489,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         if (!pollActiveRef.current) return false;
         cursorRef.current = res.cursor;
         pollFailuresRef.current = 0;
-        if (res.output) {
-          setTaskLog((prev) => {
-            const waiting = t('relayDeploy.waitingRemoteOutput');
-            const base = prev === waiting ? '' : prev;
-            return (base + res.output).slice(-MAX_LOG_CHARS);
-          });
-        }
         if (res.status !== 'running') {
           stopPolling();
           setTaskStatus(res.status);
           if (res.status === 'succeeded') {
             if (task === 'install_docker') {
               setActiveTask(null);
+              void closeDeployTerminal();
               void runPreflight(connId);
             } else {
               window.setTimeout(() => setStep('register'), 800);
@@ -390,15 +504,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           return false;
         }
       } catch (e) {
-        // Transient SSH blips are expected (the manager auto-reconnects);
-        // only give up after repeated failures.
         if (!pollActiveRef.current) return false;
         pollFailuresRef.current += 1;
         log.warn('task poll failed', e);
         if (pollFailuresRef.current >= MAX_POLL_FAILURES) {
           stopPolling();
           setTaskStatus('failed');
-          setTaskLog((prev) => `${prev}\n[poll] ${errMsg(e)}`);
+          setError(`[poll] ${errMsg(e)}`);
           return false;
         }
       }
@@ -417,36 +529,61 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     void pollOnce().then((shouldContinue) => {
       if (shouldContinue) scheduleNext();
     });
-  }, [runPreflight, stopPolling, t]);
+  }, [runPreflight, stopPolling, closeDeployTerminal]);
+
+  const launchInteractiveTask = useCallback(async (
+    task: RelayDeployTask,
+    connId: string,
+    scriptPath: string,
+  ) => {
+    await closeDeployTerminal();
+    const session = await getTerminalService().createSession({
+      connectionId: connId,
+      name: task === 'deploy' ? 'Relay Deploy' : 'Relay Docker Install',
+      cols: 100,
+      rows: 28,
+      source: 'manual',
+    });
+    terminalSessionIdRef.current = session.id;
+    setTerminalSessionId(session.id);
+    // Give the shell a moment to print its prompt before sending the command.
+    await new Promise((r) => window.setTimeout(r, 400));
+    const quoted = `'${scriptPath.replace(/'/g, `'\\''`)}'`;
+    await getTerminalService().sendCommand(session.id, `bash ${quoted}`);
+    startTaskPolling(task, connId);
+  }, [closeDeployTerminal, startTaskPolling]);
 
   const handleInstallDocker = async () => {
     if (!connectionId) return;
     setError(null);
-    setTaskLog(t('relayDeploy.waitingRemoteOutput'));
     setTaskStatus('running');
     setActiveTask('install_docker');
     try {
-      await relayDeployApi.installDocker(connectionId);
-      startTaskPolling('install_docker', connectionId);
+      const started = await relayDeployApi.installDocker(connectionId);
+      await launchInteractiveTask('install_docker', connectionId, started.scriptPath);
     } catch (e) {
       setTaskStatus('failed');
-      setTaskLog(`[start] ${errMsg(e)}`);
+      setError(`[start] ${errMsg(e)}`);
     }
   };
 
   const handleStartDeploy = async () => {
     if (!connectionId) return;
+    const port = parseRelayPort(relayPortInput);
+    if (port == null) {
+      setError(t('relayDeploy.portInvalid'));
+      return;
+    }
     setError(null);
     setStep('deploy');
-    setTaskLog(t('relayDeploy.waitingRemoteOutput'));
     setTaskStatus('running');
     setActiveTask('deploy');
     try {
-      await relayDeployApi.startDeploy(connectionId);
-      startTaskPolling('deploy', connectionId);
+      const started = await relayDeployApi.startDeploy(connectionId, port);
+      await launchInteractiveTask('deploy', connectionId, started.scriptPath);
     } catch (e) {
       setTaskStatus('failed');
-      setTaskLog(`[start] ${errMsg(e)}`);
+      setError(`[start] ${errMsg(e)}`);
     }
   };
 
@@ -478,12 +615,42 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
 
   const handleBackToPreflight = () => {
     stopPolling();
+    const cancelSnapshot = {
+      connectionId: connectionIdRef.current,
+      task: activeTaskRef.current,
+      status: taskStatusRef.current,
+    };
+    void (async () => {
+      await cancelRemoteTaskIfRunning(cancelSnapshot);
+      await closeDeployTerminal();
+    })();
     setActiveTask(null);
     setTaskStatus(null);
     if (connectionId) {
       void runPreflight(connectionId);
     } else {
       setStep('connect');
+    }
+  };
+
+  const dockerAccessHint = (mode: DockerAccessMode | undefined): string => {
+    switch (mode) {
+      case 'ok':
+        return t('relayDeploy.checkDockerOk');
+      case 'group_inactive':
+        return t('relayDeploy.checkDockerGroupInactive');
+      case 'sudo_nopass':
+        return t('relayDeploy.checkDockerSudoNopass');
+      case 'sudo_needs_password':
+        return t('relayDeploy.checkDockerSudoPassword');
+      case 'broken_docker_home':
+        return t('relayDeploy.checkDockerHomeBroken');
+      case 'daemon_down':
+        return t('relayDeploy.checkDockerDaemonDown');
+      case 'missing':
+        return t('relayDeploy.checkDockerMissing');
+      default:
+        return t('relayDeploy.checkDockerMissing');
     }
   };
 
@@ -514,11 +681,23 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     );
   });
 
-  const dockerReady = !!preflight && preflight.dockerInstalled
-    && preflight.composeAvailable
-    && preflight.dockerDaemon !== 'unreachable';
-  const canDeploy = !!preflight && preflight.archSupported && preflight.curlAvailable
-    && dockerReady && (!preflight.portBusy || preflight.containerExists);
+  const accessMode = preflight?.dockerAccessMode;
+  const dockerRecoverable = !!preflight && preflight.dockerInstalled
+    && accessMode !== 'missing'
+    && (preflight.composeAvailable
+      || accessMode === 'sudo_nopass'
+      || accessMode === 'sudo_needs_password'
+      || accessMode === 'group_inactive'
+      || accessMode === 'broken_docker_home'
+      || accessMode === 'daemon_down');
+  const canInstallDocker = !!preflight && !preflight.dockerInstalled
+    && (preflight.sudoAvailable || preflight.sudoNeedsPassword);
+  const portValid = parseRelayPort(relayPortInput) != null;
+  const canDeploy = !!preflight && preflight.archSupported
+    && preflight.curlAvailable && preflight.tarAvailable
+    && dockerRecoverable
+    && portValid
+    && (!preflight.portBusy || preflight.portOwnedByRelay);
 
   const steps: Array<{ key: Step; label: string }> = [
     { key: 'connect', label: t('relayDeploy.stepServer') },
@@ -624,7 +803,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <div className="relay-deploy-wizard__divider"><span>{t('ssh.remote.newConnection')}</span></div>
       )}
 
-      <div className="relay-deploy-wizard__form">
+      <div
+        ref={connectFormRef}
+        className={[
+          'relay-deploy-wizard__form',
+          connectFormHighlighted ? 'relay-deploy-wizard__form--highlighted' : '',
+        ].filter(Boolean).join(' ')}
+      >
         <div className="relay-deploy-wizard__row">
           <div className="relay-deploy-wizard__field relay-deploy-wizard__field--flex">
             <Input label={t('ssh.remote.host')} value={formData.host}
@@ -727,6 +912,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     const pf = preflight;
     const taskRunning = activeTask === 'install_docker' && taskStatus === 'running';
     const taskFailed = activeTask === 'install_docker' && taskStatus === 'failed';
+    const dockerOk = pf?.dockerAccessMode === 'ok';
+    const dockerWarn = !!pf?.dockerInstalled && !dockerOk && pf.dockerAccessMode !== 'missing';
     return (
       <div className="relay-deploy-wizard__scroll">
         <div className="relay-deploy-wizard__server-banner">
@@ -741,12 +928,54 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           </div>
         ) : (
           <>
-            {pf.relayHealthy && (
+            {alreadyDeployed && (
               <div className="relay-deploy-wizard__notice relay-deploy-wizard__notice--info">
                 <CheckCircle2 size={18} />
                 <div className="relay-deploy-wizard__notice-text">
                   <span className="relay-deploy-wizard__notice-title">{t('relayDeploy.alreadyDeployedTitle')}</span>
-                  <span className="relay-deploy-wizard__notice-desc">{t('relayDeploy.alreadyDeployedDesc')}</span>
+                  <span className="relay-deploy-wizard__notice-desc">
+                    {existingRelayPort && existingRelayPort !== relayPort
+                      ? t('relayDeploy.alreadyDeployedDescOtherPort', { port: existingRelayPort })
+                      : t('relayDeploy.alreadyDeployedDesc')}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="relay-deploy-wizard__port-row">
+              <div className="relay-deploy-wizard__field relay-deploy-wizard__field--port">
+                <Input
+                  label={t('relayDeploy.relayPort')}
+                  type="number"
+                  value={relayPortInput}
+                  onChange={(e) => setRelayPortInput(e.target.value)}
+                  size="medium"
+                  disabled={taskRunning || preflightLoading}
+                  min={1}
+                  max={65535}
+                />
+              </div>
+              <p className="relay-deploy-wizard__port-hint">{t('relayDeploy.relayPortHint')}</p>
+            </div>
+
+            {portConflict && (
+              <div className="relay-deploy-wizard__notice relay-deploy-wizard__notice--warn">
+                <AlertTriangle size={18} />
+                <div className="relay-deploy-wizard__notice-text">
+                  <span className="relay-deploy-wizard__notice-title">
+                    {t('relayDeploy.portConflictTitle', { port: relayPort })}
+                  </span>
+                  <span className="relay-deploy-wizard__notice-desc">
+                    {t('relayDeploy.portConflictDesc')}
+                  </span>
+                </div>
+              </div>
+            )}
+            {!portValid && (
+              <div className="relay-deploy-wizard__notice relay-deploy-wizard__notice--warn">
+                <AlertTriangle size={18} />
+                <div className="relay-deploy-wizard__notice-text">
+                  <span className="relay-deploy-wizard__notice-desc">{t('relayDeploy.portInvalid')}</span>
                 </div>
               </div>
             )}
@@ -760,15 +989,9 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                   : `${pf.os} / ${pf.arch} — ${t('relayDeploy.checkOsUnsupported')}`,
               )}
               {renderCheckRow(
-                pf.dockerInstalled ? (pf.dockerDaemon === 'sudo' ? 'warn' : true) : false,
+                dockerOk ? true : dockerWarn ? 'warn' : false,
                 t('relayDeploy.checkDocker'),
-                !pf.dockerInstalled
-                  ? t('relayDeploy.checkDockerMissing')
-                  : pf.dockerDaemon === 'unreachable'
-                    ? t('relayDeploy.checkDockerDaemonDown')
-                    : pf.dockerDaemon === 'sudo'
-                      ? t('relayDeploy.checkDockerSudo')
-                      : t('relayDeploy.checkDockerOk'),
+                dockerAccessHint(pf.dockerAccessMode),
               )}
               {renderCheckRow(
                 !pf.dockerInstalled ? 'warn' : pf.composeAvailable,
@@ -781,6 +1004,11 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 pf.curlAvailable ? t('relayDeploy.checkDockerOk') : t('relayDeploy.checkMissing'),
               )}
               {renderCheckRow(
+                pf.tarAvailable,
+                'tar',
+                pf.tarAvailable ? t('relayDeploy.checkDockerOk') : t('relayDeploy.checkMissing'),
+              )}
+              {renderCheckRow(
                 pf.memTotalMb === 0 ? 'warn' : pf.memTotalMb >= 2048 ? true : 'warn',
                 t('relayDeploy.checkMemory'),
                 pf.memTotalMb >= 2048
@@ -788,23 +1016,39 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                   : `${t('relayDeploy.checkMemoryValue', { mb: pf.memTotalMb })} — ${t('relayDeploy.checkMemoryLow')}`,
               )}
               {renderCheckRow(
-                !pf.portBusy || pf.containerExists,
-                t('relayDeploy.checkPort'),
+                !pf.portBusy || pf.portOwnedByRelay,
+                t('relayDeploy.checkPort', { port: pf.probedPort || relayPort }),
                 !pf.portBusy
                   ? t('relayDeploy.checkPortFree')
-                  : pf.containerExists
-                    ? t('relayDeploy.checkPortFree')
+                  : pf.portOwnedByRelay
+                    ? t('relayDeploy.checkPortOwned')
                     : t('relayDeploy.checkPortBusy'),
               )}
               {!pf.dockerInstalled && renderCheckRow(
-                pf.sudoAvailable,
+                pf.sudoAvailable || pf.sudoNeedsPassword ? (pf.sudoAvailable ? true : 'warn') : false,
                 t('relayDeploy.checkSudo'),
-                pf.sudoAvailable ? t('relayDeploy.checkSudoOk') : t('relayDeploy.checkSudoMissing'),
+                pf.sudoAvailable
+                  ? t('relayDeploy.checkSudoOk')
+                  : pf.sudoNeedsPassword
+                    ? t('relayDeploy.checkSudoPasswordOk')
+                    : t('relayDeploy.checkSudoMissing'),
               )}
             </div>
 
-            {(taskRunning || taskFailed || (activeTask === 'install_docker' && taskLog)) && (
-              <pre ref={logViewRef} className="relay-deploy-wizard__log">{taskLog}</pre>
+            {dockerWarn && !taskRunning && (
+              <p className="relay-deploy-wizard__hint">{t('relayDeploy.interactiveTerminalHint')}</p>
+            )}
+
+            {(taskRunning || taskFailed) && terminalSessionId && (
+              <div className="relay-deploy-wizard__terminal">
+                <ConnectedTerminal
+                  sessionId={terminalSessionId}
+                  showToolbar={false}
+                  showStatusBar={false}
+                  autoFocus
+                  options={DEPLOY_TERMINAL_OPTIONS}
+                />
+              </div>
             )}
             {taskRunning && (
               <div className="relay-deploy-wizard__task-status">
@@ -820,13 +1064,25 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             )}
 
             <div className="relay-deploy-wizard__actions">
-              {pf.relayHealthy ? (
+              {alreadyDeployed ? (
                 <>
                   <Button variant="secondary" size="small" onClick={handleStartDeploy} disabled={taskRunning}>
                     <Rocket size={14} />
                     {t('relayDeploy.redeploy')}
                   </Button>
-                  <Button variant="primary" size="small" onClick={() => setStep('register')} disabled={taskRunning}>
+                  <Button
+                    variant="primary"
+                    size="small"
+                    onClick={() => {
+                      // Account creation must hit the running relay, not the
+                      // (possibly different) redeploy listen port.
+                      if (existingRelayPort) {
+                        setRelayPortInput(String(existingRelayPort));
+                      }
+                      setStep('register');
+                    }}
+                    disabled={taskRunning || !pf.relayHealthy}
+                  >
                     <User size={14} />
                     {t('relayDeploy.skipToRegister')}
                   </Button>
@@ -837,13 +1093,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                     <ChevronLeft size={14} />
                     {t('relayDeploy.back')}
                   </Button>
-                  {!dockerReady && pf.sudoAvailable && (
+                  {canInstallDocker && (
                     <Button variant="secondary" size="small" onClick={handleInstallDocker} disabled={taskRunning}>
                       {taskRunning ? <Loader2 size={14} className="spinning" /> : <RefreshCw size={14} />}
                       {t('relayDeploy.installDocker')}
                     </Button>
                   )}
-                  {!dockerReady && !pf.sudoAvailable && !taskRunning && (
+                  {!pf.dockerInstalled && !canInstallDocker && !taskRunning && (
                     <span className="relay-deploy-wizard__hint">{t('relayDeploy.dockerManualHint')}</span>
                   )}
                   <Button variant="primary" size="small" onClick={handleStartDeploy}
@@ -893,7 +1149,22 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           </>
         )}
       </div>
-      <pre ref={logViewRef} className="relay-deploy-wizard__log relay-deploy-wizard__log--large">{taskLog}</pre>
+      {terminalSessionId ? (
+        <div className="relay-deploy-wizard__terminal relay-deploy-wizard__terminal--large">
+          <ConnectedTerminal
+            sessionId={terminalSessionId}
+            showToolbar={false}
+            showStatusBar={false}
+            autoFocus
+            options={DEPLOY_TERMINAL_OPTIONS}
+          />
+        </div>
+      ) : (
+        <div className="relay-deploy-wizard__checking relay-deploy-wizard__checking--terminal">
+          <Loader2 size={18} className="spinning" />
+          <span>{t('relayDeploy.openingTerminal')}</span>
+        </div>
+      )}
       <div className="relay-deploy-wizard__actions">
         <Button variant="secondary" size="small" onClick={handleBackToPreflight}
           disabled={taskStatus === 'running'}>
@@ -990,7 +1261,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         isOpen={isOpen}
         onClose={onClose}
         title={t('relayDeploy.title')}
-        size="medium"
+        size="large"
         showCloseButton
         closeOnOverlayClick={false}
         contentClassName="modal__content--fill-flex"

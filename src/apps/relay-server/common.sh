@@ -4,7 +4,8 @@
 
 CONTAINER_NAME="${CONTAINER_NAME:-bitfun-relay}"
 RELAY_ADMIN_DB="${RELAY_ADMIN_DB:-/app/data/bitfun_relay.db}"
-RELAY_HEALTH_URL="${RELAY_HEALTH_URL:-http://127.0.0.1:9700/health}"
+RELAY_PORT="${RELAY_PORT:-9700}"
+RELAY_HEALTH_URL="${RELAY_HEALTH_URL:-http://127.0.0.1:${RELAY_PORT}/health}"
 COMPOSE=()
 
 check_command() {
@@ -36,17 +37,79 @@ compose() {
   if [ "${#COMPOSE[@]}" -eq 0 ]; then
     resolve_compose
   fi
+  case "${BITFUN_DOCKER_MODE:-direct}" in
+    sudo)
+      # Prefer Compose V2 via sudo docker when the daemon needs root.
+      if sudo docker compose version >/dev/null 2>&1; then
+        sudo docker compose "$@"
+        return
+      fi
+      ;;
+    sg)
+      if sg docker -c 'docker compose version' >/dev/null 2>&1; then
+        sg docker -c "docker compose $*"
+        return
+      fi
+      ;;
+  esac
   "${COMPOSE[@]}" "$@"
 }
 
-require_docker_daemon() {
+# Resolve how to talk to the Docker daemon for the current shell.
+# Sets BITFUN_DOCKER_MODE to: direct | sg | sudo
+resolve_docker_access() {
   check_command docker
-  if ! docker info >/dev/null 2>&1; then
-    echo "Error: Docker daemon is not running or this user cannot access it."
-    echo "Try: sudo systemctl start docker"
-    echo "Or add your user to the 'docker' group and re-login."
-    exit 1
+  export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.bitfun/docker-config}"
+  mkdir -p "$DOCKER_CONFIG" 2>/dev/null || true
+
+  if [ -e "$HOME/.docker" ] && [ ! -w "$HOME/.docker" ]; then
+    echo "Warning: $HOME/.docker is not writable (often root-owned after sudo docker)."
+    echo "         Attempting chown; sudo password may be required..."
+    if [ "$(id -u)" = "0" ]; then
+      chown -R "$(id -un):$(id -gn)" "$HOME/.docker" || true
+    elif sudo -n chown -R "$(id -un):$(id -gn)" "$HOME/.docker" 2>/dev/null; then
+      :
+    else
+      sudo chown -R "$(id -un):$(id -gn)" "$HOME/.docker" || true
+    fi
+    if [ -e "$HOME/.docker" ] && [ ! -w "$HOME/.docker" ]; then
+      echo "         Using isolated DOCKER_CONFIG=$DOCKER_CONFIG instead."
+    fi
   fi
+
+  if docker info >/dev/null 2>&1; then
+    BITFUN_DOCKER_MODE=direct
+    return 0
+  fi
+  if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx docker \
+    || getent group docker 2>/dev/null | grep -qE "(^|:|,)$(id -un)(,|$)"; then
+    if sg docker -c 'docker info' >/dev/null 2>&1; then
+      BITFUN_DOCKER_MODE=sg
+      echo "Note: using 'sg docker' (group membership not active in this session)."
+      return 0
+    fi
+  fi
+  if sudo -n docker info >/dev/null 2>&1 || sudo docker info >/dev/null 2>&1; then
+    BITFUN_DOCKER_MODE=sudo
+    echo "Note: using sudo for Docker access."
+    return 0
+  fi
+  echo "Error: Docker daemon is not running or this user cannot access it."
+  echo "Try: sudo systemctl start docker"
+  echo "Or add your user to the 'docker' group and re-login (or: newgrp docker)."
+  exit 1
+}
+
+docker_cmd() {
+  case "${BITFUN_DOCKER_MODE:-direct}" in
+    sg) sg docker -c "docker $*" ;;
+    sudo) sudo docker "$@" ;;
+    *) docker "$@" ;;
+  esac
+}
+
+require_docker_daemon() {
+  resolve_docker_access
 }
 
 # Normalize uname -m to a short label used in logs / docs.
@@ -93,22 +156,22 @@ warn_if_forced_foreign_platform() {
 }
 
 container_exists() {
-  docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1
+  docker_cmd container inspect "$CONTAINER_NAME" >/dev/null 2>&1
 }
 
 container_running() {
-  [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" = "true" ]
+  [ "$(docker_cmd inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" = "true" ]
 }
 
 # Health probe that works without host curl/wget when possible.
 probe_relay_health() {
   # 1) Inside the container (most reliable; works even if host bind IP != 127.0.0.1)
   if container_running; then
-    if docker exec "$CONTAINER_NAME" curl -fsS --max-time 5 "$RELAY_HEALTH_URL" >/dev/null 2>&1; then
+    if docker_cmd exec "$CONTAINER_NAME" curl -fsS --max-time 5 "$RELAY_HEALTH_URL" >/dev/null 2>&1; then
       return 0
     fi
     # BusyBox-style wget (if present)
-    if docker exec "$CONTAINER_NAME" wget -q -O /dev/null --timeout=5 "$RELAY_HEALTH_URL" >/dev/null 2>&1; then
+    if docker_cmd exec "$CONTAINER_NAME" wget -q -O /dev/null --timeout=5 "$RELAY_HEALTH_URL" >/dev/null 2>&1; then
       return 0
     fi
   fi
@@ -158,7 +221,7 @@ check_relay_accounts_or_remind() {
 
   local user_list
   user_list="$(
-    docker exec "$CONTAINER_NAME" /app/relay-admin --db "$RELAY_ADMIN_DB" list-users 2>/dev/null || true
+    docker_cmd exec "$CONTAINER_NAME" /app/relay-admin --db "$RELAY_ADMIN_DB" list-users 2>/dev/null || true
   )"
 
   local empty=0

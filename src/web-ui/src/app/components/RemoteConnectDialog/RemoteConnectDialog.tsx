@@ -25,6 +25,8 @@ import {
   getRemoteConnectDisclaimerAgreed,
   setRemoteConnectDisclaimerAgreed,
 } from './remoteConnectDisclaimerStorage';
+import { RelayDeployWizard } from '@/features/relay-deploy';
+import type { RelayDeployResult } from '@/features/relay-deploy';
 import './RemoteConnectDialog.scss';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -64,7 +66,6 @@ const BOT_TABS: { id: BotTab; label: string }[] = [
 ];
 
 const NGROK_SETUP_URL = 'https://dashboard.ngrok.com/get-started/setup';
-const RELAY_SERVER_README_URL = 'https://github.com/GCWing/BitFun/blob/main/src/apps/relay-server/README.md';
 const FEISHU_SETUP_GUIDE_URLS = {
   'zh-CN': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.zh-CN.md',
   'en-US': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.md',
@@ -126,6 +127,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
   const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
+  const [showRelayDeploy, setShowRelayDeploy] = useState(false);
 
   const [qrCopied, setQrCopied] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
@@ -526,8 +528,17 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     void systemAPI.openExternal(NGROK_SETUP_URL);
   }, []);
 
-  const handleOpenRelayReadme = useCallback(() => {
-    void systemAPI.openExternal(RELAY_SERVER_README_URL);
+  /** Self-Hosted tab entry: open the in-app wizard, never an external README. */
+  const handleOpenRelayDeploy = useCallback(() => {
+    setShowRelayDeploy(true);
+  }, []);
+
+  const handleRelayDeployRegistered = useCallback((result: RelayDeployResult) => {
+    setShowRelayDeploy(false);
+    setCustomUrl(result.relayUrl);
+    setNetworkTab('custom_server');
+    setActiveGroup('network');
+    setError(null);
   }, []);
 
   const handleOpenFeishuGuide = useCallback(() => {
@@ -708,8 +719,8 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     className="bitfun-remote-connect__description-link"
                     role="link"
                     tabIndex={0}
-                    onClick={handleOpenRelayReadme}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenRelayReadme(); }}
+                    onClick={handleOpenRelayDeploy}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenRelayDeploy(); }}
                   >
                     {t('remoteConnect.desc_custom_server_link')}
                   </span>
@@ -1068,6 +1079,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           onAgree={hasAgreedDisclaimer ? undefined : handleAgreeDisclaimer}
         />
       </Modal>
+
+      {showRelayDeploy && (
+        <RelayDeployWizard
+          isOpen={showRelayDeploy}
+          onClose={() => setShowRelayDeploy(false)}
+          onRegistered={handleRelayDeployRegistered}
+        />
+      )}
     </>
   );
 };

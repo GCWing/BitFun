@@ -130,3 +130,12 @@ Still use normal `openWorkspace` / create-workspace flows (not SSH
   `adapters/peer-device-adapter.ts`
 - Peer directory picker: `pickWorkspaceDirectory.ts`, `PeerDirectoryBrowser.tsx`,
   `PeerDirectoryPickerHost.tsx`
+
+## Regression guards (read before changing session/account paths)
+
+Frontend invariants and known failure modes:
+[`src/web-ui/src/infrastructure/peer-device/README.md`](../../src/web-ui/src/infrastructure/peer-device/README.md).
+
+Especially: Peer Mode must not call fail-closed `account_fetch_session_turns`
+during hydrate; clear stale `currentWorkspacePath` on peer switch; pass live
+workspace into `create_session`; keep config HostInvokes high-priority.

@@ -1207,6 +1207,52 @@ fn current_device_identity() -> Result<DeviceIdentity, String> {
     DeviceIdentity::from_current_machine().map_err(|e| format!("detect device: {e}"))
 }
 
+/// True while credentials succeeded but the user has not yet chosen
+/// cloud-vs-local settings. Session is held in memory only; a process kill
+/// must not restore a logged-in state.
+static PENDING_SYNC_CHOICE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Persist the in-memory account session so restart restores login.
+async fn persist_account_session(device_id: Option<&str>) -> Result<(), String> {
+    let (session, relay_url) = read_account_context().await?;
+    session_store::save_session_with_device(
+        &session.token,
+        &session.user_id,
+        &session.master_key,
+        &relay_url,
+        device_id,
+    )
+    .map_err(|e| format!("persist session: {e}"))
+}
+
+/// Finish a login that was waiting on the cloud/local settings choice:
+/// persist session, register providers, and emit the logged-in event.
+///
+/// Pair with `PENDING_SYNC_CHOICE` / `account_login`: never persist or emit
+/// logged-in before this runs when `has_cloud_settings` was true. Closing the
+/// overwrite UI must `account_logout` instead of leaving a memory-only session.
+#[tauri::command]
+pub async fn account_finalize_login() -> Result<(), String> {
+    let device = current_device_identity()?;
+    persist_account_session(Some(device.device_id.as_str())).await?;
+    PENDING_SYNC_CHOICE.store(false, std::sync::atomic::Ordering::Relaxed);
+    TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    register_delegated_identity_providers().await;
+
+    let relay_url = get_account_relay_url().read().await.clone();
+    emit_account_event(
+        "account://login-state",
+        serde_json::json!({
+            "logged_in": true,
+            "relay_url": relay_url,
+        }),
+    );
+    log::info!("Account login finalized (sync choice accepted)");
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
     let device = current_device_identity()?;
@@ -1234,7 +1280,6 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
         user_id: session.user_id.clone(),
         has_cloud_settings,
     };
-    let master_key = session.master_key; // Copy ([u8; 32])
     *get_account_session().write().await = Some(session);
     *get_account_relay_url().write().await = Some(request.relay_url.clone());
     // Persist non-secret credentials for next startup pre-fill
@@ -1242,19 +1287,24 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     // Mirror the relay URL into the Remote Connect "Self-Hosted" server field
     // so phone pairing can ride the same relay the account is logged into.
     set_self_hosted_form_url(Some(&request.relay_url));
-    // Persist the full session (token + master_key, encrypted) so the
-    // user stays logged in across app restarts.
-    if let Err(e) = session_store::save_session_with_device(
-        &result.token,
-        &result.user_id,
-        &master_key,
-        &request.relay_url,
-        Some(device.device_id.as_str()),
-    ) {
-        log::warn!("Failed to persist session: {e}");
-    }
     // Reset the token-expired flag on fresh login
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    if has_cloud_settings {
+        // Hold the session in memory only until the user picks cloud vs local.
+        // Persisting here would restore "logged in" after a kill with no choice.
+        PENDING_SYNC_CHOICE.store(true, std::sync::atomic::Ordering::Relaxed);
+        log::info!(
+            "Account authenticated pending sync choice: {} (has_cloud_settings=true)",
+            result.user_id
+        );
+        return Ok(result);
+    }
+
+    PENDING_SYNC_CHOICE.store(false, std::sync::atomic::Ordering::Relaxed);
+    if let Err(e) = persist_account_session(Some(device.device_id.as_str())).await {
+        log::warn!("Failed to persist session: {e}");
+    }
 
     register_delegated_identity_providers().await;
 
@@ -1267,19 +1317,24 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     );
 
     log::info!(
-        "Account logged in: {} (has_cloud_settings={})",
-        result.user_id,
-        result.has_cloud_settings
+        "Account logged in: {} (has_cloud_settings=false)",
+        result.user_id
     );
     Ok(result)
 }
 
 #[tauri::command]
 pub async fn account_status() -> Result<AccountStatus, String> {
+    let pending = PENDING_SYNC_CHOICE.load(std::sync::atomic::Ordering::Relaxed);
     let guard = get_account_session().read().await;
+    let logged_in = guard.is_some() && !pending;
     Ok(AccountStatus {
-        logged_in: guard.is_some(),
-        user_id: guard.as_ref().map(|s| s.user_id.clone()),
+        logged_in,
+        user_id: if logged_in {
+            guard.as_ref().map(|s| s.user_id.clone())
+        } else {
+            None
+        },
     })
 }
 
@@ -1297,6 +1352,7 @@ pub async fn account_logout() -> Result<(), String> {
     }
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
+    PENDING_SYNC_CHOICE.store(false, std::sync::atomic::Ordering::Relaxed);
     clear_credential_hint();
     session_store::clear_session();
     // Clear the mirrored "Self-Hosted" server field on logout.
@@ -1993,11 +2049,6 @@ pub async fn account_fetch_session_turns(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<bool, String> {
-    if crate::api::peer_host_invoke::is_peer_controller_active() {
-        return Err(
-            "cloud session turn fetch is paused while Peer Device Mode is active".to_string(),
-        );
-    }
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
@@ -2016,6 +2067,15 @@ pub async fn account_fetch_session_turns(
     if relay_turns_import_state(&metadata).is_none() {
         return Ok(false);
     }
+
+    // Cloud import is paused while controlling a peer: history must be loaded
+    // from the peer host via restore_session_view, not from the relay.
+    // Return Ok(false) (not Err) so hydration can continue to peer restore.
+    if crate::api::peer_host_invoke::is_peer_controller_active() {
+        log::info!("Skipping cloud session turn fetch in Peer Device Mode (session={session_id})");
+        return Ok(false);
+    }
+
     let local_turns = manager
         .load_session_turns(&storage_path, &session_id)
         .await
@@ -2261,8 +2321,15 @@ async fn account_auto_sync_inner(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<AutoSyncResult, String> {
+    // Soft no-op while controlling a peer: cloud sync would rewrite the
+    // controller's local disk mid-remote. Match account_fetch_session_turns.
     if crate::api::peer_host_invoke::is_peer_controller_active() {
-        return Err("account auto-sync is paused while Peer Device Mode is active".to_string());
+        log::info!("Skipping account auto-sync while Peer Device Mode is active");
+        return Ok(AutoSyncResult {
+            settings_synced: false,
+            sessions_exported: 0,
+            sessions_imported: 0,
+        });
     }
     let (acct_session, relay_url) = read_account_context().await?;
     let client = AccountClient::new();

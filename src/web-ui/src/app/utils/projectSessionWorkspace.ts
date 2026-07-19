@@ -24,6 +24,11 @@ export function pickWorkspaceForProjectChatSession(
   return normalWorkspacesList[0] ?? null;
 }
 
+/**
+ * Build create_session config from the live workspace. After Peer Device Mode
+ * switch, callers must pass this (not `{}`) so the peer host never sees a
+ * stale controller path. See `infrastructure/peer-device/README.md`.
+ */
 export function flowChatSessionConfigForWorkspace(workspace: WorkspaceInfo) {
   return {
     workspacePath: workspace.rootPath,

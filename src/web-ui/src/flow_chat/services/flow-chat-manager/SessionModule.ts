@@ -12,6 +12,7 @@ import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace'
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
@@ -326,6 +327,17 @@ const resolveSessionWorkspacePath = (
   const explicitWorkspacePath = config?.workspacePath?.trim();
   if (explicitWorkspacePath) {
     return explicitWorkspacePath;
+  }
+  // Peer Device Mode: always prefer the live peer workspace over any stale
+  // controller-local path left in FlowChat context.
+  if (isPeerDeviceModeActive()) {
+    const peerWorkspace = workspaceManager.getState().currentWorkspace;
+    const peerRoot = peerWorkspace?.rootPath?.trim();
+    if (peerRoot) {
+      return peerWorkspace?.workspaceKind === WorkspaceKind.Remote
+        ? normalizeRemoteWorkspacePath(peerRoot)
+        : peerRoot;
+    }
   }
   const fromFlowChat = context.currentWorkspacePath?.trim();
   if (fromFlowChat) {

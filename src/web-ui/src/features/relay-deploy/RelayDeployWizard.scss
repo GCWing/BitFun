@@ -7,7 +7,12 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;
+  // Fixed shell height so step / error / terminal changes do not resize the modal.
+  width: 100%;
+  height: min(640px, calc(100vh - 96px));
+  min-height: min(640px, calc(100vh - 96px));
+  max-height: min(640px, calc(100vh - 96px));
+  overflow: hidden;
   font-family: inherit;
 
   // ── step indicator ──────────────────────────────────────────────────────
@@ -200,7 +205,14 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 0 16px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    scroll-margin-top: 8px;
+    transition: background-color var(--motion-fast) var(--easing-standard);
+
+    &--highlighted {
+      animation: relay-deploy-form-reveal 1.2s ease-out;
+    }
   }
 
   &__row {
@@ -270,6 +282,17 @@
     padding: 32px 16px;
     color: var(--color-text-secondary);
     font-size: 12px;
+
+    // Match terminal pane height so swap does not jump the dialog.
+    &--terminal {
+      margin: 0 16px 10px;
+      min-height: 320px;
+      height: 320px;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+      background: var(--color-bg-secondary);
+      box-sizing: border-box;
+    }
   }
 
   &__checks {
@@ -316,6 +339,23 @@
     text-overflow: ellipsis;
   }
 
+  &__port-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 0 16px 10px;
+    flex-wrap: wrap;
+  }
+
+  &__port-hint {
+    margin: 0 0 6px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+    flex: 1;
+    min-width: 160px;
+  }
+
   &__notice {
     display: flex;
     align-items: flex-start;
@@ -331,6 +371,14 @@
       color: var(--color-text-primary);
 
       svg { color: var(--color-accent-500); flex-shrink: 0; margin-top: 1px; }
+    }
+
+    &--warn {
+      background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-secondary));
+      border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+      color: var(--color-text-primary);
+
+      svg { color: var(--color-warning); flex-shrink: 0; margin-top: 1px; }
     }
   }
 
@@ -350,7 +398,39 @@
     line-height: 1.5;
   }
 
-  // ── task / log ──────────────────────────────────────────────────────────
+  // ── embedded remote PTY ─────────────────────────────────────────────────
+  &__terminal {
+    margin: 0 16px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: var(--color-bg-secondary);
+    overflow: hidden;
+    // Fixed geometry — avoids modal jump from flex growth / xterm measure.
+    flex: 0 0 auto;
+    width: calc(100% - 32px);
+    box-sizing: border-box;
+    min-height: 220px;
+    height: 220px;
+    display: flex;
+    flex-direction: column;
+
+    .bitfun-terminal {
+      flex: 1;
+      min-height: 0;
+      height: 100%;
+      // Slightly denser than default panel terminal (fontSize 12 via options).
+      .xterm {
+        font-size: 12px;
+      }
+    }
+
+    &--large {
+      min-height: 320px;
+      height: 320px;
+    }
+  }
+
+  // ── legacy log (kept for non-PTY fallbacks) ─────────────────────────────
   &__log {
     margin: 0 16px 10px;
     padding: 10px 12px;
@@ -380,6 +460,8 @@
     padding: 0 16px 8px;
     font-size: 12px;
     color: var(--color-text-secondary);
+    flex-shrink: 0;
+    min-height: 22px;
 
     &--failed { color: var(--color-error); }
   }
@@ -393,6 +475,10 @@
     border-radius: 8px;
     background: var(--color-bg-secondary);
     border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+    // Reserve status block so running → failed does not shift layout.
+    min-height: 52px;
+    box-sizing: border-box;
 
     svg { flex-shrink: 0; margin-top: 2px; }
   }
@@ -467,4 +553,16 @@
 @keyframes relay-deploy-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes relay-deploy-form-reveal {
+  0% {
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+  }
+  40% {
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
 }

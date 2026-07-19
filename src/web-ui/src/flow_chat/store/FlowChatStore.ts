@@ -27,6 +27,7 @@ import {
   startupTrace,
 } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
 import {
@@ -3990,7 +3991,10 @@ export class FlowChatStore {
       // context. Ordinary local sessions return after one metadata read, while
       // an incomplete relay import fails closed instead of publishing a
       // truncated UI/Core history pair.
-      if (!remote && workspacePath) {
+      //
+      // Peer Device Mode: cloud turn fetch is paused on the controller; session
+      // history must come from the peer host via restore_session_view.
+      if (!remote && workspacePath && !isPeerDeviceModeActive()) {
         const relayImportStartedAt = nowMs();
         startupTrace.markPhase('historical_session_relay_import_start', {
           remote,

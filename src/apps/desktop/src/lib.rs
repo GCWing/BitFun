@@ -1303,6 +1303,7 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
             // Account API
             api::remote_connect_api::account_login,
+            api::remote_connect_api::account_finalize_login,
             api::remote_connect_api::account_status,
             api::remote_connect_api::account_logout,
             api::remote_connect_api::account_connect_devices,
@@ -1431,6 +1432,7 @@ pub async fn run() {
             api::relay_deploy_api::relay_deploy_install_docker,
             api::relay_deploy_api::relay_deploy_start,
             api::relay_deploy_api::relay_deploy_poll,
+            api::relay_deploy_api::relay_deploy_cancel,
             api::relay_deploy_api::relay_deploy_register,
             api::relay_deploy_api::relay_deploy_verify,
             // Announcement / feature-demo / tips API

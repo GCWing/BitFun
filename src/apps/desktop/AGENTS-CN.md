@@ -18,6 +18,12 @@
 - `src/computer_use/`：操作系统相关自动化支持
 
 Peer Device Mode 的所有权和边界见 `docs/architecture/peer-device-mode.md`。
+前端防回归清单见 `src/web-ui/src/infrastructure/peer-device/README.md`。
+
+账户登录（同步选择未完成前勿落盘）见 `src/api/remote_connect_api.rs`
+（`PENDING_SYNC_CHOICE` / `account_finalize_login`）。
+一键部署 Relay：`src/api/relay_deploy_api.rs`，不变量见
+`src/web-ui/src/features/relay-deploy/README.md`。
 
 如果改动影响多个运行时共享的行为，应把稳定契约、执行策略和服务放在各自的下层 owner
 crate；`src/crates/assembly/core` 只保留产品装配与兼容桥接。

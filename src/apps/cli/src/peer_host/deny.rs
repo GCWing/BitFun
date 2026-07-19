@@ -3,6 +3,10 @@
 /// Commands that must never run on a peer on behalf of a controller.
 /// Mirrors desktop `peer_host_invoke::LOCAL_ONLY_COMMANDS` (minus control-plane
 /// commands which are handled specially before this check).
+///
+/// Keep `account_finalize_login` and cloud session/turn commands here — they
+/// are controller identity/hydrate APIs. See
+/// `src/web-ui/src/infrastructure/peer-device/README.md`.
 static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "show_main_window",
     "hide_main_window_after_close_request",
@@ -15,6 +19,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "check_for_updates",
     "install_update",
     "account_login",
+    "account_finalize_login",
     "account_logout",
     "account_status",
     "account_get_credential_hint",

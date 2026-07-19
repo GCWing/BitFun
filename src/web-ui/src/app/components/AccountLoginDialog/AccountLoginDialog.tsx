@@ -5,6 +5,13 @@
  * After login / overwrite choice the dialog closes immediately while cloud
  * sync continues in the background; reopening Online Devices shows progress.
  * Clicking an online peer device enters Peer Device Mode and closes the dialog.
+ *
+ * Sync-choice invariants (do not regress):
+ * - When the relay already has cloud settings, `account_login` keeps the
+ *   session memory-only until `account_finalize_login`. Closing / canceling
+ *   the overwrite view must logout so a killed process does not restore login.
+ * - "一键部署" opens `RelayDeployWizard` (same feature as Remote Connect),
+ *   not an external README. See `src/features/relay-deploy/README.md`.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -420,19 +427,33 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     void performLogin(result.relayUrl, result.username, result.password);
   }, [performLogin]);
 
-  const handleConfirmOverwrite = useCallback(() => {
+  const finalizeAndSync = useCallback(async (isFirstLogin: boolean) => {
+    setLoading(true);
     setError(null);
-    success(t('accountLogin.loginSuccess', { user_id: username }));
-    startBackgroundSync(false);
-    onClose();
-  }, [onClose, startBackgroundSync, success, t, username]);
+    try {
+      await remoteConnectAPI.accountFinalizeLogin();
+      success(t('accountLogin.loginSuccess', { user_id: username }));
+      startBackgroundSync(isFirstLogin);
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+      try { await remoteConnectAPI.accountLogout(); } catch (logoutErr) {
+        log.warn('logout after finalize failure failed', logoutErr);
+      }
+      resetState();
+      setView('login');
+    } finally {
+      setLoading(false);
+    }
+  }, [onClose, resetState, startBackgroundSync, success, t, username]);
+
+  const handleConfirmOverwrite = useCallback(() => {
+    void finalizeAndSync(false);
+  }, [finalizeAndSync]);
 
   const handleUseLocalOverwrite = useCallback(() => {
-    setError(null);
-    success(t('accountLogin.loginSuccess', { user_id: username }));
-    startBackgroundSync(true);
-    onClose();
-  }, [onClose, startBackgroundSync, success, t, username]);
+    void finalizeAndSync(true);
+  }, [finalizeAndSync]);
 
   const handleCancelOverwrite = useCallback(async () => {
     try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
@@ -440,6 +461,15 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setView('login');
     onClose();
   }, [onClose, resetState]);
+
+  /** Closing the dialog during the sync-choice step abandons the incomplete login. */
+  const handleDialogClose = useCallback(() => {
+    if (view === 'overwrite') {
+      void handleCancelOverwrite();
+      return;
+    }
+    onClose();
+  }, [handleCancelOverwrite, onClose, view]);
 
   const handleLogout = useCallback(async () => {
     setLoading(true);
@@ -489,7 +519,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title={title} size="medium"
+      <Modal isOpen={isOpen} onClose={handleDialogClose} title={title} size="medium"
         showCloseButton closeOnOverlayClick={false} contentClassName="modal__content--fill-flex">
       <div className="account-login-dialog">
         {error && (

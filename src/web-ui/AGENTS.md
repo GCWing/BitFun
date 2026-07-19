@@ -24,8 +24,13 @@ Most changes start in:
 - `src/locales/`: localized strings
 
 Peer Device Mode (same-account remote full client) is documented in
-`docs/architecture/peer-device-mode.md`. Do not reintroduce AccountLoginDialog
+`docs/architecture/peer-device-mode.md`. Frontend invariants:
+`src/infrastructure/peer-device/README.md`. Do not reintroduce AccountLoginDialog
 nested sessions/chat shells; enter peer mode from the device list instead.
+
+One-click relay deploy wizard: `src/features/relay-deploy/` (see its README).
+Account Login and Remote Connect Self-Hosted entries must open
+`RelayDeployWizard`, not an external README.
 
 ## Local rules
 

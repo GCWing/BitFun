@@ -5,7 +5,13 @@ import { elapsedMs, nowMs } from '@/shared/utils/timing';
 
 const log = createLogger('PeerDeviceTransport');
 
-/** Commands that must always hit the local Tauri host, even in peer mode. */
+/**
+ * Commands that must always hit the local Tauri host, even in peer mode.
+ * Keep aligned with desktop `peer_host_invoke::LOCAL_ONLY_COMMANDS` and CLI
+ * `peer_host/deny.rs`. Account + cloud turn APIs stay on the controller;
+ * peer history uses HostInvoke restore. See
+ * `src/infrastructure/peer-device/README.md`.
+ */
 const LOCAL_ONLY_COMMANDS = new Set([
   'show_main_window',
   'hide_main_window_after_close_request',
@@ -18,6 +24,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'check_for_updates',
   'install_update',
   'account_login',
+  'account_finalize_login',
   'account_logout',
   'account_status',
   'account_get_credential_hint',
@@ -66,8 +73,10 @@ const LOCAL_ONLY_COMMANDS = new Set([
 ]);
 
 /**
- * Session / workspace / chat path — must not wait behind git/SSH/editor noise.
- * Kept as an allowlist so new background commands default to normal/low.
+ * Session / workspace / chat / config path — must not wait behind git/SSH/editor
+ * noise. Concurrency is capped (2); demoting `get_config` / modes / agent
+ * profile to low starves peer hydrate (missing keys). See peer-device README.
+ * Allowlist so new background commands default to normal/low.
  */
 const HIGH_PRIORITY_COMMANDS = new Set([
   'restore_session_view',
@@ -90,6 +99,10 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'open_workspace',
   'get_workspace_info',
   'reload_config',
+  'get_config',
+  'get_configs',
+  'get_available_modes',
+  'get_agent_profile_config',
   'start_dialog_turn',
   'cancel_dialog_turn',
   'confirm_tool_execution',
@@ -113,8 +126,6 @@ const LOW_PRIORITY_EXACT = new Set([
   'get_file_metadata',
   'read_file_content',
   'get_file_editor_sync_hash',
-  'get_config',
-  'get_configs',
   'get_file_tree',
   'explorer_get_children',
   'start_file_watch',
@@ -129,8 +140,6 @@ const LOW_PRIORITY_EXACT = new Set([
   'read_background_command_output',
   'get_health_status',
   'notify_cron_host_ready',
-  'get_available_modes',
-  'get_agent_profile_config',
   'list_miniapps',
   'miniapp_worker_list_running',
 ]);
