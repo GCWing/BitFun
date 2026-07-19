@@ -2,80 +2,39 @@
 
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::runtime::{
+    DesktopRuntimeContext, DesktopSessionApplicationError, DesktopSessionScopeRequest,
+    UiSessionMetadataField,
+};
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::agentic::persistence::{
-    PersistenceManager, SessionBranchRequest, SessionBranchResult, SessionMetadataPage,
+    PersistenceManager, SessionBranchResult, SessionMetadataPage,
 };
 use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::session::{
     DialogTurnData, SessionKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
     SessionTranscriptExportOptions,
 };
-use bitfun_core::service::session_usage::{
-    generate_session_usage_report, SessionUsageReport, SessionUsageReportRequest,
-};
+use bitfun_core::service::session_usage::SessionUsageReport;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 use tauri::State;
 
-const UI_CUSTOM_METADATA_KEYS: [&str; 3] = ["titleSource", "titleKey", "titleParams"];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum UiSessionMetadataField {
-    SessionName,
-    Tags,
-    Todos,
-    ReviewActionState,
-    UnreadCompletion,
-    NeedsUserAttention,
-    TitleMetadata,
+fn desktop_session_scope(
+    workspace_path: String,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
+) -> DesktopSessionScopeRequest {
+    DesktopSessionScopeRequest {
+        workspace_path,
+        remote_connection_id,
+        remote_ssh_host,
+    }
 }
 
-fn merge_ui_owned_session_metadata(
-    current: &mut SessionMetadata,
-    incoming: &SessionMetadata,
-    fields: &[UiSessionMetadataField],
-) {
-    if fields.contains(&UiSessionMetadataField::SessionName) {
-        current.session_name = incoming.session_name.clone();
-    }
-    if fields.contains(&UiSessionMetadataField::Tags) {
-        current.tags = incoming.tags.clone();
-    }
-    if fields.contains(&UiSessionMetadataField::Todos) {
-        current.todos = incoming.todos.clone();
-    }
-    if fields.contains(&UiSessionMetadataField::ReviewActionState) {
-        current.review_action_state = incoming.review_action_state.clone();
-    }
-    if fields.contains(&UiSessionMetadataField::UnreadCompletion) {
-        current.unread_completion = incoming.unread_completion.clone();
-    }
-    if fields.contains(&UiSessionMetadataField::NeedsUserAttention) {
-        current.needs_user_attention = incoming.needs_user_attention.clone();
-    }
-
-    if fields.contains(&UiSessionMetadataField::TitleMetadata) {
-        let mut custom = current
-            .custom_metadata
-            .as_ref()
-            .and_then(serde_json::Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let incoming_custom = incoming
-            .custom_metadata
-            .as_ref()
-            .and_then(serde_json::Value::as_object);
-        for key in UI_CUSTOM_METADATA_KEYS {
-            custom.remove(key);
-            if let Some(value) = incoming_custom.and_then(|metadata| metadata.get(key)) {
-                custom.insert(key.to_string(), value.clone());
-            }
-        }
-        current.custom_metadata = (!custom.is_empty()).then(|| serde_json::Value::Object(custom));
-    }
+fn desktop_session_error(error: DesktopSessionApplicationError) -> String {
+    error.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,50 +213,49 @@ pub struct DeleteAllArchivedSessionsRequest {
 #[tauri::command]
 pub async fn list_persisted_sessions(
     request: ListPersistedSessionsRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<Vec<SessionMetadata>, String> {
-    let workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    manager
-        .list_session_metadata(&workspace_path)
+    runtime
+        .session_application()
+        .list_persisted_sessions(desktop_session_scope(
+            request.workspace_path,
+            request.remote_connection_id,
+            request.remote_ssh_host,
+        ))
         .await
-        .map_err(|e| format!("Failed to list persisted sessions: {}", e))
+        .map_err(|error| {
+            format!(
+                "Failed to list persisted sessions: {}",
+                desktop_session_error(error)
+            )
+        })
 }
 
 #[tauri::command]
 pub async fn list_persisted_sessions_page(
     request: ListPersistedSessionsPageRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<SessionMetadataPage, String> {
     let trace_started = Instant::now();
-    let result = async {
-        let workspace_path = desktop_effective_session_storage_path(
-            &app_state,
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
+    let result = runtime
+        .session_application()
+        .list_persisted_sessions_page(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.cursor.as_deref(),
+            request.limit,
         )
-        .await;
-        let manager = PersistenceManager::new(path_manager.inner().clone())
-            .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-        manager
-            .list_session_metadata_page(&workspace_path, request.cursor.as_deref(), request.limit)
-            .await
-            .map_err(|e| format!("Failed to list persisted session page: {}", e))
-    }
-    .await;
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to list persisted session page: {}",
+                desktop_session_error(error)
+            )
+        });
     startup_trace.record_tauri_command_elapsed("list_persisted_sessions_page", None, trace_started);
     result
 }
@@ -305,8 +263,7 @@ pub async fn list_persisted_sessions_page(
 #[tauri::command]
 pub async fn load_session_turns(
     request: LoadSessionTurnsRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Vec<DialogTurnData>, String> {
     let trace_started = Instant::now();
@@ -315,30 +272,24 @@ pub async fn load_session_turns(
     } else {
         "full"
     };
-    let result = async {
-        let workspace_path = desktop_effective_session_storage_path(
-            &app_state,
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
+    let result = runtime
+        .session_application()
+        .load_session_turns(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            &request.session_id,
+            request.limit,
         )
-        .await;
-        let manager = PersistenceManager::new(path_manager.inner().clone())
-            .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-        let turns = if let Some(limit) = request.limit {
-            manager
-                .load_recent_turns(&workspace_path, &request.session_id, limit)
-                .await
-        } else {
-            manager
-                .load_session_turns(&workspace_path, &request.session_id)
-                .await
-        };
-
-        turns.map_err(|e| format!("Failed to load session turns: {}", e))
-    }
-    .await;
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to load session turns: {}",
+                desktop_session_error(error)
+            )
+        });
     startup_trace.record_tauri_command_elapsed(
         "load_session_turns",
         Some(trace_target),
@@ -350,38 +301,26 @@ pub async fn load_session_turns(
 #[tauri::command]
 pub async fn get_session_usage_report(
     request: GetSessionUsageReportRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<SessionUsageReport, String> {
-    let storage_workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    let mut report = generate_session_usage_report(
-        &manager,
-        Some(app_state.token_usage_service.as_ref()),
-        SessionUsageReportRequest {
-            session_id: request.session_id,
-            workspace_path: Some(storage_workspace_path.to_string_lossy().to_string()),
-            remote_connection_id: request.remote_connection_id.clone(),
-            remote_ssh_host: request.remote_ssh_host.clone(),
-            include_hidden_subagents: request.include_hidden_subagents,
-        },
-    )
-    .await
-    .map_err(|e| format!("Failed to generate session usage report: {}", e))?;
-
-    report.workspace.path_label = Some(request.workspace_path);
-    report.workspace.remote_connection_id = request.remote_connection_id;
-    report.workspace.remote_ssh_host = request.remote_ssh_host;
-
-    Ok(report)
+    runtime
+        .session_application()
+        .generate_usage_report(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.session_id,
+            request.include_hidden_subagents,
+        )
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to generate session usage report: {}",
+                desktop_session_error(error)
+            )
+        })
 }
 
 #[tauri::command]
@@ -416,33 +355,27 @@ pub async fn save_session_turn(
 #[tauri::command]
 pub async fn save_session_metadata(
     request: SaveSessionMetadataRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<(), String> {
-    if request.fields.is_empty() {
-        return Err("At least one session metadata field is required".to_string());
-    }
-    let workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    let session_id = request.metadata.session_id.clone();
-    manager
-        .update_session_metadata(&workspace_path, &session_id, |metadata| {
-            merge_ui_owned_session_metadata(metadata, &request.metadata, &request.fields);
-        })
+    runtime
+        .session_application()
+        .save_ui_metadata(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.metadata,
+            request.fields,
+        )
         .await
-        .map_err(|e| format!("Failed to save session metadata: {}", e))?;
-
-    // Notify the auto-sync background task
-    crate::api::remote_connect_api::notify_session_changed(&session_id, &request.workspace_path);
-    Ok(())
+        .map_err(|error| match error {
+            DesktopSessionApplicationError::Validation(message) => message,
+            error => format!(
+                "Failed to save session metadata: {}",
+                desktop_session_error(error)
+            ),
+        })
 }
 
 #[tauri::command]
@@ -479,54 +412,51 @@ pub async fn export_session_transcript(
 #[tauri::command]
 pub async fn delete_persisted_session(
     request: DeletePersistedSessionRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<(), String> {
-    let workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    manager
-        .delete_session(&workspace_path, &request.session_id)
+    runtime
+        .session_application()
+        .delete_session(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.session_id,
+        )
         .await
-        .map_err(|e| format!("Failed to delete persisted session: {}", e))?;
-
-    // Notify auto-sync: tombstone this session on the relay
-    crate::api::remote_connect_api::notify_session_deleted(&request.session_id);
-    Ok(())
+        .map_err(|error| {
+            format!(
+                "Failed to delete persisted session: {}",
+                desktop_session_error(error)
+            )
+        })
 }
 
 #[tauri::command]
 pub async fn touch_session_activity(
     request: TouchSessionActivityRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<(), String> {
     let trace_started = Instant::now();
-    let result = async {
-        let workspace_path = desktop_effective_session_storage_path(
-            &app_state,
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
+    let result = runtime
+        .session_application()
+        .touch_session(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            &request.session_id,
         )
-        .await;
-        let manager = PersistenceManager::new(path_manager.inner().clone())
-            .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-        manager
-            .touch_session(&workspace_path, &request.session_id)
-            .await
-            .map_err(|e| format!("Failed to update session activity: {}", e))
-    }
-    .await;
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to update session activity: {}",
+                desktop_session_error(error)
+            )
+        });
     startup_trace.record_tauri_command_elapsed("touch_session_activity", None, trace_started);
     result
 }
@@ -534,32 +464,29 @@ pub async fn touch_session_activity(
 #[tauri::command]
 pub async fn load_persisted_session_metadata(
     request: LoadPersistedSessionMetadataRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Option<SessionMetadata>, String> {
     let trace_started = Instant::now();
-    let result = async {
-        let workspace_path = desktop_effective_session_storage_path(
-            &app_state,
-            &request.workspace_path,
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
+    // Direct metadata lookups are used by persistence flows that must be able
+    // to read hidden subagent sessions without list-level visibility filtering.
+    let result = runtime
+        .session_application()
+        .load_session_metadata(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            &request.session_id,
         )
-        .await;
-        let manager = PersistenceManager::new(path_manager.inner().clone())
-            .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-        let metadata = manager
-            .load_session_metadata(&workspace_path, &request.session_id)
-            .await
-            .map_err(|e| format!("Failed to load persisted session metadata: {}", e))?;
-
-        // Direct metadata lookups are used by persistence flows that must be able
-        // to read hidden subagent sessions without list-level visibility filtering.
-        Ok(metadata)
-    }
-    .await;
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to load persisted session metadata: {}",
+                desktop_session_error(error)
+            )
+        });
     startup_trace.record_tauri_command_elapsed(
         "load_persisted_session_metadata",
         None,
@@ -571,77 +498,71 @@ pub async fn load_persisted_session_metadata(
 #[tauri::command]
 pub async fn fork_session(
     request: ForkSessionRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<ForkSessionResponse, String> {
-    let workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    manager
-        .branch_session(
-            &workspace_path,
-            &SessionBranchRequest {
-                source_session_id: request.source_session_id,
-                source_turn_id: request.source_turn_id,
-            },
+    runtime
+        .session_application()
+        .fork_session(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.source_session_id,
+            request.source_turn_id,
         )
         .await
-        .map_err(|e| format!("Failed to fork session: {}", e))
+        .map_err(|error| format!("Failed to fork session: {}", desktop_session_error(error)))
 }
 
 #[tauri::command]
 pub async fn archive_session(
     request: ArchiveSessionRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<(), String> {
-    let workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    manager
-        .update_session_metadata(&workspace_path, &request.session_id, |metadata| {
-            metadata.status = SessionStatus::Archived;
-        })
+    runtime
+        .session_application()
+        .set_session_archived(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.session_id,
+            true,
+        )
         .await
-        .map_err(|e| format!("Failed to save session metadata: {}", e))
+        .map_err(|error| {
+            format!(
+                "Failed to save session metadata: {}",
+                desktop_session_error(error)
+            )
+        })
 }
 
 #[tauri::command]
 pub async fn unarchive_session(
     request: UnarchiveSessionRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<(), String> {
-    let workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    manager
-        .update_session_metadata(&workspace_path, &request.session_id, |metadata| {
-            metadata.status = SessionStatus::Active;
-        })
+    runtime
+        .session_application()
+        .set_session_archived(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.session_id,
+            false,
+        )
         .await
-        .map_err(|e| format!("Failed to save session metadata: {}", e))
+        .map_err(|error| {
+            format!(
+                "Failed to save session metadata: {}",
+                desktop_session_error(error)
+            )
+        })
 }
 
 #[tauri::command]
@@ -689,30 +610,17 @@ pub async fn archive_all_sessions(
 #[tauri::command]
 pub async fn list_archived_sessions(
     request: ListPersistedSessionsRequest,
-    app_state: State<'_, AppState>,
-    path_manager: State<'_, Arc<PathManager>>,
+    runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<Vec<SessionMetadata>, String> {
-    let workspace_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-    .await;
-    let manager = PersistenceManager::new(path_manager.inner().clone())
-        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
-
-    let sessions = manager
-        .list_session_metadata(&workspace_path)
+    runtime
+        .session_application()
+        .list_archived_sessions(desktop_session_scope(
+            request.workspace_path,
+            request.remote_connection_id,
+            request.remote_ssh_host,
+        ))
         .await
-        .map_err(|e| format!("Failed to list sessions: {}", e))?;
-
-    let archived: Vec<SessionMetadata> = sessions
-        .into_iter()
-        .filter(|s| s.status == SessionStatus::Archived)
-        .collect();
-
-    Ok(archived)
+        .map_err(|error| format!("Failed to list sessions: {}", desktop_session_error(error)))
 }
 
 #[tauri::command]
@@ -749,118 +657,4 @@ pub async fn delete_all_archived_sessions(
     }
 
     Ok(deleted_count)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{merge_ui_owned_session_metadata, UiSessionMetadataField};
-    use bitfun_core::service::session::{
-        SessionKind, SessionMemoryMode, SessionMetadata, SessionStatus,
-    };
-    use serde_json::json;
-
-    #[test]
-    fn ui_metadata_merge_preserves_core_authoritative_fields_and_custom_keys() {
-        let mut current = SessionMetadata::new(
-            "session".to_string(),
-            "Current".to_string(),
-            "plan".to_string(),
-            "model-a".to_string(),
-        );
-        current.last_submitted_agent_type = Some("plan".to_string());
-        current.memory_mode = SessionMemoryMode::Polluted;
-        current.session_kind = SessionKind::Standard;
-        current.status = SessionStatus::Archived;
-        current.turn_count = 7;
-        current.custom_metadata = Some(json!({
-            "threadGoal": { "objective": "preserve" },
-            "titleSource": "i18n",
-            "titleKey": "old"
-        }));
-
-        let mut incoming = current.clone();
-        incoming.session_name = "Renamed".to_string();
-        incoming.agent_type = "agentic".to_string();
-        incoming.model_name = "stale-model".to_string();
-        incoming.memory_mode = SessionMemoryMode::Enabled;
-        incoming.status = SessionStatus::Active;
-        incoming.turn_count = 1;
-        incoming.review_action_state = Some(json!({ "phase": "fixing" }));
-        incoming.custom_metadata = Some(json!({
-            "titleSource": "i18n",
-            "titleKey": "new",
-            "untrustedCoreKey": "drop"
-        }));
-
-        merge_ui_owned_session_metadata(
-            &mut current,
-            &incoming,
-            &[
-                UiSessionMetadataField::SessionName,
-                UiSessionMetadataField::Tags,
-                UiSessionMetadataField::Todos,
-                UiSessionMetadataField::ReviewActionState,
-                UiSessionMetadataField::UnreadCompletion,
-                UiSessionMetadataField::NeedsUserAttention,
-                UiSessionMetadataField::TitleMetadata,
-            ],
-        );
-
-        assert_eq!(current.session_name, "Renamed");
-        assert_eq!(current.agent_type, "plan");
-        assert_eq!(current.model_name, "model-a");
-        assert_eq!(current.memory_mode, SessionMemoryMode::Polluted);
-        assert_eq!(current.status, SessionStatus::Archived);
-        assert_eq!(current.turn_count, 7);
-        assert_eq!(current.review_action_state, incoming.review_action_state);
-        let custom = current.custom_metadata.unwrap();
-        assert_eq!(custom["threadGoal"]["objective"], "preserve");
-        assert_eq!(custom["titleKey"], "new");
-        assert!(custom.get("untrustedCoreKey").is_none());
-    }
-
-    #[test]
-    fn ui_metadata_field_mask_keeps_independent_writers_isolated() {
-        let mut current = SessionMetadata::new(
-            "session".to_string(),
-            "Current".to_string(),
-            "agentic".to_string(),
-            "auto".to_string(),
-        );
-        current.review_action_state = Some(json!({ "phase": "review_completed" }));
-        current.unread_completion = Some("completed".to_string());
-        current.needs_user_attention = Some("ask_user".to_string());
-
-        let mut stale_general_update = current.clone();
-        stale_general_update.session_name = "Renamed".to_string();
-        stale_general_update.review_action_state = None;
-        merge_ui_owned_session_metadata(
-            &mut current,
-            &stale_general_update,
-            &[UiSessionMetadataField::SessionName],
-        );
-        assert_eq!(current.session_name, "Renamed");
-        assert_eq!(
-            current.review_action_state,
-            Some(json!({ "phase": "review_completed" }))
-        );
-        assert_eq!(current.unread_completion.as_deref(), Some("completed"));
-        assert_eq!(current.needs_user_attention.as_deref(), Some("ask_user"));
-
-        let mut review_update = current.clone();
-        review_update.review_action_state = Some(json!({ "phase": "fixing" }));
-        review_update.unread_completion = None;
-        review_update.needs_user_attention = None;
-        merge_ui_owned_session_metadata(
-            &mut current,
-            &review_update,
-            &[UiSessionMetadataField::ReviewActionState],
-        );
-        assert_eq!(
-            current.review_action_state,
-            Some(json!({ "phase": "fixing" }))
-        );
-        assert_eq!(current.unread_completion.as_deref(), Some("completed"));
-        assert_eq!(current.needs_user_attention.as_deref(), Some("ask_user"));
-    }
 }

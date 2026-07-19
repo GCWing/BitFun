@@ -12,8 +12,9 @@ use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
-    AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest, AgentSessionCreateRequest,
-    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkPort,
+    AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
+    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
@@ -860,6 +861,20 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
+    pub async fn set_session_archived(
+        &self,
+        request: AgentSessionArchiveStateRequest,
+    ) -> Result<(), RuntimeError> {
+        let session_management = self
+            .session_management
+            .as_ref()
+            .ok_or(RuntimeError::MissingSessionManagementPort)?;
+        session_management
+            .set_session_archived(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn record_completed_local_command_turn(
         &self,
         request: AgentLocalCommandTurnRecordRequest,
@@ -916,6 +931,21 @@ impl AgentRuntime {
             ))
         })?;
         port.fork_session(request).await.map_err(RuntimeError::from)
+    }
+
+    pub async fn fork_session_at_turn(
+        &self,
+        request: AgentSessionForkAtTurnRequest,
+    ) -> Result<AgentSessionForkResult, RuntimeError> {
+        let port = self.session_fork.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session fork port is not registered",
+            ))
+        })?;
+        port.fork_session_at_turn(request)
+            .await
+            .map_err(RuntimeError::from)
     }
 
     pub async fn generate_session_usage(
@@ -1206,6 +1236,7 @@ mod tests {
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
         renamed_sessions: Mutex<Vec<AgentSessionRenameRequest>>,
         archived_sessions: Mutex<Vec<AgentSessionArchiveRequest>>,
+        archive_state_updates: Mutex<Vec<AgentSessionArchiveStateRequest>>,
         local_command_turns: Mutex<Vec<AgentLocalCommandTurnRecordRequest>>,
         restored_sessions: Mutex<Vec<AgentSessionRestoreRequest>>,
         mode_updates: Mutex<Vec<AgentSessionModeUpdateRequest>>,
@@ -1324,6 +1355,14 @@ mod tests {
 
         async fn archive_session(&self, request: AgentSessionArchiveRequest) -> PortResult<()> {
             self.archived_sessions.lock().unwrap().push(request);
+            Ok(())
+        }
+
+        async fn set_session_archived(
+            &self,
+            request: AgentSessionArchiveStateRequest,
+        ) -> PortResult<()> {
+            self.archive_state_updates.lock().unwrap().push(request);
             Ok(())
         }
 
@@ -1876,6 +1915,16 @@ mod tests {
             })
             .await
             .expect("archive session");
+        runtime
+            .set_session_archived(AgentSessionArchiveStateRequest {
+                workspace_path: "/workspace/project".to_string(),
+                session_id: "session_1".to_string(),
+                archived: false,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("unarchive session");
         let workspace_binding = runtime
             .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
                 session_id: "session_1".to_string(),
@@ -1898,6 +1947,7 @@ mod tests {
         assert_eq!(ports.deleted_sessions.lock().unwrap().len(), 1);
         assert_eq!(ports.renamed_sessions.lock().unwrap().len(), 1);
         assert_eq!(ports.archived_sessions.lock().unwrap().len(), 1);
+        assert_eq!(ports.archive_state_updates.lock().unwrap().len(), 1);
         assert_eq!(ports.workspace_binding_requests.lock().unwrap().len(), 1);
     }
 

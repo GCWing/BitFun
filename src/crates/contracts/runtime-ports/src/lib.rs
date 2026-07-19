@@ -1056,6 +1056,22 @@ pub struct AgentSessionArchiveRequest {
     pub remote_ssh_host: Option<String>,
 }
 
+/// Sets the persisted archive state without exposing product-specific archive UI.
+///
+/// This is separate from [`AgentSessionArchiveRequest`] so existing archive-only
+/// consumers keep their current request shape and behavior.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionArchiveStateRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    pub archived: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
 /// Records one completed local command result in user-visible session history.
 ///
 /// This request intentionally cannot select another turn kind or opt the turn
@@ -1092,6 +1108,22 @@ pub struct AgentSessionModeUpdateRequest {
 pub struct AgentSessionForkRequest {
     pub workspace_path: String,
     pub source_session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+/// Forks a session at an explicitly selected persisted turn.
+///
+/// This is additive to [`AgentSessionForkRequest`] so existing Rust SDK
+/// consumers keep the source-compatible latest-turn request shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionForkAtTurnRequest {
+    pub workspace_path: String,
+    pub source_session_id: String,
+    pub source_turn_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1815,6 +1847,26 @@ pub trait AgentSessionManagementPort: Send + Sync {
         ))
     }
 
+    async fn set_session_archived(
+        &self,
+        request: AgentSessionArchiveStateRequest,
+    ) -> PortResult<()> {
+        if request.archived {
+            return self
+                .archive_session(AgentSessionArchiveRequest {
+                    workspace_path: request.workspace_path,
+                    session_id: request.session_id,
+                    remote_connection_id: request.remote_connection_id,
+                    remote_ssh_host: request.remote_ssh_host,
+                })
+                .await;
+        }
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "session unarchive is not supported by this provider",
+        ))
+    }
+
     async fn resolve_session_workspace_binding(
         &self,
         request: AgentSessionWorkspaceRequest,
@@ -1846,6 +1898,17 @@ pub trait AgentSessionForkPort: Send + Sync {
         &self,
         request: AgentSessionForkRequest,
     ) -> PortResult<AgentSessionForkResult>;
+
+    async fn fork_session_at_turn(
+        &self,
+        request: AgentSessionForkAtTurnRequest,
+    ) -> PortResult<AgentSessionForkResult> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "exact-turn session fork is not supported by this provider",
+        ))
+    }
 }
 
 #[async_trait::async_trait]
@@ -2143,6 +2206,108 @@ impl SubagentContextMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct ArchiveOnlySessionProvider {
+        archived_requests: Mutex<Vec<AgentSessionArchiveRequest>>,
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSessionManagementPort for ArchiveOnlySessionProvider {
+        async fn list_sessions(
+            &self,
+            _request: AgentSessionListRequest,
+        ) -> PortResult<Vec<AgentSessionSummary>> {
+            Ok(Vec::new())
+        }
+
+        async fn delete_session(&self, _request: AgentSessionDeleteRequest) -> PortResult<()> {
+            Ok(())
+        }
+
+        async fn archive_session(&self, request: AgentSessionArchiveRequest) -> PortResult<()> {
+            self.archived_requests.lock().unwrap().push(request);
+            Ok(())
+        }
+
+        async fn resolve_session_workspace_binding(
+            &self,
+            _request: AgentSessionWorkspaceRequest,
+        ) -> PortResult<Option<AgentSessionWorkspaceBinding>> {
+            Ok(None)
+        }
+    }
+
+    struct LatestTurnForkOnlyProvider;
+
+    #[async_trait::async_trait]
+    impl AgentSessionForkPort for LatestTurnForkOnlyProvider {
+        async fn fork_session(
+            &self,
+            request: AgentSessionForkRequest,
+        ) -> PortResult<AgentSessionForkResult> {
+            Ok(AgentSessionForkResult {
+                session_id: format!("{}-fork", request.source_session_id),
+                session_name: "Fork".to_string(),
+                agent_type: "agentic".to_string(),
+            })
+        }
+    }
+
+    fn archive_state_request(archived: bool) -> AgentSessionArchiveStateRequest {
+        AgentSessionArchiveStateRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            archived,
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        }
+    }
+
+    #[tokio::test]
+    async fn archive_state_default_preserves_archive_only_provider_compatibility() {
+        let provider = ArchiveOnlySessionProvider::default();
+
+        AgentSessionManagementPort::set_session_archived(&provider, archive_state_request(true))
+            .await
+            .expect("archive=true should delegate to the legacy provider");
+        let requests = provider.archived_requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].workspace_path, "/workspace/project");
+        assert_eq!(requests[0].session_id, "session_1");
+        assert_eq!(requests[0].remote_connection_id.as_deref(), Some("conn-1"));
+        assert_eq!(requests[0].remote_ssh_host.as_deref(), Some("host-1"));
+        drop(requests);
+
+        let error = AgentSessionManagementPort::set_session_archived(
+            &provider,
+            archive_state_request(false),
+        )
+        .await
+        .expect_err("legacy providers must reject unarchive by default");
+        assert_eq!(error.kind, PortErrorKind::NotAvailable);
+        assert_eq!(provider.archived_requests.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn exact_turn_fork_default_preserves_latest_turn_only_provider_compatibility() {
+        let provider = LatestTurnForkOnlyProvider;
+        let error = AgentSessionForkPort::fork_session_at_turn(
+            &provider,
+            AgentSessionForkAtTurnRequest {
+                workspace_path: "/workspace/project".to_string(),
+                source_session_id: "session_1".to_string(),
+                source_turn_id: "turn_1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect_err("legacy providers must reject exact-turn fork by default");
+
+        assert_eq!(error.kind, PortErrorKind::NotAvailable);
+    }
 
     #[test]
     fn agent_session_create_request_keeps_rust_literal_compatible() {
@@ -2888,6 +3053,26 @@ mod tests {
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
         };
+        let archive_state_request = AgentSessionArchiveStateRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            archived: false,
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
+        let fork_request = AgentSessionForkRequest {
+            workspace_path: "/workspace/project".to_string(),
+            source_session_id: "session_1".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        let fork_at_turn_request = AgentSessionForkAtTurnRequest {
+            workspace_path: "/workspace/project".to_string(),
+            source_session_id: "session_1".to_string(),
+            source_turn_id: "turn_2".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
         let model_request = AgentSessionModelUpdateRequest {
             session_id: "session_1".to_string(),
             model_id: "provider/model".to_string(),
@@ -2912,6 +3097,11 @@ mod tests {
         let rename_json = serde_json::to_value(rename_request).expect("serialize rename request");
         let archive_json =
             serde_json::to_value(archive_request).expect("serialize archive request");
+        let archive_state_json =
+            serde_json::to_value(archive_state_request).expect("serialize archive-state request");
+        let fork_json = serde_json::to_value(fork_request).expect("serialize fork request");
+        let fork_at_turn_json =
+            serde_json::to_value(fork_at_turn_request).expect("serialize exact-turn fork request");
         let model_json = serde_json::to_value(model_request).expect("serialize model request");
         let mode_json = serde_json::to_value(mode_request).expect("serialize mode request");
         let workspace_json =
@@ -2936,6 +3126,9 @@ mod tests {
         assert_eq!(rename_json["remoteConnectionId"], "conn-1");
         assert_eq!(archive_json["sessionId"], "session_1");
         assert_eq!(archive_json["remoteSshHost"], "host-1");
+        assert_eq!(archive_state_json["archived"], false);
+        assert!(fork_json.get("sourceTurnId").is_none());
+        assert_eq!(fork_at_turn_json["sourceTurnId"], "turn_2");
         assert_eq!(model_json["sessionId"], "session_1");
         assert_eq!(model_json["modelId"], "provider/model");
         assert_eq!(mode_json["sessionId"], "session_1");

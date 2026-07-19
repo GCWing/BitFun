@@ -57,8 +57,9 @@ pub use bitfun_harness::{
 pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
-    AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest, AgentSessionCreateRequest,
-    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkPort,
+    AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
+    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
@@ -315,6 +316,13 @@ impl AgentRuntime {
         self.inner.archive_session(request).await
     }
 
+    pub async fn set_session_archived(
+        &self,
+        request: AgentSessionArchiveStateRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.set_session_archived(request).await
+    }
+
     pub async fn record_completed_local_command_turn(
         &self,
         request: AgentLocalCommandTurnRecordRequest,
@@ -343,6 +351,13 @@ impl AgentRuntime {
         request: AgentSessionForkRequest,
     ) -> Result<AgentSessionForkResult, RuntimeError> {
         self.inner.fork_session(request).await
+    }
+
+    pub async fn fork_session_at_turn(
+        &self,
+        request: AgentSessionForkAtTurnRequest,
+    ) -> Result<AgentSessionForkResult, RuntimeError> {
+        self.inner.fork_session_at_turn(request).await
     }
 
     pub async fn generate_session_usage(

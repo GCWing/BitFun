@@ -8012,6 +8012,23 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
         &self,
         request: bitfun_runtime_ports::AgentSessionArchiveRequest,
     ) -> bitfun_runtime_ports::PortResult<()> {
+        bitfun_runtime_ports::AgentSessionManagementPort::set_session_archived(
+            self,
+            bitfun_runtime_ports::AgentSessionArchiveStateRequest {
+                workspace_path: request.workspace_path,
+                session_id: request.session_id,
+                archived: true,
+                remote_connection_id: request.remote_connection_id,
+                remote_ssh_host: request.remote_ssh_host,
+            },
+        )
+        .await
+    }
+
+    async fn set_session_archived(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionArchiveStateRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
         bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
             bitfun_runtime_ports::PortError::new(
                 bitfun_runtime_ports::PortErrorKind::InvalidRequest,
@@ -8037,7 +8054,11 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
         session_manager
             .persistence_manager()
             .update_session_metadata(&effective_storage_path, &request.session_id, |metadata| {
-                metadata.status = SessionStatus::Archived
+                metadata.status = if request.archived {
+                    SessionStatus::Archived
+                } else {
+                    SessionStatus::Active
+                }
             })
             .await
             .map_err(runtime_port_error_preserving_message)
@@ -9731,7 +9752,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_session_management_port_renames_and_archives_persisted_session() {
+    async fn agent_session_management_port_renames_and_sets_persisted_archive_state() {
         let (coordinator, session_manager) = test_coordinator();
         let workspace_path = std::env::temp_dir().join(format!(
             "bitfun-agent-session-management-port-test-{}",
@@ -9791,7 +9812,7 @@ mod tests {
         AgentSessionManagementPort::archive_session(
             &coordinator,
             AgentSessionArchiveRequest {
-                workspace_path: workspace,
+                workspace_path: workspace.clone(),
                 session_id: created.session_id.clone(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -9806,6 +9827,26 @@ mod tests {
             .expect("metadata should load")
             .expect("metadata should exist");
         assert_eq!(metadata.status, SessionStatus::Archived);
+
+        AgentSessionManagementPort::set_session_archived(
+            &coordinator,
+            bitfun_runtime_ports::AgentSessionArchiveStateRequest {
+                workspace_path: workspace.clone(),
+                session_id: created.session_id.clone(),
+                archived: false,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect("session unarchive should succeed");
+        let metadata = session_manager
+            .persistence_manager()
+            .load_session_metadata(&storage_path, &created.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.status, SessionStatus::Active);
 
         let _ = std::fs::remove_dir_all(storage_path);
         let _ = std::fs::remove_dir_all(workspace_path);

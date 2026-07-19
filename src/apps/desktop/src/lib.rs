@@ -387,14 +387,20 @@ pub async fn run() {
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
     let step_started = Instant::now();
-    let desktop_runtime =
-        match runtime::DesktopRuntimeContext::build(coordinator.clone(), scheduler.clone()) {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
-                return;
-            }
-        };
+    let desktop_runtime = match runtime::DesktopRuntimeContext::build(
+        coordinator.clone(),
+        scheduler.clone(),
+        app_state.token_usage_service.clone(),
+        app_state.workspace_service.clone(),
+        app_state.ssh_manager.clone(),
+        app_state.acp_client_service.clone(),
+    ) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
+            return;
+        }
+    };
     startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
     startup_trace.record_elapsed_step(
         "native_pre_tauri",

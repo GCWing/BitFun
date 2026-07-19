@@ -11,9 +11,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitfun_agent_runtime::sdk::{
-    AgentEventSource, AgentRuntime, AgentSessionForkPort, AgentSessionForkRequest,
-    AgentSessionForkResult, AgentSessionUsagePort, AgentSessionUsageRequest,
-    AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    AgentEventSource, AgentRuntime, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionUsagePort,
+    AgentSessionUsageRequest, AgentTurnSettlementPort, AgentTurnSettlementRequest,
 };
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
@@ -206,6 +206,26 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
 pub struct CoreProductAgentRuntime;
 
 impl CoreProductAgentRuntime {
+    /// Build a narrow session and interaction facade for an existing product
+    /// owner. This does not assemble runtime services, harnesses, events, or a
+    /// complete delivery profile.
+    pub fn build_session_surface(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
+    ) -> Result<AgentRuntime, String> {
+        let session_operations = Arc::new(CoreSessionOperationsPort::new(
+            coordinator.clone(),
+            token_usage_service,
+        ));
+        CoreServiceAgentRuntime::session_surface_agent_runtime(
+            coordinator,
+            scheduler,
+            session_operations.clone(),
+            session_operations,
+        )
+    }
+
     pub fn build(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
@@ -270,6 +290,88 @@ impl CoreAgentRuntimeCompatibility {
             coordinator,
             scheduler,
             persistence,
+        }
+    }
+
+    pub async fn restore_session_from_storage_path(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+        include_internal: bool,
+    ) -> BitFunResult<Session> {
+        validate_persisted_session_id(session_id)?;
+        if include_internal {
+            self.coordinator
+                .restore_internal_session_from_storage_path(storage_path, session_id)
+                .await
+        } else {
+            self.coordinator
+                .restore_session_from_storage_path(storage_path, session_id)
+                .await
+        }
+    }
+
+    pub async fn restore_session_view_from_storage_path(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+        include_internal: bool,
+        tail_turn_count: Option<usize>,
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
+        validate_persisted_session_id(session_id)?;
+        if let Some(tail_turn_count) = tail_turn_count {
+            if include_internal {
+                self.coordinator
+                    .restore_internal_session_view_from_storage_path_tail_timed(
+                        storage_path,
+                        session_id,
+                        tail_turn_count,
+                    )
+                    .await
+            } else {
+                self.coordinator
+                    .restore_session_view_from_storage_path_tail_timed(
+                        storage_path,
+                        session_id,
+                        tail_turn_count,
+                    )
+                    .await
+            }
+        } else {
+            let (session, turns, timing) = if include_internal {
+                self.coordinator
+                    .restore_internal_session_view_from_storage_path_timed(storage_path, session_id)
+                    .await?
+            } else {
+                self.coordinator
+                    .restore_session_view_from_storage_path_timed(storage_path, session_id)
+                    .await?
+            };
+            let total_turn_count = turns.len();
+            Ok((session, turns, total_turn_count, timing))
+        }
+    }
+
+    pub async fn restore_session_with_turns_from_storage_path(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+        include_internal: bool,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        validate_persisted_session_id(session_id)?;
+        if include_internal {
+            self.coordinator
+                .restore_internal_session_with_turns_from_storage_path(storage_path, session_id)
+                .await
+        } else {
+            self.coordinator
+                .restore_session_with_turns_from_storage_path(storage_path, session_id)
+                .await
         }
     }
 
@@ -356,6 +458,29 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
+    pub async fn load_persisted_session_metadata(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<SessionMetadata>> {
+        validate_persisted_session_id(session_id)?;
+        self.persistence
+            .load_session_metadata(workspace_path, session_id)
+            .await
+    }
+
+    pub async fn update_persisted_session_metadata(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata),
+    ) -> BitFunResult<()> {
+        validate_persisted_session_id(session_id)?;
+        self.persistence
+            .update_session_metadata(workspace_path, session_id, update)
+            .await
+    }
+
     pub fn is_session_loaded_in_memory(&self, session_id: &str) -> BitFunResult<bool> {
         validate_persisted_session_id(session_id)?;
         Ok(self
@@ -363,6 +488,17 @@ impl CoreAgentRuntimeCompatibility {
             .get_session_manager()
             .get_session(session_id)
             .is_some())
+    }
+
+    pub async fn update_loaded_session_title(
+        &self,
+        session_id: &str,
+        title: &str,
+    ) -> BitFunResult<String> {
+        validate_persisted_session_id(session_id)?;
+        self.coordinator
+            .update_session_title(session_id, title)
+            .await
     }
 
     pub async fn resolve_persisted_session_storage_path(
@@ -568,6 +704,52 @@ impl CoreSessionOperationsPort {
             token_usage_service,
         }
     }
+
+    async fn resolve_fork_storage_path(
+        &self,
+        workspace_path: String,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
+    ) -> PortResult<PathBuf> {
+        CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: PathBuf::from(workspace_path),
+                remote_connection_id,
+                remote_ssh_host,
+            })
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+    }
+
+    async fn fork_at_persisted_turn(
+        &self,
+        storage_path: &Path,
+        source_session_id: String,
+        source_turn_id: String,
+    ) -> PortResult<AgentSessionForkResult> {
+        if source_turn_id.trim().is_empty() {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "source turn id is required",
+            ));
+        }
+        let result = self
+            .persistence
+            .branch_session(
+                storage_path,
+                &SessionBranchRequest {
+                    source_session_id,
+                    source_turn_id,
+                },
+            )
+            .await
+            .map_err(runtime_port_error)?;
+        Ok(AgentSessionForkResult {
+            session_id: result.session_id,
+            session_name: result.session_name,
+            agent_type: result.agent_type,
+        })
+    }
 }
 
 fn runtime_port_error(error: BitFunError) -> PortError {
@@ -582,7 +764,7 @@ fn runtime_port_error(error: BitFunError) -> PortError {
     PortError::new(kind, error.to_string())
 }
 
-fn validate_local_session_fork_request(request: &AgentSessionForkRequest) -> PortResult<()> {
+fn validate_latest_turn_fork_scope(request: &AgentSessionForkRequest) -> PortResult<()> {
     if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
         return Err(PortError::new(
             PortErrorKind::NotAvailable,
@@ -598,30 +780,43 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionForkRequest,
     ) -> PortResult<AgentSessionForkResult> {
-        validate_local_session_fork_request(&request)?;
-        let workspace_path = Path::new(&request.workspace_path);
-        let (_, turns) = self
+        validate_latest_turn_fork_scope(&request)?;
+        let AgentSessionForkRequest {
+            workspace_path,
+            source_session_id,
+            remote_connection_id,
+            remote_ssh_host,
+        } = request;
+        let storage_path = self
+            .resolve_fork_storage_path(workspace_path, remote_connection_id, remote_ssh_host)
+            .await?;
+        let (_, turns, _) = self
             .coordinator
-            .restore_session_view(workspace_path, &request.source_session_id)
+            .restore_session_view_from_storage_path_timed(&storage_path, &source_session_id)
             .await
             .map_err(runtime_port_error)?;
         let source_turn_id = latest_persisted_turn_id(&turns).map_err(runtime_port_error)?;
-        let result = self
-            .persistence
-            .branch_session(
-                workspace_path,
-                &SessionBranchRequest {
-                    source_session_id: request.source_session_id,
-                    source_turn_id,
-                },
-            )
+        self.fork_at_persisted_turn(&storage_path, source_session_id, source_turn_id)
             .await
-            .map_err(runtime_port_error)?;
-        Ok(AgentSessionForkResult {
-            session_id: result.session_id,
-            session_name: result.session_name,
-            agent_type: result.agent_type,
-        })
+    }
+
+    async fn fork_session_at_turn(
+        &self,
+        request: AgentSessionForkAtTurnRequest,
+    ) -> PortResult<AgentSessionForkResult> {
+        let storage_path = self
+            .resolve_fork_storage_path(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            )
+            .await?;
+        self.fork_at_persisted_turn(
+            &storage_path,
+            request.source_session_id,
+            request.source_turn_id,
+        )
+        .await
     }
 }
 
@@ -668,6 +863,7 @@ impl AgentTurnSettlementPort for CoreSessionOperationsPort {
 mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::time::Duration;
 
     use bitfun_agent_runtime::sdk::AgentRuntime;
     use bitfun_harness::HarnessRegistry;
@@ -679,12 +875,22 @@ mod tests {
 
     use super::{
         generate_core_session_usage_report, latest_persisted_turn_id, runtime_port_error,
-        validate_local_session_fork_request, validate_persisted_session_id,
+        validate_latest_turn_fork_scope, validate_persisted_session_id,
         CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
         CoreSessionOperationsPort,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
+    use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
+    use crate::agentic::execution::{
+        ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
+    };
     use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::{
+        compression::{CompressionConfig, ContextCompressor},
+        PromptCachePolicy, SessionContextStore, SessionManager, SessionManagerConfig,
+    };
+    use crate::agentic::tools::registry::ToolRegistry;
+    use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::infrastructure::PathManager;
     use crate::service::session::{DialogTurnData, SessionMetadata, UserMessageData};
     use crate::service::session_usage::UsageTokenSource;
@@ -695,8 +901,9 @@ mod tests {
     };
     use crate::util::errors::BitFunError;
     use bitfun_agent_runtime::sdk::{
-        AgentSessionForkRequest, AgentSessionUsageRequest, PortErrorKind,
+        AgentSessionForkPort, AgentSessionForkRequest, AgentSessionUsageRequest, PortErrorKind,
     };
+    use tokio::sync::RwLock as TokioRwLock;
 
     struct TestWorkspace {
         path: PathBuf,
@@ -731,7 +938,7 @@ mod tests {
     }
 
     #[test]
-    fn product_agent_runtime_has_one_sdk_safe_builder_boundary() {
+    fn product_agent_runtime_exposes_reviewed_full_and_narrow_builders() {
         fn build(
             coordinator: Arc<ConversationCoordinator>,
             scheduler: Arc<DialogScheduler>,
@@ -749,6 +956,7 @@ mod tests {
         }
 
         let _ = build;
+        let _ = CoreProductAgentRuntime::build_session_surface;
         let _ = CoreProductAgentRuntime::build_acp;
     }
 
@@ -864,19 +1072,6 @@ mod tests {
     }
 
     #[test]
-    fn local_session_fork_rejects_remote_identity() {
-        let error = validate_local_session_fork_request(&AgentSessionForkRequest {
-            workspace_path: "D:/workspace/project".to_string(),
-            source_session_id: "session-1".to_string(),
-            remote_connection_id: Some("remote-1".to_string()),
-            remote_ssh_host: None,
-        })
-        .expect_err("the local fork provider must reject remote identity");
-
-        assert_eq!(error.kind, PortErrorKind::NotAvailable);
-    }
-
-    #[test]
     fn local_session_fork_uses_latest_persisted_turn_and_preserves_empty_error() {
         let turns = [
             DialogTurnData::new(
@@ -916,6 +1111,123 @@ mod tests {
             error.message,
             "Validation error: Session has no persisted turns to fork"
         );
+    }
+
+    #[test]
+    fn latest_turn_session_fork_keeps_remote_identity_unsupported() {
+        for (remote_connection_id, remote_ssh_host) in [
+            (Some("remote-1".to_string()), None),
+            (None, Some("host-1".to_string())),
+        ] {
+            let request = AgentSessionForkRequest {
+                workspace_path: "D:/workspace/project".to_string(),
+                source_session_id: "session-1".to_string(),
+                remote_connection_id,
+                remote_ssh_host,
+            };
+            let error = validate_latest_turn_fork_scope(&request)
+                .expect_err("latest-turn remote fork must remain unsupported");
+
+            assert_eq!(error.kind, PortErrorKind::NotAvailable);
+        }
+    }
+
+    #[tokio::test]
+    async fn latest_turn_fork_restores_from_the_resolved_storage_path() {
+        let workspace = TestWorkspace::new();
+        let workspace_root = workspace.path().join("project");
+        std::fs::create_dir_all(&workspace_root).expect("workspace root");
+        let path_manager = workspace.path_manager();
+        let storage_path = WorkspaceRuntimeService::new(path_manager.clone())
+            .context_for_local_workspace(&workspace_root)
+            .sessions_dir;
+        std::fs::create_dir_all(&storage_path).expect("resolved session storage");
+        let persistence =
+            Arc::new(PersistenceManager::new(path_manager).expect("persistence manager"));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence.clone(),
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let execution_engine = Arc::new(ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        ));
+        let coordinator = Arc::new(ConversationCoordinator::new(
+            session_manager,
+            execution_engine,
+            tool_pipeline,
+            event_queue,
+            Arc::new(EventRouter::new()),
+        ));
+        let token_usage_service = Arc::new(
+            TokenUsageService::new_in_base_dir(workspace.path().join("tokens"))
+                .await
+                .expect("token usage service"),
+        );
+        let port = CoreSessionOperationsPort::new(coordinator, token_usage_service);
+
+        let session_id = "session-latest-fork";
+        persistence
+            .save_session_metadata(
+                &storage_path,
+                &SessionMetadata::new(
+                    session_id.to_string(),
+                    "Latest fork".to_string(),
+                    "agentic".to_string(),
+                    "model-a".to_string(),
+                ),
+            )
+            .await
+            .expect("session metadata");
+        let mut turn = DialogTurnData::new(
+            "turn-latest".to_string(),
+            0,
+            session_id.to_string(),
+            UserMessageData {
+                id: "user-latest".to_string(),
+                content: "fork here".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        turn.mark_completed();
+        persistence
+            .save_dialog_turn(&storage_path, &turn)
+            .await
+            .expect("persisted turn");
+
+        let result = port
+            .fork_session(AgentSessionForkRequest {
+                workspace_path: workspace_root.to_string_lossy().into_owned(),
+                source_session_id: session_id.to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("latest-turn fork should restore through the resolved storage path");
+
+        assert_ne!(result.session_id, session_id);
+        assert_eq!(result.agent_type, "agentic");
     }
 
     #[tokio::test]

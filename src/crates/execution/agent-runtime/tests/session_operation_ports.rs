@@ -1,10 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use bitfun_agent_runtime::sdk::{
-    AgentRuntimeBuilder, AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult,
-    AgentSessionUsagePort, AgentSessionUsageRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentTurnSettlementPort, AgentTurnSettlementRequest, PortErrorKind,
-    PortResult, SessionUsageReport,
+    AgentRuntimeBuilder, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionUsagePort,
+    AgentSessionUsageRequest, AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, PortErrorKind, PortResult,
+    SessionUsageReport,
 };
 use bitfun_agent_runtime::sdk::{AgentSessionCreateRequest, AgentSessionCreateResult};
 
@@ -60,6 +61,22 @@ impl AgentSessionForkPort for RecordingSessionOperations {
             agent_type: "agentic".to_string(),
         })
     }
+
+    async fn fork_session_at_turn(
+        &self,
+        request: AgentSessionForkAtTurnRequest,
+    ) -> PortResult<AgentSessionForkResult> {
+        assert_eq!(request.workspace_path, "D:/workspace/project");
+        assert_eq!(request.source_session_id, "session-1");
+        assert_eq!(request.source_turn_id, "turn-1");
+        assert_eq!(request.remote_connection_id, None);
+        assert_eq!(request.remote_ssh_host, None);
+        Ok(AgentSessionForkResult {
+            session_id: "session-2".to_string(),
+            session_name: "Main (fork)".to_string(),
+            agent_type: "agentic".to_string(),
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -98,6 +115,18 @@ async fn runtime_delegates_narrow_session_operations_to_registered_ports() {
         .expect("runtime");
 
     let fork = runtime
+        .fork_session_at_turn(AgentSessionForkAtTurnRequest {
+            workspace_path: "D:/workspace/project".to_string(),
+            source_session_id: "session-1".to_string(),
+            source_turn_id: "turn-1".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
+        .await
+        .expect("fork session");
+    assert_eq!(fork.session_id, "session-2");
+
+    let latest_turn_fork = runtime
         .fork_session(AgentSessionForkRequest {
             workspace_path: "D:/workspace/project".to_string(),
             source_session_id: "session-1".to_string(),
@@ -105,8 +134,8 @@ async fn runtime_delegates_narrow_session_operations_to_registered_ports() {
             remote_ssh_host: None,
         })
         .await
-        .expect("fork session");
-    assert_eq!(fork.session_id, "session-2");
+        .expect("latest-turn fork session");
+    assert_eq!(latest_turn_fork.session_id, "session-2");
 
     let report = runtime
         .generate_session_usage(AgentSessionUsageRequest {

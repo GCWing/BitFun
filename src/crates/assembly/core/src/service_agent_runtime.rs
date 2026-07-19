@@ -537,6 +537,13 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
         AgentSessionManagementPort::archive_session(self.coordinator.as_ref(), request).await
     }
 
+    async fn set_session_archived(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionArchiveStateRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        AgentSessionManagementPort::set_session_archived(self.coordinator.as_ref(), request).await
+    }
+
     async fn resolve_session_workspace_binding(
         &self,
         request: bitfun_runtime_ports::AgentSessionWorkspaceRequest,
@@ -903,6 +910,35 @@ impl CoreServiceAgentRuntime {
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
         .map_err(|error| error.to_string())
+    }
+
+    /// Builds the narrow interaction and session-operation surface used by a
+    /// product entrypoint without claiming a complete delivery profile.
+    pub(crate) fn session_surface_agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        session_fork: Arc<dyn AgentSessionForkPort>,
+        session_usage: Arc<dyn AgentSessionUsagePort>,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_management =
+            scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
+
+        AgentRuntimeBuilder::new()
+            .with_submission_port(submission)
+            .with_session_management_port(session_management)
+            .with_session_model_port(session_model)
+            .with_dialog_turn_port(dialog_turn)
+            .with_cancellation_port(cancellation)
+            .with_interaction_response_port(interaction_response)
+            .with_session_fork_port(session_fork)
+            .with_session_usage_port(session_usage)
+            .build()
+            .map_err(|error| error.to_string())
     }
 
     pub(crate) fn agent_runtime_with_scheduler_ports(

@@ -1,12 +1,23 @@
 use std::sync::Arc;
 
-use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnPort, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionModelPort, AgentSubmissionPort, AgentTurnCancellationPort, RuntimeBuildError,
-};
+use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::product_runtime::CoreLocalWorkspaceSnapshot;
+use bitfun_core::service::remote_ssh::SSHConnectionManager;
+use bitfun_core::service::token_usage::TokenUsageService;
+use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
+use tokio::sync::RwLock;
+
+mod session_application;
+mod session_host_effects;
+
+use session_host_effects::ProductionDesktopSessionHostEffects;
+
+pub(crate) use session_application::{
+    DesktopSessionApplication, DesktopSessionApplicationError, DesktopSessionScopeRequest,
+    UiSessionMetadataField,
+};
 
 /// Desktop-owned access to the Agent Runtime SDK interaction facade.
 ///
@@ -15,7 +26,7 @@ use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
 /// ports used by current Tauri commands; it does not claim that the complete
 /// Desktop delivery profile or its product services have been assembled.
 pub struct DesktopRuntimeContext {
-    agent_runtime: AgentRuntime,
+    session_application: DesktopSessionApplication,
     local_workspace_snapshot: Arc<dyn LocalWorkspaceSnapshotPort>,
 }
 
@@ -23,29 +34,34 @@ impl DesktopRuntimeContext {
     pub(crate) fn build(
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
-    ) -> Result<Self, RuntimeBuildError> {
-        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
-        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
-        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
-        let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
-        let agent_runtime = AgentRuntimeBuilder::new()
-            .with_submission_port(submission)
-            .with_session_model_port(session_model)
-            .with_dialog_turn_port(dialog_turn)
-            .with_cancellation_port(cancellation)
-            .with_interaction_response_port(interaction_response)
-            .build()?;
+        token_usage_service: Arc<TokenUsageService>,
+        workspace_service: Arc<WorkspaceService>,
+        ssh_manager: Arc<RwLock<Option<SSHConnectionManager>>>,
+        acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
+    ) -> Result<Self, String> {
+        let host_effects = Arc::new(ProductionDesktopSessionHostEffects::new(acp_client_service));
+        let session_application = DesktopSessionApplication::build(
+            coordinator,
+            scheduler,
+            token_usage_service,
+            workspace_service,
+            ssh_manager,
+            host_effects,
+        )?;
         let local_workspace_snapshot = CoreLocalWorkspaceSnapshot::build();
 
         Ok(Self {
-            agent_runtime,
+            session_application,
             local_workspace_snapshot,
         })
     }
 
     pub(crate) fn agent_runtime(&self) -> &AgentRuntime {
-        &self.agent_runtime
+        self.session_application.agent_runtime()
+    }
+
+    pub(crate) fn session_application(&self) -> &DesktopSessionApplication {
+        &self.session_application
     }
 
     pub(crate) fn local_workspace_snapshot(&self) -> &dyn LocalWorkspaceSnapshotPort {
@@ -67,11 +83,15 @@ mod tests {
         assert!(app_source.contains("DesktopRuntimeContext::build("));
         assert!(app_source.contains(".manage(desktop_runtime)"));
 
-        assert!(runtime_source.contains("with_dialog_turn_port"));
-        assert!(runtime_source.contains("with_cancellation_port"));
-        assert!(runtime_source.contains("with_interaction_response_port"));
-        assert!(runtime_source.contains("with_session_model_port"));
+        assert!(runtime_source.contains("DesktopSessionApplication::build("));
         assert!(runtime_source.contains("CoreLocalWorkspaceSnapshot::build()"));
+
+        let session_commands = include_str!("../api/session_api.rs");
+        assert_eq!(
+            session_commands.matches("PersistenceManager::new").count(),
+            4,
+            "only raw turn save, transcript export, and the two excluded bulk operations keep direct persistence"
+        );
 
         let snapshot_commands = include_str!("../api/snapshot_service.rs");
         assert_eq!(
