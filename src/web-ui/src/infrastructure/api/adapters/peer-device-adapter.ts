@@ -70,6 +70,14 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'remote_connect_weixin_qr_poll',
   'remote_connect_get_bot_verbose_mode',
   'remote_connect_set_bot_verbose_mode',
+  // One-click relay deploy SSHes from the controller, never the peer host
+  'relay_deploy_preflight',
+  'relay_deploy_install_docker',
+  'relay_deploy_start',
+  'relay_deploy_poll',
+  'relay_deploy_cancel',
+  'relay_deploy_register',
+  'relay_deploy_verify',
 ]);
 
 /**

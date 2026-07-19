@@ -10,6 +10,7 @@
 
 import { useCallback } from 'react';
 import { FlowChatManager } from '../services/FlowChatManager';
+import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
 import type { ContextItem, ImageContext } from '@/shared/types/context';
 import { createLogger } from '@/shared/utils/logger';
@@ -94,7 +95,10 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       if (!sessionId) {
         const agentType = currentAgentType || 'agentic';
 
-        sessionId = await flowChatManager.createChatSession({}, agentType);
+        sessionId = await flowChatManager.createChatSession(
+          flowChatSessionConfigForCurrentWorkspace(),
+          agentType,
+        );
         agentTypeForSend =
           FlowChatManager.getInstance().getFlowChatState().sessions.get(sessionId)?.mode ||
           agentType;

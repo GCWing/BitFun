@@ -2049,6 +2049,13 @@ pub async fn account_fetch_session_turns(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<bool, String> {
+    // Soft-skip before any disk IO so accidental callers cannot fail-closed
+    // Peer hydrate on metadata load errors. History comes from the peer host.
+    if crate::api::peer_host_invoke::is_peer_controller_active() {
+        log::info!("Skipping cloud session turn fetch in Peer Device Mode (session={session_id})");
+        return Ok(false);
+    }
+
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
@@ -2065,14 +2072,6 @@ pub async fn account_fetch_session_turns(
         return Ok(false);
     };
     if relay_turns_import_state(&metadata).is_none() {
-        return Ok(false);
-    }
-
-    // Cloud import is paused while controlling a peer: history must be loaded
-    // from the peer host via restore_session_view, not from the relay.
-    // Return Ok(false) (not Err) so hydration can continue to peer restore.
-    if crate::api::peer_host_invoke::is_peer_controller_active() {
-        log::info!("Skipping cloud session turn fetch in Peer Device Mode (session={session_id})");
         return Ok(false);
     }
 

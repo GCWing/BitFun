@@ -1,4 +1,5 @@
 import { WorkspaceKind, isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
+import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 
 /**
  * Always create a new session instead of reusing an existing empty one.
@@ -39,4 +40,18 @@ export function flowChatSessionConfigForWorkspace(workspace: WorkspaceInfo) {
       ? { remoteSshHost: workspace.sshHost }
       : {}),
   };
+}
+
+/**
+ * Prefer the live workspaceManager workspace for create_session. Returns `{}`
+ * only when no workspace is open yet (caller / SessionModule must still resolve).
+ */
+export function flowChatSessionConfigForCurrentWorkspace(
+  workspace?: WorkspaceInfo | null,
+) {
+  const live = workspace ?? workspaceManager.getState().currentWorkspace;
+  if (!live) {
+    return {};
+  }
+  return flowChatSessionConfigForWorkspace(live);
 }

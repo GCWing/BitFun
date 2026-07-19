@@ -62,6 +62,13 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "remote_connect_set_bot_verbose_mode",
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    "relay_deploy_preflight",
+    "relay_deploy_install_docker",
+    "relay_deploy_start",
+    "relay_deploy_poll",
+    "relay_deploy_cancel",
+    "relay_deploy_register",
+    "relay_deploy_verify",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.

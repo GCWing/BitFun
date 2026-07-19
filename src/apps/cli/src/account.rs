@@ -66,8 +66,13 @@ pub(crate) async fn read_account_context() -> Result<(AccountSession, String)> {
     }
 }
 
-/// Whether an account session is currently held.
+/// Whether an account session is currently held and login is finalized.
+/// Matches desktop `account_status`: pending cloud/local sync choice is not
+/// treated as logged in.
 pub(crate) async fn is_logged_in() -> bool {
+    if PENDING_SYNC_CHOICE.load(Ordering::Relaxed) {
+        return false;
+    }
     account_session().read().await.is_some()
 }
 

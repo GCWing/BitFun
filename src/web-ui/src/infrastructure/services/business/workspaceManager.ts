@@ -574,14 +574,23 @@ class WorkspaceManager {
   }
 
   /**
+   * Drop controller-local workspace pointers before peer transport is live so
+   * create_session / SessionModule cannot prefer a stale controller path while
+   * rebootstrap is still in flight.
+   */
+  public clearForPeerModeSwitch(): void {
+    this.isInitialized = false;
+    this.isInitializing = false;
+    this.updateWorkspaceState(null, [], [], false, null);
+  }
+
+  /**
    * Tear down local workspace product state and reload opened/recent
    * workspaces from the current transport target (local or peer).
    */
   public async reinitializeForPeerModeSwitch(): Promise<void> {
     log.info('Reinitializing workspace state for peer mode switch');
-    this.isInitialized = false;
-    this.isInitializing = false;
-    this.updateWorkspaceState(null, [], [], false, null);
+    this.clearForPeerModeSwitch();
     this.emit({ type: 'workspace:loading', loading: true });
     await this.initialize();
   }

@@ -90,6 +90,14 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // This-machine computer-use / OS permission prompts
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    // One-click relay deploy SSHes from the controller to a user host
+    "relay_deploy_preflight",
+    "relay_deploy_install_docker",
+    "relay_deploy_start",
+    "relay_deploy_poll",
+    "relay_deploy_cancel",
+    "relay_deploy_register",
+    "relay_deploy_verify",
 ];
 
 static PENDING: OnceLock<Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeResult>>>> =

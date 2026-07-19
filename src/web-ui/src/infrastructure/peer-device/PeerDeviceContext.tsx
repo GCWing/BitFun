@@ -55,6 +55,14 @@ async function resetProductSurface(): Promise<void> {
     log.warn('Failed to reset FlowChat during peer mode switch', error);
   }
 
+  // Clear before peer flag / emit so SessionModule cannot read a stale
+  // controller workspace while rebootstrap is still running.
+  try {
+    workspaceManager.clearForPeerModeSwitch();
+  } catch (error) {
+    log.warn('Failed to clear workspace during peer mode switch', error);
+  }
+
   try {
     await TerminalService.getInstance().shutdownAll();
   } catch (error) {

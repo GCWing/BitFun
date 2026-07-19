@@ -10,7 +10,7 @@
  * - When the relay already has cloud settings, `account_login` keeps the
  *   session memory-only until `account_finalize_login`. Closing / canceling
  *   the overwrite view must logout so a killed process does not restore login.
- * - "一键部署" opens `RelayDeployWizard` (same feature as Remote Connect),
+ * - One-click deploy opens `RelayDeployWizard` (same feature as Remote Connect),
  *   not an external README. See `src/features/relay-deploy/README.md`.
  */
 

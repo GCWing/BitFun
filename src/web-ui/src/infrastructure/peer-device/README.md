@@ -41,6 +41,15 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
    …). Keep FE adapter, desktop `peer_host_invoke`, and CLI `peer_host/deny`
    lists aligned.
 
+8. **`relay_deploy_*` is LOCAL_ONLY.** One-click deploy SSHes from the
+   controller to a user-owned host; do not HostInvoke it onto the peer.
+
+9. **Clear workspace before peer flag emit.** `resetProductSurface` must call
+   `workspaceManager.clearForPeerModeSwitch()` so SessionModule cannot prefer
+   a stale controller path while rebootstrap is in flight. Never pass `{}` to
+   `createChatSession` when a live workspace exists — use
+   `flowChatSessionConfigForCurrentWorkspace`.
+
 ## Related account-login guards
 
 Incomplete login (cloud vs local settings choice) must not persist a session

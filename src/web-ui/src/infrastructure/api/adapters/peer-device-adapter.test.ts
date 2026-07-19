@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   PeerDeviceTransportAdapter,
+  isPeerLocalOnlyCommand,
   peerInvokePriorityFor,
 } from './peer-device-adapter';
 
@@ -11,6 +12,16 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('initialize_workspace_startup_state')).toBe('high');
     expect(peerInvokePriorityFor('start_dialog_turn')).toBe('high');
     expect(peerInvokePriorityFor('reload_config')).toBe('high');
+    expect(peerInvokePriorityFor('get_config')).toBe('high');
+    expect(peerInvokePriorityFor('get_available_modes')).toBe('high');
+  });
+
+  it('keeps account finalize and relay deploy on the controller', () => {
+    expect(isPeerLocalOnlyCommand('account_finalize_login')).toBe(true);
+    expect(isPeerLocalOnlyCommand('account_fetch_session_turns')).toBe(true);
+    expect(isPeerLocalOnlyCommand('relay_deploy_start')).toBe(true);
+    expect(isPeerLocalOnlyCommand('relay_deploy_cancel')).toBe(true);
+    expect(isPeerLocalOnlyCommand('create_session')).toBe(false);
   });
 
   it('ranks interactive peer directory browsing high', () => {
