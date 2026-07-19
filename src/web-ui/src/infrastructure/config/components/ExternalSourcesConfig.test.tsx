@@ -14,6 +14,7 @@ const setSubagentActivationMock = vi.hoisted(() => vi.fn());
 const chooseSubagentConflictMock = vi.hoisted(() => vi.fn());
 const setMcpServerDecisionMock = vi.hoisted(() => vi.fn());
 const chooseMcpConflictMock = vi.hoisted(() => vi.fn());
+const updateIntegrationPolicyMock = vi.hoisted(() => vi.fn());
 const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project' }));
 
 vi.mock('react-i18next', () => ({
@@ -47,10 +48,18 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     chooseSubagentConflict: chooseSubagentConflictMock,
     setMcpServerDecision: setMcpServerDecisionMock,
     chooseMcpConflict: chooseMcpConflictMock,
+    updateIntegrationPolicy: updateIntegrationPolicyMock,
   },
 }));
 
 const snapshot = {
+  hostCapabilities: {
+    canRefresh: true,
+    canMutatePolicy: true,
+    canManageSources: true,
+    canApproveRuntime: true,
+    canExecuteExternalAssets: true,
+  },
   generation: 1,
   discoveryPending: false,
   sources: [{
@@ -101,6 +110,80 @@ const snapshot = {
   tools: [],
   toolApprovalRequests: [],
   toolConflicts: [],
+  integrationPolicy: {
+    schemaMajor: 1,
+    status: 'compatible',
+    userDefaults: { enabled: true, ecosystems: {} },
+    globalEffective: { enabled: true, ecosystems: {} },
+    effective: { enabled: true, ecosystems: {} },
+    registeredEcosystems: [],
+  },
+};
+
+const integrationPolicy = {
+  schemaMajor: 1,
+  status: 'compatible',
+  userDefaults: {
+    enabled: true,
+    ecosystems: {
+      opencode: { mode: 'recommended', capabilityOverrides: {} },
+    },
+  },
+  globalEffective: {
+    enabled: true,
+    ecosystems: {
+      opencode: {
+        ecosystemId: 'opencode',
+        mode: 'recommended',
+        capabilities: {
+          command: 'auto',
+          tool: 'ask_before_use',
+          subagent: 'ask_before_use',
+          mcp: 'ask_before_use',
+        },
+        policyLimitedCapabilities: [],
+      },
+    },
+  },
+  effective: {
+    enabled: true,
+    ecosystems: {
+      opencode: {
+        ecosystemId: 'opencode',
+        mode: 'recommended',
+        capabilities: {
+          command: 'auto',
+          tool: 'ask_before_use',
+          subagent: 'ask_before_use',
+          mcp: 'ask_before_use',
+        },
+        policyLimitedCapabilities: [],
+      },
+    },
+  },
+  registeredEcosystems: [{
+    ecosystemId: 'opencode',
+    displayName: 'OpenCode',
+    adapterRevision: '1',
+    capabilities: [
+      { capabilityId: 'command', recommendedAccess: 'auto', safetyCeiling: 'auto' },
+      {
+        capabilityId: 'tool',
+        recommendedAccess: 'ask_before_use',
+        safetyCeiling: 'ask_before_use',
+      },
+      {
+        capabilityId: 'subagent',
+        recommendedAccess: 'ask_before_use',
+        safetyCeiling: 'ask_before_use',
+      },
+      {
+        capabilityId: 'mcp',
+        recommendedAccess: 'ask_before_use',
+        safetyCeiling: 'ask_before_use',
+      },
+    ],
+  }],
 };
 
 describe('ExternalSourcesConfig', () => {
@@ -125,6 +208,7 @@ describe('ExternalSourcesConfig', () => {
     chooseSubagentConflictMock.mockResolvedValue(snapshot);
     setMcpServerDecisionMock.mockResolvedValue(snapshot);
     chooseMcpConflictMock.mockResolvedValue(snapshot);
+    updateIntegrationPolicyMock.mockResolvedValue(snapshot);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -135,6 +219,97 @@ describe('ExternalSourcesConfig', () => {
     container.remove();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it('keeps compatibility controls compact and applies the safe OpenCode defaults', async () => {
+    const policySnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      integrationPolicy,
+    };
+    getSnapshotMock.mockResolvedValue(policySnapshot);
+    updateIntegrationPolicyMock.mockResolvedValue({
+      ...policySnapshot,
+      preferenceRevision: 5,
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('policy.title');
+    expect(container.textContent).toContain('policy.externalBadge');
+    expect(container.textContent).toContain('OpenCode');
+    expect(container.textContent).toContain('policy.mode.recommended');
+    expect(container.textContent).toContain('policy.inherited');
+    expect(container.textContent).not.toContain('policy.capability.command');
+
+    const capabilityButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.getAttribute('aria-label') === 'policy.capabilitiesFor:{"ecosystem":"OpenCode"}');
+    await act(async () => capabilityButton?.click());
+    expect(container.textContent).toContain('policy.capability.command');
+    expect(container.textContent).toContain('policy.access.auto');
+    expect(container.textContent).toContain('policy.capability.tool');
+    expect(container.textContent).toContain('policy.access.askBeforeUse');
+
+    const policyToggle = container.querySelector(
+      '.bitfun-external-sources-config__policy-card input[type="checkbox"]',
+    ) as HTMLInputElement;
+    expect(policyToggle.checked).toBe(true);
+    await act(async () => policyToggle.click());
+    expect(updateIntegrationPolicyMock).toHaveBeenCalledWith('D:/workspace/project', {
+      expectedPreferenceRevision: 4,
+      scope: 'workspace',
+      change: { operation: 'set_enabled', enabled: false },
+    });
+  });
+
+  it('shows the effective safety ceiling when stored policy requests broader access', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      integrationPolicy: {
+        ...integrationPolicy,
+        userDefaults: {
+          enabled: true,
+          ecosystems: {
+            opencode: {
+              mode: 'custom',
+              capabilityOverrides: { tool: 'auto' },
+            },
+          },
+        },
+        effective: {
+          enabled: true,
+          ecosystems: {
+            opencode: {
+              ...integrationPolicy.effective.ecosystems.opencode,
+              mode: 'custom',
+              capabilities: {
+                ...integrationPolicy.effective.ecosystems.opencode.capabilities,
+                tool: 'ask_before_use',
+              },
+              policyLimitedCapabilities: ['tool'],
+            },
+          },
+        },
+      },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    const capabilityButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.getAttribute('aria-label') === 'policy.capabilitiesFor:{"ecosystem":"OpenCode"}');
+    await act(async () => capabilityButton?.click());
+    const toolRow = Array.from(container.querySelectorAll(
+      '.bitfun-external-sources-config__capability-row',
+    )).find((row) => row.textContent?.includes('policy.capability.tool'));
+
+    expect(toolRow?.textContent).toContain('policy.access.askBeforeUse');
+    expect(toolRow?.textContent).toContain('policy.safetyLimited');
+    expect(toolRow?.textContent).not.toContain('policy.access.auto');
   });
 
   it('requires one explicit conflict choice and persists source toggles', async () => {
@@ -155,19 +330,23 @@ describe('ExternalSourcesConfig', () => {
       'D:/workspace/project',
       'conflict-v1',
       'candidate-opencode',
+      0,
     );
     expect(container.textContent).toContain('conflicts.commandName');
     expect(container.textContent).toContain('conflicts.currentSelection');
     expect(container.textContent).toContain('common.selected');
     expect(container.textContent).toContain('common.notSelected');
 
-    const sourceToggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
     expect(sourceToggle.checked).toBe(true);
     await act(async () => sourceToggle.click());
     expect(setSourceEnabledMock).toHaveBeenCalledWith(
       'D:/workspace/project',
       'source-key',
       false,
+      0,
     );
   });
 
@@ -400,6 +579,7 @@ describe('ExternalSourcesConfig', () => {
       'D:/workspace/project',
       'tool-conflict-v1',
       'external-review',
+      7,
     );
 
     const bitfunAgent = Array.from(container.querySelectorAll('button')).find((button) =>
@@ -576,7 +756,7 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
     expect(container.textContent).toContain('errors.loadFailed');
-    expect(container.textContent).toContain('initial load failed');
+    expect(container.textContent).not.toContain('initial load failed');
 
     await act(async () => root.unmount());
     container.remove();
@@ -589,10 +769,12 @@ describe('ExternalSourcesConfig', () => {
       root.render(<ExternalSourcesConfig />);
       await Promise.resolve();
     });
-    const sourceToggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
     await act(async () => sourceToggle.click());
     expect(container.textContent).toContain('errors.mutationUnknown');
-    expect(container.textContent).toContain('save result unknown');
+    expect(container.textContent).not.toContain('save result unknown');
   });
 
   it('keeps the visible snapshot but warns when checking for changes fails', async () => {
@@ -608,7 +790,7 @@ describe('ExternalSourcesConfig', () => {
     await act(async () => refresh?.click());
     expect(container.textContent).toContain('errors.refreshFailed');
     expect(container.textContent).toContain('OpenCode project commands');
-    expect(container.textContent).toContain('refresh failed');
+    expect(container.textContent).not.toContain('refresh failed');
   });
 
   it('describes BitFun preference-storage diagnostics without blaming source files', async () => {
@@ -883,14 +1065,16 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).not.toContain('agentChanges.unavailable');
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
     });
     expect(container.textContent).toContain('agentChanges.unavailable');
     expect(container.textContent).toContain('External Review');
     expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
     });
     expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
 
@@ -900,7 +1084,8 @@ describe('ExternalSourcesConfig', () => {
       subagentGeneration: 6,
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
     });
     expect(container.textContent).not.toContain('agentChanges.unavailable');
   });
@@ -981,6 +1166,7 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('capability.environment');
     const enable = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('toolApprovals.enable'));
+    enable?.focus();
     await act(async () => enable?.click());
 
     expect(setToolTargetDecisionMock).toHaveBeenCalledWith(
@@ -988,10 +1174,13 @@ describe('ExternalSourcesConfig', () => {
       'approval-1',
       'decision-1',
       true,
+      0,
     );
-    const operationStatus = container.querySelector('[role="status"][tabindex="-1"]');
+    const operationStatus = Array.from(container.querySelectorAll('[role="status"]')).find(
+      (candidate) => candidate.textContent?.includes('actions.updated'),
+    );
     expect(operationStatus?.textContent).toContain('actions.updated');
-    expect(document.activeElement).toBe(operationStatus);
+    expect(document.activeElement).not.toBe(operationStatus);
   });
 
   it('lets a previously declined tool be reviewed and enabled without another automatic prompt', async () => {
@@ -1048,6 +1237,7 @@ describe('ExternalSourcesConfig', () => {
       'approval-1',
       'decision-1',
       true,
+      0,
     );
   });
 
@@ -1142,7 +1332,9 @@ describe('ExternalSourcesConfig', () => {
       root.render(<ExternalSourcesConfig />);
       await Promise.resolve();
     });
-    const sourceToggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
     expect(sourceToggle.disabled).toBe(true);
     expect(sourceToggle.checked).toBe(false);
   });
@@ -1216,7 +1408,9 @@ describe('ExternalSourcesConfig', () => {
       root.render(<ExternalSourcesConfig />);
       await Promise.resolve();
     });
-    const sourceToggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
     await act(async () => sourceToggle.click());
 
     workspaceState.path = 'D:/workspace/other';
@@ -1234,7 +1428,7 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).not.toContain('OpenCode project commands');
   });
 
-  it('keeps the latest mutation authoritative over an intervening poll', async () => {
+  it('keeps the latest mutation authoritative over a focus refresh', async () => {
     let resolveMutation: ((value: typeof snapshot) => void) | undefined;
     setSourceEnabledMock.mockReturnValue(new Promise<typeof snapshot>((resolve) => {
       resolveMutation = resolve;
@@ -1244,11 +1438,14 @@ describe('ExternalSourcesConfig', () => {
       root.render(<ExternalSourcesConfig />);
       await Promise.resolve();
     });
-    const sourceToggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
     await act(async () => sourceToggle.click());
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
     });
     await act(async () => {
       resolveMutation?.({
@@ -1259,8 +1456,134 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
 
-    const updatedToggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const updatedToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
     expect(updatedToggle.checked).toBe(false);
     expect(container.textContent).toContain('lifecycle.suppressed');
+  });
+
+  it('fails closed for a legacy read-only host and never sends a mutation', async () => {
+    const { hostCapabilities: _omitted, ...legacySnapshot } = snapshot;
+    getSnapshotMock.mockResolvedValue(legacySnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
+    const policyToggle = container.querySelector(
+      '.bitfun-external-sources-config__policy-card input[type="checkbox"]',
+    ) as HTMLInputElement;
+    expect(sourceToggle.disabled).toBe(true);
+    expect(policyToggle.disabled).toBe(true);
+    await act(async () => {
+      sourceToggle.click();
+      policyToggle.click();
+    });
+    expect(setSourceEnabledMock).not.toHaveBeenCalled();
+    expect(updateIntegrationPolicyMock).not.toHaveBeenCalled();
+  });
+
+  it('requires explicit confirmation before resetting an incompatible policy', async () => {
+    const incompatibleSnapshot = {
+      ...snapshot,
+      preferenceRevision: 9,
+      integrationPolicy: {
+        ...integrationPolicy,
+        schemaMajor: 13,
+        status: 'incompatible_schema',
+      },
+    };
+    getSnapshotMock.mockResolvedValue(incompatibleSnapshot);
+    updateIntegrationPolicyMock.mockResolvedValue({
+      ...snapshot,
+      preferenceRevision: 10,
+      integrationPolicy,
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const reset = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent === 'policy.backupAndReset');
+    await act(async () => reset?.click());
+    expect(updateIntegrationPolicyMock).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('policy.resetConfirmTitle');
+
+    const confirm = Array.from(document.body.querySelectorAll('button')).filter((button) =>
+      button.textContent === 'policy.backupAndReset').at(-1);
+    await act(async () => confirm?.click());
+    expect(updateIntegrationPolicyMock).toHaveBeenCalledWith('D:/workspace/project', {
+      expectedPreferenceRevision: 9,
+      scope: 'user',
+      change: { operation: 'reset_incompatible_policy' },
+    });
+  });
+
+  it('opens and focuses the first diagnostic when the attention summary is activated', async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      commandConflicts: [],
+      sources: [{
+        ...snapshot.sources[0],
+        record: {
+          ...snapshot.sources[0].record,
+          diagnostics: [{
+            severity: 'warning',
+            code: 'opencode.command.source_warning',
+            message: 'A source needs attention.',
+          }],
+        },
+      }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const attention = container.querySelector(
+      'button[aria-controls="external-integration-attention-region"]',
+    ) as HTMLButtonElement;
+    await act(async () => attention.click());
+    const firstDiagnostic = container.querySelector(
+      'details[data-external-attention="true"]',
+    ) as HTMLDetailsElement;
+    expect(firstDiagnostic.open).toBe(true);
+    expect(document.activeElement).toBe(firstDiagnostic.querySelector('summary'));
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(container.textContent).toContain('opencode.command.source_warning');
+  });
+
+  it('shows a stable reference without exposing an internal mutation message', async () => {
+    getSnapshotMock.mockResolvedValue(snapshot);
+    setSourceEnabledMock.mockRejectedValueOnce(Object.assign(
+      new Error('database connection string should stay private'),
+      { code: 'internal', retryable: true, correlationId: 'external-source-ref-7' },
+    ));
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
+    await act(async () => sourceToggle.click());
+
+    expect(container.textContent).toContain('operationErrors.internal');
+    expect(container.textContent).toContain('external-source-ref-7');
+    expect(container.textContent).not.toContain('database connection string');
   });
 });

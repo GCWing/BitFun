@@ -28,7 +28,7 @@ mod ui;
 
 use anyhow::{anyhow, Result};
 use bitfun_core::service::remote_connect::DeviceIdentity;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
@@ -400,6 +400,78 @@ enum ConfigAction {
     Edit,
     /// Reset to default configuration
     Reset,
+    /// Inspect or change external AI application compatibility
+    External {
+        #[command(subcommand)]
+        action: ExternalConfigAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ExternalConfigAction {
+    /// Show effective global and project compatibility settings
+    Status,
+    /// Enable or disable external compatibility
+    SetEnabled {
+        enabled: bool,
+        #[arg(long, value_enum, default_value = "project")]
+        scope: ExternalPolicyScopeArg,
+    },
+    /// Select an external ecosystem compatibility mode
+    SetMode {
+        #[arg(value_enum)]
+        mode: ExternalPolicyModeArg,
+        /// Ecosystem id; optional when exactly one ecosystem is registered
+        #[arg(long)]
+        ecosystem: Option<String>,
+        #[arg(long, value_enum, default_value = "project")]
+        scope: ExternalPolicyScopeArg,
+    },
+    /// Customize one external ecosystem capability
+    SetCapability {
+        #[arg(value_enum)]
+        capability: ExternalCapabilityArg,
+        #[arg(value_enum)]
+        access: ExternalAccessArg,
+        /// Ecosystem id; optional when exactly one ecosystem is registered
+        #[arg(long)]
+        ecosystem: Option<String>,
+        #[arg(long, value_enum, default_value = "project")]
+        scope: ExternalPolicyScopeArg,
+    },
+    /// Remove this project's overrides and inherit global settings
+    ResetProject,
+    /// Back up and reset a policy written by an incompatible BitFun version
+    ResetIncompatible,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalPolicyScopeArg {
+    Global,
+    Project,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalPolicyModeArg {
+    Recommended,
+    DiscoverOnly,
+    Off,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalCapabilityArg {
+    Command,
+    Tool,
+    Agent,
+    Mcp,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ExternalAccessArg {
+    Off,
+    Discover,
+    Ask,
+    Auto,
 }
 
 #[derive(Subcommand)]
@@ -887,7 +959,7 @@ async fn run_cli() -> Result<()> {
         }
 
         Some(Commands::Config { action }) => {
-            root_handlers::handle_config_action(action, &config)?;
+            root_handlers::handle_config_action(action, &config).await?;
         }
 
         Some(Commands::Health) => {
@@ -1139,6 +1211,88 @@ mod plugin_command_tests {
             Some(Commands::Plugins {
                 action: Some(PluginAction::Deactivate { package_id })
             }) if package_id == "acme.demo"
+        ));
+    }
+}
+
+#[cfg(test)]
+mod external_config_command_tests {
+    use super::{
+        Cli, Commands, ConfigAction, ExternalAccessArg, ExternalCapabilityArg,
+        ExternalConfigAction, ExternalPolicyModeArg, ExternalPolicyScopeArg,
+    };
+    use clap::Parser;
+
+    #[test]
+    fn external_config_commands_keep_scope_and_capability_explicit() {
+        let status = Cli::try_parse_from(["bitfun-cli", "config", "external", "status"])
+            .expect("parse external status");
+        assert!(matches!(
+            status.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::Status
+                }
+            })
+        ));
+
+        let mode = Cli::try_parse_from([
+            "bitfun-cli",
+            "config",
+            "external",
+            "set-mode",
+            "discover-only",
+            "--scope",
+            "global",
+        ])
+        .expect("parse external mode");
+        assert!(matches!(
+            mode.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::SetMode {
+                        mode: ExternalPolicyModeArg::DiscoverOnly,
+                        ecosystem: None,
+                        scope: ExternalPolicyScopeArg::Global,
+                    }
+                }
+            })
+        ));
+
+        let capability = Cli::try_parse_from([
+            "bitfun-cli",
+            "config",
+            "external",
+            "set-capability",
+            "mcp",
+            "ask",
+            "--ecosystem",
+            "opencode",
+        ])
+        .expect("parse external capability");
+        assert!(matches!(
+            capability.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::SetCapability {
+                        capability: ExternalCapabilityArg::Mcp,
+                        access: ExternalAccessArg::Ask,
+                        ecosystem: Some(ref ecosystem),
+                        scope: ExternalPolicyScopeArg::Project,
+                    }
+                }
+            }) if ecosystem == "opencode"
+        ));
+
+        let reset = Cli::try_parse_from(["bitfun-cli", "config", "external", "reset-incompatible"])
+            .expect("parse incompatible policy reset");
+        assert!(matches!(
+            reset.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::ResetIncompatible
+                }
+            })
         ));
     }
 }

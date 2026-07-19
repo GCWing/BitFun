@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModeSkillInfo, SkillInfo } from './types';
 import {
   buildSkillCoverageSourceMap,
+  canDeleteSkill,
   findSkillByKey,
   formatSkillOrigin,
   getModeSkillRuntimeStatus,
@@ -43,6 +44,16 @@ describe('skill source presentation', () => {
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'home.codex' }))).toBe('Codex');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'bitfun-system' }))).toBe('BitFun');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'future' }), '其他来源')).toBe('其他来源');
+  });
+
+  it('only allows BitFun-owned non-builtin skills to be deleted', () => {
+    expect(canDeleteSkill(skill())).toBe(true);
+    expect(canDeleteSkill(skill({ isBuiltin: true }))).toBe(false);
+    expect(canDeleteSkill(skill({ sourceId: 'bitfun-system', isBuiltin: false }))).toBe(true);
+    expect(canDeleteSkill(skill({ sourceId: 'opencode' }))).toBe(false);
+    expect(canDeleteSkill(skill({ sourceId: '', sourceSlot: 'home.codex' }))).toBe(false);
+    expect(canDeleteSkill(skill({ sourceId: '', sourceSlot: 'future' }))).toBe(false);
+    expect(canDeleteSkill(skill({ sourceId: '', sourceSlot: '' }))).toBe(false);
   });
 
   it('formats source and scope with surface-localized labels', () => {

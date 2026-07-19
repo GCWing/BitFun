@@ -16,6 +16,88 @@ export type ExternalSourceLifecycle =
   | 'suppressed'
   | 'using_last_valid_version';
 
+export type ExternalIntegrationMode =
+  | 'recommended'
+  | 'discover_only'
+  | 'disabled'
+  | 'custom'
+  | (string & {});
+
+export type ExternalIntegrationAccess =
+  | 'disabled'
+  | 'discover_only'
+  | 'ask_before_use'
+  | 'auto'
+  | (string & {});
+
+export interface ExternalEcosystemPolicy {
+  mode: ExternalIntegrationMode;
+  capabilityOverrides?: Record<string, ExternalIntegrationAccess>;
+}
+
+export interface ExternalEcosystemPolicyOverride {
+  mode?: ExternalIntegrationMode;
+  capabilityOverrides?: Record<string, ExternalIntegrationAccess>;
+}
+
+export interface ExternalIntegrationPolicySnapshot {
+  schemaMajor: number;
+  status: 'compatible' | 'incompatible_schema' | (string & {});
+  userDefaults: {
+    enabled: boolean;
+    ecosystems?: Record<string, ExternalEcosystemPolicy>;
+  };
+  workspaceOverride?: {
+    enabled?: boolean;
+    ecosystems?: Record<string, ExternalEcosystemPolicyOverride>;
+  };
+  globalEffective: EffectiveExternalIntegrationPolicy;
+  effective: EffectiveExternalIntegrationPolicy;
+  registeredEcosystems: Array<{
+    ecosystemId: string;
+    displayName: string;
+    adapterRevision: string;
+    capabilities: Array<{
+      capabilityId: string;
+      recommendedAccess: ExternalIntegrationAccess;
+      safetyCeiling: ExternalIntegrationAccess;
+    }>;
+  }>;
+}
+
+export interface EffectiveExternalIntegrationPolicy {
+    enabled: boolean;
+    ecosystems: Record<
+      string,
+      {
+        ecosystemId: string;
+        mode: ExternalIntegrationMode;
+        capabilities: Record<string, ExternalIntegrationAccess>;
+        policyLimitedCapabilities?: string[];
+      }
+    >;
+}
+
+export type ExternalIntegrationPolicyMutation = {
+  expectedPreferenceRevision: number;
+  scope: 'user' | 'workspace';
+  change:
+    | { operation: 'set_enabled'; enabled: boolean }
+    | {
+        operation: 'set_ecosystem_mode';
+        ecosystemId: string;
+        mode: ExternalIntegrationMode;
+      }
+    | {
+        operation: 'set_capability_access';
+        ecosystemId: string;
+        capabilityId: string;
+        access: ExternalIntegrationAccess;
+      }
+    | { operation: 'reset_workspace' }
+    | { operation: 'reset_incompatible_policy' };
+};
+
 export type PromptCommandAvailability =
   | { state: 'available' }
   | { state: 'restricted'; reason: string; required_capabilities: string[] }
@@ -40,6 +122,13 @@ export interface ExternalSourceRecord {
 }
 
 export interface ExternalSourceCatalogSnapshot {
+  hostCapabilities: {
+    canRefresh: boolean;
+    canMutatePolicy: boolean;
+    canManageSources: boolean;
+    canApproveRuntime: boolean;
+    canExecuteExternalAssets: boolean;
+  };
   generation: number;
   discoveryPending: boolean;
   sources: Array<{
@@ -87,6 +176,7 @@ export interface ExternalSourceCatalogSnapshot {
   subagents?: ExternalSubagentSummary[];
   subagentConflicts?: ExternalSubagentConflict[];
   pendingSubagentApprovals?: string[];
+  integrationPolicy: ExternalIntegrationPolicySnapshot;
   diagnostics?: Array<{
     severity: string;
     assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp';
@@ -273,22 +363,297 @@ export interface ExternalMcpConflict {
   }>;
 }
 
+export type ExternalSourceOperationErrorCode =
+  | 'invalid_request'
+  | 'host_unavailable'
+  | 'host_capability_unavailable'
+  | 'policy_incompatible'
+  | 'policy_limited'
+  | 'stale_revision'
+  | 'conflict'
+  | 'not_found'
+  | 'unavailable'
+  | 'internal';
+
+export class ExternalSourceApiError extends Error {
+  constructor(
+    public readonly code: ExternalSourceOperationErrorCode,
+    public readonly detail: string,
+    public readonly retryable: boolean,
+    public readonly correlationId?: string,
+  ) {
+    super(detail);
+    this.name = 'ExternalSourceApiError';
+  }
+}
+
+const READ_ONLY_HOST_CAPABILITIES: ExternalSourceCatalogSnapshot['hostCapabilities'] = {
+  canRefresh: false,
+  canMutatePolicy: false,
+  canManageSources: false,
+  canApproveRuntime: false,
+  canExecuteExternalAssets: false,
+};
+
+function safePolicySnapshot(
+  status: ExternalIntegrationPolicySnapshot['status'] = 'unknown',
+  schemaMajor = 0,
+): ExternalIntegrationPolicySnapshot {
+  const safelyOff: EffectiveExternalIntegrationPolicy = {
+    enabled: false,
+    ecosystems: {},
+  };
+  return {
+    schemaMajor,
+    status,
+    userDefaults: { enabled: false, ecosystems: {} },
+    globalEffective: safelyOff,
+    effective: safelyOff,
+    registeredEcosystems: [],
+  };
+}
+
+function normalizeOptionalArray<T>(value: unknown): T[] {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) return value;
+  throw new ExternalSourceApiError(
+    'internal',
+    'External source response included an invalid collection',
+    true,
+  );
+}
+
+function normalizePolicySnapshot(value: unknown): ExternalIntegrationPolicySnapshot {
+  if (!value || typeof value !== 'object') return safePolicySnapshot();
+  const candidate = value as Partial<ExternalIntegrationPolicySnapshot>;
+  const schemaMajor = typeof candidate.schemaMajor === 'number' ? candidate.schemaMajor : 0;
+  if (candidate.status === 'incompatible_schema') {
+    return safePolicySnapshot('incompatible_schema', schemaMajor);
+  }
+  if (
+    candidate.status !== 'compatible'
+    || !candidate.userDefaults
+    || typeof candidate.userDefaults.enabled !== 'boolean'
+    || !candidate.globalEffective
+    || typeof candidate.globalEffective.enabled !== 'boolean'
+    || !candidate.globalEffective.ecosystems
+    || !candidate.effective
+    || typeof candidate.effective.enabled !== 'boolean'
+    || !candidate.effective.ecosystems
+    || !Array.isArray(candidate.registeredEcosystems)
+  ) {
+    return safePolicySnapshot(
+      typeof candidate.status === 'string' ? candidate.status : 'unknown',
+      schemaMajor,
+    );
+  }
+  return {
+    ...candidate,
+    registeredEcosystems: candidate.registeredEcosystems.map((ecosystem) => ({
+      ...ecosystem,
+      capabilities: normalizeOptionalArray(ecosystem.capabilities),
+    })),
+  } as ExternalIntegrationPolicySnapshot;
+}
+
+function normalizeMcpDefinition(definition: ExternalMcpDefinition): ExternalMcpDefinition {
+  return {
+    ...definition,
+    provenance: normalizeOptionalArray(definition.provenance),
+    environmentKeys: normalizeOptionalArray(definition.environmentKeys),
+    environmentReferenceNames: normalizeOptionalArray(definition.environmentReferenceNames),
+    headerNames: normalizeOptionalArray(definition.headerNames),
+  };
+}
+
+function normalizeSnapshot(value: unknown): ExternalSourceCatalogSnapshot {
+  if (!value || typeof value !== 'object') {
+    throw new ExternalSourceApiError('internal', 'External source response was not usable', true);
+  }
+  const candidate = value as ExternalSourceCatalogSnapshot & {
+    hostCapabilities?: Partial<ExternalSourceCatalogSnapshot['hostCapabilities']>;
+    integrationPolicy?: unknown;
+  };
+  const capabilities = candidate.hostCapabilities;
+  return {
+    ...candidate,
+    generation: typeof candidate.generation === 'number' ? candidate.generation : 0,
+    discoveryPending: candidate.discoveryPending === true,
+    sources: normalizeOptionalArray<ExternalSourceCatalogSnapshot['sources'][number]>(candidate.sources).map((source) => ({
+      ...source,
+      record: {
+        ...source.record,
+        diagnostics: normalizeOptionalArray(source.record.diagnostics),
+      },
+    })),
+    commands: normalizeOptionalArray<ExternalSourceCatalogSnapshot['commands'][number]>(candidate.commands),
+    commandConflicts: normalizeOptionalArray<NonNullable<ExternalSourceCatalogSnapshot['commandConflicts']>[number]>(candidate.commandConflicts).map((conflict) => ({
+      ...conflict,
+      candidates: normalizeOptionalArray(conflict.candidates),
+    })),
+    tools: normalizeOptionalArray<ExternalToolCatalogEntry>(candidate.tools).map((entry) => ({
+      ...entry,
+      definition: {
+        ...entry.definition,
+        capabilities: normalizeOptionalArray(entry.definition.capabilities),
+      },
+    })),
+    toolApprovalRequests: normalizeOptionalArray<ExternalToolApprovalRequest>(candidate.toolApprovalRequests).map((request) => ({
+      ...request,
+      capabilities: normalizeOptionalArray(request.capabilities),
+      toolNames: normalizeOptionalArray(request.toolNames),
+    })),
+    toolConflicts: normalizeOptionalArray<ExternalToolConflict>(candidate.toolConflicts).map((conflict) => ({
+      ...conflict,
+      candidates: normalizeOptionalArray(conflict.candidates),
+    })),
+    mcpServers: normalizeOptionalArray<ExternalMcpCatalogEntry>(candidate.mcpServers).map((entry) => ({
+      ...entry,
+      definition: normalizeMcpDefinition(entry.definition),
+    })),
+    mcpApprovalRequests: normalizeOptionalArray<ExternalMcpApprovalRequest>(candidate.mcpApprovalRequests).map((request) => ({
+      ...request,
+      definition: normalizeMcpDefinition(request.definition),
+    })),
+    mcpConflicts: normalizeOptionalArray<ExternalMcpConflict>(candidate.mcpConflicts).map((conflict) => ({
+      ...conflict,
+      candidates: normalizeOptionalArray(conflict.candidates),
+    })),
+    subagents: normalizeOptionalArray<ExternalSubagentSummary>(candidate.subagents).map((subagent) => ({
+      ...subagent,
+      sourceKeys: normalizeOptionalArray(subagent.sourceKeys),
+      sourceLocationLabels: normalizeOptionalArray(subagent.sourceLocationLabels),
+      effectiveToolLabels: normalizeOptionalArray(subagent.effectiveToolLabels),
+      diagnostics: normalizeOptionalArray(subagent.diagnostics),
+    })),
+    subagentConflicts: normalizeOptionalArray<ExternalSubagentConflict>(candidate.subagentConflicts).map((conflict) => ({
+      ...conflict,
+      candidates: normalizeOptionalArray(conflict.candidates),
+    })),
+    pendingSubagentApprovals: normalizeOptionalArray(candidate.pendingSubagentApprovals),
+    diagnostics: normalizeOptionalArray(candidate.diagnostics),
+    hostCapabilities: {
+      ...READ_ONLY_HOST_CAPABILITIES,
+      canRefresh: capabilities?.canRefresh === true,
+      canMutatePolicy: capabilities?.canMutatePolicy === true,
+      canManageSources: capabilities?.canManageSources === true,
+      canApproveRuntime: capabilities?.canApproveRuntime === true,
+      canExecuteExternalAssets: capabilities?.canExecuteExternalAssets === true,
+    },
+    integrationPolicy: normalizePolicySnapshot(candidate.integrationPolicy),
+  };
+}
+
+const OPERATION_ERROR_CODES = new Set<ExternalSourceOperationErrorCode>([
+  'invalid_request',
+  'host_unavailable',
+  'host_capability_unavailable',
+  'policy_incompatible',
+  'policy_limited',
+  'stale_revision',
+  'conflict',
+  'not_found',
+  'unavailable',
+  'internal',
+]);
+
+function parseOperationError(value: unknown, visited = new Set<unknown>()): ExternalSourceApiError | null {
+  if (value === null || value === undefined || visited.has(value)) return null;
+  visited.add(value);
+  if (typeof value === 'string') {
+    try {
+      return parseOperationError(JSON.parse(value), visited);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.code === 'string' &&
+    OPERATION_ERROR_CODES.has(record.code as ExternalSourceOperationErrorCode) &&
+    typeof record.detail === 'string'
+  ) {
+    return new ExternalSourceApiError(
+      record.code as ExternalSourceOperationErrorCode,
+      record.detail,
+      record.retryable === true,
+      typeof record.correlationId === 'string' ? record.correlationId : undefined,
+    );
+  }
+  for (const candidate of [
+    record.originalError,
+    record.error,
+    record.data,
+    record.details,
+    (record.context as Record<string, unknown> | undefined)?.originalError,
+    (record.details as Record<string, unknown> | undefined)?.originalError,
+  ]) {
+    const parsed = parseOperationError(candidate, visited);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+async function invokeExternal<T>(command: string, args: Record<string, unknown>): Promise<T> {
+  try {
+    return await api.invoke<T>(command, args);
+  } catch (error) {
+    throw parseOperationError(error) ?? new ExternalSourceApiError(
+      'internal',
+      'External source operation failed',
+      false,
+    );
+  }
+}
+
+async function invokeSnapshot(
+  command: string,
+  args: Record<string, unknown>,
+): Promise<ExternalSourceCatalogSnapshot> {
+  return normalizeSnapshot(await invokeExternal<unknown>(command, args));
+}
+
+function normalizeOptionalWorkspacePath(workspacePath: string | undefined): string | undefined {
+  return workspacePath?.trim() ? workspacePath : undefined;
+}
+
 export const externalSourcesAPI = {
   getSnapshot(workspacePath?: string, forceRefresh = false) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('get_external_source_snapshot', {
-      request: { workspacePath, forceRefresh },
+    return invokeSnapshot('get_external_source_snapshot', {
+      request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), forceRefresh },
     });
   },
 
-  setSourceEnabled(workspacePath: string | undefined, sourceKey: string, enabled: boolean) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_source_enabled_command', {
-      request: { workspacePath, sourceKey, enabled },
+  setSourceEnabled(
+    workspacePath: string | undefined,
+    sourceKey: string,
+    enabled: boolean,
+    expectedPreferenceRevision: number,
+  ) {
+    return invokeSnapshot('set_external_source_enabled_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        sourceKey,
+        enabled,
+        expectedPreferenceRevision,
+      },
     });
   },
 
-  setConflictChoice(workspacePath: string | undefined, conflictKey: string, candidateId: string) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_source_conflict_choice_command', {
-      request: { workspacePath, conflictKey, candidateId },
+  setConflictChoice(
+    workspacePath: string | undefined,
+    conflictKey: string,
+    candidateId: string,
+    expectedPreferenceRevision: number,
+  ) {
+    return invokeSnapshot('set_external_source_conflict_choice_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        conflictKey,
+        candidateId,
+        expectedPreferenceRevision,
+      },
     });
   },
 
@@ -297,9 +662,16 @@ export const externalSourcesAPI = {
     approvalKey: string,
     decisionKey: string,
     approved: boolean,
+    expectedPreferenceRevision: number,
   ) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_tool_target_decision_command', {
-      request: { workspacePath, approvalKey, decisionKey, approved },
+    return invokeSnapshot('set_external_tool_target_decision_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        approvalKey,
+        decisionKey,
+        approved,
+        expectedPreferenceRevision,
+      },
     });
   },
 
@@ -307,9 +679,15 @@ export const externalSourcesAPI = {
     workspacePath: string | undefined,
     conflictKey: string,
     candidateId: string,
+    expectedPreferenceRevision: number,
   ) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_tool_conflict_choice_command', {
-      request: { workspacePath, conflictKey, candidateId },
+    return invokeSnapshot('set_external_tool_conflict_choice_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        conflictKey,
+        candidateId,
+        expectedPreferenceRevision,
+      },
     });
   },
 
@@ -321,9 +699,9 @@ export const externalSourcesAPI = {
     expectedPreferenceRevision: number,
     decisionKey: string,
   ) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_subagent_activation_command', {
+    return invokeSnapshot('set_external_subagent_activation_command', {
       request: {
-        workspacePath,
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         candidateId,
         approved,
         expectedSubagentGeneration,
@@ -341,9 +719,9 @@ export const externalSourcesAPI = {
     expectedSubagentGeneration: number,
     expectedPreferenceRevision: number,
   ) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('choose_external_subagent_conflict_command', {
+    return invokeSnapshot('choose_external_subagent_conflict_command', {
       request: {
-        workspacePath,
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         conflictKey,
         candidateId,
         approveExternal,
@@ -361,9 +739,9 @@ export const externalSourcesAPI = {
     expectedMcpGeneration: number,
     expectedPreferenceRevision: number,
   ) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('set_external_mcp_server_decision_command', {
+    return invokeSnapshot('set_external_mcp_server_decision_command', {
       request: {
-        workspacePath,
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         candidateId,
         decisionKey,
         approved,
@@ -381,9 +759,9 @@ export const externalSourcesAPI = {
     expectedMcpGeneration: number,
     expectedPreferenceRevision: number,
   ) {
-    return api.invoke<ExternalSourceCatalogSnapshot>('choose_external_mcp_conflict_command', {
+    return invokeSnapshot('choose_external_mcp_conflict_command', {
       request: {
-        workspacePath,
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         conflictKey,
         candidateId,
         approveExternal,
@@ -391,5 +769,15 @@ export const externalSourcesAPI = {
         expectedPreferenceRevision,
       },
     });
+  },
+
+  updateIntegrationPolicy(
+    workspacePath: string | undefined,
+    mutation: ExternalIntegrationPolicyMutation,
+  ) {
+    return invokeSnapshot(
+      'update_external_integration_policy_command',
+      { request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), mutation } },
+    );
   },
 };

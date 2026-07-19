@@ -128,6 +128,12 @@ export const productCoreFeatureAssemblyRules = [
     reason: 'CLI must explicitly assemble the full bitfun-core product runtime',
   },
   {
+    manifestPath: 'src/apps/server/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'Server must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
     manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
     dependencyName: 'bitfun-core',
     requiredFeatures: ['product-full'],

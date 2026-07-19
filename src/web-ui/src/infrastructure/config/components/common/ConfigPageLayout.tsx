@@ -29,15 +29,17 @@ export interface ConfigPageContentProps {
   children: React.ReactNode;
    
   className?: string;
+  id?: string;
 }
 
  
 export const ConfigPageContent: React.FC<ConfigPageContentProps> = ({
   children,
   className = '',
+  id,
 }) => {
   return (
-    <div className={`bitfun-config-page-content ${className}`}>
+    <div id={id} className={`bitfun-config-page-content ${className}`}>
       <div className="bitfun-config-page-content__inner">
         {children}
       </div>

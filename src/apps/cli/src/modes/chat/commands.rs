@@ -395,15 +395,26 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        let expected_preference_revision = self
+            .external_source_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.preference_revision)
+            .unwrap_or(0);
         let persisted = tokio::task::block_in_place(|| {
             rt_handle.block_on(remember_external_source_conflict_choice(
                 conflict_key,
                 candidate_id,
                 participants.clone(),
+                expected_preference_revision,
             ))
         });
         match persisted {
-            Ok(preferences) => self.replace_external_conflict_preferences(preferences.into()),
+            Ok((choices, lineage, candidates, preference_revision)) => {
+                self.replace_external_conflict_preferences((choices, lineage, candidates).into());
+                if let Some(snapshot) = &mut self.external_source_snapshot {
+                    snapshot.preference_revision = preference_revision;
+                }
+            }
             Err(error) => {
                 tracing::warn!(
                     "Failed to persist external command conflict choice: {}",
@@ -437,11 +448,17 @@ impl ChatMode {
         }
         if let Some(provider_conflict_key) = &projection.provider_conflict_key {
             let workspace = self.agent.workspace_path_buf();
+            let expected_preference_revision = self
+                .external_source_snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.preference_revision)
+                .unwrap_or(0);
             let snapshot = tokio::task::block_in_place(|| {
                 rt_handle.block_on(set_external_prompt_command_conflict_choice(
                     Some(&workspace),
                     provider_conflict_key,
                     &projection.candidate_id,
+                    expected_preference_revision,
                 ))
             });
             let snapshot = match snapshot {
@@ -454,6 +471,7 @@ impl ChatMode {
                     return Ok(None);
                 }
             };
+            self.external_source_snapshot = Some(snapshot);
             if let Some(collision) = &projection.native_collision {
                 self.remember_native_command_choice(
                     collision,
@@ -462,7 +480,6 @@ impl ChatMode {
                     rt_handle,
                 );
             }
-            self.external_source_snapshot = Some(snapshot);
             let Some(active) = self.external_command_projection(&projection.command_name) else {
                 chat_state.add_system_message(format!(
                     "Selected external command /{} is no longer available; refresh and choose again.",

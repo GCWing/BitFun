@@ -18,6 +18,7 @@ use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig,
 use crate::service::config::SubagentModelSelection;
 use crate::util::BitFunError;
 use bitfun_external_sources::ExternalSubagentCoordinatorSnapshot;
+use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_product_domains::external_sources::{ExternalSourceScope, ProviderId, SourceKey};
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_conflict_key,
@@ -35,6 +36,7 @@ pub(super) const DISABLED_SUBAGENT_CONFLICT_CHOICE: &str = "__bitfun_disabled__"
 static MODEL_CONFIG_UNAVAILABLE_LOGGED: AtomicBool = AtomicBool::new(false);
 
 pub(super) struct ExternalSubagentDecisions<'a> {
+    pub active_ecosystems: &'a BTreeSet<EcosystemId>,
     pub approved_envelopes: &'a BTreeSet<String>,
     pub declined_decisions: &'a BTreeMap<String, String>,
     pub conflict_choices: &'a BTreeMap<String, String>,
@@ -106,6 +108,65 @@ pub(super) async fn reconcile_external_subagents(
         decisions,
         &facts,
     )
+}
+
+/// Static projection for read-only Hosts. It never reads model configuration,
+/// the tool registry, or the agent registry, and it never produces routes or
+/// runtime registrations.
+pub(super) fn project_external_subagents_read_only(
+    workspace_root: Option<&Path>,
+    execution_domain_id: &str,
+    snapshot: &ExternalSubagentCoordinatorSnapshot,
+    decisions: ExternalSubagentDecisions<'_>,
+) -> ExternalSubagentProductState {
+    let source_map = snapshot
+        .sources
+        .iter()
+        .map(|entry| (entry.record.key.clone(), &entry.record))
+        .collect::<BTreeMap<_, _>>();
+    let facts = ProductFacts::default();
+    let mut state = ExternalSubagentProductState::default();
+    for definition in &snapshot.definitions {
+        let resolved = resolve_external_candidate(
+            workspace_root,
+            execution_domain_id,
+            definition,
+            &source_map,
+            &snapshot.provider_labels,
+            &facts,
+        );
+        let ecosystem_active = resolved.source_keys.iter().all(|source_key| {
+            source_map
+                .get(source_key)
+                .is_some_and(|source| decisions.active_ecosystems.contains(&source.ecosystem_id))
+        });
+        let activation = if !ecosystem_active || resolved.definition.disabled {
+            ExternalSubagentActivationState::Disabled
+        } else if decisions
+            .approved_envelopes
+            .contains(&resolved.approval_key)
+        {
+            ExternalSubagentActivationState::Unavailable
+        } else if decisions
+            .declined_decisions
+            .get(&resolved.approval_key)
+            .is_some_and(|decision| decision == &resolved.approval_key)
+        {
+            ExternalSubagentActivationState::Declined
+        } else {
+            state.pending_approvals.push(resolved.approval_key.clone());
+            ExternalSubagentActivationState::ApprovalRequired
+        };
+        state.summaries.push(summary_for(&resolved, activation));
+    }
+    state.summaries.sort_by(|left, right| {
+        left.logical_id
+            .cmp(&right.logical_id)
+            .then(left.candidate_id.cmp(&right.candidate_id))
+    });
+    state.pending_approvals.sort();
+    state.pending_approvals.dedup();
+    state
 }
 
 async fn gather_product_facts(
@@ -416,6 +477,18 @@ fn reconcile_with_facts(
             &snapshot.provider_labels,
             facts,
         );
+        let ecosystem_active = resolved.source_keys.iter().all(|source_key| {
+            source_map
+                .get(source_key)
+                .is_some_and(|source| decisions.active_ecosystems.contains(&source.ecosystem_id))
+        });
+        if !ecosystem_active {
+            state.summaries.push(summary_for(
+                &resolved,
+                ExternalSubagentActivationState::Disabled,
+            ));
+            continue;
+        }
         let summary = summary_for(&resolved, initial_activation_state(&resolved));
         if facts.ai_config.is_none() {
             if !resolved.definition.disabled {
@@ -1025,6 +1098,13 @@ fn stable_digest(parts: impl IntoIterator<Item = impl AsRef<str>>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_active_ecosystems() -> &'static BTreeSet<EcosystemId> {
+        static ECOSYSTEMS: std::sync::OnceLock<BTreeSet<EcosystemId>> = std::sync::OnceLock::new();
+        ECOSYSTEMS.get_or_init(|| {
+            BTreeSet::from([EcosystemId::new("fake").expect("valid test ecosystem")])
+        })
+    }
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExecutionDomainId, ExternalSourceCatalogEntry, ExternalSourceHealth,
         ExternalSourceLifecycleState, ExternalSourceRecord,
@@ -1273,6 +1353,7 @@ mod tests {
             "local-user",
             &definition_snapshot,
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1289,6 +1370,7 @@ mod tests {
             "local-user",
             &definition_snapshot,
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &approved,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1321,6 +1403,7 @@ mod tests {
             "local-user",
             &definition_snapshot,
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &approved,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1361,6 +1444,7 @@ mod tests {
             "local-user",
             &first,
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1376,6 +1460,7 @@ mod tests {
             "local-user",
             &updated,
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &approved,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1403,6 +1488,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1416,6 +1502,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v2", "catalog-v2"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &approved,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1440,6 +1527,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1463,6 +1551,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &approved,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1492,6 +1581,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1511,6 +1601,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &approved,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1548,6 +1639,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1584,6 +1676,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1615,6 +1708,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &approved,
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,
@@ -1655,6 +1749,7 @@ mod tests {
                 "local-user",
                 &snapshot("behavior-v1", "catalog-v1"),
                 ExternalSubagentDecisions {
+                    active_ecosystems: test_active_ecosystems(),
                     approved_envelopes: &approved,
                     declined_decisions: &empty_map,
                     conflict_choices: &choices,
@@ -1685,6 +1780,7 @@ mod tests {
                 "local-user",
                 &snapshot("behavior-v1", "catalog-v1"),
                 ExternalSubagentDecisions {
+                    active_ecosystems: test_active_ecosystems(),
                     approved_envelopes: &approved,
                     declined_decisions: &empty_map,
                     conflict_choices: &choices,
@@ -1736,6 +1832,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
@@ -1762,6 +1859,7 @@ mod tests {
             "local-user",
             &snapshot("behavior-v1", "catalog-v1"),
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,
@@ -1800,6 +1898,7 @@ mod tests {
             "local-user",
             &without_external,
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,
@@ -1833,6 +1932,7 @@ mod tests {
             "local-user",
             &without_external,
             ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
                 approved_envelopes: &empty_set,
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,

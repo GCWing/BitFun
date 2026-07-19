@@ -169,6 +169,85 @@ fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, 
         })
 }
 
+fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -> Vec<String> {
+    let policy = &snapshot.integration_policy;
+    if policy.status
+        == bitfun_core::external_sources::ExternalIntegrationPolicyStatus::IncompatibleSchema
+    {
+        return vec![
+            format!(
+                "Access: safely off; unsupported policy schema {}",
+                policy.schema_major
+            ),
+            "Recover: bitfun-cli config external reset-incompatible".to_string(),
+        ];
+    }
+    if !policy.status.is_compatible() {
+        return vec![
+            format!(
+                "Access: safely off; unsupported policy status '{}'",
+                policy.status.as_str()
+            ),
+            "Recover: upgrade BitFun or connect through a compatible workspace host".to_string(),
+        ];
+    }
+    let scope = if policy.workspace_override.is_some() {
+        "this project overrides global settings"
+    } else {
+        "this project inherits global settings"
+    };
+    if policy.registered_ecosystems.is_empty() {
+        return vec![format!("Access: unavailable; {scope}")];
+    }
+    let mut lines = vec![format!(
+        "Access: {}; {scope}",
+        if policy.effective.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    )];
+    for descriptor in &policy.registered_ecosystems {
+        let Some(ecosystem) = policy.effective.ecosystems.get(&descriptor.ecosystem_id) else {
+            lines.push(format!("{}: unavailable", descriptor.display_name));
+            continue;
+        };
+        let mode = match ecosystem.mode.as_str() {
+            "recommended" => "recommended",
+            "discover_only" => "discover only",
+            "disabled" => "off",
+            "custom" => "custom",
+            _ => "unsupported, safely off",
+        };
+        let capability_summary = descriptor
+            .capabilities
+            .iter()
+            .filter_map(|capability| {
+                ecosystem
+                    .capabilities
+                    .get(&capability.capability_id)
+                    .map(|access| {
+                        let access = match access.as_str() {
+                            "disabled" => "off",
+                            "discover_only" => "discover",
+                            "ask_before_use" => "ask",
+                            "auto" => "auto",
+                            _ => "unsupported, safely off",
+                        };
+                        format!("{} {access}", capability.capability_id.as_str())
+                    })
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        lines.push(format!(
+            "{}: {mode}; {capability_summary}",
+            descriptor.display_name
+        ));
+    }
+    lines.push("Manage: bitfun-cli config external --help".to_string());
+    lines
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ExternalToolReviewAction {
     Show,
@@ -186,7 +265,49 @@ enum ExternalToolReviewAction {
 
 struct ExternalToolMutationResult {
     action: ExternalToolReviewAction,
-    result: std::result::Result<ExternalSourceCatalogSnapshot, String>,
+    result: std::result::Result<ExternalSourceCatalogSnapshot, ExternalSourceOperationError>,
+}
+
+fn external_operation_error_status(surface: &str, error: &ExternalSourceOperationError) -> String {
+    let reason = match error.code {
+        ExternalSourceOperationErrorCode::InvalidRequest => {
+            "The requested change is no longer valid."
+        }
+        ExternalSourceOperationErrorCode::HostUnavailable => "The workspace host is not available.",
+        ExternalSourceOperationErrorCode::HostCapabilityUnavailable => {
+            "This workspace host is read-only for external integrations."
+        }
+        ExternalSourceOperationErrorCode::PolicyIncompatible => {
+            "Compatibility settings were written by a newer BitFun version."
+        }
+        ExternalSourceOperationErrorCode::PolicyLimited => {
+            "The current safety policy does not allow this change."
+        }
+        ExternalSourceOperationErrorCode::StaleRevision => {
+            "Compatibility settings changed before the update completed."
+        }
+        ExternalSourceOperationErrorCode::Conflict => {
+            "The available choices changed before the update completed."
+        }
+        ExternalSourceOperationErrorCode::NotFound => "That external item is no longer available.",
+        ExternalSourceOperationErrorCode::Unavailable => {
+            "The external integration is temporarily unavailable."
+        }
+        ExternalSourceOperationErrorCode::Internal => {
+            "BitFun could not complete the external integration update."
+        }
+    };
+    let next_step = if error.retryable {
+        format!(" Run /builtin:{surface} refresh and try again.")
+    } else {
+        format!(" Run /builtin:{surface} refresh to review the current state.")
+    };
+    let reference = error
+        .correlation_id
+        .as_deref()
+        .map(|id| format!(" Reference: {id}."))
+        .unwrap_or_default();
+    format!("{reason}{next_step}{reference}")
 }
 
 struct ExternalToolTargetSummary<'a> {
@@ -413,6 +534,8 @@ fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -
         "BitFun does not run external code while checking sources. Enabling tools runs their code with your user permissions and inherited environment variables. The code is not isolated by an OS sandbox, and processes it starts may keep running after cancellation."
             .to_string(),
     ];
+    lines.push(String::new());
+    lines.extend(external_integration_policy_lines(snapshot));
 
     if snapshot.discovery_pending {
         lines.push(String::new());
@@ -632,7 +755,7 @@ enum ExternalAgentReviewAction {
 
 struct ExternalAgentMutationResult {
     action: ExternalAgentReviewAction,
-    result: std::result::Result<ExternalSourceCatalogSnapshot, String>,
+    result: std::result::Result<ExternalSourceCatalogSnapshot, ExternalSourceOperationError>,
 }
 
 fn external_tool_run_location_label(execution_domain_id: &str) -> &'static str {
@@ -790,6 +913,8 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
         "BitFun only reads supported settings while checking sources. Agent instructions stay hidden and are not added to the current agent. Once enabled, those instructions guide the selected model and may call the tools listed below. Before enabling, review the model, tools, and where the agent runs. BitFun asks again if the instructions, model, tools, or configuration sources change. Each use starts a new task; follow-up is not supported in this version."
             .to_string(),
     ];
+    lines.push(String::new());
+    lines.extend(external_integration_policy_lines(snapshot));
     if snapshot.discovery_pending {
         lines.push(String::new());
         lines.push(

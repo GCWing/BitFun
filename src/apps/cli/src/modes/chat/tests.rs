@@ -3,21 +3,20 @@ mod tests {
     use tokio::sync::broadcast::error::TryRecvError;
 
     use super::{
-        action_opens_extension_management, agent_event_stream_failure,
-        apply_agent_mode_feedback, apply_model_selection_feedback, builtin_command_reconfirmation,
-        command_route,
+        action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
+        apply_model_selection_feedback, builtin_command_reconfirmation, command_route,
         external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
         external_agent_review_text, external_command_projections,
+        external_integration_policy_lines, external_operation_error_status,
         external_tool_mutation_result_label, external_tool_pending_notice_key,
         external_tool_result_is_stale, external_tool_review_text, external_tool_run_location_label,
         mark_active_turn_failed, merge_external_agent_mutation_snapshot,
         mode_change_blocks_typed_submission, mode_change_completion_should_exit,
         native_command_conflict_key, parse_command_token, parse_external_agent_review_action,
-        parse_external_tool_review_action, CommandQualifier, CommandRoute,
-        ExternalAgentReviewAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
-        previous_session_mode_change_status, ModeSelectionApplyOutcome,
-        ModelSelectionApplyOutcome,
+        parse_external_tool_review_action, previous_session_mode_change_status, CommandQualifier,
+        CommandRoute, ExternalAgentReviewAction, ExternalSourceConflictPreferences,
+        ExternalToolReviewAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
     };
     use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
@@ -25,7 +24,8 @@ mod tests {
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use bitfun_core::external_sources::{
         ExternalSourceAssetKind, ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic,
-        ExternalSourceDiagnosticSeverity, ExternalSubagentActivationState,
+        ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+        ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
         ExternalToolActivationState,
     };
     use std::collections::{BTreeMap, BTreeSet};
@@ -196,6 +196,68 @@ mod tests {
                     "sourceLocation": "<workspace>/.opencode/tools/review.js"
                 }]
             }],
+            "integrationPolicy": {
+                "schemaMajor": 1,
+                "status": "compatible",
+                "userDefaults": { "enabled": true },
+                "globalEffective": {
+                    "enabled": true,
+                    "ecosystems": {
+                        "opencode": {
+                            "ecosystemId": "opencode",
+                            "mode": "recommended",
+                            "capabilities": {
+                                "command": "auto",
+                                "tool": "ask_before_use",
+                                "subagent": "ask_before_use",
+                                "mcp": "ask_before_use"
+                            }
+                        }
+                    }
+                },
+                "effective": {
+                    "enabled": true,
+                    "ecosystems": {
+                        "opencode": {
+                            "ecosystemId": "opencode",
+                            "mode": "recommended",
+                            "capabilities": {
+                                "command": "auto",
+                                "tool": "ask_before_use",
+                                "subagent": "ask_before_use",
+                                "mcp": "ask_before_use"
+                            }
+                        }
+                    }
+                },
+                "registeredEcosystems": [{
+                    "ecosystemId": "opencode",
+                    "displayName": "OpenCode",
+                    "adapterRevision": "1",
+                    "capabilities": [
+                        {
+                            "capabilityId": "command",
+                            "recommendedAccess": "auto",
+                            "safetyCeiling": "auto"
+                        },
+                        {
+                            "capabilityId": "tool",
+                            "recommendedAccess": "ask_before_use",
+                            "safetyCeiling": "ask_before_use"
+                        },
+                        {
+                            "capabilityId": "subagent",
+                            "recommendedAccess": "ask_before_use",
+                            "safetyCeiling": "ask_before_use"
+                        },
+                        {
+                            "capabilityId": "mcp",
+                            "recommendedAccess": "ask_before_use",
+                            "safetyCeiling": "ask_before_use"
+                        }
+                    ]
+                }]
+            },
             "diagnostics": [{
                 "severity": "warning",
                 "code": "opencode.tool.directory_read_failed",
@@ -204,6 +266,53 @@ mod tests {
             }]
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn external_review_projects_effective_scope_and_capability_policy() {
+        let lines = external_integration_policy_lines(&external_tool_review_snapshot());
+        let text = lines.join("\n");
+
+        assert!(text.contains("Access: enabled"));
+        assert!(text.contains("this project inherits global settings"));
+        assert!(text.contains("OpenCode: recommended"));
+        assert!(text.contains("command auto"));
+        assert!(text.contains("tool ask"));
+        assert!(text.contains("bitfun-cli config external --help"));
+    }
+
+    #[test]
+    fn external_operation_errors_use_stable_tui_copy_without_raw_details() {
+        let stale = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::StaleRevision,
+            "raw stale detail",
+            true,
+        );
+        let policy = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::PolicyLimited,
+            "raw policy detail",
+            false,
+        );
+        let internal = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::Internal,
+            "database password must not be shown",
+            true,
+        )
+        .with_correlation_id("external-source-ref-9");
+
+        let stale_status = external_operation_error_status("tools", &stale);
+        assert!(stale_status.contains("settings changed"));
+        assert!(stale_status.contains("refresh and try again"));
+        assert!(!stale_status.contains("raw stale detail"));
+
+        let policy_status = external_operation_error_status("agents", &policy);
+        assert!(policy_status.contains("safety policy"));
+        assert!(policy_status.contains("review the current state"));
+        assert!(!policy_status.contains("raw policy detail"));
+
+        let internal_status = external_operation_error_status("tools", &internal);
+        assert!(internal_status.contains("external-source-ref-9"));
+        assert!(!internal_status.contains("database password"));
     }
 
     #[test]

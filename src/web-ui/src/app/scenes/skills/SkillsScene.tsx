@@ -24,6 +24,7 @@ import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import {
   buildSkillCoverageSourceMap,
+  canDeleteSkill,
   findSkillByKey,
   getSkillSourceLabel,
 } from '@/infrastructure/config/skillSourcePresentation';
@@ -398,7 +399,7 @@ const SkillsScene: React.FC = () => {
                                 <span>{t('list.item.detail')}</span>
                                 <ArrowRight size={12} />
                               </Button>
-                              {!skill.isBuiltin && (
+                              {canDeleteSkill(skill) && (
                                 <button
                                   type="button"
                                   className="skills-card__delete"
@@ -666,7 +667,7 @@ const SkillsScene: React.FC = () => {
             {selectedMarketSkill.installs ?? 0}
           </span>
         ) : null}
-        actions={selectedInstalledSkill && !selectedInstalledSkill.isBuiltin ? (
+        actions={selectedInstalledSkill && canDeleteSkill(selectedInstalledSkill) ? (
           <Button
             variant="danger"
             size="small"
@@ -884,7 +885,8 @@ const SkillsScene: React.FC = () => {
         isOpen={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
         onConfirm={async () => {
-          if (!deleteTarget) {
+          if (!deleteTarget || !canDeleteSkill(deleteTarget)) {
+            setDeleteTarget(null);
             return;
           }
           const deleted = await installed.handleDelete(deleteTarget);

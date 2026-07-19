@@ -22,19 +22,6 @@
 
 // ─── clickable row ─────────────────────────────────────────────────────────────
 
-.bitfun-collection-item__row {
-  transition: background $motion-base $easing-standard;
-
-  &.is-clickable {
-    cursor: pointer;
-    user-select: none;
-  }
-
-  &.is-clickable:hover {
-    background: var(--element-bg-subtle);
-  }
-}
-
 // ─── label + inline badge ──────────────────────────────────────────────────────
 
 .bitfun-collection-item__label {
@@ -102,6 +89,16 @@
   gap: $size-gap-2;
 }
 
+.bitfun-collection-item__details-toggle {
+  svg {
+    transition: transform $motion-base $easing-standard;
+  }
+
+  &[aria-expanded='true'] svg {
+    transform: rotate(180deg);
+  }
+}
+
 // ─── expandable details ────────────────────────────────────────────────────────
 
 .bitfun-collection-item__details {
@@ -140,6 +137,11 @@
   &:hover {
     background: var(--element-bg-medium);
     color: var(--color-text-primary);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
 
   &--danger:hover {

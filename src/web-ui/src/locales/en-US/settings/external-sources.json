@@ -23,17 +23,88 @@
     "mcpUpdated": "Saved the MCP server choice and refreshed its status."
   },
   "unavailable": {
-    "title": "External settings unavailable",
-    "desktopOnly": "External sources are currently available only in the desktop app.",
-    "remoteWorkspace": "Remote workspaces cannot use local external settings yet. BitFun did not load local settings in their place."
+    "hostTitle": "Compatibility service unavailable",
+    "hostDescription": "This workspace host does not provide external compatibility yet. BitFun did not fall back to files or settings from this device."
+  },
+  "policy": {
+    "title": "External compatibility",
+    "externalBadge": "External",
+    "readySummary": "{{count}} external items detected with quiet, risk-based defaults.",
+    "attentionSummary": "{{count}} items need attention; unrelated work is not blocked.",
+    "enabledLabel": "Allow external compatibility",
+    "updated": "External compatibility settings were saved.",
+    "recoveryRequired": "This policy was written by a newer BitFun version, so external access is safely off.",
+    "unknownStatus": "This Host reports an unsupported policy state. External access stays off until BitFun is updated.",
+    "hostReadOnlyHint": "View only on this Host. Manage external integrations from Desktop or an authenticated Peer Host.",
+    "backupAndReset": "Back up and reset",
+    "resetConfirmTitle": "Back up and reset policy?",
+    "resetConfirmMessage": "BitFun will preserve the newer policy in a local backup, replace it with safe defaults, and keep external execution off until you enable it.",
+    "recoveryResetComplete": "The incompatible policy was backed up and reset to safe defaults.",
+    "inherited": "Inherited",
+    "projectOverride": "Project override",
+    "resetWorkspace": "Use global settings",
+    "adapterRevision": "Adapter {{revision}}",
+    "sourceCount": "{{count}} source locations",
+    "capabilities": "Customize capabilities",
+    "capabilitiesFor": "Customize {{ecosystem}} capabilities",
+    "modeLabel": "{{ecosystem}} compatibility mode",
+    "capabilityAccessLabel": "{{ecosystem}} {{capability}} access",
+    "unsupportedSafelyOff": "Unsupported by this version (safely off)",
+    "capabilitiesHint": "Choose how each kind of external content is discovered and used.",
+    "safetyLimited": "Safety limit",
+    "scope": {
+      "user": "Global",
+      "workspace": "This project",
+      "workspaceHint": "Project settings override only this workspace.",
+      "workspaceUnavailable": "Open a workspace to add a project override."
+    },
+    "mode": {
+      "recommended": "Recommended",
+      "discoverOnly": "Discover only",
+      "disabled": "Off",
+      "custom": "Custom"
+    },
+    "access": {
+      "disabled": "Off",
+      "discoverOnly": "Discover",
+      "askBeforeUse": "Ask before use",
+      "auto": "Use automatically"
+    },
+    "capability": {
+      "command": "Commands",
+      "tool": "Tools",
+      "subagent": "Agents",
+      "mcp": "MCP servers"
+    },
+    "health": {
+      "available": "Adapter available",
+      "partial": "Adapter partially available",
+      "degraded": "Adapter degraded",
+      "unavailable": "Adapter unavailable"
+    },
+    "state": {
+      "checking": "Checking",
+      "attention": "Needs attention",
+      "ready": "Ready",
+      "noConfig": "No configuration"
+    }
   },
   "errors": {
     "loadFailed": "BitFun could not load the current external settings. Do not assume external content is available; refresh to try again.",
     "refreshFailed": "BitFun could not check for changes. Previously enabled content remains available, but recent changes may be missing; refresh to retry.",
     "mutationUnknown": "BitFun could not confirm whether your change was saved. Do not assume an enable, disable, or source choice took effect; refresh to confirm the current state."
   },
+  "operationErrors": {
+    "rejected": "This change is not allowed in the current Host or policy. No settings were changed.",
+    "refreshRequired": "The catalog changed before this action completed. Refresh, review the current state, and try again.",
+    "policyIncompatible": "External settings were written by a newer BitFun version. Back up and reset them before making changes.",
+    "unavailableRetry": "The external integration Host is temporarily unavailable. Retry or refresh in a moment.",
+    "internal": "BitFun could not complete this operation. Retry once; use the reference id if it continues.",
+    "referenceId": "Reference: {{id}}"
+  },
   "diagnostics": {
     "summary": "{{count}} items need attention. Review the details to see what is affected.",
+    "sourceSummary": "{{name}} has {{count}} issues",
     "category": {
       "confirmationStateUnavailable": "BitFun could not verify saved tool confirmations, so affected tools remain disabled. Check BitFun settings storage, then refresh.",
       "conflictHistoryUnavailable": "BitFun could not save conflict information, so affected names remain unavailable. Check BitFun settings storage, then refresh.",

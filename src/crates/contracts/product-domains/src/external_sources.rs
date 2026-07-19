@@ -4,6 +4,7 @@
 //! surfaces and lifecycle coordination consume these types without branching on
 //! a concrete ecosystem or carrying arbitrary extension payloads.
 
+use crate::external_integration_policy::ExternalIntegrationPolicySnapshot;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -14,7 +15,10 @@ const MAX_ID_LENGTH: usize = 160;
 const MAX_TOOL_NAME_LENGTH: usize = 64;
 const MAX_TEXT_LENGTH: usize = 4096;
 
-fn validate_id(value: &str, label: &'static str) -> Result<(), ExternalSourceContractError> {
+pub(crate) fn validate_id(
+    value: &str,
+    label: &'static str,
+) -> Result<(), ExternalSourceContractError> {
     if value.is_empty()
         || value.len() > MAX_ID_LENGTH
         || value.trim() != value
@@ -36,6 +40,8 @@ fn validate_text(value: &str, label: &'static str) -> Result<(), ExternalSourceC
 pub enum ExternalSourceContractError {
     InvalidIdentifier(&'static str),
     InvalidText(&'static str),
+    InvalidPolicyDescriptor(&'static str),
+    UnsupportedPolicySchemaMajor(u32),
 }
 
 impl fmt::Display for ExternalSourceContractError {
@@ -43,11 +49,129 @@ impl fmt::Display for ExternalSourceContractError {
         match self {
             Self::InvalidIdentifier(label) => write!(formatter, "invalid {label} identifier"),
             Self::InvalidText(label) => write!(formatter, "invalid {label} text"),
+            Self::InvalidPolicyDescriptor(reason) => {
+                write!(
+                    formatter,
+                    "invalid external integration descriptor: {reason}"
+                )
+            }
+            Self::UnsupportedPolicySchemaMajor(major) => {
+                write!(
+                    formatter,
+                    "unsupported external integration policy schema major: {major}"
+                )
+            }
         }
     }
 }
 
 impl Error for ExternalSourceContractError {}
+
+/// Stable product error codes shared by Desktop, Server, CLI and remote hosts.
+/// User-facing copy is owned by each surface; `detail` is bounded diagnostic
+/// context and must not be used for control flow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalSourceOperationErrorCode {
+    InvalidRequest,
+    HostUnavailable,
+    HostCapabilityUnavailable,
+    PolicyIncompatible,
+    PolicyLimited,
+    StaleRevision,
+    Conflict,
+    NotFound,
+    Unavailable,
+    Internal,
+}
+
+impl ExternalSourceOperationErrorCode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidRequest => "invalid_request",
+            Self::HostUnavailable => "host_unavailable",
+            Self::HostCapabilityUnavailable => "host_capability_unavailable",
+            Self::PolicyIncompatible => "policy_incompatible",
+            Self::PolicyLimited => "policy_limited",
+            Self::StaleRevision => "stale_revision",
+            Self::Conflict => "conflict",
+            Self::NotFound => "not_found",
+            Self::Unavailable => "unavailable",
+            Self::Internal => "internal",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalSourceOperationError {
+    pub code: ExternalSourceOperationErrorCode,
+    pub detail: String,
+    pub retryable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correlation_id: Option<String>,
+}
+
+impl ExternalSourceOperationError {
+    pub fn new(
+        code: ExternalSourceOperationErrorCode,
+        detail: impl Into<String>,
+        retryable: bool,
+    ) -> Self {
+        let detail = detail.into();
+        Self {
+            code,
+            detail: detail.chars().take(MAX_TEXT_LENGTH).collect(),
+            retryable,
+            correlation_id: None,
+        }
+    }
+
+    pub fn with_correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
+        self.correlation_id = Some(correlation_id.into().chars().take(MAX_ID_LENGTH).collect());
+        self
+    }
+
+    /// Encode a typed failure while legacy internal call paths are migrated
+    /// away from `Result<_, String>`. Decoding is exact JSON parsing; callers
+    /// must never infer error categories from message text.
+    pub fn encode(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| {
+            r#"{"code":"internal","detail":"External source operation failed","retryable":false}"#
+                .to_string()
+        })
+    }
+
+    pub fn decode(encoded: &str) -> Option<Self> {
+        serde_json::from_str(encoded).ok()
+    }
+
+    pub fn host_capability_unavailable(detail: impl Into<String>) -> Self {
+        Self::new(
+            ExternalSourceOperationErrorCode::HostCapabilityUnavailable,
+            detail,
+            false,
+        )
+    }
+
+    pub fn invalid_request(detail: impl Into<String>) -> Self {
+        Self::new(
+            ExternalSourceOperationErrorCode::InvalidRequest,
+            detail,
+            false,
+        )
+    }
+}
+
+impl fmt::Display for ExternalSourceOperationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}: {}", self.code.as_str(), self.detail)
+    }
+}
+
+impl Error for ExternalSourceOperationError {}
+
+pub type ExternalSourceOperationResult<T> = Result<T, ExternalSourceOperationError>;
 
 macro_rules! open_id {
     ($name:ident, $label:literal) => {
@@ -83,6 +207,10 @@ open_id!(CommandLocalId, "command");
 open_id!(ToolTargetLocalId, "tool target");
 open_id!(ToolExportLocalId, "tool export");
 open_id!(McpServerLocalId, "MCP server");
+open_id!(
+    ExternalIntegrationCapabilityId,
+    "external integration capability"
+);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1506,6 +1634,150 @@ pub struct ExternalSourceCatalogSnapshot {
     pub subagent_conflicts: Vec<crate::external_subagents::ExternalSubagentConflict>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_subagent_approvals: Vec<String>,
+    /// Effective policy is owned by product assembly and projected unchanged
+    /// to every product surface.
+    #[serde(default)]
+    pub integration_policy: ExternalIntegrationPolicySnapshot,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<ExternalSourceDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalPromptCommandDefinitionSummary {
+    pub id: SourceQualifiedCommandId,
+    pub name: String,
+    pub description: String,
+    pub availability: PromptCommandAvailability,
+    pub content_version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalPromptCommandSummary {
+    pub definition: ExternalPromptCommandDefinitionSummary,
+}
+
+/// Stable cross-host projection. Executable prompt templates and prepared
+/// runtime payloads never cross a product-surface transport boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalSourceHostCapabilities {
+    pub can_refresh: bool,
+    pub can_mutate_policy: bool,
+    pub can_manage_sources: bool,
+    pub can_approve_runtime: bool,
+    pub can_execute_external_assets: bool,
+}
+
+impl ExternalSourceHostCapabilities {
+    pub const fn read_write() -> Self {
+        Self {
+            can_refresh: true,
+            can_mutate_policy: true,
+            can_manage_sources: true,
+            can_approve_runtime: true,
+            can_execute_external_assets: true,
+        }
+    }
+
+    pub const fn read_only_projection() -> Self {
+        Self {
+            can_refresh: true,
+            can_mutate_policy: false,
+            can_manage_sources: false,
+            can_approve_runtime: false,
+            can_execute_external_assets: false,
+        }
+    }
+}
+
+impl Default for ExternalSourceHostCapabilities {
+    fn default() -> Self {
+        Self::read_write()
+    }
+}
+
+/// Stable cross-host projection. Executable prompt templates and prepared
+/// runtime payloads never cross a product-surface transport boundary. Host
+/// capability facts are transport-owned and do not alter the authoritative
+/// product catalog or persisted policy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalSourcePublicSnapshot {
+    #[serde(default)]
+    pub host_capabilities: ExternalSourceHostCapabilities,
+    pub generation: u64,
+    pub discovery_pending: bool,
+    pub sources: Vec<ExternalSourceCatalogEntry>,
+    pub commands: Vec<ExternalPromptCommandSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command_conflicts: Vec<PromptCommandConflict>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<ExternalToolCatalogEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_approval_requests: Vec<ExternalToolApprovalRequest>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_conflicts: Vec<ExternalToolConflict>,
+    #[serde(default)]
+    pub mcp_generation: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<ExternalMcpCatalogEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_approval_requests: Vec<ExternalMcpApprovalRequest>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_conflicts: Vec<ExternalMcpConflict>,
+    #[serde(default)]
+    pub subagent_generation: u64,
+    #[serde(default)]
+    pub preference_revision: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagents: Vec<crate::external_subagents::ExternalSubagentSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_conflicts: Vec<crate::external_subagents::ExternalSubagentConflict>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_subagent_approvals: Vec<String>,
+    #[serde(default)]
+    pub integration_policy: ExternalIntegrationPolicySnapshot,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<ExternalSourceDiagnostic>,
+}
+
+impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {
+    fn from(snapshot: ExternalSourceCatalogSnapshot) -> Self {
+        Self {
+            host_capabilities: ExternalSourceHostCapabilities::read_write(),
+            generation: snapshot.generation,
+            discovery_pending: snapshot.discovery_pending,
+            sources: snapshot.sources,
+            commands: snapshot
+                .commands
+                .into_iter()
+                .map(|entry| ExternalPromptCommandSummary {
+                    definition: ExternalPromptCommandDefinitionSummary {
+                        id: entry.definition.id,
+                        name: entry.definition.name,
+                        description: entry.definition.description,
+                        availability: entry.definition.availability,
+                        content_version: entry.definition.content_version,
+                    },
+                })
+                .collect(),
+            command_conflicts: snapshot.command_conflicts,
+            tools: snapshot.tools,
+            tool_approval_requests: snapshot.tool_approval_requests,
+            tool_conflicts: snapshot.tool_conflicts,
+            mcp_generation: snapshot.mcp_generation,
+            mcp_servers: snapshot.mcp_servers,
+            mcp_approval_requests: snapshot.mcp_approval_requests,
+            mcp_conflicts: snapshot.mcp_conflicts,
+            subagent_generation: snapshot.subagent_generation,
+            preference_revision: snapshot.preference_revision,
+            subagents: snapshot.subagents,
+            subagent_conflicts: snapshot.subagent_conflicts,
+            pending_subagent_approvals: snapshot.pending_subagent_approvals,
+            integration_policy: snapshot.integration_policy,
+            diagnostics: snapshot.diagnostics,
+        }
+    }
 }

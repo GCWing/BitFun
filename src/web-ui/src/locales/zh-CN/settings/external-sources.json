@@ -23,17 +23,88 @@
     "mcpUpdated": "已保存 MCP 服务器选择并刷新状态。"
   },
   "unavailable": {
-    "title": "外部配置暂不可用",
-    "desktopOnly": "外部来源目前仅在桌面应用中可用。",
-    "remoteWorkspace": "远程工作区暂不能使用本机外部配置，BitFun 也不会改为加载本机配置。"
+    "hostTitle": "兼容服务不可用",
+    "hostDescription": "当前工作区宿主尚未提供外部兼容能力。BitFun 不会改用本机的文件或配置。"
+  },
+  "policy": {
+    "title": "外部兼容",
+    "externalBadge": "外部",
+    "readySummary": "已发现 {{count}} 项外部内容，并采用低打扰的风险默认策略。",
+    "attentionSummary": "有 {{count}} 项需要处理，不影响无关工作。",
+    "enabledLabel": "允许外部兼容",
+    "updated": "外部兼容设置已保存。",
+    "recoveryRequired": "此策略由较新的 BitFun 版本写入，外部能力已安全关闭。",
+    "unknownStatus": "当前 Host 返回了不支持的策略状态。升级 BitFun 前，外部能力保持关闭。",
+    "hostReadOnlyHint": "当前 Host 仅支持查看。请在桌面端或已认证的 Peer Host 中管理外部扩展。",
+    "backupAndReset": "备份并重置",
+    "resetConfirmTitle": "备份并重置策略？",
+    "resetConfirmMessage": "BitFun 会在本地保留新版策略备份，恢复安全默认值，并在你主动开启前保持外部执行关闭。",
+    "recoveryResetComplete": "不兼容策略已备份，并已恢复安全默认值。",
+    "inherited": "继承全局",
+    "projectOverride": "项目覆盖",
+    "resetWorkspace": "使用全局设置",
+    "adapterRevision": "适配器 {{revision}}",
+    "sourceCount": "{{count}} 个来源位置",
+    "capabilities": "定制能力",
+    "capabilitiesFor": "定制 {{ecosystem}} 能力",
+    "modeLabel": "{{ecosystem}} 兼容模式",
+    "capabilityAccessLabel": "{{ecosystem}} 的{{capability}}访问策略",
+    "unsupportedSafelyOff": "当前版本不支持（已安全关闭）",
+    "capabilitiesHint": "分别选择各类外部内容的发现与使用方式。",
+    "safetyLimited": "安全上限",
+    "scope": {
+      "user": "全局",
+      "workspace": "当前项目",
+      "workspaceHint": "项目设置仅覆盖当前工作区。",
+      "workspaceUnavailable": "打开工作区后可添加项目覆盖。"
+    },
+    "mode": {
+      "recommended": "推荐",
+      "discoverOnly": "仅发现",
+      "disabled": "关闭",
+      "custom": "自定义"
+    },
+    "access": {
+      "disabled": "关闭",
+      "discoverOnly": "仅发现",
+      "askBeforeUse": "使用前询问",
+      "auto": "自动使用"
+    },
+    "capability": {
+      "command": "命令",
+      "tool": "工具",
+      "subagent": "Agent",
+      "mcp": "MCP 服务器"
+    },
+    "state": {
+      "checking": "检查中",
+      "attention": "需要处理",
+      "ready": "已就绪",
+      "noConfig": "未发现配置"
+    },
+    "health": {
+      "available": "适配器可用",
+      "partial": "适配器部分可用",
+      "degraded": "适配器已降级",
+      "unavailable": "适配器不可用"
+    }
   },
   "errors": {
     "loadFailed": "BitFun 无法加载当前外部配置。请勿假定外部内容可用，并刷新重试。",
     "refreshFailed": "BitFun 无法检查变更。之前已启用的内容仍可使用，但可能未包含最近的变化；请刷新重试。",
     "mutationUnknown": "BitFun 无法确认本次更改是否已保存。请勿假定启用、停用或来源选择已经生效，并刷新确认当前状态。"
   },
+  "operationErrors": {
+    "rejected": "当前 Host 或策略不允许此更改，设置未发生变化。",
+    "refreshRequired": "操作完成前目录已变化。请刷新并确认当前状态后重试。",
+    "policyIncompatible": "外部设置由较新的 BitFun 版本写入。请先备份并重置，再进行更改。",
+    "unavailableRetry": "外部扩展 Host 暂时不可用。请稍后重试或刷新。",
+    "internal": "BitFun 无法完成此操作。请重试一次；若问题持续，请提供参考编号。",
+    "referenceId": "参考编号：{{id}}"
+  },
   "diagnostics": {
     "summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。",
+    "sourceSummary": "{{name}} 有 {{count}} 项问题",
     "category": {
       "confirmationStateUnavailable": "BitFun 无法验证已保存的工具确认状态，因此相关工具保持停用。请检查 BitFun 设置存储后刷新。",
       "conflictHistoryUnavailable": "BitFun 无法保存冲突信息，因此相关名称保持不可用。请检查 BitFun 设置存储后刷新。",

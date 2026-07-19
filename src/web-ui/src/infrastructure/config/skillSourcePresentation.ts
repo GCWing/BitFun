@@ -32,6 +32,17 @@ export function getSkillSourceLabel(
     || fallbackLabel;
 }
 
+export function canDeleteSkill(skill: SkillInfo): boolean {
+  if (skill.isBuiltin) return false;
+
+  const sourceId = skill.sourceId?.trim().toLowerCase();
+  if (sourceId) {
+    return sourceId === 'bitfun' || sourceId === 'bitfun-system';
+  }
+
+  return skill.sourceSlot?.trim().toLowerCase().startsWith('bitfun') ?? false;
+}
+
 export interface SkillOriginLabels {
   fallbackSourceLabel: string;
   userLabel: string;

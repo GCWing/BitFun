@@ -1575,6 +1575,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "update_external_integration_policy_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "update_mcp_remote_auth",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

@@ -165,6 +165,7 @@ export function runManifestParserSelfTest({
   for (const manifestPath of [
     'src/apps/desktop/Cargo.toml',
     'src/apps/cli/Cargo.toml',
+    'src/apps/server/Cargo.toml',
     'src/crates/interfaces/acp/Cargo.toml',
   ]) {
     if (!productCoreRulePaths.has(manifestPath)) {
@@ -195,15 +196,21 @@ export function runManifestParserSelfTest({
     },
     {
       manifestPath: 'src/apps/server/Cargo.toml',
-      text: '[dependencies]\naxum = { workspace = true }',
+      text:
+        '[dependencies]\nbitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }',
     },
     {
       manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
       text: '[dependencies."bitfun-core"]\npath = "../../assembly/core"\ndefault-features = false\nfeatures = ["product-full"]',
     },
   ]);
-  if (discoveredProductCoreManifests.join(',') !== 'src/apps/desktop/Cargo.toml,src/crates/interfaces/acp/Cargo.toml') {
-    throw new Error('product core dependency scanner must discover only manifests that depend on bitfun-core');
+  if (
+    discoveredProductCoreManifests.join(',') !==
+    'src/apps/desktop/Cargo.toml,src/apps/server/Cargo.toml,src/crates/interfaces/acp/Cargo.toml'
+  ) {
+    throw new Error(
+      'product core dependency scanner must discover only manifests that depend on bitfun-core',
+    );
   }
   const ownerFeatureRulePaths = new Set(
     ownerCrateFeatureAssemblyRules.map((rule) => rule.manifestPath),

@@ -422,6 +422,11 @@ impl ChatMode {
         }
 
         let workspace = self.workspace_path_for_sync(chat_state);
+        let expected_preference_revision = self
+            .external_source_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.preference_revision)
+            .unwrap_or(0);
         let pending_status = match &action {
             ExternalToolReviewAction::Refresh => "Refreshing external tools",
             ExternalToolReviewAction::Decide { approved: true, .. } => "Enabling external tool",
@@ -448,6 +453,7 @@ impl ChatMode {
                         approval_key,
                         decision_key,
                         *approved,
+                        expected_preference_revision,
                     )
                     .await
                 }
@@ -455,12 +461,17 @@ impl ChatMode {
                     conflict_key,
                     candidate_id,
                 } => {
-                    set_external_tool_conflict_choice(Some(&workspace), conflict_key, candidate_id)
-                        .await
+                    set_external_tool_conflict_choice(
+                        Some(&workspace),
+                        conflict_key,
+                        candidate_id,
+                        expected_preference_revision,
+                    )
+                    .await
                 }
                 ExternalToolReviewAction::Show => unreachable!(),
             }
-            .map_err(|error| error.to_string());
+            .map_err(sanitize_external_source_operation_error);
             let _ = sender.send(ExternalToolMutationResult {
                 action: task_action,
                 result,
@@ -519,10 +530,12 @@ impl ChatMode {
                 }
             }
             Err(error) => {
-                tracing::warn!("External tool review action failed: {}", error);
-                chat_view.set_status(Some(format!(
-                    "External tool choice was not applied: {error}. Run /builtin:tools refresh to review current results."
-                )));
+                tracing::warn!(
+                    error_code = error.code.as_str(),
+                    correlation_id = error.correlation_id.as_deref().unwrap_or("none"),
+                    "External tool review action failed"
+                );
+                chat_view.set_status(Some(external_operation_error_status("tools", &error)));
             }
         }
         true
@@ -655,7 +668,7 @@ impl ChatMode {
                 }
                 ExternalAgentReviewAction::Show => unreachable!(),
             }
-            .map_err(|error| error.to_string());
+            .map_err(sanitize_external_source_operation_error);
             let _ = sender.send(ExternalAgentMutationResult {
                 action: task_action,
                 result,
@@ -719,13 +732,12 @@ impl ChatMode {
                 }
             }
             Err(error) => {
-                tracing::warn!("External agent review action failed: {}", error);
-                let reason = error
-                    .split_once(':')
-                    .map_or(error.as_str(), |(_, reason)| reason.trim());
-                chat_view.set_status(Some(format!(
-                    "External agent choice was not applied: {reason}. Run /builtin:agents refresh to review current results."
-                )));
+                tracing::warn!(
+                    error_code = error.code.as_str(),
+                    correlation_id = error.correlation_id.as_deref().unwrap_or("none"),
+                    "External agent review action failed"
+                );
+                chat_view.set_status(Some(external_operation_error_status("agents", &error)));
             }
         }
         true

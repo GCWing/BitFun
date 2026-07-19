@@ -7,6 +7,49 @@
       "description": "Manage MCP server status and JSON configuration."
     }
   },
+  "external": {
+    "title": "External MCP servers",
+    "description": "MCP servers discovered from compatible ecosystems. Manage trust and conflicts from External integrations.",
+    "manage": "Manage external integrations",
+    "retry": "Retry external MCP sources",
+    "loading": "Checking external MCP sources...",
+    "unavailable": "External MCP sources are unavailable on this host.",
+    "empty": "No external MCP servers discovered.",
+    "unknown": "Unknown",
+    "scope": {
+      "userGlobal": "User",
+      "project": "Project",
+      "remoteUser": "Remote user",
+      "remoteProject": "Remote project"
+    },
+    "status": {
+      "checking": "Checking",
+      "stale": "Last valid",
+      "degraded": "Source issue",
+      "readOnly": "Read-only",
+      "approvalRequired": "Approval required",
+      "starting": "Starting",
+      "active": "Active",
+      "declined": "Declined",
+      "conflict": "Conflict",
+      "covered": "Covered",
+      "sourceDisabled": "Source disabled",
+      "configurationChanged": "Changed",
+      "unsupported": "Unsupported",
+      "runtimeUnavailable": "Unavailable",
+      "removed": "Removed"
+    },
+    "details": {
+      "source": "Source",
+      "scope": "Scope",
+      "location": "Configuration",
+      "transport": "Transport"
+    },
+    "transport": {
+      "localStdio": "Local process",
+      "streamableHttp": "Streamable HTTP"
+    }
+  },
   "tabs": {
     "servers": "Servers",
     "add": "Add Server"

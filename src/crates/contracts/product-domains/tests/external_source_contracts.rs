@@ -1,14 +1,23 @@
+use bitfun_product_domains::external_integration_policy::{
+    evaluate_external_integration_policy, external_integration_policy_snapshot,
+    ExternalEcosystemPolicy, ExternalEcosystemPolicyOverride, ExternalIntegrationAccess,
+    ExternalIntegrationCapabilityDescriptor, ExternalIntegrationEcosystemDescriptor,
+    ExternalIntegrationMode, ExternalIntegrationPolicyDocument, ExternalIntegrationPolicyOverride,
+    ExternalIntegrationPolicyStatus,
+};
 use bitfun_product_domains::external_sources::{
     external_mcp_approval_key, external_mcp_conflict_key, external_tool_approval_key,
     external_tool_conflict_key, prompt_command_conflict_key, EcosystemId, ExecutionDomainId,
-    ExpandedPromptCommand, ExternalMcpActivationState, ExternalMcpApprovalRequest,
-    ExternalMcpCatalogEntry, ExternalMcpConflict, ExternalMcpConflictCandidate,
-    ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity, ExternalMcpProviderSnapshot,
-    ExternalMcpServerDefinition, ExternalMcpStaticStatus, ExternalMcpTransportKind,
-    ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
-    ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalToolCapability,
-    ExternalToolDefinition, ExternalToolRuntimeKind, ExternalToolStaticStatus, ExternalWatchRoot,
-    PreparedExternalMcpServer, PreparedExternalMcpTransport, PromptCommandAvailability,
+    ExpandedPromptCommand, ExternalIntegrationCapabilityId, ExternalMcpActivationState,
+    ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
+    ExternalMcpConflictCandidate, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
+    ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
+    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
+    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
+    ExternalSourceProviderError, ExternalSourcePublicSnapshot, ExternalSourceRecord,
+    ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
+    ExternalToolStaticStatus, ExternalWatchRoot, PreparedExternalMcpServer,
+    PreparedExternalMcpTransport, PromptCommandAvailability, PromptCommandCatalogEntry,
     PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
     PromptCommandSourceProvider, SecretValue, SourceKey, SourceQualifiedCommandId,
     SourceQualifiedMcpServerId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
@@ -845,4 +854,342 @@ fn external_mcp_product_view_is_version_guarded_and_contains_only_disclosed_fiel
     assert!(encoded.contains("GITHUB_TOKEN"));
     assert!(!encoded.contains("Bearer secret"));
     assert!(encoded.contains("approval_required"));
+}
+
+fn external_capability(value: &str) -> ExternalIntegrationCapabilityId {
+    ExternalIntegrationCapabilityId::new(value).expect("valid external capability id")
+}
+
+const TEST_ECOSYSTEM_ID: &str = "test-ecosystem";
+const EXTERNAL_CAPABILITY_COMMAND: &str = "command";
+const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
+const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
+const EXTERNAL_CAPABILITY_MCP: &str = "mcp";
+
+fn test_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystemDescriptor> {
+    let capability =
+        |id, recommended_access, safety_ceiling| ExternalIntegrationCapabilityDescriptor {
+            capability_id: external_capability(id),
+            recommended_access,
+            safety_ceiling,
+        };
+    vec![ExternalIntegrationEcosystemDescriptor {
+        ecosystem_id: EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap(),
+        display_name: "Test ecosystem".to_string(),
+        adapter_revision: "1".to_string(),
+        capabilities: vec![
+            capability(
+                EXTERNAL_CAPABILITY_COMMAND,
+                ExternalIntegrationAccess::Auto,
+                ExternalIntegrationAccess::Auto,
+            ),
+            capability(
+                EXTERNAL_CAPABILITY_TOOL,
+                ExternalIntegrationAccess::AskBeforeUse,
+                ExternalIntegrationAccess::AskBeforeUse,
+            ),
+            capability(
+                EXTERNAL_CAPABILITY_SUBAGENT,
+                ExternalIntegrationAccess::AskBeforeUse,
+                ExternalIntegrationAccess::AskBeforeUse,
+            ),
+            capability(
+                EXTERNAL_CAPABILITY_MCP,
+                ExternalIntegrationAccess::AskBeforeUse,
+                ExternalIntegrationAccess::AskBeforeUse,
+            ),
+        ],
+    }]
+}
+
+#[test]
+fn recommended_external_integration_policy_is_low_friction_and_fail_closed() {
+    let effective = evaluate_external_integration_policy(
+        &ExternalIntegrationPolicyDocument::default(),
+        Some("workspace-a"),
+        &test_external_integration_ecosystems(),
+    )
+    .expect("default policy evaluates");
+    let opencode = effective
+        .ecosystems
+        .get(&EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap())
+        .expect("test ecosystem is registered");
+
+    assert_eq!(opencode.mode, ExternalIntegrationMode::Recommended);
+    assert_eq!(
+        opencode.capabilities[&external_capability(EXTERNAL_CAPABILITY_COMMAND)],
+        ExternalIntegrationAccess::Auto
+    );
+    for capability in [
+        EXTERNAL_CAPABILITY_TOOL,
+        EXTERNAL_CAPABILITY_SUBAGENT,
+        EXTERNAL_CAPABILITY_MCP,
+    ] {
+        assert_eq!(
+            opencode.capabilities[&external_capability(capability)],
+            ExternalIntegrationAccess::AskBeforeUse
+        );
+    }
+}
+
+#[test]
+fn workspace_policy_overrides_only_the_fields_the_user_changed() {
+    let ecosystem = EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap();
+    let mut document = ExternalIntegrationPolicyDocument::default();
+    document.user_defaults.ecosystems.insert(
+        ecosystem.clone(),
+        ExternalEcosystemPolicy {
+            mode: ExternalIntegrationMode::DiscoverOnly,
+            ..ExternalEcosystemPolicy::default()
+        },
+    );
+    document.workspace_overrides.insert(
+        "workspace-a".to_string(),
+        ExternalIntegrationPolicyOverride {
+            ecosystems: [(
+                ecosystem.clone(),
+                ExternalEcosystemPolicyOverride {
+                    mode: Some(ExternalIntegrationMode::Custom),
+                    capability_overrides: [(
+                        external_capability(EXTERNAL_CAPABILITY_COMMAND),
+                        ExternalIntegrationAccess::Auto,
+                    )]
+                    .into_iter()
+                    .collect(),
+                    ..ExternalEcosystemPolicyOverride::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..ExternalIntegrationPolicyOverride::default()
+        },
+    );
+
+    let effective = evaluate_external_integration_policy(
+        &document,
+        Some("workspace-a"),
+        &test_external_integration_ecosystems(),
+    )
+    .unwrap();
+    let opencode = &effective.ecosystems[&ecosystem];
+    assert_eq!(opencode.mode, ExternalIntegrationMode::Custom);
+    assert_eq!(
+        opencode.capabilities[&external_capability(EXTERNAL_CAPABILITY_COMMAND)],
+        ExternalIntegrationAccess::Auto
+    );
+    assert_eq!(
+        opencode.capabilities[&external_capability(EXTERNAL_CAPABILITY_MCP)],
+        ExternalIntegrationAccess::DiscoverOnly
+    );
+
+    let inherited = evaluate_external_integration_policy(
+        &document,
+        Some("workspace-b"),
+        &test_external_integration_ecosystems(),
+    )
+    .unwrap();
+    assert_eq!(
+        inherited.ecosystems[&ecosystem].mode,
+        ExternalIntegrationMode::DiscoverOnly
+    );
+}
+
+#[test]
+fn high_risk_auto_access_is_limited_by_the_capability_owner() {
+    let ecosystem = EcosystemId::new(TEST_ECOSYSTEM_ID).unwrap();
+    let mcp = external_capability(EXTERNAL_CAPABILITY_MCP);
+    let mut document = ExternalIntegrationPolicyDocument::default();
+    document.user_defaults.ecosystems.insert(
+        ecosystem.clone(),
+        ExternalEcosystemPolicy {
+            mode: ExternalIntegrationMode::Custom,
+            capability_overrides: [(mcp.clone(), ExternalIntegrationAccess::Auto)]
+                .into_iter()
+                .collect(),
+            ..ExternalEcosystemPolicy::default()
+        },
+    );
+
+    let effective = evaluate_external_integration_policy(
+        &document,
+        None,
+        &test_external_integration_ecosystems(),
+    )
+    .unwrap();
+    let opencode = &effective.ecosystems[&ecosystem];
+    assert_eq!(
+        opencode.capabilities[&mcp],
+        ExternalIntegrationAccess::AskBeforeUse
+    );
+    assert!(opencode.policy_limited_capabilities.contains(&mcp));
+}
+
+#[test]
+fn future_policy_values_and_minor_fields_survive_read_modify_write() {
+    let raw = serde_json::json!({
+        "schemaMajor": 1,
+        "userDefaults": {
+            "enabled": true,
+            "ecosystems": {
+                "opencode": {
+                    "mode": "future_mode",
+                    "capabilityOverrides": {
+                        "future-capability": "future_access"
+                    },
+                    "futureEcosystemField": { "enabled": true }
+                }
+            },
+            "futureSettingsField": "preserve-me"
+        },
+        "workspaceOverrides": {},
+        "futureDocumentField": [1, 2, 3]
+    });
+    let mut document: ExternalIntegrationPolicyDocument =
+        serde_json::from_value(raw.clone()).expect("future minor data remains readable");
+    document.user_defaults.enabled = false;
+    let encoded = serde_json::to_value(&document).expect("policy remains serializable");
+
+    assert_eq!(
+        encoded["userDefaults"]["ecosystems"]["opencode"]["mode"],
+        "future_mode"
+    );
+    assert_eq!(
+        encoded["userDefaults"]["ecosystems"]["opencode"]["capabilityOverrides"]
+            ["future-capability"],
+        "future_access"
+    );
+    assert_eq!(
+        encoded["userDefaults"]["ecosystems"]["opencode"]["futureEcosystemField"],
+        raw["userDefaults"]["ecosystems"]["opencode"]["futureEcosystemField"]
+    );
+    assert_eq!(
+        encoded["userDefaults"]["futureSettingsField"],
+        "preserve-me"
+    );
+    assert_eq!(encoded["futureDocumentField"], raw["futureDocumentField"]);
+
+    let effective = evaluate_external_integration_policy(
+        &document,
+        None,
+        &test_external_integration_ecosystems(),
+    )
+    .unwrap();
+    assert!(!effective.enabled);
+}
+
+#[test]
+fn incompatible_policy_schema_major_is_rejected_without_downgrade() {
+    let document = ExternalIntegrationPolicyDocument {
+        schema_major: 2,
+        ..ExternalIntegrationPolicyDocument::default()
+    };
+    let error = evaluate_external_integration_policy(
+        &document,
+        None,
+        &test_external_integration_ecosystems(),
+    )
+    .expect_err("future major schemas must fail closed");
+    assert!(error.to_string().contains("schema major: 2"));
+}
+
+#[test]
+fn incompatible_policy_schema_has_a_safe_read_only_public_snapshot() {
+    let raw = serde_json::json!({
+        "schemaMajor": 2,
+        "userDefaults": {
+            "enabled": true,
+            "futureSecretHostField": "persistence-only"
+        },
+        "futureDocumentField": { "keep": true }
+    });
+    let document: ExternalIntegrationPolicyDocument = serde_json::from_value(raw).unwrap();
+    let snapshot = external_integration_policy_snapshot(
+        &document,
+        Some("workspace-a"),
+        test_external_integration_ecosystems(),
+    )
+    .expect("incompatible schemas remain inspectable through a safe snapshot");
+
+    assert_eq!(
+        snapshot.status,
+        ExternalIntegrationPolicyStatus::IncompatibleSchema
+    );
+    assert!(!snapshot.global_effective.enabled);
+    assert!(!snapshot.effective.enabled);
+    assert!(snapshot
+        .effective
+        .ecosystems
+        .values()
+        .all(|ecosystem| ecosystem
+            .capabilities
+            .values()
+            .all(|access| { matches!(access, ExternalIntegrationAccess::Disabled) })));
+
+    let public = serde_json::to_string(&snapshot).unwrap();
+    assert!(!public.contains("futureSecretHostField"));
+    assert!(!public.contains("futureDocumentField"));
+
+    let persisted = serde_json::to_string(&document).unwrap();
+    assert!(persisted.contains("futureSecretHostField"));
+    assert!(persisted.contains("futureDocumentField"));
+}
+
+#[test]
+fn integration_registry_rejects_ambiguous_or_unsafe_descriptors() {
+    let mut duplicate_ecosystem = test_external_integration_ecosystems();
+    duplicate_ecosystem.push(duplicate_ecosystem[0].clone());
+    let duplicate_error = evaluate_external_integration_policy(
+        &ExternalIntegrationPolicyDocument::default(),
+        None,
+        &duplicate_ecosystem,
+    )
+    .expect_err("duplicate ecosystem registrations must fail closed");
+    assert!(duplicate_error.to_string().contains("duplicate ecosystem"));
+
+    let mut unsafe_recommendation = test_external_integration_ecosystems();
+    unsafe_recommendation[0].capabilities[1].recommended_access = ExternalIntegrationAccess::Auto;
+    let unsafe_error = evaluate_external_integration_policy(
+        &ExternalIntegrationPolicyDocument::default(),
+        None,
+        &unsafe_recommendation,
+    )
+    .expect_err("registry defaults cannot exceed their safety ceiling");
+    assert!(unsafe_error
+        .to_string()
+        .contains("exceeds the safety ceiling"));
+}
+
+#[test]
+fn public_snapshot_never_exposes_executable_prompt_templates() {
+    let snapshot = ExternalSourceCatalogSnapshot {
+        generation: 1,
+        discovery_pending: false,
+        sources: Vec::new(),
+        commands: vec![PromptCommandCatalogEntry {
+            definition: command("opencode", "project-commands", 1),
+        }],
+        command_conflicts: Vec::new(),
+        tools: Vec::new(),
+        tool_approval_requests: Vec::new(),
+        tool_conflicts: Vec::new(),
+        mcp_generation: 0,
+        mcp_servers: Vec::new(),
+        mcp_approval_requests: Vec::new(),
+        mcp_conflicts: Vec::new(),
+        subagent_generation: 0,
+        preference_revision: 0,
+        subagents: Vec::new(),
+        subagent_conflicts: Vec::new(),
+        pending_subagent_approvals: Vec::new(),
+        integration_policy: Default::default(),
+        diagnostics: Vec::new(),
+    };
+
+    let public = ExternalSourcePublicSnapshot::from(snapshot);
+    let encoded = serde_json::to_value(public).expect("serialize public projection");
+
+    assert_eq!(encoded["commands"][0]["definition"]["name"], "review");
+    assert!(encoded["commands"][0]["definition"]
+        .get("template")
+        .is_none());
 }

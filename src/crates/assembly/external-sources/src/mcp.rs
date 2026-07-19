@@ -1,10 +1,10 @@
 use bitfun_product_domains::external_sources::{
-    ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity, ExternalMcpProviderSnapshot,
-    ExternalMcpServerDefinition, ExternalMcpSourceProvider, ExternalMcpStaticStatus,
-    ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceContext,
-    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceLifecycleState,
-    ExternalSourceProviderError, ExternalWatchRoot, PreparedExternalMcpServer, ProviderId,
-    SourceKey, SourceQualifiedMcpServerId,
+    EcosystemId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
+    ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpSourceProvider,
+    ExternalMcpStaticStatus, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
+    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
+    ExternalSourceLifecycleState, ExternalSourceProviderError, ExternalWatchRoot,
+    PreparedExternalMcpServer, ProviderId, SourceKey, SourceQualifiedMcpServerId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -31,6 +31,7 @@ pub struct ExternalMcpCoordinatorSnapshot {
 /// parallel without teaching the coordinator about a concrete ecosystem.
 pub struct ExternalMcpDiscoveryRequest {
     provider_id: ProviderId,
+    ecosystem_id: EcosystemId,
     provider: Arc<dyn ExternalMcpSourceProvider>,
     input: ExternalMcpDiscoveryInput,
 }
@@ -38,6 +39,22 @@ pub struct ExternalMcpDiscoveryRequest {
 impl ExternalMcpDiscoveryRequest {
     pub fn provider_id(&self) -> &ProviderId {
         &self.provider_id
+    }
+
+    pub fn ecosystem_id(&self) -> &EcosystemId {
+        &self.ecosystem_id
+    }
+
+    pub fn disabled(self) -> ExternalMcpDiscoveryResult {
+        ExternalMcpDiscoveryResult {
+            provider_id: self.provider_id,
+            candidate: Ok(ExternalMcpProviderSnapshot {
+                provider: self.provider.identity(),
+                sources: Vec::new(),
+                servers: Vec::new(),
+                diagnostics: Vec::new(),
+            }),
+        }
     }
 
     pub fn execute(self) -> ExternalMcpDiscoveryResult {
@@ -143,6 +160,7 @@ impl ExternalMcpCoordinator {
             .iter()
             .map(|generation| ExternalMcpDiscoveryRequest {
                 provider_id: generation.identity.provider_id.clone(),
+                ecosystem_id: generation.identity.ecosystem_id.clone(),
                 provider: Arc::clone(&generation.provider),
                 input: ExternalMcpDiscoveryInput {
                     context: self.context.clone(),
@@ -191,6 +209,13 @@ impl ExternalMcpCoordinator {
 
     pub fn snapshot(&self) -> ExternalMcpCoordinatorSnapshot {
         self.snapshot.clone()
+    }
+
+    pub fn ecosystem_for_provider(&self, provider_id: &ProviderId) -> Option<EcosystemId> {
+        self.providers
+            .iter()
+            .find(|provider| &provider.identity.provider_id == provider_id)
+            .map(|provider| provider.identity.ecosystem_id.clone())
     }
 
     pub fn set_source_enabled(&mut self, stable_key: &str, enabled: bool) -> Result<(), String> {
@@ -278,6 +303,28 @@ impl ExternalMcpCoordinator {
     pub fn watch_roots(&self) -> Vec<ExternalWatchRoot> {
         let mut roots = BTreeMap::new();
         for provider in &self.providers {
+            for root in provider.provider.watch_roots(&self.context) {
+                roots
+                    .entry(root.path)
+                    .and_modify(|recursive| *recursive |= root.recursive)
+                    .or_insert(root.recursive);
+            }
+        }
+        roots
+            .into_iter()
+            .map(|(path, recursive)| ExternalWatchRoot { path, recursive })
+            .collect()
+    }
+
+    pub fn watch_roots_for_ecosystems(
+        &self,
+        ecosystems: &BTreeSet<EcosystemId>,
+    ) -> Vec<ExternalWatchRoot> {
+        let mut roots = BTreeMap::new();
+        for provider in &self.providers {
+            if !ecosystems.contains(&provider.identity.ecosystem_id) {
+                continue;
+            }
             for root in provider.provider.watch_roots(&self.context) {
                 roots
                     .entry(root.path)

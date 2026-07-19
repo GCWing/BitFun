@@ -11,7 +11,14 @@ use bitfun_product_domains::external_sources::{
     PreparedExternalMcpServer, PreparedExternalMcpTransport, SecretValue, SourceKey,
     SourceQualifiedMcpServerId,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+fn active_ecosystems() -> &'static BTreeSet<EcosystemId> {
+    static ECOSYSTEMS: std::sync::OnceLock<BTreeSet<EcosystemId>> = std::sync::OnceLock::new();
+    ECOSYSTEMS.get_or_init(|| {
+        BTreeSet::from([EcosystemId::new("opencode").expect("valid test ecosystem")])
+    })
+}
 
 #[test]
 fn unavailable_external_mcp_can_be_disabled_but_not_silently_reapproved() {
@@ -73,6 +80,7 @@ fn decisions<'a>(
     conflict_choices: &'a BTreeMap<String, String>,
 ) -> ExternalMcpDecisions<'a> {
     ExternalMcpDecisions {
+        active_ecosystems: active_ecosystems(),
         server_decisions,
         conflict_choices,
     }

@@ -5,14 +5,14 @@ use crate::service::mcp::{
 use async_trait::async_trait;
 use bitfun_external_sources::ExternalMcpCoordinatorSnapshot;
 use bitfun_product_domains::external_sources::{
-    external_mcp_approval_key, external_mcp_conflict_key, ExternalMcpActivationState,
+    external_mcp_approval_key, external_mcp_conflict_key, EcosystemId, ExternalMcpActivationState,
     ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
     ExternalMcpConflictCandidate, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
     ExternalSourceDiagnostic, PreparedExternalMcpServer, PreparedExternalMcpTransport,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +23,7 @@ pub(super) struct ExternalMcpDecision {
 }
 
 pub(super) struct ExternalMcpDecisions<'a> {
+    pub active_ecosystems: &'a BTreeSet<EcosystemId>,
     pub server_decisions: &'a BTreeMap<String, ExternalMcpDecision>,
     pub conflict_choices: &'a BTreeMap<String, String>,
 }
@@ -304,6 +305,16 @@ pub(super) fn reconcile_external_mcp_catalog(
             )
         })
         .collect::<BTreeMap<_, _>>();
+    let source_ecosystems = snapshot
+        .sources
+        .iter()
+        .map(|source| {
+            (
+                source.record.key.clone(),
+                source.record.ecosystem_id.clone(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut state = ExternalMcpProductState::default();
 
     for (_, mut group) in groups {
@@ -313,17 +324,25 @@ pub(super) fn reconcile_external_mcp_catalog(
         group
             .external
             .sort_by(|left, right| left.candidate_id().cmp(&right.candidate_id()));
-        let participant_count = group.native.len() + group.external.len();
-        let server_name = group
-            .native
-            .first()
-            .map(|candidate| candidate.name.as_str())
-            .or_else(|| group.external.first().map(|definition| definition.name.as_str()))
-            .unwrap_or_default();
+        let active_external = group
+            .external
+            .iter()
+            .copied()
+            .filter(|definition| {
+                source_ecosystems
+                    .get(&definition.id.source)
+                    .is_some_and(|ecosystem| decisions.active_ecosystems.contains(ecosystem))
+            })
+            .collect::<Vec<_>>();
+        let active_group = CandidateGroup {
+            native: group.native.clone(),
+            external: active_external,
+        };
+        let participant_count = active_group.native.len() + active_group.external.len();
         let pending_conflict = build_conflict(
             execution_domain_id,
             workspace_key,
-            &group,
+            &active_group,
             &source_names,
             decisions.conflict_choices,
         );
@@ -341,8 +360,7 @@ pub(super) fn reconcile_external_mcp_catalog(
             || decisions.conflict_choices.keys().any(|key| {
                 key.rsplit_once(':')
                     .is_some_and(|(lineage, _)| lineage == conflict_lineage)
-            })
-        {
+            }) {
             Some(pending_conflict)
         } else {
             None
@@ -351,7 +369,7 @@ pub(super) fn reconcile_external_mcp_catalog(
             .as_ref()
             .and_then(|conflict| conflict.selected_candidate_id.as_deref());
         let selected_external = selected_candidate_id.is_some_and(|selected| {
-            group
+            active_group
                 .external
                 .iter()
                 .any(|definition| definition.candidate_id() == selected)
@@ -373,12 +391,15 @@ pub(super) fn reconcile_external_mcp_catalog(
                 &definition.id,
                 &definition.behavior_version,
             );
-            let decision = current_or_previous_mcp_decision(
-                decisions.server_decisions,
-                &approval_key,
-            );
+            let decision =
+                current_or_previous_mcp_decision(decisions.server_decisions, &approval_key);
             let static_unavailable = static_unavailable_reason(definition);
-            let activation_state = if let Some(reason) = static_unavailable {
+            let ecosystem_active = source_ecosystems
+                .get(&definition.id.source)
+                .is_some_and(|ecosystem| decisions.active_ecosystems.contains(ecosystem));
+            let activation_state = if !ecosystem_active {
+                ExternalMcpActivationState::SourceDisabled
+            } else if let Some(reason) = static_unavailable {
                 if !definition.source_enabled
                     || matches!(
                         definition.static_status,

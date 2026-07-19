@@ -11,6 +11,7 @@ import { configAPI } from '../../api/service-api/ConfigAPI';
 import type { SkillInfo, SkillLevel, SkillMarketItem, SkillValidationResult } from '../types';
 import {
   buildSkillCoverageSourceMap,
+  canDeleteSkill,
   getSkillSourceLabel,
 } from '../skillSourcePresentation';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -146,7 +147,10 @@ const SkillsConfig: React.FC = () => {
 
   const confirmDelete = async () => {
     const skill = deleteConfirm.skill;
-    if (!skill) return;
+    if (!skill || !canDeleteSkill(skill)) {
+      setDeleteConfirm({ show: false, skill: null });
+      return;
+    }
     try {
       await configAPI.deleteSkill({
         skillKey: skill.key,
@@ -313,18 +317,16 @@ const SkillsConfig: React.FC = () => {
         )}
       </>
     );
-    const control = (
-      <>
+    const control = canDeleteSkill(skill) ? (
         <button
           type="button"
           className="bitfun-collection-btn bitfun-collection-btn--danger"
-          onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ show: true, skill }); }}
+          onClick={() => setDeleteConfirm({ show: true, skill })}
           title={t('list.item.deleteTooltip')}
         >
           <Trash2 size={14} />
         </button>
-      </>
-    );
+    ) : null;
     const details = (
       <>
         <div className="bitfun-collection-details__field">{skill.description}</div>
