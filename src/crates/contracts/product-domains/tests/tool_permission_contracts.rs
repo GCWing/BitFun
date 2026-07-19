@@ -1,8 +1,9 @@
 use bitfun_product_domains::tool_permissions::{
     merge_permission_rule_layers, resolve_permission_policy, wildcard_matches, PermissionEffect,
     PermissionEvaluator, PermissionPolicyConfig, PermissionPolicyLayers, PermissionPolicyPreset,
-    PermissionReply, PermissionRequest, PermissionRequestSource, PermissionRequestSourceKind,
-    PermissionResourceCaseSensitivity, PermissionRule, ToolPermissionConfig,
+    PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
+    PermissionRequestSource, PermissionRequestSourceKind, PermissionResourceCaseSensitivity,
+    PermissionRule, ToolPermissionConfig,
 };
 use serde_json::json;
 use serde_json::Map;
@@ -57,7 +58,29 @@ fn policy_presets_expand_into_ordinary_baseline_rules() {
         enforced: &[],
     });
 
-    assert_eq!(ask_rules, vec![rule("*", "*", PermissionEffect::Ask)]);
+    assert_eq!(
+        ask_rules,
+        vec![
+            rule("*", "*", PermissionEffect::Ask),
+            rule("read", "*", PermissionEffect::Allow),
+            rule("read", "*/.env", PermissionEffect::Ask),
+            rule("read", "*/.env.*", PermissionEffect::Ask),
+            rule("read", "*/.env.example", PermissionEffect::Allow),
+            rule("websearch", "*", PermissionEffect::Allow),
+            rule("webfetch", "*", PermissionEffect::Allow),
+            rule("task", "*", PermissionEffect::Allow),
+            rule("skill", "*", PermissionEffect::Allow),
+            rule("git", "git status *", PermissionEffect::Allow),
+            rule("git", "git diff *", PermissionEffect::Allow),
+            rule("git", "git log *", PermissionEffect::Allow),
+            rule("git", "git show *", PermissionEffect::Allow),
+            rule("git", "git blame *", PermissionEffect::Allow),
+            rule("git", "git rev-parse *", PermissionEffect::Allow),
+            rule("git", "git describe *", PermissionEffect::Allow),
+            rule("git", "git shortlog *", PermissionEffect::Allow),
+            rule("git", "git branch", PermissionEffect::Allow),
+        ]
+    );
     assert_eq!(
         full_access_rules,
         vec![rule("*", "*", PermissionEffect::Allow)]
@@ -70,6 +93,63 @@ fn policy_presets_expand_into_ordinary_baseline_rules() {
         evaluator.evaluate_resource("edit", "src/main.rs", &full_access_rules),
         PermissionEffect::Allow
     );
+}
+
+#[test]
+fn ask_preset_allows_low_risk_actions_and_keeps_mutations_guarded() {
+    let rules = resolve_permission_policy(PermissionPolicyLayers {
+        product_defaults: &[],
+        global: &policy(PermissionPolicyPreset::Ask, Vec::new()),
+        project: &[],
+        agent: &[],
+        enforced: &[],
+    });
+    let evaluator = PermissionEvaluator::case_sensitive();
+
+    for (action, resource) in [
+        ("read", "C:/repo/README.md"),
+        ("read", "C:/repo/.env.example"),
+        ("websearch", "BitFun permission model"),
+        ("webfetch", "https://example.com/docs"),
+        ("task", "general"),
+        ("task", "send_input:session-1"),
+        ("skill", "pdf"),
+        ("git", "git status"),
+        ("git", "git diff --staged"),
+        ("git", "git log --oneline -10"),
+        ("git", "git show HEAD"),
+        ("git", "git blame src/main.rs"),
+        ("git", "git rev-parse HEAD"),
+        ("git", "git describe --tags"),
+        ("git", "git shortlog -sn"),
+        ("git", "git branch"),
+    ] {
+        assert_eq!(
+            evaluator.evaluate_resource(action, resource, &rules),
+            PermissionEffect::Allow,
+            "{action} {resource}"
+        );
+    }
+
+    for (action, resource) in [
+        ("read", "C:/repo/.env"),
+        ("read", "C:/repo/.env.local"),
+        ("external_directory", "C:/outside"),
+        ("edit", "C:/repo/src/main.rs"),
+        ("bash", "cargo test"),
+        ("git", "git branch feature/new"),
+        ("git", "git add src/main.rs"),
+        ("git", "git commit -m change"),
+        ("git", "git push origin main"),
+        ("mcp", "server/tool"),
+        ("future_action", "resource"),
+    ] {
+        assert_eq!(
+            evaluator.evaluate_resource(action, resource, &rules),
+            PermissionEffect::Ask,
+            "{action} {resource}"
+        );
+    }
 }
 
 #[test]
@@ -95,7 +175,7 @@ fn resolved_policy_preserves_layer_order_and_enforced_limits() {
         resolved,
         [
             product_defaults,
-            vec![rule("*", "*", PermissionEffect::Allow)],
+            PermissionPolicyPreset::FullAccess.baseline_rules(),
             global.rules,
             project,
             agent,
@@ -201,6 +281,36 @@ fn permission_request_call_id_is_optional_and_camel_cased() {
     });
     let decoded: PermissionRequest = serde_json::from_value(legacy).expect("decode legacy request");
     assert_eq!(decoded.tool_call_id, None);
+}
+
+#[test]
+fn permission_request_events_use_camel_case_fields() {
+    assert_eq!(
+        serde_json::to_value(PermissionRequestEvent::Replied {
+            request_id: "request-1".to_string(),
+            reply: PermissionReply::Once,
+            source: PermissionReplySource::AutoApprove,
+        })
+        .expect("serialize replied permission event"),
+        json!({
+            "event": "replied",
+            "requestId": "request-1",
+            "reply": { "reply": "once" },
+            "source": "auto_approve",
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(PermissionRequestEvent::Cancelled {
+            request_id: "request-2".to_string(),
+            reason: "session closed".to_string(),
+        })
+        .expect("serialize cancelled permission event"),
+        json!({
+            "event": "cancelled",
+            "requestId": "request-2",
+            "reason": "session closed",
+        })
+    );
 }
 
 #[test]

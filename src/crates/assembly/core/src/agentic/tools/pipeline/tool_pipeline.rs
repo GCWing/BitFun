@@ -610,24 +610,27 @@ impl ToolPipeline {
 
         for intent in asks {
             let request_id = uuid::Uuid::new_v4().to_string();
-            let pending = manager
-                .register(PermissionV2Request {
-                    request_id: request_id.clone(),
-                    tool_call_id: Some(task.tool_call.tool_id.clone()),
-                    project_id: project_id.clone(),
-                    session_id: task.context.session_id.clone(),
-                    agent_id: task.context.agent_type.clone(),
-                    action: intent.action,
-                    resources: intent.resources,
-                    save_resources: intent.save_resources,
-                    source: PermissionRequestSource {
-                        kind: PermissionRequestSourceKind::ToolCall,
-                        identity: tool_name.to_string(),
-                    },
-                    display_metadata: intent.display_metadata,
-                })
-                .await
-                .map_err(|error| BitFunError::service(error.to_string()))?;
+            let request = PermissionV2Request {
+                request_id: request_id.clone(),
+                tool_call_id: Some(task.tool_call.tool_id.clone()),
+                project_id: project_id.clone(),
+                session_id: task.context.session_id.clone(),
+                agent_id: task.context.agent_type.clone(),
+                action: intent.action,
+                resources: intent.resources,
+                save_resources: intent.save_resources,
+                source: PermissionRequestSource {
+                    kind: PermissionRequestSourceKind::ToolCall,
+                    identity: tool_name.to_string(),
+                },
+                display_metadata: intent.display_metadata,
+            };
+            let pending = if task.options.auto_approve_ask {
+                manager.register_non_interactive(request).await
+            } else {
+                manager.register(request).await
+            }
+            .map_err(|error| BitFunError::service(error.to_string()))?;
 
             if task.options.auto_approve_ask {
                 if cancellation_token.is_cancelled() {
@@ -2627,16 +2630,8 @@ mod tests {
             }
         ));
         assert!(matches!(
-            events.try_recv().expect("asked event"),
-            bitfun_runtime_ports::PermissionRequestEvent::Asked { .. }
-        ));
-        assert!(matches!(
-            events.try_recv().expect("replied event"),
-            bitfun_runtime_ports::PermissionRequestEvent::Replied {
-                reply: PermissionReply::Once,
-                source: bitfun_runtime_ports::PermissionReplySource::AutoApprove,
-                ..
-            }
+            events.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
         ));
         assert!(manager.pending_requests().is_empty());
     }

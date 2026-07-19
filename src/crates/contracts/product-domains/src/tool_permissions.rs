@@ -53,15 +53,32 @@ pub enum PermissionPolicyPreset {
 }
 
 impl PermissionPolicyPreset {
-    pub const fn effect(self) -> PermissionEffect {
+    pub fn baseline_rules(self) -> PermissionRuleset {
         match self {
-            Self::Ask => PermissionEffect::Ask,
-            Self::FullAccess => PermissionEffect::Allow,
+            // Later matches win, so sensitive read exceptions follow the broad
+            // low-risk allow and .env.example follows the .env.* guard.
+            Self::Ask => vec![
+                PermissionRule::new("*", "*", PermissionEffect::Ask),
+                PermissionRule::new("read", "*", PermissionEffect::Allow),
+                PermissionRule::new("read", "*/.env", PermissionEffect::Ask),
+                PermissionRule::new("read", "*/.env.*", PermissionEffect::Ask),
+                PermissionRule::new("read", "*/.env.example", PermissionEffect::Allow),
+                PermissionRule::new("websearch", "*", PermissionEffect::Allow),
+                PermissionRule::new("webfetch", "*", PermissionEffect::Allow),
+                PermissionRule::new("task", "*", PermissionEffect::Allow),
+                PermissionRule::new("skill", "*", PermissionEffect::Allow),
+                PermissionRule::new("git", "git status *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git diff *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git log *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git show *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git blame *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git rev-parse *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git describe *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git shortlog *", PermissionEffect::Allow),
+                PermissionRule::new("git", "git branch", PermissionEffect::Allow),
+            ],
+            Self::FullAccess => vec![PermissionRule::new("*", "*", PermissionEffect::Allow)],
         }
-    }
-
-    pub fn baseline_rule(self) -> PermissionRule {
-        PermissionRule::new("*", "*", self.effect())
     }
 }
 
@@ -105,10 +122,10 @@ pub struct PermissionPolicyLayers<'a> {
 /// Expands the configured preset and merges every static rule layer in its
 /// security-significant evaluation order.
 pub fn resolve_permission_policy(layers: PermissionPolicyLayers<'_>) -> PermissionRuleset {
-    let baseline = layers.global.preset.baseline_rule();
+    let baseline = layers.global.preset.baseline_rules();
     merge_permission_rule_layers(&[
         layers.product_defaults,
-        std::slice::from_ref(&baseline),
+        &baseline,
         &layers.global.rules,
         layers.project,
         layers.agent,
@@ -182,7 +199,11 @@ pub enum PermissionReplySource {
 
 /// Process-local lifecycle event projected to interactive permission surfaces.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "event", rename_all = "snake_case")]
+#[serde(
+    tag = "event",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum PermissionRequestEvent {
     Asked {
         request: PermissionRequest,

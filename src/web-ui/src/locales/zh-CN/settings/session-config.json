@@ -55,7 +55,7 @@
     "sectionDescription": "设置默认工具访问策略和权限询问的处理方式。",
     "mode": "权限模式",
     "ask": "访问前确认",
-    "askDescription": "除非更具体的规则已允许或拒绝，否则工具执行前会请求确认。",
+    "askDescription": "低风险读取、浏览、Task 和 Skill 自动允许；文件修改、命令执行及其他受限操作需要确认。",
     "fullAccess": "完全访问",
     "fullAccessDescription": "默认允许工具执行，但显式拒绝规则、产品限制和操作系统权限仍然生效。",
     "fullAccessWarningTitle": "启用完全访问？",

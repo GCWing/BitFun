@@ -77,6 +77,7 @@ pub enum PermissionRequestManagerError {
 struct PendingPermission {
     request: PermissionV2Request,
     sender: oneshot::Sender<PermissionWaitOutcome>,
+    interactive: bool,
 }
 
 #[derive(Clone)]
@@ -179,6 +180,23 @@ impl PermissionRequestManager {
         &self,
         request: PermissionV2Request,
     ) -> Result<PendingPermissionReceiver, PermissionRequestManagerError> {
+        self.register_with_visibility(request, true).await
+    }
+
+    /// Registers a request for internal coordination and audit without exposing
+    /// it to interactive subscribers or pending-request snapshots.
+    pub async fn register_non_interactive(
+        &self,
+        request: PermissionV2Request,
+    ) -> Result<PendingPermissionReceiver, PermissionRequestManagerError> {
+        self.register_with_visibility(request, false).await
+    }
+
+    async fn register_with_visibility(
+        &self,
+        request: PermissionV2Request,
+        interactive: bool,
+    ) -> Result<PendingPermissionReceiver, PermissionRequestManagerError> {
         let _operation = self.operations.lock().await;
         let request_id = request.request_id.clone();
         let (sender, receiver) = oneshot::channel();
@@ -191,6 +209,7 @@ impl PermissionRequestManager {
                 entry.insert(PendingPermission {
                     request: request.clone(),
                     sender,
+                    interactive,
                 });
             }
         }
@@ -206,9 +225,11 @@ impl PermissionRequestManager {
             return Err(PermissionRequestManagerError::AuditStore(error));
         }
 
-        let _ = self.events.send(PermissionRequestEvent::Asked {
-            request: request.clone(),
-        });
+        if interactive {
+            let _ = self.events.send(PermissionRequestEvent::Asked {
+                request: request.clone(),
+            });
+        }
 
         Ok(PendingPermissionReceiver {
             request_id,
@@ -220,6 +241,17 @@ impl PermissionRequestManager {
         let mut requests = self
             .pending
             .iter()
+            .map(|entry| entry.request.clone())
+            .collect::<Vec<_>>();
+        requests.sort_by(|left, right| left.request_id.cmp(&right.request_id));
+        requests
+    }
+
+    pub fn interactive_pending_requests(&self) -> Vec<PermissionV2Request> {
+        let mut requests = self
+            .pending
+            .iter()
+            .filter(|entry| entry.interactive)
             .map(|entry| entry.request.clone())
             .collect::<Vec<_>>();
         requests.sort_by(|left, right| left.request_id.cmp(&right.request_id));
@@ -292,11 +324,13 @@ impl PermissionRequestManager {
                 let _ = pending
                     .sender
                     .send(PermissionWaitOutcome::Replied(pending_reply.clone()));
-                let _ = self.events.send(PermissionRequestEvent::Replied {
-                    request_id: pending_request.request_id,
-                    reply: pending_reply,
-                    source,
-                });
+                if pending.interactive {
+                    let _ = self.events.send(PermissionRequestEvent::Replied {
+                        request_id: pending_request.request_id,
+                        reply: pending_reply,
+                        source,
+                    });
+                }
             }
         }
 
@@ -371,10 +405,12 @@ impl PermissionRequestManager {
                 let _ = pending.sender.send(PermissionWaitOutcome::Cancelled {
                     reason: reason.clone(),
                 });
-                let _ = self.events.send(PermissionRequestEvent::Cancelled {
-                    request_id: request.request_id,
-                    reason: reason.clone(),
-                });
+                if pending.interactive {
+                    let _ = self.events.send(PermissionRequestEvent::Cancelled {
+                        request_id: request.request_id,
+                        reason: reason.clone(),
+                    });
+                }
             }
         }
         Ok(())
@@ -554,5 +590,45 @@ mod tests {
                 reason: "session closed".to_string()
             }
         );
+    }
+
+    #[tokio::test]
+    async fn non_interactive_request_is_audited_without_entering_interactive_surfaces() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager =
+            PermissionRequestManager::new(store.clone(), store.clone(), Arc::new(FixedClock));
+        let mut events = manager.subscribe();
+
+        let pending = manager
+            .register_non_interactive(request())
+            .await
+            .expect("register non-interactive request");
+
+        assert_eq!(manager.pending_requests(), vec![request()]);
+        assert!(manager.interactive_pending_requests().is_empty());
+        assert!(matches!(
+            events.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+
+        manager
+            .reply(
+                "request-1",
+                PermissionReply::Once,
+                PermissionReplySource::AutoApprove,
+            )
+            .await
+            .expect("auto-approve request");
+
+        assert_eq!(
+            pending.wait().await,
+            PermissionWaitOutcome::Replied(PermissionReply::Once)
+        );
+        assert!(manager.pending_requests().is_empty());
+        assert!(matches!(
+            events.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+        assert_eq!(store.audit.lock().unwrap().len(), 2);
     }
 }

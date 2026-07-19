@@ -97,4 +97,50 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       refreshOnActive: false,
     }));
   });
+
+  it('keeps an ask-mode permission entry visible and switches from its menu', async () => {
+    const onChange = vi.fn();
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath=""
+          workspaceLabel=""
+          permissionControl={{ mode: 'ask', onChange }}
+        />
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-trigger"]');
+    expect(trigger?.dataset.permissionMode).toBe('ask');
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).not.toBeNull();
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-option-auto"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith('auto');
+    expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+  });
+
+  it('shows ACP ownership without exposing native permission choices', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          permissionControl={{ mode: 'acp' }}
+        />
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-trigger"]');
+    expect(trigger?.disabled).toBe(true);
+    expect(trigger?.dataset.permissionMode).toBe('acp');
+    expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+  });
 });

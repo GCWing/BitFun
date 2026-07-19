@@ -55,7 +55,7 @@
     "sectionDescription": "Choose the default tool access policy and how permission prompts are handled.",
     "mode": "Permission mode",
     "ask": "Ask before access",
-    "askDescription": "Tools ask for approval unless a more specific rule already allows or denies the action.",
+    "askDescription": "Low-risk reads, browsing, Task, and Skill are allowed automatically; file changes, commands, and other restricted actions require approval.",
     "fullAccess": "Full access",
     "fullAccessDescription": "Tools are allowed by default, while explicit deny rules, product restrictions, and operating system permissions still apply.",
     "fullAccessWarningTitle": "Enable full access?",

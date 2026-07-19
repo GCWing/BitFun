@@ -615,7 +615,7 @@ impl AgentRuntime {
     pub fn pending_permission_requests(&self) -> Result<Vec<PermissionV2Request>, RuntimeError> {
         self.permission_requests
             .as_ref()
-            .map(|manager| manager.pending_requests())
+            .map(|manager| manager.interactive_pending_requests())
             .ok_or(RuntimeError::MissingPermissionRequestManager)
     }
 

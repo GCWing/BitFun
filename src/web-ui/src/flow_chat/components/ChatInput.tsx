@@ -6,7 +6,7 @@
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, useSyncExternalStore } from 'react';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star, ShieldCheck } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState, type InlineTriggerState } from './RichTextInput';
@@ -62,7 +62,7 @@ import {
 import { isReviewSlashCommand } from '../deep-review/launch/commandParser';
 import { createLogger } from '@/shared/utils/logger';
 import { isTauriRuntime } from '@/infrastructure/runtime';
-import { Tooltip, IconButton, confirmWarning } from '@/component-library';
+import { Tooltip, IconButton, confirmDanger, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/btwSessionPane';
@@ -84,12 +84,20 @@ import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
-import { configManager, normalizeToolPermissionConfig, permissionConfigService } from '@/infrastructure/config';
+import {
+  configManager,
+  DEFAULT_TOOL_PERMISSION_CONFIG,
+  normalizeToolPermissionConfig,
+  permissionConfigService,
+} from '@/infrastructure/config';
 import type { ToolPermissionConfig } from '@/infrastructure/config/types';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
-import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
+import {
+  ChatInputWorkspaceStrip,
+  type ChatInputPermissionMode,
+} from './ChatInputWorkspaceStrip';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import {
   appendSkillPromptReferenceToken,
@@ -288,8 +296,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [savedDraft, setSavedDraft] = useState('');
   const [inputTarget, setInputTarget] = useState<ChatInputTarget>('main');
-  const [autoApproveAskEnabled, setAutoApproveAskEnabled] = useState(false);
-  const [autoApproveAskSaving, setAutoApproveAskSaving] = useState(false);
+  const [toolPermissionConfig, setToolPermissionConfig] = useState<ToolPermissionConfig>(
+    DEFAULT_TOOL_PERMISSION_CONFIG,
+  );
+  const [permissionModeSaving, setPermissionModeSaving] = useState(false);
   const { addMessage: addToHistory, getSessionHistory } = useInputHistoryStore();
   
   const contexts = useContextStore(state => state.contexts);
@@ -679,6 +689,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [effectiveTargetSession]
   );
   const isAcpTargetSession = Boolean(acpTargetAgentType);
+  const permissionMode: ChatInputPermissionMode = isAcpTargetSession
+    ? 'acp'
+    : toolPermissionConfig.policy.preset === 'full_access'
+      ? 'full_access'
+      : toolPermissionConfig.interaction.auto_approve_ask
+        ? 'auto'
+        : 'ask';
   const activeSessionMode = effectiveTargetSessionId
     ? acpTargetAgentType || flowChatState.sessions.get(effectiveTargetSessionId)?.mode
     : undefined;
@@ -1366,7 +1383,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     let cancelled = false;
     const applyConfig = (config: ToolPermissionConfig) => {
       if (!cancelled) {
-        setAutoApproveAskEnabled(config.interaction.auto_approve_ask);
+        setToolPermissionConfig(config);
       }
     };
     const loadConfig = async () => {
@@ -1388,21 +1405,46 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, []);
 
-  const handleDisableAutoApproveAsk = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    if (autoApproveAskSaving) return;
-    setAutoApproveAskEnabled(false);
-    setAutoApproveAskSaving(true);
-    try {
-      await permissionConfigService.setAutoApproveAsk(false);
-    } catch (error) {
-      log.error('Failed to disable auto approve ask', error);
-      setAutoApproveAskEnabled(true);
-      notificationService.error(t('chatInput.autoPermissionDisableFailed'));
-    } finally {
-      setAutoApproveAskSaving(false);
+  const handlePermissionModeChange = useCallback(async (
+    nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
+  ) => {
+    if (permissionModeSaving || isAcpTargetSession) return;
+    if (nextMode === 'full_access') {
+      const confirmed = await confirmDanger(
+        t('chatInput.permissionMode.fullAccessWarningTitle'),
+        t('chatInput.permissionMode.fullAccessWarningMessage'),
+        {
+          confirmText: t('chatInput.permissionMode.fullAccessConfirm'),
+          cancelText: t('chatInput.permissionMode.cancel'),
+        },
+      );
+      if (!confirmed) return;
     }
-  }, [autoApproveAskSaving, t]);
+
+    const previousConfig = toolPermissionConfig;
+    const nextConfig: ToolPermissionConfig = {
+      policy: {
+        ...previousConfig.policy,
+        preset: nextMode === 'full_access' ? 'full_access' : 'ask',
+      },
+      interaction: {
+        ...previousConfig.interaction,
+        auto_approve_ask: nextMode === 'auto',
+      },
+    };
+    setToolPermissionConfig(nextConfig);
+    setPermissionModeSaving(true);
+    try {
+      const saved = await permissionConfigService.saveConfig(nextConfig);
+      setToolPermissionConfig(saved);
+    } catch (error) {
+      log.error('Failed to change permission mode', error);
+      setToolPermissionConfig(previousConfig);
+      notificationService.error(t('chatInput.permissionMode.changeFailed'));
+    } finally {
+      setPermissionModeSaving(false);
+    }
+  }, [isAcpTargetSession, permissionModeSaving, t, toolPermissionConfig]);
 
   React.useEffect(() => {
     if (!slashCommandState.isActive || slashCommandState.kind !== 'all' || derivedState?.isProcessing) {
@@ -4281,22 +4323,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     </div>
                   )}
                 </div>
-                {autoApproveAskEnabled && !isAcpTargetSession && (
-                  <Tooltip content={t('chatInput.autoPermissionDisable')}>
-                    <button
-                      type="button"
-                      className="bitfun-chat-input__auto-permission"
-                      aria-label={t('chatInput.autoPermissionDisable')}
-                      disabled={autoApproveAskSaving}
-                      data-testid="chat-input-auto-permission"
-                      onClick={handleDisableAutoApproveAsk}
-                    >
-                      <ShieldCheck size={12} aria-hidden />
-                      <span>{t('chatInput.autoPermissionEnabled')}</span>
-                      <X size={11} aria-hidden />
-                    </button>
-                  </Tooltip>
-                )}
               </div>
               <div className="bitfun-chat-input__actions-right">
                 <div className="bitfun-chat-input__model-usage-group">
@@ -4317,30 +4343,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         </div>
       </div>
-      {((chatStripRepositoryPath || chatStripWorkspaceLabel) ||
-        (effectiveTargetSessionId && effectiveTargetSession)) && (
-        <ChatInputWorkspaceStrip
-          repositoryPath={chatStripRepositoryPath}
-          workspaceLabel={chatStripWorkspaceLabel}
-          deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
-          usageReport={
-            effectiveTargetSessionId && effectiveTargetSession
-              ? { visible: true, onOpen: handleToolbarUsageReport }
-              : undefined
-          }
-          threadGoal={
-            effectiveTargetSessionId && effectiveTargetSession && !isBtwSession
-              ? {
-                  visible: true,
-                  goal: threadGoalController.goal,
-                  onOpen: () => {
-                    void threadGoalController.openGoalEntry();
-                  },
-                }
-              : undefined
-          }
-        />
-      )}
+      <ChatInputWorkspaceStrip
+        repositoryPath={chatStripRepositoryPath}
+        workspaceLabel={chatStripWorkspaceLabel}
+        deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
+        permissionControl={{
+          mode: permissionMode,
+          saving: permissionModeSaving,
+          onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
+        }}
+        usageReport={
+          effectiveTargetSessionId && effectiveTargetSession
+            ? { visible: true, onOpen: handleToolbarUsageReport }
+            : undefined
+        }
+        threadGoal={
+          effectiveTargetSessionId && effectiveTargetSession && !isBtwSession
+            ? {
+                visible: true,
+                goal: threadGoalController.goal,
+                onOpen: () => {
+                  void threadGoalController.openGoalEntry();
+                },
+              }
+            : undefined
+        }
+      />
       {effectiveTargetSession && !isBtwSession ? (
         <ThreadGoalDialogs
           controller={threadGoalController}
