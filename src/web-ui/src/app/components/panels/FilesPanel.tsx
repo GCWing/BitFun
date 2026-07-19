@@ -266,7 +266,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     rootPath: workspacePath,
     autoLoad: true,
     enablePathCompression: true,
-    showHiddenFiles: false,
+    showHiddenFiles: true,
     // Local filesystem watchers are unavailable for remote SSH workspaces.
     enableAutoWatch: !isRemoteCurrentWorkspace,
   });

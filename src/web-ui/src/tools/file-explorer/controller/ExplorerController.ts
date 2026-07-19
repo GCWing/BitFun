@@ -94,7 +94,7 @@ export class ExplorerController {
     autoLoad: true,
     enableAutoWatch: true,
     enablePathCompression: true,
-    showHiddenFiles: false,
+    showHiddenFiles: true,
     sortBy: 'name',
     sortOrder: 'asc',
     excludePatterns: [],
