@@ -6,8 +6,11 @@ use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_core::agentic::coordination::{self, DialogScheduler};
 use bitfun_core::agentic::system::AgenticSystem;
 use bitfun_core::product_assembly::{ProductAssemblyPlan, ProductServiceCapabilityAvailability};
-use bitfun_core::product_runtime::{CoreAgentRuntimeCompatibility, CoreProductAgentRuntime};
+use bitfun_core::product_runtime::{
+    CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
+};
 use bitfun_core::runtime_ports::PluginRuntimeAvailability;
+use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
 use bitfun_runtime_services::RuntimeServices;
 
 use crate::product_assembly::{assemble_acp_runtime_parts, assemble_cli_runtime_parts};
@@ -52,6 +55,7 @@ impl CliProductRuntimeState {
 pub(crate) struct CliRuntimeContext {
     workspace_root: PathBuf,
     agent_runtime: AgentRuntime,
+    local_workspace_snapshot: Arc<dyn LocalWorkspaceSnapshotPort>,
     compatibility: CoreAgentRuntimeCompatibility,
     agent_events: CliAgentEventSource,
     services: RuntimeServices,
@@ -102,6 +106,7 @@ impl CliRuntimeContext {
         .context("Failed to build CLI Agent Runtime SDK")?;
         let compatibility =
             CoreAgentRuntimeCompatibility::build(agentic_system.coordinator.clone(), scheduler);
+        let local_workspace_snapshot = CoreLocalWorkspaceSnapshot::build();
 
         debug_assert_eq!(
             agent_runtime.harness_provider_ids(),
@@ -116,6 +121,7 @@ impl CliRuntimeContext {
             workspace_root,
             agent_events,
             agent_runtime,
+            local_workspace_snapshot,
             compatibility,
             services,
             product,
@@ -134,6 +140,10 @@ impl CliRuntimeContext {
 
     pub(crate) fn compatibility(&self) -> &CoreAgentRuntimeCompatibility {
         &self.compatibility
+    }
+
+    pub(crate) fn local_workspace_snapshot(&self) -> &Arc<dyn LocalWorkspaceSnapshotPort> {
+        &self.local_workspace_snapshot
     }
 
     pub(crate) fn agent_events(&self) -> &CliAgentEventSource {

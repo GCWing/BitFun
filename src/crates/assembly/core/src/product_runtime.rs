@@ -17,8 +17,9 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
-    PortError, PortErrorKind, PortResult, SessionStoragePathRequest, SessionStorePort,
-    SessionViewRestoreTiming,
+    LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
+    LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind, PortResult,
+    SessionStoragePathRequest, SessionStorePort, SessionViewRestoreTiming,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -33,7 +34,8 @@ use crate::agentic::session::CoreSessionStorePort;
 use crate::service::session::{DialogTurnData, SessionMetadata};
 use crate::service::session_usage::{generate_session_usage_report, SessionUsageReport};
 use crate::service::snapshot::{
-    get_snapshot_manager_for_workspace, initialize_snapshot_manager_for_workspace, SnapshotManager,
+    get_snapshot_manager_for_workspace, initialize_snapshot_manager_for_workspace, SnapshotError,
+    SnapshotManager,
 };
 use crate::service::token_usage::TokenUsageService;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
@@ -77,19 +79,123 @@ async fn generate_core_session_usage_report(
     generate_session_usage_report(persistence, Some(token_usage_service), request).await
 }
 
-async fn ensure_snapshot_manager(workspace_path: &Path) -> BitFunResult<Arc<SnapshotManager>> {
+fn snapshot_port_error(error: SnapshotError) -> PortError {
+    let kind = match &error {
+        SnapshotError::SnapshotNotFound(_)
+        | SnapshotError::SessionNotFound(_)
+        | SnapshotError::OperationNotFound(_)
+        | SnapshotError::FileNotFound(_) => PortErrorKind::NotFound,
+        SnapshotError::Io(_)
+        | SnapshotError::Serialization(_)
+        | SnapshotError::GitIsolationFailure(_)
+        | SnapshotError::ConfigError(_)
+        | SnapshotError::ToolExecution(_) => PortErrorKind::Backend,
+    };
+    PortError::new(kind, error.to_string())
+}
+
+fn snapshot_initialization_port_error(error: SnapshotError) -> PortError {
+    PortError::new(PortErrorKind::NotAvailable, error.to_string())
+}
+
+fn validate_local_snapshot_workspace(workspace_path: &Path) -> PortResult<()> {
+    if workspace_path.as_os_str().is_empty() {
+        return Err(PortError::new(
+            PortErrorKind::InvalidRequest,
+            "workspace path is required",
+        ));
+    }
+    if !workspace_path.is_dir() {
+        return Err(PortError::new(
+            PortErrorKind::InvalidRequest,
+            format!(
+                "Workspace directory does not exist: {}",
+                workspace_path.display()
+            ),
+        ));
+    }
+    Ok(())
+}
+
+async fn ensure_local_snapshot_manager(workspace_path: &Path) -> PortResult<Arc<SnapshotManager>> {
+    validate_local_snapshot_workspace(workspace_path)?;
     if let Some(manager) = get_snapshot_manager_for_workspace(workspace_path) {
         return Ok(manager);
     }
     initialize_snapshot_manager_for_workspace(workspace_path.to_path_buf(), None)
         .await
-        .map_err(|error| BitFunError::service(error.to_string()))?;
+        .map_err(snapshot_initialization_port_error)?;
     get_snapshot_manager_for_workspace(workspace_path).ok_or_else(|| {
-        BitFunError::service(format!(
-            "Snapshot manager is unavailable for workspace {}",
-            workspace_path.display()
-        ))
+        PortError::new(
+            PortErrorKind::Backend,
+            format!(
+                "Snapshot manager is unavailable for workspace {}",
+                workspace_path.display()
+            ),
+        )
     })
+}
+
+/// Core-backed access to the existing local workspace snapshot owner.
+///
+/// The returned port is intentionally separate from the Agent Runtime SDK and
+/// does not accept remote workspace identity.
+pub struct CoreLocalWorkspaceSnapshot;
+
+impl CoreLocalWorkspaceSnapshot {
+    pub fn build() -> Arc<dyn LocalWorkspaceSnapshotPort> {
+        Arc::new(Self)
+    }
+}
+
+#[async_trait::async_trait]
+impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
+    async fn prepare_local_workspace(&self, workspace_path: PathBuf) -> PortResult<()> {
+        ensure_local_snapshot_manager(&workspace_path).await?;
+        Ok(())
+    }
+
+    async fn get_session_files(
+        &self,
+        request: LocalWorkspaceSnapshotSessionRequest,
+    ) -> PortResult<Vec<PathBuf>> {
+        validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
+        ensure_local_snapshot_manager(&request.workspace_path)
+            .await?
+            .get_session_files(&request.session_id)
+            .await
+            .map_err(snapshot_port_error)
+    }
+
+    async fn get_session_stats(
+        &self,
+        request: LocalWorkspaceSnapshotSessionRequest,
+    ) -> PortResult<LocalWorkspaceSnapshotStats> {
+        validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
+        let stats = ensure_local_snapshot_manager(&request.workspace_path)
+            .await?
+            .get_session_stats_fact(&request.session_id)
+            .await
+            .map_err(snapshot_port_error)?;
+        Ok(LocalWorkspaceSnapshotStats {
+            session_id: stats.session_id,
+            total_files: stats.total_files,
+            total_turns: stats.total_turns,
+            total_changes: stats.total_changes,
+        })
+    }
+
+    async fn rollback_workspace_files_to_turn(
+        &self,
+        request: LocalWorkspaceSnapshotTurnRequest,
+    ) -> PortResult<Vec<PathBuf>> {
+        validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
+        ensure_local_snapshot_manager(&request.workspace_path)
+            .await?
+            .rollback_to_turn(&request.session_id, request.turn_index)
+            .await
+            .map_err(snapshot_port_error)
+    }
 }
 
 /// Product-assembly entry for the public Agent Runtime SDK.
@@ -426,49 +532,6 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
-    pub async fn get_session_snapshot_files(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<Vec<PathBuf>> {
-        validate_persisted_session_id(session_id)?;
-        ensure_snapshot_manager(workspace_path)
-            .await?
-            .get_session_files(session_id)
-            .await
-            .map_err(|error| BitFunError::service(error.to_string()))
-    }
-
-    pub async fn get_session_snapshot_stats(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<Option<serde_json::Value>> {
-        validate_persisted_session_id(session_id)?;
-        let Some(manager) = get_snapshot_manager_for_workspace(workspace_path) else {
-            return Ok(None);
-        };
-        manager
-            .get_session_stats(session_id)
-            .await
-            .map(Some)
-            .map_err(|error| BitFunError::service(error.to_string()))
-    }
-
-    pub async fn rollback_workspace_files_to_turn(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-        turn_index: usize,
-    ) -> BitFunResult<Vec<PathBuf>> {
-        validate_persisted_session_id(session_id)?;
-        ensure_snapshot_manager(workspace_path)
-            .await?
-            .rollback_to_turn(session_id, turn_index)
-            .await
-            .map_err(|error| BitFunError::service(error.to_string()))
-    }
-
     pub async fn delete_hidden_subagent_sessions_for_parent_turns(
         &self,
         workspace_path: &Path,
@@ -608,20 +671,28 @@ mod tests {
 
     use bitfun_agent_runtime::sdk::AgentRuntime;
     use bitfun_harness::HarnessRegistry;
+    use bitfun_runtime_ports::{
+        LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotTurnRequest,
+    };
     use bitfun_runtime_services::RuntimeServices;
     use uuid::Uuid;
 
     use super::{
         generate_core_session_usage_report, latest_persisted_turn_id, runtime_port_error,
         validate_local_session_fork_request, validate_persisted_session_id,
-        CoreAgentRuntimeCompatibility, CoreProductAgentRuntime, CoreSessionOperationsPort,
+        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
+        CoreSessionOperationsPort,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::PathManager;
     use crate::service::session::{DialogTurnData, SessionMetadata, UserMessageData};
     use crate::service::session_usage::UsageTokenSource;
+    use crate::service::snapshot::manager::clear_snapshot_manager_for_test;
     use crate::service::token_usage::TokenUsageService;
+    use crate::service::workspace_runtime::{
+        set_workspace_runtime_service_for_current_test, WorkspaceRuntimeService,
+    };
     use crate::util::errors::BitFunError;
     use bitfun_agent_runtime::sdk::{
         AgentSessionForkRequest, AgentSessionUsageRequest, PortErrorKind,
@@ -654,6 +725,7 @@ mod tests {
 
     impl Drop for TestWorkspace {
         fn drop(&mut self) {
+            clear_snapshot_manager_for_test(&self.path);
             let _ = std::fs::remove_dir_all(&self.path);
         }
     }
@@ -713,6 +785,70 @@ mod tests {
             .expect_err("compatibility boundary must reject path-like session ids");
 
         assert!(error.to_string().contains("session_id"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn local_workspace_snapshot_port_concurrently_prepares_and_returns_typed_empty_facts() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(workspace.path_manager()),
+        ));
+        let port = CoreLocalWorkspaceSnapshot::build();
+
+        let first = port.prepare_local_workspace(workspace.path().to_path_buf());
+        let second = port.prepare_local_workspace(workspace.path().to_path_buf());
+        let (first, second) = tokio::join!(first, second);
+        first.expect("first local snapshot preparation should succeed");
+        second.expect("concurrent local snapshot preparation should reuse the owner");
+
+        let request = LocalWorkspaceSnapshotSessionRequest {
+            workspace_path: workspace.path().to_path_buf(),
+            session_id: "session-empty".to_string(),
+        };
+        assert!(port
+            .get_session_files(request.clone())
+            .await
+            .expect("session files should be available")
+            .is_empty());
+        let stats = port
+            .get_session_stats(request)
+            .await
+            .expect("typed stats should be available");
+        assert_eq!(stats.session_id, "session-empty");
+        assert_eq!(stats.total_files, 0);
+        assert_eq!(stats.total_turns, 0);
+        assert_eq!(stats.total_changes, 0);
+        assert!(port
+            .rollback_workspace_files_to_turn(LocalWorkspaceSnapshotTurnRequest {
+                workspace_path: workspace.path().to_path_buf(),
+                session_id: "session-empty".to_string(),
+                turn_index: 0,
+            })
+            .await
+            .expect("an empty session rollback remains a no-op")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn local_workspace_snapshot_port_rejects_non_local_inputs_before_backend_access() {
+        let workspace = TestWorkspace::new();
+        let port = CoreLocalWorkspaceSnapshot::build();
+
+        let invalid_session = port
+            .get_session_files(LocalWorkspaceSnapshotSessionRequest {
+                workspace_path: workspace.path().to_path_buf(),
+                session_id: "../other-session".to_string(),
+            })
+            .await
+            .expect_err("path-like session ids must be rejected");
+        assert_eq!(invalid_session.kind, PortErrorKind::InvalidRequest);
+
+        let missing_workspace = workspace.path().join("missing");
+        let invalid_workspace = port
+            .prepare_local_workspace(missing_workspace)
+            .await
+            .expect_err("missing local workspaces must be rejected");
+        assert_eq!(invalid_workspace.kind, PortErrorKind::InvalidRequest);
     }
 
     #[test]

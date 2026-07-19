@@ -11,8 +11,13 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+mod local_workspace_snapshot;
 mod plugin;
 mod script_tool;
+pub use local_workspace_snapshot::{
+    LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
+    LocalWorkspaceSnapshotTurnRequest,
+};
 pub use plugin::{
     validate_plugin_dispatch_response, validate_plugin_runtime_read_response,
     DisabledPluginRuntimeClient, ExtensionCapabilityAvailability, PermissionPromptDenyState,

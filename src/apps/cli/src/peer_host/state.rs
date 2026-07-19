@@ -943,6 +943,7 @@ fn prune_idle_tree(inner: &mut PeerTurnTrackerInner, key: &PeerTurnKey) {
 #[derive(Clone)]
 pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
+    pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
     pub(crate) agent_events: CliAgentEventSource,
     pub(crate) turns: PeerTurnTracker,

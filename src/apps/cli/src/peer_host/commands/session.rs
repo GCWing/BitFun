@@ -17,6 +17,8 @@ use bitfun_runtime_ports::{
 use crate::peer_host::args::{get_string, optional_bool, optional_string, request_value};
 use crate::peer_host::state::PeerHostState;
 
+use super::snapshot::{local_snapshot_session_stats, require_local_snapshot_workspace};
+
 fn session_storage_request(request: &Value) -> Result<SessionStoragePathRequest, String> {
     let workspace_path = get_string(request, "workspacePath")?;
     let workspace_path = workspace_path.trim();
@@ -471,23 +473,27 @@ pub(crate) async fn get_session_stats(
     let request = request_value(args);
     let session_id = get_string(request, "sessionId")?;
     let workspace_path = get_string(request, "workspacePath")?;
-    let workspace = PathBuf::from(&workspace_path);
+    bitfun_agent_runtime::session_control::validate_session_id(&session_id)
+        .map_err(session_stats_validation_error)?;
+    require_local_snapshot_workspace(request, &workspace_path).await?;
 
-    if let Some(stats) = state
-        .compatibility
-        .get_session_snapshot_stats(&workspace, &session_id)
-        .await
-        .map_err(|e| format!("Failed to get session stats: {e}"))?
-    {
-        return Ok(stats);
-    }
+    let stats = local_snapshot_session_stats(
+        state.local_workspace_snapshot.as_ref(),
+        PathBuf::from(&workspace_path),
+        session_id,
+    )
+    .await?;
 
     Ok(json!({
-        "session_id": session_id,
-        "total_files": 0,
-        "total_turns": 0,
-        "total_changes": 0
+        "session_id": stats.session_id,
+        "total_files": stats.total_files,
+        "total_turns": stats.total_turns,
+        "total_changes": stats.total_changes
     }))
+}
+
+fn session_stats_validation_error(error: impl std::fmt::Display) -> String {
+    format!("Failed to get session stats: Validation error: {error}")
 }
 
 pub(crate) async fn save_session_turn(
@@ -527,7 +533,7 @@ pub(crate) async fn save_session_turn(
 
 #[cfg(test)]
 mod tests {
-    use super::restored_session_to_json;
+    use super::{restored_session_to_json, session_stats_validation_error};
     use bitfun_agent_runtime::sdk::{AgentSessionRestoreResult, AgentSessionSummary, SessionState};
 
     #[test]
@@ -557,5 +563,13 @@ mod tests {
         assert_eq!(value["turnCount"], 3);
         assert_eq!(value["createdAt"], 12);
         assert!(value.get("lastActiveAt").is_none());
+    }
+
+    #[test]
+    fn session_stats_validation_keeps_compatibility_error_category() {
+        assert_eq!(
+            session_stats_validation_error("session_id cannot contain path separators"),
+            "Failed to get session stats: Validation error: session_id cannot contain path separators"
+        );
     }
 }

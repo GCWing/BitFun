@@ -5,6 +5,8 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionModelPort, AgentSubmissionPort, AgentTurnCancellationPort, RuntimeBuildError,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
+use bitfun_core::product_runtime::CoreLocalWorkspaceSnapshot;
+use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
 
 /// Desktop-owned access to the Agent Runtime SDK interaction facade.
 ///
@@ -14,6 +16,7 @@ use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogSchedule
 /// Desktop delivery profile or its product services have been assembled.
 pub struct DesktopRuntimeContext {
     agent_runtime: AgentRuntime,
+    local_workspace_snapshot: Arc<dyn LocalWorkspaceSnapshotPort>,
 }
 
 impl DesktopRuntimeContext {
@@ -33,12 +36,20 @@ impl DesktopRuntimeContext {
             .with_cancellation_port(cancellation)
             .with_interaction_response_port(interaction_response)
             .build()?;
+        let local_workspace_snapshot = CoreLocalWorkspaceSnapshot::build();
 
-        Ok(Self { agent_runtime })
+        Ok(Self {
+            agent_runtime,
+            local_workspace_snapshot,
+        })
     }
 
     pub(crate) fn agent_runtime(&self) -> &AgentRuntime {
         &self.agent_runtime
+    }
+
+    pub(crate) fn local_workspace_snapshot(&self) -> &dyn LocalWorkspaceSnapshotPort {
+        self.local_workspace_snapshot.as_ref()
     }
 }
 
@@ -60,6 +71,50 @@ mod tests {
         assert!(runtime_source.contains("with_cancellation_port"));
         assert!(runtime_source.contains("with_interaction_response_port"));
         assert!(runtime_source.contains("with_session_model_port"));
+        assert!(runtime_source.contains("CoreLocalWorkspaceSnapshot::build()"));
+
+        let snapshot_commands = include_str!("../api/snapshot_service.rs");
+        assert_eq!(
+            snapshot_commands
+                .matches(".local_workspace_snapshot()")
+                .count(),
+            3,
+            "only file listing, typed stats, and workspace rollback use the local owner port"
+        );
+        assert!(snapshot_commands.contains("is_remote_path(&request.workspace_path).await"));
+
+        let rollback_source = &snapshot_commands[snapshot_commands
+            .find("pub async fn rollback_to_turn")
+            .expect("rollback command must exist")..];
+        let remote_guard = rollback_source
+            .find("if is_remote_path(&request.workspace_path).await")
+            .expect("remote rollback guard must remain host-owned");
+        let cancellation = rollback_source
+            .find("cancel_active_turn_for_session")
+            .expect("active-turn cancellation must precede rollback");
+        let file_rollback = rollback_source
+            .find("rollback_local_workspace_files(")
+            .expect("workspace files must be restored through the port adapter");
+        let history_cleanup = rollback_source
+            .find("if request.delete_turns")
+            .expect("history cleanup must remain host-owned");
+        let history_event = rollback_source
+            .find("conversation_turns_deleted")
+            .expect("history event must remain host-projected");
+        let rollback_event = rollback_source
+            .find("turn_rolled_back")
+            .expect("rollback event must remain host-projected");
+        assert!(
+            remote_guard < cancellation
+                && cancellation < file_rollback
+                && file_rollback < history_cleanup
+                && history_cleanup < history_event
+                && history_event < rollback_event,
+            "Desktop rollback must preserve remote, cancellation, files, history, and event order"
+        );
+
+        let sdk_source = include_str!("../../../../crates/execution/agent-runtime/src/sdk.rs");
+        assert!(!sdk_source.contains("LocalWorkspaceSnapshot"));
     }
 
     #[test]

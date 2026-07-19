@@ -140,7 +140,7 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
 }
 
 #[test]
-fn remaining_cli_local_persistence_stays_behind_core_compatibility_facade() {
+fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
     const ACCOUNT_SYNC: &str = include_str!("../src/account_sync.rs");
     const STARTUP_PAGE: &str = include_str!("../src/ui/startup.rs");
     const PEER_BOOTSTRAP: &str = include_str!("../src/peer_host/bootstrap.rs");
@@ -186,8 +186,17 @@ fn remaining_cli_local_persistence_stays_behind_core_compatibility_facade() {
             && !PEER_SESSION_COMMANDS.contains("state.persistence")
             && !PEER_SNAPSHOT_COMMANDS.contains("state.persistence")
             && !PEER_SESSION_COMMANDS.contains("get_snapshot_manager_for_workspace")
-            && !PEER_SNAPSHOT_COMMANDS.contains("get_snapshot_manager_for_workspace"),
-        "Peer Host persistence operations must stay behind the Core compatibility facade"
+            && !PEER_SNAPSHOT_COMMANDS.contains("get_snapshot_manager_for_workspace")
+            && !PEER_SESSION_COMMANDS.contains("ensure_snapshot_manager_for_workspace")
+            && !PEER_SNAPSHOT_COMMANDS.contains("ensure_snapshot_manager_for_workspace"),
+        "Peer Host persistence operations must stay behind an explicit Core owner boundary"
+    );
+    assert!(
+        PEER_BOOTSTRAP.contains("local_workspace_snapshot:")
+            && PEER_STATE.contains("LocalWorkspaceSnapshotPort")
+            && PEER_SESSION_COMMANDS.contains("local_workspace_snapshot")
+            && PEER_SNAPSHOT_COMMANDS.contains("local_workspace_snapshot"),
+        "Peer Host local snapshot operations must consume the injected owner port"
     );
 }
 
@@ -223,12 +232,28 @@ fn peer_session_control_and_usage_persistence_use_runtime_sdk() {
         "pub async fn archive_persisted_session",
         "pub async fn get_thread_goal",
         "pub async fn append_completed_local_command_turn",
+        "pub async fn get_session_snapshot_files",
+        "pub async fn get_session_snapshot_stats",
+        "pub async fn rollback_workspace_files_to_turn",
     ] {
         assert!(
             !CORE_PRODUCT_RUNTIME.contains(removed_compatibility_method),
             "migrated session control must not remain on CoreAgentRuntimeCompatibility: {removed_compatibility_method}"
         );
     }
+}
+
+#[test]
+fn local_workspace_snapshot_port_does_not_expand_the_agent_runtime_sdk() {
+    const RUNTIME_SDK: &str = include_str!("../../../crates/execution/agent-runtime/src/sdk.rs");
+    const LOCAL_SNAPSHOT_PORT: &str =
+        include_str!("../../../crates/contracts/runtime-ports/src/local_workspace_snapshot.rs");
+
+    assert!(!RUNTIME_SDK.contains("LocalWorkspaceSnapshot"));
+    assert!(!LOCAL_SNAPSHOT_PORT.contains("remote_connection_id"));
+    assert!(!LOCAL_SNAPSHOT_PORT.contains("remote_ssh_host"));
+    assert!(!LOCAL_SNAPSHOT_PORT.contains("checkpoint_workspace"));
+    assert!(!LOCAL_SNAPSHOT_PORT.contains("rewind_workspace"));
 }
 
 #[test]

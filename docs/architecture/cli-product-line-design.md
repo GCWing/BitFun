@@ -92,7 +92,7 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - Agent、模型、MCP、会话、用量、诊断、ACP 外部 Agent 和插件来源管理命令。
 - BitFun 原生插件目录的发现、内容校验、来源确认，以及 OpenCode custom tool 静态名称预览。
 - CLI 本地 Agent 入口以类型化 `RuntimeServices` 调用 `ProductAssembler`，选择 `DeliveryProfile::Cli`，
-  并把 `ProductRuntimeParts`、Agent Runtime SDK、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
+  并把 `ProductRuntimeParts`、Agent Runtime SDK、本地工作区快照 owner port、事件源和调用级审批策略保存在一个 `CliRuntimeContext` 中。
 - TUI、`exec`、会话、用量和交互模式下的 Peer Host 复用同一上下文。SDK 已承接会话创建（包括
   `exec --session-id` 和缺失后端会话通过独立固定 ID 方法按原 ID 重建）/列举/删除/恢复、类型化转录、本地分支、
   用量生成、轮次提交/取消和精确结算；普通创建
@@ -103,7 +103,9 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
   等待期间可以切换或新建会话；只有原会话的发送继续等待。首次退出请求在持久化成功后自动退出，失败时留在界面提示重试；再次退出允许立即离开，
   并明确提示下次恢复以 Core 的持久化模式为准。恢复主会话时，已从当前目录移除的持久化模式由 Core 迁移到可执行回退模式；
   TUI 对比恢复前后的会话摘要并显示模式变化，如果同时携带启动输入，只预填而不自动执行，须由用户确认后发送。TUI 用量卡片通过固定语义的
-  完成态本地命令轮次端口持久化；账号同步、快照、富历史及 Peer Host/ACP 维护等 SDK v1 缺口由一个 Core 兼容门面转发给原 owner。
+  完成态本地命令轮次端口持久化。Peer Host 的本地工作区准备、会话文件清单、类型化快照统计和工作区文件回滚通过
+  独立的本地 owner port 回到现有 Core 快照实现；该端口不进入 Agent Runtime SDK，不接受远程身份，也不承载历史截断、维护锁或完整 checkpoint/rewind。
+  账号同步、富历史及 Peer Host/ACP 的其余维护缺口继续由一个 Core 兼容门面转发给原 owner。
 - Agentic Event Queue 仍是唯一事件 owner；TUI、`exec` 与 Peer Host 使用独立广播订阅，不互相消费事件。
 - 有界旧队列只承担兼容存储；达到容量时不得抑制广播。CLI 保持一个后台 drain，订阅方一旦报告 lag/closed，
   必须取消活动 turn 并显式失败，不能在状态不完整时继续报告成功。
@@ -124,7 +126,8 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - 初始化按入口分级：交互模式启动 Peer Host 与 MCP，`exec` 只启动 MCP；本地 session 管理和 usage 查询不启动
   Peer Host/MCP。该分级不改变 Agentic/Terminal owner，也不等同于管理命令已有独立轻量 Runtime。
 - Peer Host 保持既有 HostInvoke / DeviceEvent wire schema 与 Relay 路由，但执行已接入上述调用级上下文：
-  对话提交、精确取消、会话创建/基础恢复/重命名/归档、thread-goal 查询和模型更新走 SDK，富历史、快照及维护缺口走单一 Core 兼容门面。Peer Host 只跟踪由 Peer 提交的根 turn、
+  对话提交、精确取消、会话创建/基础恢复/重命名/归档、thread-goal 查询和模型更新走 SDK；本地快照文件清单、统计和文件回滚走窄 owner port；
+  富历史及其余维护缺口走单一 Core 兼容门面。Peer Host 在进入本地端口前对远程身份与远程路径返回明确不支持错误，并继续拥有回滚前取消、维护锁、历史截断、部分失败提示和事件投影。Peer Host 只跟踪由 Peer 提交的根 turn、
   其子 turn 与待确认工具；可确认工具始终由控制器确认，即使宿主全局策略跳过确认，Agent 也会暂停等待控制器。
   该 Peer 专属确认要求会沿精确后台结果 follow-up 保留。后台结果按 Core 内部元数据中的精确父 turn 与来源子 turn
   继承 ownership；仅在父 turn 仍运行时注入，否则排在
@@ -148,7 +151,7 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 
 | 缺口 | 影响 | 本设计的处理 |
 |---|---|---|
-| CLI 主会话客户端已仅消费 Runtime SDK，但账号同步、快照、富历史及 Peer Host/ACP 的持久化维护仍由 `bitfun-core/product-full` 兼容 owner 提供 | SDK 尚不能独立覆盖全部宿主维护能力，过早删除兼容路径会改变行为 | 仅在稳定端口、真实嵌入方和行为等价测试齐备后迁移 owner；兼容门面保持单一且不扩展成第二套 Runtime。 |
+| CLI 主会话客户端已仅消费 Runtime SDK；本地工作区快照的准备、文件清单、统计和文件回滚已有 Desktop/Peer Host 共用的窄 owner port，但快照记录/持久化/事件、账号同步、富历史及 Peer Host/ACP 的其余维护仍由现有 Core owner 提供 | 窄端口只消除重复宿主转发，不代表完整快照系统、远程快照或 SDK 能力已迁移；过早删除其余兼容路径会改变行为 | 保持快照实现和工具拦截在 Core，远程与历史维护留在宿主；仅在新的真实调用方、独立语义和行为等价测试齐备后继续迁移。 |
 | TUI 编排、输入、命令、副作用和渲染仍有大文件聚集 | 交互回归难以隔离，终端状态与业务状态容易耦合 | 在现有模块上增量收敛为事件、状态归约、副作用和渲染四个边界，不重写全部 TUI。 |
 | CLI 配置只覆盖入口本地选项，缺少统一层级、来源解释和兼容导入 | 用户无法安全复用其他 CLI 资产，也难以解释最终配置来源 | 建立 BitFun Canonical Config、持续来源视图和可选的显式导入报告。 |
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 第一条闭环只完成一个无外部依赖的契约样例；取得真实 `execute` 并注册到 Tool Runtime 后才显示可用。 |
@@ -279,8 +282,9 @@ CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Ru
 `SessionTranscript` 投影为本地渲染状态，不再消费 Core `Message`。Peer Host 的对话提交、精确取消、基础会话控制、thread-goal 查询、会话模型更新和
 工具确认/拒绝通过 SDK 回到 Core owner；本地会话分支通过显式本地范围的 SDK 端口完成，携带远程身份的请求返回类型化
 `NotAvailable`，本轮不扩展远程分支。TUI 用量卡片通过固定语义的完成态本地命令轮次端口持久化，不暴露通用 transcript writer。
-账户同步、快照、富历史及其他未覆盖操作仍使用经过审查的 Core
-compatibility 方法，直到各自具备明确 owner、稳定 DTO、远程语义和行为等价测试。
+本地工作区快照准备、会话文件清单、类型化统计和工作区文件回滚通过 `runtime-ports` 中不属于 Runtime SDK 的窄 owner port 完成，
+由 Desktop 和 Peer Host 分别投影现有协议；Desktop 保留既有远程空结果，Peer Host 返回明确不支持错误，远程请求都不进入本地实现。快照记录、持久化、事件、历史截断与维护编排仍在原 owner。
+账户同步、富历史及其他未覆盖操作继续使用经过审查的 Core compatibility 方法，直到各自具备明确 owner、稳定 DTO、远程语义和行为等价测试。
 这是一条垂直链路迁移，不是删除整个兼容门面或新建 CLI 专用服务层。
 
 Runtime Configuration Service 当前由 `bitfun-core/service/config` 负责。在经评审的 port/provider
