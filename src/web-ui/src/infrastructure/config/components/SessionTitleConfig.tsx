@@ -16,7 +16,7 @@ const AGENT_SESSION_TITLE = 'session-title-func-agent';
 
 export const SessionTitleConfig: React.FC = () => {
   const { t } = useTranslation('settings/ai-model');
-  const notification = useNotification();
+  const { success: notifySuccess, error: notifyError } = useNotification();
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [models, setModels] = useState<AIModelConfig[]>([]);
@@ -35,11 +35,11 @@ export const SessionTitleConfig: React.FC = () => {
       setFuncAgentModels(funcAgentModelsData ?? {});
     } catch (error) {
       log.error('Failed to load session title config', error);
-      notification.error(t('sessionTitle.loadFailed'));
+      notifyError(t('sessionTitle.loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, [notification, t]);
+  }, [notifyError, t]);
 
   useEffect(() => {
     void loadData();
@@ -65,10 +65,10 @@ export const SessionTitleConfig: React.FC = () => {
     setSettings(next);
     try {
       await aiExperienceConfigService.saveSettings(next);
-      notification.success(t('sessionTitle.messages.saveSuccess'));
+      notifySuccess(t('sessionTitle.messages.saveSuccess'));
     } catch (error) {
       log.error('Failed to save session title enable setting', error);
-      notification.error(t('sessionTitle.messages.saveFailed'));
+      notifyError(t('sessionTitle.messages.saveFailed'));
       setSettings(previous);
     }
   };

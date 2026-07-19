@@ -42,6 +42,7 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/default-model', key: 'tabs.models' },
     { ns: 'settings/ai-model', key: 'subtitle' },
     { ns: 'settings/ai-model', key: 'subagentModels.title' },
+    { ns: 'settings/ai-model', key: 'subagentModels.default.description' },
     { ns: 'settings/ai-model', key: 'sessionTitle.title' },
     { ns: 'settings/ai-model', key: 'sessionTitle.subtitle' },
     { ns: 'settings/default-model', key: 'tabs.proxy' },

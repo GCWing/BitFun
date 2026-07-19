@@ -12,6 +12,7 @@
     "title": "Subagent Models",
     "default": {
       "label": "Default Subagent Model",
+      "description": "Default model used by subagents when none is set individually",
       "configureTooltip": "Sets the default model for subagents. Open Customize > Agents to configure each subagent separately",
       "updateFailed": "Failed to update the default Subagent model"
     },
