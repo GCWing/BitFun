@@ -308,6 +308,7 @@
     "fillModelName": "請填寫模型名稱",
     "duplicateModelNameUnderProvider": "該服務商下已有同名模型，請改用其他名稱或編輯已有條目",
     "invalidBaseUrlScheme": "API地址必須以 http:// 或 https:// 開頭",
+    "contextWindowTooSmall": "上下文視窗大小不能小於 32K Tokens",
     "saveFailed": "儲存失敗",
     "deleteFailed": "刪除設定失敗",
     "loadFailed": "載入AI設定失敗",

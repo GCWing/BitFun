@@ -39,7 +39,7 @@ use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{
-    model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
+    automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
@@ -342,7 +342,6 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    const AUTO_COMPRESSION_DEFAULT_OUTPUT_RESERVE_TOKENS: usize = 16_000;
     const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
     const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
@@ -516,7 +515,7 @@ impl ExecutionEngine {
     ) -> CompressionTriggerBudget {
         let output_reserve_tokens = configured_max_tokens
             .map(|value| value as usize)
-            .unwrap_or(Self::AUTO_COMPRESSION_DEFAULT_OUTPUT_RESERVE_TOKENS);
+            .unwrap_or_else(|| automatic_max_output_tokens(context_window as u32) as usize);
         let safety_reserve_tokens = Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
         let input_limit =
             context_window.saturating_sub(output_reserve_tokens + safety_reserve_tokens);
@@ -4074,12 +4073,12 @@ mod tests {
     }
 
     #[test]
-    fn compression_trigger_budget_uses_16k_output_reserve_when_max_tokens_is_unset() {
+    fn compression_trigger_budget_uses_the_automatic_output_tier_when_max_tokens_is_unset() {
         let budget = ExecutionEngine::compression_trigger_budget(128_000, None);
 
-        assert_eq!(budget.output_reserve_tokens, 16_000);
+        assert_eq!(budget.output_reserve_tokens, 32_000);
         assert_eq!(budget.safety_reserve_tokens, 10_000);
-        assert_eq!(budget.input_limit, 102_000);
+        assert_eq!(budget.input_limit, 86_000);
     }
 
     #[test]

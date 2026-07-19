@@ -1222,6 +1222,30 @@ pub enum AgentSubagentOverrideState {
 pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
 pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
+pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 128_128;
+pub const MIN_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 32_000;
+pub const MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT: u32 = 40;
+const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS: [u32; 5] = [8_000, 16_000, 24_000, 32_000, 64_000];
+
+/// Chooses the largest supported output tier that does not exceed one quarter
+/// of the model context window.
+pub fn automatic_max_output_tokens(context_window: u32) -> u32 {
+    let quarter_context = context_window / 4;
+    AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS
+        .iter()
+        .rev()
+        .copied()
+        .find(|tier| *tier <= quarter_context)
+        .unwrap_or(quarter_context)
+}
+
+/// A configured output cap may use up to 40% of the model context window.
+pub fn is_valid_configured_max_output_tokens(context_window: u32, max_tokens: u32) -> bool {
+    max_tokens > 0
+        && u64::from(max_tokens) * 100
+            <= u64::from(context_window) * u64::from(MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, from = "AIModelConfigCompat")]
 pub struct AIModelConfig {
@@ -1239,7 +1263,8 @@ pub struct AIModelConfig {
     pub api_key: String,
     /// Context window size (total token limit for input + output).
     pub context_window: Option<u32>,
-    /// Max output tokens (request parameter limiting model output length).
+    /// Optional advanced override for the request output limit. When absent,
+    /// BitFun derives a tiered limit from the context window at runtime.
     pub max_tokens: Option<u32>,
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
