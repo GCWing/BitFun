@@ -17,6 +17,7 @@ impl ClawMode {
         Self {
             default_tools: vec![
                 "Task".to_string(),
+                "AgentWait".to_string(),
                 "Read".to_string(),
                 "view_image".to_string(),
                 "analyze_image".to_string(),

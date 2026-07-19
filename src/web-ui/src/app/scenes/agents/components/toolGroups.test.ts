@@ -18,6 +18,9 @@ const tools: GroupableTool[] = [
   { name: 'Glob', description: 'Find files', is_readonly: true },
   { name: 'Edit', description: 'Edit files', is_readonly: false },
   { name: 'Write', description: 'Write files', is_readonly: false },
+  { name: 'Task', description: 'Delegate work to an agent', is_readonly: false },
+  { name: 'AgentWait', description: 'Wait for background agent results', is_readonly: true },
+  { name: 'Skill', description: 'Load a skill', is_readonly: true },
   { name: 'analyze_image', description: 'Analyze an image', is_readonly: true },
   { name: 'view_image', description: 'View an image', is_readonly: true },
   { name: 'AskUserQuestion', description: 'Ask the user a question', is_readonly: true },
@@ -44,6 +47,13 @@ describe('tool groups', () => {
 
     expect(files?.tools.map((tool) => tool.name)).toContain('Read');
     expect(editing?.tools.map((tool) => tool.name)).not.toContain('Read');
+  });
+
+  it('groups AgentWait with delegation and skills', () => {
+    const groups = resolveToolGroups(tools, [], t as never);
+
+    expect(groups.find((group) => group.id === 'builtin:delegation')?.tools.map((tool) => tool.name))
+      .toEqual(['AgentWait', 'Skill', 'Task']);
   });
 
   it('groups image, canvas, and computer automation tools by their user-facing purpose', () => {
