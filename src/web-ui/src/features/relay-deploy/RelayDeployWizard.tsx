@@ -362,18 +362,11 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     pollFailuresRef.current = 0;
     pollActiveRef.current = true;
 
-    const scheduleNext = () => {
-      if (!pollActiveRef.current) return;
-      pollRef.current = setTimeout(() => {
-        void tick();
-      }, POLL_INTERVAL_MS);
-    };
-
-    const tick = async () => {
-      if (!pollActiveRef.current) return;
+    const pollOnce = async (): Promise<boolean> => {
+      if (!pollActiveRef.current) return false;
       try {
         const res = await relayDeployApi.poll(connId, task, cursorRef.current);
-        if (!pollActiveRef.current) return;
+        if (!pollActiveRef.current) return false;
         cursorRef.current = res.cursor;
         pollFailuresRef.current = 0;
         if (res.output) {
@@ -394,25 +387,36 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               window.setTimeout(() => setStep('register'), 800);
             }
           }
-          return;
+          return false;
         }
       } catch (e) {
         // Transient SSH blips are expected (the manager auto-reconnects);
         // only give up after repeated failures.
-        if (!pollActiveRef.current) return;
+        if (!pollActiveRef.current) return false;
         pollFailuresRef.current += 1;
         log.warn('task poll failed', e);
         if (pollFailuresRef.current >= MAX_POLL_FAILURES) {
           stopPolling();
           setTaskStatus('failed');
           setTaskLog((prev) => `${prev}\n[poll] ${errMsg(e)}`);
-          return;
+          return false;
         }
       }
-      scheduleNext();
+      return pollActiveRef.current;
     };
 
-    void tick();
+    const scheduleNext = () => {
+      if (!pollActiveRef.current) return;
+      pollRef.current = setTimeout(() => {
+        void pollOnce().then((shouldContinue) => {
+          if (shouldContinue) scheduleNext();
+        });
+      }, POLL_INTERVAL_MS);
+    };
+
+    void pollOnce().then((shouldContinue) => {
+      if (shouldContinue) scheduleNext();
+    });
   }, [runPreflight, stopPolling, t]);
 
   const handleInstallDocker = async () => {
