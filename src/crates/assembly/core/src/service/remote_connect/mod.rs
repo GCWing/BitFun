@@ -1210,12 +1210,20 @@ impl RemoteConnectService {
         )
     }
 
+    /// Start account device routing. Returns `(event_rx, authenticated_device_id)`.
+    ///
+    /// `AuthOk` is consumed here (not forwarded) so callers must use the returned
+    /// `authenticated_device_id` — and this method adopts it into the persisted
+    /// local `DeviceIdentity` before returning.
     pub async fn start_device_connection(
         &self,
         relay_url: &str,
         token: &str,
         device_name: &str,
-    ) -> Result<tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>> {
+    ) -> Result<(
+        tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>,
+        String,
+    )> {
         // Disconnect previous device connection if any.
         self.stop_device_connection().await;
 
@@ -1238,13 +1246,18 @@ impl RemoteConnectService {
         // The relay client may emit other events first (e.g. `Connected`),
         // so we loop until we see AuthOk/AuthError or time out.
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
-        let mut got_auth = false;
+        let mut authenticated_device_id: Option<String> = None;
         let mut auth_error: Option<String> = None;
-        while !got_auth && auth_error.is_none() {
+        while authenticated_device_id.is_none() && auth_error.is_none() {
             match tokio::time::timeout_at(deadline, event_rx.recv()).await {
                 Ok(Some(relay_client::RelayEvent::AuthOk { user_id, device_id })) => {
                     log::info!("Device connection auth ok: user={user_id} device={device_id}");
-                    got_auth = true;
+                    // AuthOk is consumed here and never forwarded. Adopt immediately
+                    // so getDeviceInfo / 本机 marking match the token-bound device.
+                    if let Err(e) = DeviceIdentity::adopt_account_device_id(&device_id) {
+                        log::warn!("Failed to adopt AuthOk device_id: {e}");
+                    }
+                    authenticated_device_id = Some(device_id);
                 }
                 Ok(Some(relay_client::RelayEvent::AuthError { message })) => {
                     auth_error = Some(message);
@@ -1266,6 +1279,8 @@ impl RemoteConnectService {
         if let Some(msg) = auth_error {
             anyhow::bail!("relay auth error: {msg}");
         }
+        let authenticated_device_id = authenticated_device_id
+            .ok_or_else(|| anyhow::anyhow!("relay auth completed without device_id"))?;
 
         let online_arc = self.online_devices.clone();
         let device_client_arc = self.device_relay_client.clone();
@@ -1288,7 +1303,7 @@ impl RemoteConnectService {
         });
 
         *device_client_arc.write().await = Some(client);
-        Ok(forward_rx)
+        Ok((forward_rx, authenticated_device_id))
     }
 
     /// Disconnect the account-authenticated device-routing connection.

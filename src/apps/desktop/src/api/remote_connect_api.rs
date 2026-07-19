@@ -421,12 +421,19 @@ pub fn init_on_startup() {
     tokio::spawn(async {
         // Restore persisted account session (if any) before anything else
         // so that auto-sync, device routing, and bot delegation work on restart.
-        match session_store::load_session() {
-            Ok(Some((token, user_id, master_key, relay_url))) => {
+        match session_store::load_session_detailed() {
+            Ok(Some(loaded)) => {
+                let user_id = loaded.user_id.clone();
+                let relay_url = loaded.relay_url.clone();
+                if let Some(device_id) = loaded.device_id.as_deref() {
+                    if let Err(e) = DeviceIdentity::adopt_account_device_id(device_id) {
+                        log::warn!("Failed to adopt restored session device_id: {e}");
+                    }
+                }
                 let session = AccountSession {
-                    token,
+                    token: loaded.token,
                     user_id: user_id.clone(),
-                    master_key,
+                    master_key: loaded.master_key,
                 };
                 *get_account_session().write().await = Some(session);
                 *get_account_relay_url().write().await = Some(relay_url.clone());
@@ -829,14 +836,13 @@ fn is_ipv4(s: &str) -> bool {
 #[tauri::command]
 pub async fn remote_connect_get_device_info() -> Result<DeviceInfo, String> {
     ensure_service().await?;
-    let holder = get_service_holder();
-    let guard = holder.read().await;
-    let service = guard.as_ref().ok_or("service not initialized")?;
-    let id = service.device_identity();
+    // Always read the persisted/account-adopted identity — not a stale copy
+    // captured when RemoteConnectService was first constructed.
+    let id = DeviceIdentity::from_current_machine().map_err(|e| format!("detect device: {e}"))?;
     Ok(DeviceInfo {
-        device_id: id.device_id.clone(),
-        device_name: id.device_name.clone(),
-        mac_address: id.mac_address.clone(),
+        device_id: id.device_id,
+        device_name: id.device_name,
+        mac_address: id.mac_address,
     })
 }
 
@@ -1227,11 +1233,12 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     save_credential_hint(&request.username, &request.relay_url);
     // Persist the full session (token + master_key, encrypted) so the
     // user stays logged in across app restarts.
-    if let Err(e) = session_store::save_session(
+    if let Err(e) = session_store::save_session_with_device(
         &result.token,
         &result.user_id,
         &master_key,
         &request.relay_url,
+        Some(device.device_id.as_str()),
     ) {
         log::warn!("Failed to persist session: {e}");
     }
@@ -1299,24 +1306,36 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
         .as_ref()
         .ok_or_else(|| "remote connect service not initialized".to_string())?;
 
-    // Skip reconnecting if the device WS is already active.  Repeated calls
-    // (e.g. dialog re-open) should not tear down an existing connection.
+    // Skip reconnecting if the device WS is already active AND local identity
+    // already matches an online device. Otherwise reconnect so AuthOk can heal
+    // a drifted MAC-derived device_id (AuthOk is consumed inside start_device_connection).
     if service.is_device_connected().await {
         let devices = service.online_devices().await;
-        return Ok(devices
-            .into_iter()
-            .map(|d| OnlineDeviceInfo {
-                device_id: d.device_id,
-                device_name: d.device_name,
-            })
-            .collect());
+        let local_id = DeviceIdentity::from_current_machine()
+            .ok()
+            .map(|d| d.device_id);
+        let local_known = local_id
+            .as_ref()
+            .is_some_and(|id| devices.iter().any(|d| d.device_id == *id));
+        if local_known {
+            return Ok(devices
+                .into_iter()
+                .map(|d| OnlineDeviceInfo {
+                    device_id: d.device_id,
+                    device_name: d.device_name,
+                })
+                .collect());
+        }
+        log::info!(
+            "Device WS connected but local device_id not in online set; reconnecting to heal identity"
+        );
     }
 
-    let mut event_rx = match service
+    let (mut event_rx, auth_device_id) = match service
         .start_device_connection(&relay_url, &session.token, &device_name)
         .await
     {
-        Ok(rx) => rx,
+        Ok(result) => result,
         Err(e) => {
             let msg = format!("{e}");
             drop(holder);
@@ -1327,14 +1346,28 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
         }
     };
 
+    if let Err(e) = session_store::save_session_with_device(
+        &session.token,
+        &session.user_id,
+        &session.master_key,
+        &relay_url,
+        Some(auth_device_id.as_str()),
+    ) {
+        log::warn!("Failed to persist AuthOk device_id into session: {e}");
+    }
+
     // Background task: consume events (presence / device messages / auth errors)
+    // Note: AuthOk is consumed inside start_device_connection (adopt happens there).
     let session_arc = get_account_session().clone();
     tokio::spawn(async move {
         use bitfun_core::service::remote_connect::relay_client::RelayEvent;
         while let Some(event) = event_rx.recv().await {
             match event {
                 RelayEvent::AuthOk { user_id, device_id } => {
-                    log::info!("Device routing auth ok: user={user_id} device={device_id}");
+                    // Should not normally arrive — start_device_connection consumes AuthOk.
+                    log::info!(
+                        "Device routing auth ok (forwarded unexpectedly): user={user_id} device={device_id}"
+                    );
                 }
                 RelayEvent::AuthError { message } => {
                     log::warn!("Device routing auth error: {message}");

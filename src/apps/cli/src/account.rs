@@ -68,15 +68,21 @@ pub(crate) async fn is_logged_in() -> bool {
 /// Attempt to restore a persisted session from disk.  Called at startup.
 /// Returns `Some(user_id)` if a session was restored.
 pub(crate) async fn try_restore_session() -> Option<String> {
-    match session_store::load_session() {
-        Ok(Some((token, user_id, master_key, relay_url))) => {
+    match session_store::load_session_detailed() {
+        Ok(Some(loaded)) => {
+            let user_id = loaded.user_id.clone();
+            if let Some(device_id) = loaded.device_id.as_deref() {
+                if let Err(e) = DeviceIdentity::adopt_account_device_id(device_id) {
+                    tracing::warn!("Failed to adopt restored session device_id: {e}");
+                }
+            }
             let session = AccountSession {
-                token,
+                token: loaded.token,
                 user_id: user_id.clone(),
-                master_key,
+                master_key: loaded.master_key,
             };
             *account_session().write().await = Some(session);
-            *account_relay_url().write().await = Some(relay_url);
+            *account_relay_url().write().await = Some(loaded.relay_url);
             tracing::info!("Restored account session for user {user_id}");
             Some(user_id)
         }
@@ -157,7 +163,13 @@ pub(crate) async fn login_with_credentials(
     *account_session().write().await = Some(session);
     *account_relay_url().write().await = Some(relay_url.to_string());
 
-    if let Err(e) = session_store::save_session(&token, &user_id, &master_key, relay_url) {
+    if let Err(e) = session_store::save_session_with_device(
+        &token,
+        &user_id,
+        &master_key,
+        relay_url,
+        Some(device.device_id.as_str()),
+    ) {
         tracing::warn!("Failed to persist session: {e}");
     }
     session_store::save_credential_hint(username, relay_url);
@@ -313,6 +325,21 @@ async fn handle_relay_event(
     match event {
         RelayEvent::AuthOk { user_id, device_id } => {
             tracing::info!("Device routing auth ok: user={user_id} device={device_id}");
+            if let Err(e) = DeviceIdentity::adopt_account_device_id(&device_id) {
+                tracing::warn!("Failed to adopt AuthOk device_id: {e}");
+            } else if let Some(session) = session_arc.read().await.clone() {
+                if let Some(relay_url) = account_relay_url().read().await.clone() {
+                    if let Err(e) = session_store::save_session_with_device(
+                        &session.token,
+                        &session.user_id,
+                        &session.master_key,
+                        &relay_url,
+                        Some(device_id.as_str()),
+                    ) {
+                        tracing::warn!("Failed to persist AuthOk device_id into session: {e}");
+                    }
+                }
+            }
         }
         RelayEvent::AuthError { message } => {
             tracing::warn!("Device routing auth error: {message}");

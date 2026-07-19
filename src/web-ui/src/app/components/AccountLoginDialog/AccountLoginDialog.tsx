@@ -221,6 +221,13 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         setView('devices');
         try {
           await remoteConnectAPI.accountConnectDevices();
+          // Re-read after AuthOk may have adopted the account-bound device_id.
+          try {
+            const info = await remoteConnectAPI.getDeviceInfo();
+            setLocalDeviceId(info.device_id);
+          } catch (e) {
+            log.warn('getDeviceInfo after connect failed', e);
+          }
         } catch (err) {
           log.warn('accountConnectDevices failed', err);
           if (isAccountAuthFailure(err)) {
