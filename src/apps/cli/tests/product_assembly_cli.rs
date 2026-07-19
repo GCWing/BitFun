@@ -140,7 +140,7 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
 }
 
 #[test]
-fn cli_local_persistence_stays_behind_core_compatibility_facade() {
+fn remaining_cli_local_persistence_stays_behind_core_compatibility_facade() {
     const ACCOUNT_SYNC: &str = include_str!("../src/account_sync.rs");
     const STARTUP_PAGE: &str = include_str!("../src/ui/startup.rs");
     const PEER_BOOTSTRAP: &str = include_str!("../src/peer_host/bootstrap.rs");
@@ -189,6 +189,46 @@ fn cli_local_persistence_stays_behind_core_compatibility_facade() {
             && !PEER_SNAPSHOT_COMMANDS.contains("get_snapshot_manager_for_workspace"),
         "Peer Host persistence operations must stay behind the Core compatibility facade"
     );
+}
+
+#[test]
+fn peer_session_control_and_usage_persistence_use_runtime_sdk() {
+    const PEER_SESSION_COMMANDS: &str = include_str!("../src/peer_host/commands/session.rs");
+    const CHAT_SELECTION: &str = include_str!("../src/modes/chat/selection.rs");
+    const CORE_PRODUCT_RUNTIME: &str =
+        include_str!("../../../crates/assembly/core/src/product_runtime.rs");
+
+    for sdk_operation in [
+        "create_session_with_id",
+        "restore_session",
+        "rename_session",
+        "archive_session",
+        "get_thread_goal",
+    ] {
+        assert!(
+            PEER_SESSION_COMMANDS.contains(sdk_operation),
+            "Peer Host session control must route {sdk_operation} through the Runtime SDK"
+        );
+    }
+    assert!(
+        CHAT_SELECTION.contains("record_completed_local_command_turn")
+            && !CHAT_SELECTION.contains("append_completed_local_command_turn"),
+        "TUI usage persistence must use the fixed-semantics Runtime SDK port"
+    );
+
+    for removed_compatibility_method in [
+        "pub async fn create_session_with_workspace",
+        "pub async fn restore_session_for_workspace",
+        "pub async fn update_session_title_for_storage_path",
+        "pub async fn archive_persisted_session",
+        "pub async fn get_thread_goal",
+        "pub async fn append_completed_local_command_turn",
+    ] {
+        assert!(
+            !CORE_PRODUCT_RUNTIME.contains(removed_compatibility_method),
+            "migrated session control must not remain on CoreAgentRuntimeCompatibility: {removed_compatibility_method}"
+        );
+    }
 }
 
 #[test]

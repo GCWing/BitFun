@@ -379,8 +379,10 @@ Arguments:
                         session_name,
                         agent_type,
                         workspace_path: Some(workspace.display_workspace.clone()),
+                        workspace_id: None,
                         remote_connection_id: workspace.remote_connection_id.clone(),
                         remote_ssh_host: workspace.remote_ssh_host.clone(),
+                        model_id: None,
                         metadata,
                     })
                     .await

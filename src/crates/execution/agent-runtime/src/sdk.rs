@@ -56,22 +56,23 @@ pub use bitfun_harness::{
 };
 pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
+    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
+    AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkPort,
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionSummary,
-    AgentSessionUsagePort, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
-    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
-    AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest, ClockPort,
-    DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort,
-    NetworkPort, PermissionDecision, PermissionPort, PermissionRequest, PortError, PortErrorKind,
-    PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
+    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentTurnSettlementPort,
+    AgentTurnSettlementRequest, ClockPort, DialogSubmissionPolicy, DialogSubmitOutcome,
+    FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort,
+    PermissionRequest, PortError, PortErrorKind, PortResult, RemoteAssistantWorkspaceFacts,
+    RemoteCapabilityPort, RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
     SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, SessionTranscript,
@@ -146,6 +147,14 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_restore_port(mut self, port: Arc<dyn AgentSessionRestorePort>) -> Self {
         self.inner = self.inner.with_session_restore_port(port);
+        self
+    }
+
+    pub fn with_local_command_turn_port(
+        mut self,
+        port: Arc<dyn AgentLocalCommandTurnPort>,
+    ) -> Self {
+        self.inner = self.inner.with_local_command_turn_port(port);
         self
     }
 
@@ -290,6 +299,29 @@ impl AgentRuntime {
         request: AgentSessionDeleteRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.delete_session(request).await
+    }
+
+    pub async fn rename_session(
+        &self,
+        request: AgentSessionRenameRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.rename_session(request).await
+    }
+
+    pub async fn archive_session(
+        &self,
+        request: AgentSessionArchiveRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.archive_session(request).await
+    }
+
+    pub async fn record_completed_local_command_turn(
+        &self,
+        request: AgentLocalCommandTurnRecordRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner
+            .record_completed_local_command_turn(request)
+            .await
     }
 
     pub async fn update_session_model(

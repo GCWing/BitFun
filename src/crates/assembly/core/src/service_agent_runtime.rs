@@ -13,11 +13,11 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
-    AgentSessionCreateRequest, AgentSessionManagementPort, AgentSubmissionPort,
-    AgentSubmissionSource, AgentThreadGoalManagementPort, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, RemoteControlStatePort, RemoteControlStateRequest,
-    RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity, RuntimeServiceCapability,
-    RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
+    AgentLocalCommandTurnPort, AgentSessionCreateRequest, AgentSessionManagementPort,
+    AgentSubmissionPort, AgentSubmissionSource, AgentThreadGoalManagementPort,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, RemoteControlStatePort,
+    RemoteControlStateRequest, RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity,
+    RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
 };
 use bitfun_services_integrations::remote_connect::{
     agent_input_attachment_from_remote_image_context, build_remote_chat_messages,
@@ -402,6 +402,7 @@ fn core_agent_runtime_builder(
     session_mode: Arc<dyn AgentSessionModePort>,
     session_model: Arc<dyn AgentSessionModelPort>,
     session_restore: Arc<dyn AgentSessionRestorePort>,
+    local_command_turn: Arc<dyn AgentLocalCommandTurnPort>,
     transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
     thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
@@ -415,6 +416,7 @@ fn core_agent_runtime_builder(
         .with_session_mode_port(session_mode)
         .with_session_model_port(session_model)
         .with_session_restore_port(session_restore)
+        .with_local_command_turn_port(local_command_turn)
         .with_session_transcript_reader(transcript_reader)
         .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
@@ -519,6 +521,20 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
                 bitfun_runtime_ports::PortError::new(kind, error.to_string())
             })?;
         AgentSessionManagementPort::delete_session(self.coordinator.as_ref(), request).await
+    }
+
+    async fn rename_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionRenameRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        AgentSessionManagementPort::rename_session(self.coordinator.as_ref(), request).await
+    }
+
+    async fn archive_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionArchiveRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        AgentSessionManagementPort::archive_session(self.coordinator.as_ref(), request).await
     }
 
     async fn resolve_session_workspace_binding(
@@ -797,6 +813,7 @@ impl CoreServiceAgentRuntime {
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
@@ -808,6 +825,7 @@ impl CoreServiceAgentRuntime {
             session_mode,
             session_model,
             session_restore,
+            local_command_turn,
             transcript_reader,
             thread_goal_management,
             cancellation,
@@ -827,6 +845,7 @@ impl CoreServiceAgentRuntime {
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
@@ -840,6 +859,7 @@ impl CoreServiceAgentRuntime {
             session_mode,
             session_model,
             session_restore,
+            local_command_turn,
             transcript_reader,
             thread_goal_management,
             cancellation,
@@ -861,6 +881,7 @@ impl CoreServiceAgentRuntime {
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
@@ -873,6 +894,7 @@ impl CoreServiceAgentRuntime {
             session_mode,
             session_model,
             session_restore,
+            local_command_turn,
             transcript_reader,
             thread_goal_management,
             cancellation,
@@ -893,6 +915,7 @@ impl CoreServiceAgentRuntime {
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
@@ -906,6 +929,7 @@ impl CoreServiceAgentRuntime {
             session_mode,
             session_model,
             session_restore,
+            local_command_turn,
             transcript_reader,
             thread_goal_management,
             cancellation,
@@ -979,6 +1003,7 @@ impl CoreServiceAgentRuntime {
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
@@ -992,6 +1017,7 @@ impl CoreServiceAgentRuntime {
             session_mode,
             session_model,
             session_restore,
+            local_command_turn,
             transcript_reader,
             thread_goal_management,
             cancellation,

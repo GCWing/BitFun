@@ -55,7 +55,9 @@ use crate::service::config::{
     get_global_config_service, AgentModelDefaultsConfig, SubagentModelSelection,
 };
 use crate::service::remote_ssh::normalize_remote_workspace_path;
-use crate::service::session::{SessionMemoryMode, SessionRelationship, SessionRelationshipKind};
+use crate::service::session::{
+    SessionMemoryMode, SessionRelationship, SessionRelationshipKind, SessionStatus,
+};
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
 };
@@ -7871,8 +7873,10 @@ async fn create_agent_session_from_runtime_request(
             request.agent_type,
             SessionConfig {
                 workspace_path: Some(workspace_path.clone()),
+                workspace_id: request.workspace_id,
                 remote_connection_id: request.remote_connection_id,
                 remote_ssh_host: request.remote_ssh_host,
+                model_id: request.model_id,
                 ..Default::default()
             },
             workspace_path,
@@ -7904,16 +7908,13 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
         request: bitfun_runtime_ports::AgentSessionCreateRequest,
     ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
         bitfun_core_types::validate_session_id(&session_id).map_err(|message| {
-            bitfun_runtime_ports::PortError::new(
-                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
-                message,
-            )
+            runtime_port_error_preserving_message(BitFunError::Validation(message))
         })?;
         create_agent_session_from_runtime_request(
             self,
             Some(session_id),
             request,
-            runtime_port_error_from_bitfun,
+            runtime_port_error_preserving_message,
         )
         .await
     }
@@ -8013,6 +8014,9 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        model_id: None,
+        last_user_dialog_agent_type: session.last_user_dialog_agent_type,
+        last_submitted_agent_type: session.last_submitted_agent_type,
         turn_count: session.turn_count,
         created_at_ms: runtime_session_time_ms(session.created_at),
         last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
@@ -8142,6 +8146,74 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
             })
     }
 
+    async fn rename_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionRenameRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        let effective_storage_path = Self::resolve_session_restore_path(
+            &request.workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await
+        .map_err(runtime_port_error_preserving_message)?;
+
+        let session_manager = self.get_session_manager();
+        if !session_manager
+            .is_session_loaded_from_storage_path(&effective_storage_path, &request.session_id)
+            .map_err(runtime_port_error_preserving_message)?
+        {
+            self.restore_session_from_storage_path(&effective_storage_path, &request.session_id)
+                .await
+                .map_err(runtime_port_error_preserving_message)?;
+        }
+        self.update_session_title(&request.session_id, &request.session_name)
+            .await
+            .map(|_| ())
+            .map_err(runtime_port_error_preserving_message)
+    }
+
+    async fn archive_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionArchiveRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        let effective_storage_path = Self::resolve_session_restore_path(
+            &request.workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await
+        .map_err(runtime_port_error_preserving_message)?;
+
+        let session_manager = self.get_session_manager();
+        let _mutation = session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &effective_storage_path)
+            .map_err(runtime_port_error_preserving_message)?;
+        session_manager
+            .persistence_manager()
+            .update_session_metadata(&effective_storage_path, &request.session_id, |metadata| {
+                metadata.status = SessionStatus::Archived
+            })
+            .await
+            .map_err(runtime_port_error_preserving_message)
+    }
+
     async fn resolve_session_workspace_binding(
         &self,
         request: bitfun_runtime_ports::AgentSessionWorkspaceRequest,
@@ -8192,29 +8264,59 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 message,
             )
         })?;
-        let session = self
-            .restore_session_for_workspace(
-                SessionStoragePathRequest {
-                    workspace_path: PathBuf::from(request.workspace_path),
-                    remote_connection_id: request.remote_connection_id,
-                    remote_ssh_host: request.remote_ssh_host,
-                },
-                &request.session_id,
-            )
-            .await
-            .map_err(runtime_port_error_preserving_message)?;
+        let storage_request = SessionStoragePathRequest {
+            workspace_path: PathBuf::from(request.workspace_path),
+            remote_connection_id: request.remote_connection_id,
+            remote_ssh_host: request.remote_ssh_host,
+        };
+        let session = if request.include_internal {
+            self.restore_internal_session_for_workspace(storage_request, &request.session_id)
+                .await
+        } else {
+            self.restore_session_for_workspace(storage_request, &request.session_id)
+                .await
+        }
+        .map_err(runtime_port_error_preserving_message)?;
 
         Ok(bitfun_agent_runtime::sdk::AgentSessionRestoreResult {
             session: bitfun_runtime_ports::AgentSessionSummary {
                 session_id: session.session_id,
                 session_name: session.session_name,
                 agent_type: session.agent_type,
+                model_id: session.config.model_id,
+                last_user_dialog_agent_type: session.last_user_dialog_agent_type,
+                last_submitted_agent_type: session.last_submitted_agent_type,
                 turn_count: session.dialog_turn_ids.len(),
                 created_at_ms: runtime_session_time_ms(session.created_at),
                 last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
             },
             state: session.state,
         })
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentLocalCommandTurnPort for ConversationCoordinator {
+    async fn record_completed_local_command_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentLocalCommandTurnRecordRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        let metadata = if request.metadata.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(request.metadata))
+        };
+        self.get_session_manager()
+            .append_completed_local_command_turn(
+                &request.session_id,
+                request.content,
+                request.turn_id,
+                request.timestamp_ms,
+                metadata,
+            )
+            .await
+            .map(|_| ())
+            .map_err(runtime_port_error_preserving_message)
     }
 }
 
@@ -8254,12 +8356,45 @@ impl bitfun_runtime_ports::AgentThreadGoalManagementPort for ConversationCoordin
         &self,
         request: bitfun_runtime_ports::AgentThreadGoalGetRequest,
     ) -> bitfun_runtime_ports::PortResult<Option<ThreadGoal>> {
-        self.get_thread_goal(
-            &request.session_id,
-            std::path::Path::new(&request.workspace_path),
-        )
-        .await
-        .map_err(runtime_port_error_from_bitfun)
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            runtime_port_error_preserving_message(BitFunError::Validation(message))
+        })?;
+        let uses_default_workspace = request.workspace_path == "."
+            && request.remote_connection_id.is_none()
+            && request.remote_ssh_host.is_none();
+        let session_is_loaded = self
+            .get_session_manager()
+            .get_session(&request.session_id)
+            .is_some();
+        let effective_storage_path = if uses_default_workspace && session_is_loaded {
+            self.require_main_session_storage_path(&request.session_id)
+                .await
+                .map_err(runtime_port_error_preserving_message)?
+        } else {
+            Self::resolve_session_restore_path(
+                &request.workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .await
+            .map_err(|error| {
+                let message = format!("Failed to resolve session storage path: {error}");
+                let mut port_error = runtime_port_error_preserving_message(error);
+                port_error.message = message;
+                port_error
+            })?
+        };
+        if !uses_default_workspace || session_is_loaded {
+            self.get_session_manager()
+                .validate_session_storage_path_binding(
+                    &request.session_id,
+                    effective_storage_path.as_path(),
+                )
+                .map_err(runtime_port_error_preserving_message)?;
+        }
+        self.get_thread_goal(&request.session_id, effective_storage_path.as_path())
+            .await
+            .map_err(runtime_port_error_preserving_message)
     }
 
     async fn create_thread_goal(
@@ -8560,6 +8695,7 @@ mod tests {
     use crate::agentic::execution::{
         ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
     };
+    use crate::agentic::goal_mode::thread_goal_patch;
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
         compression::{CompressionConfig, ContextCompressor},
@@ -8574,11 +8710,13 @@ mod tests {
     use crate::infrastructure::PathManager;
     use crate::service::config::{AgentModelDefaultsConfig, SubagentModelSelection};
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
-    use crate::service::session::SessionMetadata;
+    use crate::service::session::{SessionMetadata, SessionStatus};
     use bitfun_runtime_ports::{
-        AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionRequest,
-        AgentSubmissionSource, DelegationPolicy, DialogQueuePriority, DialogSubmissionPolicy,
-        SubagentContextMode,
+        AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionManagementPort,
+        AgentSessionRenameRequest, AgentSubmissionPort, AgentSubmissionRequest,
+        AgentSubmissionSource, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
+        DelegationPolicy, DialogQueuePriority, DialogSubmissionPolicy, SubagentContextMode,
+        ThreadGoal, ThreadGoalStatus,
     };
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -9847,8 +9985,10 @@ mod tests {
                 session_name: "Worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                workspace_id: Some("workspace-1".to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                model_id: Some("explicit-model".to_string()),
                 metadata,
             },
         )
@@ -9861,7 +10001,90 @@ mod tests {
         assert_eq!(result.session_name, "Worker");
         assert_eq!(result.session_name, created.session_name);
         assert_eq!(created.created_by.as_deref(), Some("session-parent"));
+        assert_eq!(created.config.workspace_id.as_deref(), Some("workspace-1"));
+        assert_eq!(created.config.model_id.as_deref(), Some("explicit-model"));
 
+        let _ = std::fs::remove_dir_all(workspace_path);
+    }
+
+    #[tokio::test]
+    async fn agent_session_management_port_renames_and_archives_persisted_session() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-agent-session-management-port-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let workspace = workspace_path.to_string_lossy().into_owned();
+        let created = AgentSubmissionPort::create_session(
+            &coordinator,
+            AgentSessionCreateRequest {
+                session_name: "Original".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace.clone()),
+                workspace_id: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                model_id: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect("session creation should succeed");
+        let storage_path = session_manager
+            .resolve_session_workspace_binding(&created.session_id)
+            .await
+            .expect("created session should have a storage binding")
+            .session_storage_dir();
+        let created_session = session_manager
+            .get_session(&created.session_id)
+            .expect("created session should stay loaded");
+        session_manager
+            .persistence_manager()
+            .save_session(&storage_path, &created_session)
+            .await
+            .expect("session fixture should be persisted");
+
+        AgentSessionManagementPort::rename_session(
+            &coordinator,
+            AgentSessionRenameRequest {
+                workspace_path: workspace.clone(),
+                session_id: created.session_id.clone(),
+                session_name: "Renamed".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect("session rename should succeed");
+        assert_eq!(
+            session_manager
+                .get_session(&created.session_id)
+                .expect("renamed session should stay loaded")
+                .session_name,
+            "Renamed"
+        );
+
+        AgentSessionManagementPort::archive_session(
+            &coordinator,
+            AgentSessionArchiveRequest {
+                workspace_path: workspace,
+                session_id: created.session_id.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect("session archive should succeed");
+        let metadata = session_manager
+            .persistence_manager()
+            .load_session_metadata(&storage_path, &created.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.status, SessionStatus::Archived);
+
+        let _ = std::fs::remove_dir_all(storage_path);
         let _ = std::fs::remove_dir_all(workspace_path);
     }
 
@@ -9874,8 +10097,10 @@ mod tests {
                 session_name: "Over capacity".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                model_id: None,
                 metadata: serde_json::Map::new(),
             },
         )
@@ -9901,8 +10126,10 @@ mod tests {
                 session_name: "Fixed worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                model_id: None,
                 metadata: serde_json::Map::new(),
             },
         )
@@ -9911,6 +10138,18 @@ mod tests {
 
         assert_eq!(result.session_id, "fixed-session-id");
         assert!(session_manager.get_session("fixed-session-id").is_some());
+        let default_workspace_goal = AgentThreadGoalManagementPort::get_thread_goal(
+            &coordinator,
+            AgentThreadGoalGetRequest {
+                session_id: "fixed-session-id".to_string(),
+                workspace_path: ".".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect("loaded local session should accept the default workspace");
+        assert_eq!(default_workspace_goal, None);
 
         let duplicate_error = AgentSubmissionPort::create_session_with_id(
             &coordinator,
@@ -9919,8 +10158,10 @@ mod tests {
                 session_name: "Duplicate worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                model_id: None,
                 metadata: serde_json::Map::new(),
             },
         )
@@ -9930,6 +10171,7 @@ mod tests {
             duplicate_error.kind,
             bitfun_runtime_ports::PortErrorKind::InvalidRequest
         );
+        assert!(duplicate_error.message.starts_with("Validation error:"));
         assert!(duplicate_error.message.contains("already exists"));
         assert_eq!(
             session_manager
@@ -9938,6 +10180,218 @@ mod tests {
                 .session_name,
             "Fixed worker"
         );
+        assert!(session_manager
+            .unload_session_from_memory("fixed-session-id")
+            .await
+            .expect("fixed-id session should unload"));
+        let unloaded_default_workspace_goal = AgentThreadGoalManagementPort::get_thread_goal(
+            &coordinator,
+            AgentThreadGoalGetRequest {
+                session_id: "fixed-session-id".to_string(),
+                workspace_path: ".".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect("unloaded local session should retain the current-directory fallback");
+        assert_eq!(unloaded_default_workspace_goal, None);
+    }
+
+    #[tokio::test]
+    async fn thread_goal_management_preserves_validation_error_messages() {
+        let (coordinator, _) = test_coordinator();
+        let error = AgentThreadGoalManagementPort::get_thread_goal(
+            &coordinator,
+            AgentThreadGoalGetRequest {
+                session_id: "../invalid".to_string(),
+                workspace_path: std::env::temp_dir().to_string_lossy().into_owned(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect_err("invalid session id should be rejected");
+
+        assert_eq!(
+            error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        assert!(error.message.starts_with("Validation error:"));
+    }
+
+    #[tokio::test]
+    async fn thread_goal_management_keeps_cold_remote_workspaces_isolated() {
+        let (coordinator, session_manager) = test_coordinator();
+        let fixture_id = uuid::Uuid::new_v4();
+        let session_id = format!("remote-goal-{fixture_id}");
+        let logical_workspace_path = "/workspace/shared";
+        let remote_identities = [
+            (
+                format!("connection-a-{fixture_id}"),
+                format!("host-a-{fixture_id}"),
+                "Goal from remote A",
+            ),
+            (
+                format!("connection-b-{fixture_id}"),
+                format!("host-b-{fixture_id}"),
+                "Goal from remote B",
+            ),
+        ];
+        let mut storage_paths = Vec::new();
+
+        for (index, (connection_id, ssh_host, objective)) in remote_identities.iter().enumerate() {
+            let storage_path = ConversationCoordinator::resolve_session_restore_path(
+                logical_workspace_path,
+                Some(connection_id),
+                Some(ssh_host),
+            )
+            .await
+            .expect("remote storage path should resolve");
+            let goal = ThreadGoal {
+                goal_id: format!("goal-{index}"),
+                session_id: session_id.clone(),
+                objective: (*objective).to_string(),
+                status: ThreadGoalStatus::Active,
+                token_budget: None,
+                tokens_used: 0,
+                time_used_seconds: 0,
+                created_at: index as i64,
+                updated_at: index as i64,
+                auto_continuation_count: 0,
+            };
+            let mut metadata = SessionMetadata::new(
+                session_id.clone(),
+                format!("Remote {index}"),
+                "agentic".to_string(),
+                "primary".to_string(),
+            );
+            metadata.custom_metadata = Some(thread_goal_patch(&goal));
+            metadata.workspace_path = Some(logical_workspace_path.to_string());
+            metadata.workspace_hostname = Some(ssh_host.clone());
+            session_manager
+                .persistence_manager()
+                .save_session_metadata(&storage_path, &metadata)
+                .await
+                .expect("remote goal metadata should persist");
+            storage_paths.push(storage_path);
+        }
+
+        assert!(session_manager.get_session(&session_id).is_none());
+
+        for (connection_id, ssh_host, objective) in &remote_identities {
+            let goal = AgentThreadGoalManagementPort::get_thread_goal(
+                &coordinator,
+                AgentThreadGoalGetRequest {
+                    session_id: session_id.clone(),
+                    workspace_path: logical_workspace_path.to_string(),
+                    remote_connection_id: Some(connection_id.clone()),
+                    remote_ssh_host: Some(ssh_host.clone()),
+                },
+            )
+            .await
+            .expect("cold remote goal lookup should succeed")
+            .expect("cold remote goal should exist");
+            assert_eq!(goal.objective, *objective);
+        }
+
+        let loaded_session_id = format!("loaded-remote-goal-{fixture_id}");
+        coordinator
+            .create_session_with_id(
+                Some(loaded_session_id.clone()),
+                "Loaded remote A".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(logical_workspace_path.to_string()),
+                    remote_connection_id: Some(remote_identities[0].0.clone()),
+                    remote_ssh_host: Some(remote_identities[0].1.clone()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("remote A should enter the loaded session set");
+        let loaded_storage_path = session_manager
+            .resolve_session_workspace_binding(&loaded_session_id)
+            .await
+            .expect("loaded remote binding should resolve")
+            .session_storage_dir();
+        assert_eq!(loaded_storage_path, storage_paths[0]);
+        let loaded_goal_fixture = ThreadGoal {
+            goal_id: "loaded-goal-a".to_string(),
+            session_id: loaded_session_id.clone(),
+            objective: "Loaded goal from remote A".to_string(),
+            status: ThreadGoalStatus::Active,
+            token_budget: None,
+            tokens_used: 0,
+            time_used_seconds: 0,
+            created_at: 0,
+            updated_at: 0,
+            auto_continuation_count: 0,
+        };
+        let mut loaded_metadata = SessionMetadata::new(
+            loaded_session_id.clone(),
+            "Loaded remote A".to_string(),
+            "agentic".to_string(),
+            "primary".to_string(),
+        );
+        loaded_metadata.custom_metadata = Some(thread_goal_patch(&loaded_goal_fixture));
+        loaded_metadata.workspace_path = Some(logical_workspace_path.to_string());
+        loaded_metadata.workspace_hostname = Some(remote_identities[0].1.clone());
+        session_manager
+            .persistence_manager()
+            .save_session_metadata(&loaded_storage_path, &loaded_metadata)
+            .await
+            .expect("loaded remote goal should persist");
+        let loaded_goal = AgentThreadGoalManagementPort::get_thread_goal(
+            &coordinator,
+            AgentThreadGoalGetRequest {
+                session_id: loaded_session_id.clone(),
+                workspace_path: ".".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect("loaded remote goal lookup with default workspace should succeed")
+        .expect("loaded remote goal should exist");
+        assert_eq!(loaded_goal.objective, "Loaded goal from remote A");
+
+        let explicit_loaded_goal = AgentThreadGoalManagementPort::get_thread_goal(
+            &coordinator,
+            AgentThreadGoalGetRequest {
+                session_id: loaded_session_id.clone(),
+                workspace_path: logical_workspace_path.to_string(),
+                remote_connection_id: Some(remote_identities[0].0.clone()),
+                remote_ssh_host: Some(remote_identities[0].1.clone()),
+            },
+        )
+        .await
+        .expect("loaded remote goal lookup with matching identity should succeed")
+        .expect("loaded remote goal should exist");
+        assert_eq!(explicit_loaded_goal.objective, "Loaded goal from remote A");
+
+        let cross_workspace_error = AgentThreadGoalManagementPort::get_thread_goal(
+            &coordinator,
+            AgentThreadGoalGetRequest {
+                session_id: loaded_session_id,
+                workspace_path: logical_workspace_path.to_string(),
+                remote_connection_id: Some(remote_identities[1].0.clone()),
+                remote_ssh_host: Some(remote_identities[1].1.clone()),
+            },
+        )
+        .await
+        .expect_err("a loaded session must not read another remote workspace");
+        assert_eq!(
+            cross_workspace_error.kind,
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        );
+        assert!(cross_workspace_error
+            .message
+            .contains("already bound to another workspace"));
+
+        for storage_path in storage_paths {
+            let _ = std::fs::remove_dir_all(storage_path);
+        }
     }
 
     #[tokio::test]
@@ -10040,8 +10494,10 @@ mod tests {
                 session_name: "Invalid worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                model_id: None,
                 metadata: serde_json::Map::new(),
             },
         )
@@ -10052,6 +10508,7 @@ mod tests {
             error.kind,
             bitfun_runtime_ports::PortErrorKind::InvalidRequest
         );
+        assert!(error.message.starts_with("Validation error:"));
     }
 
     #[tokio::test]

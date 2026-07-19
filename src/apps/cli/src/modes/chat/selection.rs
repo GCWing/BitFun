@@ -177,16 +177,18 @@ impl ChatMode {
                     let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
                     let metadata = usage_report_metadata(&report)?;
                     runtime
-                        .compatibility()
-                        .append_completed_local_command_turn(
-                            &session_id,
-                            markdown,
-                            Some(format!("local-usage-{}", report.report_id)),
-                            Some(generated_at),
-                            Some(metadata),
-                        )
+                        .agent_runtime()
+                        .record_completed_local_command_turn(AgentLocalCommandTurnRecordRequest {
+                            session_id,
+                            content: markdown,
+                            turn_id: Some(format!("local-usage-{}", report.report_id)),
+                            timestamp_ms: Some(generated_at),
+                            metadata: metadata.as_object().cloned().ok_or_else(|| {
+                                anyhow!("Usage report metadata must be an object")
+                            })?,
+                        })
                         .await
-                        .map_err(|error| anyhow!(error.to_string()))?;
+                        .map_err(|error| anyhow!(error.into_message()))?;
 
                     Ok(report)
                 })
@@ -323,7 +325,8 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        if !agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some()) {
+        if !agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some())
+        {
             chat_view.set_status(Some(mode_switch_unavailable_message(
                 chat_state.is_processing,
             )));
@@ -538,10 +541,7 @@ impl ChatMode {
             agent_items,
             Some(self.agent_type.clone()),
             true,
-            agent_mode_switch_allowed(
-                chat_state.is_processing,
-                self.pending_mode_change.is_some(),
-            ),
+            agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some()),
         );
     }
 
@@ -665,12 +665,8 @@ impl ChatMode {
             )));
             return ModeChangePollOutcome::Redraw;
         }
-        let applied = apply_agent_mode_feedback(
-            &mut self.agent_type,
-            chat_state,
-            &pending.mode_id,
-            outcome,
-        );
+        let applied =
+            apply_agent_mode_feedback(&mut self.agent_type, chat_state, &pending.mode_id, outcome);
         if applied {
             chat_view.set_status(Some(format!("Agent mode set to {}", pending.mode_id)));
         } else {

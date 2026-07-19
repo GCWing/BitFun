@@ -58,8 +58,10 @@ impl BitfunAcpRuntime {
             ),
             agent_type: "agentic".to_string(),
             workspace_path: Some(cwd.clone()),
+            workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            model_id: None,
             metadata: serde_json::Map::new(),
         };
         let session = match self

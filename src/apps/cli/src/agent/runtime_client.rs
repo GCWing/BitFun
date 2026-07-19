@@ -153,6 +153,7 @@ impl CliAgentRuntimeClient {
             .restore_session(AgentSessionRestoreRequest {
                 workspace_path: effective_workspace.to_string_lossy().to_string(),
                 session_id: session_id.to_string(),
+                include_internal: false,
                 remote_connection_id: None,
                 remote_ssh_host: None,
             })
@@ -300,8 +301,10 @@ impl CliAgentRuntimeClient {
                     session_name,
                     agent_type: effective_agent_type,
                     workspace_path: Some(self.workspace_path_string()),
+                    workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
+                    model_id: None,
                     metadata: serde_json::Map::new(),
                 },
             )
@@ -319,6 +322,7 @@ impl CliAgentRuntimeClient {
             .restore_session(AgentSessionRestoreRequest {
                 workspace_path: workspace.to_string_lossy().to_string(),
                 session_id: session_id.to_string(),
+                include_internal: false,
                 remote_connection_id: None,
                 remote_ssh_host: None,
             })
@@ -359,8 +363,10 @@ impl CliAgentRuntimeClient {
                     session_name: Self::build_default_session_name(),
                     agent_type: agent_type.to_string(),
                     workspace_path: Some(self.workspace_path_string()),
+                    workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
+                    model_id: None,
                     metadata: serde_json::Map::new(),
                 },
             )
@@ -389,8 +395,10 @@ impl CliAgentRuntimeClient {
                 session_name: Self::build_default_session_name(),
                 agent_type: agent_type.to_string(),
                 workspace_path: Some(self.workspace_path_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                model_id: None,
                 metadata: serde_json::Map::new(),
             })
             .await
@@ -502,8 +510,10 @@ impl CliAgentRuntimeClient {
                 session_name: Self::build_default_session_name(),
                 agent_type: agent_type.to_string(),
                 workspace_path: Some(self.workspace_path_string()),
+                workspace_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                model_id: None,
                 metadata: serde_json::Map::new(),
             })
             .await
@@ -625,6 +635,9 @@ mod tests {
             session_id: session_id.to_string(),
             session_name: "Workspace session".to_string(),
             agent_type: "agentic".to_string(),
+            model_id: None,
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
             turn_count: 1,
             created_at_ms: 1,
             last_active_at_ms: 2,

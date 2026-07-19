@@ -231,6 +231,7 @@ pub(crate) async fn handle_session_action(
                 .restore_session(AgentSessionRestoreRequest {
                     workspace_path: workspace_path.to_string_lossy().to_string(),
                     session_id: session_id.clone(),
+                    include_internal: false,
                     remote_connection_id: None,
                     remote_ssh_host: None,
                 })

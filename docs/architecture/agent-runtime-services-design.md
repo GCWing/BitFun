@@ -708,12 +708,13 @@ pub struct HarnessExecutionContext {
 `DeliveryProfile::Acp` 构造 `ProductRuntimeParts`。Desktop 主交互直接从现有协调器和调度器端口构造窄口径
 Agent Runtime SDK 门面，不注册未实现的 `RuntimeServices` 能力，也不宣称完整 Desktop profile 可用。CLI 通过
 一个调用级上下文把 Agent Runtime SDK、Harness、能力注册、调用级权限和 Agentic 事件广播交给 TUI、Exec、Session、Usage 与
-交互模式下的 Peer Host。SDK 已承接会话创建/列举/删除/恢复、会话模型更新、类型化转录读取、本地分支、用量生成、
+交互模式下的 Peer Host。SDK 已承接会话创建/列举/删除/基础恢复、重命名/归档、会话模型更新、thread-goal 查询、类型化转录读取、本地分支、用量生成、
 轮次提交/取消与精确结算，以及 CLI/TUI 的工具确认、拒绝和用户问题回答；固定 ID 创建使用独立的
-`create_session_with_id` 方法，普通创建 DTO 保持 v1
-字段集合。未实现该能力的提供方返回类型化不支持错误；实现成功时 Runtime 必须校验返回 ID 与请求完全一致，不能
+`create_session_with_id` 方法，普通创建 DTO 只增加可选工作区 ID 与模型 ID 事实，不承载调用方指定的会话 ID。
+未实现该能力的提供方返回类型化不支持错误；实现成功时 Runtime 必须校验返回 ID 与请求完全一致，不能
 替换为自动生成的 ID。`SessionSelector::Create` 仍保持自动生成。Peer Host 通过同一 SDK 处理对话提交、精确取消、
-工具确认、拒绝和会话模型更新。TUI 用量卡片持久化、快照及 Peer Host/ACP 维护等产品操作仍由
+工具确认/拒绝、会话创建/基础恢复/重命名/归档、thread-goal 查询和会话模型更新。TUI 用量卡片以固定的、模型上下文不可见的
+本地命令轮次契约回到 Core owner；账号同步、快照、富历史读取及 Peer Host/ACP 维护等产品操作仍由
 `assembly/core` 的单一兼容门面转发。
 `doctor` 与 `health` 校验真实组装结果及必需注册完整性；
 Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊断不等于对这些外部服务做实时探活。
@@ -817,9 +818,10 @@ Core 兼容门面读取协议回放所需的完整轮次，避免为单一协议
 推断远程语义。CLI/TUI 的工具确认、拒绝和用户问题回答，以及 ACP 服务端 / Peer Host 的工具确认与拒绝，通过类型化
 `AgentInteractionResponsePort` 回到 Core 的工具管线或用户输入 owner，不改变审批策略或交互所有权。
 `CoreAgentRuntimeCompatibility` 仍承载未迁移的
-TUI 用量卡片持久化、快照及 Peer Host/ACP 维护等操作；不能据此把整个兼容门面一次性删除，也不能把这些
+账号同步、快照、富历史读取及 Peer Host/ACP 维护等操作；不能据此把整个兼容门面一次性删除，也不能把这些
 操作提前声明为跨宿主稳定接口。固定 ID 创建的兼容周期已经结束；会话创建、分支和用量生成均由 Runtime SDK
-承接，Core 的分支/用量 provider 直接调用现有协调器、持久化和用量 owner，不再反向经过兼容门面。账号、登录态、
+承接；会话重命名/归档、基础恢复、thread-goal 查询和完成态本地命令轮次也通过显式窄端口回到 Core owner，
+不形成通用会话 mutation 或 transcript writer。Core provider 直接调用现有协调器、持久化和用量 owner，不再反向经过兼容门面。账号、登录态、
 用户身份和同步策略仍是可选产品能力，不进入 Agent Runtime 或该 Core provider 的稳定接口。
 
 ### 4.3 Product Capability 设计
@@ -1093,9 +1095,9 @@ Product 测试：
 - `bitfun-core` 可继续作为 `product-full` 兼容门面，避免迁移期间一次性重写入口。
 - CLI 已以 `DeliveryProfile::Cli` 构造真实 Runtime Parts 和 SDK runtime；本地 Agent 入口、会话、用量和
   Peer Host 共用一个调用级上下文与广播事件源，审批策略不再写回全局配置。Peer Host 通过 SDK 提交/精确取消
-  turn、更新会话模型并处理工具确认/拒绝，通过单一 Core 兼容门面处理快照及持久化维护缺口，不再构造独立调度器、持久化 manager 或事件队列；
+  turn、处理基础会话控制、更新会话模型并处理工具确认/拒绝，通过单一 Core 兼容门面处理快照、富历史和持久化维护缺口，不再构造独立调度器、持久化 manager 或事件队列；
   wire schema、Relay ACK/重放和重连协议未在该切换中扩张。
-- CLI 主会话客户端通过 SDK 处理 session、transcript、fork、usage report、turn、cancel 与 settlement；TUI 用量卡片持久化和其他 SDK v1 缺口仍通过一个 Core 兼容门面处理；
+- CLI 主会话客户端通过 SDK 处理 session、transcript、fork、usage report、用量卡片完成态本地命令轮次、turn、cancel 与 settlement；其他 SDK v1 缺口仍通过一个 Core 兼容门面处理；
   该门面复用现有 owner，不建立第二套状态或事件 schema。
 - CLI 托管的 ACP 服务端已以 `DeliveryProfile::Acp` 构造真实 Runtime Parts；会话创建/列举、轮次、取消、会话模型更新、工具确认/拒绝和
   Agent 事件订阅复用同一 SDK 语义，ACP stdio、连接与协议投影保持不变。Agentic Event Queue 仍是唯一事件 owner；

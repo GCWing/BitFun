@@ -25,12 +25,12 @@ use bitfun_runtime_services::RuntimeServices;
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
 };
-use crate::agentic::core::{Session, SessionConfig};
+use crate::agentic::core::Session;
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::SessionBranchRequest;
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
 use crate::agentic::session::CoreSessionStorePort;
-use crate::service::session::{DialogTurnData, SessionMetadata, SessionStatus};
+use crate::service::session::{DialogTurnData, SessionMetadata};
 use crate::service::session_usage::{generate_session_usage_report, SessionUsageReport};
 use crate::service::snapshot::{
     get_snapshot_manager_for_workspace, initialize_snapshot_manager_for_workspace, SnapshotManager,
@@ -167,25 +167,6 @@ impl CoreAgentRuntimeCompatibility {
         }
     }
 
-    pub async fn create_session_with_workspace(
-        &self,
-        session_id: Option<String>,
-        session_name: String,
-        agent_type: String,
-        config: SessionConfig,
-        workspace_path: String,
-    ) -> BitFunResult<Session> {
-        self.coordinator
-            .create_session_with_workspace(
-                session_id,
-                session_name,
-                agent_type,
-                config,
-                workspace_path,
-            )
-            .await
-    }
-
     pub async fn restore_session_view_for_workspace(
         &self,
         request: SessionStoragePathRequest,
@@ -247,24 +228,6 @@ impl CoreAgentRuntimeCompatibility {
         } else {
             self.coordinator
                 .restore_session_with_turns_for_workspace(request, session_id)
-                .await
-        }
-    }
-
-    pub async fn restore_session_for_workspace(
-        &self,
-        request: SessionStoragePathRequest,
-        session_id: &str,
-        include_internal: bool,
-    ) -> BitFunResult<Session> {
-        validate_persisted_session_id(session_id)?;
-        if include_internal {
-            self.coordinator
-                .restore_internal_session_for_workspace(request, session_id)
-                .await
-        } else {
-            self.coordinator
-                .restore_session_for_workspace(request, session_id)
                 .await
         }
     }
@@ -423,32 +386,6 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
-    pub async fn update_session_title_for_storage_path(
-        &self,
-        storage_path: &Path,
-        session_id: &str,
-        title: &str,
-    ) -> BitFunResult<()> {
-        validate_persisted_session_id(session_id)?;
-        self.ensure_session_loaded_from_storage_path(storage_path, session_id, false)
-            .await?;
-        self.coordinator
-            .update_session_title(session_id, title)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn get_thread_goal(
-        &self,
-        session_id: &str,
-        storage_path: &Path,
-    ) -> BitFunResult<Option<bitfun_runtime_ports::ThreadGoal>> {
-        validate_persisted_session_id(session_id)?;
-        self.coordinator
-            .get_thread_goal(session_id, storage_path)
-            .await
-    }
-
     pub async fn load_persisted_session_turns(
         &self,
         workspace_path: &Path,
@@ -465,19 +402,6 @@ impl CoreAgentRuntimeCompatibility {
                 .load_session_turns(workspace_path, session_id)
                 .await
         }
-    }
-
-    pub async fn archive_persisted_session(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<()> {
-        validate_persisted_session_id(session_id)?;
-        self.persistence
-            .update_session_metadata(workspace_path, session_id, |metadata| {
-                metadata.status = SessionStatus::Archived;
-            })
-            .await
     }
 
     pub async fn touch_persisted_session(
@@ -557,26 +481,6 @@ impl CoreAgentRuntimeCompatibility {
                 workspace_path,
                 parent_session_id,
                 parent_dialog_turn_ids,
-            )
-            .await
-    }
-
-    pub async fn append_completed_local_command_turn(
-        &self,
-        session_id: &str,
-        content: String,
-        turn_id: Option<String>,
-        timestamp_ms: Option<u64>,
-        user_message_metadata: Option<serde_json::Value>,
-    ) -> BitFunResult<DialogTurnData> {
-        self.coordinator
-            .get_session_manager()
-            .append_completed_local_command_turn(
-                session_id,
-                content,
-                turn_id,
-                timestamp_ms,
-                user_message_metadata,
             )
             .await
     }
@@ -801,7 +705,6 @@ mod tests {
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
         let _ = CoreAgentRuntimeCompatibility::unload_persisted_session;
-        let _ = CoreAgentRuntimeCompatibility::append_completed_local_command_turn;
     }
 
     #[test]
