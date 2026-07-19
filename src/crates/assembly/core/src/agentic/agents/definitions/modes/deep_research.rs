@@ -21,6 +21,7 @@ impl DeepResearchMode {
         Self {
             default_tools: vec![
                 "Task".to_string(),
+                "AgentWait".to_string(),
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
                 "Read".to_string(),

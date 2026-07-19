@@ -61,7 +61,6 @@ struct BackgroundTaskStartRequest<'a> {
     subagent_context: Option<HashMap<String, String>>,
     prepared_prompt: String,
     timeout_seconds: Option<u64>,
-    allow_review_follow_up: bool,
     tool_call_id: String,
     session_id: String,
     dialog_turn_id: String,
@@ -181,7 +180,6 @@ impl TaskTool {
         let model_id = invocation.model_id.clone();
         let mut timeout_seconds = invocation.timeout_seconds;
         let run_in_background = invocation.run_in_background;
-        let allow_review_follow_up = invocation.allow_review_follow_up;
         let is_retry = invocation.is_retry;
         let requested_auto_retry = invocation.requested_auto_retry;
         let is_auto_retry = is_retry && requested_auto_retry;
@@ -227,12 +225,6 @@ impl TaskTool {
                     if !supports_follow_up && model_id.is_some() {
                         return Err(BitFunError::tool(
                             "external_subagent_model_override_unsupported: external subagents use the approved model binding"
-                                .to_string(),
-                        ));
-                    }
-                    if !supports_follow_up && allow_review_follow_up {
-                        return Err(BitFunError::tool(
-                            "external_subagent_follow_up_unsupported: external subagents are fresh-only"
                                 .to_string(),
                         ));
                     }
@@ -596,7 +588,6 @@ impl TaskTool {
                 subagent_context,
                 prepared_prompt,
                 timeout_seconds,
-                allow_review_follow_up,
                 tool_call_id,
                 session_id,
                 dialog_turn_id,
@@ -655,7 +646,6 @@ impl TaskTool {
             subagent_context,
             prepared_prompt,
             timeout_seconds,
-            allow_review_follow_up,
             tool_call_id,
             session_id,
             dialog_turn_id,
@@ -684,7 +674,6 @@ impl TaskTool {
                     external_generation_lease,
                 },
                 timeout_seconds,
-                allow_review_follow_up,
             )
             .await?;
 
@@ -698,6 +687,7 @@ impl TaskTool {
             }),
             result_for_assistant: Some(Self::background_subagent_started_assistant_message(
                 &background_result.session_id,
+                &background_result.background_task_id,
             )),
             image_attachments: None,
         }])

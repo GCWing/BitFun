@@ -51,7 +51,7 @@ use bitfun_services_core::session::{
 };
 use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -4637,6 +4637,22 @@ impl SessionManager {
             merge_session_custom_metadata_value(metadata, patch)
         })
         .await
+    }
+
+    pub(crate) async fn load_session_custom_metadata(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Option<Value>> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(None);
+        }
+
+        let workspace_path = self.metadata_workspace_path_for_update(session_id).await?;
+        Ok(self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await?
+            .and_then(|metadata| metadata.custom_metadata))
     }
 
     pub async fn merge_session_relationship(

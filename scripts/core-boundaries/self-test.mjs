@@ -3361,7 +3361,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/tests.rs',
       contracts: [
-        'background_subagent_start_acknowledgement_uses_session_id_only',
+        'background_subagent_start_acknowledgement_exposes_agent_wait_task_id',
         '<background_task',
       ],
     },

@@ -466,6 +466,7 @@ mod tests {
             "ExecControl",
             "GetTime",
             "Task",
+            "AgentWait",
             "LaunchReviewAgent",
             "Skill",
             "AskUserQuestion",
