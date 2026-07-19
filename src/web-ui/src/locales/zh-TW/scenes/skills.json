@@ -101,21 +101,28 @@
     }
   },
   "suite": {
-    "title": "內建技能套件",
-    "subtitle": "選擇一個模式後，可一鍵控制各組內建技能的可見性；也可逐個調整技能後按組儲存。",
+    "title": "技能套件",
+    "subtitle": "選擇一個模式後，可一鍵控制各組 Skill 的可見性；也可逐個調整 Skill 後按組儲存。",
     "modeLabel": "模式",
     "refreshTooltip": "重新整理目前模式",
     "refreshAction": "重新整理",
-    "loading": "正在載入內建技能套件...",
-    "empty": "目前沒有可用的內建技能。",
+    "loading": "正在載入技能套件...",
+    "empty": "目前沒有可用的 Skill。",
     "groups": {
       "office": "Office",
       "computerUse": "Computer Use",
       "meta": "Meta",
       "miniapp": "MiniApp",
+      "canvas": "畫布",
       "gstack": "gstack",
       "other": "其他"
     },
+    "sections": {
+      "myGroups": "我的分組",
+      "builtin": "內置分組",
+      "otherSkills": "其他 Skill"
+    },
+    "manageGroups": "管理 Skill 分組",
     "modes": {
       "agentic": "agentic",
       "cowork": "Cowork",

@@ -101,21 +101,28 @@
     }
   },
   "suite": {
-    "title": "Built-in Skill Suites",
-    "subtitle": "Pick a mode to manage built-in skill groups. Group actions apply immediately, while individual skill edits can be saved per group.",
+    "title": "Skill Suites",
+    "subtitle": "Pick a mode to manage skill visibility. Group actions apply immediately, while individual skill edits can be saved per group.",
     "modeLabel": "Mode",
     "refreshTooltip": "Refresh current mode",
     "refreshAction": "Refresh",
-    "loading": "Loading built-in skill suites...",
-    "empty": "No built-in skills are available.",
+    "loading": "Loading skill suites...",
+    "empty": "No skills are available.",
     "groups": {
       "office": "Office",
       "computerUse": "Computer Use",
       "meta": "Meta",
       "miniapp": "MiniApp",
+      "canvas": "Canvas",
       "gstack": "gstack",
       "other": "Other"
     },
+    "sections": {
+      "myGroups": "My groups",
+      "builtin": "Built-in groups",
+      "otherSkills": "Other skills"
+    },
+    "manageGroups": "Manage Skill groups",
     "modes": {
       "agentic": "agentic",
       "cowork": "Cowork",

@@ -500,6 +500,11 @@
     gap: $size-gap-1;
   }
 
+  &__tooltip-trigger {
+    display: inline-flex;
+    max-width: 100%;
+  }
+
   &__token {
     display: inline-flex;
     align-items: center;

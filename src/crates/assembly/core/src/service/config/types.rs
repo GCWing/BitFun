@@ -120,10 +120,80 @@ pub struct AppConfig {
     /// the frontend owns the versioned format (StoredKeybindingsV1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keybindings: Option<serde_json::Value>,
+    /// Global, user-defined groups used to organize Agent tool pickers.
+    #[serde(default, skip_serializing_if = "UserToolGroupsConfig::is_empty")]
+    pub user_tool_groups: UserToolGroupsConfig,
+    /// Global, user-defined groups used to organize Skill pickers.
+    #[serde(default, skip_serializing_if = "UserSkillGroupsConfig::is_empty")]
+    pub user_skill_groups: UserSkillGroupsConfig,
     /// What happens when the window close button is clicked on Windows / Linux.
     /// Allowed values: "quit" | "minimize_to_tray" | "ask".
     #[serde(default = "default_close_button_behavior")]
     pub close_button_behavior: String,
+}
+
+/// Versioned user preference for grouping selectable Agent tools in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserToolGroupsConfig {
+    pub version: u32,
+    pub groups: Vec<UserToolGroup>,
+}
+
+impl UserToolGroupsConfig {
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+}
+
+impl Default for UserToolGroupsConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            groups: Vec::new(),
+        }
+    }
+}
+
+/// A user-defined group of canonical tool names.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserToolGroup {
+    pub id: String,
+    pub name: String,
+    pub tool_names: Vec<String>,
+}
+
+/// Versioned user preference for grouping selectable Skills in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSkillGroupsConfig {
+    pub version: u32,
+    pub groups: Vec<UserSkillGroup>,
+}
+
+impl UserSkillGroupsConfig {
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+}
+
+impl Default for UserSkillGroupsConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            groups: Vec::new(),
+        }
+    }
+}
+
+/// A user-defined group of stable Skill keys.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSkillGroup {
+    pub id: String,
+    pub name: String,
+    pub skill_keys: Vec<String>,
 }
 
 /// App logging configuration.
@@ -1499,6 +1569,8 @@ impl Default for AppConfig {
             flow_chat: AppFlowChatConfig::default(),
             ai_experience: AIExperienceConfig::default(),
             keybindings: None,
+            user_tool_groups: UserToolGroupsConfig::default(),
+            user_skill_groups: UserSkillGroupsConfig::default(),
             close_button_behavior: default_close_button_behavior(),
         }
     }
@@ -1892,7 +1964,7 @@ mod tests {
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
         AgentProfileView, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
         ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
-        SubagentModelSelection,
+        SubagentModelSelection, UserSkillGroupsConfig, UserToolGroupsConfig,
     };
 
     #[test]
@@ -1911,6 +1983,88 @@ mod tests {
         assert!(view.default_tools.is_empty());
         assert!(view.disabled_user_skills.is_empty());
         assert!(view.enabled_user_skills.is_empty());
+    }
+
+    #[test]
+    fn user_tool_groups_default_to_version_one_without_persisted_groups() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(config.app.user_tool_groups, UserToolGroupsConfig::default());
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("user_tool_groups").is_none());
+    }
+
+    #[test]
+    fn user_tool_groups_preserve_the_versioned_ui_shape() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "user_tool_groups": {
+                    "version": 1,
+                    "groups": [{
+                        "id": "daily-code",
+                        "name": "Daily code changes",
+                        "toolNames": ["Read", "Edit"]
+                    }]
+                }
+            }
+        }))
+        .expect("user tool groups should deserialize");
+
+        assert_eq!(
+            config.app.user_tool_groups.groups[0].tool_names,
+            vec!["Read".to_string(), "Edit".to_string()]
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["user_tool_groups"]["groups"][0]["toolNames"],
+            serde_json::json!(["Read", "Edit"])
+        );
+    }
+
+    #[test]
+    fn user_skill_groups_default_to_version_one_without_persisted_groups() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(
+            config.app.user_skill_groups,
+            UserSkillGroupsConfig::default()
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("user_skill_groups").is_none());
+    }
+
+    #[test]
+    fn user_skill_groups_preserve_the_versioned_ui_shape() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "user_skill_groups": {
+                    "version": 1,
+                    "groups": [{
+                        "id": "daily-coding",
+                        "name": "Daily coding",
+                        "skillKeys": ["builtin::find-skills", "user::review"]
+                    }]
+                }
+            }
+        }))
+        .expect("user skill groups should deserialize");
+
+        assert_eq!(
+            config.app.user_skill_groups.groups[0].skill_keys,
+            vec![
+                "builtin::find-skills".to_string(),
+                "user::review".to_string()
+            ]
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["user_skill_groups"]["groups"][0]["skillKeys"],
+            serde_json::json!(["builtin::find-skills", "user::review"])
+        );
     }
 
     #[test]
