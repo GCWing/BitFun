@@ -1461,7 +1461,46 @@
     display: flex;
     align-items: center;
     gap: $size-gap-1;
+    min-width: 0;
     animation: bitfun-stacked-reveal 0.28s cubic-bezier(0.4, 0, 0.2, 1) 0.17s both;
+  }
+
+  &__auto-permission {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--color-warning) 38%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    color: var(--color-warning);
+    font: inherit;
+    font-size: var(--flowchat-font-size-xxs);
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    &:hover:not(:disabled) {
+      border-color: color-mix(in srgb, var(--color-warning) 56%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-warning);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.55;
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
   }
 
   &__model-usage-group {

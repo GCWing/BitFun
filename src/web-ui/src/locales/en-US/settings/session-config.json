@@ -50,6 +50,21 @@
     "sectionTitle": "Tool execution behavior",
     "sectionDescription": "Confirmation and timeout settings when tools run in a session."
   },
+  "permissionPolicy": {
+    "sectionTitle": "Tool permissions",
+    "sectionDescription": "Choose the default tool access policy and how permission prompts are handled.",
+    "mode": "Permission mode",
+    "ask": "Ask before access",
+    "askDescription": "Tools ask for approval unless a more specific rule already allows or denies the action.",
+    "fullAccess": "Full access",
+    "fullAccessDescription": "Tools are allowed by default, while explicit deny rules, product restrictions, and operating system permissions still apply.",
+    "fullAccessWarningTitle": "Enable full access?",
+    "fullAccessWarningMessage": "Full access allows tools to read and write files, run commands, and call integrations without asking each time. Explicit deny rules, product restrictions, and operating system permissions still apply.",
+    "fullAccessConfirm": "Enable full access",
+    "cancel": "Cancel",
+    "autoApprove": "Auto approve permission prompts",
+    "autoApproveDescription": "Automatically approve only actions that evaluate to Ask. Denied actions remain blocked, and no remembered grant is created."
+  },
   "deferredToolLoading": {
     "sectionTitle": "Deferred tool loading",
     "sectionDescription": "Load detailed schemas for some tools only when needed, including a subset of built-in tools and all MCP tools.",

@@ -50,6 +50,21 @@
     "sectionTitle": "工具執行行為",
     "sectionDescription": "本會話中 AI 調用工具時的確認與超時策略。"
   },
+  "permissionPolicy": {
+    "sectionTitle": "工具權限",
+    "sectionDescription": "設定預設工具存取策略和權限詢問的處理方式。",
+    "mode": "權限模式",
+    "ask": "存取前確認",
+    "askDescription": "除非更具體的規則已允許或拒絕，否則工具執行前會請求確認。",
+    "fullAccess": "完全存取",
+    "fullAccessDescription": "預設允許工具執行，但明確拒絕規則、產品限制和作業系統權限仍然生效。",
+    "fullAccessWarningTitle": "啟用完全存取？",
+    "fullAccessWarningMessage": "完全存取會允許工具讀取和寫入檔案、執行命令及調用整合，不再逐次詢問。明確拒絕規則、產品限制和作業系統權限仍然生效。",
+    "fullAccessConfirm": "啟用完全存取",
+    "cancel": "取消",
+    "autoApprove": "自動批准權限請求",
+    "autoApproveDescription": "僅自動批准求值結果為「需要確認」的操作。被拒絕的操作仍會阻止，且不會建立記憶授權。"
+  },
   "deferredToolLoading": {
     "sectionTitle": "工具延遲載入",
     "sectionDescription": "僅在需要時載入部分工具的完整 Schema（包括部分內建工具及所有 MCP 工具）。",

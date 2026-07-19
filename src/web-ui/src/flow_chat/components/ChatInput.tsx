@@ -6,7 +6,7 @@
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, useSyncExternalStore } from 'react';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star, ShieldCheck } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState, type InlineTriggerState } from './RichTextInput';
@@ -84,7 +84,8 @@ import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
-import { configManager } from '@/infrastructure/config';
+import { configManager, normalizeToolPermissionConfig, permissionConfigService } from '@/infrastructure/config';
+import type { ToolPermissionConfig } from '@/infrastructure/config/types';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
@@ -287,6 +288,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [savedDraft, setSavedDraft] = useState('');
   const [inputTarget, setInputTarget] = useState<ChatInputTarget>('main');
+  const [autoApproveAskEnabled, setAutoApproveAskEnabled] = useState(false);
+  const [autoApproveAskSaving, setAutoApproveAskSaving] = useState(false);
   const { addMessage: addToHistory, getSessionHistory } = useInputHistoryStore();
   
   const contexts = useContextStore(state => state.contexts);
@@ -1358,6 +1361,48 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       globalEventBus.off('chat-input:get-state', handleGetChatInputState);
     };
   }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const applyConfig = (config: ToolPermissionConfig) => {
+      if (!cancelled) {
+        setAutoApproveAskEnabled(config.interaction.auto_approve_ask);
+      }
+    };
+    const loadConfig = async () => {
+      applyConfig(await permissionConfigService.getConfig());
+    };
+    const handlePermissionConfigUpdated = (value?: ToolPermissionConfig) => {
+      if (value) {
+        applyConfig(normalizeToolPermissionConfig(value));
+      } else {
+        void loadConfig();
+      }
+    };
+
+    void loadConfig();
+    globalEventBus.on('permission:config:updated', handlePermissionConfigUpdated);
+    return () => {
+      cancelled = true;
+      globalEventBus.off('permission:config:updated', handlePermissionConfigUpdated);
+    };
+  }, []);
+
+  const handleDisableAutoApproveAsk = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (autoApproveAskSaving) return;
+    setAutoApproveAskEnabled(false);
+    setAutoApproveAskSaving(true);
+    try {
+      await permissionConfigService.setAutoApproveAsk(false);
+    } catch (error) {
+      log.error('Failed to disable auto approve ask', error);
+      setAutoApproveAskEnabled(true);
+      notificationService.error(t('chatInput.autoPermissionDisableFailed'));
+    } finally {
+      setAutoApproveAskSaving(false);
+    }
+  }, [autoApproveAskSaving, t]);
 
   React.useEffect(() => {
     if (!slashCommandState.isActive || slashCommandState.kind !== 'all' || derivedState?.isProcessing) {
@@ -4236,6 +4281,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     </div>
                   )}
                 </div>
+                {autoApproveAskEnabled && !isAcpTargetSession && (
+                  <Tooltip content={t('chatInput.autoPermissionDisable')}>
+                    <button
+                      type="button"
+                      className="bitfun-chat-input__auto-permission"
+                      aria-label={t('chatInput.autoPermissionDisable')}
+                      disabled={autoApproveAskSaving}
+                      data-testid="chat-input-auto-permission"
+                      onClick={handleDisableAutoApproveAsk}
+                    >
+                      <ShieldCheck size={12} aria-hidden />
+                      <span>{t('chatInput.autoPermissionEnabled')}</span>
+                      <X size={11} aria-hidden />
+                    </button>
+                  </Tooltip>
+                )}
               </div>
               <div className="bitfun-chat-input__actions-right">
                 <div className="bitfun-chat-input__model-usage-group">

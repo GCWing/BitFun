@@ -14,6 +14,7 @@ import {
   Modal,
   Select,
   Tooltip,
+  confirmDanger,
   type SelectOption,
 } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
@@ -27,9 +28,14 @@ import {
   type AgentCompanionPetPackage,
 } from '../services/AgentCompanionPetService';
 import { configManager } from '../services/ConfigManager';
+import {
+  DEFAULT_TOOL_PERMISSION_CONFIG,
+  normalizeToolPermissionConfig,
+  permissionConfigService,
+} from '../services/PermissionConfigService';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
-import type { AIModelConfig, DebugModeConfig, LanguageDebugTemplate } from '../types';
+import type { AIModelConfig, DebugModeConfig, LanguageDebugTemplate, ToolPermissionConfig } from '../types';
 import {
   LANGUAGE_TEMPLATE_LABELS,
   DEFAULT_DEBUG_MODE_CONFIG,
@@ -112,6 +118,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
   const [deferredToolLoadingConfigSaving, setDeferredToolLoadingConfigSaving] = useState(false);
+  const [toolPermissionConfig, setToolPermissionConfig] = useState<ToolPermissionConfig>(DEFAULT_TOOL_PERMISSION_CONFIG);
+  const [permissionConfigSaving, setPermissionConfigSaving] = useState(false);
 
   const [computerUseEnabled, setComputerUseEnabled] = useState(false);
   const [computerUseAccess, setComputerUseAccess] = useState(false);
@@ -216,6 +224,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         debugConfigData,
         computerUseCfg,
         browserControlPreferredBrowser,
+        loadedToolPermissionConfig,
         loadedCompanionPets,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
@@ -228,6 +237,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
+        permissionConfigService.getConfig(),
         listAgentCompanionPets(),
       ]);
 
@@ -243,6 +253,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
+      setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
 
       refreshDesktopStatus(computerUseCfg);
     } catch (error) {
@@ -252,6 +263,50 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setIsLoading(false);
     }
   }, [refreshDesktopStatus]);
+
+  const saveToolPermissionConfig = async (nextConfig: ToolPermissionConfig, previousConfig: ToolPermissionConfig) => {
+    setToolPermissionConfig(nextConfig);
+    setPermissionConfigSaving(true);
+    try {
+      await permissionConfigService.saveConfig(nextConfig);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save tool permission config', error);
+      setToolPermissionConfig(previousConfig);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setPermissionConfigSaving(false);
+    }
+  };
+
+  const handlePermissionPresetChange = async (value: string | number | (string | number)[]) => {
+    const nextPreset = String(Array.isArray(value) ? value[0] : value) === 'full_access' ? 'full_access' : 'ask';
+    if (nextPreset === toolPermissionConfig.policy.preset) return;
+    const previousConfig = toolPermissionConfig;
+    if (nextPreset === 'full_access') {
+      const confirmed = await confirmDanger(
+        t('permissionPolicy.fullAccessWarningTitle'),
+        t('permissionPolicy.fullAccessWarningMessage'),
+        {
+          confirmText: t('permissionPolicy.fullAccessConfirm'),
+          cancelText: t('permissionPolicy.cancel'),
+        },
+      );
+      if (!confirmed) return;
+    }
+    await saveToolPermissionConfig(
+      { ...previousConfig, policy: { ...previousConfig.policy, preset: nextPreset } },
+      previousConfig,
+    );
+  };
+
+  const handleAutoApproveAskChange = async (enabled: boolean) => {
+    const previousConfig = toolPermissionConfig;
+    await saveToolPermissionConfig(
+      { ...previousConfig, interaction: { ...previousConfig.interaction, auto_approve_ask: enabled } },
+      previousConfig,
+    );
+  };
 
   useEffect(() => {
     loadAllData();
@@ -1060,6 +1115,46 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               <Switch
                 checked={settings.enable_workspace_search}
                 onChange={(e) => updateSetting('enable_workspace_search', e.target.checked)}
+                size="small"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('permissionPolicy.sectionTitle')}
+          description={t('permissionPolicy.sectionDescription')}
+        >
+          <ConfigPageRow
+            label={t('permissionPolicy.mode')}
+            description={toolPermissionConfig.policy.preset === 'full_access'
+              ? t('permissionPolicy.fullAccessDescription')
+              : t('permissionPolicy.askDescription')}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control">
+              <Select
+                size="small"
+                value={toolPermissionConfig.policy.preset}
+                options={[
+                  { value: 'ask', label: t('permissionPolicy.ask') },
+                  { value: 'full_access', label: t('permissionPolicy.fullAccess') },
+                ]}
+                disabled={permissionConfigSaving}
+                onChange={handlePermissionPresetChange}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('permissionPolicy.autoApprove')}
+            description={t('permissionPolicy.autoApproveDescription')}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control">
+              <Switch
+                checked={toolPermissionConfig.interaction.auto_approve_ask}
+                onChange={(event) => void handleAutoApproveAskChange(event.target.checked)}
+                disabled={permissionConfigSaving}
                 size="small"
               />
             </div>

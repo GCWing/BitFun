@@ -50,6 +50,21 @@
     "sectionTitle": "工具执行行为",
     "sectionDescription": "本会话中 AI 调用工具时的确认与超时策略。"
   },
+  "permissionPolicy": {
+    "sectionTitle": "工具权限",
+    "sectionDescription": "设置默认工具访问策略和权限询问的处理方式。",
+    "mode": "权限模式",
+    "ask": "访问前确认",
+    "askDescription": "除非更具体的规则已允许或拒绝，否则工具执行前会请求确认。",
+    "fullAccess": "完全访问",
+    "fullAccessDescription": "默认允许工具执行，但显式拒绝规则、产品限制和操作系统权限仍然生效。",
+    "fullAccessWarningTitle": "启用完全访问？",
+    "fullAccessWarningMessage": "完全访问会允许工具读取和写入文件、执行命令及调用集成，不再逐次询问。显式拒绝规则、产品限制和操作系统权限仍然生效。",
+    "fullAccessConfirm": "启用完全访问",
+    "cancel": "取消",
+    "autoApprove": "自动批准权限请求",
+    "autoApproveDescription": "仅自动批准求值结果为“需要确认”的操作。被拒绝的操作仍会阻止，且不会创建记忆授权。"
+  },
   "deferredToolLoading": {
     "sectionTitle": "工具延迟加载",
     "sectionDescription": "仅在需要时加载部分工具的完整 Schema（包括部分内置工具及所有 MCP 工具）。",

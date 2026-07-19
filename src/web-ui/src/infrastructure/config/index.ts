@@ -11,6 +11,7 @@ export * from './types';
 // Services
 export * from './services/ConfigManager';
 export * from './services/modelConfigs';
+export * from './services/PermissionConfigService';
 
 // Components
 export { default as AIModelConfig } from './components/AIModelConfig';

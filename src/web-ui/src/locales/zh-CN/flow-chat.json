@@ -562,6 +562,9 @@
   },
   "chatInput": {
     "addBoostTooltip": "智能体模式、图片或 Skill",
+    "autoPermissionEnabled": "自动批准",
+    "autoPermissionDisable": "自动批准已开启，点击关闭。",
+    "autoPermissionDisableFailed": "关闭权限自动批准失败。",
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能体",
     "boostSectionContext": "上下文",

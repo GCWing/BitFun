@@ -562,6 +562,9 @@
   },
   "chatInput": {
     "addBoostTooltip": "Agent modes, image, or skills",
+    "autoPermissionEnabled": "Auto",
+    "autoPermissionDisable": "Auto approval is on. Click to turn it off.",
+    "autoPermissionDisableFailed": "Failed to turn off automatic permission approval.",
     "addModeTooltip": "Add Plan or Debug",
     "boostSectionAgent": "Agent",
     "boostSectionContext": "Context",
