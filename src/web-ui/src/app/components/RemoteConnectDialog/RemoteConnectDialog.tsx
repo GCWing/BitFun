@@ -11,6 +11,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { Modal, Badge, Input, Select } from '@/component-library';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import {
   remoteConnectAPI,
   type ConnectionResult,
@@ -273,6 +274,25 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       cancelled = true;
     };
   }, [isOpen]);
+
+  // Keep the Self-Hosted server URL in sync with account login state. The
+  // backend already persists the mirrored value; this refreshes the input
+  // while the dialog is open (fill on login, clear on logout).
+  useEffect(() => {
+    const unlisten = api.listen<{ logged_in: boolean; relay_url?: string }>(
+      'account://login-state',
+      (payload) => {
+        if (payload?.logged_in && payload.relay_url) {
+          setCustomUrl(payload.relay_url);
+        } else if (payload && !payload.logged_in) {
+          setCustomUrl('');
+        }
+      },
+    );
+    return () => {
+      unlisten();
+    };
+  }, []);
 
   useEffect(() => {
     formSnapshotRef.current = {

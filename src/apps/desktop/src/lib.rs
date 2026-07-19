@@ -1426,6 +1426,13 @@ pub async fn run() {
             api::ssh_api::remote_close_workspace,
             api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
+            // Relay self-deploy API
+            api::relay_deploy_api::relay_deploy_preflight,
+            api::relay_deploy_api::relay_deploy_install_docker,
+            api::relay_deploy_api::relay_deploy_start,
+            api::relay_deploy_api::relay_deploy_poll,
+            api::relay_deploy_api::relay_deploy_register,
+            api::relay_deploy_api::relay_deploy_verify,
             // Announcement / feature-demo / tips API
             api::announcement_api::get_pending_announcements,
             api::announcement_api::mark_announcement_seen,

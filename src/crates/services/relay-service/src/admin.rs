@@ -54,6 +54,12 @@ impl AdminKdfParams {
 }
 
 /// The complete set of values needed to insert/update a user row.
+///
+/// Serializable so a client can provision an account locally (keeping the
+/// plaintext password on the client machine) and hand the derived artifacts
+/// to `relay-admin import-user` on the server over a trusted channel (e.g.
+/// the operator's own SSH session).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProvisionedAccount {
     pub user_id: String,
     pub salt: String,
@@ -61,6 +67,15 @@ pub struct ProvisionedAccount {
     pub argon2_params: String,
     pub password_hash: String,
     pub wrapped_master_key: String,
+}
+
+/// A locally-provisioned account plus its username, as exchanged with
+/// `relay-admin import-user` (JSON over file/stdin).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportableAccount {
+    pub username: String,
+    #[serde(flatten)]
+    pub account: ProvisionedAccount,
 }
 
 /// Derive all cryptographic artifacts for a username + password.
@@ -129,6 +144,25 @@ pub async fn add_user(pool: &DbPool, username: &str, password: &str) -> Result<S
         return Err(anyhow!("username '{username}' already exists"));
     }
     let acct = provision(username, password)?;
+    insert_user_row(pool, username, &acct).await?;
+    Ok(acct.user_id.clone())
+}
+
+/// Insert an account that was provisioned elsewhere (e.g. on the client
+/// machine, so the plaintext password never transits the server). Only
+/// derived artifacts are stored — identical to what `add_user` persists.
+pub async fn import_user(pool: &DbPool, import: &ImportableAccount) -> Result<String> {
+    if UserRow::find_by_username(pool, &import.username)
+        .await?
+        .is_some()
+    {
+        return Err(anyhow!("username '{}' already exists", import.username));
+    }
+    insert_user_row(pool, &import.username, &import.account).await?;
+    Ok(import.account.user_id.clone())
+}
+
+async fn insert_user_row(pool: &DbPool, username: &str, acct: &ProvisionedAccount) -> Result<()> {
     UserRow::create(
         pool,
         &acct.user_id,
@@ -140,7 +174,7 @@ pub async fn add_user(pool: &DbPool, username: &str, password: &str) -> Result<S
         &acct.wrapped_master_key,
     )
     .await?;
-    Ok(acct.user_id)
+    Ok(())
 }
 
 /// Reset the password for an existing account. Generates new salts and a new

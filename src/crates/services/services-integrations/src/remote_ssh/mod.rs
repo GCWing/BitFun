@@ -19,6 +19,8 @@ pub mod manager;
 #[cfg(feature = "remote-ssh-concrete")]
 mod password_vault;
 #[cfg(feature = "remote-ssh-concrete")]
+pub mod relay_deploy;
+#[cfg(feature = "remote-ssh-concrete")]
 mod remote_exec;
 #[cfg(feature = "remote-ssh-concrete")]
 mod remote_exec_runtime_port;

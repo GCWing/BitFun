@@ -1102,6 +1102,30 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("reload_subagents", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "relay_deploy_install_docker",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_poll",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_preflight",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_register",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_start",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "relay_deploy_verify",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "remote_close_workspace",
         RemoteWorkspacePolicy::RemoteRouted,
     ),

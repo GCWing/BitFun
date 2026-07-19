@@ -438,6 +438,9 @@ pub fn init_on_startup() {
                 };
                 *get_account_session().write().await = Some(session);
                 *get_account_relay_url().write().await = Some(relay_url.clone());
+                // Keep the mirrored "Self-Hosted" server field in sync for
+                // sessions restored from an older version without the mirror.
+                set_self_hosted_form_url(Some(&relay_url));
                 log::info!("Restored account session for user {user_id}");
 
                 // Initialize the remote-connect service if not yet ready.
@@ -1236,6 +1239,9 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     *get_account_relay_url().write().await = Some(request.relay_url.clone());
     // Persist non-secret credentials for next startup pre-fill
     save_credential_hint(&request.username, &request.relay_url);
+    // Mirror the relay URL into the Remote Connect "Self-Hosted" server field
+    // so phone pairing can ride the same relay the account is logged into.
+    set_self_hosted_form_url(Some(&request.relay_url));
     // Persist the full session (token + master_key, encrypted) so the
     // user stays logged in across app restarts.
     if let Err(e) = session_store::save_session_with_device(
@@ -1251,6 +1257,14 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
 
     register_delegated_identity_providers().await;
+
+    emit_account_event(
+        "account://login-state",
+        serde_json::json!({
+            "logged_in": true,
+            "relay_url": request.relay_url,
+        }),
+    );
 
     log::info!(
         "Account logged in: {} (has_cloud_settings={})",
@@ -1285,9 +1299,26 @@ pub async fn account_logout() -> Result<(), String> {
     *get_account_relay_url().write().await = None;
     clear_credential_hint();
     session_store::clear_session();
+    // Clear the mirrored "Self-Hosted" server field on logout.
+    set_self_hosted_form_url(None);
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
+    emit_account_event(
+        "account://login-state",
+        serde_json::json!({ "logged_in": false }),
+    );
     log::info!("Account logged out");
     Ok(())
+}
+
+/// Persist (or clear) the account relay URL in the Remote Connect
+/// "Self-Hosted" form field so the pairing UI follows account login state.
+fn set_self_hosted_form_url(url: Option<&str>) {
+    let mut data = bot::load_bot_persistence();
+    let value = url.unwrap_or_default();
+    if data.form_state.custom_server_url != value {
+        data.form_state.custom_server_url = value.to_string();
+        bot::save_bot_persistence(&data);
+    }
 }
 
 // ── P2: Device routing commands ──────────────────────────────────────────
