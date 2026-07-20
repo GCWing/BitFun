@@ -65,7 +65,8 @@ turn 抽取与文件来源记录；旧格式中缺少 turn id 的来源记录不
 ## 生命周期
 
 1. execution engine 对每个不同的用户 turn 处理一次约束抽取。
-2. 明确的测试文件禁改措辞先由确定性规则兜底；fast 模型补充其他 matcher，并返回显式撤销。
+2. 明确的测试文件禁改措辞先由确定性句法规则兜底；规则要求禁止词、变更动作与测试文件目标
+   形成直接关系，不以关键词共现推断约束。fast 模型补充其他 matcher，并返回显式撤销。
 3. 有约束、发生模型尝试或抽取失败时才将结果写入 session metadata；普通无信号 turn 不产生
    guard 状态，也不触发 metadata 重写。抽取失败单独记录，执行阶段 fail open。
 4. 文件工具在 `validate_input` 中调用统一检查；shell、WriteStdin 和 Git 工具先将可静态识别的
