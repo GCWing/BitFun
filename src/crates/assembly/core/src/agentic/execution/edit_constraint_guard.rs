@@ -31,6 +31,8 @@ pub use model::{
     ExtractedConstraint, ExtractionFailure, ExtractionStatus, ModelExtractionStatus,
 };
 use shell_targets::explicit_bash_mutation_targets;
+#[cfg(test)]
+use shell_targets::ShellMutationOperation;
 
 pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
 const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 5;
@@ -1012,12 +1014,12 @@ pub fn check_delete(
 /// remain observable through the final patch/provenance telemetry instead of
 /// being silently treated as guarded direct-file writes.
 pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<ValidationResult> {
-    for path in explicit_bash_mutation_targets(command) {
+    for target in explicit_bash_mutation_targets(command) {
         if let Some(rejection) = check(
             Some(context),
             "Bash",
-            "explicit_shell_mutation",
-            &path,
+            target.operation.guard_operation(),
+            &target.path,
             false,
         ) {
             return Some(rejection);

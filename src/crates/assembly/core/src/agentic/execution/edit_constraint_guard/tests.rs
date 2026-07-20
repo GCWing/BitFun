@@ -14,6 +14,13 @@ fn constraint(description: &str, matcher: ConstraintMatcher) -> ExtractedConstra
     }
 }
 
+fn parsed_shell_targets(command: &str) -> Vec<(String, ShellMutationOperation)> {
+    explicit_bash_mutation_targets(command)
+        .into_iter()
+        .map(|target| (target.path, target.operation))
+        .collect()
+}
+
 #[test]
 fn test_files_matcher_covers_common_conventions() {
     let matcher = ConstraintMatcher::TestFiles;
@@ -109,50 +116,123 @@ fn matchers_cover_paths_extensions_and_unmatched() {
 #[test]
 fn terminal_preflight_finds_explicit_mutation_targets() {
     assert_eq!(
-        explicit_bash_mutation_targets("sed -i 's/old/new/' tests/example.rs"),
-        vec!["tests/example.rs".to_string()]
+        parsed_shell_targets("sed -i 's/old/new/' tests/example.rs"),
+        vec![(
+            "tests/example.rs".to_string(),
+            ShellMutationOperation::Write
+        )]
     );
     assert_eq!(
-        explicit_bash_mutation_targets("printf x > test/unit/output.txt && touch src/lib.rs"),
-        vec!["test/unit/output.txt".to_string(), "src/lib.rs".to_string()]
-    );
-    assert_eq!(
-        explicit_bash_mutation_targets("cargo test -p core"),
-        Vec::<String>::new()
-    );
-    assert_eq!(
-        explicit_bash_mutation_targets(
-            r#"python3 -c \"open('/app/test/unit/example_test.py', 'w').write('x')\""#
-        ),
-        vec!["/app/test/unit/example_test.py".to_string()]
-    );
-    assert_eq!(
-        explicit_bash_mutation_targets(
-            r#"python -c \"from pathlib import Path; Path('tests/repro_test.py').write_text('x')\""#
-        ),
-        vec!["tests/repro_test.py".to_string()]
-    );
-    assert_eq!(
-        explicit_bash_mutation_targets("mv tests/existing_test.py src/existing.py"),
+        parsed_shell_targets("printf x > test/unit/output.txt && touch src/lib.rs"),
         vec![
-            "tests/existing_test.py".to_string(),
-            "src/existing.py".to_string()
+            (
+                "test/unit/output.txt".to_string(),
+                ShellMutationOperation::Write
+            ),
+            ("src/lib.rs".to_string(), ShellMutationOperation::Write)
         ]
     );
     assert_eq!(
-        explicit_bash_mutation_targets(
+        parsed_shell_targets("cargo test -p core"),
+        Vec::<(String, ShellMutationOperation)>::new()
+    );
+    assert_eq!(
+        parsed_shell_targets(
+            r#"python3 -c \"open('/app/test/unit/example_test.py', 'w').write('x')\""#
+        ),
+        vec![(
+            "/app/test/unit/example_test.py".to_string(),
+            ShellMutationOperation::Write
+        )]
+    );
+    assert_eq!(
+        parsed_shell_targets(
+            r#"python -c \"from pathlib import Path; Path('tests/repro_test.py').write_text('x')\""#
+        ),
+        vec![(
+            "tests/repro_test.py".to_string(),
+            ShellMutationOperation::Write
+        )]
+    );
+    assert_eq!(
+        parsed_shell_targets("mv tests/existing_test.py src/existing.py"),
+        vec![
+            (
+                "tests/existing_test.py".to_string(),
+                ShellMutationOperation::Delete
+            ),
+            ("src/existing.py".to_string(), ShellMutationOperation::Write)
+        ]
+    );
+    assert_eq!(
+        parsed_shell_targets(
             r#"node -e \"require('fs').writeFileSync('tests/example.test.js', 'x')\""#
         ),
-        vec!["tests/example.test.js".to_string()]
+        vec![(
+            "tests/example.test.js".to_string(),
+            ShellMutationOperation::Write
+        )]
     );
     assert_eq!(
-        explicit_bash_mutation_targets("git mv tests/example.rs src/example.rs"),
-        vec!["tests/example.rs".to_string(), "src/example.rs".to_string()]
+        parsed_shell_targets("git mv tests/example.rs src/example.rs"),
+        vec![
+            (
+                "tests/example.rs".to_string(),
+                ShellMutationOperation::Delete
+            ),
+            ("src/example.rs".to_string(), ShellMutationOperation::Write)
+        ]
     );
     assert_eq!(
-        explicit_bash_mutation_targets("git checkout HEAD -- tests/example.rs"),
-        vec!["tests/example.rs".to_string()]
+        parsed_shell_targets("git checkout HEAD -- tests/example.rs"),
+        vec![(
+            "tests/example.rs".to_string(),
+            ShellMutationOperation::Write
+        )]
     );
+}
+
+#[test]
+fn shell_delete_targets_apply_delete_only_constraints() {
+    let delete_only = ExtractedConstraint {
+        id: "test:delete-only".to_string(),
+        description: "do not delete tests".to_string(),
+        operation_scope: ConstraintOperationScope::DeleteOnly,
+        matcher: ConstraintMatcher::TestFiles,
+        source: ConstraintSource::Deterministic,
+        source_text: Some("Do not delete tests.".to_string()),
+    };
+
+    for command in [
+        "rm tests/example.rs",
+        "git rm tests/example.rs",
+        "python -c \"from pathlib import Path; Path('tests/example.rs').unlink()\"",
+        "node -e \"require('fs').unlinkSync('tests/example.rs')\"",
+    ] {
+        let target = explicit_bash_mutation_targets(command)
+            .into_iter()
+            .find(|target| target.path == "tests/example.rs")
+            .unwrap_or_else(|| panic!("missing delete target for {command}"));
+        assert_eq!(target.operation, ShellMutationOperation::Delete);
+        assert!(find_violation_for_operation(
+            std::slice::from_ref(&delete_only),
+            &target.path,
+            target.operation.guard_operation(),
+        )
+        .is_some());
+    }
+
+    let write = explicit_bash_mutation_targets("touch tests/example.rs")
+        .into_iter()
+        .next()
+        .expect("write target");
+    assert_eq!(write.operation, ShellMutationOperation::Write);
+    assert!(find_violation_for_operation(
+        &[delete_only],
+        &write.path,
+        write.operation.guard_operation(),
+    )
+    .is_none());
 }
 
 #[test]
