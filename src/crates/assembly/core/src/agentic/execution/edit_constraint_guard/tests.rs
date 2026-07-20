@@ -702,6 +702,66 @@ async fn blank_input_is_no_constraints_not_failure() {
     assert!(extraction.failure.is_none());
 }
 
+#[tokio::test]
+async fn irrelevant_follow_up_with_active_constraints_skips_model() {
+    let active = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+    let extraction =
+        extract_constraints_with_active("Continue with the implementation.", &[active]).await;
+
+    assert_eq!(extraction.status, ExtractionStatus::NoConstraints);
+    assert_eq!(extraction.model_attempts, 0);
+    assert!(extraction.constraints.is_empty());
+    assert!(extraction.failure.is_none());
+}
+
+#[tokio::test]
+async fn no_signal_extraction_does_not_require_session_state() {
+    let mut extraction = extract_constraints("Continue with the implementation.").await;
+    assert!(!extraction_requires_session_state(&extraction));
+
+    extraction.model_attempts = 1;
+    assert!(extraction_requires_session_state(&extraction));
+
+    extraction.model_attempts = 0;
+    extraction.status = ExtractionStatus::Failed;
+    assert!(extraction_requires_session_state(&extraction));
+}
+
+#[test]
+fn agent_created_provenance_is_only_needed_for_full_test_constraints() {
+    let mut state = EditConstraintState::default();
+    state.constraints.push(constraint(
+        "don't touch lockfiles",
+        ConstraintMatcher::Extension {
+            exts: vec![".lock".to_string()],
+        },
+    ));
+    assert!(!state.tracks_agent_created_test_paths());
+
+    state.constraints.push(constraint(
+        "don't touch tests",
+        ConstraintMatcher::TestFiles,
+    ));
+    assert!(state.tracks_agent_created_test_paths());
+}
+
+#[test]
+fn telemetry_requires_explicit_opt_in_value() {
+    for value in ["1", "true", "TRUE", "yes", "on", " On "] {
+        assert!(
+            telemetry_setting_enabled(Some(value)),
+            "expected opt-in: {value}"
+        );
+    }
+    for value in ["", "0", "false", "off", "enabled"] {
+        assert!(
+            !telemetry_setting_enabled(Some(value)),
+            "unexpected opt-in: {value}"
+        );
+    }
+    assert!(!telemetry_setting_enabled(None));
+}
+
 #[test]
 fn successful_mutation_telemetry_is_persisted_as_jsonl() {
     let root = std::env::temp_dir().join(format!(
