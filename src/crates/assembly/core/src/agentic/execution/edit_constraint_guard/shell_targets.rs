@@ -2,7 +2,28 @@ use regex::Regex;
 use std::path::Path;
 use std::sync::OnceLock;
 
-pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ShellMutationOperation {
+    Write,
+    Delete,
+}
+
+impl ShellMutationOperation {
+    pub(super) fn guard_operation(self) -> &'static str {
+        match self {
+            Self::Write => "write",
+            Self::Delete => "delete",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ShellMutationTarget {
+    pub(super) path: String,
+    pub(super) operation: ShellMutationOperation,
+}
+
+pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<ShellMutationTarget> {
     let mut targets = Vec::new();
     // Python `-c` programs commonly contain semicolons inside the quoted
     // program. Scan the complete command before shell-level segmentation so a
@@ -29,14 +50,14 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
             let redirection = word.trim_start_matches(|c| matches!(c, '0'..='9'));
             if matches!(redirection, ">" | ">>" | "1>" | "1>>") {
                 if let Some(path) = words.get(index + 1) {
-                    push_bash_target(&mut targets, path);
+                    push_bash_target(&mut targets, path, ShellMutationOperation::Write);
                 }
             } else if let Some(path) = redirection
                 .strip_prefix(">>")
                 .or_else(|| redirection.strip_prefix('>'))
             {
                 if !path.is_empty() {
-                    push_bash_target(&mut targets, path);
+                    push_bash_target(&mut targets, path, ShellMutationOperation::Write);
                 }
             }
         }
@@ -56,7 +77,7 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
                     .iter()
                     .filter(|argument| !argument.starts_with('-'))
                 {
-                    push_bash_target(&mut targets, argument);
+                    push_bash_target(&mut targets, argument, ShellMutationOperation::Write);
                 }
             }
             "cp" | "install" => {
@@ -65,7 +86,7 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
                     .rev()
                     .find(|argument| !argument.starts_with('-'))
                 {
-                    push_bash_target(&mut targets, path);
+                    push_bash_target(&mut targets, path, ShellMutationOperation::Write);
                 }
             }
             "mv" => {
@@ -73,19 +94,33 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
                 // location, so both sides are mutation targets. The previous
                 // destination-only handling let `mv tests/a.rs src/a.rs`
                 // bypass a test-file constraint.
-                for argument in arguments
+                let paths = arguments
                     .iter()
                     .filter(|argument| !argument.starts_with('-'))
-                {
-                    push_bash_target(&mut targets, argument);
+                    .collect::<Vec<_>>();
+                for (index, argument) in paths.iter().enumerate() {
+                    let operation = if index + 1 == paths.len() {
+                        ShellMutationOperation::Write
+                    } else {
+                        ShellMutationOperation::Delete
+                    };
+                    push_bash_target(&mut targets, argument, operation);
                 }
             }
-            "touch" | "truncate" | "rm" | "rmdir" | "unlink" => {
+            "touch" | "truncate" => {
                 for argument in arguments
                     .iter()
                     .filter(|argument| !argument.starts_with('-'))
                 {
-                    push_bash_target(&mut targets, argument);
+                    push_bash_target(&mut targets, argument, ShellMutationOperation::Write);
+                }
+            }
+            "rm" | "rmdir" | "unlink" => {
+                for argument in arguments
+                    .iter()
+                    .filter(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(&mut targets, argument, ShellMutationOperation::Delete);
                 }
             }
             "sed" | "perl" => {
@@ -109,7 +144,7 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
                             || argument.starts_with("test/")
                             || argument.starts_with("tests/")
                         {
-                            push_bash_target(&mut targets, argument);
+                            push_bash_target(&mut targets, argument, ShellMutationOperation::Write);
                         }
                     }
                 }
@@ -121,7 +156,7 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<String> {
     targets
 }
 
-fn push_git_mutation_targets(targets: &mut Vec<String>, arguments: &[&str]) {
+fn push_git_mutation_targets(targets: &mut Vec<ShellMutationTarget>, arguments: &[&str]) {
     let Some((subcommand_index, subcommand)) = arguments
         .iter()
         .enumerate()
@@ -131,12 +166,34 @@ fn push_git_mutation_targets(targets: &mut Vec<String>, arguments: &[&str]) {
     };
     let remaining = &arguments[subcommand_index + 1..];
     match *subcommand {
-        "mv" | "rm" | "restore" => {
+        "mv" => {
+            let paths = remaining
+                .iter()
+                .filter(|argument| !argument.starts_with('-'))
+                .collect::<Vec<_>>();
+            for (index, argument) in paths.iter().enumerate() {
+                let operation = if index + 1 == paths.len() {
+                    ShellMutationOperation::Write
+                } else {
+                    ShellMutationOperation::Delete
+                };
+                push_bash_target(targets, argument, operation);
+            }
+        }
+        "rm" => {
             for argument in remaining
                 .iter()
                 .filter(|argument| !argument.starts_with('-'))
             {
-                push_bash_target(targets, argument);
+                push_bash_target(targets, argument, ShellMutationOperation::Delete);
+            }
+        }
+        "restore" => {
+            for argument in remaining
+                .iter()
+                .filter(|argument| !argument.starts_with('-'))
+            {
+                push_bash_target(targets, argument, ShellMutationOperation::Write);
             }
         }
         "checkout" => {
@@ -147,7 +204,7 @@ fn push_git_mutation_targets(targets: &mut Vec<String>, arguments: &[&str]) {
                     .iter()
                     .filter(|argument| !argument.starts_with('-'))
                 {
-                    push_bash_target(targets, argument);
+                    push_bash_target(targets, argument, ShellMutationOperation::Write);
                 }
             }
         }
@@ -155,63 +212,124 @@ fn push_git_mutation_targets(targets: &mut Vec<String>, arguments: &[&str]) {
     }
 }
 
-fn push_python_mutation_targets(targets: &mut Vec<String>, segment: &str) {
+fn push_python_mutation_targets(targets: &mut Vec<ShellMutationTarget>, segment: &str) {
     static OPEN_FOR_WRITE: OnceLock<Regex> = OnceLock::new();
-    static PATH_MUTATION: OnceLock<Regex> = OnceLock::new();
+    static PATH_WRITE: OnceLock<Regex> = OnceLock::new();
+    static PATH_DELETE: OnceLock<Regex> = OnceLock::new();
+    static PATH_MOVE: OnceLock<Regex> = OnceLock::new();
     let open_for_write = OPEN_FOR_WRITE.get_or_init(|| {
         Regex::new(r#"(?i)\bopen\s*\(\s*["']([^"']+)["']\s*,\s*["'][wax][^"']*["']"#)
             .expect("valid Python open-for-write regex")
     });
-    let path_mutation = PATH_MUTATION.get_or_init(|| {
+    let path_write = PATH_WRITE.get_or_init(|| {
         Regex::new(
-            r#"(?i)\bPath\s*\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:write_text|write_bytes|unlink|rename|replace)\s*\("#,
+            r#"(?i)\bPath\s*\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:write_text|write_bytes)\s*\("#,
         )
-        .expect("valid pathlib mutation regex")
+        .expect("valid pathlib write regex")
+    });
+    let path_delete = PATH_DELETE.get_or_init(|| {
+        Regex::new(r#"(?i)\bPath\s*\(\s*["']([^"']+)["']\s*\)\s*\.\s*unlink\s*\("#)
+            .expect("valid pathlib delete regex")
+    });
+    let path_move = PATH_MOVE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\bPath\s*\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:rename|replace)\s*\(\s*["']([^"']+)["']"#,
+        )
+        .expect("valid pathlib move regex")
     });
 
-    for captures in open_for_write
-        .captures_iter(segment)
-        .chain(path_mutation.captures_iter(segment))
-    {
+    for captures in open_for_write.captures_iter(segment) {
         if let Some(path) = captures.get(1) {
-            push_bash_target(targets, path.as_str());
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Write);
+        }
+    }
+    for captures in path_write.captures_iter(segment) {
+        if let Some(path) = captures.get(1) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Write);
+        }
+    }
+    for captures in path_delete.captures_iter(segment) {
+        if let Some(path) = captures.get(1) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Delete);
+        }
+    }
+    for captures in path_move.captures_iter(segment) {
+        if let Some(path) = captures.get(1) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Delete);
+        }
+        if let Some(path) = captures.get(2) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Write);
         }
     }
 }
 
-fn push_node_mutation_targets(targets: &mut Vec<String>, segment: &str) {
-    static SINGLE_PATH_MUTATION: OnceLock<Regex> = OnceLock::new();
-    static TWO_PATH_MUTATION: OnceLock<Regex> = OnceLock::new();
-    let single_path_mutation = SINGLE_PATH_MUTATION.get_or_init(|| {
+fn push_node_mutation_targets(targets: &mut Vec<ShellMutationTarget>, segment: &str) {
+    static SINGLE_PATH_WRITE: OnceLock<Regex> = OnceLock::new();
+    static SINGLE_PATH_DELETE: OnceLock<Regex> = OnceLock::new();
+    static TWO_PATH_COPY: OnceLock<Regex> = OnceLock::new();
+    static TWO_PATH_MOVE: OnceLock<Regex> = OnceLock::new();
+    let single_path_write = SINGLE_PATH_WRITE.get_or_init(|| {
         Regex::new(
-            r#"(?i)\b(?:fs\s*\.\s*)?(?:writefilesync|appendfilesync|unlinksync|rmsync)\s*\(\s*["']([^"']+)["']"#,
+            r#"(?i)\b(?:fs\s*\.\s*)?(?:writefilesync|appendfilesync)\s*\(\s*["']([^"']+)["']"#,
         )
-        .expect("valid Node single-path mutation regex")
+        .expect("valid Node single-path write regex")
     });
-    let two_path_mutation = TWO_PATH_MUTATION.get_or_init(|| {
+    let single_path_delete = SINGLE_PATH_DELETE.get_or_init(|| {
+        Regex::new(r#"(?i)\b(?:fs\s*\.\s*)?(?:unlinksync|rmsync)\s*\(\s*["']([^"']+)["']"#)
+            .expect("valid Node single-path delete regex")
+    });
+    let two_path_copy = TWO_PATH_COPY.get_or_init(|| {
         Regex::new(
-            r#"(?i)\b(?:fs\s*\.\s*)?(?:renamesync|copyfilesync)\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']"#,
+            r#"(?i)\b(?:fs\s*\.\s*)?copyfilesync\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']"#,
         )
-        .expect("valid Node two-path mutation regex")
+        .expect("valid Node copy regex")
+    });
+    let two_path_move = TWO_PATH_MOVE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)\b(?:fs\s*\.\s*)?renamesync\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']"#,
+        )
+        .expect("valid Node move regex")
     });
 
-    for captures in single_path_mutation.captures_iter(segment) {
+    for captures in single_path_write.captures_iter(segment) {
         if let Some(path) = captures.get(1) {
-            push_bash_target(targets, path.as_str());
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Write);
         }
     }
-    for captures in two_path_mutation.captures_iter(segment) {
-        for index in [1, 2] {
-            if let Some(path) = captures.get(index) {
-                push_bash_target(targets, path.as_str());
-            }
+    for captures in single_path_delete.captures_iter(segment) {
+        if let Some(path) = captures.get(1) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Delete);
+        }
+    }
+    for captures in two_path_copy.captures_iter(segment) {
+        if let Some(path) = captures.get(2) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Write);
+        }
+    }
+    for captures in two_path_move.captures_iter(segment) {
+        if let Some(path) = captures.get(1) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Delete);
+        }
+        if let Some(path) = captures.get(2) {
+            push_bash_target(targets, path.as_str(), ShellMutationOperation::Write);
         }
     }
 }
 
-fn push_bash_target(targets: &mut Vec<String>, raw_path: &str) {
+fn push_bash_target(
+    targets: &mut Vec<ShellMutationTarget>,
+    raw_path: &str,
+    operation: ShellMutationOperation,
+) {
     let path = raw_path.trim_matches(|c: char| matches!(c, '\'' | '"' | ','));
-    if !path.is_empty() && !targets.iter().any(|existing| existing == path) {
-        targets.push(path.to_string());
+    if !path.is_empty()
+        && !targets
+            .iter()
+            .any(|existing| existing.path == path && existing.operation == operation)
+    {
+        targets.push(ShellMutationTarget {
+            path: path.to_string(),
+            operation,
+        });
     }
 }
