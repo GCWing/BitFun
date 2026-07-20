@@ -12,7 +12,7 @@
     "title": "Subagent 模型",
     "default": {
       "label": "Subagent 預設模型",
-      "description": "未單獨指定時，Subagent 使用的預設模型",
+      "description": "Subagent 未單獨設定模型時，統一使用此模型",
       "configureTooltip": "設定 Subagent 的預設模型。前往「定製 > 專業智能體」可為每個 Subagent 個別設定模型",
       "updateFailed": "更新 Subagent 預設模型失敗"
     },

@@ -2660,6 +2660,7 @@ const AIModelConfig: React.FC = () => {
         </ConfigPageSection>
 
         <ConfigPageSection
+          className="bitfun-ai-model-config__models-section"
           title={tDefault('tabs.models')}
           description={t('subtitle')}
           extra={(
