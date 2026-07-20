@@ -128,6 +128,24 @@ fn task_schema_accepts_optional_model_id() {
         .any(|value| value.as_str() == Some("model_id")));
 }
 
+#[test]
+fn task_model_id_inherit_requests_parent_model_inheritance() {
+    let invocation = TaskTool::parse_invocation(
+        &json!({
+            "action": "spawn",
+            "description": "Inspect parser",
+            "prompt": "Inspect the parser flow.",
+            "subagent_type": "Explore",
+            "model_id": "inherit"
+        }),
+        false,
+    )
+    .expect("inherit should be accepted as a Task model selection");
+
+    assert_eq!(invocation.model_id, None);
+    assert!(invocation.inherit_parent_model);
+}
+
 #[tokio::test]
 async fn validate_input_accepts_review_background_for_agent_wait() {
     let validation = TaskTool::new()
