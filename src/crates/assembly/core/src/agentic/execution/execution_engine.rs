@@ -2109,9 +2109,13 @@ impl ExecutionEngine {
                 )
                 .await;
                 extraction.dialog_turn_id = Some(context.dialog_turn_id.clone());
-                self.session_manager
-                    .remember_edit_constraint_extraction(&context.session_id, extraction)
-                    .await;
+                if crate::agentic::execution::edit_constraint_guard::extraction_requires_session_state(
+                    &extraction,
+                ) {
+                    self.session_manager
+                        .remember_edit_constraint_extraction(&context.session_id, extraction)
+                        .await;
+                }
             }
         }
 
