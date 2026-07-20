@@ -3395,7 +3395,8 @@ impl ExecutionEngine {
                     round_result.has_more_rounds,
                 );
 
-                // If C01 detected a violation, inject the abort message
+                // 审查蜂提醒模式：Abort 已在 post_call_hooks 降级为 WARN，
+                // 此处仅注入提醒上下文，不拦截任何操作
                 if aggregated.is_abort() {
                     if let Some(abort) = &aggregated.abort {
                         match abort {
@@ -3404,14 +3405,14 @@ impl ExecutionEngine {
                                 fix_instruction,
                                 ..
                             } => {
-                                let guard_message = format!(
-                                    "[ToolGuard Intercepted] {reason}\n\n{fix_instruction}"
+                                let remind = format!(
+                                    "[审查蜂提醒] {reason}\n\n建议: {fix_instruction}"
                                 );
                                 let msg =
-                                    Message::system(render_system_reminder(&guard_message));
+                                    Message::system(render_system_reminder(&remind));
                                 messages.push(msg);
                                 warn!(
-                                    "[Stop Hook] Round {}: Abort — {}",
+                                    "[Stop Hook] Round {}: Reminder — {}",
                                     round_index, reason
                                 );
                             }
@@ -3456,18 +3457,20 @@ impl ExecutionEngine {
                          - 上下文压缩了？提取压缩前的关键决策/进度/用户纠正 → CTX:<要点>\n\
                          - 轮次>20或token告急？预摘要关键状态 → CTX:<摘要>\n\
                          - Agent忘记重要信息（重复提问/忽略决策）？→ CTX:<提醒>\n\n\
-                         ## 纪律委员（行为审查）\n\
-                         - 编辑前未Read？→ ABORT:未读即改-<文件>\n\
-                         - 碰了LionHeart库？→ ABORT:受保护路径\n\
-                         - 同工具连续失败？→ ABORT:策略死循环\n\
-                         - PS+中文+JSON？→ ABORT:PS编码风险\n\
-                         - 全部工具失败？→ ABORT:全部失败\n\
+                         ## 纪律委员（行为审查·仅提醒不拦截）\n\
+                         - 编辑前未Read？→ WARN:未读即改-<文件>\n\
+                         - 删除了LionHeart库文件？→ WARN:受保护路径-禁止删除\n\
+                         - LionHeart库读写操作正常，删除操作警告\n\
+                         - 同工具连续失败？→ WARN:策略死循环\n\
+                         - PS+中文+JSON？→ WARN:PS编码风险\n\
+                         - 全部工具失败？→ WARN:全部失败\n\
                          - 改完不验证？→ WARN:未验证\n\n\
                          ## 提示蜂（技能推荐）\n\
                          - MiniApp相关但没加载miniapp-dev？→ SKILL:miniapp-dev\n\
                          - 编码但没加载Pair-Programming？→ SKILL:Pair Programming\n\
                          - 调研但没加载agent-reach？→ SKILL:agent-reach\n\n\
-                         输出（每行一个）：PASS / ABORT:<原因> / WARN:<问题> / CTX:<内容> / SKILL:<名称>\n\
+                         输出（每行一个）：PASS / WARN:<问题> / CTX:<内容> / SKILL:<名称>\n\
+                         禁止输出ABORT——审查蜂只有提醒权限，不拦截任何操作。\n\
                          一切正常只回复PASS。",
                         tl.join(","), fr2.join(","), fe2.join(","), ts
                     );

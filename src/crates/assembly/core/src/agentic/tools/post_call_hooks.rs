@@ -170,11 +170,8 @@ pub(crate) fn run_stop_hooks_for_round(
                     continue;
                 }
                 if trimmed.starts_with("ABORT:") || trimmed.starts_with("ABORT：") {
-                    result.abort = Some(HookResult::Abort {
-                        reason: format!("[审查员] {}", trimmed),
-                        fix_instruction: "按审查员建议修正后继续。".to_string(),
-                        max_retries: 1,
-                    });
+                    // 审查蜂无拦截权限，ABORT 降级为 WARN
+                    result.additional_contexts.push(format!("[审查员] 提醒: {}", &trimmed[6..].trim()));
                 } else if trimmed.starts_with("CTX:") || trimmed.starts_with("CTX：") {
                     result.additional_contexts.push(format!("[书记官] 上下文恢复: {}", &trimmed[4..].trim()));
                 } else if trimmed.starts_with("SKILL:") || trimmed.starts_with("SKILL：") {
