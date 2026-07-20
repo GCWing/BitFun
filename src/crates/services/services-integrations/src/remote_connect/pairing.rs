@@ -52,8 +52,12 @@ pub struct PairingResponse {
     pub device_name: String,
     #[serde(default)]
     pub mobile_install_id: Option<String>,
+    /// Local pairing user id, or BitFun account username when account auth is required.
     #[serde(default)]
     pub user_id: Option<String>,
+    /// BitFun account password when the paired desktop is logged in. Never log this field.
+    #[serde(default)]
+    pub password: Option<String>,
 }
 
 /// Manages the pairing state machine.
@@ -169,12 +173,30 @@ impl PairingProtocol {
         mobile_install_id: Option<String>,
         user_id: Option<String>,
     ) -> PairingResponse {
+        Self::answer_challenge_with_password(
+            challenge,
+            device_identity,
+            mobile_install_id,
+            user_id,
+            None,
+        )
+    }
+
+    /// Mobile side: pairing response that may include an account password.
+    pub fn answer_challenge_with_password(
+        challenge: &PairingChallenge,
+        device_identity: &DeviceIdentity,
+        mobile_install_id: Option<String>,
+        user_id: Option<String>,
+        password: Option<String>,
+    ) -> PairingResponse {
         PairingResponse {
             challenge_echo: challenge.challenge.clone(),
             device_id: device_identity.device_id.clone(),
             device_name: device_identity.device_name.clone(),
             mobile_install_id,
             user_id,
+            password,
         }
     }
 

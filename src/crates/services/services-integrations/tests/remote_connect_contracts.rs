@@ -27,22 +27,22 @@ use bitfun_services_integrations::remote_connect::{
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
     resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
     ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, DeviceIdentity,
-    ImageAttachment, KeyPair, PairingProtocol, PairingState, QrGenerator, QrPayload, RelayMessage,
-    RemoteAssistantWorkspaceFacts, RemoteCancelDecision, RemoteCancelRuntimeHost,
-    RemoteCancelTaskRequest, RemoteChatHistoryRound, RemoteChatHistoryTextItem,
-    RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall, RemoteChatHistoryToolItem,
-    RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost, RemoteConnectSubmissionSource,
-    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
-    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
-    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
-    RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemoteReasoningModeFact,
-    RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity,
-    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
-    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
-    RemoteWorkspaceKind, RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES,
-    REMOTE_FILE_MAX_READ_BYTES,
+    ImageAttachment, KeyPair, PairingChallenge, PairingProtocol, PairingResponse, PairingState,
+    QrGenerator, QrPayload, RelayMessage, RemoteAssistantWorkspaceFacts, RemoteCancelDecision,
+    RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
+    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
+    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost,
+    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
+    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
+    RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
+    RemoteDialogWorkspaceBinding, RemoteImageContext, RemoteImageContextAdapter,
+    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelConfig,
+    RemoteModelFacts, RemoteReasoningModeFact, RemoteRecentWorkspaceFacts, RemoteResponse,
+    RemoteSessionMetadata, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity, RemoteTerminalPrewarmRequest,
+    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
+    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
+    RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -95,10 +95,46 @@ fn remote_connect_qr_and_relay_primitives_live_in_services_owner() {
         version: 1,
     };
 
-    let url = QrGenerator::build_url(&payload, "https://mobile.example.com/", "zh-CN");
+    let url = QrGenerator::build_url(&payload, "https://mobile.example.com/", "zh-CN", None);
     assert!(url.starts_with("https://mobile.example.com/#/pair?"));
     assert!(url.contains("relay=wss%3A%2F%2Frelay.example.com%2Fsocket"));
     assert!(url.contains("lang=zh-CN"));
+    assert!(!url.contains("auth=account"));
+
+    let account_url = QrGenerator::build_url(
+        &payload,
+        "https://mobile.example.com/",
+        "zh-CN",
+        Some("alice"),
+    );
+    assert!(account_url.contains("auth=account"));
+    assert!(account_url.contains("user=alice"));
+
+    let auth_only_url =
+        QrGenerator::build_url(&payload, "https://mobile.example.com/", "zh-CN", Some(""));
+    assert!(auth_only_url.contains("auth=account"));
+    assert!(!auth_only_url.contains("user="));
+
+    let with_password = PairingProtocol::answer_challenge_with_password(
+        &PairingChallenge {
+            challenge: "abc".to_string(),
+            timestamp: 1,
+        },
+        &DeviceIdentity {
+            device_id: "m1".to_string(),
+            device_name: "Phone".to_string(),
+            mac_address: "00:00:00:00:00:00".to_string(),
+        },
+        Some("install-1".to_string()),
+        Some("alice".to_string()),
+        Some("secret".to_string()),
+    );
+    let json = serde_json::to_value(&with_password).expect("serialize pairing response");
+    assert_eq!(json["user_id"], "alice");
+    assert_eq!(json["password"], "secret");
+    let parsed: PairingResponse =
+        serde_json::from_value(json).expect("deserialize pairing response");
+    assert_eq!(parsed.password.as_deref(), Some("secret"));
 
     let message = RelayMessage::CreateRoom {
         room_id: Some(payload.room_id),
