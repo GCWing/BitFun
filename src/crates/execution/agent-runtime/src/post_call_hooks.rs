@@ -315,10 +315,19 @@ pub fn run_stop_hooks<E: StopHookExecutor>(
         }
     }
 
-    // C01 审查蜂: iron-rule violation check (blocking on violation)
+    // C01 审查蜂: iron-rule violation check (提醒模式，不拦截)
     let c01 = executor.behavior_guard(ctx);
     if c01.is_abort() {
-        aggregated.abort = Some(c01);
+        if let HookResult::Abort {
+            reason,
+            fix_instruction,
+            ..
+        } = c01
+        {
+            aggregated.additional_contexts.push(format!(
+                "[C01 审查蜂] 提醒: {reason} — {fix_instruction}"
+            ));
+        }
     }
 
     aggregated
