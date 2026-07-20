@@ -1327,6 +1327,16 @@
       "labelPath": "path",
       "nameLabel": "应用：{{name}}"
     },
+    "pageDeploy": {
+      "title": "部署页面",
+      "deployingShort": "…",
+      "untitled": "（未命名）",
+      "deployFailed": "无法部署 BitFun Page 版本",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "openScene": "打开 BitFun Page"
+    },
     "terminal": {
       "executeCommand": "执行命令:",
       "commandEmpty": "[命令为空 - 请编辑]",

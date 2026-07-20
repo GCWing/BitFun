@@ -1085,6 +1085,9 @@
     "shell": "Shell",
     "panelView": "面板視圖"
   },
+  "bitfunPage": {
+    "menuLabel": "BitFun Page"
+  },
   "loading": {
     "app": "正在啟動 BitFun...",
     "scenes": "正在載入場景",

@@ -28,6 +28,7 @@ const ProfileScene    = lazy(() => import('./profile/ProfileScene'));
 const AgentsScene       = lazy(() => import('./agents/AgentsScene'));
 const SkillsScene     = lazy(() => import('./skills/SkillsScene'));
 const MiniAppGalleryScene = lazy(() => import('./miniapps/MiniAppGalleryScene'));
+const BitFunPageScene = lazy(() => import('./bitfun-page/BitFunPageScene'));
 const BrowserScene    = lazy(() => import('./browser/BrowserScene'));
 const InsightsScene   = lazy(() => import('./my-agent/InsightsScene'));
 const ShellScene      = lazy(() => import('./shell/ShellScene'));
@@ -128,6 +129,8 @@ function renderScene(
       return <SkillsScene />;
     case 'miniapps':
       return <MiniAppGalleryScene />;
+    case 'bitfun-page':
+      return <BitFunPageScene />;
     case 'browser':
       return <BrowserScene />;
     case 'assistant':

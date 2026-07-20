@@ -29,16 +29,25 @@ pub struct AuthUser {
 }
 
 /// Validate the bearer token in `headers`; returns the owning user/device.
-async fn validate_auth(state: &AppState, headers: &HeaderMap) -> Result<AuthUser, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    let token = headers
+pub async fn validate_auth(state: &AppState, headers: &HeaderMap) -> Result<AuthUser, StatusCode> {
+    let token = extract_bearer_token(headers).ok_or(StatusCode::UNAUTHORIZED)?;
+    validate_token(state, &token).await
+}
+
+/// Extract `Bearer` token from the `Authorization` header.
+pub fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    let auth = AuthToken::find(db, &token)
+}
+
+/// Validate a raw token string against the account database.
+pub async fn validate_token(state: &AppState, token: &str) -> Result<AuthUser, StatusCode> {
+    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let auth = AuthToken::find(db, token)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;

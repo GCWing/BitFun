@@ -1,0 +1,19 @@
+[package]
+name = "bitfun-page-function-runtime"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Embedded JS Page Function runtime for BitFun Pages (rquickjs)"
+
+[lib]
+name = "bitfun_page_function_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+rquickjs = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

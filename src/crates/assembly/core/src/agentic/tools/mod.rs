@@ -1,5 +1,6 @@
 //! Tool system - includes Tool interface, tool registry and tool executor
 
+pub mod account_login_capability;
 pub mod browser_control;
 pub mod computer_use_capability;
 pub mod computer_use_host;
@@ -11,6 +12,7 @@ pub mod framework;
 pub mod image_context;
 pub mod implementations;
 pub mod manifest_resolver;
+pub mod page_deploy_host;
 pub mod pipeline;
 pub(crate) mod post_call_hooks;
 #[doc(hidden)]

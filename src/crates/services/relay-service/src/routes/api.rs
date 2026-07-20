@@ -37,6 +37,8 @@ pub struct AppState {
     /// Optional account database. When `None`, the relay runs in pure-relay
     /// mode (no account features); the embedded relay passes `None`.
     pub db: Option<Arc<crate::db::DbPool>>,
+    /// Optional per-page mutable data root (KV/SQLite/blobs). Required for Page Functions data plane.
+    pub page_data: Option<crate::page_data::PageDataStore>,
     /// Per-IP rate limiter for auth endpoints (brute-force protection).
     pub login_rate_limiter: Arc<crate::routes::auth::LoginRateLimiter>,
     /// Per-user online device registry for account-based device routing.
@@ -533,6 +535,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             asset_store: Arc::new(MemoryAssetStore::new()),
             db: None,
+            page_data: None,
             login_rate_limiter: Arc::new(crate::routes::auth::LoginRateLimiter::new()),
             device_manager: crate::relay::DeviceManager::new(),
         }

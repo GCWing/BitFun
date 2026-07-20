@@ -43,6 +43,7 @@ impl ClawMode {
                 // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
+                "PageDeploy".to_string(),
             ],
         }
     }

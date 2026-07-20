@@ -134,6 +134,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
+        "PageDeploy".to_string(),
     ];
     append_provider_group_tools(&mut tools, "core.canvas");
     tools

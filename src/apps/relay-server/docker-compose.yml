@@ -17,6 +17,7 @@ services:
     environment:
       - RELAY_PORT=${RELAY_PORT:-9700}
       - RELAY_STATIC_DIR=/app/static
+      # Room mobile-web assets and BitFun Pages (`pages/{user_id}/{slug}/`) share this dir.
       - RELAY_ROOM_WEB_DIR=/app/room-web
       - RELAY_ROOM_TTL=3600
       - RELAY_DB_PATH=/app/data/bitfun_relay.db

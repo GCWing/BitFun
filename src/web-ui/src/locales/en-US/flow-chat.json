@@ -1327,6 +1327,16 @@
       "labelPath": "path",
       "nameLabel": "App: {{name}}"
     },
+    "pageDeploy": {
+      "title": "Deploy Page",
+      "deployingShort": "…",
+      "untitled": "(unnamed)",
+      "deployFailed": "Could not deploy BitFun Page version",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "openScene": "Open BitFun Page"
+    },
     "terminal": {
       "executeCommand": "Execute command:",
       "commandEmpty": "[Command empty - please edit]",

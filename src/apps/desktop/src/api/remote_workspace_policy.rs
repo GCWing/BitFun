@@ -1035,6 +1035,23 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("open_remote_workspace", RemoteWorkspacePolicy::RemoteRouted),
     ("open_workspace", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "page_delete_version",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("page_deploy", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    ("page_list", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "page_list_versions",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("page_publish", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "page_save_version",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("page_unpublish", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    ("page_update", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("paste_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "peer_control_attach",
