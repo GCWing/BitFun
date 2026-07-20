@@ -2,11 +2,13 @@ import {
   isReviewActivityBlocking,
   type SessionReviewActivity,
 } from './sessionReviewActivity';
-import { DEEP_REVIEW_COMMAND_RE } from './deepReviewConstants';
+import { REVIEW_COMMAND_RE } from './deepReviewConstants';
 
-export function shouldBlockDeepReviewCommand(
+export function shouldBlockReviewCommand(
   input: string,
   activity?: SessionReviewActivity | null,
 ): boolean {
-  return DEEP_REVIEW_COMMAND_RE.test(input.trim()) && isReviewActivityBlocking(activity);
+  return REVIEW_COMMAND_RE.test(input.trim()) && isReviewActivityBlocking(activity);
 }
+
+export const shouldBlockDeepReviewCommand = shouldBlockReviewCommand;

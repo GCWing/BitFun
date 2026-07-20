@@ -1,149 +1,110 @@
-# BitFun 子模块设计：Plugin Runtime Host 与 OpenCode 兼容适配
+# SDLC Harness 使用 OpenCode 扩展的设计
 
-> 上游文档：[design.md](../design.md)、
-> [product-architecture.md](../../architecture/product-architecture.md)、
-> [agent-runtime-services-design.md](../../architecture/agent-runtime-services-design.md)、
-> [plugin-runtime-host-design.md](../../architecture/plugin-runtime-host-design.md)
+> 上游文档：[SDLC Harness 总体设计](../design.md)、
+> [产品架构](../../architecture/product-architecture.md)、
+> [OpenCode 扩展兼容总览](../../architecture/extensions/opencode-extension-compatibility.md)、
+> [插件运行时主机](../../architecture/extensions/plugin-runtime-host-design.md)
 
-## 1. 模块定位
+本文只说明 SDLC Harness 如何消费 BitFun 的 OpenCode 扩展能力，不另建一套插件格式、运行时或权限体系。
+OpenCode 配置、工具、服务插件、Hook 和终端插件的完整范围、可实现性与降级项，以扩展兼容总览及其细分设计为准。
 
-本模块描述 SDLC Harness 场景下的插件生态接入方式。OpenCode 兼容能力是 BitFun
-Plugin Runtime Host 内部的 compatibility adapter，不是 BitFun 内部插件模型、运行时内核或公共 API owner。
+本文描述对应 OC-R 阶段完成后的目标消费方式。当前 P0 只能消费来源事实和静态诊断，不能消费真实 OpenCode
+插件工具、Hook、Client、终端贡献或运行状态；以下能力只有在其 owner 形成生产闭环后才对 Harness 可用。
 
-SDLC Harness 只关心插件能力进入开发治理链路后的信任、权限、证据、风险提示和 UI 投影。具体执行必须复用
-BitFun 的 Plugin Runtime Host、Tool ABI、Event Manifest、Permission/Effect Control Plane 和
-UI Extension Contract。
+## 1. 边界
 
-核心原则：
+SDLC Harness 可以消费：
 
-- OpenCode API 只作为兼容输入和映射目标；BitFun 内部模块只依赖自身稳定 contract。
-- 插件、hook、自定义工具和工具复写默认是主动配置，必须先发现、记录来源和权限，再进入信任审查。
-- 插件只能产出候选效果；授权、阻断、审计、通过/失败状态和权威任务事实由 BitFun 内核、安全边界和执行层写入。
-- UI 扩展只通过 descriptor 暴露 slot、route、command、prompt、dialog、state view 等贡献，不暴露 React、Tauri、DOM 或具体 renderer handle。
-- 可写 JS/TS 插件运行时不是默认能力，必须在沙箱、secret、网络、包源安全和崩溃隔离具备独立评审后再开放。
+- 已由工具归属模块注册的 OpenCode custom tool 和插件工具；
+- 已由事件归属模块转换的公开事件；
+- 适用于评审、测试、验证和报告流程的稳定 Hook 结果；
+- 插件来源、版本、启停、策略限制、故障和降级诊断；
+- 符合当前有效策略的 OpenCode 配置来源和声明式资产。
 
-## 2. 架构对齐
+SDLC Harness 不负责：
 
-| 能力 | 所属架构合同 | 本模块使用方式 |
+- 发现、安装、加载或更新 OpenCode 插件；
+- 解释 OpenCode 原始配置、工具 schema、TUI 组件或 Client 方法；
+- 为插件单独决定文件、网络、进程、凭据或工具权限；
+- 直接保存插件产生的会话、审计、权限、证据或门禁状态；
+- 把插件异常等同于评审任务失败。
+
+这意味着 Harness 只依赖 BitFun 的稳定工具、事件、权限和诊断接口，不读取 JS 进程句柄、OpenCode 原始载荷或
+插件运行时内部状态。
+
+## 2. 能力接入
+
+| OpenCode 能力 | Harness 如何使用 | 最终状态由谁提交 |
 |---|---|---|
-| 插件生命周期 | Plugin Runtime Host | install、activate、deactivate、reload、dispose 必须可撤销、可审计 |
-| 工具接入 | Tool ABI | built-in tool、MCP tool、plugin tool 使用同一 snapshot、provider identity、permission/effect 和 stale call guard |
-| 事件订阅 | Event Manifest / Quality Data Plane | 插件消费 public event manifest；事件写入、回放和投影由质量数据面承接 |
-| 权限与副作用 | Permission/Effect Control Plane | 插件 hook 只能返回 candidate decision；最终安全决策由安全边界完成 |
-| UI 扩展 | UI Extension Contract | OpenCode TUI 能力映射为 descriptor，由各产品入口选择是否渲染 |
-| 产品组装 | Product Assembly | 选择 adapter manifest/capability set、host 隔离等级、支持矩阵和 product capability |
+| custom tool / 插件 `tool` | 与内置工具、MCP 工具一样进入工具选择与执行流程 | Tool Runtime 与调用时权限路径 |
+| `tool.execute.before` | 在固定插件顺序中变换本次工具参数，随后重新校验 schema 和权限 | 工具归属模块 |
+| `tool.execute.after` | 在固定插件顺序中变换 title、output 和 metadata | 工具归属模块 |
+| `tool.definition` | 变换模型可见的 JSON Schema；执行仍由插件进程中的原始 Zod 校验 | 工具归属模块 |
+| `permission.ask` | 保留 OpenCode 的 allow/deny/ask 语义；用户或组织策略可进一步限制 | 权限归属模块 |
+| `event` | 订阅已转换、版本化的公开事件 | 产生该事件的业务模块 |
+| chat / command / config Hook | 按 OpenCode 顺序变换输入；每一步失败只影响本次调用 | 对应配置、会话或命令模块 |
+| TUI 插件贡献 | 仅由 CLI/TUI 宿主消费，Harness 不解释组件或键位 | CLI/TUI 宿主 |
 
-禁止依赖：
+OpenCode Hook 是可变换接口，不应统一降级为“建议”或“只读候选”。适配器负责顺序和参数转换，对应 BitFun
+模块负责结构校验、策略上限与最终提交。插件不能绕过这些模块直接写 Harness 的任务、证据或门禁记录。
 
-- 插件或 OpenCode adapter 直接依赖 `bitfun-core/product-full`。
-- 插件拿到 full `RuntimeServices`、concrete provider handle、session manager 或 UI implementation。
-- OpenCode payload 进入 Agent Kernel、Execution、Security Boundary 的内部状态对象。
+## 3. 运行视图
 
-## 3. 范围与边界
-
-范围：
-
-- 发现 OpenCode 风格配置、hook、自定义工具和插件入口，并写入项目画像。
-- 维护 OpenCode server plugin 和 TUI plugin 的支持矩阵。
-- 将 OpenCode 事件、工具、permission hook、配置 transform 和 UI contribution 映射为 BitFun contract。
-- 将插件输出整理为建议、证据候选、工具输入补丁、工具后置观察、UI contribution 或 typed unsupported。
-- 为信任审查、安全决策、证据包、PR 就绪度和回放评测提供事件与测试夹具。
-
-边界：
-
-- 不复制 OpenCode 运行时，也不承诺任意社区插件无修改运行。
-- 不允许插件直接写任务状态、审计事实、权限状态、PR 门禁、证据通过状态或安全策略。
-- 不允许工具复写静默覆盖全局工具；复写必须按项目执行域、来源、hash、能力范围和期限生效。
-- 不把插件失败解释为任务失败；失败必须进入降级、警告、候选丢弃或安全决策。
-- 不把 JS worker、subprocess 或 WebView 当成自动可信沙箱。
-
-## 4. OpenCode 映射模型
-
-### 4.1 Server Plugin
-
-| OpenCode 能力 | BitFun 映射 | 约束 |
-|---|---|---|
-| `tool.execute.before/after` | Tool ABI hook / evidence candidate | 只能建议、补丁或记录证据；不能直接写通过/失败 |
-| `permission.ask` | Permission candidate hook | 最终 decision、audit、policy write 仍由安全边界完成 |
-| custom tool | Tool provider contribution | 必须声明 schema、provider identity、capability/effect、cancellation 和 stale call guard |
-| event subscription | Event Manifest subscription | 只能消费 public event；不能读取 session 内部结构 |
-| config/provider/model transform | Scoped transform descriptor | 必须进入支持矩阵；未知能力返回 typed unsupported |
-| client log / notification | Quality Data Plane / UI projection | 作为日志或提示候选，不作为权威事实 |
-
-### 4.2 TUI Plugin
-
-| OpenCode 能力 | BitFun 映射 | 约束 |
-|---|---|---|
-| route / panel / slot | UI contribution descriptor | 各入口可选择渲染或返回 unsupported |
-| keymap / command | UiCommandDescriptor | 不能绕过权限和产品命令注册 |
-| prompt augmentation | Prompt contribution candidate | 必须标注来源和信任级别 |
-| dialog / toast | UI notification descriptor | 只能投影提示，不写权威状态 |
-| state access | Read-only state view | 只能读取投影，不暴露内部 store |
-| theme | Theme contribution descriptor | 不能写全局 CSS、DOM 或宿主实现对象 |
-
-## 5. 数据合同
-
-兼容适配器需要使用窄合同，避免暴露实现细节：
-
-```ts
-interface ExtensionCompatibilityDescriptor {
-  adapter_id: string;
-  ecosystem: "opencode" | "kiro" | "claude_code" | "bitfun_native";
-  source: {
-    kind: "workspace" | "user" | "organization" | "remote";
-    location: string;
-    hash?: string;
-  };
-  trust: {
-    state: "discovered" | "trusted" | "changed" | "disabled" | "revoked";
-    scope: "project" | "worktree" | "session" | "organization";
-  };
-  capabilities: CapabilityDeclaration[];
-  effects: EffectDeclaration[];
-}
+```mermaid
+flowchart LR
+  OC["OpenCode 配置 / 插件 / 工具"] --> Adapter["OpenCode 兼容适配层"]
+  Adapter --> Host["插件运行时主机"]
+  Host --> Tools["工具归属模块"]
+  Host --> Events["事件归属模块"]
+  Host --> Permission["权限归属模块"]
+  Tools --> Harness["SDLC Harness"]
+  Events --> Harness
+  Permission --> Harness
+  Harness --> Record["评审 / 验证 / 报告状态"]
 ```
 
-应用规则：
+每个外部插件 target 在独立进程中执行。Harness 发起的调用仍使用同一期限、取消、有界队列、大小限制、
+响应校验和崩溃回收路径；Harness 不为插件增加第二层进程管理。
 
-- IPC 信封、候选效果和 UI descriptor 的权威 schema 见
-  [`plugin-runtime-host-design.md`](../../architecture/plugin-runtime-host-design.md)。
-- `project_epoch`、`trust_epoch`、`policy_epoch` 或 `tool_registry_epoch` 变化后，旧响应不得应用。
-- 所有候选效果必须通过 `PluginResponseEnvelope` 进入应用流程；不得传递裸候选对象。
-- 候选效果进入策略或安全边界前，必须重新校验 capability/effect 声明。
-- UI contribution 必须声明目标 surface、fallback 和 required capabilities。
-- 真实工具结果只能由 Tool ABI 下的 Execution 路径写入；插件只能返回工具前置补丁或工具后置证据候选。
+远程工作区中，配置发现、依赖准备、插件进程和工具执行都必须发生在远端执行域。远端不支持时返回明确的
+不支持或能力降级，不得静默回本机执行。
 
-## 6. 安全与质量保护
+## 4. 配置与产品体验
 
-| 风险 | 保护方式 |
-|---|---|
-| OpenCode API 反向污染内部模型 | 内部只依赖 BitFun Plugin Runtime Host、Tool ABI、Event Manifest、Permission/Effect 和 UI descriptor |
-| 插件越权授权 | hook 只返回 candidate；最终安全决策和审计由安全边界写入 |
-| 工具复写绕过内置工具策略 | 复写按项目执行域生效，重新经过 Tool ABI、权限声明和安全边界 |
-| UI 插件耦合前端实现 | descriptor-only；宿主适配器渲染；不支持时返回 unsupported 或安全文本投影 |
-| 跨项目状态串扰 | trust、event subscription、tool override、workspace path 和授权绑定 project domain |
-| 远程/本地语义漂移 | envelope 必须携带 execution domain、logical path、workspace identity 和 capability facts |
-| JS/TS 运行时供应链风险 | 默认不开放可写运行时；需要包源、secret、网络、权限和崩溃隔离安全评审 |
-| 兼容承诺过宽 | 支持矩阵逐项列出能力、级别、测试和降级；禁止泛称“全量兼容” |
+- OpenCode 标准配置和全局/项目插件按兼容适配层的来源顺序自动发现，Harness 不要求用户再次导入或激活。
+- 用户可以显式导入支持的配置字段到 BitFun；导入前显示直接使用、需要转换和会降级的项目。
+- 插件或配置变化先在后台准备候选版本；来源仍启用、健康旧进程仍符合当前策略时，代码或依赖更新准备失败可
+  继续使用旧进程。旧进程丢失后只有精确旧物化目录仍可校验时才能重建；否则明确“上一版本不可恢复”。停用、
+  删除、来源撤销、权限收紧或安全策略失效必须撤下旧贡献，不能为不中断评审而回退。
+- 新增或删除工具、Hook、权限或依赖时，在任务启动前显示简短差异；不在每次工具调用中重复弹窗。
+- Harness 报告只记录实际使用的插件来源、执行版本和降级结果，不复制整份插件配置。
 
-## 7. 兼容等级
+## 5. 安全与可靠性
 
-本表描述支持等级，不是排期承诺。
+本地默认兼容策略允许插件使用当前用户通常可用的文件、网络、进程和环境能力。经 BitFun 能力接口的调用可以
+细分收紧；脚本直接能力只能由真实 OS/容器边界粗粒度限制，无法落实时停用相应 target。策略限制必须与插件
+代码错误分开显示。
 
-| 能力等级 | 必须满足的合同 |
-|---|---|
-| Discovery | 能发现配置、记录来源/hash/权限并默认禁用 |
-| Read-only adapter | 能消费 public event manifest，输出建议或证据候选，失败可降级 |
-| Tool provider adapter | Tool ABI、permission/effect、stale call guard、cancellation 和项目执行域隔离通过测试 |
-| UI contribution adapter | descriptor round-trip、入口 fallback、只读 state view 和 unsupported 行为通过测试 |
-| Writable / executable plugin runtime | 沙箱、secret、网络、包源安全、资源预算、崩溃隔离和审计具备独立评审结论 |
+无论权限是否开放，下列可靠性保护始终生效：
 
-## 8. 成功标准
+- 单插件进程隔离和可终止调用；
+- 初始化、Hook、工具和清理期限；
+- 取消传播、有界队列、输入/输出大小限制；
+- 无效响应丢弃、迟到响应不再提交；
+- 有限次数恢复和重复错误聚合；更新失败只保留仍健康且合规的旧进程，或从摘要匹配的精确旧物化目录重建；
+- 凭据和敏感环境变量不进入普通日志或报告。
 
-- OpenCode adapter 不成为 BitFun 内部 owner。
-- 插件配置能被发现、解释、禁用、重新信任和撤销。
-- 插件只能通过候选效果影响治理链路，不能直接写权威状态。
-- 工具、MCP、自定义工具和插件工具使用同一 Tool ABI 语义。
-- UI 扩展能力可在 Desktop、CLI、Server、Remote、ACP、Web、Mobile Web、SDK 等形态下明确支持或显式不可用。
-- 未支持 OpenCode 能力返回 typed unsupported，不静默忽略。
-- adapter 失败、超时、旧响应和权限拒绝能被安全边界、质量数据面和证据包追踪。
+未知配置字段保留并诊断，不阻断其他有效字段；未知事件按服务 v1/TUI v2 的冻结规则局部降级。未知 Client 读接口
+返回稳定的不支持错误；未知写入、变换 API 或无法验证的 Hook 参数只终止对应调用，不执行也不伪造成功。任何
+不兼容项都不能触发无限重试、日志风暴、主界面等待或 Agent 循环卡死。
+
+## 6. 完成判定
+
+本模块只有在以下条件同时满足时才算接入完成：
+
+1. Harness 使用的每个 OpenCode 能力都能回到扩展兼容矩阵中的稳定版本和适配方式。
+2. 插件工具与内置/MCP 工具走同一注册、权限、取消、结果和陈旧调用保护路径。
+3. Hook 的顺序、变换、异常和最终提交由冻结 OpenCode 样例验证。
+4. 插件故障、策略限制和 Harness 业务失败在状态与日志中可以区分。
+5. 远程执行域、停用、更新、健康旧进程保留、精确旧代次重建和重启都有端到端测试。
+6. 未支持能力返回明确降级，且不影响无关插件、评审任务、主界面或会话。

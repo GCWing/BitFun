@@ -5,6 +5,11 @@ import type {
   WorkspaceSearchIndexTaskHandle,
 } from '@/infrastructure/api/service-api/tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  isPeerDeviceModeActive,
+  PEER_MODE_SEARCH_ACTIVE_POLL_MS,
+  PEER_MODE_SEARCH_IDLE_POLL_MS,
+} from '@/infrastructure/peer-device/peerModeFlag';
 
 const log = createLogger('useWorkspaceSearchIndex');
 const ACTIVE_TASK_POLL_MS = 1000;
@@ -191,7 +196,9 @@ export function useWorkspaceSearchIndex(
       if (cancelled || !mountedRef.current) {
         return;
       }
-      const delay = isTaskActive(status) ? ACTIVE_TASK_POLL_MS : IDLE_STATUS_POLL_MS;
+      const delay = isTaskActive(status)
+        ? (isPeerDeviceModeActive() ? PEER_MODE_SEARCH_ACTIVE_POLL_MS : ACTIVE_TASK_POLL_MS)
+        : (isPeerDeviceModeActive() ? PEER_MODE_SEARCH_IDLE_POLL_MS : IDLE_STATUS_POLL_MS);
       pollTimerRef.current = setTimeout(() => {
         void refreshStatus(true).then((nextStatus) => {
           scheduleNext(nextStatus);

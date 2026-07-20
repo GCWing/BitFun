@@ -160,6 +160,25 @@ impl AgentRegistry {
         None
     }
 
+    pub async fn get_subagent_is_review_for_workspace(
+        &self,
+        id: &str,
+        workspace_root: Option<&Path>,
+    ) -> Option<bool> {
+        self.ensure_user_custom_agents_loaded().await;
+        if let Some(workspace_root) = workspace_root {
+            let is_project_cache_loaded =
+                self.read_project_subagents().contains_key(workspace_root);
+            if !is_project_cache_loaded {
+                self.load_custom_agents(Some(workspace_root)).await;
+            }
+        }
+
+        self.find_agent_entry(id, workspace_root)
+            .filter(|entry| entry.category == AgentCategory::SubAgent)
+            .map(|entry| is_review_agent_entry(&entry))
+    }
+
     fn entry_is_visible_for_query(
         entry: &AgentEntry,
         query: &SubagentQueryContext<'_>,

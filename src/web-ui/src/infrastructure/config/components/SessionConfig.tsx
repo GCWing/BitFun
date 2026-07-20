@@ -68,12 +68,14 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
+  const [enableDeferredToolLoading, setEnableDeferredToolLoading] = useState(true);
   const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
   const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
     useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
+  const [deferredToolLoadingConfigSaving, setDeferredToolLoadingConfigSaving] = useState(false);
 
   // ── Debug mode config state ──────────────────────────────────────────────
   const [debugConfig, setDebugConfig] = useState<DebugModeConfig>(DEFAULT_DEBUG_MODE_CONFIG);
@@ -90,6 +92,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         allModels,
         funcAgentModelsData,
         skipConfirm,
+        deferredToolLoadingEnabled,
         loadedSubagentMaxConcurrency,
         execTimeout,
         confirmTimeout,
@@ -100,6 +103,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
         configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
         configManager.getConfig<boolean>('ai.skip_tool_confirmation'),
+        configManager.getConfig<boolean>('ai.enable_deferred_tool_loading'),
         configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
@@ -111,6 +115,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setSkipToolConfirmation(skipConfirm ?? true);
+      setEnableDeferredToolLoading(deferredToolLoadingEnabled ?? true);
       setSubagentMaxConcurrency(loadedSubagentMaxConcurrency != null
         ? loadedSubagentMaxConcurrency
         : DEFAULT_SUBAGENT_MAX_CONCURRENCY);
@@ -231,6 +236,24 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSkipToolConfirmation(!checked);
     } finally {
       setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleDeferredToolLoadingChange = async (checked: boolean) => {
+    const previous = enableDeferredToolLoading;
+    setEnableDeferredToolLoading(checked);
+    setDeferredToolLoadingConfigSaving(true);
+    try {
+      await configManager.setConfig('ai.enable_deferred_tool_loading', checked);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save enable_deferred_tool_loading', error);
+      notificationService.error(
+        `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+      setEnableDeferredToolLoading(previous);
+    } finally {
+      setDeferredToolLoadingConfigSaving(false);
     }
   };
 
@@ -416,6 +439,20 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const enabledModels = models.filter((m: AIModelConfig) => m.enabled);
   const sessionTitleModelId = funcAgentModels[AGENT_SESSION_TITLE] || 'fast';
   const templateEntries = getTemplateEntries();
+  // const computerUseAccessLabel = computerUseStatusLoading
+  //   ? t('loading.text')
+  //   : computerUseAccess ? t('computerUse.granted') : t('computerUse.notGranted');
+  // const computerUseScreenLabel = computerUseStatusLoading
+  //   ? t('loading.text')
+  //   : computerUseScreen ? t('computerUse.granted') : t('computerUse.notGranted');
+  // const browserStatusLabel = browserCdpAvailable
+  //   ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
+  //   : browserStatusLoading ? t('loading.text') : t('browserControl.notConnected');
+  // const browserSelectOptions: SelectOption[] = browserOptions.map((option) => ({
+  //   value: option.value,
+  //   label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
+  //   disabled: !option.installed,
+  // }));
 
   const pageTitle = variant === 'personalization'
     ? t('personalizationPage.title')
@@ -611,11 +648,32 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
           </ConfigPageRow>
         </ConfigPageSection>
 
+        <ConfigPageSection
+          title={t('deferredToolLoading.sectionTitle')}
+          description={t('deferredToolLoading.sectionDescription')}
+        >
+          <ConfigPageRow
+            label={t('common.enable')}
+            description={!enableDeferredToolLoading ? t('deferredToolLoading.warning') : undefined}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control">
+              <Switch
+                checked={enableDeferredToolLoading}
+                onChange={(event) => handleDeferredToolLoadingChange(event.target.checked)}
+                disabled={deferredToolLoadingConfigSaving}
+                size="small"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
         {/* ── Debug mode settings ───────────────────────────────── */}
         {/* <ConfigPageSection
           title={tDebug('sections.combined')}
           description={tDebug('sections.combinedDescription')}
         >
+          Basic settings: log path + ingest port
           <ConfigPageRow
             label={tDebug('settings.logPath.label')}
             description={tDebug('settings.logPath.description')}
@@ -654,6 +712,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             />
           </ConfigPageRow>
 
+          Save / cancel for basic settings changes (not shown while modal is open)
           {debugHasChanges && !isTemplatesModalOpen && (
             <ConfigPageRow label={tDebug('actions.save')} align="center">
               <div className="bitfun-debug-config__settings-actions">
@@ -677,6 +736,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </ConfigPageRow>
           )}
 
+          Language templates entry row
           <ConfigPageRow
             label={tDebug('sections.templates')}
             description={tDebug('templates.description')}

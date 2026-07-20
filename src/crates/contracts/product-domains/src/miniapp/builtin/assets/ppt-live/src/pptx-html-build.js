@@ -1,12 +1,71 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Slide Data → PPTX Build (Stage 2 of 2)
+//
+// buildSlideFromExtracted() takes the slideData from html2pptx-dom-core.js and
+// maps each element to pptxgenjs API calls (addText, addImage, addShape, etc.).
+//
+// Key design decisions:
+//   WIDTH_SAFETY_IN  — text boxes are widened by 0.15" to absorb cross-renderer
+//     font metric drift (PowerPoint renders CJK glyphs slightly wider than
+//     browsers). safeTextBoxGeometry() shifts the x coordinate for right/center
+//     aligned text so the extra width doesn't shift the visual anchor.
+//   margin — set from the element's CSS padding so PPTX internal inset matches
+//     the HTML box model (prevents text from shifting toward top-left).
+//   valign — resolved from CSS flex/grid align-items or line-height ratio.
+// ─────────────────────────────────────────────────────────────────────────────
 import pptxgen from 'pptxgenjs';
 
 const PX_PER_IN = 96;
 const EMU_PER_IN = 914400;
 const SLIDE_W_IN = 13.333;
 const SLIDE_H_IN = 7.5;
+const EDITABLE_TEXT_TYPES = new Set([
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'svg-text', 'list', 'merged-text',
+]);
+
+// PowerPoint and browsers render the same font at the same point size with
+// measurably different glyph widths (different font metric tables / hinting).
+// For CJK text the drift is amplified because every glyph is full-width:
+// if a line of CJK text *barely* fits on one line in the browser, PowerPoint's
+// slightly wider rendering pushes the last character to the next line.
+//
+// 0.15 inch (~14.4px @ 96dpi) ≈ one CJK glyph at ~14pt body text. This is
+// large enough to absorb the worst-case cross-renderer metric drift while
+// capTextBoxWidth() prevents any overflow past the slide edge.
+//
+// IMPORTANT: the safety width widens the text box to prevent wrapping, but
+// for right/center-aligned text this alone would shift the rendered glyphs
+// (right edge moves right, center moves right).  The callers compensate by
+// adjusting the x coordinate so that the *original* text region is preserved.
+const WIDTH_SAFETY_IN = 0.15;
 
 function capTextBoxWidth(x, w) {
-  return Math.min(w, Math.max(0.15, SLIDE_W_IN - x - 0.04));
+  return Math.min(w, Math.max(0.15, SLIDE_W_IN - x - 0.02));
+}
+
+// Given an element's original x/w and its text-align, return {x, w} for the
+// PPTX text box.  The box is widened by WIDTH_SAFETY_IN to prevent wrapping,
+// but the x coordinate is shifted so the original left/right/center anchor
+// stays in the same visual position:
+//   left   → extra width extends to the right (x unchanged)
+//   right  → extra width extends to the left  (x shifts left by safety)
+//   center → split equally                    (x shifts left by safety/2)
+function safeTextBoxGeometry(origX, origW, align, isVerticalText) {
+  const safety = isVerticalText ? 0 : WIDTH_SAFETY_IN;
+  const rawW = origW + safety;
+  if (!safety || align === 'left' || !align) {
+    return { x: origX, w: capTextBoxWidth(origX, rawW) };
+  }
+  if (align === 'right') {
+    const x = Math.max(0, origX - safety);
+    return { x, w: capTextBoxWidth(x, rawW) };
+  }
+  if (align === 'center') {
+    const x = Math.max(0, origX - safety / 2);
+    return { x, w: capTextBoxWidth(x, rawW) };
+  }
+  // justify behaves like left for anchoring
+  return { x: origX, w: capTextBoxWidth(origX, rawW) };
 }
 
 function toImagePayload(src) {
@@ -73,7 +132,68 @@ async function addBackground(slideData, targetSlide) {
 }
 
 function addElements(slideData, targetSlide, pres) {
-  for (const el of slideData.elements) {
+  if (slideData.fullPageFallback) {
+    const payload = toImagePayload(
+      slideData.fullPageFallback.data || slideData.fullPageFallback.src,
+    );
+    if (!payload) throw new Error('Full-page fallback has no image payload');
+    targetSlide.addImage({
+      ...payload,
+      x: 0,
+      y: 0,
+      w: SLIDE_W_IN,
+      h: SLIDE_H_IN,
+    });
+    return;
+  }
+  const suppressedNativeVisualIds = new Set([
+    ...(slideData.suppressedNativeVisualIds || []),
+    ...(slideData.fallbackLayers || [])
+      .flatMap((layer) => layer.suppressedNativeVisualIds || []),
+  ]);
+  const paintItems = [
+    ...(slideData.elements || []).map((element, order) => ({
+      type: 'element',
+      item: element,
+      zIndex: element.zIndex ?? 0,
+      order: element.paintOrder ?? order,
+      subOrder: element.subOrder ?? 0,
+      stableOrder: order,
+    })),
+    ...(slideData.fallbackLayers || []).map((layer, order) => ({
+      type: 'fallback',
+      item: layer,
+      zIndex: layer.zIndex ?? 0,
+      order: layer.paintOrder ?? ((slideData.elements || []).length + order),
+      subOrder: layer.subOrder ?? 0,
+      stableOrder: (slideData.elements || []).length + order,
+    })),
+  ].sort((a, b) => (
+    a.zIndex - b.zIndex
+    || a.order - b.order
+    || a.subOrder - b.subOrder
+    || a.stableOrder - b.stableOrder
+  ));
+  for (const paintItem of paintItems) {
+    if (paintItem.type === 'fallback') {
+      const layer = paintItem.item;
+      const payload = toImagePayload(layer.data || layer.src);
+      const bbox = layer.bbox || {};
+      if (!payload) continue;
+      const fullPageCanvas = layer.canvas === 'full-page';
+      targetSlide.addImage({
+        ...payload,
+        x: fullPageCanvas ? 0 : (bbox.x ?? 0),
+        y: fullPageCanvas ? 0 : (bbox.y ?? 0),
+        w: fullPageCanvas ? SLIDE_W_IN : (bbox.w ?? SLIDE_W_IN),
+        h: fullPageCanvas ? SLIDE_H_IN : (bbox.h ?? SLIDE_H_IN),
+      });
+      continue;
+    }
+    const el = paintItem.item;
+    if (suppressedNativeVisualIds.has(el.sourceId) && !EDITABLE_TEXT_TYPES.has(el.type)) {
+      continue;
+    }
     if (el.type === 'image') {
       const payload = toImagePayload(el.src);
       if (!payload) continue;
@@ -92,14 +212,22 @@ function addElements(slideData, targetSlide, pres) {
         h: el.y2 - el.y1,
         line: { color: el.color, width: el.width },
       });
-    } else if (el.type === 'shape') {
+    } else if (el.type === 'shape' || el.type === 'svg-shape') {
       const shapeOptions = {
         x: el.position.x,
         y: el.position.y,
         w: el.position.w,
         h: el.position.h,
-        shape: el.shape.rectRadius > 0 ? pres.ShapeType.roundRect : pres.ShapeType.rect,
       };
+      const nativeShapeType = {
+        circle: pres.ShapeType.ellipse,
+        ellipse: pres.ShapeType.ellipse,
+        triangle: pres.ShapeType.triangle,
+        diamond: pres.ShapeType.diamond,
+        rect: pres.ShapeType.rect,
+      }[el.svgType];
+      shapeOptions.shape = nativeShapeType
+        || (el.shape.rectRadius > 0 ? pres.ShapeType.roundRect : pres.ShapeType.rect);
       if (el.shape.fill) {
         shapeOptions.fill = { color: el.shape.fill };
         if (el.shape.transparency != null) shapeOptions.fill.transparency = el.shape.transparency;
@@ -107,12 +235,18 @@ function addElements(slideData, targetSlide, pres) {
       if (el.shape.line) shapeOptions.line = el.shape.line;
       if (el.shape.rectRadius > 0) shapeOptions.rectRadius = el.shape.rectRadius;
       if (el.shape.shadow) shapeOptions.shadow = el.shape.shadow;
-      targetSlide.addText(el.text || '', shapeOptions);
+      if (el.shape.rotate != null) shapeOptions.rotate = el.shape.rotate;
+      if (el.type === 'svg-shape') {
+        targetSlide.addShape(shapeOptions.shape, shapeOptions);
+      } else {
+        targetSlide.addText(el.text || '', shapeOptions);
+      }
     } else if (el.type === 'list' || el.type === 'merged-text') {
+      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.position.x, el.position.w, el.style.align, false);
       const listOptions = {
-        x: el.position.x,
+        x: boxX,
         y: el.position.y,
-        w: capTextBoxWidth(el.position.x, el.position.w + (el.position.w * 0.04)),
+        w: boxW,
         h: Math.min(el.position.h, Math.max(0.15, SLIDE_H_IN - el.position.y - 0.04)),
         fontSize: el.style.fontSize,
         fontFace: el.style.fontFace,
@@ -122,8 +256,7 @@ function addElements(slideData, targetSlide, pres) {
         lineSpacing: el.style.lineSpacing,
         paraSpaceBefore: el.style.paraSpaceBefore,
         paraSpaceAfter: el.style.paraSpaceAfter,
-        margin: el.style.margin,
-        inset: 0,
+        margin: el.style.margin || 0,
         shrinkText: false,
         autoFit: false,
       };
@@ -131,23 +264,12 @@ function addElements(slideData, targetSlide, pres) {
       targetSlide.addText(el.items || el.text, listOptions);
     } else {
       const lineHeight = el.style.lineSpacing || el.style.fontSize * 1.2;
-      const isSingleLine = el.position.h <= lineHeight * 1.5;
       const isVerticalText = el.style.vert && el.style.vert !== 'horz';
-      const widthIncrease = isVerticalText ? 0 : el.position.w * (isSingleLine ? 0.02 : 0.06);
-      let adjustedX = el.position.x;
-      let adjustedW = capTextBoxWidth(el.position.x, el.position.w + widthIncrease);
-      const align = el.style.align;
-      if (!isVerticalText && align === 'center') {
-        adjustedX = el.position.x - ((adjustedW - el.position.w) / 2);
-      } else if (!isVerticalText && align === 'right') {
-        adjustedX = el.position.x - (adjustedW - el.position.w);
-      }
-      adjustedX = Math.max(0, adjustedX);
-      adjustedW = capTextBoxWidth(adjustedX, adjustedW);
+      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.position.x, el.position.w, el.style.align, isVerticalText);
       const textOptions = {
-        x: adjustedX,
+        x: boxX,
         y: el.position.y,
-        w: adjustedW,
+        w: boxW,
         h: Math.min(el.position.h, Math.max(0.15, SLIDE_H_IN - el.position.y - 0.04)),
         fontSize: el.style.fontSize,
         fontFace: el.style.fontFace,
@@ -159,12 +281,13 @@ function addElements(slideData, targetSlide, pres) {
         lineSpacing: el.style.lineSpacing,
         paraSpaceBefore: el.style.paraSpaceBefore,
         paraSpaceAfter: el.style.paraSpaceAfter,
-        inset: 0,
+        // margin reproduces the element's CSS padding as PPTX internal inset,
+        // preventing text from shifting toward the frame's top-left corner.
+        margin: el.style.margin || 0,
         shrinkText: false,
         autoFit: false,
       };
       if (el.style.align) textOptions.align = el.style.align;
-      if (el.style.margin) textOptions.margin = el.style.margin;
       if (el.style.rotate !== undefined) textOptions.rotate = el.style.rotate;
       if (el.style.vert) textOptions.vert = el.style.vert;
       if (el.style.transparency != null && el.style.transparency !== undefined) {
@@ -187,10 +310,38 @@ export async function buildSlideFromExtracted(slideData, bodyDimensions, pres, o
   if (validationWarnings.length) {
     console.warn('[ppt-live-export] slide validation warnings (export continues):', validationWarnings.join('; '));
   }
+  const diagnostics = [
+    ...(slideData?.diagnostics || []),
+    ...validationWarnings.map((message) => ({
+      severity: 'fallback',
+      code: 'pptx_layout_warning',
+      message,
+      sourceId: null,
+      tag: null,
+    })),
+  ];
   const targetSlide = options.slide || pres.addSlide();
-  await addBackground(slideData, targetSlide);
-  addElements(slideData, targetSlide, pres);
-  return { slide: targetSlide, placeholders: slideData.placeholders || [] };
+  try {
+    await addBackground(slideData, targetSlide);
+    addElements(slideData, targetSlide, pres);
+  } catch (error) {
+    const diagnostic = {
+      severity: 'blocking',
+      kind: 'blocking',
+      code: 'pptx_serialization',
+      message: String(error?.message || error || 'PPTX serialization failed.'),
+      sourceId: null,
+      tag: null,
+    };
+    error.diagnostic = diagnostic;
+    error.diagnostics = [...diagnostics, diagnostic];
+    throw error;
+  }
+  return {
+    slide: targetSlide,
+    placeholders: slideData.placeholders || [],
+    diagnostics,
+  };
 }
 
 export function createPptxDeck(deck = {}) {

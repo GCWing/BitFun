@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 import {
   Settings,
   Info,
@@ -11,6 +11,7 @@ import {
   ExternalLink,
   BarChart3,
   ChevronUp,
+  LogIn,
   MessageCircle,
 } from 'lucide-react';
 import { systemAPI } from '@/infrastructure/api';
@@ -23,6 +24,7 @@ import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
+import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import {
   RemoteConnectDisclaimerContent,
@@ -33,6 +35,7 @@ import {
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
+const AccountLoginDialog = lazy(() => import('../../AccountLoginDialog'));
 const AboutDialog = lazy(() =>
   import('../../AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -55,12 +58,40 @@ const PersistentFooterActions: React.FC = () => {
   const { hasWorkspace } = useCurrentWorkspace();
   const { warning } = useNotification();
 
+  useEffect(() => {
+    const onAutoExit = (event: Event) => {
+      const detail = (event as CustomEvent<{ deviceName?: string; reason?: string }>).detail;
+      const name = detail?.deviceName || 'peer';
+      if (detail?.reason === 'peer_offline') {
+        warning(t('accountLogin.peerAutoExitOffline', { name }));
+      } else if (detail?.reason === 'rpc_failures') {
+        warning(t('accountLogin.peerAutoExitRpc', { name }));
+      }
+    };
+    window.addEventListener('peer-mode:auto-exit', onAutoExit);
+    return () => window.removeEventListener('peer-mode:auto-exit', onAutoExit);
+  }, [t, warning]);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showAccountLogin, setShowAccountLogin] = useState(false);
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
+
+  // Periodic token-expiry check. Only auto-open the login dialog if the
+  // token has actually expired while the app is running — not on startup.
+  useEffect(() => {
+    const expiryCheck = setInterval(() => {
+      remoteConnectAPI.accountTokenExpired().then((expired) => {
+        if (expired) {
+          setShowAccountLogin(true);
+        }
+      });
+    }, 60000);
+    return () => clearInterval(expiryCheck);
+  }, []);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
@@ -128,6 +159,11 @@ const PersistentFooterActions: React.FC = () => {
     enableToolbarMode();
   };
 
+  const handleAccountLogin = () => {
+    closeMenu();
+    setShowAccountLogin(true);
+  };
+
   const handleRemoteConnect = useCallback(async () => {
     if (!hasWorkspace) {
       warning(t('header.remoteConnectRequiresWorkspace'));
@@ -193,6 +229,17 @@ const PersistentFooterActions: React.FC = () => {
                   role="menu"
                   data-testid="nav-footer-menu"
                 >
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    onClick={handleAccountLogin}
+                    data-testid="nav-footer-account-login-item"
+                  >
+                    <LogIn size={14} />
+                    <span>{t('shared:features.accountLogin')}</span>
+                  </button>
+                  <div className="bitfun-nav-panel__footer-menu-divider" />
                   <Tooltip
                     content={t('header.remoteConnectRequiresWorkspace')}
                     placement="right"
@@ -305,6 +352,11 @@ const PersistentFooterActions: React.FC = () => {
       {showAbout && (
         <Suspense fallback={null}>
           <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+        </Suspense>
+      )}
+      {showAccountLogin && (
+        <Suspense fallback={null}>
+          <AccountLoginDialog isOpen={showAccountLogin} onClose={() => setShowAccountLogin(false)} />
         </Suspense>
       )}
       {showRemoteConnect && (

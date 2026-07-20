@@ -44,11 +44,11 @@ describe('CapacityQueueNotice', () => {
 
     expect(html).toContain('Waiting for model capacity');
     expect(html).toContain('BitFun is waiting for temporary model capacity.');
-    expect(html).toContain('Reason: provider concurrency limit');
-    expect(html).toContain('The model provider rejected another concurrent reviewer.');
+    expect(html).toContain('Reason: model concurrency limit');
+    expect(html).toContain('The model provider rejected another concurrent review request.');
     expect(html).toContain('Waited 12s of 1m 0s');
-    expect(html).toContain('Pause queue');
-    expect(html).toContain('Skip optional extras');
+    expect(html).toContain('Pause waiting');
+    expect(html).toContain('Keep core checks');
     expect(html).not.toContain('Run slower next time');
   });
 
@@ -72,14 +72,14 @@ describe('CapacityQueueNotice', () => {
       />,
     );
 
-    expect(html).toContain('Reason: previous launch batch still running');
+    expect(html).toContain('Reason: earlier review work still running');
     expect(html).toContain('Waiting preserves the planned review order');
-    expect(html).toContain('Waiting for running reviewers');
-    expect(html).toContain('Running reviewers: 2');
+    expect(html).toContain('Waiting for review capacity');
+    expect(html).not.toContain('Active review work: 2');
     expect(html).not.toContain('Waited 4s of 1m 0s');
   });
 
-  it('explains launch-batch waits that outlast the configured queue window', () => {
+  it('explains launch-batch waits that outlast the configured capacity window', () => {
     const html = renderToStaticMarkup(
       <CapacityQueueNotice
         capacityQueueState={{
@@ -99,14 +99,14 @@ describe('CapacityQueueNotice', () => {
       />,
     );
 
-    expect(html).toContain('waited longer than the configured queue window');
-    expect(html).toContain('Cancel queued reviewers');
+    expect(html).toContain('waited longer than the configured capacity window');
+    expect(html).toContain('Cancel waiting review');
     expect(html).toContain('Open Review settings');
     expect(html).not.toContain('Run slower next time');
     expect(html).not.toContain('Waited 1m 30s of 1m 0s');
   });
 
-  it('does not show the long launch-batch detail before the queue window is exceeded', () => {
+  it('does not show the long launch-batch detail before the capacity window is exceeded', () => {
     const html = renderToStaticMarkup(
       <CapacityQueueNotice
         capacityQueueState={{
@@ -126,7 +126,7 @@ describe('CapacityQueueNotice', () => {
       />,
     );
 
-    expect(html).not.toContain('waited longer than the configured queue window');
+    expect(html).not.toContain('waited longer than the configured capacity window');
   });
 
   it('explains active-reviewer waits without presenting max wait as a hard timeout', () => {
@@ -149,13 +149,13 @@ describe('CapacityQueueNotice', () => {
       />,
     );
 
-    expect(html).toContain('Waiting for running reviewers');
-    expect(html).toContain('Queued reviewers start when a running reviewer frees capacity.');
-    expect(html).toContain('Running reviewers: 2');
+    expect(html).toContain('Waiting for review capacity');
+    expect(html).toContain('Waiting review work starts when active review work frees capacity.');
+    expect(html).not.toContain('Active review work: 2');
     expect(html).not.toContain('Waited 1m 10s of 1m 0s');
   });
 
-  it('renders the specific reviewers currently waiting', () => {
+  it('keeps waiting review work summarized instead of listing individual reviewers', () => {
     const html = renderToStaticMarkup(
       <CapacityQueueNotice
         capacityQueueState={{
@@ -189,11 +189,11 @@ describe('CapacityQueueNotice', () => {
       />,
     );
 
-    expect(html).toContain('Waiting reviewers');
-    expect(html).toContain('Security reviewer');
-    expect(html).toContain('Frontend reviewer');
-    expect(html).toContain('Paused');
-    expect(html).toContain('Waited 9s');
+    expect(html).toContain('Review waiting for capacity');
+    expect(html).not.toContain('Security reviewer');
+    expect(html).not.toContain('Frontend reviewer');
+    expect(html).not.toContain('Paused');
+    expect(html).not.toContain('Waited 9s');
   });
 
   it('renders the stop hint when inline queue controls are unavailable', () => {
@@ -213,7 +213,7 @@ describe('CapacityQueueNotice', () => {
       />,
     );
 
-    expect(html).toContain('Use Stop to interrupt this review queue.');
-    expect(html).not.toContain('Pause queue');
+    expect(html).toContain('Use Stop to interrupt this review.');
+    expect(html).not.toContain('Pause waiting');
   });
 });

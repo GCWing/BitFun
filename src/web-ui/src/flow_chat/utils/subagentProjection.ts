@@ -4,6 +4,7 @@ export interface SubagentProjectionTarget {
   parentSessionId?: string;
   parentToolIds: Set<string>;
   directSubagentSessionId?: string;
+  directSubagentDialogTurnId?: string;
 }
 
 export interface SubagentProjectionState {
@@ -26,16 +27,35 @@ const ACTIVE_TURN_STATUSES = new Set<DialogTurn['status']>([
   'cancelling',
 ]);
 
+export type SubagentExecutionStatus = 'running' | 'completed' | 'error' | 'cancelled';
+
+export function deriveSubagentExecutionStatus(
+  turn: DialogTurn | null | undefined,
+): SubagentExecutionStatus | null {
+  if (!turn) {
+    return null;
+  }
+  if (ACTIVE_TURN_STATUSES.has(turn.status) || turn.modelRounds?.some(round => round.isStreaming)) {
+    return 'running';
+  }
+  switch (turn.status) {
+    case 'completed':
+      return 'completed';
+    case 'error':
+      return 'error';
+    case 'cancelled':
+      return 'cancelled';
+    default:
+      return null;
+  }
+}
+
 function isActiveTurn(turn: DialogTurn | null | undefined): boolean {
   if (!turn) {
     return false;
   }
 
-  if (ACTIVE_TURN_STATUSES.has(turn.status)) {
-    return true;
-  }
-
-  return turn.modelRounds.some(round => round.isStreaming);
+  return deriveSubagentExecutionStatus(turn) === 'running';
 }
 
 function flattenTurnItems(turn: DialogTurn | null): FlowItem[] {
@@ -62,9 +82,16 @@ function flattenRoundItems(round: ModelRound | null): FlowItem[] {
   return round.items;
 }
 
-function pickProjectedTurn(session: Session | null): DialogTurn | null {
+function pickProjectedTurn(session: Session | null, directDialogTurnId?: string): DialogTurn | null {
   if (!session || session.dialogTurns.length === 0) {
     return null;
+  }
+
+  if (directDialogTurnId) {
+    const directTurn = session.dialogTurns.find(turn => turn.id === directDialogTurnId);
+    if (directTurn) {
+      return directTurn;
+    }
   }
 
   for (let index = session.dialogTurns.length - 1; index >= 0; index -= 1) {
@@ -139,7 +166,7 @@ export function getSubagentProjectionState(
   options: SubagentProjectionOptions = {},
 ): SubagentProjectionState {
   const session = findProjectedSession(state, target);
-  const turn = pickProjectedTurn(session);
+  const turn = pickProjectedTurn(session, target.directSubagentDialogTurnId);
   const round = pickProjectedRound(turn);
   const itemsMode = options.itemsMode ?? 'full-turn';
   const items = itemsMode === 'last-round'

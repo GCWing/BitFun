@@ -51,7 +51,7 @@ fn json_object_metadata(value: Value) -> serde_json::Map<String, Value> {
     }
 }
 
-async fn deliver_background_bash_result(
+struct BackgroundBashResultDelivery {
     parent_session_id: String,
     parent_agent_type: String,
     parent_workspace_path: Option<String>,
@@ -62,7 +62,21 @@ async fn deliver_background_bash_result(
     metadata: serde_json::Map<String, Value>,
     terminal_session_id: String,
     failure_context: &'static str,
-) {
+}
+
+async fn deliver_background_bash_result(delivery: BackgroundBashResultDelivery) {
+    let BackgroundBashResultDelivery {
+        parent_session_id,
+        parent_agent_type,
+        parent_workspace_path,
+        parent_remote_connection_id,
+        parent_remote_ssh_host,
+        delivery_text,
+        display_text,
+        metadata,
+        terminal_session_id,
+        failure_context,
+    } = delivery;
     let runtime = match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -276,7 +290,7 @@ Usage notes:
   - The output may include the command echo and/or the shell prompt prefix (for example, a printed `PS` or `$` prompt line). Do not treat these as part of the command's actual result.
   - Avoid interactive commands that may block waiting for user input or open a pager/editor. Prefer non-interactive variants and explicit flags. For example, use `git --no-pager diff` instead of `git diff`, and avoid commands that prompt for confirmation unless the User explicitly asks for them.
   
-  - Prefer specialized tools for workspace file operations: Glob for file discovery, Grep for content search, Read for reading, Edit for modifying, Write for creating, and Delete for deletion. Prefer the Git tool (after loading it with GetToolSpec when collapsed) for Git subcommands such as status, diff, log, add, commit, branch, checkout, pull, and push. Use Bash for commands that genuinely need a shell, such as build/test/package CLIs, process control, scripts, and environment checks. Never use shell output only to communicate with the user.
+  - Prefer specialized tools for workspace file operations: Glob for file discovery, Grep for content search, Read for reading, Edit for modifying, Write for creating, and Delete for deletion. Prefer the Git tool for Git subcommands such as status, diff, log, add, commit, branch, checkout, pull, and push. When Git appears in the Deferred Tool Listing, load its schema with GetToolSpec and execute it through CallDeferredTool; otherwise call Git directly. Use Bash for commands that genuinely need a shell, such as build/test/package CLIs, process control, scripts, and environment checks. Never use shell output only to communicate with the user.
   - When issuing multiple commands:
     - If the commands are independent and can run in parallel, make multiple tool calls in a single message. For Git inspection, prefer parallel Git tool calls such as `{{"operation":"status"}}` and `{{"operation":"diff","args":"--stat"}}` instead of Bash.
     - If the commands depend on each other and must run sequentially, use a single Bash call with '&&' to chain them together (e.g., `git add . && git commit -m "message" && git push`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before Bash for git operations, or git add before git commit), run these operations sequentially instead.
@@ -1266,18 +1280,18 @@ impl BashTool {
                             "outputFile": output_file_reference_for_task.clone(),
                         });
 
-                        deliver_background_bash_result(
-                            parent_session_id.clone(),
-                            parent_agent_type.clone(),
-                            parent_workspace_path.clone(),
-                            parent_remote_connection_id.clone(),
-                            parent_remote_ssh_host.clone(),
+                        deliver_background_bash_result(BackgroundBashResultDelivery {
+                            parent_session_id: parent_session_id.clone(),
+                            parent_agent_type: parent_agent_type.clone(),
+                            parent_workspace_path: parent_workspace_path.clone(),
+                            parent_remote_connection_id: parent_remote_connection_id.clone(),
+                            parent_remote_ssh_host: parent_remote_ssh_host.clone(),
                             delivery_text,
                             display_text,
-                            json_object_metadata(metadata),
-                            terminal_session_id.clone(),
-                            "result",
-                        )
+                            metadata: json_object_metadata(metadata),
+                            terminal_session_id: terminal_session_id.clone(),
+                            failure_context: "result",
+                        })
                         .await;
                         delivery_sent = true;
                         break;
@@ -1306,18 +1320,18 @@ impl BashTool {
                             "error": message.clone(),
                         });
 
-                        deliver_background_bash_result(
-                            parent_session_id.clone(),
-                            parent_agent_type.clone(),
-                            parent_workspace_path.clone(),
-                            parent_remote_connection_id.clone(),
-                            parent_remote_ssh_host.clone(),
+                        deliver_background_bash_result(BackgroundBashResultDelivery {
+                            parent_session_id: parent_session_id.clone(),
+                            parent_agent_type: parent_agent_type.clone(),
+                            parent_workspace_path: parent_workspace_path.clone(),
+                            parent_remote_connection_id: parent_remote_connection_id.clone(),
+                            parent_remote_ssh_host: parent_remote_ssh_host.clone(),
                             delivery_text,
                             display_text,
-                            json_object_metadata(metadata),
-                            terminal_session_id.clone(),
-                            "error result",
-                        )
+                            metadata: json_object_metadata(metadata),
+                            terminal_session_id: terminal_session_id.clone(),
+                            failure_context: "error result",
+                        })
                         .await;
                         delivery_sent = true;
                         break;
@@ -1348,18 +1362,18 @@ impl BashTool {
                     "error": "stream_ended_without_completion",
                 });
 
-                deliver_background_bash_result(
-                    parent_session_id.clone(),
-                    parent_agent_type.clone(),
-                    parent_workspace_path.clone(),
-                    parent_remote_connection_id.clone(),
-                    parent_remote_ssh_host.clone(),
+                deliver_background_bash_result(BackgroundBashResultDelivery {
+                    parent_session_id: parent_session_id.clone(),
+                    parent_agent_type: parent_agent_type.clone(),
+                    parent_workspace_path: parent_workspace_path.clone(),
+                    parent_remote_connection_id: parent_remote_connection_id.clone(),
+                    parent_remote_ssh_host: parent_remote_ssh_host.clone(),
                     delivery_text,
                     display_text,
-                    json_object_metadata(metadata),
-                    terminal_session_id.clone(),
-                    "stream-end result",
-                )
+                    metadata: json_object_metadata(metadata),
+                    terminal_session_id: terminal_session_id.clone(),
+                    failure_context: "stream-end result",
+                })
                 .await;
             }
         });

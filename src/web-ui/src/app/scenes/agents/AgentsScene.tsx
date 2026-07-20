@@ -8,12 +8,11 @@ import {
   Plus,
   Puzzle,
   Search as SearchIcon,
-  ShieldCheck,
   Trash2,
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, IconButton, Search, Switch, confirmDanger } from '@/component-library';
+import { Badge, Button, IconButton, Search, Select, Switch, confirmDanger } from '@/component-library';
 import {
   GalleryDetailModal,
   GalleryEmpty,
@@ -24,10 +23,8 @@ import {
   GalleryZone,
 } from '@/app/components';
 import AgentCard from './components/AgentCard';
-import AgentTeamCard from './components/AgentTeamCard';
 import CoreAgentCard, { type CoreAgentMeta } from './components/CoreAgentCard';
 import CreateAgentPage from './components/CreateAgentPage';
-import ReviewTeamPage, { ReviewTeamErrorBoundary } from './components/ReviewTeamPage';
 import {
   type AgentWithCapabilities,
   useAgentsStore,
@@ -36,6 +33,7 @@ import { useAgentsList } from './hooks/useAgentsList';
 import { AGENT_ICON_MAP } from './agentsIcons';
 import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentTheme';
 import { getCardGradient } from '@/shared/utils/cardGradients';
+import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
 import './AgentsScene.scss';
@@ -43,13 +41,16 @@ import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefre
 import { CORE_AGENT_IDS, isAgentInOverviewZone } from './agentVisibility';
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { ModeSkillInfo } from '@/infrastructure/config/types';
+import type { ModeSkillInfo, SubagentModelSelection } from '@/infrastructure/config/types';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useNotification } from '@/shared/notification-system';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { loadDefaultReviewTeam, type ReviewTeam } from '@/shared/services/reviewTeamService';
+import {
+  type ModelSelectOption,
+  useModelSelectPresentation,
+} from '@/infrastructure/config/components/ModelSelectPresentation';
 
 const UNGROUPED_SKILL_GROUP = '__ungrouped__';
+const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
 
 const SKILL_GROUP_ORDER: Record<string, number> = {
   office: 0,
@@ -68,7 +69,27 @@ interface SkillGroup {
   totalCount: number;
 }
 
-type CapabilityTab = 'tools' | 'skills' | 'subagents';
+type CapabilityTab = 'model' | 'tools' | 'skills' | 'subagents';
+
+function normalizeSelectValue(value: string | number | (string | number)[]): string {
+  return String(Array.isArray(value) ? (value[0] ?? '') : value);
+}
+
+function subagentModelOverrideValue(selection: SubagentModelSelection | undefined): string {
+  if (!selection) {
+    return DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE;
+  }
+  return selection.kind === 'inherit' ? 'inherit' : selection.model_id;
+}
+
+function subagentModelSelectionFromValue(value: string): SubagentModelSelection | undefined {
+  if (value === DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE) {
+    return undefined;
+  }
+  return value === 'inherit'
+    ? { kind: 'inherit' }
+    : { kind: 'fixed', model_id: value };
+}
 
 function getConfiguredEnabledSkillKeys(skills: ModeSkillInfo[]): string[] {
   return skills.filter((skill) => skill.effectiveEnabled).map((skill) => skill.key);
@@ -182,7 +203,6 @@ function buildSkillGroups(
 const AgentsHomeView: React.FC = () => {
   const { t } = useTranslation('scenes/agents');
   const notification = useNotification();
-  const { workspacePath } = useCurrentWorkspace();
   const [deletingAgent, setDeletingAgent] = useState(false);
   const {
     searchQuery,
@@ -193,10 +213,9 @@ const AgentsHomeView: React.FC = () => {
     setAgentFilterType,
     openCreateAgent,
     openEditAgent,
-    openReviewTeam,
   } = useAgentsStore();
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
-  const [activeCapabilityTab, setActiveCapabilityTab] = React.useState<CapabilityTab>('tools');
+  const [activeCapabilityTab, setActiveCapabilityTab] = React.useState<CapabilityTab | null>(null);
   const [toolsEditing, setToolsEditing] = React.useState(false);
   const [skillsEditing, setSkillsEditing] = React.useState(false);
   const [subagentsEditing, setSubagentsEditing] = React.useState(false);
@@ -206,14 +225,16 @@ const AgentsHomeView: React.FC = () => {
   const [savingTools, setSavingTools] = React.useState(false);
   const [savingSkills, setSavingSkills] = React.useState(false);
   const [savingSubagents, setSavingSubagents] = React.useState(false);
-  const [reviewTeam, setReviewTeam] = useState<ReviewTeam | null>(null);
+  const [savingSubagentModel, setSavingSubagentModel] = React.useState(false);
   const [computerUseEnabled, setComputerUseEnabled] = useState(true);
+  const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
 
   const {
     allAgents,
     filteredAgents,
     loading,
     availableTools,
+    configuredModels = [],
     getModeProfile,
     getModeSkills,
     getModeManageableSubagents,
@@ -226,6 +247,7 @@ const AgentsHomeView: React.FC = () => {
     handleSetSkills,
     handleResetSkills,
     handleSetSubagentEnabled,
+    handleSetSubagentModel,
   } = useAgentsList({
     searchQuery,
     filterLevel: agentFilterLevel,
@@ -237,32 +259,8 @@ const AgentsHomeView: React.FC = () => {
     sceneId: 'agents',
     refetch: () => {
       void loadAgents();
-      void loadDefaultReviewTeam(workspacePath || undefined).then(setReviewTeam).catch(() => {
-        setReviewTeam(null);
-      });
     },
   });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const loadedTeam = await loadDefaultReviewTeam(workspacePath || undefined);
-        if (!cancelled) {
-          setReviewTeam(loadedTeam);
-        }
-      } catch {
-        if (!cancelled) {
-          setReviewTeam(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspacePath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -342,16 +340,24 @@ const AgentsHomeView: React.FC = () => {
     () => (selectedAgent?.agentKind === 'mode' ? getModeManageableSubagents(selectedAgent.id) : []),
     [getModeManageableSubagents, selectedAgent],
   );
-  const selectedAgentTools = useMemo(() => (
+  const selectedAgentConfiguredTools = useMemo(() => (
     selectedAgent?.agentKind === 'mode'
       ? (selectedAgentModeConfig?.enabled_tools ?? selectedAgent.defaultTools ?? [])
       : (selectedAgent?.defaultTools ?? [])
   ), [selectedAgent, selectedAgentModeConfig]);
+  const selectedAgentTools = useMemo(
+    () => selectedAgentConfiguredTools.filter(isUserSelectableToolName),
+    [selectedAgentConfiguredTools],
+  );
+  const userSelectableAvailableTools = useMemo(
+    () => availableTools.filter((tool) => isUserSelectableToolName(tool.name)),
+    [availableTools],
+  );
   const selectedAgentHasSkillTool = selectedAgent?.agentKind === 'mode'
-    ? modeHasSkillTool(selectedAgentTools)
+    ? modeHasSkillTool(selectedAgentConfiguredTools)
     : false;
   const selectedAgentHasTaskTool = selectedAgent?.agentKind === 'mode'
-    ? modeHasTaskTool(selectedAgentTools)
+    ? modeHasTaskTool(selectedAgentConfiguredTools)
     : false;
   const selectedAgentEnabledSubagents = useMemo(
     () => selectedAgentManageableSubagents.filter((subagent) => subagent.effectiveEnabled),
@@ -398,29 +404,77 @@ const AgentsHomeView: React.FC = () => {
   }, [allAgents, selectedAgentModeProfile]);
   const selectedAgentUsesSharedProfile = (selectedAgentModeProfile?.memberModeIds.length ?? 0) > 1;
   const getDisplayedToolCount = useCallback((agent: AgentWithCapabilities): number => {
-    if (agent.agentKind === 'mode') {
-      return getModeConfig(agent.id)?.enabled_tools?.length
-        ?? agent.defaultTools?.length
-        ?? agent.toolCount
-        ?? 0;
+    const configuredTools = agent.agentKind === 'mode'
+      ? (getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools)
+      : agent.defaultTools;
+    if (configuredTools) {
+      return configuredTools.filter(isUserSelectableToolName).length;
     }
-    return agent.toolCount ?? agent.defaultTools?.length ?? 0;
+    return agent.toolCount ?? 0;
   }, [getModeConfig]);
   const selectedAgentToolCount = selectedAgent ? getDisplayedToolCount(selectedAgent) : 0;
+  const selectedSubagentModelValue = selectedAgent?.agentKind === 'subagent'
+    ? subagentModelOverrideValue(selectedAgent.subagentModelOverride)
+    : DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE;
+  const subagentModelOptions = useMemo<ModelSelectOption[]>(() => [
+    {
+      label: t('agentCard.modelSelector.default'),
+      value: DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE,
+    },
+    { label: t('agentCard.modelSelector.inherit'), value: 'inherit' },
+    { label: t('agentCard.modelSelector.fast'), value: 'fast' },
+    { label: t('agentCard.modelSelector.primary'), value: 'primary' },
+    { label: t('agentCard.modelSelector.auto'), value: 'auto' },
+    ...configuredModels
+      .filter((model): model is typeof model & { id: string } => (
+        typeof model.id === 'string'
+        && model.id.trim().length > 0
+        && model.enabled !== false
+        && (model.capabilities ?? []).includes('text_chat')
+      ))
+      .map(buildModelOption),
+  ], [buildModelOption, configuredModels, t]);
+  const handleSubagentModelChange = useCallback(async (
+    value: string | number | (string | number)[],
+  ) => {
+    if (!selectedAgent || selectedAgent.agentKind !== 'subagent' || savingSubagentModel) {
+      return;
+    }
+
+    setSavingSubagentModel(true);
+    try {
+      await handleSetSubagentModel(
+        selectedAgent.id,
+        subagentModelSelectionFromValue(normalizeSelectValue(value)),
+      );
+    } finally {
+      setSavingSubagentModel(false);
+    }
+  }, [handleSetSubagentModel, savingSubagentModel, selectedAgent]);
   const selectedAgentCapabilityTabs = useMemo(() => {
     const tabs: Array<{
       key: CapabilityTab;
       icon: typeof Wrench;
       label: string;
-      count: string;
+      count?: string;
     }> = [];
+
+    if (selectedAgent?.agentKind === 'subagent') {
+      tabs.push({
+        key: 'model',
+        icon: Cpu,
+        label: t('agentCard.modelSelector.label'),
+      });
+    }
 
     if (selectedAgentTools.length > 0) {
       const currentToolCount = selectedAgent?.agentKind === 'mode'
-        ? (toolsEditing ? (pendingTools ?? selectedAgentTools).length : selectedAgentTools.length)
+        ? (toolsEditing
+          ? (pendingTools ?? selectedAgentConfiguredTools).filter(isUserSelectableToolName).length
+          : selectedAgentTools.length)
         : selectedAgentTools.length;
       const totalToolCount = selectedAgent?.agentKind === 'mode'
-        ? availableTools.length
+        ? userSelectableAvailableTools.length
         : selectedAgentTools.length;
 
       tabs.push({
@@ -456,11 +510,12 @@ const AgentsHomeView: React.FC = () => {
 
     return tabs;
   }, [
-    availableTools.length,
+    userSelectableAvailableTools.length,
     pendingSkills,
     pendingSubagentIds,
     pendingTools,
     selectedAgent,
+    selectedAgentConfiguredTools,
     selectedAgentEnabledSubagentIds,
     selectedAgentHasSkillTool,
     selectedAgentHasTaskTool,
@@ -483,7 +538,9 @@ const AgentsHomeView: React.FC = () => {
     ? toolsEditing
     : currentCapabilityTab === 'skills'
       ? skillsEditing
-      : subagentsEditing;
+      : currentCapabilityTab === 'subagents'
+        ? subagentsEditing
+        : false;
   const resetEditState = useCallback(() => {
     setToolsEditing(false);
     setSkillsEditing(false);
@@ -526,19 +583,19 @@ const AgentsHomeView: React.FC = () => {
 
   const openAgentDetails = useCallback((agent: AgentWithCapabilities) => {
     setSelectedAgentId(agent.id);
-    setActiveCapabilityTab('tools');
+    setActiveCapabilityTab(null);
     resetEditState();
   }, [resetEditState]);
 
   const closeAgentDetails = useCallback(() => {
     setSelectedAgentId(null);
-    setActiveCapabilityTab('tools');
+    setActiveCapabilityTab(null);
     resetEditState();
   }, [resetEditState]);
 
   useEffect(() => {
     if (!selectedAgentCapabilityTabs.some((tab) => tab.key === activeCapabilityTab)) {
-      setActiveCapabilityTab(selectedAgentCapabilityTabs[0]?.key ?? 'tools');
+      setActiveCapabilityTab(selectedAgentCapabilityTabs[0]?.key ?? null);
     }
   }, [activeCapabilityTab, selectedAgentCapabilityTabs]);
 
@@ -588,14 +645,6 @@ const AgentsHomeView: React.FC = () => {
               data-testid="agents-anchor-core"
             >
               {t('nav.coreAgents')}
-            </button>
-            <button
-              type="button"
-              className="gallery-anchor-btn"
-              onClick={() => scrollToZone('teams-zone')}
-              data-testid="agents-anchor-teams"
-            >
-              {t('nav.teams')}
             </button>
             <button
               type="button"
@@ -674,51 +723,6 @@ const AgentsHomeView: React.FC = () => {
               ))}
             </div>
           )}
-        </GalleryZone>
-
-        <GalleryZone
-          id="teams-zone"
-          data-testid="agents-teams-zone"
-          title={t('teamsZone.title')}
-          subtitle={t('teamsZone.subtitle')}
-          tools={(
-            <>
-              <button
-                type="button"
-                className="gallery-action-btn"
-                onClick={openReviewTeam}
-                data-testid="agents-review-team-configure-btn"
-              >
-                <ShieldCheck size={15} />
-                <span>{t('reviewTeams.detail.open')}</span>
-              </button>
-              <span className="gallery-zone-count">{reviewTeam ? 1 : 0}</span>
-            </>
-          )}
-        >
-          {loading && !reviewTeam ? renderSkeletons('team') : null}
-
-          {!loading && reviewTeam ? (
-            <GalleryGrid minCardWidth={360}>
-              <AgentTeamCard
-                index={0}
-                title={t('reviewTeams.default.name')}
-                subtitle={t('reviewTeams.default.summary')}
-                roleName={t('reviewTeams.detail.localOnly')}
-                tagNames={t('reviewTeams.default.tags', {
-                  returnObjects: true
-                }) as string[]}
-                onOpen={openReviewTeam}
-              />
-            </GalleryGrid>
-          ) : null}
-
-          {!loading && !reviewTeam ? (
-            <GalleryEmpty
-              icon={<ShieldCheck size={32} strokeWidth={1.5} />}
-              message={t('teamsZone.empty')}
-            />
-          ) : null}
         </GalleryZone>
 
         <GalleryZone
@@ -846,7 +850,6 @@ const AgentsHomeView: React.FC = () => {
                 ).label
               }
             </Badge>
-            {selectedAgent.model ? <Badge variant="neutral">{selectedAgent.model}</Badge> : null}
           </>
         ) : null}
         description={selectedAgent
@@ -931,7 +934,7 @@ const AgentsHomeView: React.FC = () => {
                         >
                           <TabIcon size={12} />
                           <span>{tab.label}</span>
-                          {isActive ? (
+                          {isActive && tab.count ? (
                             <span className="agent-card__tab-count">{tab.count}</span>
                           ) : null}
                         </button>
@@ -1093,7 +1096,7 @@ const AgentsHomeView: React.FC = () => {
                           size="small"
                           onClick={() => {
                             if (currentCapabilityTab === 'tools') {
-                              setPendingTools([...selectedAgentTools]);
+                              setPendingTools([...selectedAgentConfiguredTools]);
                               setToolsEditing(true);
                               return;
                             }
@@ -1113,12 +1116,27 @@ const AgentsHomeView: React.FC = () => {
                   ) : null}
                 </div>
 
+                {currentCapabilityTab === 'model' && selectedAgent.agentKind === 'subagent' ? (
+                  <Select
+                    size="small"
+                    searchable
+                    className="bitfun-agents-scene__subagent-model-select model-select-presentation__select"
+                    options={subagentModelOptions}
+                    value={selectedSubagentModelValue}
+                    onChange={(value) => void handleSubagentModelChange(value)}
+                    renderOption={renderModelOption}
+                    renderValue={renderModelValue}
+                    disabled={savingSubagentModel}
+                    triggerTestId="agent-detail-subagent-model-select"
+                  />
+                ) : null}
+
                 {currentCapabilityTab === 'tools' ? (
                   selectedAgent.agentKind === 'mode' && toolsEditing ? (
                     <div className="agent-card__token-grid">
-                      {[...availableTools]
+                      {[...userSelectableAvailableTools]
                         .sort((a, b) => {
-                          const draft = pendingTools ?? selectedAgentTools;
+                          const draft = pendingTools ?? selectedAgentConfiguredTools;
                           const aOn = draft.includes(a.name);
                           const bOn = draft.includes(b.name);
                           if (aOn && !bOn) return -1;
@@ -1126,7 +1144,7 @@ const AgentsHomeView: React.FC = () => {
                           return 0;
                         })
                         .map((tool) => {
-                          const draft = pendingTools ?? selectedAgentTools;
+                          const draft = pendingTools ?? selectedAgentConfiguredTools;
                           const isOn = draft.includes(tool.name);
                           return (
                             <button
@@ -1136,7 +1154,7 @@ const AgentsHomeView: React.FC = () => {
                               title={tool.description || tool.name}
                               onClick={() => {
                                 setPendingTools((prev) => {
-                                  const current = prev ?? selectedAgentTools;
+                                  const current = prev ?? selectedAgentConfiguredTools;
                                   return isOn
                                     ? current.filter((n) => n !== tool.name)
                                     : [...current, tool.name];
@@ -1380,16 +1398,6 @@ const AgentsScene: React.FC = () => {
     return (
       <div className="bitfun-agents-scene bitfun-agents-scene--page">
         <CreateAgentPage />
-      </div>
-    );
-  }
-
-  if (page === 'reviewTeam') {
-    return (
-      <div className="bitfun-agents-scene bitfun-agents-scene--page">
-        <ReviewTeamErrorBoundary>
-          <ReviewTeamPage />
-        </ReviewTeamErrorBoundary>
       </div>
     );
   }

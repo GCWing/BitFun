@@ -1,4 +1,7 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
+@use '../../../../component-library/styles/flowchat-markdown-code-vars' as markdownCode;
+@use '../../../../component-library/styles/flowchat-markdown-table-vars' as markdownTable;
+@use '../../styles/markdown-editor-layout' as markdownLayout;
 
 .m-editor-tiptap {
   --private-markdown-editor-highlight-rgb: 255, 213, 79;
@@ -120,33 +123,35 @@
     }
 
     blockquote {
-      margin: var(--flowchat-md-bq-margin);
-      padding: var(--flowchat-md-bq-padding);
+      margin: markdownCode.$bq-margin;
+      padding: markdownCode.$bq-padding;
       font-style: italic;
-      color: var(--flowchat-md-bq-fg);
-      background: var(--flowchat-md-bq-bg);
-      border-left: 3px solid var(--flowchat-md-bq-border);
-      border-radius: var(--flowchat-md-bq-radius);
+      color: markdownCode.$bq-fg;
+      background: markdownCode.$bq-bg;
+      border-left: 3px solid markdownCode.$bq-border;
+      border-radius: markdownCode.$bq-radius;
     }
 
     pre {
       margin: 0.25rem 0.3rem;
-      padding: var(--flowchat-md-pre-padding);
+      padding: markdownCode.$pre-padding;
       overflow-x: auto;
-      font-size: var(--flowchat-md-pre-font-size);
+      font-size: var(--flowchat-code-font-size);
       line-height: 1.5;
-      font-family: var(--flowchat-md-code-font-mono);
-      color: var(--flowchat-md-pre-code-fg);
-      background: var(--flowchat-md-pre-bg);
-      border: 1px var(--flowchat-md-pre-border-style) var(--flowchat-md-pre-border);
-      border-radius: var(--flowchat-md-pre-radius);
-      box-shadow: var(--flowchat-md-pre-shadow);
-      transition: all 0.3s ease;
+      font-family: var(--font-family-mono);
+      color: markdownCode.$pre-code-fg;
+      background: markdownCode.$pre-bg;
+      border: 1px dashed markdownCode.$pre-border;
+      border-radius: var(--flowchat-card-radius);
+      box-shadow: markdownCode.$pre-shadow;
+      transition:
+        border-color 0.3s ease,
+        box-shadow 0.3s ease;
 
       &:hover {
         border-style: solid;
-        border-color: var(--flowchat-md-pre-hover-border);
-        box-shadow: var(--flowchat-md-pre-hover-shadow);
+        border-color: markdownCode.$pre-hover-border;
+        box-shadow: markdownCode.$pre-hover-shadow;
       }
     }
 
@@ -158,19 +163,22 @@
       line-height: 1.4;
       vertical-align: baseline;
       white-space: nowrap;
-      font-family: var(--flowchat-md-code-font-mono);
-      color: var(--flowchat-md-inline-code-fg);
-      background: var(--flowchat-md-inline-code-bg);
-      border: 1px solid var(--flowchat-md-inline-code-border);
+      font-family: var(--font-family-mono);
+      color: markdownCode.$inline-code-fg;
+      background: markdownCode.$inline-code-bg;
+      border: 1px solid markdownCode.$inline-code-border;
       border-radius: 4px;
-      transition: all 0.15s ease;
+      transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
 
       &:hover {
-        background: var(--flowchat-md-inline-code-hover-bg);
-        border-color: var(--flowchat-md-inline-code-hover-border);
-        color: var(--flowchat-md-inline-code-hover-fg);
+        background: markdownCode.$inline-code-hover-bg;
+        border-color: markdownCode.$inline-code-hover-border;
+        color: markdownCode.$inline-code-hover-fg;
       }
     }
 
@@ -178,7 +186,7 @@
       display: block;
       padding: 0;
       margin: 0;
-      font-size: var(--flowchat-md-pre-font-size);
+      font-size: var(--flowchat-code-font-size);
       font-weight: inherit;
       white-space: pre-wrap;
       word-break: break-word;
@@ -225,10 +233,10 @@
       margin: $size-gap-4 0;
       table-layout: fixed;
       font-size: 0.85rem;
-      border: 1px solid var(--flowchat-md-table-border);
-      border-radius: var(--flowchat-md-table-radius);
-      background: var(--flowchat-md-table-surface);
-      box-shadow: var(--flowchat-md-table-shadow);
+      border: 1px solid markdownTable.$border;
+      border-radius: var(--flowchat-card-radius);
+      background: markdownTable.$surface;
+      box-shadow: markdownTable.$shadow;
       overflow: hidden;
     }
 
@@ -236,7 +244,7 @@
     td {
       padding: $size-gap-3 $size-gap-4;
       border: none;
-      border-bottom: 1px solid var(--flowchat-md-table-cell-border);
+      border-bottom: 1px solid markdownTable.$cell-border;
       vertical-align: top;
       min-width: 5rem;
       word-break: break-word;
@@ -248,18 +256,18 @@
 
     th {
       font-weight: $font-weight-semibold;
-      background: var(--flowchat-md-table-th-bg);
-      color: var(--flowchat-md-table-th-fg);
+      background: markdownTable.$th-bg;
+      color: markdownTable.$th-fg;
     }
 
     td {
-      color: var(--flowchat-md-table-td-fg);
+      color: var(--color-text-primary);
     }
 
     th + th,
     td + td,
     th + td {
-      border-left: 1px solid var(--flowchat-md-table-col-divider);
+      border-left: 1px solid markdownTable.$col-divider;
     }
 
     tbody tr:last-child td,
@@ -268,19 +276,19 @@
     }
 
     tbody tr {
-      background: var(--flowchat-md-table-row-base);
+      background: markdownTable.$row-base;
     }
 
     tbody tr:nth-child(2n) {
-      background: var(--flowchat-md-table-row-stripe);
+      background: markdownTable.$row-stripe;
     }
 
     tbody tr:hover {
-      background: var(--flowchat-md-table-hover);
+      background: markdownTable.$hover;
     }
 
     thead tr:hover {
-      background: var(--flowchat-md-table-hover);
+      background: markdownTable.$hover;
     }
 
     thead tr:hover th,
@@ -291,30 +299,30 @@
 
     tbody tr:first-child th:first-child,
     thead th:first-child {
-      border-top-left-radius: var(--flowchat-md-table-radius);
+      border-top-left-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:first-child th:last-child,
     thead th:last-child {
-      border-top-right-radius: var(--flowchat-md-table-radius);
+      border-top-right-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:last-child td:first-child,
     tbody tr:last-child th:first-child {
-      border-bottom-left-radius: var(--flowchat-md-table-radius);
+      border-bottom-left-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:last-child td:last-child,
     tbody tr:last-child th:last-child {
-      border-bottom-right-radius: var(--flowchat-md-table-radius);
+      border-bottom-right-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:first-child th:only-child {
-      border-radius: var(--flowchat-md-table-radius) var(--flowchat-md-table-radius) 0 0;
+      border-radius: var(--flowchat-card-radius) var(--flowchat-card-radius) 0 0;
     }
 
     tbody tr:last-child td:only-child {
-      border-radius: 0 0 var(--flowchat-md-table-radius) var(--flowchat-md-table-radius);
+      border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
     }
 
     th code,
@@ -343,7 +351,7 @@
       list-style: none;
       position: relative;
       margin-bottom: $size-gap-1;
-      padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
+      padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
     }
 
     > ul:not([data-type='taskList']) > li::before,
@@ -351,7 +359,7 @@
       position: absolute;
       left: 0;
       top: 0;
-      width: var(--markdown-editor-list-marker-width);
+      width: markdownLayout.$list-marker-width;
       color: var(--color-text-primary);
       font-weight: $font-weight-medium;
     }
@@ -378,7 +386,7 @@
     li > ol:not([data-type='taskList']) {
       margin-top: $size-gap-1;
       margin-bottom: 0;
-      padding-left: var(--markdown-editor-list-indent);
+      padding-left: markdownLayout.$list-indent;
     }
 
     > ul[data-type='taskList'] {
@@ -389,14 +397,14 @@
 
     > ul[data-type='taskList'] > li {
       display: grid;
-      grid-template-columns: var(--markdown-editor-list-marker-width) 1fr;
-      column-gap: var(--markdown-editor-list-gap);
+      grid-template-columns: markdownLayout.$list-marker-width 1fr;
+      column-gap: markdownLayout.$list-gap;
       align-items: start;
       margin-bottom: $size-gap-1;
     }
 
     > ul[data-type='taskList'] > li > label {
-      width: var(--markdown-editor-list-marker-width);
+      width: markdownLayout.$list-marker-width;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -405,8 +413,8 @@
 
     > ul[data-type='taskList'] > li > label > input[type='checkbox'] {
       margin: 0;
-      width: var(--markdown-editor-task-checkbox-size);
-      height: var(--markdown-editor-task-checkbox-size);
+      width: markdownLayout.$task-checkbox-size;
+      height: markdownLayout.$task-checkbox-size;
     }
 
     > ul[data-type='taskList'] > li > label > span {
@@ -422,7 +430,7 @@
     ul[data-type='taskList'] li > ol {
       margin-top: $size-gap-1;
       margin-bottom: 0;
-      padding-left: var(--markdown-editor-list-indent);
+      padding-left: markdownLayout.$list-indent;
     }
 
     li > p {
@@ -825,13 +833,13 @@
 
   .m-editor-inline-ai-rendered__content.markdown-body blockquote {
     margin: 0 0 6px;
-    padding: var(--flowchat-md-bq-padding);
+    padding: markdownCode.$bq-padding;
     font-style: italic;
     font-size: var(--font-size-2xs);
-    color: var(--flowchat-md-bq-fg);
-    background: var(--flowchat-md-bq-bg);
-    border-left: 3px solid var(--flowchat-md-bq-border);
-    border-radius: var(--flowchat-md-bq-radius);
+    color: markdownCode.$bq-fg;
+    background: markdownCode.$bq-bg;
+    border-left: 3px solid markdownCode.$bq-border;
+    border-radius: markdownCode.$bq-radius;
     opacity: 1;
   }
 
@@ -840,19 +848,21 @@
     padding: 8px 10px;
     font-size: var(--font-size-2xs);
     line-height: 1.45;
-    font-family: var(--flowchat-md-code-font-mono);
-    color: var(--flowchat-md-pre-code-fg);
-    background: var(--flowchat-md-pre-bg);
-    border: 1px var(--flowchat-md-pre-border-style) var(--flowchat-md-pre-border);
-    border-radius: var(--flowchat-md-pre-radius);
-    box-shadow: var(--flowchat-md-pre-shadow);
+    font-family: var(--font-family-mono);
+    color: markdownCode.$pre-code-fg;
+    background: markdownCode.$pre-bg;
+    border: 1px dashed markdownCode.$pre-border;
+    border-radius: var(--flowchat-card-radius);
+    box-shadow: markdownCode.$pre-shadow;
     overflow-x: auto;
-    transition: all 0.3s ease;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
 
     &:hover {
       border-style: solid;
-      border-color: var(--flowchat-md-pre-hover-border);
-      box-shadow: var(--flowchat-md-pre-hover-shadow);
+      border-color: markdownCode.$pre-hover-border;
+      box-shadow: markdownCode.$pre-hover-shadow;
     }
   }
 
@@ -877,10 +887,10 @@
     padding: 0.1em 0.35em;
     font-size: 0.9em;
     font-weight: 500;
-    font-family: var(--flowchat-md-code-font-mono);
-    color: var(--flowchat-md-inline-code-fg);
-    background: var(--flowchat-md-inline-code-bg);
-    border: 1px solid var(--flowchat-md-inline-code-border);
+    font-family: var(--font-family-mono);
+    color: markdownCode.$inline-code-fg;
+    background: markdownCode.$inline-code-bg;
+    border: 1px solid markdownCode.$inline-code-border;
     border-radius: 4px;
   }
 
@@ -963,7 +973,7 @@
 
   .m-editor-raw-html-inline__source {
     margin: 0;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--font-size-xs);
     white-space: pre-wrap;
     word-break: break-word;
@@ -1000,7 +1010,7 @@
   .m-editor-render-only-block__textarea,
   .m-editor-raw-html-block__textarea {
     margin: 0;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--font-size-sm);
     display: block;
     width: 100%;
@@ -1062,7 +1072,7 @@
   .m-editor-raw-html-block__source-fallback {
     display: none;
     margin: 0;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--font-size-sm);
     white-space: pre-wrap;
     word-break: break-word;
@@ -1234,5 +1244,118 @@
 
   .m-editor-details-block__content > :last-child {
     margin-bottom: 0;
+  }
+}
+
+:root[data-theme="light"] .m-editor-tiptap,
+:root[data-theme-type="light"] .m-editor-tiptap,
+[data-theme-type="light"] .m-editor-tiptap,
+.light .m-editor-tiptap {
+  .ProseMirror {
+    blockquote {
+      color: markdownCode.$bq-fg-light;
+      background: markdownCode.$bq-bg-light;
+      border-left-color: markdownCode.$bq-border-light;
+    }
+
+    pre {
+      color: markdownCode.$pre-code-fg-light;
+      background: markdownCode.$pre-bg-light;
+      border-color: markdownCode.$pre-border-light;
+      box-shadow: markdownCode.$pre-shadow-light;
+
+      &:hover {
+        border-color: markdownCode.$pre-hover-border-light;
+        box-shadow: markdownCode.$pre-hover-shadow-light;
+      }
+    }
+
+    code {
+      color: markdownCode.$inline-code-fg-light;
+      background: markdownCode.$inline-code-bg-light;
+      border-color: markdownCode.$inline-code-border-light;
+
+      &:hover {
+        background: markdownCode.$inline-code-hover-bg-light;
+        border-color: markdownCode.$inline-code-hover-border-light;
+        color: markdownCode.$inline-code-hover-fg-light;
+      }
+    }
+
+    pre code,
+    pre code:hover {
+      color: inherit;
+      background: transparent !important;
+      border: none !important;
+    }
+
+    table {
+      border-color: markdownTable.$border-light;
+      background: markdownTable.$surface-light;
+      box-shadow: markdownTable.$shadow-light;
+    }
+
+    th,
+    td {
+      border-bottom-color: markdownTable.$cell-border-light;
+    }
+
+    th {
+      background: markdownTable.$th-bg-light;
+      color: markdownTable.$th-fg-light;
+    }
+
+    th + th,
+    td + td,
+    th + td {
+      border-left-color: markdownTable.$col-divider-light;
+    }
+
+    tbody tr {
+      background: markdownTable.$row-base-light;
+    }
+
+    tbody tr:nth-child(2n) {
+      background: markdownTable.$row-stripe-light;
+    }
+
+    tbody tr:hover,
+    thead tr:hover {
+      background: markdownTable.$hover-light;
+    }
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body blockquote {
+    color: markdownCode.$bq-fg-light;
+    background: markdownCode.$bq-bg-light;
+    border-left-color: markdownCode.$bq-border-light;
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body pre {
+    color: markdownCode.$pre-code-fg-light;
+    background: markdownCode.$pre-bg-light;
+    border-color: markdownCode.$pre-border-light;
+    box-shadow: markdownCode.$pre-shadow-light;
+
+    &:hover {
+      border-color: markdownCode.$pre-hover-border-light;
+      box-shadow: markdownCode.$pre-hover-shadow-light;
+    }
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body pre code {
+    color: inherit;
+    background: transparent;
+    border: none;
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body :not(pre) > code,
+  .m-editor-inline-ai-rendered__content.markdown-body p code,
+  .m-editor-inline-ai-rendered__content.markdown-body li code,
+  .m-editor-inline-ai-rendered__content.markdown-body td code,
+  .m-editor-inline-ai-rendered__content.markdown-body th code {
+    color: markdownCode.$inline-code-fg-light;
+    background: markdownCode.$inline-code-bg-light;
+    border-color: markdownCode.$inline-code-border-light;
   }
 }

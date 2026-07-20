@@ -17,8 +17,10 @@ const loggerMocks = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/api/event', () => ({
-  listen: eventMocks.listen,
+vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
+  api: {
+    listen: eventMocks.listen,
+  },
 }));
 
 vi.mock('@/infrastructure/api', () => ({
@@ -40,7 +42,7 @@ describe('TauriExplorerFileSystemProvider watches', () => {
     vi.clearAllMocks();
     workspaceApiMocks.startFileWatch.mockResolvedValue(undefined);
     workspaceApiMocks.stopFileWatch.mockResolvedValue(undefined);
-    eventMocks.listen.mockResolvedValue(vi.fn());
+    eventMocks.listen.mockReturnValue(vi.fn());
   });
 
   it('passes explicit non-recursive watcher requests to the backend', async () => {
@@ -55,9 +57,11 @@ describe('TauriExplorerFileSystemProvider watches', () => {
   });
 
   it('does not dispatch deep child events for non-recursive watches', async () => {
-    let tauriListener: ((event: { payload: Array<{ path: string; kind: string; timestamp: number }> }) => void) | undefined;
-    eventMocks.listen.mockImplementation(async (_event, listener) => {
-      tauriListener = listener;
+    let fileListener:
+      | ((events: Array<{ path: string; kind: string; timestamp: number }>) => void)
+      | undefined;
+    eventMocks.listen.mockImplementation((_event, listener) => {
+      fileListener = listener;
       return vi.fn();
     });
     const callback = vi.fn();
@@ -65,15 +69,13 @@ describe('TauriExplorerFileSystemProvider watches', () => {
 
     const unwatch = provider.watch('C:\\large\\repo', callback, { recursive: false });
     await vi.waitFor(() => {
-      expect(tauriListener).toBeDefined();
+      expect(fileListener).toBeDefined();
     });
 
-    tauriListener?.({
-      payload: [
-        { path: 'C:\\large\\repo\\src', kind: 'modify', timestamp: 1 },
-        { path: 'C:\\large\\repo\\src\\nested.ts', kind: 'modify', timestamp: 1 },
-      ],
-    });
+    fileListener?.([
+      { path: 'C:\\large\\repo\\src', kind: 'modify', timestamp: 1 },
+      { path: 'C:\\large\\repo\\src\\nested.ts', kind: 'modify', timestamp: 1 },
+    ]);
 
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({

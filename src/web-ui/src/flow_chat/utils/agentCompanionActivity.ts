@@ -5,6 +5,11 @@ import { deriveChatInputPetMood, type ChatInputPetMood } from './chatInputPetMoo
 import type { DialogTurn, FlowToolItem, FlowTextItem, FlowThinkingItem, Session } from '../types/flow-chat';
 import { resolveSessionRelationship } from './sessionMetadata';
 import { toWellFormedText } from '@/shared/utils/wellFormedText';
+import {
+  findPendingAskUserQuestion,
+  TRANSIENT_TURN_STATUSES,
+} from './askUserQuestionState';
+import { effectiveToolInvocation } from './toolInvocationIdentity';
 
 export type AgentCompanionTaskState =
   | 'running'
@@ -40,20 +45,7 @@ const EMPTY_ACTIVITY: AgentCompanionActivityPayload = {
 
 const taskOrderBySessionId = new Map<string, number>();
 let nextTaskOrder = 0;
-const TRANSIENT_TURN_STATUSES = new Set<DialogTurn['status']>([
-  'pending',
-  'image_analyzing',
-  'processing',
-  'finishing',
-  'cancelling',
-]);
 const LATEST_OUTPUT_MAX_CHARS = 512;
-const TERMINAL_TOOL_STATUSES = new Set<FlowToolItem['status']>([
-  'completed',
-  'error',
-  'cancelled',
-  'rejected',
-]);
 
 function ensureTaskOrder(sessionId: string): number {
   const existingOrder = taskOrderBySessionId.get(sessionId);
@@ -135,12 +127,12 @@ function latestAssistantSnippet(turn: DialogTurn | undefined): string | undefine
 }
 
 function extractAskUserQuestionText(tool: FlowToolItem): string | undefined {
-  const input = tool.toolCall?.input;
+  const input = effectiveToolInvocation(tool.toolName, tool.toolCall?.input).input;
   if (!input || typeof input !== 'object') {
     return undefined;
   }
 
-  const questions = input.questions;
+  const questions = (input as Record<string, unknown>).questions;
   if (!Array.isArray(questions) || questions.length === 0) {
     return undefined;
   }
@@ -148,35 +140,6 @@ function extractAskUserQuestionText(tool: FlowToolItem): string | undefined {
   const firstQuestion = questions[0]?.question;
   if (typeof firstQuestion === 'string' && firstQuestion.trim()) {
     return truncateLatestOutput(firstQuestion);
-  }
-
-  return undefined;
-}
-
-function findPendingAskUserQuestion(
-  turn: DialogTurn | undefined,
-): FlowToolItem | undefined {
-  if (!turn || !TRANSIENT_TURN_STATUSES.has(turn.status)) {
-    return undefined;
-  }
-
-  for (let roundIndex = turn.modelRounds.length - 1; roundIndex >= 0; roundIndex -= 1) {
-    const round = turn.modelRounds[roundIndex];
-    for (let itemIndex = round.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
-      const item = round.items[itemIndex];
-      if (
-        item.type === 'tool'
-        && item.toolName === 'AskUserQuestion'
-        && !TERMINAL_TOOL_STATUSES.has(item.status)
-        && !item.isParamsStreaming
-      ) {
-        const input = item.toolCall?.input;
-        const questions = input && typeof input === 'object' ? input.questions : undefined;
-        if (Array.isArray(questions) && questions.length > 0) {
-          return item;
-        }
-      }
-    }
   }
 
   return undefined;

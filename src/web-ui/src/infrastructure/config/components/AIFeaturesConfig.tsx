@@ -50,11 +50,11 @@ const AIFeaturesConfig: React.FC = () => {
       const [
         loadedSettings,
         allModels,
-        funcAgentModelsData
+        funcAgentModelsData,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
-        configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {}
+        configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
       ]);
 
       setSettings(loadedSettings);
@@ -215,6 +215,7 @@ const AIFeaturesConfig: React.FC = () => {
             </ConfigPageSection>
           );
         })}
+
       </ConfigPageContent>
     </ConfigPageLayout>
   );

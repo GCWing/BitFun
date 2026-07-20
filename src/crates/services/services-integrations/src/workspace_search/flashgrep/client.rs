@@ -40,7 +40,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 const DROP_CLEANUP_TIMEOUT: Duration = Duration::from_millis(150);
 
 #[derive(Debug, Clone)]
-pub struct ManagedClient {
+pub(crate) struct ManagedClient {
     daemon_program: Option<OsString>,
     start_timeout: Duration,
     retry_interval: Duration,
@@ -50,7 +50,7 @@ pub struct ManagedClient {
 }
 
 #[derive(Debug)]
-pub struct RepoSession {
+pub(crate) struct RepoSession {
     repo_id: String,
     client: ManagedClient,
 }
@@ -95,26 +95,26 @@ impl Default for ManagedClient {
 }
 
 impl ManagedClient {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_daemon_program(mut self, program: impl Into<OsString>) -> Self {
+    pub(crate) fn with_daemon_program(mut self, program: impl Into<OsString>) -> Self {
         self.daemon_program = Some(program.into());
         self
     }
 
-    pub fn with_start_timeout(mut self, timeout: Duration) -> Self {
+    pub(crate) fn with_start_timeout(mut self, timeout: Duration) -> Self {
         self.start_timeout = timeout;
         self
     }
 
-    pub fn with_retry_interval(mut self, interval: Duration) -> Self {
+    pub(crate) fn with_retry_interval(mut self, interval: Duration) -> Self {
         self.retry_interval = interval;
         self
     }
 
-    pub async fn open_repo(&self, params: OpenRepoParams) -> Result<RepoSession> {
+    pub(crate) async fn open_repo(&self, params: OpenRepoParams) -> Result<RepoSession> {
         match self
             .send_request_with_restart(Request::OpenRepo { params })
             .await?
@@ -127,7 +127,7 @@ impl ManagedClient {
         }
     }
 
-    pub async fn shutdown_daemon(&self) -> Result<()> {
+    pub(crate) async fn shutdown_daemon(&self) -> Result<()> {
         self.shutting_down.store(true, Ordering::Relaxed);
         let daemon = self.state.lock().await.daemon.take();
         if let Some(daemon) = daemon {
@@ -136,7 +136,7 @@ impl ManagedClient {
         Ok(())
     }
 
-    pub async fn stop_daemon(&self) -> Result<()> {
+    pub(crate) async fn stop_daemon(&self) -> Result<()> {
         let daemon = self.state.lock().await.daemon.take();
         if let Some(daemon) = daemon {
             daemon.shutdown().await?;
@@ -250,7 +250,7 @@ impl ManagedClient {
 }
 
 impl RepoSession {
-    pub async fn status(&self) -> Result<RepoStatus> {
+    pub(crate) async fn status(&self) -> Result<RepoStatus> {
         self.send_repo_request(
             "get_repo_status",
             Request::GetRepoStatus {
@@ -265,7 +265,7 @@ impl RepoSession {
         .await
     }
 
-    pub async fn search(&self, request: SearchRequest) -> Result<SearchOutcome> {
+    pub(crate) async fn search(&self, request: SearchRequest) -> Result<SearchOutcome> {
         self.send_repo_request(
             "search",
             Request::Search {
@@ -294,7 +294,7 @@ impl RepoSession {
         .await
     }
 
-    pub async fn glob(&self, request: GlobRequest) -> Result<GlobOutcome> {
+    pub(crate) async fn glob(&self, request: GlobRequest) -> Result<GlobOutcome> {
         self.send_repo_request(
             "glob",
             Request::Glob {
@@ -312,7 +312,7 @@ impl RepoSession {
         .await
     }
 
-    pub async fn index_build(&self) -> Result<TaskStatus> {
+    pub(crate) async fn index_build(&self) -> Result<TaskStatus> {
         self.send_repo_request(
             "base_snapshot/build",
             Request::BaseSnapshotBuild {
@@ -327,7 +327,7 @@ impl RepoSession {
         .await
     }
 
-    pub async fn index_rebuild(&self) -> Result<TaskStatus> {
+    pub(crate) async fn index_rebuild(&self) -> Result<TaskStatus> {
         self.send_repo_request(
             "base_snapshot/rebuild",
             Request::BaseSnapshotRebuild {
@@ -342,7 +342,7 @@ impl RepoSession {
         .await
     }
 
-    pub async fn task_status(&self, task_id: impl Into<String>) -> Result<TaskStatus> {
+    pub(crate) async fn task_status(&self, task_id: impl Into<String>) -> Result<TaskStatus> {
         self.send_repo_request(
             "task/status",
             Request::TaskStatus {
@@ -359,7 +359,7 @@ impl RepoSession {
         .await
     }
 
-    pub async fn close(&self) -> Result<()> {
+    pub(crate) async fn close(&self) -> Result<()> {
         self.send_repo_request(
             "close_repo",
             Request::CloseRepo {

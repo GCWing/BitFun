@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Embedded Browser Video Stream Fixture</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: #f6f7f9;
+      background: #111418;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) 280px;
+      gap: 16px;
+      width: 100vw;
+      height: 100vh;
+      padding: 16px;
+    }
+
+    .stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid #3b424e;
+      border-radius: 8px;
+      background: #07090c;
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .phone-frame {
+      position: absolute;
+      top: 8%;
+      left: 50%;
+      width: min(42vw, 360px);
+      aspect-ratio: 9 / 19.5;
+      transform: translateX(-50%);
+      border: 8px solid rgba(255, 255, 255, 0.22);
+      border-radius: 28px;
+      pointer-events: none;
+    }
+
+    aside {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid #3b424e;
+      border-radius: 8px;
+      background: #191f27;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 650;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    dt {
+      color: #aeb7c4;
+    }
+
+    dd {
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    button {
+      height: 32px;
+      border: 1px solid #677080;
+      border-radius: 6px;
+      color: #f6f7f9;
+      background: #26303d;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #303b4b;
+    }
+
+    .status {
+      min-height: 24px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      color: #102015;
+      background: #8ee6a4;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    @media (max-width: 720px) {
+      main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+
+      aside {
+        max-height: 38vh;
+        overflow: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="stage">
+      <video id="preview" autoplay muted playsinline></video>
+      <div class="phone-frame" aria-hidden="true"></div>
+    </section>
+    <aside>
+      <h1>Video stream fixture</h1>
+      <div id="status" class="status">Starting stream</div>
+      <dl>
+        <dt>Frames</dt><dd id="frames">0</dd>
+        <dt>Approx FPS</dt><dd id="fps">0</dd>
+        <dt>Long gaps</dt><dd id="gaps">0</dd>
+        <dt>Green samples</dt><dd id="green">0</dd>
+        <dt>Resolution</dt><dd id="resolution">0 x 0</dd>
+      </dl>
+      <button id="size">Toggle stage size</button>
+      <button id="stress">Toggle stress motion</button>
+    </aside>
+  </main>
+
+  <script>
+    const width = 1280;
+    const height = 720;
+    const canvas = document.createElement('canvas');
+    const sample = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const sampleCtx = sample.getContext('2d', { willReadFrequently: true });
+    const video = document.getElementById('preview');
+    const status = document.getElementById('status');
+    const framesEl = document.getElementById('frames');
+    const fpsEl = document.getElementById('fps');
+    const gapsEl = document.getElementById('gaps');
+    const greenEl = document.getElementById('green');
+    const resolutionEl = document.getElementById('resolution');
+    const stage = document.querySelector('.stage');
+
+    canvas.width = width;
+    canvas.height = height;
+    sample.width = 96;
+    sample.height = 54;
+
+    let stressMotion = true;
+    let compact = false;
+    let startedAt = performance.now();
+    let lastVideoFrameAt = 0;
+    let frames = 0;
+    let longGaps = 0;
+    let greenSamples = 0;
+    let tick = 0;
+
+    function drawPhoneFrame(now) {
+      const swipe = Math.sin(now / 260);
+      const scroll = (now / 18) % 560;
+
+      ctx.fillStyle = '#10141b';
+      ctx.fillRect(0, 0, width, height);
+
+      const hue = (now / 38) % 360;
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, `hsl(${hue}, 84%, 58%)`);
+      gradient.addColorStop(0.45, `hsl(${(hue + 96) % 360}, 76%, 46%)`);
+      gradient.addColorStop(1, `hsl(${(hue + 190) % 360}, 72%, 52%)`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.save();
+      ctx.translate(width / 2 - 170 + swipe * 34, 38);
+      ctx.fillStyle = 'rgba(9, 14, 22, 0.88)';
+      ctx.roundRect(0, 0, 340, 644, 28);
+      ctx.fill();
+      ctx.clip();
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(18, 24, 304, 596);
+
+      for (let i = 0; i < 16; i += 1) {
+        const y = 42 + ((i * 76 - scroll) % 640 + 640) % 640;
+        ctx.fillStyle = i % 2 ? '#e8eef8' : '#dfe8f4';
+        ctx.roundRect(34, y, 272, 54, 12);
+        ctx.fill();
+        ctx.fillStyle = `hsl(${(hue + i * 27) % 360}, 68%, 48%)`;
+        ctx.roundRect(48, y + 10, 36, 34, 10);
+        ctx.fill();
+        ctx.fillStyle = '#223044';
+        ctx.fillRect(100, y + 14, 168, 8);
+        ctx.fillRect(100, y + 32, 118, 7);
+      }
+
+      ctx.fillStyle = '#0f1724';
+      ctx.roundRect(122, 8, 96, 18, 9);
+      ctx.fill();
+
+      if (stressMotion) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.26)';
+        ctx.beginPath();
+        ctx.arc(170 + swipe * 112, 530 + Math.cos(now / 170) * 38, 28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(0, 0, width, 34);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '16px ui-monospace, Menlo, monospace';
+      ctx.fillText(`dynamic stream frame ${tick++}`, 18, 23);
+    }
+
+    function render(now) {
+      drawPhoneFrame(now);
+      requestAnimationFrame(render);
+    }
+
+    function sampleVideoFrame() {
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      sampleCtx.drawImage(video, 0, 0, sample.width, sample.height);
+      const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height).data;
+      let greenish = 0;
+      for (let i = 0; i < pixels.length; i += 16) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+        if (g > 120 && g > r * 1.8 && g > b * 1.8) greenish += 1;
+      }
+      if (greenish > pixels.length / 16 * 0.58) greenSamples += 1;
+    }
+
+    function updateStats() {
+      const elapsed = Math.max(1, performance.now() - startedAt);
+      framesEl.textContent = String(frames);
+      fpsEl.textContent = String(Math.round(frames / elapsed * 1000));
+      gapsEl.textContent = String(longGaps);
+      greenEl.textContent = String(greenSamples);
+      resolutionEl.textContent = `${video.videoWidth || 0} x ${video.videoHeight || 0}`;
+      status.textContent = longGaps === 0 && greenSamples === 0 ? 'Stream healthy' : 'Inspect stream visually';
+    }
+
+    function onVideoFrame(now, metadata) {
+      frames += 1;
+      if (lastVideoFrameAt && metadata.mediaTime - lastVideoFrameAt > 0.18) {
+        longGaps += 1;
+      }
+      lastVideoFrameAt = metadata.mediaTime;
+      sampleVideoFrame();
+      video.requestVideoFrameCallback(onVideoFrame);
+    }
+
+    document.getElementById('size').addEventListener('click', () => {
+      compact = !compact;
+      stage.style.margin = compact ? '8vh 8vw' : '0';
+    });
+
+    document.getElementById('stress').addEventListener('click', () => {
+      stressMotion = !stressMotion;
+    });
+
+    const stream = canvas.captureStream(60);
+    video.srcObject = stream;
+    video.play().catch((error) => {
+      status.textContent = `Play failed: ${error && error.message ? error.message : error}`;
+    });
+
+    if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      video.requestVideoFrameCallback(onVideoFrame);
+    } else {
+      setInterval(() => {
+        frames += 1;
+        sampleVideoFrame();
+      }, 16);
+    }
+
+    setInterval(updateStats, 500);
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>

@@ -1477,6 +1477,7 @@ $_section-header-height: 24px;
   display: flex;
   align-items: center;
   gap: $size-gap-1;
+  flex-shrink: 0;
 }
 
 .bitfun-nav-panel__footer-btn {

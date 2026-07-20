@@ -1,7 +1,7 @@
 use bitfun_agent_runtime::user_questions::{
-    ask_user_question_available_for_acp_transport, build_answered_user_question_result,
-    build_cancelled_user_question_result, validate_ask_user_question_input, AskUserQuestionInput,
-    Question, QuestionOption,
+    ask_user_question_available_for_acp_transport, ask_user_question_available_in_context,
+    build_answered_user_question_result, build_cancelled_user_question_result,
+    validate_ask_user_question_input, AskUserQuestionInput, Question, QuestionOption,
 };
 
 fn question() -> Question {
@@ -62,6 +62,26 @@ fn ask_user_question_available_flag_matches_acp_transport_contract() {
         &serde_json::json!(false)
     )));
     assert!(ask_user_question_available_for_acp_transport(None));
+}
+
+#[test]
+fn ask_user_question_availability_honors_non_interactive_surface_fact() {
+    assert!(!ask_user_question_available_in_context(
+        None,
+        Some(&serde_json::json!(false)),
+    ));
+    assert!(!ask_user_question_available_in_context(
+        None,
+        Some(&serde_json::json!("false")),
+    ));
+    assert!(ask_user_question_available_in_context(
+        None,
+        Some(&serde_json::json!(true)),
+    ));
+    assert!(!ask_user_question_available_in_context(
+        Some(&serde_json::json!(true)),
+        Some(&serde_json::json!(true)),
+    ));
 }
 
 #[test]

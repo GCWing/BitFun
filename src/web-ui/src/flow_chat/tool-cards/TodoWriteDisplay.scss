@@ -95,7 +95,7 @@
 
     &.todo-write-card .tool-card-icon-slot {
       margin-right: 2px;
-      width: calc(var(--tool-card-header-icon-rail) + 8px);
+      width: 32px;
     }
   }
 
@@ -154,7 +154,7 @@
 
   /* Expanded body — align list with card edges */
   .todo-expanded-body {
-    margin: calc(var(--tool-card-expanded-pad-y) * -1) calc(var(--tool-card-expanded-pad-x) * -1);
+    margin: calc(var(--flowchat-card-expanded-pad-y) * -1) calc(var(--tool-card-expanded-pad-x) * -1);
   }
   .todo-full-list {
     background: transparent;

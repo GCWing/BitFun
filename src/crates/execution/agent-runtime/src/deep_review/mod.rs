@@ -15,17 +15,21 @@ pub mod queue;
 pub mod report;
 mod runtime_state;
 pub mod shared_context;
+pub mod target_evidence;
 pub mod task_execution;
 pub mod team_definition;
 pub mod tool_context;
 
-pub use budget::{DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker};
+pub use budget::{
+    DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, ReviewDiffBudgetAdmission,
+    REVIEW_DIFF_MAX_CHARS_PER_TURN, REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN,
+};
 pub use concurrency_policy::{DeepReviewConcurrencyPolicy, DeepReviewEffectiveConcurrencySnapshot};
 pub use constants::{
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
-    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
-    REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_GENERAL_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
+    REVIEWER_SECURITY_AGENT_TYPE, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
 };
 pub use diagnostics::DeepReviewRuntimeDiagnostics;
 pub use execution_policy::{
@@ -43,6 +47,11 @@ pub use report::DeepReviewCacheUpdate;
 pub use runtime_state::*;
 pub use shared_context::{
     DeepReviewSharedContextDuplicate, DeepReviewSharedContextMeasurementSnapshot,
+};
+pub use target_evidence::{
+    ReviewTargetEvidence, ReviewTargetEvidenceCompleteness, ReviewTargetEvidenceFile,
+    ReviewTargetEvidenceSource, ReviewTargetEvidenceValidationError,
+    ReviewTargetPullRequestIdentity, ReviewTargetWorkspaceBinding,
 };
 pub use task_execution::{DeepReviewLaunchBatchInfo, DeepReviewQueueWaitSkipReason};
 pub use team_definition::{

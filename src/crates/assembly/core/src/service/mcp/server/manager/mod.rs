@@ -12,7 +12,7 @@ mod reconnect;
 mod tests;
 mod tools;
 
-use super::connection::{MCPConnection, MCPConnectionEvent};
+use super::connection::MCPConnection;
 use super::{MCPServerConfig, MCPServerStatus};
 use crate::infrastructure::events::event_system::{get_global_event_system, BackendEvent};
 use crate::service::mcp::adapter::MCPToolAdapter;
@@ -21,6 +21,7 @@ use crate::service::mcp::config::MCPConfigService;
 use crate::service::mcp::protocol::{MCPError, MCPPrompt, MCPResource};
 use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_services_integrations::mcp::server::MCPConnectionEvent;
 use bitfun_services_integrations::mcp::server::MCPServerRuntimeState;
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};

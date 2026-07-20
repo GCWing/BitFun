@@ -59,6 +59,7 @@ fn git_contracts_remain_available_from_core_facade() {
             files: None,
             staged: Some(false),
             stat: Some(true),
+            review_safe: None,
         }),
         vec!["diff", "main..feature", "--stat"]
     );
@@ -67,8 +68,9 @@ fn git_contracts_remain_available_from_core_facade() {
             source: None,
             target: Some("feature".to_string()),
             staged: Some(false),
+            review_safe: None,
         }),
-        vec!["diff", "--name-status", "feature"]
+        vec!["diff", "--name-status", "-z", "feature"]
     );
     let _service_size = std::mem::size_of::<GitService>();
 

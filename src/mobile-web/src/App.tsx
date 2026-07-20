@@ -3,6 +3,7 @@ import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
 import ChatPage from './pages/ChatPage';
+import DevicesPage from './pages/DevicesPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
@@ -12,7 +13,7 @@ import { useConnectionHealth } from './hooks/useConnectionHealth';
 import { useMobileStore } from './services/store';
 import './styles/index.scss';
 
-type Page = 'pairing' | 'workspace' | 'sessions' | 'chat';
+type Page = 'pairing' | 'workspace' | 'sessions' | 'chat' | 'devices';
 type NavDirection = 'push' | 'pop' | null;
 
 const NAV_DURATION = 300;
@@ -172,6 +173,10 @@ const AppContent: React.FC = () => {
     navigateTo('sessions', 'pop');
   }, [navigateTo]);
 
+  const doPopFromDevices = useCallback(() => {
+    navigateTo('sessions', 'pop');
+  }, [navigateTo]);
+
   useEffect(() => {
     const onPopState = () => {
       const stack = pageStackRef.current;
@@ -190,6 +195,8 @@ const AppContent: React.FC = () => {
           doPopFromChat();
         } else if (currentPage === 'workspace') {
           doPopFromWorkspace();
+        } else if (currentPage === 'devices') {
+          doPopFromDevices();
         }
       } finally {
         isPopstateNavRef.current = false;
@@ -198,7 +205,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [doPopFromChat, doPopFromWorkspace]);
+  }, [doPopFromChat, doPopFromWorkspace, doPopFromDevices]);
 
   const handleOpenWorkspace = useCallback(() => {
     navigateTo('workspace', 'push');
@@ -259,6 +266,14 @@ const AppContent: React.FC = () => {
           />
         </div>
       )}
+      {shouldShow('devices') && clientRef.current && (
+        <div className={`nav-page ${getNavClass('devices', currentPage, navDir, isAnimating)}`}>
+          <DevicesPage
+            client={clientRef.current}
+            onBack={doPopFromDevices}
+          />
+        </div>
+      )}
       {shouldShow('sessions') && sessionMgrRef.current && (
         <div className={`nav-page ${getNavClass('sessions', currentPage, navDir, isAnimating)}`}>
           <SessionListPage
@@ -266,6 +281,7 @@ const AppContent: React.FC = () => {
             onSelectSession={handleSelectSession}
             onOpenWorkspace={handleOpenWorkspace}
             onDisconnect={handleDisconnect}
+            onOpenDevices={() => navigateTo('devices', 'push')}
           />
         </div>
       )}

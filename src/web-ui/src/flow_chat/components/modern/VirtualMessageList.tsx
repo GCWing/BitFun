@@ -1658,13 +1658,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
     const resolvedMetrics = resolveTurnPinMetrics(request.turnId, ignoredTailSpacePx);
     if (!resolvedMetrics) {
-      const fallbackBehavior: ScrollBehavior = request.pinMode === 'sticky-latest'
-        ? 'auto'
-        : targetItem.index === 0
-          ? 'auto'
-        : request.attempts === 0 && request.behavior === 'smooth'
-          ? 'smooth'
-          : 'auto';
+      // A far smooth scroll can leave the target virtualized long enough for the
+      // deferred pin to expire. Materialize it first, then let the existing live
+      // geometry pass perform the exact alignment and stabilization.
+      const fallbackBehavior: ScrollBehavior = 'auto';
       const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       const provisionalPinPx = request.pinMode === 'sticky-latest'
         ? Math.max(maxScrollTop, currentPinReservation.px)

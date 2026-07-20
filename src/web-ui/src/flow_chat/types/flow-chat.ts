@@ -8,7 +8,7 @@ import type {
   SessionKind,
   SessionTitleSource,
 } from '@/shared/types/session-history';
-import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 // Base type for streaming items.
 export interface FlowItem {
@@ -51,6 +51,7 @@ export interface FlowThinkingItem extends FlowItem {
 
 export interface FlowToolItem extends FlowItem {
   type: 'tool';
+  /** Provider-facing identity. Deferred calls remain `CallDeferredTool`. */
   toolName: string;
   terminalSessionId?: string;
   interruptionReason?: 'app_restart' | 'retry_superseded';
@@ -95,9 +96,13 @@ export interface FlowToolItem extends FlowItem {
   confirmationWaitMs?: number;
   executionMs?: number;
 
-  /** Resolved when a subagent model round completes (parent Task tool only). */
+  /** Resolved subagent AI model configuration ID captured on the parent Task tool. */
   subagentModelId?: string;
-  subagentModelAlias?: string;
+  /** Provider model name used by the subagent's round. */
+  subagentModelDisplayName?: string;
+
+  /** Child dialog turn produced by this parent Task call. */
+  subagentDialogTurnId?: string;
   
   // Streaming parameter buffering.
   isParamsStreaming?: boolean;  // Params are streaming in.
@@ -176,8 +181,8 @@ export interface ModelRound {
   endTime?: number;
   durationMs?: number;
   providerId?: string;
-  modelId?: string;
-  modelAlias?: string;
+  modelConfigId?: string;
+  effectiveModelName?: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
@@ -299,6 +304,8 @@ export interface Session {
   // - 'error': state machine state === ERROR
   // - 'idle': otherwise
   status: 'active' | 'idle' | 'error';
+  /** Persisted backend status retained while historical turns are metadata-only. */
+  persistedStatus?: 'active' | 'archived' | 'completed';
   
   config: SessionConfig;
   createdAt: number;
@@ -452,6 +459,12 @@ export interface Session {
 
   /** Per-run reviewer manifest for Deep Review child sessions. */
   deepReviewRunManifest?: ReviewTeamRunManifest;
+
+  /** Immutable target identity used to associate Review results with a PR or Git target. */
+  reviewTargetEvidence?: ReviewTargetEvidence;
+
+  /** Original file scope for Review remediation follow-ups. */
+  reviewTargetFilePaths?: string[];
 
   /**
    * Runtime-only session that should stay in memory but never be persisted or

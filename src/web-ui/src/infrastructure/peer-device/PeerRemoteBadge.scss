@@ -1,0 +1,51 @@
+/**
+ * Peer Remote status row above the NavPanel footer.
+ * Uses the full sidebar width so the device name stays readable.
+ */
+
+@use '../../component-library/styles/tokens.scss' as *;
+
+.bitfun-peer-remote-badge {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: $size-gap-2 $size-gap-3;
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  line-height: 1.3;
+
+  &__icon {
+    flex-shrink: 0;
+    color: var(--color-warning);
+  }
+
+  &__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__disconnect {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-warning);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0;
+    text-decoration: underline;
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+}

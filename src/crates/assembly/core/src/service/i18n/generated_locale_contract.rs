@@ -124,13 +124,18 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
+        key: "features.accountLogin",
+        value: "账户登录",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
         key: "features.codeAgent",
         value: "代码助手",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
         key: "features.deepReview",
-        value: "深度代码评审",
+        value: "严格审查",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
@@ -294,13 +299,18 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
+        key: "features.accountLogin",
+        value: "帳號登入",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
         key: "features.codeAgent",
         value: "程式碼助手",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
         key: "features.deepReview",
-        value: "深度程式碼審查",
+        value: "嚴格審查",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
@@ -464,13 +474,18 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
+        key: "features.accountLogin",
+        value: "Account Login",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
         key: "features.codeAgent",
         value: "Code Agent",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
         key: "features.deepReview",
-        value: "Deep Review",
+        value: "Review: Strict",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
@@ -602,13 +617,12 @@ pub fn generated_locale_entry_from_code(
             for entry in GENERATED_LOCALE_CONTRACT {
                 for alias in entry.aliases {
                     let alias = alias.to_ascii_lowercase();
-                    if normalized == alias || normalized.starts_with(&format!("{alias}-")) {
-                        if best_match
+                    if (normalized == alias || normalized.starts_with(&format!("{alias}-")))
+                        && best_match
                             .map(|(_, current_len)| alias.len() > current_len)
                             .unwrap_or(true)
-                        {
-                            best_match = Some((entry, alias.len()));
-                        }
+                    {
+                        best_match = Some((entry, alias.len()));
                     }
                 }
             }
@@ -660,7 +674,7 @@ mod tests {
     fn generated_contract_contains_shared_terms() {
         assert_eq!(
             generated_shared_term(LocaleId::EnUS, "features.deepReview"),
-            Some("Deep Review")
+            Some("Review: Strict")
         );
     }
 }

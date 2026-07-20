@@ -7,6 +7,7 @@ pub mod computer_use;
 pub mod crash_diagnostics;
 pub mod logging;
 pub mod macos_menubar;
+pub mod runtime;
 pub mod startup_trace;
 pub mod theme;
 #[cfg(not(target_env = "ohos"))]
@@ -48,6 +49,7 @@ use api::custom_agent_api::{
     update_custom_agent,
 };
 use api::diff_api::*;
+use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
 use api::i18n_api::*;
@@ -92,6 +94,7 @@ static MAIN_WINDOW_HIDDEN_ON_MACOS: AtomicBool = AtomicBool::new(false);
 static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
 
 const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
+const BROWSER_WEBVIEW_PAGE_LOAD_EVENT: &str = "browser-webview-page-load";
 const CRON_DESKTOP_START_FALLBACK_DELAY: Duration = Duration::from_secs(120);
 
 #[cfg(target_os = "macos")]
@@ -200,6 +203,68 @@ async fn hide_main_window_after_close_request(app: tauri::AppHandle) -> Result<(
     Ok(())
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn show_main_window_for_secondary_launch(
+    app: &tauri::AppHandle,
+    attempt: &str,
+) -> Result<(), String> {
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let Some(main_window) = app.get_webview_window("main") else {
+            return Err("main window not found".to_string());
+        };
+
+        #[cfg(target_os = "macos")]
+        {
+            cancel_main_window_close_request_on_macos();
+            mark_main_window_hidden_on_macos(false);
+        }
+
+        main_window
+            .unminimize()
+            .map_err(|error| format!("failed to unminimize main window: {}", error))?;
+        main_window
+            .show()
+            .map_err(|error| format!("failed to show main window: {}", error))?;
+        main_window
+            .set_focus()
+            .map_err(|error| format!("failed to focus main window: {}", error))?;
+
+        log::info!(
+        "Main window shown from secondary launch: attempt={}",
+        attempt
+    );
+        Ok(())
+    }
+
+    #[cfg(target_env = "ohos")]
+    {
+        Err("Unable to support the main window".to_string())
+    }
+
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn handle_secondary_launch(app: &tauri::AppHandle) {
+    if let Err(error) = show_main_window_for_secondary_launch(app, "immediate") {
+        log::warn!(
+            "Failed to show main window from secondary launch immediately: {}",
+            error
+        );
+
+        let app_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            if let Err(error) = show_main_window_for_secondary_launch(&app_handle, "retry") {
+                log::warn!(
+                    "Failed to show main window from secondary launch retry: {}",
+                    error
+                );
+            }
+        });
+    }
+}
+
 #[tauri::command]
 async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Result<(), String> {
     log::debug!("webdriver_bridge_result command invoked");
@@ -267,7 +332,6 @@ pub async fn _run() {
     // Install the rustls ring CryptoProvider as the process-level default early,
     // so that all subsequent TLS operations (relay_client, reqwest, tokio-tungstenite)
     // reuse the same provider instead of each attempting their own install_default().
-    // This is a no-op on non-Windows platforms where tokio-tungstenite handles it.
     bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
 
     eprintln!("=== BitFun Desktop Starting ===");
@@ -370,6 +434,22 @@ pub async fn _run() {
     startup_timings.record_elapsed("initialize_app_state", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
+    let step_started = Instant::now();
+    let desktop_runtime =
+        match runtime::DesktopRuntimeContext::build(coordinator.clone(), scheduler.clone()) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
+                return;
+            }
+        };
+    startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "initialize_desktop_agent_runtime",
+        step_started,
+    );
+
     let coordinator_state = CoordinatorState {
         coordinator: coordinator.clone(),
     };
@@ -382,11 +462,14 @@ pub async fn _run() {
 
     let path_manager = get_path_manager_arc();
 
-    let app = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    let app = builder
         .plugin(logging::build_log_plugin(log_targets))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .manage(app_state)
+        .manage(desktop_runtime)
         .manage(coordinator_state)
         .manage(scheduler_state)
         .manage(path_manager)
@@ -394,6 +477,26 @@ pub async fn _run() {
         .manage(scheduler)
         .manage(terminal_state)
         .manage(startup_trace.clone())
+        .on_page_load(|webview, payload| {
+            let label = webview.label();
+            if label.starts_with("embedded-browser-view-")
+                || label.starts_with("embedded-browser-panel-view-")
+            {
+                let event = match payload.event() {
+                    tauri::webview::PageLoadEvent::Started => "started",
+                    tauri::webview::PageLoadEvent::Finished => "finished",
+                };
+                let _ = webview.emit_to(
+                    "main",
+                    BROWSER_WEBVIEW_PAGE_LOAD_EVENT,
+                    serde_json::json!({
+                        "label": label,
+                        "event": event,
+                        "url": payload.url(),
+                    }),
+                );
+            }
+        })
         .setup(move |app| {
             let setup_started = Instant::now();
             startup_trace.record_phase("tauri_setup_start", "native_setup");
@@ -688,6 +791,7 @@ pub async fn _run() {
             // paired bots start listening immediately on app startup.
             let step_started = Instant::now();
             api::remote_connect_api::init_on_startup();
+            api::remote_connect_api::init_auto_sync();
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "remote_connect_init_on_startup",
@@ -722,6 +826,7 @@ pub async fn _run() {
 
             let step_started = Instant::now();
             init_services(app_handle.clone(), startup_log_level);
+            api::remote_connect_api::set_account_app_handle(app_handle.clone());
             startup_trace.record_elapsed_step("native_setup", "init_services", step_started);
 
             let step_started = Instant::now();
@@ -849,6 +954,11 @@ pub async fn _run() {
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
             api::editor_ai_api::editor_ai_cancel,
+            get_external_source_snapshot,
+            set_external_source_enabled_command,
+            set_external_source_conflict_choice_command,
+            set_external_tool_target_decision_command,
+            set_external_tool_conflict_choice_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
             get_readonly_tools_info,
@@ -867,8 +977,6 @@ pub async fn _run() {
             discover_cli_credentials,
             refresh_cli_credential,
             initialize_ai,
-            set_agent_model,
-            get_agent_models,
             refresh_model_client,
             get_app_state,
             update_app_status,
@@ -965,9 +1073,14 @@ pub async fn _run() {
             delete_skill,
             git_is_repository,
             git_get_repository_basic,
+            git_resolve_revision,
             git_get_repository,
             review_platform_get_workspace_snapshot,
+            review_platform_get_workspace_context,
             review_platform_get_pull_request_detail,
+            review_platform_get_pull_request_review_target,
+            review_platform_get_issue,
+            review_platform_get_pull_request_review_target_by_identity,
             review_platform_get_pull_request_detail_page,
             review_platform_get_pull_request_ci_log,
             review_platform_update_auth_token,
@@ -1213,6 +1326,35 @@ pub async fn _run() {
             api::remote_connect_api::remote_connect_weixin_qr_poll,
             api::remote_connect_api::remote_connect_get_bot_verbose_mode,
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
+            // Account API
+            api::remote_connect_api::account_login,
+            api::remote_connect_api::account_status,
+            api::remote_connect_api::account_logout,
+            api::remote_connect_api::account_connect_devices,
+            api::remote_connect_api::account_online_devices,
+            api::remote_connect_api::account_send_session_to_device,
+            api::remote_connect_api::account_sync_session,
+            api::remote_connect_api::account_fetch_synced_sessions,
+            api::remote_connect_api::account_delete_synced_session,
+            api::remote_connect_api::account_sync_settings,
+            api::remote_connect_api::account_fetch_settings,
+            api::remote_connect_api::account_export_local_session,
+            api::remote_connect_api::account_export_all_sessions,
+            api::remote_connect_api::account_import_remote_sessions,
+            api::remote_connect_api::account_fetch_session_turns,
+            api::remote_connect_api::account_execute_on_device,
+            api::remote_connect_api::account_auto_sync,
+            api::remote_connect_api::account_get_credential_hint,
+            api::remote_connect_api::account_token_expired,
+            api::remote_connect_api::account_list_devices,
+            api::remote_connect_api::account_delete_device,
+            api::remote_connect_api::account_device_rpc,
+            api::remote_connect_api::account_delegate_to_paired,
+            api::peer_host_invoke::peer_host_invoke_complete,
+            api::peer_host_invoke::peer_control_attach,
+            api::peer_host_invoke::peer_control_detach,
+            api::peer_host_invoke::peer_mode_ping,
+            api::peer_host_invoke::peer_controller_set_active,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,
@@ -1264,6 +1406,10 @@ pub async fn _run() {
             api::miniapp_export_api::miniapp_render_slide_page,
             // Browser API (embedded webview)
             api::browser_api::browser_webview_eval,
+            api::browser_api::browser_webview_create,
+            api::browser_api::browser_webview_navigate,
+            api::browser_api::browser_webview_reload,
+            api::browser_api::browser_webview_set_bounds,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_list_browsers,
@@ -1469,6 +1615,7 @@ async fn init_agentic_system() -> anyhow::Result<(
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
+    api::remote_connect_api::set_dialog_scheduler(scheduler.clone());
 
     let cron_service = bitfun_core::service::cron::CronService::new(
         path_manager.clone(),
@@ -1660,8 +1807,20 @@ fn start_event_loop_with_transport(
                         log::warn!("Internal event routing failed: {:?}", e);
                     }
 
-                    if let Err(e) = transport.emit_event("", envelope.event).await {
+                    let event_for_fanout = envelope.event.clone();
+                    if let Err(e) = transport.emit_event(envelope.event).await {
                         log::error!("Failed to emit event: {:?}", e);
+                    }
+
+                    if !api::peer_host_invoke::attached_controllers().is_empty() {
+                        if let Some(projected) =
+                            bitfun_events::project_agentic_frontend_event(event_for_fanout)
+                        {
+                            api::remote_connect_api::fanout_peer_device_event(
+                                projected.event_name,
+                                projected.payload,
+                            );
+                        }
                     }
                 }
             }
@@ -1770,7 +1929,9 @@ fn create_event_emitter(
     transport: Arc<TauriTransportAdapter>,
 ) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
     use bitfun_core::infrastructure::events::TransportEmitter;
-    Arc::new(TransportEmitter::new(transport))
+    let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
+        Arc::new(TransportEmitter::new(transport));
+    api::remote_connect_api::wrap_peer_aware_emitter(inner)
 }
 
 fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {

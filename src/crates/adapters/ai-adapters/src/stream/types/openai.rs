@@ -77,6 +77,8 @@ struct Delta {
     role: Option<String>,
     /// Standard OpenAI-compatible reasoning field (DeepSeek, Qwen, etc.)
     reasoning_content: Option<String>,
+    /// Some OpenAI-compatible providers stream thinking under `reasoning`.
+    reasoning: Option<String>,
     /// MiniMax-specific reasoning field; used as fallback when `reasoning_content` is absent.
     reasoning_details: Option<Vec<ReasoningDetail>>,
     content: Option<String>,
@@ -166,6 +168,7 @@ impl OpenAISSEData {
         } = first_choice;
         let Delta {
             reasoning_content,
+            reasoning,
             reasoning_details,
             content,
             tool_calls,
@@ -176,7 +179,7 @@ impl OpenAISSEData {
         // `content: ""` in reasoning-only chunks). Keep empty reasoning content so downstream
         // can replay structurally present thinking blocks when a provider requires it.
         let content = content.filter(|s| !s.is_empty());
-        let reasoning_content = reasoning_content;
+        let reasoning_content = reasoning_content.or(reasoning);
 
         // MiniMax uses `reasoning_details` instead of `reasoning_content`.
         // Collect all "reasoning.text" entries and join them as a fallback.
@@ -372,6 +375,31 @@ mod tests {
         assert_eq!(responses.len(), 1);
         assert_eq!(responses[0].reasoning_content.as_deref(), Some(""));
         assert_eq!(responses[0].finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn parses_reasoning_alias_chunk() {
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 123,
+            "model": "compatible-test",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "reasoning": "I should check the provider-specific field."
+                },
+                "finish_reason": null
+            }]
+        }"#;
+
+        let sse_data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
+        let responses = sse_data.into_unified_responses();
+
+        assert_eq!(responses.len(), 1);
+        assert_eq!(
+            responses[0].reasoning_content.as_deref(),
+            Some("I should check the provider-specific field.")
+        );
     }
 
     #[test]

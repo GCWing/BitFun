@@ -5,8 +5,7 @@
  * events to frontend consumers (e.g. diagnostics subscriptions, notifications).
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
@@ -56,7 +55,7 @@ export class WorkspaceLspManager {
   private static instances = new Map<string, WorkspaceLspManager>();
   
   private workspacePath: string;
-  private eventUnlisten?: UnlistenFn;
+  private eventUnlisten?: () => void;
   private isInitialized = false;
   private serverStatusByLanguage = new Map<string, CachedServerStatus>();
   private skippedOpenNoticeLanguages = new Set<string>();
@@ -102,6 +101,12 @@ export class WorkspaceLspManager {
       this.instances.delete(workspacePath);
     }
   }
+
+  /** Drop all workspace LSP managers when entering/exiting Peer Device Mode. */
+  static async clearAllForPeerSwitch(): Promise<void> {
+    const paths = Array.from(this.instances.keys());
+    await Promise.all(paths.map((path) => this.remove(path)));
+  }
   
   
   async initialize(): Promise<void> {
@@ -111,13 +116,13 @@ export class WorkspaceLspManager {
 
     try {
 
-      await invoke('lsp_open_workspace', {
+      await api.invoke('lsp_open_workspace', {
         request: { workspacePath: this.workspacePath }
       });
       
 
-      this.eventUnlisten = await listen<LspEvent>('lsp-event', (event) => {
-        this.handleLspEvent(event.payload);
+      this.eventUnlisten = api.listen<LspEvent>('lsp-event', (payload) => {
+        this.handleLspEvent(payload);
       });
       
       this.isInitialized = true;
@@ -414,7 +419,7 @@ export class WorkspaceLspManager {
         setTimeout(() => reject(new Error('LSP open document timeout after 30s')), 30000);
       });
       
-      const openPromise = invoke('lsp_open_document', {
+      const openPromise = api.invoke('lsp_open_document', {
         request: {
           workspacePath: this.workspacePath,
           uri,
@@ -438,7 +443,7 @@ export class WorkspaceLspManager {
   
   async changeDocument(uri: string, content: string): Promise<void> {
     try {
-      await invoke('lsp_change_document', {
+      await api.invoke('lsp_change_document', {
         request: {
           workspacePath: this.workspacePath,
           uri,
@@ -453,7 +458,7 @@ export class WorkspaceLspManager {
   
   async saveDocument(uri: string): Promise<void> {
     try {
-      await invoke('lsp_save_document', {
+      await api.invoke('lsp_save_document', {
         request: {
           workspacePath: this.workspacePath,
           uri
@@ -467,7 +472,7 @@ export class WorkspaceLspManager {
   
   async closeDocument(uri: string): Promise<void> {
     try {
-      await invoke('lsp_close_document', {
+      await api.invoke('lsp_close_document', {
         request: {
           workspacePath: this.workspacePath,
           uri
@@ -481,7 +486,7 @@ export class WorkspaceLspManager {
   
   async getCompletions(language: string, uri: string, line: number, character: number): Promise<any[]> {
     try {
-      const result = await invoke<any[]>('lsp_get_completions_workspace', {
+      const result = await api.invoke<any[]>('lsp_get_completions_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -500,7 +505,7 @@ export class WorkspaceLspManager {
   
   async getHover(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await invoke('lsp_get_hover_workspace', {
+      return await api.invoke('lsp_get_hover_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -525,7 +530,7 @@ export class WorkspaceLspManager {
   
   async gotoDefinition(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await invoke('lsp_goto_definition_workspace', {
+      return await api.invoke('lsp_goto_definition_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -543,7 +548,7 @@ export class WorkspaceLspManager {
   
   async findReferences(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await invoke('lsp_find_references_workspace', {
+      return await api.invoke('lsp_find_references_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -561,7 +566,7 @@ export class WorkspaceLspManager {
   
   async getSignatureHelp(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      const result = await invoke('lsp_get_signature_help_workspace', {
+      const result = await api.invoke('lsp_get_signature_help_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -596,7 +601,7 @@ export class WorkspaceLspManager {
   
   private async requestDiagnostics(uri: string): Promise<void> {
     try {
-      const diagnostics = await invoke<any[]>('lsp_get_diagnostics', {
+      const diagnostics = await api.invoke<any[]>('lsp_get_diagnostics', {
         request: {
           workspacePath: this.workspacePath,
           uri
@@ -616,7 +621,7 @@ export class WorkspaceLspManager {
   
   async formatDocument(language: string, uri: string, tabSize: number = 2, insertSpaces: boolean = true): Promise<any> {
     try {
-      return await invoke('lsp_format_document_workspace', {
+      return await api.invoke('lsp_format_document_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -641,7 +646,7 @@ export class WorkspaceLspManager {
     endCharacter: number
   ): Promise<any[]> {
     try {
-      return await invoke('lsp_get_inlay_hints_workspace', {
+      return await api.invoke('lsp_get_inlay_hints_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -661,7 +666,7 @@ export class WorkspaceLspManager {
   
   async rename(language: string, uri: string, line: number, character: number, newName: string): Promise<any> {
     try {
-      return await invoke('lsp_rename_workspace', {
+      return await api.invoke('lsp_rename_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -680,7 +685,7 @@ export class WorkspaceLspManager {
   
   async getCodeActions(language: string, uri: string, range: any, context: any): Promise<any> {
     try {
-      return await invoke('lsp_get_code_actions_workspace', {
+      return await api.invoke('lsp_get_code_actions_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -698,7 +703,7 @@ export class WorkspaceLspManager {
   
   async getDocumentSymbols(language: string, uri: string): Promise<any> {
     try {
-      return await invoke('lsp_get_document_symbols_workspace', {
+      return await api.invoke('lsp_get_document_symbols_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -714,7 +719,7 @@ export class WorkspaceLspManager {
   
   async getWorkspaceSymbols(query: string): Promise<any> {
     try {
-      return await invoke('lsp_get_workspace_symbols', {
+      return await api.invoke('lsp_get_workspace_symbols', {
         request: {
           workspacePath: this.workspacePath,
           query
@@ -729,7 +734,7 @@ export class WorkspaceLspManager {
   
   async getDocumentHighlight(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await invoke('lsp_get_document_highlight_workspace', {
+      return await api.invoke('lsp_get_document_highlight_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -747,7 +752,7 @@ export class WorkspaceLspManager {
   
   async getSemanticTokens(language: string, uri: string): Promise<any> {
     try {
-      return await invoke('lsp_get_semantic_tokens_workspace', {
+      return await api.invoke('lsp_get_semantic_tokens_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -770,7 +775,7 @@ export class WorkspaceLspManager {
     endCharacter: number
   ): Promise<any> {
     try {
-      return await invoke('lsp_get_semantic_tokens_range_workspace', {
+      return await api.invoke('lsp_get_semantic_tokens_range_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -790,7 +795,7 @@ export class WorkspaceLspManager {
   
   async getServerState(language: string): Promise<ServerState | null> {
     try {
-      return await invoke<ServerState>('lsp_get_server_state', {
+      return await api.invoke<ServerState>('lsp_get_server_state', {
         request: {
           workspacePath: this.workspacePath,
           language
@@ -805,7 +810,7 @@ export class WorkspaceLspManager {
   
   async getAllServerStates(): Promise<Record<string, ServerState>> {
     try {
-      return await invoke<Record<string, ServerState>>('lsp_get_all_server_states', {
+      return await api.invoke<Record<string, ServerState>>('lsp_get_all_server_states', {
         request: {
           workspacePath: this.workspacePath
         }
@@ -826,7 +831,7 @@ export class WorkspaceLspManager {
       }
 
 
-      await invoke('lsp_close_workspace', {
+      await api.invoke('lsp_close_workspace', {
         request: { workspacePath: this.workspacePath }
       });
       

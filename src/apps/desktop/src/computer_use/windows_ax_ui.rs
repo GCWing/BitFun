@@ -46,10 +46,6 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
-/// Default depth cap; mirrors cua-driver-rs.
-pub const DEFAULT_MAX_DEPTH: usize = 25;
-/// Default total-element cap; mirrors cua-driver-rs.
-pub const DEFAULT_MAX_TOTAL_ELEMENTS: usize = 5000;
 /// Transient-provider retry count for `BuildUpdatedCache`.
 const BUILD_CACHE_MAX_ATTEMPTS: u32 = 3;
 /// Backoff between `BuildUpdatedCache` retries (milliseconds).
@@ -64,7 +60,7 @@ const BUILD_CACHE_BACKOFF_MS: u64 = 40;
 /// `ElementCache` (cua parity); until then the pointers simply outlive the
 /// snapshot, which is acceptable for a not-yet-wired code path.
 #[derive(Clone)]
-pub struct UiaNode {
+pub(super) struct UiaNode {
     /// Dense index assigned only to actionable elements (`[N]` in the tree
     /// text). `None` for non-actionable content-only nodes.
     pub element_index: Option<usize>,
@@ -99,7 +95,7 @@ impl UiaNode {
     /// nodes), whereas [`UiaNode::element_index`] only numbers actionable
     /// elements. The integration wiring is responsible for the dense
     /// re-indexing when `get_app_state` is connected on Windows.
-    pub fn to_ax_node(&self, idx: u32, parent_idx: Option<u32>) -> AxNode {
+    fn to_ax_node(&self, idx: u32, parent_idx: Option<u32>) -> AxNode {
         let frame_global = self
             .rect
             .map(|(l, t, r, b)| (l as f64, t as f64, (r - l) as f64, (b - t) as f64));
@@ -144,8 +140,9 @@ fn localized_control_type_string(elem: &IUIAutomationElement) -> String {
 unsafe fn build_cache_request(
     automation: &IUIAutomation,
 ) -> BitFunResult<IUIAutomationCacheRequest> {
-    let cache_req = automation
-        .CreateCacheRequest()
+    // SAFETY: `automation` is a live UI Automation COM interface and all ids
+    // supplied below are documented properties, patterns, scopes, or filters.
+    let cache_req = unsafe { automation.CreateCacheRequest() }
         .map_err(|e| BitFunError::tool(format!("UI Automation CreateCacheRequest: {}.", e)))?;
 
     // Properties to pre-fetch (typed cached accessors read these).
@@ -158,7 +155,7 @@ unsafe fn build_cache_request(
         UIA_IsOffscreenPropertyId,
         UIA_BoundingRectanglePropertyId,
     ] {
-        let _ = cache_req.AddProperty(prop);
+        let _ = unsafe { cache_req.AddProperty(prop) };
     }
 
     // Patterns to pre-fetch (for action detection + Value read).
@@ -172,16 +169,16 @@ unsafe fn build_cache_request(
         UIA_TextPatternId,
         UIA_ScrollPatternId,
     ] {
-        let _ = cache_req.AddPattern(pat);
+        let _ = unsafe { cache_req.AddPattern(pat) };
     }
 
     // Fetch the entire subtree in one bulk RPC.
-    let _ = cache_req.SetTreeScope(TreeScope_Subtree);
+    let _ = unsafe { cache_req.SetTreeScope(TreeScope_Subtree) };
 
     // Control-view filter (same set ControlViewWalker would walk) — drops
     // decorative / raw-view nodes that only add noise.
-    if let Ok(ctrl_cond) = automation.ControlViewCondition() {
-        let _ = cache_req.SetTreeFilter(&ctrl_cond);
+    if let Ok(ctrl_cond) = unsafe { automation.ControlViewCondition() } {
+        let _ = unsafe { cache_req.SetTreeFilter(&ctrl_cond) };
     }
 
     Ok(cache_req)
@@ -197,7 +194,9 @@ pub(crate) unsafe fn build_updated_cache_with_retry(
 ) -> BitFunResult<IUIAutomationElement> {
     let mut attempt = 0u32;
     loop {
-        match uncached.BuildUpdatedCache(cache_req) {
+        // SAFETY: both COM interfaces are live for the call and `cache_req`
+        // was constructed by the same UI Automation instance.
+        match unsafe { uncached.BuildUpdatedCache(cache_req) } {
             Ok(e) => return Ok(e),
             Err(e) => {
                 attempt += 1;
@@ -309,9 +308,9 @@ fn read_cached_is_offscreen(element: &IUIAutomationElement) -> bool {
 
 /// Read bounding rect as `(center_x, center_y, Some((l, t, r, b)))`. Returns
 /// `rect=None` when the element has no meaningful `BoundingRectangle`.
-fn read_cached_bounding_rect_full(
-    element: &IUIAutomationElement,
-) -> (i32, i32, Option<(i32, i32, i32, i32)>) {
+type CachedBoundingRect = (i32, i32, Option<(i32, i32, i32, i32)>);
+
+fn read_cached_bounding_rect_full(element: &IUIAutomationElement) -> CachedBoundingRect {
     unsafe {
         match element.CachedBoundingRectangle() {
             Ok(r) if r.right > r.left && r.bottom > r.top => (
@@ -419,40 +418,6 @@ fn control_type_name(id: i32) -> String {
 
 // ── Tree walk ───────────────────────────────────────────────────────────────
 
-/// Walk the UIA tree for the window with the given HWND, returning the indexed
-/// node vector (no rendered tree text). Caps truncate both the walk and the
-/// rendered markdown identically.
-pub fn walk_tree_bounded(
-    hwnd: u64,
-    max_elements: usize,
-    max_depth: usize,
-) -> BitFunResult<Vec<UiaNode>> {
-    unsafe {
-        walk_tree_full(
-            windows::Win32::Foundation::HWND(hwnd as *mut _),
-            max_elements,
-            max_depth,
-        )
-    }
-    .map(|(_tree_text, nodes)| nodes)
-}
-
-/// Walk the foreground window's UIA tree and return the rendered tree text plus
-/// the indexed node vector. Intended for integration with BitFun's
-/// `get_app_state` path.
-pub fn walk_uia_tree(
-    max_elements: usize,
-    max_depth: usize,
-) -> BitFunResult<(String, Vec<UiaNode>)> {
-    let hwnd = unsafe { GetForegroundWindow() };
-    if hwnd.is_invalid() {
-        return Err(BitFunError::tool(
-            "No foreground window (GetForegroundWindow returned null).".to_string(),
-        ));
-    }
-    unsafe { walk_tree_full(hwnd, max_elements, max_depth) }
-}
-
 /// Core walk: COM init → cache request → `ElementFromHandle` →
 /// `BuildUpdatedCache` (retried) → recursive cached traversal → render.
 unsafe fn walk_tree_full(
@@ -460,39 +425,45 @@ unsafe fn walk_tree_full(
     max_elements: usize,
     max_depth: usize,
 ) -> BitFunResult<(String, Vec<UiaNode>)> {
-    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    // SAFETY: initializes COM for the current thread and creates the documented
+    // in-process UI Automation class; failures are handled below.
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
 
-    let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
-        .map_err(|e| {
+    let automation: IUIAutomation =
+        unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }.map_err(|e| {
             BitFunError::tool(format!(
                 "UI Automation (CoCreateInstance CUIAutomation): {}.",
                 e
             ))
         })?;
 
-    let cache_req = build_cache_request(&automation)?;
+    let cache_req = unsafe { build_cache_request(&automation) }?;
 
-    let uncached = automation.ElementFromHandle(hwnd).map_err(|e| {
+    // SAFETY: `hwnd` is the caller-provided target handle. UIA reports an
+    // error for an invalid or stale handle, which is propagated here.
+    let uncached = unsafe { automation.ElementFromHandle(hwnd) }.map_err(|e| {
         BitFunError::tool(format!("UI Automation ElementFromHandle failed: {}.", e))
     })?;
 
-    let root_elem = build_updated_cache_with_retry(&uncached, &cache_req)?;
+    let root_elem = unsafe { build_updated_cache_with_retry(&uncached, &cache_req) }?;
 
     let mut nodes: Vec<UiaNode> = Vec::new();
     let mut lines: Vec<(usize, String)> = Vec::new();
     let mut counter = 0usize;
     let mut total = 0usize;
-    walk_cached_bounded(
-        &root_elem,
-        0,
-        None,
-        &mut nodes,
-        &mut lines,
-        &mut counter,
-        &mut total,
-        max_elements,
-        max_depth,
-    );
+    unsafe {
+        walk_cached_bounded(
+            &root_elem,
+            0,
+            None,
+            &mut nodes,
+            &mut lines,
+            &mut counter,
+            &mut total,
+            max_elements,
+            max_depth,
+        )
+    };
 
     let tree_text = render_lines(&lines);
     Ok((tree_text, nodes))
@@ -593,21 +564,25 @@ unsafe fn walk_cached_bounded(
     }
 
     // Recurse using cached children — zero additional cross-process RPCs.
-    if let Ok(children) = element.GetCachedChildren() {
-        let len = children.Length().unwrap_or(0);
+    // SAFETY: `element` is a live cached UIA element, and child indices are
+    // bounded by the array length returned by UI Automation.
+    if let Ok(children) = unsafe { element.GetCachedChildren() } {
+        let len = unsafe { children.Length() }.unwrap_or(0);
         for i in 0..len {
-            if let Ok(child) = children.GetElement(i) {
-                walk_cached_bounded(
-                    &child,
-                    depth + 1,
-                    emitted_parent,
-                    nodes,
-                    lines,
-                    counter,
-                    total,
-                    max_elements,
-                    max_depth,
-                );
+            if let Ok(child) = unsafe { children.GetElement(i) } {
+                unsafe {
+                    walk_cached_bounded(
+                        &child,
+                        depth + 1,
+                        emitted_parent,
+                        nodes,
+                        lines,
+                        counter,
+                        total,
+                        max_elements,
+                        max_depth,
+                    )
+                };
             }
         }
     }
@@ -721,7 +696,7 @@ fn center_result_from_node(
 /// whole subtree, then in-process cached reads). `node_idx` is now supported
 /// because the cached walk produces a real indexed tree (previously
 /// Windows-only-`text_contains`/`title_contains`+`role_substring`).
-pub fn locate_ui_element_center(
+pub(super) fn locate_ui_element_center(
     query: &UiElementLocateQuery,
 ) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(query)?;
@@ -802,7 +777,7 @@ pub fn locate_ui_element_center(
 /// Single-element hit-test: only a handful of COM calls, so it stays on the
 /// `CurrentXxx` accessors (caching does not help one element). Signature is
 /// intentionally unchanged.
-pub fn accessibility_hit_at_global_point(
+pub(super) fn accessibility_hit_at_global_point(
     gx: f64,
     gy: f64,
 ) -> BitFunResult<Option<OcrAccessibilityHit>> {
@@ -872,22 +847,9 @@ pub fn accessibility_hit_at_global_point(
 
 // ── AppStateSnapshot builder ────────────────────────────────────────────────
 
-/// Build a full [`AppStateSnapshot`] from the foreground window's UIA tree.
-///
-/// This is the Windows equivalent of macOS `dump_app_ax` — it walks the
-/// UIA control-view tree, converts nodes to [`AxNode`] with dense indexing,
-/// computes a SHA1 digest, and returns the snapshot.
-pub fn get_app_state_snapshot(
-    max_depth: u32,
-    focus_window_only: bool,
-) -> BitFunResult<AppStateSnapshot> {
-    let hwnd = unsafe { GetForegroundWindow() };
-    get_app_state_snapshot_for_window(hwnd, max_depth, focus_window_only)
-}
-
-/// Same as [`get_app_state_snapshot`] but targets an explicit top-level HWND
-/// (used when the caller resolved an `AppSelector` to a pid/window).
-pub fn get_app_state_snapshot_for_window(
+/// Build a full [`AppStateSnapshot`] for an explicit top-level HWND selected by
+/// the caller.
+pub(super) fn get_app_state_snapshot_for_window(
     hwnd: windows::Win32::Foundation::HWND,
     max_depth: u32,
     focus_window_only: bool,
@@ -1045,13 +1007,13 @@ fn window_pid_for(hwnd: windows::Win32::Foundation::HWND) -> Option<u32> {
 /// Raw handle of the current foreground window as `isize` (0 when none). Used
 /// by the desktop host to capture a screenshot of the same window the AX
 /// snapshot was taken from.
-pub fn foreground_window_handle() -> isize {
+pub(super) fn foreground_window_handle() -> isize {
     let hwnd = unsafe { GetForegroundWindow() };
     hwnd.0 as isize
 }
 
 /// Owning process id of the current foreground window, if any.
-pub fn foreground_window_pid() -> Option<u32> {
+pub(super) fn foreground_window_pid() -> Option<u32> {
     let hwnd = unsafe { GetForegroundWindow() };
     window_pid_for(hwnd)
 }

@@ -38,6 +38,31 @@
     color: var(--color-text-muted);
     white-space: nowrap;
   }
+
+  &__subagent-model-select {
+    width: min(280px, 100%);
+    max-width: 100%;
+
+    &.select--open .select__dropdown {
+      position: static;
+      max-height: min(240px, 40vh);
+      border: 1px solid var(--border-medium);
+      border-top: none;
+      border-radius: 0 0 var(--size-radius-sm) var(--size-radius-sm);
+      box-shadow: 0 4px 12px var(--color-overlay-black-40);
+
+      &::before {
+        top: 0;
+        bottom: auto;
+      }
+    }
+
+    &.select--open.select--placement-top .select__trigger {
+      border-top-color: var(--border-medium);
+      border-bottom-color: transparent;
+      border-radius: var(--size-radius-sm) var(--size-radius-sm) 0 0;
+    }
+  }
 }
 
 @media (max-width: 1080px) {

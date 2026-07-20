@@ -23,6 +23,20 @@ pub struct ToolConfirmationGateFacts {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolConfirmationPolicyGateFacts {
+    pub global_skip_tool_confirmation: bool,
+    pub context_policy: ToolConfirmationContextPolicy,
+    pub any_tool_needs_permission: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolConfirmationContextPolicy {
+    Inherit,
+    Require,
+    Skip,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolConfirmationGatePlan {
     SkipByPolicy,
     SkipNoPermissionedTool,
@@ -125,11 +139,33 @@ impl ToolConfirmationChannelStore {
 pub fn resolve_tool_confirmation_gate(
     facts: ToolConfirmationGateFacts,
 ) -> ToolConfirmationGatePlan {
-    if facts.global_skip_tool_confirmation || facts.context_skip_tool_confirmation {
+    resolve_tool_confirmation_gate_from_skip(
+        facts.global_skip_tool_confirmation || facts.context_skip_tool_confirmation,
+        facts.any_tool_needs_permission,
+    )
+}
+
+pub fn resolve_tool_confirmation_policy_gate(
+    facts: ToolConfirmationPolicyGateFacts,
+) -> ToolConfirmationGatePlan {
+    let skip_by_policy = match facts.context_policy {
+        ToolConfirmationContextPolicy::Require => false,
+        ToolConfirmationContextPolicy::Skip => true,
+        ToolConfirmationContextPolicy::Inherit => facts.global_skip_tool_confirmation,
+    };
+
+    resolve_tool_confirmation_gate_from_skip(skip_by_policy, facts.any_tool_needs_permission)
+}
+
+fn resolve_tool_confirmation_gate_from_skip(
+    skip_by_policy: bool,
+    any_tool_needs_permission: bool,
+) -> ToolConfirmationGatePlan {
+    if skip_by_policy {
         return ToolConfirmationGatePlan::SkipByPolicy;
     }
 
-    if facts.any_tool_needs_permission {
+    if any_tool_needs_permission {
         ToolConfirmationGatePlan::AwaitPermissionedTool
     } else {
         ToolConfirmationGatePlan::SkipNoPermissionedTool

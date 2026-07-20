@@ -10,10 +10,15 @@ pub mod json_store;
 #[cfg(feature = "lsp")]
 pub mod lsp;
 pub mod managed_runtime;
+#[cfg(feature = "markdown")]
+pub mod markdown;
+pub mod persistence;
 pub mod process_manager;
 pub mod session;
 pub mod session_usage;
+pub mod storage_cleanup;
 pub mod system;
 pub mod token_usage;
 #[cfg(feature = "workspace-runtime")]
 pub mod workspace;
+pub mod workspace_instructions;

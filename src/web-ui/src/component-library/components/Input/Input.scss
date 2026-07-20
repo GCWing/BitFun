@@ -127,6 +127,7 @@
 .bitfun-input {
   flex: 1;
   min-width: 0;
+  height: 100%;
   background: transparent;
   border: none !important;
   outline: none !important;
@@ -172,6 +173,23 @@
   flex-shrink: 0;
   position: relative;
   z-index: 1;
+}
+
+.bitfun-input-toggle {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+
+  &:hover {
+    color: var(--color-text-secondary);
+  }
 }
 
 .bitfun-input-error-message {

@@ -4,6 +4,7 @@ import type {
   DeepReviewEvidencePackContractHint,
   DeepReviewEvidencePackContractHintKind,
   DeepReviewScopeProfile,
+  ReviewTargetEvidence,
   ReviewTeamChangeStats,
   ReviewTeamWorkPacket,
 } from './types';
@@ -75,6 +76,7 @@ export function buildDeepReviewEvidencePack(params: {
   target: ReviewTargetClassification;
   changeStats: ReviewTeamChangeStats;
   scopeProfile?: DeepReviewScopeProfile;
+  targetEvidence?: ReviewTargetEvidence;
   workPackets: ReviewTeamWorkPacket[];
 }): DeepReviewEvidencePack {
   const includedFiles = includedReviewTargetFiles(params.target);
@@ -118,5 +120,6 @@ export function buildDeepReviewEvidencePack(params: {
         'full_file_contents',
       ],
     },
+    ...(params.targetEvidence ? { reviewTarget: params.targetEvidence } : {}),
   };
 }

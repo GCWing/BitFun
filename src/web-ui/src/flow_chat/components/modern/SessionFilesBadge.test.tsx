@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionFilesBadge } from './SessionFilesBadge';
+import { prepareReviewLaunchFromSessionFiles } from '../../services/ReviewService';
+import { notificationService } from '../../../shared/notification-system';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,10 +21,23 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
+      const messages: Record<string, string> = {
+        'sessionFilesBadge.actionsButton': 'Actions',
+        'sessionFilesBadge.actionsMenuHint': 'Quick actions',
+        'sessionFilesBadge.reviewModeStandard': 'Review',
+        'sessionFilesBadge.reviewModeDeep': 'Review: Strict',
+      };
       if (key === 'sessionFilesBadge.filesSummaryCount') {
         return `${String(options?.count ?? 0)} files`;
+      }
+      if (messages[key]) {
+        return messages[key];
       }
       return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
     },
@@ -72,22 +87,13 @@ vi.mock('../../../shared/notification-system', () => ({
   },
 }));
 
-vi.mock('../../services/BtwThreadService', () => ({
-  createBtwChildSession: vi.fn(),
+vi.mock('../../services/ReviewService', () => ({
+  prepareReviewLaunchFromSessionFiles: vi.fn(),
+  launchPreparedReviewSession: vi.fn(),
 }));
 
-vi.mock('../../services/btwSessionPane', () => ({
-  openBtwSessionInAuxPane: vi.fn(),
-}));
-
-vi.mock('../../services/DeepReviewService', () => ({
-  buildDeepReviewLaunchFromSessionFiles: vi.fn(),
-  buildDeepReviewPreviewFromSessionFiles: vi.fn(),
-  launchDeepReviewSession: vi.fn(),
-}));
-
-vi.mock('../../services/ReviewSessionMarkerService', () => ({
-  insertReviewSessionSummaryMarker: vi.fn(),
+vi.mock('@/infrastructure/runtime', () => ({
+  isTauriRuntime: () => true,
 }));
 
 vi.mock('../DeepReviewConsentDialog', () => ({
@@ -172,6 +178,8 @@ describe('SessionFilesBadge', () => {
       changeKind: 'modify',
     });
     mocks.getOperationDiff.mockReset();
+    vi.mocked(prepareReviewLaunchFromSessionFiles).mockReset();
+    vi.mocked(notificationService.error).mockReset();
   });
 
   afterEach(() => {
@@ -216,5 +224,55 @@ describe('SessionFilesBadge', () => {
 
     expect(container.textContent).toContain('1 files');
     expect(container.textContent).not.toContain('stale-session.ts');
+  });
+
+  it('presents one adaptive Review action instead of asking users to choose a depth', async () => {
+    await act(async () => {
+      root.render(<SessionFilesBadge sessionId="session-1" />);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const actionsButton = container.querySelector('.session-files-badge__review-btn') as HTMLButtonElement | null;
+    expect(actionsButton).not.toBeNull();
+
+    await act(async () => {
+      actionsButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Review');
+    expect(container.textContent).not.toContain('Review: Strict');
+    expect(container.textContent).not.toContain('Deep review');
+  });
+
+  it('shows a localized error when Review cannot be prepared', async () => {
+    vi.mocked(prepareReviewLaunchFromSessionFiles).mockRejectedValueOnce(
+      new Error('review policy unavailable'),
+    );
+    await act(async () => {
+      root.render(<SessionFilesBadge sessionId="session-1" />);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const actionsButton = container.querySelector('.session-files-badge__review-btn') as HTMLButtonElement;
+    await act(async () => {
+      actionsButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    const reviewButton = container.querySelector('[role="menuitem"]') as HTMLButtonElement;
+    await act(async () => {
+      reviewButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(notificationService.error).toHaveBeenCalledWith(
+      expect.stringContaining('review policy unavailable'),
+      expect.objectContaining({ duration: 5000 }),
+    );
   });
 });

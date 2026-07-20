@@ -20,7 +20,6 @@ const ERROR = '255, 59, 48';
 
 const BG_PRIMARY = '#f3f3f5';
 const BG_SECONDARY = 'var(--color-static-white)';
-const BG_QUATERNARY = '#e8e8e8';
 const TEXT_PRIMARY = '#18181a';
 const TEXT_SECONDARY = '#48484a';
 const TEXT_MUTED = '#8e8e93';
@@ -39,12 +38,10 @@ export const lightTheme: MobileThemeVars = {
   '--color-bg-primary': BG_PRIMARY,
   '--color-bg-secondary': BG_SECONDARY,
   '--color-bg-tertiary': BG_PRIMARY,
-  '--color-bg-quaternary': BG_QUATERNARY,
   '--color-bg-elevated': BG_SECONDARY,
   '--color-bg-workbench': BG_PRIMARY,
   '--color-bg-scene': BG_SECONDARY,
   '--color-bg-flowchat': BG_SECONDARY,
-  '--color-bg-tooltip': alpha(WHITE, '0.98'),
 
   '--color-text-primary': TEXT_PRIMARY,
   '--color-text-secondary': TEXT_SECONDARY,
@@ -56,7 +53,6 @@ export const lightTheme: MobileThemeVars = {
   '--element-bg-base': alpha(IOS_NEUTRAL, '0.1'),
   '--element-bg-medium': alpha(IOS_NEUTRAL, '0.14'),
   '--element-bg-strong': alpha(IOS_NEUTRAL, '0.2'),
-  '--element-bg-elevated': alpha(WHITE, '0.94'),
 
   ...colorRamp('--color-accent', ACCENT, ACCENT_500, ACCENT_600, ['0.04', '0.08', '0.14', '0.22', '0.36']),
   ...colorRamp('--color-purple', PURPLE, PURPLE_500, PURPLE_600, ['0.04', '0.08', '0.14', '0.22', '0.36']),

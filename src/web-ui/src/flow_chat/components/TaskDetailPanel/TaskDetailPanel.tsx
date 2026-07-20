@@ -31,6 +31,7 @@ type FlowChatSession = NonNullable<ReturnType<FlowChatStore['getState']>['sessio
 interface TaskDetailSnapshot {
   toolItem: FlowToolItem | null;
   subagentSessionId?: string;
+  subagentDialogTurnId?: string;
   subagentItems: FlowItem[];
   isSubagentRunning: boolean;
 }
@@ -80,6 +81,7 @@ function areSnapshotsEqual(prev: TaskDetailSnapshot, next: TaskDetailSnapshot): 
   return (
     prev.toolItem === next.toolItem &&
     prev.subagentSessionId === next.subagentSessionId &&
+    prev.subagentDialogTurnId === next.subagentDialogTurnId &&
     prev.isSubagentRunning === next.isSubagentRunning &&
     areFlowItemsEqual(prev.subagentItems, next.subagentItems)
   );
@@ -90,6 +92,7 @@ function collectTaskDetailSnapshot(
   sessionId: string | undefined,
   parentTaskToolIds: Set<string>,
   directSubagentSessionId?: string,
+  directSubagentDialogTurnId?: string,
 ): TaskDetailSnapshot {
   if (parentTaskToolIds.size === 0 && !directSubagentSessionId) {
     return { toolItem: null, subagentItems: [], subagentSessionId: undefined, isSubagentRunning: false };
@@ -128,12 +131,14 @@ function collectTaskDetailSnapshot(
     parentSessionId: sessionId,
     parentToolIds: parentTaskToolIds,
     directSubagentSessionId,
+    directSubagentDialogTurnId,
   });
 
   if (toolItem || projection.items.length > 0 || projection.session || !preferredSession) {
     return {
       toolItem,
       subagentSessionId: projection.session?.sessionId,
+      subagentDialogTurnId: projection.turn?.id,
       subagentItems: projection.items,
       isSubagentRunning: projection.isRunning,
     };
@@ -143,11 +148,13 @@ function collectTaskDetailSnapshot(
     parentSessionId: undefined,
     parentToolIds: parentTaskToolIds,
     directSubagentSessionId,
+    directSubagentDialogTurnId,
   });
 
   return {
     toolItem,
     subagentSessionId: fallbackProjection.session?.sessionId,
+    subagentDialogTurnId: fallbackProjection.turn?.id,
     subagentItems: fallbackProjection.items,
     isSubagentRunning: fallbackProjection.isRunning,
   };
@@ -160,6 +167,7 @@ export interface TaskDetailData {
     prompt: string;
     agentType: string;
     reviewerContext?: ReviewerContext | null;
+    isReviewCoverageTask?: boolean;
   } | null;
   sessionId?: string;
 }
@@ -172,19 +180,32 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const { t } = useTranslation('flow-chat');
   const { t: tAgents } = useTranslation('scenes/agents');
   const { toolItem: initialToolItem, taskInput, sessionId } = data || {};
+  const isReviewCoverageTask = Boolean(taskInput?.isReviewCoverageTask);
   const defaultTimeoutDisabled = useSessionGoalModeActive(sessionId);
   const parentTaskToolId = initialToolItem?.id;
   const parentTaskToolCallId = initialToolItem?.toolCall?.id;
   const directSubagentSessionId = initialToolItem?.subagentSessionId;
+  const directSubagentDialogTurnId = initialToolItem?.subagentDialogTurnId;
   const parentTaskToolIds = useMemo(
     () => new Set([parentTaskToolId, parentTaskToolCallId].filter(Boolean) as string[]),
     [parentTaskToolId, parentTaskToolCallId],
   );
+  const projectionParentTaskToolIds = useMemo(
+    () => isReviewCoverageTask ? new Set<string>() : parentTaskToolIds,
+    [isReviewCoverageTask, parentTaskToolIds],
+  );
+  const projectionSubagentSessionId = isReviewCoverageTask
+    ? undefined
+    : directSubagentSessionId;
+  const projectionSubagentDialogTurnId = isReviewCoverageTask
+    ? undefined
+    : directSubagentDialogTurnId;
   
   const [taskSnapshot, setTaskSnapshot] = useState<TaskDetailSnapshot>(() => ({
     toolItem: initialToolItem ?? null,
     subagentItems: [],
     subagentSessionId: initialToolItem?.subagentSessionId,
+    subagentDialogTurnId: initialToolItem?.subagentDialogTurnId,
     isSubagentRunning: false,
   }));
   const [isSnapshotHydrated, setIsSnapshotHydrated] = useState(false);
@@ -199,7 +220,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   // Collect only the state this detail panel cares about, and avoid re-rendering
   // when unrelated flow-chat updates arrive.
   useEffect(() => {
-    if (parentTaskToolIds.size === 0 && !directSubagentSessionId) {
+    if (projectionParentTaskToolIds.size === 0 && !projectionSubagentSessionId) {
+      setTaskSnapshot({
+        toolItem: initialToolItem ?? null,
+        subagentItems: [],
+        subagentSessionId: initialToolItem?.subagentSessionId,
+        subagentDialogTurnId: initialToolItem?.subagentDialogTurnId,
+        isSubagentRunning: false,
+      });
       setIsSnapshotHydrated(true);
       return;
     }
@@ -209,6 +237,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       toolItem: initialToolItem ?? null,
       subagentItems: [],
       subagentSessionId: initialToolItem?.subagentSessionId,
+      subagentDialogTurnId: initialToolItem?.subagentDialogTurnId,
       isSubagentRunning: false,
     };
     let hydrationFrameId: number | null = null;
@@ -235,8 +264,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         const nextSnapshot = collectTaskDetailSnapshot(
           latestState,
           sessionId,
-          parentTaskToolIds,
-          directSubagentSessionId,
+          projectionParentTaskToolIds,
+          projectionSubagentSessionId,
+          projectionSubagentDialogTurnId,
         );
 
         if (!areSnapshotsEqual(previousSnapshot, nextSnapshot)) {
@@ -259,8 +289,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       previousSnapshot = collectTaskDetailSnapshot(
         flowChatStore.getState(),
         sessionId,
-        parentTaskToolIds,
-        directSubagentSessionId,
+        projectionParentTaskToolIds,
+        projectionSubagentSessionId,
+        projectionSubagentDialogTurnId,
       );
 
       setTaskSnapshot(current => areSnapshotsEqual(current, previousSnapshot) ? current : previousSnapshot);
@@ -290,7 +321,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       }
       unsubscribe?.();
     };
-  }, [sessionId, parentTaskToolIds, directSubagentSessionId, initialToolItem, initialToolItem?.status]);
+  }, [
+    sessionId,
+    projectionParentTaskToolIds,
+    projectionSubagentSessionId,
+    projectionSubagentDialogTurnId,
+    initialToolItem,
+    initialToolItem?.status,
+  ]);
 
   const toolItem = taskSnapshot.toolItem || initialToolItem;
   const status = toolItem?.status;
@@ -299,7 +337,8 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const isFailed = status === 'error' || toolResult?.success === false;
   const taskDurationMs = readTaskDurationMs(toolResult);
   const isCompleted = status === 'completed' && !isFailed;
-  const shouldDisplaySubagentProjection = taskSnapshot.isSubagentRunning;
+  const shouldDisplaySubagentProjection =
+    !isReviewCoverageTask && taskSnapshot.isSubagentRunning;
   const subagentItems = useMemo(() => {
     if (!shouldDisplaySubagentProjection) {
       return [];
@@ -449,7 +488,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     );
   }
 
-  const rc = taskInput?.reviewerContext;
+  const rc = taskInput?.isReviewCoverageTask ? null : taskInput?.reviewerContext;
 
   return (
     <div className="task-detail-panel">
@@ -460,7 +499,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         </span>
         {taskInput?.agentType && (
           <span className="task-detail-panel__header-badge">
-            {rc
+            {taskInput.isReviewCoverageTask
+              ? t('toolCards.taskTool.reviewCoverageLabel')
+              : rc
               ? tAgents(`reviewTeams.members.${rc.definitionKey}.funName`, {
                   defaultValue: rc.roleName,
                 })
@@ -543,10 +584,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
               <Square size={12} style={{ marginRight: 6 }} />
               {stoppingSubagent
                 ? t('toolCards.taskDetailPanel.stoppingSubagent')
-                : t('toolCards.taskDetailPanel.stopSubagent')}
+                : taskInput?.isReviewCoverageTask
+                  ? t('toolCards.taskDetailPanel.stopReviewWork')
+                  : t('toolCards.taskDetailPanel.stopSubagent')}
             </Button>
             <span className="task-detail-panel__actions-hint">
-              {t('toolCards.taskDetailPanel.stopSubagentHint')}
+              {taskInput?.isReviewCoverageTask
+                ? t('toolCards.taskDetailPanel.stopReviewWorkHint')
+                : t('toolCards.taskDetailPanel.stopSubagentHint')}
             </span>
           </div>
         )}
@@ -564,6 +609,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
               <SubagentProjectionView
                 parentTaskToolId={toolItem.id}
                 subagentSessionId={subagentSessionId}
+                directSubagentDialogTurnId={taskSnapshot.subagentDialogTurnId}
                 items={visibleSubagentItems}
                 sessionId={subagentSessionId}
                 compactText={false}

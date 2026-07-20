@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "Permission management",
-    "subtitle": "Accelerated workspace search, tool execution, browser control, and debug mode"
+    "subtitle": "Accelerated workspace search, tool execution, tool definition loading, browser control, and debug mode"
   },
   "features": {
     "sessionTitle": {
@@ -22,6 +22,27 @@
   "toolExecution": {
     "sectionTitle": "Tool execution behavior",
     "sectionDescription": "Confirmation and timeout settings when tools run in a session."
+  },
+  "deferredToolLoading": {
+    "sectionTitle": "Deferred tool loading",
+    "sectionDescription": "Load detailed schemas for some tools only when needed, including a subset of built-in tools and all MCP tools.",
+    "warning": "Each request now sends full schemas for enabled tools. Configuring many MCP tools uses more tokens."
+  },
+  "computerUse": {
+    "sectionTitle": "Computer use (desktop)",
+    "sectionDescription": "In the BitFun desktop app, the assistant can capture the screen and control the mouse and keyboard; requires a multimodal model for vision.",
+    "enable": "Enable Computer use",
+    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode.",
+    "accessibility": "Accessibility",
+    "accessibilityDesc": "macOS: lets BitFun read on-screen UI elements and send mouse/keyboard input to other apps. Not applicable on Windows; on Linux this requires an X11 session.",
+    "screenCapture": "Screen recording",
+    "screenCaptureDesc": "Lets BitFun capture screenshots of your screen so the assistant can see what it is controlling.",
+    "granted": "Granted",
+    "notGranted": "Not granted",
+    "openSettings": "Setting",
+    "refreshStatus": "Refresh status",
+    "desktopOnly": "Computer use settings are only available in the BitFun desktop app.",
+    "platformNote": "Note"
   },
   "browserControl": {
     "sectionTitle": "Browser control",

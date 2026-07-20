@@ -20,7 +20,7 @@ pub struct MemoryExtractionRecord {
     pub created_at_unix_secs: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct MemoryPhase1RunStats {
     pub scanned_sessions: usize,
     pub candidate_sessions: usize,
@@ -29,14 +29,21 @@ pub struct MemoryPhase1RunStats {
     pub failed_sessions: usize,
 }
 
-impl Default for MemoryPhase1RunStats {
-    fn default() -> Self {
-        Self {
-            scanned_sessions: 0,
-            candidate_sessions: 0,
-            extracted_sessions: 0,
-            skipped_sessions: 0,
-            failed_sessions: 0,
-        }
+#[cfg(test)]
+mod tests {
+    use super::MemoryPhase1RunStats;
+
+    #[test]
+    fn phase1_run_stats_default_is_all_zeroes() {
+        assert_eq!(
+            MemoryPhase1RunStats::default(),
+            MemoryPhase1RunStats {
+                scanned_sessions: 0,
+                candidate_sessions: 0,
+                extracted_sessions: 0,
+                skipped_sessions: 0,
+                failed_sessions: 0,
+            }
+        );
     }
 }

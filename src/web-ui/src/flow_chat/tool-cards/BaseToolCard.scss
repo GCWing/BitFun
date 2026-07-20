@@ -97,7 +97,7 @@
   display: flex;
   align-items: center;
   gap: var(--flowchat-inline-gap);
-  padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-right) var(--tool-card-header-pad-y) var(--tool-card-header-pad-x);
+  padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-right) var(--tool-card-header-pad-y) 0;
   position: relative;
   z-index: 11;
   flex-shrink: 0;
@@ -191,7 +191,7 @@
 /* ========== Expanded content area ========== */
 .base-tool-card-expanded {
   /* Full-bleed dividers in children use these (header pad-x is 0; do not conflate). */
-  padding: var(--tool-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
+  padding: var(--flowchat-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
   opacity: 1;

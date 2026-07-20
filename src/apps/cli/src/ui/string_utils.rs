@@ -2,7 +2,7 @@
 use unicode_width::UnicodeWidthChar;
 
 /// Safely truncate string to specified byte length
-pub fn truncate_str(s: &str, max_bytes: usize) -> String {
+pub(crate) fn truncate_str(s: &str, max_bytes: usize) -> String {
     let first_line = s.lines().next().unwrap_or("");
 
     if first_line.len() <= max_bytes {
@@ -23,7 +23,7 @@ pub fn truncate_str(s: &str, max_bytes: usize) -> String {
 
 /// Strip ANSI escape sequences from a string.
 /// Handles CSI sequences (\x1b[...X), OSC sequences (\x1b]...ST), and simple two-byte escapes.
-pub fn strip_ansi_codes(s: &str) -> String {
+pub(super) fn strip_ansi_codes(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
 
@@ -78,7 +78,7 @@ pub fn strip_ansi_codes(s: &str) -> String {
 
 /// Hard-wrap a single line to fit within display width (columns).
 /// Preserves all characters (no truncation), splitting long lines into multiple lines.
-pub fn wrap_to_display_width(s: &str, max_width: usize) -> Vec<String> {
+pub(super) fn wrap_to_display_width(s: &str, max_width: usize) -> Vec<String> {
     if max_width == 0 {
         return vec![String::new()];
     }

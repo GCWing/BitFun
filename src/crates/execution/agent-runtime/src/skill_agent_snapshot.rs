@@ -256,7 +256,7 @@ pub fn build_skill_agent_tool_listing_sections_from_snapshot(
         agent_listing: (!snapshot.subagents.is_empty())
             .then(|| render_full_agent_listing_body(&snapshot.subagents))
             .filter(|body| !body.is_empty()),
-        collapsed_tool_listing: None,
+        deferred_tool_listing: None,
     }
 }
 

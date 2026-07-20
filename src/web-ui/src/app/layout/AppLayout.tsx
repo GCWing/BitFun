@@ -19,8 +19,6 @@ import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { sessionStorageAdapter } from '@/shared/utils/sessionStorageAdapter';
-
-type TransitionDirection = 'entering' | 'returning' | null;
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
 import WorkspaceBody from './WorkspaceBody';
 import { useToolbarModeContext } from '../../flow_chat/components/toolbar-mode/ToolbarModeContext';
@@ -38,6 +36,8 @@ import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/servic
 import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import './AppLayout.scss';
+
+type TransitionDirection = 'entering' | 'returning' | null;
 
 const log = createLogger('AppLayout');
 const ACP_SESSION_PENDING_TIMEOUT_MS = 75_000;
@@ -226,7 +226,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     try {
       const selected = await workspaceAPI.open_oh_file_dialog();
 
-      if (selected && typeof selected === 'string') {
+      if (selected) {
         await openWorkspace(selected);
       }
     } catch (error) {
@@ -278,7 +278,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       } catch {}
     })();
     return () => { unlistenFns.forEach(fn => fn()); unlistenFns = []; };
-  }, [isMacOS, openWorkspace, handleNewProject, handleShowAbout]);
+  }, [isMacOS, openWorkspace, handleNewProject, handleShowAbout, t]);
 
   // Initialize FlowChatManager
   React.useEffect(() => {
@@ -603,13 +603,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     const handler = (e: Event) => {
       const clientId = (e as CustomEvent<{ clientId?: string }>).detail?.clientId?.trim();
       if (!clientId) return;
+      const config = currentWorkspace
+        ? {
+            workspacePath: currentWorkspace.rootPath,
+            ...(currentWorkspace.workspaceKind === WorkspaceKind.Remote && currentWorkspace.connectionId
+              ? { remoteConnectionId: currentWorkspace.connectionId }
+              : {}),
+            ...(currentWorkspace.workspaceKind === WorkspaceKind.Remote && currentWorkspace.sshHost
+              ? { remoteSshHost: currentWorkspace.sshHost }
+              : {}),
+          }
+        : {};
       void FlowChatManager.getInstance()
-        .createAcpChatSession(clientId)
+        .createAcpChatSession(clientId, config)
         .catch(error => log.error('Failed to create ACP FlowChat session', error));
     };
     window.addEventListener('bitfun:create-acp-session', handler);
     return () => window.removeEventListener('bitfun:create-acp-session', handler);
-  }, []);
+  }, [currentWorkspace]);
 
   React.useEffect(() => {
     const handler = (event: Event) => {

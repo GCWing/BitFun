@@ -9,6 +9,8 @@
 |---|---|---|
 | [research/external-research.md](research/external-research.md) | 调研文档 | 外部产品、论文、标准和趋势信号 |
 | [product-requirements.md](product-requirements.md) | 产品需求 | 产品定位、用户画像、体验路径、产品规格、关键边界、平台差异和成功指标 |
+| [product-requirements-agent-workflow-adjustment.md](product-requirements-agent-workflow-adjustment.md) | 非权威候选调整提案 | 智能体工作流、并发 GUI、Review 范围控制、token 成本和任务完成度平衡；采纳前需回填权威文档 |
+| [agent-workflow-staged-plan.md](agent-workflow-staged-plan.md) | 场景收敛计划 | 将工作流、审查、并发和成本控制压回真实用户场景，不新增独立阶段路线 |
 | [design.md](design.md) | 架构设计 | 设计目标、领域模型、配置层级、模块边界和架构风险 |
 | [implementation-plan.md](implementation-plan.md) | 实施计划 | 按用户收益切片组织快速路径、上下文保障、团队治理、复杂生命周期能力的阶段落地 |
 | [traceability-matrix.md](traceability-matrix.md) | 追踪矩阵 | 需求、设计、功能规格、执行阶段和测试方法的映射 |
@@ -43,13 +45,15 @@ BitFun 面向任意目标项目提供可配置的智能体开发体验。产品�
 
 这些准则适用于产品需求、架构设计、实施计划和子模块文档。非通用准则只写在对应子模块，并说明触发条件、退出条件和与全局准则的关系。
 
-- **默认轻量，关键风险强保护**：普通低风险开发不进入重流程；凭据、网络外发、危险 shell、跨目录写、删除、发布、主动配置和 prompt 注入等安全风险始终走安全边界。
+- **默认轻量，关键风险强保护**：普通低风险开发不进入重流程；凭据、网络外发、危险 shell、跨目录写、删除、发布、Harness 主动配置和 prompt 注入等安全风险始终走安全边界；外部能力沿用其 owner 的安全决定。
 - **按动作效果判定，不按工具名称判定**：tool、MCP、skills、插件、hook、shell 和内置能力都映射为能力、目标、数据、来源和副作用，再由策略判断。
 - **未知能力默认受限**：新增扩展必须声明能力和可能副作用；未声明、声明不完整或运行时行为超出声明时，不能按低风险处理。
 - **用户确认不是万能授权**：确认只在指定范围、期限、执行域和能力内生效；组织策略、安全拒绝和关键凭据保护不能被本地确认绕过。
 - **模型只参与解释和候选判断**：风险解释、建议检查和候选影响可以由模型辅助；授权、阻断、审计、状态写入和策略变更必须由确定性策略和内核事实执行。
 - **体验和性能预算常驻**：风险判断、提示、事件和扫描不能明显拖慢默认路径；高成本分析、深度证据和完整图谱默认按需、异步或离线执行。
-- **扩展契约先于生态运行时**：先稳定 Plugin Runtime Host contract、binding、envelope、disabled stub、Event Manifest、Tool ABI、Permission/Effect 和 UI descriptor；真实可写插件运行时、OpenCode 兼容或其他生态适配后置接入。
+- **扩展能力复用现有归属接口**：Harness 只消费已注册的类型化工具、Hook 变换、事件、权限结果和诊断，
+  不定义跨能力统一消息、效果协议或界面扩展对象。新增插件主机/适配器契约必须来自真实垂直切片，
+  其交付阶段以产品架构与 OpenCode 兼容文档为准，不与 SDLC Harness 阶段互相替代。
 
 ## 阅读建议
 

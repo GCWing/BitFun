@@ -7,7 +7,10 @@ use std::collections::{HashMap, HashSet};
 /// Single token usage record for a specific API call
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenUsageRecord {
-    pub model_id: String,
+    /// Resolved `AIModelConfig.id` used for the request.
+    pub model_config_id: String,
+    /// Provider model name sent on the request.
+    pub effective_model_name: String,
     pub session_id: String,
     pub turn_id: String,
     pub timestamp: DateTime<Utc>,

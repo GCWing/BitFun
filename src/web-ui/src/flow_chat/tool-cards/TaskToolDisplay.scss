@@ -239,6 +239,50 @@
     background: rgba(var(--task-failed-badge-rgb), 0.15);
   }
 
+  .task-subagent-stop-button {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    color: var(--color-text-secondary);
+    background: var(--element-bg-soft);
+    cursor: pointer;
+    transition:
+      color 0.15s ease,
+      background-color 0.15s ease,
+      border-color 0.15s ease;
+
+    &:hover:not(:disabled) {
+      color: var(--color-error);
+      background: var(--element-bg-hover);
+      border-color: var(--color-error);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.7;
+    }
+
+    svg {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    &:disabled svg {
+      animation: task-subagent-stop-spin 1s linear infinite;
+    }
+  }
+
   .agent-type-badge {
     display: inline-flex;
     align-items: center;
@@ -614,6 +658,15 @@
     li {
       color: var(--color-text-secondary);
     }
+  }
+}
+
+@keyframes task-subagent-stop-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 

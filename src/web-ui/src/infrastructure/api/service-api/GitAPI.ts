@@ -98,12 +98,16 @@ export interface GitDiffParams {
   filePath?: string;
   staged?: boolean;
   commit?: string;
+  /** Use the bounded, non-interactive path reserved for Review evidence. */
+  reviewSafe?: boolean;
 }
 
 export interface GitChangedFilesParams {
   source?: string;
   target?: string;
   staged?: boolean;
+  /** Use the bounded, non-interactive path reserved for Review evidence. */
+  reviewSafe?: boolean;
 }
 
 export type GitChangedFileStatus =
@@ -238,6 +242,19 @@ export class GitAPI {
       });
     } catch (error) {
       throw createTauriCommandError('git_get_repository_basic', error, { repositoryPath });
+    }
+  }
+
+  async resolveRevision(repositoryPath: string, revision: string): Promise<string> {
+    try {
+      return await api.invoke('git_resolve_revision', {
+        request: { repositoryPath, revision },
+      });
+    } catch (error) {
+      throw createTauriCommandError('git_resolve_revision', error, {
+        repositoryPath,
+        revision,
+      });
     }
   }
 

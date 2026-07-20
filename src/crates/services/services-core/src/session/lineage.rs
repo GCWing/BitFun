@@ -208,11 +208,9 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
         .sum();
     metadata.status = SessionStatus::Active;
     metadata.snapshot_session_id = None;
-    metadata.tags = metadata
+    metadata
         .tags
-        .into_iter()
-        .filter(|tag| !BRANCH_EXCLUDED_TAGS.contains(&tag.as_str()))
-        .collect();
+        .retain(|tag| !BRANCH_EXCLUDED_TAGS.contains(&tag.as_str()));
     metadata.custom_metadata = build_branch_custom_metadata(
         facts.source_metadata.custom_metadata.as_ref(),
         facts.source_session_id,
@@ -221,7 +219,9 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
     );
     metadata.relationship = None;
     metadata.todos = None;
+    metadata.review_action_state = None;
     metadata.deep_review_run_manifest = None;
+    metadata.review_target_evidence = None;
     metadata.unread_completion = None;
     metadata.needs_user_attention = None;
     metadata
@@ -362,10 +362,11 @@ mod tests {
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                subagent_dialog_turn_id: None,
                 attempt_id: None,
                 attempt_index: None,
                 subagent_model_id: None,
-                subagent_model_alias: None,
+                subagent_model_display_name: None,
                 status: Some("completed".to_string()),
                 interruption_reason: None,
             }],
@@ -374,8 +375,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,

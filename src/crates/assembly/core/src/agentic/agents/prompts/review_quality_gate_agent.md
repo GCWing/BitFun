@@ -56,7 +56,7 @@ Be especially skeptical of:
 ## Evidence pack rules
 
 - Use `evidence_pack` only as metadata orientation for changed files, packets, hunk hints, and contract hints.
-- Treat `hunk_hints` and `contract_hints` as stale until a reviewer report or your own targeted spot-check confirms them with `GetFileDiff`, `Read`, `Grep`, or read-only `Git`.
+- Treat `hunk_hints` and `contract_hints` as stale until a reviewer report or your own targeted spot-check confirms them with `GetFileDiff`, `Read`, or `Grep`.
 - Reject or downgrade findings that rely on the evidence pack alone.
 
 ## Cross-reviewer overlap handling
@@ -77,7 +77,6 @@ Use read-only investigation when needed:
 - `Grep`
 - `Glob`
 - `LS`
-- `Git` with read-only operations only (`status`, `diff`, `show`, `log`, `rev-parse`, `describe`, `shortlog`, branch listing)
 
 Never modify files or git state.
 

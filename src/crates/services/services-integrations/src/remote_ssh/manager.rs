@@ -66,9 +66,9 @@ fn ssh_cfg_has(settings: &std::collections::HashMap<&str, &str>, canonical_key: 
 /// quoted value or the first whitespace-delimited token for unquoted values.
 fn parse_ssh_config_value(value: &str) -> Option<&str> {
     let value = value.trim();
-    if value.starts_with('"') {
-        if let Some(end) = value[1..].find('"') {
-            let inner = &value[1..1 + end];
+    if let Some(quoted) = value.strip_prefix('"') {
+        if let Some(end) = quoted.find('"') {
+            let inner = &quoted[..end];
             return if inner.is_empty() { None } else { Some(inner) };
         }
     }
@@ -1661,15 +1661,12 @@ impl SSHConnectionManager {
         let result = SSHCommandResult {
             stdout,
             stderr,
-            exit_code: exit_status.unwrap_or_else(|| {
-                if timed_out {
-                    124
-                } else if interrupted {
-                    130
-                } else {
-                    -1
-                }
-            }),
+            exit_code: match exit_status {
+                Some(exit_code) => exit_code,
+                None if timed_out => 124,
+                None if interrupted => 130,
+                None => -1,
+            },
             interrupted,
             timed_out,
         };
@@ -2390,9 +2387,8 @@ impl SSHConnectionManager {
         }
 
         for dir in sftp_mkdir_all_prefixes(&path) {
-            match sftp.as_ref().try_exists(&dir).await {
-                Ok(true) => continue,
-                Ok(false) | Err(_) => {}
+            if let Ok(true) = sftp.as_ref().try_exists(&dir).await {
+                continue;
             }
 
             if let Err(error) = sftp.as_ref().create_dir(&dir).await {
@@ -2479,14 +2475,19 @@ impl SSHConnectionManager {
         cols: u32,
         rows: u32,
     ) -> anyhow::Result<PTYSession> {
-        let guard = self.connections.read().await;
-        let conn = guard
-            .get(connection_id)
-            .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+        let handle = {
+            let guard = self.connections.read().await;
+            let conn = guard
+                .get(connection_id)
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            if !conn.alive.load(Ordering::SeqCst) {
+                return Err(anyhow!("Connection {} is not alive", connection_id));
+            }
+            conn.handle.clone()
+        };
 
         // Open a session channel
-        let channel = conn
-            .handle
+        let channel = handle
             .channel_open_session()
             .await
             .map_err(|e| anyhow!("Failed to open channel: {}", e))?;
@@ -2502,6 +2503,21 @@ impl SSHConnectionManager {
             .request_shell(false)
             .await
             .map_err(|e| anyhow!("Failed to start shell: {}", e))?;
+
+        let still_connected = {
+            let guard = self.connections.read().await;
+            guard.get(connection_id).is_some_and(|conn| {
+                conn.alive.load(Ordering::SeqCst) && Arc::ptr_eq(&conn.handle, &handle)
+            })
+        };
+        if !still_connected {
+            let _ = channel.eof().await;
+            let _ = channel.close().await;
+            return Err(anyhow!(
+                "Connection {} disconnected while opening PTY",
+                connection_id
+            ));
+        }
 
         Ok(PTYSession {
             channel: Arc::new(tokio::sync::Mutex::new(channel)),

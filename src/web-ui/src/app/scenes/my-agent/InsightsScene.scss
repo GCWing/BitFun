@@ -15,10 +15,10 @@ $ins-blue-bg:  var(--color-accent-100);
 $ins-green-bg: var(--color-success-bg);
 $ins-red-bg:   var(--color-error-bg);
 
-// Surfaces & borders — must work on both light & dark themes.
-// Using `--color-bg-elevated` keeps cards crisp on white scenes (dark theme
-// elevated is still slightly above the scene bg so it reads as a card).
-$ins-surface:       var(--color-bg-quaternary);
+// Surfaces & borders - local card layer, not a public theme contract.
+// The text mix preserves resting-card separation in light themes where
+// scene and elevated surfaces are intentionally both white.
+$ins-surface:       color-mix(in srgb, var(--color-bg-elevated) 94%, var(--color-text-primary) 6%);
 $ins-surface-soft:  var(--element-bg-subtle);
 $ins-surface-hover: var(--element-bg-soft);
 $ins-border:        var(--border-base);
@@ -26,8 +26,8 @@ $ins-border-hover:  var(--border-medium);
 
 // Hover tint that flips with theme: blends toward primary text color
 // (dark on light theme, light on dark theme), so it always reads correctly.
-$ins-tint-1: color-mix(in srgb, var(--color-bg-quaternary) 92%, var(--color-text-primary) 8%);
-$ins-tint-2: color-mix(in srgb, var(--color-bg-quaternary) 86%, var(--color-text-primary) 14%);
+$ins-tint-1: color-mix(in srgb, var(--color-bg-elevated) 88%, var(--color-text-primary) 12%);
+$ins-tint-2: color-mix(in srgb, var(--color-bg-elevated) 82%, var(--color-text-primary) 18%);
 
 // Spacing: 4 / 8 / 14 / 22 / 40
 $ins-xs: 4px;

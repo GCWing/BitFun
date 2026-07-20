@@ -17,7 +17,7 @@ impl DialogTurnCancellationTokenStore {
     pub fn get_or_insert_new(&self, dialog_turn_id: &str) -> CancellationToken {
         self.tokens
             .entry(dialog_turn_id.to_string())
-            .or_insert_with(CancellationToken::new)
+            .or_default()
             .clone()
     }
 

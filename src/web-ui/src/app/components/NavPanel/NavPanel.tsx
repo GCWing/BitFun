@@ -21,6 +21,7 @@ import { getSceneNav } from '../../scenes/nav-registry';
 import type { SceneTabId } from '../SceneBar/types';
 import MainNav from './MainNav';
 import PersistentFooterActions from './components/PersistentFooterActions';
+import { PeerRemoteBadge } from '@/infrastructure/peer-device/PeerRemoteBadge';
 import './NavPanel.scss';
 
 /** Scenes that use the split-open accordion transition. */
@@ -102,6 +103,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
         )}
 
       </div>
+      <PeerRemoteBadge />
       <PersistentFooterActions />
     </nav>
   );

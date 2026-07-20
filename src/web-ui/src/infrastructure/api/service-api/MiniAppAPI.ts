@@ -241,6 +241,14 @@ export interface MiniAppCustomizationMetadata {
   updated_at: number;
 }
 
+function normalizeMiniApp(raw: MiniApp & { compiledHtml?: string }): MiniApp {
+  const compiledHtml = raw.compiled_html ?? raw.compiledHtml ?? '';
+  return {
+    ...raw,
+    compiled_html: compiledHtml,
+  };
+}
+
 export class MiniAppAPI {
   async listMiniApps(): Promise<MiniAppMeta[]> {
     try {
@@ -252,9 +260,11 @@ export class MiniAppAPI {
 
   async getMiniApp(appId: string, theme?: string, workspacePath?: string): Promise<MiniApp> {
     try {
-      return await api.invoke('get_miniapp', {
+      const raw = await api.invoke<MiniApp & { compiledHtml?: string }>('get_miniapp', {
         request: { appId, theme: theme ?? undefined, workspacePath }
       });
+      const normalized = normalizeMiniApp(raw);
+      return normalized;
     } catch (error) {
       throw createTauriCommandError('get_miniapp', error, { appId, workspacePath });
     }

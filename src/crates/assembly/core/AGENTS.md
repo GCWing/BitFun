@@ -33,7 +33,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   `tauri::AppHandle`; use shared abstractions such as
   `bitfun_events::EventEmitter`.
 - Desktop-only host adapters belong in `src/apps/desktop`, then flow through
-  transport/API layers.
+  typed capability interfaces; use the production transport adapter when event
+  delivery is needed.
 - Do not add new cross-layer references from `service` to `agentic` without a
   narrow port/interface boundary.
 - Do not move platform-specific logic, build-script behavior, product capability
@@ -60,6 +61,14 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   coverage, but filesystem writes, worker/host side effects, Git/AI concrete
   calls, marker IO, and path-manager integration stay in core unless a reviewed
   owner design says otherwise.
+- `plugin_source` may inject product-owned paths and keep compatibility exports;
+  concrete managed-package discovery and trust persistence stay in
+  `services-integrations`, while ecosystem parsing and Plugin Runtime Host
+  behavior remain in their adapter and execution owners.
+- `plugin_runtime` and `external_sources` are the reviewed product-full
+  composition files allowed to select ecosystem adapters for their respective
+  capability contracts. Product surfaces consume product-level views and must
+  not import adapter or Host ABI types.
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.
@@ -85,8 +94,8 @@ Use these files for ownership details instead of expanding this guide:
 Narrower local guides already exist for some subtrees:
 
 - `src/crates/adapters/ai-adapters/AGENTS.md`
-- `src/agentic/execution/AGENTS.md`
-- `src/agentic/deep_review/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/execution/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/deep_review/AGENTS.md`
 
 ## Verification
 

@@ -150,7 +150,7 @@ body {
   box-shadow: inset -1px 0 0 var(--border-subtle);
   overflow-y: auto;
   padding: 12px 10px;
-  transition: width var(--motion-fast) var(--easing-smooth);
+  transition: width var(--motion-fast) var(--easing-standard);
 }
 
 .preview-sidebar--collapsed {
@@ -186,9 +186,9 @@ body {
   color: var(--color-text-secondary);
   cursor: pointer;
   transition:
-    background var(--motion-fast) var(--easing-smooth),
-    color var(--motion-fast) var(--easing-smooth),
-    transform var(--motion-fast) var(--easing-smooth);
+    background var(--motion-fast) var(--easing-standard),
+    color var(--motion-fast) var(--easing-standard),
+    transform var(--motion-fast) var(--easing-standard);
 }
 
 .preview-sidebar-toggle:hover {
@@ -198,7 +198,7 @@ body {
 
 .preview-sidebar-toggle__icon {
   display: inline-flex;
-  transition: transform var(--motion-fast) var(--easing-smooth);
+  transition: transform var(--motion-fast) var(--easing-standard);
 }
 
 .preview-sidebar-toggle__icon.is-collapsed {
@@ -230,10 +230,10 @@ body {
   font-weight: 600;
   color: var(--color-text-secondary);
   transition:
-    background var(--motion-fast) var(--easing-smooth),
-    color var(--motion-fast) var(--easing-smooth),
-    transform var(--motion-fast) var(--easing-smooth),
-    box-shadow var(--motion-fast) var(--easing-smooth);
+    background var(--motion-fast) var(--easing-standard),
+    color var(--motion-fast) var(--easing-standard),
+    transform var(--motion-fast) var(--easing-standard),
+    box-shadow var(--motion-fast) var(--easing-standard);
   text-align: left;
 }
 
@@ -315,9 +315,9 @@ body {
   border: 1px solid var(--border-subtle);
   overflow: visible;
   transition:
-    border-color var(--motion-fast) var(--easing-smooth),
-    box-shadow var(--motion-fast) var(--easing-smooth),
-    transform var(--motion-fast) var(--easing-smooth);
+    border-color var(--motion-fast) var(--easing-standard),
+    box-shadow var(--motion-fast) var(--easing-standard),
+    transform var(--motion-fast) var(--easing-standard);
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);

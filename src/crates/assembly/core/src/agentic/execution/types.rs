@@ -7,9 +7,11 @@ use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 pub use bitfun_agent_runtime::events::FinishReason;
+use bitfun_agent_tools::LoadedDeferredToolSpec;
 use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tool_runtime::context::PrimaryModelFacts;
@@ -53,11 +55,14 @@ pub struct RoundContext {
     pub round_number: usize,
     pub round_group_id: Option<String>,
     pub workspace: Option<WorkspaceBinding>,
-    pub messages: Vec<Message>,
+    pub model_exchange_trace_dir: Option<PathBuf>,
     pub available_tools: Vec<String>,
-    pub collapsed_tools: Vec<String>,
-    pub unlocked_collapsed_tools: Vec<String>,
-    pub model_name: String,
+    pub deferred_tools: Vec<String>,
+    pub loaded_deferred_tool_specs: Vec<LoadedDeferredToolSpec>,
+    /// Resolved `AIModelConfig.id` used to construct the client for this round.
+    pub model_config_id: String,
+    /// Provider model name sent in the request.
+    pub effective_model_name: String,
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,

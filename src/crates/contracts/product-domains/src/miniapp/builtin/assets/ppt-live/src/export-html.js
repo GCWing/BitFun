@@ -1,6 +1,7 @@
 import { escapeHtml } from './state.js';
 import { getLocale } from './i18n.js';
 import { normalizeSlideDocument, slideHtml } from './render.js';
+import { sanitizeSlideMarkup } from './sanitize-slide-markup.js';
 
 export function buildHtmlDeck(state) {
   if ((state.slides || []).some((slide) => slide.html)) {
@@ -28,7 +29,7 @@ ${deckCss()}
 function buildSourceHtmlDeck(state) {
   const slides = (state.slides || [])
     .map((slide, index) => `<section class="deck-slide" data-index="${index + 1}">
-  <iframe class="source-frame" sandbox="allow-same-origin" srcdoc="${escapeHtml(normalizeSlideDocument(slide.html || slideHtml(slide)))}"></iframe>
+  <iframe class="source-frame" sandbox="allow-same-origin" srcdoc="${escapeHtml(sanitizeSlideMarkup(normalizeSlideDocument(slide.html || slideHtml(slide))))}"></iframe>
 </section>`)
     .join('\n');
   return `<!DOCTYPE html>

@@ -173,7 +173,7 @@
       &--active {
         background: linear-gradient(135deg,
           color-mix(in srgb, var(--color-accent-500) 90%, transparent) 0%,
-          var(--color-accent-800) 100%);
+          color-mix(in srgb, var(--color-accent-600) 92%, var(--color-static-black)) 100%);
         color: var(--color-static-white);
         box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
       }
@@ -210,7 +210,7 @@
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
           var(--color-purple-200) 0%,
-          var(--color-purple-400) 100%);
+          color-mix(in srgb, var(--color-purple-500) 40%, transparent) 100%);
         box-shadow: 0 2px 8px color-mix(in srgb, var(--color-purple-500) 20%, transparent);
       }
     }
@@ -219,7 +219,7 @@
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
           color-mix(in srgb, var(--color-purple-500) 90%, transparent) 0%,
-          var(--color-purple-800) 100%);
+          color-mix(in srgb, var(--color-purple-600) 90%, transparent) 100%);
         box-shadow: 0 4px 12px color-mix(in srgb, var(--color-purple-500) 30%, transparent);
       }
     }
@@ -241,7 +241,7 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        border-bottom-color: var(--color-purple-400);
+        border-bottom-color: color-mix(in srgb, var(--color-purple-500) 40%, transparent);
       }
     }
 

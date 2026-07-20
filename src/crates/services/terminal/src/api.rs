@@ -38,6 +38,9 @@ pub struct CreateSessionRequest {
     /// Optional shell type
     #[serde(rename = "shellType")]
     pub shell_type: Option<ShellType>,
+    /// Optional stable ID of a discovered shell executable.
+    #[serde(rename = "shellId", skip_serializing_if = "Option::is_none")]
+    pub shell_id: Option<String>,
     /// Optional working directory
     #[serde(rename = "workingDirectory")]
     pub working_directory: Option<String>,
@@ -177,6 +180,8 @@ pub struct GetHistoryResponse {
 /// Shell information response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShellInfo {
+    /// Stable ID for selecting this exact executable.
+    pub id: String,
     /// Shell type
     #[serde(rename = "shellType")]
     pub shell_type: ShellType,
@@ -186,6 +191,9 @@ pub struct ShellInfo {
     pub path: String,
     /// Shell version (if detected)
     pub version: Option<String>,
+    /// How the executable was discovered.
+    #[serde(rename = "discoverySource")]
+    pub discovery_source: crate::shell::ShellDiscoverySource,
     /// Whether the shell is available
     pub available: bool,
 }
@@ -300,10 +308,12 @@ impl TerminalApi {
         ShellDetector::detect_available_shells()
             .into_iter()
             .map(|shell| ShellInfo {
+                id: shell.id,
                 shell_type: shell.shell_type,
                 name: shell.display_name,
                 path: shell.path.to_string_lossy().to_string(),
                 version: shell.version,
+                discovery_source: shell.discovery_source,
                 available: true,
             })
             .collect()
@@ -316,10 +326,11 @@ impl TerminalApi {
     ) -> TerminalResult<SessionResponse> {
         let session = self
             .session_manager
-            .create_session(
+            .create_session_with_shell_id(
                 request.session_id,
                 request.name,
                 request.shell_type,
+                request.shell_id,
                 request.working_directory,
                 request.env,
                 request.cols,

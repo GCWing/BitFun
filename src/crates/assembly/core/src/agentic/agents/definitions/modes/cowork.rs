@@ -22,8 +22,8 @@ impl CoworkMode {
         // Cowork is the office/research mode; web research is baseline there,
         // so keep WebSearch/WebFetch expanded (same as DeepResearch).
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("WebSearch".to_string(), ToolExposure::Expanded);
-        tool_exposure_overrides.insert("WebFetch".to_string(), ToolExposure::Expanded);
+        tool_exposure_overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
+        tool_exposure_overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
         Self {
             tool_exposure_overrides,
             default_tools: vec![

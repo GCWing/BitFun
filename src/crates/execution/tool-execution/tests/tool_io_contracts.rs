@@ -6,8 +6,8 @@ use tool_runtime::fs::read_file::{build_remote_read_command, parse_remote_read_o
 use tool_runtime::fs::{
     build_remote_delete_command, build_remote_list_commands, delete_local_path, edit_local_file,
     inspect_local_delete_target, parse_remote_list_entries, write_local_file,
-    DeleteLocalPathRequest, EditLocalFileRequest, LocalDeleteTarget, WriteLocalFileMode,
-    WriteLocalFileRequest, WriteLocalFileStatus,
+    DeleteLocalPathRequest, EditLocalFileRequest, LocalDeleteTarget, WriteLocalFileRequest,
+    WriteLocalFileStatus,
 };
 use tool_runtime::search::glob_search::{
     build_remote_find_command, build_remote_rg_command, collect_remote_glob_matches,
@@ -52,7 +52,6 @@ fn write_local_file_reports_created_overwritten_and_identical_retry() {
         logical_path: "nested/file.txt".to_string(),
         resolved_path: target.clone(),
         content: "hello\nworld\n".to_string(),
-        mode: WriteLocalFileMode::Write,
     })
     .expect("write should create file");
 
@@ -68,7 +67,6 @@ fn write_local_file_reports_created_overwritten_and_identical_retry() {
         logical_path: "nested/file.txt".to_string(),
         resolved_path: target.clone(),
         content: "hello\nworld\n".to_string(),
-        mode: WriteLocalFileMode::Write,
     })
     .expect("identical retry should be successful and idempotent");
 
@@ -83,7 +81,6 @@ fn write_local_file_reports_created_overwritten_and_identical_retry() {
         logical_path: "nested/file.txt".to_string(),
         resolved_path: target.clone(),
         content: "replacement".to_string(),
-        mode: WriteLocalFileMode::Write,
     })
     .expect("write should overwrite file");
 
@@ -91,47 +88,6 @@ fn write_local_file_reports_created_overwritten_and_identical_retry() {
     assert_eq!(
         fs::read_to_string(&target).expect("file should exist"),
         "replacement"
-    );
-
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn write_local_file_append_mode_appends_and_creates_when_missing() {
-    let root = make_temp_dir("write-append");
-    let existing_target = root.join("nested").join("file.txt");
-    fs::create_dir_all(existing_target.parent().expect("parent should exist"))
-        .expect("parent should be created");
-    fs::write(&existing_target, "hello").expect("seed file should exist");
-
-    let appended = write_local_file(WriteLocalFileRequest {
-        logical_path: "nested/file.txt".to_string(),
-        resolved_path: existing_target.clone(),
-        content: "\nworld".to_string(),
-        mode: WriteLocalFileMode::Append,
-    })
-    .expect("append should succeed");
-
-    assert_eq!(appended.status, WriteLocalFileStatus::Appended);
-    assert_eq!(appended.bytes_written, "\nworld".len());
-    assert_eq!(
-        fs::read_to_string(&existing_target).expect("file should exist"),
-        "hello\nworld"
-    );
-
-    let new_target = root.join("new.txt");
-    let created = write_local_file(WriteLocalFileRequest {
-        logical_path: "new.txt".to_string(),
-        resolved_path: new_target.clone(),
-        content: "first".to_string(),
-        mode: WriteLocalFileMode::Append,
-    })
-    .expect("append should create file when missing");
-
-    assert_eq!(created.status, WriteLocalFileStatus::Created);
-    assert_eq!(
-        fs::read_to_string(&new_target).expect("file should exist"),
-        "first"
     );
 
     let _ = fs::remove_dir_all(root);

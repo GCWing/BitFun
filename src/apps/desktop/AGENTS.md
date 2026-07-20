@@ -13,10 +13,16 @@ This file applies to `src/apps/desktop`. Use the top-level `AGENTS.md` for repos
 Main areas:
 
 - `src/api/`: Tauri commands
+- `src/api/peer_host_invoke.rs`: Peer Device Mode host-invoke bridge + control attach
 - `src/lib.rs`, `src/main.rs`: app setup and wiring
 - `src/computer_use/`: OS-specific automation support
 
-If a change affects shared product behavior across runtimes, the implementation likely belongs in `src/crates/assembly/core`.
+Peer Device Mode ownership and boundaries:
+`docs/architecture/peer-device-mode.md`.
+
+If a change affects behavior shared by multiple runtimes, place stable contracts,
+execution policy, and services in their owning lower-layer crates. Keep only
+product wiring and compatibility bridges in `src/crates/assembly/core`.
 
 ## Local rules
 

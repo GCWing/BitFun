@@ -21,3 +21,6 @@ miniapp = []
 canvas = []
 agent-control = []
 product-full = ["basic", "git", "mcp", "browser-web", "computer-use", "image-analysis", "miniapp", "canvas", "agent-control"]
+
+[lints]
+workspace = true

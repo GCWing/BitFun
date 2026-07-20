@@ -14,16 +14,21 @@ use bitfun_agent_runtime::custom_subagent::{
 use std::fs;
 use std::path::PathBuf;
 
+struct BuildDefinitionInput<'a>(
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<&'a str>,
+    Option<Vec<String>>,
+    Option<bool>,
+    Option<bool>,
+    Option<&'a str>,
+    CustomSubagentKind,
+);
+
 fn build_definition(
-    id: Option<&str>,
-    name: Option<&str>,
-    description: Option<&str>,
-    tools: Option<Vec<String>>,
-    readonly: Option<bool>,
-    review: Option<bool>,
-    model: Option<&str>,
-    level: CustomSubagentKind,
+    input: BuildDefinitionInput<'_>,
 ) -> Result<CustomSubagentDefinition, CustomSubagentDefinitionError> {
+    let BuildDefinitionInput(id, name, description, tools, readonly, review, model, level) = input;
     CustomSubagentDefinition::from_front_matter_fields(
         id,
         name,
@@ -97,7 +102,7 @@ fn custom_subagent_kind_remains_project_or_user() {
 
 #[test]
 fn custom_subagent_definition_from_front_matter_preserves_schema_and_defaults() {
-    let definition = build_definition(
+    let definition = build_definition(BuildDefinitionInput(
         Some("ReviewExtra"),
         Some("Additional code reviewer"),
         Some("Review agent for changed files"),
@@ -106,7 +111,7 @@ fn custom_subagent_definition_from_front_matter_preserves_schema_and_defaults() 
         Some(true),
         Some("deepseek-reasoner"),
         CustomSubagentKind::User,
-    )
+    ))
     .expect("front matter fields should build a definition");
 
     assert_eq!(definition.id, "ReviewExtra");
@@ -125,8 +130,55 @@ fn custom_subagent_definition_from_front_matter_preserves_schema_and_defaults() 
 }
 
 #[test]
+fn custom_subagent_model_presence_distinguishes_default_from_fast_override() {
+    let implicit = build_definition(BuildDefinitionInput(
+        Some("ImplicitModel"),
+        Some("Implicit model"),
+        Some("Uses the shared Subagent default"),
+        None,
+        None,
+        None,
+        None,
+        CustomSubagentKind::User,
+    ))
+    .expect("definition without a model should parse");
+    assert_eq!(implicit.model, "fast");
+    assert!(!implicit.model_is_explicit);
+    assert!(!implicit.should_save_model());
+
+    let explicit_fast = build_definition(BuildDefinitionInput(
+        Some("ExplicitFast"),
+        Some("Explicit fast"),
+        Some("Keeps a fast override"),
+        None,
+        None,
+        None,
+        Some("fast"),
+        CustomSubagentKind::User,
+    ))
+    .expect("definition with fast should parse");
+    assert!(explicit_fast.model_is_explicit);
+    assert!(explicit_fast.should_save_model());
+
+    let dir = TestTempDir::new("bitfun-agent-runtime-explicit-model");
+    let implicit_path = dir.join("implicit.md");
+    let explicit_path = dir.join("explicit.md");
+    custom_subagent_save_markdown_file(&implicit_path, &implicit)
+        .expect("implicit definition should save");
+    custom_subagent_save_markdown_file(&explicit_path, &explicit_fast)
+        .expect("explicit definition should save");
+
+    let implicit_markdown =
+        fs::read_to_string(&implicit_path).expect("implicit markdown should read");
+    let explicit_markdown =
+        fs::read_to_string(&explicit_path).expect("explicit markdown should read");
+    assert!(!implicit_markdown.contains("model:"));
+    assert!(explicit_markdown.contains("model: fast"));
+}
+
+#[test]
 fn custom_subagent_definition_reports_legacy_missing_field_errors() {
-    let missing_name = build_definition(
+    let missing_name = build_definition(BuildDefinitionInput(
         None,
         None,
         Some("Additional code reviewer"),
@@ -135,12 +187,12 @@ fn custom_subagent_definition_reports_legacy_missing_field_errors() {
         None,
         None,
         CustomSubagentKind::Project,
-    )
+    ))
     .expect_err("missing name should fail");
     assert_eq!(missing_name, CustomSubagentDefinitionError::MissingName);
     assert_eq!(missing_name.message(), "Missing name field");
 
-    let missing_description = build_definition(
+    let missing_description = build_definition(BuildDefinitionInput(
         Some("ReviewExtra"),
         Some("Additional code reviewer"),
         None,
@@ -149,7 +201,7 @@ fn custom_subagent_definition_reports_legacy_missing_field_errors() {
         None,
         None,
         CustomSubagentKind::Project,
-    )
+    ))
     .expect_err("missing description should fail");
     assert_eq!(
         missing_description,
@@ -162,7 +214,7 @@ fn custom_subagent_definition_reports_legacy_missing_field_errors() {
 fn custom_subagent_markdown_io_writes_canonical_front_matter() {
     let dir = TestTempDir::new("bitfun-agent-runtime-subagent");
     let path = dir.join("reviewer.md");
-    let definition = build_definition(
+    let definition = build_definition(BuildDefinitionInput(
         Some("Reviewer"),
         Some("Review changed code"),
         Some("Review changed files and report findings"),
@@ -171,7 +223,7 @@ fn custom_subagent_markdown_io_writes_canonical_front_matter() {
         Some(true),
         Some("deepseek-reasoner"),
         CustomSubagentKind::Project,
-    )
+    ))
     .expect("definition should be valid");
 
     custom_subagent_save_markdown_file(&path, &definition).expect("definition should save");

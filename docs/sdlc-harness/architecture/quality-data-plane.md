@@ -5,7 +5,7 @@
 
 ## 1. 模块定位
 
-质量数据面是事实数据层。它负责把项目画像、任务、工具调用、文件变更、验证命令、策略决策、安全授权、审查、CI、发布和运行期反馈整理成可追踪、可裁剪、可回放的数据事实，并为摘要、审查、门禁、复盘和评测提供同一事实来源。
+质量数据面是追加式事件和事实视图层。它负责把项目画像、任务、工具调用、文件变更、验证命令、策略决策、安全授权、审查、CI、发布和运行期反馈整理成可追踪、可裁剪、可回放的事实视图，并为摘要、审查、门禁、复盘和评测提供统一查询口径。
 
 P0 事件集优先支撑三件事：
 
@@ -13,7 +13,7 @@ P0 事件集优先支撑三件事：
 2. 安全敏感动作能追溯允许、询问、拒绝、应急放行的原因和范围。
 3. 配置化策略能用真实数据校准是否过度打断、误升级或漏提示。
 
-证据包、交付物图谱、风险分类器、变更就绪度、PR 门禁和智能体评测都消费同一事实层；模块通过稳定查询和投影契约读取事实，避免各自重新定义字段。
+证据包、交付物图谱、风险分类器、变更就绪度、PR 门禁和智能体评测都消费同一事实视图层；模块通过稳定查询接口和事实视图读取事实，避免各自重新定义字段。权威事实仍由 Agent Kernel、Execution、Security Boundary、受信外部系统或人工确认产生，质量数据面不成为新的状态 owner。
 
 ## 2. 行业参照与设计约束
 
@@ -40,7 +40,7 @@ P0 事件集优先支撑三件事：
 范围：
 
 - 定义 `LifecycleEvent` 事件信封。
-- 统一任务、会话、策略、安全、工具、文件、验证、审查、门禁、成本和主动配置的事件域。
+- 统一任务、会话、策略、安全、工具、文件、验证、审查、门禁、成本、Harness 主动配置和外部 owner 诊断的事件域。
 - 为证据包、交付物图谱、风险分类器、变更就绪度、PR 门禁和智能体评测提供事实输入。
 - 支持本地追加式审计、投影查询和外部导出。
 
@@ -65,9 +65,9 @@ P0 事件集优先支撑三件事：
 | 工具事件 | 命令、工具调用、审批、退出码、耗时 |
 | 文件事件 | diff、重命名、删除、生成文件、文件监听 |
 | 验证事件 | 命令、退出码、耗时、日志摘要、制品引用 |
-| 审查/门禁事件 | 深度审查、问题、就绪度、门禁投影 |
+| 审查/门禁事件 | 严格审查、问题、就绪度、门禁投影 |
 | 性能/成本事件 | 首次有用动作耗时、后台分析耗时、token、模型、墙钟耗时、工具耗时 |
-| 主动配置事件 | hook、plugin、自定义工具信任状态、hash、权限声明、启用范围 |
+| Harness 主动配置事件 | Harness 直接执行的项目脚本、自定义工具和工作流配置的 hash、权限、执行域与审核状态 |
 | 阶段收益事件 | 阶段用户收益、技术前置、延期边界、质量一致性抽样和验收结果 |
 
 核心输出：
@@ -110,31 +110,43 @@ interface LifecycleEvent {
 | `external_system` | GitHub、Jira、CI、观测适配器返回的已认证事实 | 可以，但需记录适配器和刷新时间 |
 | `human_confirmed` | 用户确认、审查人决策、风险接受 | 可以，但必须记录操作者和原因 |
 | `model_inferred` | LLM 摘要、候选影响面、候选风险标签 | 不可以，只能作为候选或说明 |
-| `plugin_suggested` | 第三方 hook/plugin 产生的建议 | 不可以，必须经过 BitFun 策略或人工确认 |
+| `plugin_suggested` | 第三方插件明确产生的建议性内容 | 不可以，必须经过 BitFun 策略或人工确认；合法 Hook 变换和插件工具结果不归入该等级，而由对应 owner 校验并产生事实 |
 
-## 5. P0 最小事件集
+## 5. 事件注册表
 
-| 事件 | 用途 |
+每个事件进入实现前必须在注册表中补齐：
+
+| 字段 | 要求 |
 |---|---|
-| `project.profiled.light` | 关联轻量项目结构、规则入口和验证候选 |
-| `task.started` / `task.completed` | 关联一次用户任务与结果摘要 |
-| `policy.decided` | 固化模式、触发原因、推荐/强制动作 |
-| `security.decided` | 固化允许/询问/拒绝/应急放行、执行位置、沙箱等级组合、范围、原因、降级和残余风险 |
-| `sandbox.capability.evaluated` | 记录当前执行面可用的快照、worktree、只读、网络限制、进程隔离或容器能力 |
-| `user.override.recorded` | 记录跳过、风险接受或临时放行 |
-| `active_config.discovered` | 固化 hook、plugin、自定义工具、MCP、智能体规则的来源、hash、权限声明和未信任状态 |
-| `extension.hook.dispatched` | 记录 Plugin Runtime Host 通过 Event Manifest 投递事件、适用范围、deadline 和空实现/候选处理结果 |
-| `extension.effect.candidate` | 记录外部适配器或空实现返回的建议、证据、工具输入补丁、UI contribution 或 permission candidate |
-| `tool.override.candidate` | 记录工具复写候选的来源、hash、目标工具、能力范围和信任状态 |
-| `telemetry.point.recorded` | 记录可采样的扩展点打点，用于成本、超时、失败和降级分析 |
-| `file.changed` | 更新 diff 摘要和风险候选 |
-| `tool.completed` | 采集工具和命令输出摘要 |
-| `verification.completed` | 形成验证证据 |
-| `confidence.summary.generated` | 固化任务结束的用户可见信心摘要 |
-| `evidence_pack.generated` | 在需要时固化摘要/证据引用/完整证据包 |
-| `stage.outcome.evaluated` | 记录阶段用户收益、必要技术前置、延期边界和验收结果 |
-| `quality.consistency.sampled` | 记录同一任务中需求、开发、验证、审查或发布强度是否匹配 |
-| `performance.budget.evaluated` | 记录阶段性能预算、实际耗时、事件载荷、成本和回退判定 |
+| producer | 明确由 Agent Kernel、Execution、Security Boundary、Project Profile Integration、Configurable Policy Profile、Artifact and Evidence Plane、Product Feature、adapter 或 UI 投影中的哪个 owner 产生 |
+| trigger | 说明何时产生，缺少输入时是否跳过、降级或使用摘要 |
+| payload schema | 定义稳定字段、版本和可删除字段；禁止无界 `payload: unknown` 直接进入长期 schema |
+| privacy / retention | 标注隐私分级、保留周期、脱敏和导出策略 |
+| consumer | 列出当前消费方；没有当前消费方的字段必须有删除条件 |
+| fallback | 事件缺失、过期或不可访问时的用户可见降级 |
+| phase owner | 标注 P0/P1/P2+，避免 P0 背负后续治理字段 |
+
+P0 硬事件集：
+
+| 事件 | Producer | 用途 |
+|---|---|---|
+| `project.profiled.light` | Project Profile Integration | 关联轻量项目结构、规则入口和验证候选 |
+| `task.started` | Agent Kernel，输入来自产品入口的稳定任务请求 | 关联一次用户任务、入口和初始上下文 |
+| `task.completed` | Agent Kernel，输入来自任务状态机结束 | 记录结果摘要、任务结束状态和未验证项 |
+| `policy.decided` | Configurable Policy Profile | 固化内部策略画像、触发原因和展示层级 |
+| `security.decided` | Security Boundary 生成决策 payload，Agent Kernel 负责事件落盘 | 固化允许/询问/拒绝/应急放行、执行位置、范围、原因、降级和残余风险 |
+| `tool.completed` | Execution | 采集工具和命令输出摘要、退出状态和耗时 |
+| `verification.completed` | Execution；受信 CI adapter 只投影外部 CI 结果 | 形成验证证据、不可运行原因或替代验证引用 |
+| `confidence.summary.generated` | Artifact and Evidence Plane | 固化任务结束的用户可见信心摘要 |
+
+P0 可选或派生事件，不得阻塞默认路径：
+
+| 事件 | Producer | 触发 |
+|---|---|---|
+| `active_config.discovered` | Project Profile Integration | 轻量项目画像发现 Harness 将直接执行的项目脚本、自定义工具或工作流配置；不表示外部生态需二次激活 |
+| `sandbox.capability.evaluated` | Security Boundary | 用户界面需要展示真实沙箱、隔离或降级原因 |
+| `user.override.recorded` | Agent Kernel 记录接受后的 override 事实；Security Boundary 生成安全 override payload | 用户选择跳过、风险接受或临时放行 |
+| `file.changed` | Agent Kernel 根据 Execution 结果或产品入口 diff 更新 | 任务摘要需要独立 diff 摘要；否则并入 `task.completed` |
 
 P1/P2 再引入：
 
@@ -144,7 +156,16 @@ P1/P2 再引入：
 | `readiness.generated` | PR 或审查场景 |
 | `gate.projected` | 团队/守护/合规策略 |
 | `review.completed` | 定向/完整审查 |
+| `tool.override.candidate` | 工具复写进入 P2 信任审查 |
+| `telemetry.point.recorded` | 成本、超时、失败和降级采样 |
+| `evidence_pack.generated` | PR、团队、发布、事故或评测需要证据引用/完整包 |
+| `stage.outcome.evaluated` | 阶段评审采样 |
+| `quality.consistency.sampled` | 阶段质量一致性抽样 |
+| `performance.budget.evaluated` | P1+ 阶段性能预算评审 |
 | `artifact.edge.updated` | 复杂项目图谱 |
+
+插件工具、Hook、事件和权限请求复用各归属模块已有事件，不在质量数据面预留跨能力统一的扩展效果事件。
+若真实插件诊断需要独立事件，必须先明确生产者、当前消费方、状态 owner、隐私与删除条件。
 
 ## 6. 核心流程
 
@@ -175,7 +196,7 @@ P1/P2 再引入：
 |---|---|
 | P0 | 轻量项目、任务、策略、安全、验证和信心摘要事件 |
 | P1 | 风险提示、就绪度、定向审查、成本和提示体验指标 |
-| P2 | 团队策略、门禁投影、主动配置信任审查、外部 CI/PR 事件 |
+| P2 | 团队策略、门禁投影、Harness 主动配置审核、外部 CI/PR 事件 |
 | P3 | 交付物图谱、发布、事故、观测事件接入 |
 | P4 | 评测回放、跨团队指标、策略回放分析 |
 
@@ -196,6 +217,7 @@ P1/P2 再引入：
 - 普通任务可以生成可解释信心摘要。
 - 安全提示、拒绝、应急放行都能追溯到事件和范围。
 - 证据包、变更就绪度和门禁复用同一事实层。
-- 深度审查 token、耗时、范围、跳过项上下文可被统一记录。
+- 严格审查 token、耗时、范围、跳过项上下文可被统一记录。
 - 事件模型能够导出到至少一种外部标准或平台。
-- hook/plugin/custom 工具的信任状态可通过事件追溯到来源、hash、权限和审核人。
+- Harness 直接执行的项目脚本、自定义工具和工作流配置可通过事件追溯来源、hash、权限、执行域和审核人。
+- 外部插件能力沿用其 owner 的来源、有效策略和运行诊断，不由质量数据面建立第二套信任状态。

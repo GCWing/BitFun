@@ -51,7 +51,7 @@ import {
   displayFileToolGuidanceMessage,
   isFileToolGuidanceMessage,
 } from './fileToolGuidance';
-import { extractFilePathFromJsonBuffer } from '@/shared/utils/partialJsonParser';
+import { extractFilePathFromJsonBuffer, splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 import { i18nService } from '@/infrastructure/i18n';
 import { useFlowChatContext } from '../components/modern/FlowChatContext';
 import {
@@ -189,7 +189,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     
     if (Object.keys(params).length === 0) return '';
     
-    return firstStringValue(params, [
+    const combinedParts = splitFilePathAndContent(params.payload);
+    return combinedParts?.filePath || firstStringValue(params, [
       'file_path',
       'filePath',
       'filepath',
@@ -221,6 +222,9 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const getContent = useCallback((): string => {
     const params = partialParams || toolCall?.input;
     if (!params) return '';
+    const combinedParts = splitFilePathAndContent(params.payload);
+    if (combinedParts) return combinedParts.content;
+    if (typeof params.payload === 'string') return params.payload;
     return params.content || params.contents || '';
   }, [toolCall, partialParams]);
 

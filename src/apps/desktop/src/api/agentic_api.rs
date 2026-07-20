@@ -9,7 +9,13 @@ use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::runtime::DesktopRuntimeContext;
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_agent_runtime::sdk::{
+    AgentDialogTurnRequest, AgentInputAttachment, AgentSessionModelUpdateRequest,
+    AgentSubmissionSource, AgentToolConfirmationRequest, AgentToolRejectionRequest,
+    AgentTurnCancellationRequest,
+};
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
     AssistantBootstrapBlockReason, AssistantBootstrapEnsureOutcome, AssistantBootstrapSkipReason,
@@ -34,7 +40,10 @@ use bitfun_core::agentic::tools::implementations::exec_command::{
     ReadBackgroundCommandOutputRequest as CoreReadBackgroundCommandOutputRequest,
     ReadBackgroundCommandOutputResponse,
 };
-use bitfun_core::service::session::{DialogTurnData, SessionMemoryMode, SessionRelationship};
+use bitfun_core::service::session::{
+    DialogTurnData, SessionMemoryMode, SessionMetadata, SessionRelationship,
+    SessionRelationshipKind,
+};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -60,6 +69,8 @@ pub struct CreateSessionRequest {
     pub relationship: Option<SessionRelationship>,
     #[serde(default)]
     pub deep_review_run_manifest: Option<serde_json::Value>,
+    #[serde(default)]
+    pub review_target_evidence: Option<serde_json::Value>,
     pub config: Option<SessionConfigDTO>,
 }
 
@@ -72,7 +83,6 @@ pub struct SessionConfigDTO {
     pub safe_mode: Option<bool>,
     pub max_turns: Option<usize>,
     pub enable_context_compression: Option<bool>,
-    pub compression_threshold: Option<f32>,
     pub model_name: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -86,6 +96,69 @@ pub struct CreateSessionResponse {
     pub session_id: String,
     pub session_name: String,
     pub agent_type: String,
+}
+
+fn existing_session_create_response(
+    request: &CreateSessionRequest,
+    metadata: &SessionMetadata,
+) -> Result<CreateSessionResponse, String> {
+    let relationship_matches = match (
+        metadata.relationship.as_ref(),
+        request.relationship.as_ref(),
+    ) {
+        (None, None) | (None, Some(_)) => true,
+        (Some(existing), Some(requested)) => {
+            existing.kind == requested.kind
+                && existing.parent_session_id == requested.parent_session_id
+                && existing.parent_request_id == requested.parent_request_id
+        }
+        _ => false,
+    };
+    let deep_manifest_matches = match (
+        metadata.deep_review_run_manifest.as_ref(),
+        request.deep_review_run_manifest.as_ref(),
+    ) {
+        (Some(existing), Some(requested)) => existing == requested,
+        (None, Some(_)) | (None, None) => true,
+        (Some(_), None) => false,
+    };
+    let target_evidence_matches = match (
+        metadata.review_target_evidence.as_ref(),
+        request.review_target_evidence.as_ref(),
+    ) {
+        (Some(existing), Some(requested)) => existing == requested,
+        (None, Some(_)) | (None, None) => true,
+        (Some(_), None) => false,
+    };
+    if metadata.agent_type != request.agent_type
+        || !relationship_matches
+        || !deep_manifest_matches
+        || !target_evidence_matches
+    {
+        return Err(format!(
+            "Session ID {} already exists with different identity",
+            metadata.session_id
+        ));
+    }
+
+    Ok(CreateSessionResponse {
+        session_id: metadata.session_id.clone(),
+        session_name: metadata.session_name.clone(),
+        agent_type: metadata.agent_type.clone(),
+    })
+}
+
+fn is_idempotent_review_create(request: &CreateSessionRequest) -> bool {
+    let Some(relationship) = request.relationship.as_ref() else {
+        return false;
+    };
+    matches!(
+        relationship.kind,
+        Some(SessionRelationshipKind::Review | SessionRelationshipKind::DeepReview)
+    ) && relationship
+        .parent_request_id
+        .as_deref()
+        .is_some_and(|request_id| !request_id.trim().is_empty())
 }
 
 #[derive(Debug, Deserialize)]
@@ -299,6 +372,8 @@ pub struct SessionResponse {
     pub session_name: String,
     /// Current/default mode selection for the next dialog turn.
     pub agent_type: String,
+    /// Current/default model selection for the next dialog turn.
+    pub model_name: Option<String>,
     /// Mode of the last surviving user dialog turn in session history.
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
@@ -660,11 +735,13 @@ pub struct GenerateSessionTitleRequest {
 #[tauri::command]
 pub async fn create_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
     fn norm_conn(s: Option<String>) -> Option<String> {
         s.map(|x| x.trim().to_string()).filter(|x| !x.is_empty())
     }
+    let wp = request.workspace_path.clone();
     let remote_conn = norm_conn(request.remote_connection_id.clone()).or_else(|| {
         request
             .config
@@ -678,6 +755,54 @@ pub async fn create_session(
             .and_then(|c| norm_conn(c.remote_ssh_host.clone()))
     });
 
+    if is_idempotent_review_create(&request) {
+        let session_id = request
+            .session_id
+            .as_deref()
+            .ok_or_else(|| "Idempotent Review session requires a session ID".to_string())?;
+        let effective_path = desktop_effective_session_storage_path(
+            &app_state,
+            &request.workspace_path,
+            remote_conn.as_deref(),
+            remote_ssh_host.as_deref(),
+        )
+        .await;
+        let existing = coordinator
+            .get_session_manager()
+            .load_session_metadata(&effective_path, session_id)
+            .await
+            .map_err(|error| format!("Failed to check existing session: {error}"))?;
+        if let Some(mut metadata) = existing {
+            let response = existing_session_create_response(&request, &metadata)?;
+            let mut repaired = false;
+            if metadata.relationship.is_none() && request.relationship.is_some() {
+                metadata.relationship = request.relationship.clone();
+                repaired = true;
+            }
+            if metadata.deep_review_run_manifest.is_none()
+                && request.deep_review_run_manifest.is_some()
+            {
+                metadata.deep_review_run_manifest = request.deep_review_run_manifest.clone();
+                repaired = true;
+            }
+            if metadata.review_target_evidence.is_none() && request.review_target_evidence.is_some()
+            {
+                metadata.review_target_evidence = request.review_target_evidence.clone();
+                repaired = true;
+            }
+            if repaired {
+                coordinator
+                    .get_session_manager()
+                    .save_session_metadata(&effective_path, &metadata)
+                    .await
+                    .map_err(|error| {
+                        format!("Failed to repair Review session metadata: {error}")
+                    })?;
+            }
+            return Ok(response);
+        }
+    }
+
     let config = request
         .config
         .map(|c| SessionConfig {
@@ -687,7 +812,6 @@ pub async fn create_session(
             safe_mode: c.safe_mode.unwrap_or(true),
             max_turns: c.max_turns.unwrap_or(200),
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
-            compression_threshold: c.compression_threshold.unwrap_or(0.8),
             workspace_path: Some(request.workspace_path.clone()),
             workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
@@ -743,6 +867,18 @@ pub async fn create_session(
             .map_err(|e| format!("Failed to persist Deep Review run manifest: {}", e))?;
     }
 
+    let session_id = session.session_id.clone();
+    // Notify auto-sync: new session created
+    crate::api::remote_connect_api::notify_session_changed(&session_id, &wp);
+
+    if let Some(target_evidence) = request.review_target_evidence {
+        coordinator
+            .get_session_manager()
+            .set_session_review_target_evidence(&session.session_id, Some(target_evidence))
+            .await
+            .map_err(|e| format!("Failed to persist Review target evidence: {}", e))?;
+    }
+
     Ok(CreateSessionResponse {
         session_id: session.session_id,
         session_name: session.session_name,
@@ -752,13 +888,17 @@ pub async fn create_session(
 
 #[tauri::command]
 pub async fn update_session_model(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: UpdateSessionModelRequest,
 ) -> Result<(), String> {
-    coordinator
-        .update_session_model(&request.session_id, &request.model_name)
+    runtime
+        .agent_runtime()
+        .update_session_model(AgentSessionModelUpdateRequest {
+            session_id: request.session_id,
+            model_id: request.model_name,
+        })
         .await
-        .map_err(|e| format!("Failed to update session model: {}", e))
+        .map_err(|error| format!("Failed to update session model: {}", error.into_message()))
 }
 
 #[tauri::command]
@@ -800,10 +940,16 @@ pub async fn update_session_title(
             .map_err(|e| format!("Failed to restore session before renaming: {}", e))?;
     }
 
-    coordinator
+    let result = coordinator
         .update_session_title(session_id, &request.title)
         .await
-        .map_err(|e| format!("Failed to update session title: {}", e))
+        .map_err(|e| format!("Failed to update session title: {}", e));
+
+    // Notify auto-sync: metadata changed (title)
+    let wp = request.workspace_path.as_deref().unwrap_or("");
+    crate::api::remote_connect_api::notify_session_changed(session_id, wp);
+
+    result
 }
 
 /// Load the session into the coordinator process when it exists on disk but is not in memory.
@@ -853,10 +999,26 @@ pub async fn ensure_coordinator_session(
 #[tauri::command]
 pub async fn start_dialog_turn(
     _app: AppHandle,
-    _coordinator: State<'_, Arc<ConversationCoordinator>>,
-    scheduler: State<'_, Arc<DialogScheduler>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: StartDialogTurnRequest,
 ) -> Result<StartDialogTurnResponse, String> {
+    let runtime_request = desktop_dialog_turn_request(request)?;
+
+    runtime
+        .agent_runtime()
+        .submit_dialog_turn(runtime_request)
+        .await
+        .map_err(|error| format!("Failed to start dialog turn: {}", error.into_message()))?;
+
+    Ok(StartDialogTurnResponse {
+        success: true,
+        message: "Dialog turn started".to_string(),
+    })
+}
+
+fn desktop_dialog_turn_request(
+    request: StartDialogTurnRequest,
+) -> Result<AgentDialogTurnRequest, String> {
     let StartDialogTurnRequest {
         session_id,
         user_input,
@@ -871,38 +1033,66 @@ pub async fn start_dialog_turn(
     } = request;
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi);
-    let resolved_images = if let Some(image_contexts) = image_contexts
-        .as_ref()
-        .filter(|images| !images.is_empty())
-        .cloned()
-    {
-        Some(resolve_missing_image_payloads(image_contexts)?)
-    } else {
-        None
+    let attachments = match image_contexts.filter(|images| !images.is_empty()) {
+        Some(images) => resolve_missing_image_payloads(images)?
+            .into_iter()
+            .map(desktop_image_attachment)
+            .collect(),
+        None => Vec::new(),
     };
+    let metadata = desktop_user_message_metadata(user_message_metadata);
 
-    scheduler
-        .submit(
-            session_id,
-            user_input,
-            original_user_input,
-            turn_id,
-            agent_type,
-            workspace_path,
-            remote_connection_id,
-            remote_ssh_host,
-            policy,
-            None,
-            user_message_metadata,
-            resolved_images,
-        )
-        .await
-        .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
-
-    Ok(StartDialogTurnResponse {
-        success: true,
-        message: "Dialog turn started".to_string(),
+    Ok(AgentDialogTurnRequest {
+        session_id,
+        message: user_input,
+        original_message: original_user_input,
+        turn_id,
+        agent_type,
+        workspace_path,
+        remote_connection_id,
+        remote_ssh_host,
+        policy,
+        reply_route: None,
+        prepended_reminders: Vec::new(),
+        attachments,
+        metadata,
     })
+}
+
+fn desktop_user_message_metadata(
+    metadata: Option<serde_json::Value>,
+) -> serde_json::Map<String, serde_json::Value> {
+    match metadata {
+        Some(serde_json::Value::Object(metadata)) => metadata,
+        Some(metadata) => serde_json::Map::from_iter([("raw_metadata".to_string(), metadata)]),
+        None => serde_json::Map::new(),
+    }
+}
+
+fn desktop_image_attachment(image: ImageContextData) -> AgentInputAttachment {
+    let mut metadata = serde_json::Map::new();
+    if let Some(image_path) = image.image_path {
+        metadata.insert(
+            "imagePath".to_string(),
+            serde_json::Value::String(image_path),
+        );
+    }
+    if let Some(data_url) = image.data_url {
+        metadata.insert("dataUrl".to_string(), serde_json::Value::String(data_url));
+    }
+    metadata.insert(
+        "mimeType".to_string(),
+        serde_json::Value::String(image.mime_type),
+    );
+    if let Some(image_metadata) = image.metadata {
+        metadata.insert("metadata".to_string(), image_metadata);
+    }
+
+    AgentInputAttachment {
+        kind: "remote_image".to_string(),
+        id: image.id,
+        metadata,
+    }
 }
 
 #[tauri::command]
@@ -1437,7 +1627,7 @@ fn resolve_missing_image_payloads(
 
 #[tauri::command]
 pub async fn cancel_dialog_turn(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     app_state: State<'_, AppState>,
     request: CancelDialogTurnRequest,
 ) -> Result<(), String> {
@@ -1460,8 +1650,16 @@ pub async fn cancel_dialog_turn(
         }
     }
 
-    coordinator
-        .cancel_dialog_turn(&request.session_id, &request.dialog_turn_id)
+    runtime
+        .agent_runtime()
+        .cancel_turn(AgentTurnCancellationRequest {
+            session_id: request.session_id.clone(),
+            turn_id: Some(request.dialog_turn_id.clone()),
+            source: Some(AgentSubmissionSource::DesktopUi),
+            requester_session_id: None,
+            reason: None,
+            wait_timeout_ms: None,
+        })
         .await
         .map_err(|e| {
             log::error!(
@@ -1470,8 +1668,9 @@ pub async fn cancel_dialog_turn(
                 request.dialog_turn_id,
                 e
             );
-            format!("Failed to cancel dialog turn: {}", e)
+            format!("Failed to cancel dialog turn: {}", e.into_message())
         })
+        .map(|_| ())
 }
 
 #[tauri::command]
@@ -1828,7 +2027,11 @@ pub async fn delete_session(
     coordinator
         .delete_session(&effective_path, &request.session_id)
         .await
-        .map_err(|e| format!("Failed to delete session: {}", e))
+        .map_err(|e| format!("Failed to delete session: {}", e))?;
+
+    // Notify auto-sync: tombstone this session on the relay
+    crate::api::remote_connect_api::notify_session_deleted(&request.session_id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -2088,6 +2291,7 @@ pub async fn list_sessions(
             session_id: summary.session_id,
             session_name: summary.session_name,
             agent_type: summary.agent_type,
+            model_name: None,
             last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
             last_submitted_agent_type: summary.last_submitted_agent_type,
             state: format!("{:?}", summary.state),
@@ -2101,28 +2305,36 @@ pub async fn list_sessions(
 
 #[tauri::command]
 pub async fn confirm_tool_execution(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: ConfirmToolRequest,
 ) -> Result<(), String> {
-    coordinator
-        .confirm_tool(&request.tool_id, request.updated_input)
+    runtime
+        .agent_runtime()
+        .confirm_tool(AgentToolConfirmationRequest {
+            tool_id: request.tool_id,
+            updated_input: request.updated_input,
+        })
         .await
-        .map_err(|e| format!("Confirm tool failed: {}", e))
+        .map_err(|error| format!("Confirm tool failed: {}", error.into_message()))
 }
 
 #[tauri::command]
 pub async fn reject_tool_execution(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: RejectToolRequest,
 ) -> Result<(), String> {
     let reason = request
         .reason
         .unwrap_or_else(|| "User rejected".to_string());
 
-    coordinator
-        .reject_tool(&request.tool_id, reason)
+    runtime
+        .agent_runtime()
+        .reject_tool(AgentToolRejectionRequest {
+            tool_id: request.tool_id,
+            reason,
+        })
         .await
-        .map_err(|e| format!("Reject tool failed: {}", e))
+        .map_err(|error| format!("Reject tool failed: {}", error.into_message()))
 }
 
 #[tauri::command]
@@ -2265,6 +2477,7 @@ fn session_to_response_with_turn_count(session: Session, turn_count: usize) -> S
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        model_name: session.config.model_id,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
         last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
@@ -2290,6 +2503,273 @@ mod tests {
         ModelRoundData, ToolCallData, ToolItemData, ToolResultData, TurnStatus, UserMessageData,
     };
     use serde_json::json;
+
+    #[test]
+    fn desktop_dialog_turn_request_preserves_runtime_contract() {
+        let request: StartDialogTurnRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "userInput": "resolved input",
+            "originalUserInput": "original input",
+            "agentType": "agentic",
+            "workspacePath": "/workspace/project",
+            "remoteConnectionId": "connection-1",
+            "remoteSshHost": "host-1",
+            "turnId": "turn-1",
+            "imageContexts": [{
+                "id": "image-1",
+                "image_path": "/workspace/clip.png",
+                "data_url": "data:image/png;base64,abc",
+                "mime_type": "image/png",
+                "metadata": {
+                    "name": "clip.png",
+                    "source": "upload"
+                }
+            }],
+            "userMessageMetadata": {
+                "surface": "flow_chat",
+                "requestId": "request-1"
+            }
+        }))
+        .expect("current Tauri request shape");
+
+        let runtime_request =
+            desktop_dialog_turn_request(request).expect("Desktop runtime request");
+
+        assert_eq!(runtime_request.session_id, "session-1");
+        assert_eq!(runtime_request.message, "resolved input");
+        assert_eq!(
+            runtime_request.original_message.as_deref(),
+            Some("original input")
+        );
+        assert_eq!(runtime_request.turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(runtime_request.agent_type, "agentic");
+        assert_eq!(
+            runtime_request.workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+        assert_eq!(
+            runtime_request.remote_connection_id.as_deref(),
+            Some("connection-1")
+        );
+        assert_eq!(runtime_request.remote_ssh_host.as_deref(), Some("host-1"));
+        assert_eq!(
+            runtime_request.policy.trigger_source,
+            AgentSubmissionSource::DesktopUi
+        );
+        assert_eq!(
+            runtime_request.policy,
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi)
+        );
+        assert!(runtime_request.reply_route.is_none());
+        assert!(runtime_request.prepended_reminders.is_empty());
+        assert_eq!(runtime_request.attachments.len(), 1);
+        let attachment = &runtime_request.attachments[0];
+        assert_eq!(attachment.kind, "remote_image");
+        assert_eq!(attachment.id, "image-1");
+        assert_eq!(
+            attachment.metadata.get("imagePath"),
+            Some(&json!("/workspace/clip.png"))
+        );
+        assert_eq!(
+            attachment.metadata.get("dataUrl"),
+            Some(&json!("data:image/png;base64,abc"))
+        );
+        assert_eq!(
+            attachment.metadata.get("mimeType"),
+            Some(&json!("image/png"))
+        );
+        assert_eq!(
+            attachment
+                .metadata
+                .get("metadata")
+                .and_then(|value| value.get("source")),
+            Some(&json!("upload"))
+        );
+        assert_eq!(
+            runtime_request.metadata.get("surface"),
+            Some(&json!("flow_chat"))
+        );
+        assert_eq!(
+            runtime_request.metadata.get("requestId"),
+            Some(&json!("request-1"))
+        );
+    }
+
+    #[test]
+    fn desktop_interaction_dtos_keep_existing_camel_case_shape() {
+        let cancel: CancelDialogTurnRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "dialogTurnId": "turn-1"
+        }))
+        .expect("cancel request");
+        let confirm: ConfirmToolRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "toolId": "tool-1",
+            "updatedInput": { "path": "updated.txt" }
+        }))
+        .expect("confirm request");
+        let reject: RejectToolRequest = serde_json::from_value(json!({
+            "sessionId": "session-1",
+            "toolId": "tool-1",
+            "reason": "Use a read-only path"
+        }))
+        .expect("reject request");
+
+        assert_eq!(cancel.session_id, "session-1");
+        assert_eq!(cancel.dialog_turn_id, "turn-1");
+        assert_eq!(confirm.tool_id, "tool-1");
+        assert_eq!(
+            confirm.updated_input,
+            Some(json!({ "path": "updated.txt" }))
+        );
+        assert_eq!(reject.reason.as_deref(), Some("Use a read-only path"));
+        assert_eq!(
+            serde_json::to_value(StartDialogTurnResponse {
+                success: true,
+                message: "Dialog turn started".to_string(),
+            })
+            .expect("response"),
+            json!({
+                "success": true,
+                "message": "Dialog turn started"
+            })
+        );
+    }
+
+    #[test]
+    fn desktop_dialog_turn_accepts_and_normalizes_legacy_non_object_metadata() {
+        let request = serde_json::from_value::<StartDialogTurnRequest>(json!({
+            "sessionId": "session-1",
+            "userInput": "hello",
+            "agentType": "agentic",
+            "userMessageMetadata": "not-an-object"
+        }))
+        .expect("legacy metadata request");
+        let runtime_request =
+            desktop_dialog_turn_request(request).expect("Desktop runtime request");
+
+        assert_eq!(
+            runtime_request.metadata.get("raw_metadata"),
+            Some(&json!("not-an-object"))
+        );
+    }
+
+    fn idempotent_create_request() -> CreateSessionRequest {
+        CreateSessionRequest {
+            session_id: Some("review_child_request-1".to_string()),
+            session_name: "Review fixes".to_string(),
+            agent_type: "CodeReview".to_string(),
+            workspace_path: "/workspace".to_string(),
+            workspace_id: None,
+            session_kind: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            relationship: Some(SessionRelationship {
+                kind: Some(SessionRelationshipKind::Review),
+                parent_session_id: Some("parent-1".to_string()),
+                parent_request_id: Some("request-1".to_string()),
+                parent_dialog_turn_id: Some("turn-1".to_string()),
+                parent_turn_index: Some(1),
+                ..Default::default()
+            }),
+            deep_review_run_manifest: None,
+            review_target_evidence: None,
+            config: None,
+        }
+    }
+
+    #[test]
+    fn existing_create_session_retry_returns_the_matching_session() {
+        let request = idempotent_create_request();
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+        let relationship = metadata.relationship.as_mut().expect("relationship");
+        relationship.parent_dialog_turn_id = Some("turn-2".to_string());
+        relationship.parent_turn_index = Some(2);
+
+        let response = existing_session_create_response(&request, &metadata)
+            .expect("matching retry should reuse the session");
+
+        assert_eq!(response.session_id, "review_child_request-1");
+        assert_eq!(response.agent_type, "CodeReview");
+    }
+
+    #[test]
+    fn existing_create_session_retry_rejects_identity_mismatch() {
+        let request = idempotent_create_request();
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Other session".to_string(),
+            "DeepReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+
+        let error = existing_session_create_response(&request, &metadata)
+            .expect_err("a conflicting session id must not be reused");
+
+        assert!(error.contains("different identity"));
+    }
+
+    #[test]
+    fn existing_create_session_retry_rejects_a_different_parent_request() {
+        let request = idempotent_create_request();
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        let mut relationship = request.relationship.clone().expect("relationship");
+        relationship.parent_request_id = Some("request-2".to_string());
+        metadata.relationship = Some(relationship);
+
+        assert!(existing_session_create_response(&request, &metadata).is_err());
+    }
+
+    #[test]
+    fn existing_create_session_retry_rejects_different_target_evidence() {
+        let mut request = idempotent_create_request();
+        request.review_target_evidence = Some(json!({ "fingerprint": "requested" }));
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+        metadata.review_target_evidence = Some(json!({ "fingerprint": "existing" }));
+
+        assert!(existing_session_create_response(&request, &metadata).is_err());
+    }
+
+    #[test]
+    fn existing_create_session_retry_allows_missing_target_evidence_repair() {
+        let mut request = idempotent_create_request();
+        request.review_target_evidence = Some(json!({ "fingerprint": "requested" }));
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+
+        assert!(existing_session_create_response(&request, &metadata).is_ok());
+    }
+
+    #[test]
+    fn ordinary_explicit_session_ids_do_not_use_review_idempotency() {
+        let mut request = idempotent_create_request();
+        request.relationship = None;
+
+        assert!(!is_idempotent_review_create(&request));
+    }
 
     fn tool_item(
         tool_name: &str,
@@ -2322,10 +2802,11 @@ mod tests {
             is_subagent_item: None,
             parent_task_tool_id: None,
             subagent_session_id: None,
+            subagent_dialog_turn_id: None,
             attempt_id: None,
             attempt_index: None,
             subagent_model_id: None,
-            subagent_model_alias: None,
+            subagent_model_display_name: None,
             status: None,
             interruption_reason: None,
         }
@@ -2362,8 +2843,8 @@ mod tests {
                 end_time: Some(2),
                 duration_ms: Some(1),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,
@@ -2443,8 +2924,8 @@ mod tests {
                 end_time: Some(2),
                 duration_ms: Some(1),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,
@@ -2505,8 +2986,8 @@ mod tests {
                 end_time: Some(2),
                 duration_ms: Some(1),
                 provider_id: None,
-                model_id: None,
-                model_alias: None,
+                model_config_id: None,
+                effective_model_name: None,
                 first_chunk_ms: None,
                 first_visible_output_ms: None,
                 stream_duration_ms: None,

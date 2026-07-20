@@ -12,10 +12,16 @@ Be respectful, kind, and constructive. We welcome contributors of all background
 
 ### Prerequisites
 
-- Node.js (LTS recommended)
-- pnpm
+- Node.js 22.12+ (LTS recommended)
+- pnpm 10.15.0 via Corepack
 - Rust toolchain (install via [rustup](https://rustup.rs/))
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop development
+
+BitFun standardizes local JavaScript builds and CI on Node.js 22.12+. The GitHub
+Actions upgrades in this repository use Node.js 24-compatible action runtimes,
+but project scripts should run on Node.js 22.12+ unless a narrower local guide
+says otherwise. After switching from an older Node.js version, rerun
+`pnpm install`.
 
 #### Windows: OpenSSL Setup
 
@@ -71,7 +77,8 @@ terms:
 - User-visible copy should use the project i18n flow; do not share Web UI
   locale catalogs with smaller surfaces.
 - Shared core must stay platform-agnostic. Desktop/Tauri details belong in app
-  adapters and flow back through transport/API layers.
+  adapters and flow through typed capability interfaces; use the production
+  transport adapter when event delivery is needed.
 - Tauri commands use `snake_case` command names and structured `request`
   payloads.
 - Product architecture, feature-boundary, dependency-boundary, and build-speed

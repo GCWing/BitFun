@@ -86,7 +86,7 @@ pub fn build_session_metadata_page(
         sessions.push(metadata);
 
         if let Some(mut children) = children_by_parent.remove(&session_id) {
-            children.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+            children.sort_by_key(|metadata| std::cmp::Reverse(metadata.last_active_at));
             sessions.extend(children);
         }
     }

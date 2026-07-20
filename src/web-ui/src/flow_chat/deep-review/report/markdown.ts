@@ -6,43 +6,37 @@ import type {
   RemediationGroupId,
   StrengthGroupId,
 } from './codeReviewReport';
-import { formatRunManifestMarkdownSection } from './manifestSections';
 import {
   buildCodeReviewReliabilityNotices,
   RELIABILITY_NOTICE_FALLBACK_LABELS,
   reliabilityNoticeMarkdownLine,
 } from './reliabilityNotices';
 import { buildCodeReviewReportSections } from './reportSections';
+import {
+  DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS,
+  formatReviewCoverageSource,
+} from './reviewCoverageSource';
 
 export const DEFAULT_CODE_REVIEW_MARKDOWN_LABELS: CodeReviewReportMarkdownLabels = {
-  titleStandard: 'Code Review Report',
-  titleDeep: 'Deep Review Report',
+  titleStandard: 'Review Report',
+  titleDeep: 'Strict Review Report',
   executiveSummary: 'Executive Summary',
   reviewDecision: 'Review Decision',
-  runManifest: 'Run manifest',
   riskLevel: 'Risk Level',
   recommendedAction: 'Recommended Action',
+  evidenceStatus: 'Evidence Status',
   scope: 'Scope',
-  target: 'Target',
-  budget: 'Budget',
-  estimatedCalls: 'Estimated calls',
-  activeReviewers: 'Active reviewers',
-  skippedReviewers: 'Skipped reviewers',
   issues: 'Issues',
   noIssues: 'No validated issues.',
   remediationPlan: 'Remediation Plan',
   strengths: 'Strengths',
-  reviewTeam: 'Code Review Team',
   reliabilitySignals: 'Review Reliability',
   coverageNotes: 'Coverage Notes',
-  status: 'Status',
-  packet: 'Packet',
-  partialOutput: 'Partial output',
-  findings: 'Findings',
   validation: 'Validation',
   suggestion: 'Suggestion',
   source: 'Source',
   noItems: 'None.',
+  coverageSourceLabels: DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS,
   reliabilityNoticeLabels: RELIABILITY_NOTICE_FALLBACK_LABELS,
   groupTitles: {
     must_fix: 'Must Fix',
@@ -70,6 +64,10 @@ function mergeLabels(labels?: Partial<CodeReviewReportMarkdownLabels>): CodeRevi
     reliabilityNoticeLabels: {
       ...DEFAULT_CODE_REVIEW_MARKDOWN_LABELS.reliabilityNoticeLabels,
       ...labels?.reliabilityNoticeLabels,
+    },
+    coverageSourceLabels: {
+      ...DEFAULT_CODE_REVIEW_MARKDOWN_LABELS.coverageSourceLabels,
+      ...labels?.coverageSourceLabels,
     },
   };
 }
@@ -101,7 +99,6 @@ export function formatCodeReviewReportMarkdown(
   const mergedLabels = mergeLabels(labels);
   const sections = buildCodeReviewReportSections(report);
   const issues = report.issues ?? [];
-  const reviewers = report.reviewers ?? [];
   const lines: string[] = [];
 
   lines.push(`# ${report.review_mode === 'deep' ? mergedLabels.titleDeep : mergedLabels.titleStandard}`);
@@ -112,14 +109,11 @@ export function formatCodeReviewReportMarkdown(
   lines.push(`## ${mergedLabels.reviewDecision}`);
   lines.push(`- ${mergedLabels.riskLevel}: ${report.summary?.risk_level ?? 'unknown'}`);
   lines.push(`- ${mergedLabels.recommendedAction}: ${report.summary?.recommended_action ?? 'unknown'}`);
+  lines.push(`- ${mergedLabels.evidenceStatus}: ${report.evidence_status ?? 'unknown'}`);
   if (report.review_scope?.trim()) {
     lines.push(`- ${mergedLabels.scope}: ${report.review_scope.trim()}`);
   }
   lines.push('');
-  if (report.review_mode === 'deep' && options?.runManifest) {
-    lines.push(formatRunManifestMarkdownSection(options.runManifest, mergedLabels));
-    lines.push('');
-  }
   const reliabilityNotices = buildCodeReviewReliabilityNotices(report, options?.runManifest);
   if (reliabilityNotices.length > 0) {
     lines.push(`## ${mergedLabels.reliabilitySignals}`);
@@ -145,8 +139,12 @@ export function formatCodeReviewReportMarkdown(
       if (issue.category) {
         lines.push(`   - ${issue.category}`);
       }
-      if (issue.source_reviewer) {
-        lines.push(`   - ${mergedLabels.source}: ${issue.source_reviewer}`);
+      const coverageSource = formatReviewCoverageSource(
+        issue.source_reviewer,
+        mergedLabels.coverageSourceLabels,
+      );
+      if (coverageSource) {
+        lines.push(`   - ${mergedLabels.source}: ${coverageSource}`);
       }
       if (issue.description) {
         lines.push(`   - ${issue.description}`);
@@ -180,32 +178,6 @@ export function formatCodeReviewReportMarkdown(
     lines.push(`- ${mergedLabels.noItems}`);
     lines.push('');
   }
-  lines.push(`## ${mergedLabels.reviewTeam}`);
-  if (reviewers.length === 0) {
-    lines.push(`- ${mergedLabels.noItems}`);
-  } else {
-    for (const reviewer of reviewers) {
-      const issueCount = typeof reviewer.issue_count === 'number'
-        ? `; ${mergedLabels.findings}: ${reviewer.issue_count}`
-        : '';
-      lines.push(`- ${reviewer.name} (${reviewer.specialty}; ${mergedLabels.status}: ${reviewer.status}${issueCount})`);
-      if (reviewer.summary) {
-        lines.push(`  - ${reviewer.summary}`);
-      }
-      const packetId = reviewer.packet_id?.trim();
-      if (packetId || reviewer.packet_status_source) {
-        const packetLabel = packetId || 'missing';
-        const sourceLabel = reviewer.packet_status_source
-          ? ` (${reviewer.packet_status_source})`
-          : '';
-        lines.push(`  - ${mergedLabels.packet}: ${packetLabel}${sourceLabel}`);
-      }
-      if (reviewer.partial_output?.trim()) {
-        lines.push(`  - ${mergedLabels.partialOutput}: ${reviewer.partial_output.trim()}`);
-      }
-    }
-  }
-  lines.push('');
   lines.push(`## ${mergedLabels.coverageNotes}`);
   pushList(lines, sections.coverageNotes, mergedLabels.noItems);
 

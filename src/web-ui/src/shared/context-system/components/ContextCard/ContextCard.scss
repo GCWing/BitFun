@@ -299,7 +299,7 @@
       background: linear-gradient(135deg,
         var(--color-accent-100) 0%,
         color-mix(in srgb, var(--color-accent-500) 6%, transparent) 50%,
-        var(--card-bg-accent) 100%
+        var(--color-accent-100) 100%
       );
       border-color: color-mix(in srgb, var(--color-accent-500) 30%, transparent);
       transform: translateY(-2px);

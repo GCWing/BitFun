@@ -3,7 +3,7 @@
 /// Inspired by opencode TUI's PermissionPrompt component.
 /// Three-level permission system:
 /// - Allow once: execute this tool call only
-/// - Allow always: auto-approve this tool type for the session
+/// - Allow always: auto-approve this tool type until the CLI runtime exits
 /// - Reject: deny execution (optionally with a reason)
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -17,11 +17,17 @@ use ratatui::{
 use super::string_utils::truncate_str;
 use super::theme::{tool_icon, StyleKind, Theme};
 
+pub(crate) const ALLOW_ALWAYS_RUNTIME_SCOPE: &str = "until this CLI runtime exits";
+
+fn allow_always_confirmation_text(tool_name: &str) -> String {
+    format!("This will auto-approve '{tool_name}' tool calls {ALLOW_ALWAYS_RUNTIME_SCOPE}.")
+}
+
 // ============ Data Types ============
 
 /// Permission prompt stage
 #[derive(Debug, Clone, PartialEq)]
-pub enum PermissionStage {
+enum PermissionStage {
     /// Main permission screen: Allow once / Allow always / Reject
     Permission,
     /// Confirm "Allow always" action
@@ -32,20 +38,20 @@ pub enum PermissionStage {
 
 /// Permission prompt state
 #[derive(Debug, Clone)]
-pub struct PermissionPrompt {
-    pub tool_id: String,
-    pub tool_name: String,
-    pub params: serde_json::Value,
-    pub stage: PermissionStage,
+pub(crate) struct PermissionPrompt {
+    pub(crate) tool_id: String,
+    tool_name: String,
+    params: serde_json::Value,
+    stage: PermissionStage,
     /// Selected option index: 0=Allow once, 1=Allow always, 2=Reject
-    pub selected_option: usize,
+    selected_option: usize,
     /// Reject reason input buffer
-    pub reject_reason: String,
+    reject_reason: String,
 }
 
 /// Result of handling a key event in the permission prompt
 #[derive(Debug, Clone)]
-pub enum PermissionAction {
+pub(crate) enum PermissionAction {
     /// No action, continue showing the prompt
     None,
     /// User confirmed: allow once (with optional updated input)
@@ -58,7 +64,7 @@ pub enum PermissionAction {
 
 impl PermissionPrompt {
     /// Create a new permission prompt from a ConfirmationNeeded event
-    pub fn new(tool_id: String, tool_name: String, params: serde_json::Value) -> Self {
+    pub(crate) fn new(tool_id: String, tool_name: String, params: serde_json::Value) -> Self {
         Self {
             tool_id,
             tool_name,
@@ -69,8 +75,12 @@ impl PermissionPrompt {
         }
     }
 
+    pub(crate) fn tool_name(&self) -> &str {
+        &self.tool_name
+    }
+
     /// Handle a key event. Returns a PermissionAction if the user made a decision.
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> PermissionAction {
+    pub(crate) fn handle_key_event(&mut self, key: KeyEvent) -> PermissionAction {
         if key.kind != KeyEventKind::Press && key.kind != KeyEventKind::Repeat {
             return PermissionAction::None;
         }
@@ -184,7 +194,7 @@ impl PermissionPrompt {
 /// Render the permission overlay on top of the message area.
 ///
 /// This renders at the bottom of the given area, taking up a fixed height.
-pub fn render_permission_overlay(
+pub(super) fn render_permission_overlay(
     frame: &mut Frame,
     prompt: &PermissionPrompt,
     theme: &Theme,
@@ -302,10 +312,7 @@ fn render_confirm_always(frame: &mut Frame, prompt: &PermissionPrompt, theme: &T
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            format!(
-                "This will auto-approve '{}' tool calls for this session.",
-                prompt.tool_name
-            ),
+            allow_always_confirmation_text(&prompt.tool_name),
             theme.style(StyleKind::Muted),
         )),
     ];
@@ -474,10 +481,24 @@ fn build_tool_detail(prompt: &PermissionPrompt) -> String {
         "Write" | "write_file" | "write_file_tool" => {
             let path = prompt
                 .params
-                .get("file_path")
-                .or_else(|| prompt.params.get("target_file"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+                .get("payload")
+                .and_then(|value| value.as_str())
+                .and_then(|value| {
+                    let first_line = value.split_once('\n').map_or(value, |(path, _)| path);
+                    first_line
+                        .strip_suffix('\r')
+                        .unwrap_or(first_line)
+                        .strip_prefix("+++ ")
+                })
+                .filter(|path| !path.trim().is_empty())
+                .or_else(|| {
+                    prompt
+                        .params
+                        .get("file_path")
+                        .or_else(|| prompt.params.get("target_file"))
+                        .and_then(|value| value.as_str())
+                })
+                .unwrap_or("workspace temporary file");
             format!("Write {}", path)
         }
         "Delete" => {
@@ -540,4 +561,17 @@ fn extract_first_param(params: &serde_json::Value) -> String {
         }
     }
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allow_always_confirmation_text;
+
+    #[test]
+    fn allow_always_copy_describes_cli_runtime_lifetime() {
+        let text = allow_always_confirmation_text("run_terminal_cmd");
+
+        assert!(text.contains("until this CLI runtime exits"));
+        assert!(!text.contains("session"));
+    }
 }

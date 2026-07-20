@@ -201,18 +201,30 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
   }
 });
 
-test('FlowChat 4xl alias mirrors runtime typography without static root 4xl fallback', () => {
+test('FlowChat heading scale derives from runtime typography without static 4xl root aliases', () => {
   const tokens = readText(path.join(root, 'src/web-ui/src/component-library/styles/tokens.scss'));
+  const welcomePanel = readText(path.join(root, 'src/web-ui/src/flow_chat/components/WelcomePanel.css'));
+  const navScope = readText(path.join(root, 'src/web-ui/src/app/styles/nav-panel-font-scope.scss'));
 
-  assert.match(
+  assert.doesNotMatch(
     tokens,
     /^\s*--flowchat-font-size-4xl:\s*var\(--font-size-4xl\);$/m,
-    'FlowChat 4xl should mirror the runtime typography owner',
+    'static root --flowchat-font-size-4xl should not be reintroduced',
   );
   assert.doesNotMatch(
     tokens,
     /^\s*--font-size-4xl:/m,
     'static root --font-size-4xl should not be reintroduced',
+  );
+  assert.match(
+    welcomePanel,
+    /font-size:\s*calc\(var\(--flowchat-font-size-3xl\) \+ 4px\);/,
+    'Welcome heading should preserve the 4xl visual size by deriving from FlowChat 3xl',
+  );
+  assert.match(
+    navScope,
+    /--font-size-4xl:\s*max\(24px, calc\(var\(--flowchat-font-size-3xl\) \+ 3px\)\);/,
+    'Nav scope should preserve its old 4xl-minus-one behavior from FlowChat 3xl',
   );
 });
 

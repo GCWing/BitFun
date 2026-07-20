@@ -41,12 +41,16 @@ pub fn list_local_ips() -> Result<Vec<LocalNetworkInterface>> {
         })
         .collect();
 
-    entries.sort_by(|left, right| ip_sort_key(&left.ip).cmp(&ip_sort_key(&right.ip)));
+    sort_local_network_interfaces(&mut entries);
 
     if entries.is_empty() {
         return Err(anyhow!("no local IPv4 addresses found"));
     }
     Ok(entries)
+}
+
+fn sort_local_network_interfaces(entries: &mut [LocalNetworkInterface]) {
+    entries.sort_by_key(|entry| ip_sort_key(&entry.ip));
 }
 
 /// Return a sort priority for an IPv4 string.
@@ -94,6 +98,34 @@ mod tests {
         assert_eq!(ip_sort_key("10.0.0.5"), 1);
         assert_eq!(ip_sort_key("172.16.0.1"), 2);
         assert_eq!(ip_sort_key("8.8.8.8"), 3);
+    }
+
+    #[test]
+    fn interface_sort_uses_priority_and_preserves_tie_order() {
+        let mut entries = vec![
+            LocalNetworkInterface {
+                interface_name: "public".to_string(),
+                ip: "8.8.8.8".to_string(),
+            },
+            LocalNetworkInterface {
+                interface_name: "first-private".to_string(),
+                ip: "192.168.1.8".to_string(),
+            },
+            LocalNetworkInterface {
+                interface_name: "second-private".to_string(),
+                ip: "192.168.1.9".to_string(),
+            },
+        ];
+
+        sort_local_network_interfaces(&mut entries);
+
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.interface_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["first-private", "second-private", "public"]
+        );
     }
 
     #[test]

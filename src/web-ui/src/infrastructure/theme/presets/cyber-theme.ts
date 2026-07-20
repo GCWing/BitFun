@@ -30,9 +30,6 @@ const CYBER_ERROR = '#ff0055';
 const CYBER_SURFACE_SECONDARY = '#1c1c1f';
 
 const cyberAccent = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT, alpha);
-const cyberSuccess = (alpha: number | string) => rgbaFromHex(CYBER_SUCCESS, alpha);
-const cyberWarning = (alpha: number | string) => rgbaFromHex(CYBER_WARNING, alpha);
-const cyberError = (alpha: number | string) => rgbaFromHex(CYBER_ERROR, alpha);
 
 export const bitfunCyberTheme: ThemeConfig = {
 
@@ -49,11 +46,9 @@ export const bitfunCyberTheme: ThemeConfig = {
       primary: CYBER_BACKGROUND,
       secondary: CYBER_SURFACE_SECONDARY,
       tertiary: CYBER_SURFACE_SECONDARY,
-      quaternary: CYBER_SURFACE_SECONDARY,
       elevated: CYBER_BACKGROUND,
       workbench: CYBER_BACKGROUND,
       scene: CYBER_SURFACE_SECONDARY,
-      tooltip: rgbaFromHex(CYBER_BACKGROUND, 0.95),
     },
 
     text: {
@@ -66,13 +61,13 @@ export const bitfunCyberTheme: ThemeConfig = {
     accent: createAccentScale({
       base: CYBER_ACCENT,
       hover: CYBER_ACCENT_HOVER,
-      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 300: 0.3, 400: 0.45, 700: 0.85, 800: 0.95 },
+      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 300: 0.3, 400: 0.45, 700: 0.85 },
     }),
 
     purple: createSecondaryAccentScale({
       base: CYBER_PURPLE,
       hover: CYBER_PURPLE_HOVER,
-      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 400: 0.45, 800: 0.95 },
+      alpha: { 100: 0.1, 200: 0.18 },
     }),
 
     semantic: createSemanticColors({
@@ -98,18 +93,14 @@ export const bitfunCyberTheme: ThemeConfig = {
       base: cyberAccent(0.13),
       medium: cyberAccent(0.17),
       strong: cyberAccent(0.22),
-      elevated: cyberAccent(0.27),
     },
 
     git: createGitColors({
       branch: rgbFromHex(CYBER_ACCENT),
       branchBg: cyberAccent(0.12),
       changes: rgbFromHex(CYBER_WARNING),
-      changesBg: cyberWarning(0.12),
       added: rgbFromHex(CYBER_SUCCESS),
-      addedBg: cyberSuccess(0.12),
       deleted: rgbFromHex(CYBER_ERROR),
-      deletedBg: cyberError(0.12),
     }),
   },
 

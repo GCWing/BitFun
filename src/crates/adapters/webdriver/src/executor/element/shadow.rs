@@ -5,7 +5,10 @@ use crate::runtime::api;
 use crate::server::response::WebDriverErrorResponse;
 
 impl BridgeExecutor {
-    pub async fn get_shadow_root(&self, element_id: &str) -> Result<Value, WebDriverErrorResponse> {
+    pub(crate) async fn get_shadow_root(
+        &self,
+        element_id: &str,
+    ) -> Result<Value, WebDriverErrorResponse> {
         api::element::exec_element_value(
             self.state.clone(),
             &self.session.id,
@@ -15,7 +18,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn find_elements_from_shadow(
+    pub(crate) async fn find_elements_from_shadow(
         &self,
         shadow_id: &str,
         using: &str,
@@ -31,11 +34,14 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn validate_frame_index(&self, index: u32) -> Result<(), WebDriverErrorResponse> {
+    pub(crate) async fn validate_frame_index(
+        &self,
+        index: u32,
+    ) -> Result<(), WebDriverErrorResponse> {
         api::element::exec_validate_frame_index(self.state.clone(), &self.session.id, index).await
     }
 
-    pub async fn validate_frame_element(
+    pub(crate) async fn validate_frame_element(
         &self,
         element_id: &str,
     ) -> Result<(), WebDriverErrorResponse> {

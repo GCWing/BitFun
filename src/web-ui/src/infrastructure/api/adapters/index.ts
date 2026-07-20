@@ -7,6 +7,7 @@ import { isTauriRuntime } from '@/infrastructure/runtime';
 export * from './base';
 export * from './tauri-adapter';
 export * from './websocket-adapter';
+export * from './peer-device-adapter';
 
  
 export function detectEnvironment(): 'tauri' | 'web' {

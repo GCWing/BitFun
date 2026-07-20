@@ -7,6 +7,20 @@ use bitfun_product_domains::canvas::{
 };
 
 #[test]
+fn canvas_enum_defaults_preserve_variants_and_wire_values() {
+    assert_eq!(CanvasScope::default(), CanvasScope::Session);
+    assert_eq!(CanvasStatus::default(), CanvasStatus::SourceSaved);
+    assert_eq!(
+        serde_json::to_string(&CanvasScope::default()).unwrap(),
+        "\"session\""
+    );
+    assert_eq!(
+        serde_json::to_string(&CanvasStatus::default()).unwrap(),
+        "\"source_saved\""
+    );
+}
+
+#[test]
 fn canvas_artifact_ref_uses_logical_uri_not_path() {
     let reference =
         CanvasArtifactRef::new(CanvasSessionId::new("session 1"), CanvasId::new("canvas 1"));

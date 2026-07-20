@@ -27,18 +27,13 @@ pub struct AcpClientConfig {
     pub permission_mode: AcpClientPermissionMode,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AcpClientPermissionMode {
+    #[default]
     Ask,
     AllowOnce,
     RejectOnce,
-}
-
-impl Default for AcpClientPermissionMode {
-    fn default() -> Self {
-        Self::Ask
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,4 +97,17 @@ pub enum AcpClientStatus {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AcpClientPermissionMode;
+
+    #[test]
+    fn permission_mode_default_remains_ask_on_the_wire() {
+        let mode = AcpClientPermissionMode::default();
+
+        assert_eq!(mode, AcpClientPermissionMode::Ask);
+        assert_eq!(serde_json::to_string(&mode).unwrap(), "\"ask\"");
+    }
 }

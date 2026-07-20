@@ -15,10 +15,7 @@ const THINK_CLOSE_TAG: &str = "</think>";
 pub fn sanitize_plain_model_output(raw: &str) -> String {
     let mut cleaned = raw.to_string();
 
-    loop {
-        let Some(open_idx) = cleaned.find(THINK_OPEN_TAG) else {
-            break;
-        };
+    while let Some(open_idx) = cleaned.find(THINK_OPEN_TAG) {
         let content_start = open_idx + THINK_OPEN_TAG.len();
 
         if let Some(relative_close_idx) = cleaned[content_start..].find(THINK_CLOSE_TAG) {

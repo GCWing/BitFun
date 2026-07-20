@@ -71,6 +71,15 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/session-config', key: 'features.workspaceSearch.enable' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionTitle' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionDescription' },
+    // { ns: 'settings/session-config', key: 'deferredToolLoading.sectionTitle' },
+    // { ns: 'settings/session-config', key: 'deferredToolLoading.sectionDescription' },
+    // { ns: 'settings/session-config', key: 'deferredToolLoading.warning' },
+    // { ns: 'settings/session-config', key: 'computerUse.sectionTitle' },
+    // { ns: 'settings/session-config', key: 'computerUse.sectionDescription' },
+    // { ns: 'settings/session-config', key: 'computerUse.enable' },
+    // { ns: 'settings/session-config', key: 'computerUse.enableDesc' },
+    // { ns: 'settings/session-config', key: 'browserControl.sectionTitle' },
+    // { ns: 'settings/session-config', key: 'browserControl.sectionDescription' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecute' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecuteDesc' },
     { ns: 'settings/agentic-tools', key: 'config.confirmTimeout' },
@@ -90,12 +99,10 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
   review: [
     { ns: 'settings/review', key: 'title' },
     { ns: 'settings/review', key: 'subtitle' },
-    { ns: 'settings/review', key: 'overview.title' },
-    { ns: 'settings/review', key: 'overview.description' },
-    { ns: 'settings/review', key: 'strategy.title' },
-    { ns: 'settings/review', key: 'execution.title' },
-    { ns: 'settings/review', key: 'members.title' },
-    { ns: 'settings/review', key: 'extra.title' },
+    { ns: 'settings/review', key: 'capacity.title' },
+    { ns: 'settings/review', key: 'capacity.description' },
+    { ns: 'settings/review', key: 'capacity.maxParallelReviewers.label' },
+    { ns: 'settings/review', key: 'capacity.maxQueueWaitSeconds.label' },
   ],
 
   memories: [
@@ -120,7 +127,22 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/mcp', key: 'section.serverList.description' },
   ],
 
-  // 'acp-agents': [ ... ], // nav entry temporarily hidden; omit from search index
+  'external-sources': [
+    { ns: 'settings/external-sources', key: 'title' },
+    { ns: 'settings/external-sources', key: 'subtitle' },
+    { ns: 'settings/external-sources', key: 'sources.title' },
+    { ns: 'settings/external-sources', key: 'sources.description' },
+    { ns: 'settings/external-sources', key: 'conflicts.title' },
+    { ns: 'settings/external-sources', key: 'conflicts.description' },
+  ],
+
+  // 'acp-agents': [
+  //   { ns: 'settings/acp-agents', key: 'title' },
+  //   { ns: 'settings/acp-agents', key: 'subtitle' },
+  //   { ns: 'settings/acp-agents', key: 'registry.title' },
+  //   { ns: 'settings/acp-agents', key: 'registry.description' },
+  //   { ns: 'settings/acp-agents', key: 'json.title' },
+  // ],
 
   editor: [
     { ns: 'settings/editor', key: 'title' },

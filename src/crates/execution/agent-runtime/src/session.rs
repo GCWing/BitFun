@@ -141,8 +141,6 @@ pub struct SessionConfig {
     pub safe_mode: bool,
     pub max_turns: usize,
     pub enable_context_compression: bool,
-    /// Compression threshold (token usage rate), compression triggered when exceeded
-    pub compression_threshold: f32,
     /// Workspace path bound to this session. Used to run AI in the correct workspace
     /// without changing the desktop's foreground workspace.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -173,7 +171,6 @@ impl Default for SessionConfig {
             safe_mode: true,
             max_turns: 200,
             enable_context_compression: true,
-            compression_threshold: 0.8, // 80%
             workspace_path: None,
             workspace_id: None,
             remote_connection_id: None,
@@ -259,7 +256,6 @@ mod tests {
         assert!(config.safe_mode);
         assert_eq!(config.max_turns, 200);
         assert!(config.enable_context_compression);
-        assert_eq!(config.compression_threshold, 0.8);
         assert!(config.workspace_path.is_none());
         assert!(config.workspace_id.is_none());
         assert!(config.remote_connection_id.is_none());
@@ -336,7 +332,6 @@ mod tests {
                     "safe_mode": true,
                     "max_turns": 200,
                     "enable_context_compression": true,
-                    "compression_threshold": 0.800000011920929,
                     "workspace_path": "/workspace",
                     "model_id": "model-a"
                 },

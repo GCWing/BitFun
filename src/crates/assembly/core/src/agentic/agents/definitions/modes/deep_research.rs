@@ -16,8 +16,8 @@ impl Default for DeepResearchMode {
 impl DeepResearchMode {
     pub fn new() -> Self {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("WebSearch".to_string(), ToolExposure::Expanded);
-        tool_exposure_overrides.insert("WebFetch".to_string(), ToolExposure::Expanded);
+        tool_exposure_overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
+        tool_exposure_overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
         Self {
             default_tools: vec![
                 "Task".to_string(),

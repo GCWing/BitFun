@@ -8,7 +8,7 @@ fn default_jsonrpc_version() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RequestEnvelope {
+pub(crate) struct RequestEnvelope {
     #[serde(default = "default_jsonrpc_version")]
     pub jsonrpc: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -19,7 +19,7 @@ pub struct RequestEnvelope {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case")]
-pub enum Request {
+pub(crate) enum Request {
     Initialize {
         params: InitializeParams,
     },
@@ -56,7 +56,7 @@ pub enum Request {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct InitializeParams {
+pub(crate) struct InitializeParams {
     #[serde(default)]
     pub client_info: Option<ClientInfo>,
     #[serde(default)]
@@ -64,14 +64,14 @@ pub struct InitializeParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClientInfo {
+pub(crate) struct ClientInfo {
     pub name: String,
     #[serde(default)]
     pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ClientCapabilities {
+pub(crate) struct ClientCapabilities {
     #[serde(default)]
     pub progress: bool,
     #[serde(default)]
@@ -81,17 +81,17 @@ pub struct ClientCapabilities {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoRef {
+pub(crate) struct RepoRef {
     pub repo_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskRef {
+pub(crate) struct TaskRef {
     pub task_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenRepoParams {
+pub(crate) struct OpenRepoParams {
     pub repo_path: PathBuf,
     #[serde(default)]
     pub storage_root: Option<PathBuf>,
@@ -102,7 +102,7 @@ pub struct OpenRepoParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchParams {
+pub(crate) struct SearchParams {
     pub repo_id: String,
     pub query: QuerySpec,
     #[serde(default)]
@@ -112,14 +112,14 @@ pub struct SearchParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GlobParams {
+pub(crate) struct GlobParams {
     pub repo_id: String,
     #[serde(default)]
     pub scope: PathScope,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuerySpec {
+pub(crate) struct QuerySpec {
     pub pattern: String,
     #[serde(default)]
     pub patterns: Vec<String>,
@@ -150,7 +150,7 @@ pub struct QuerySpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct PathScope {
+pub(crate) struct PathScope {
     #[serde(default)]
     pub roots: Vec<PathBuf>,
     #[serde(default)]
@@ -168,7 +168,7 @@ pub struct PathScope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoConfig {
+pub(crate) struct RepoConfig {
     #[serde(default)]
     pub tokenizer: TokenizerModeConfig,
     #[serde(default)]
@@ -197,7 +197,7 @@ impl Default for RepoConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RefreshPolicyConfig {
+pub(crate) struct RefreshPolicyConfig {
     #[serde(default = "default_rebuild_dirty_threshold")]
     pub rebuild_dirty_threshold: usize,
     #[serde(default = "default_overlay_auto_checkpoint_max_uncommitted_ops")]
@@ -222,7 +222,7 @@ impl Default for RefreshPolicyConfig {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum TokenizerModeConfig {
+pub(crate) enum TokenizerModeConfig {
     Trigram,
     #[default]
     SparseNgram,
@@ -230,7 +230,7 @@ pub enum TokenizerModeConfig {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum CorpusModeConfig {
+pub(crate) enum CorpusModeConfig {
     #[default]
     RespectIgnore,
     NoIgnore,
@@ -238,7 +238,7 @@ pub enum CorpusModeConfig {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum SearchModeConfig {
+pub(crate) enum SearchModeConfig {
     FilesWithMatches,
     #[default]
     LineMatches,
@@ -248,7 +248,7 @@ pub enum SearchModeConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ResponseEnvelope {
+pub(crate) struct ResponseEnvelope {
     #[serde(default = "default_jsonrpc_version")]
     pub jsonrpc: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -260,7 +260,7 @@ pub struct ResponseEnvelope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NotificationEnvelope {
+pub(crate) struct NotificationEnvelope {
     #[serde(default = "default_jsonrpc_version")]
     pub jsonrpc: String,
     pub method: String,
@@ -270,13 +270,13 @@ pub struct NotificationEnvelope {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ServerMessage {
+pub(crate) enum ServerMessage {
     Response(ResponseEnvelope),
     Notification(NotificationEnvelope),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ErrorResponse {
+pub(crate) struct ErrorResponse {
     pub code: i64,
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -285,7 +285,7 @@ pub struct ErrorResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Response {
+pub(crate) enum Response {
     InitializeResult {
         protocol_version: u32,
         server_info: ServerInfo,
@@ -327,13 +327,13 @@ pub enum Response {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerInfo {
+pub(crate) struct ServerInfo {
     pub name: String,
     pub version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerCapabilities {
+pub(crate) struct ServerCapabilities {
     pub workspace_open: bool,
     pub workspace_ensure: bool,
     pub workspace_list: bool,
@@ -349,7 +349,7 @@ pub struct ServerCapabilities {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchProtocolCapabilities {
+pub(crate) struct SearchProtocolCapabilities {
     pub search_modes: Vec<SearchModeConfig>,
 }
 
@@ -464,7 +464,7 @@ pub enum SearchBackend {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchResults {
+pub(crate) struct SearchResults {
     pub candidate_docs: usize,
     #[serde(default)]
     pub searches_with_match: usize,
@@ -489,13 +489,13 @@ pub struct FileCount {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileMatchCount {
+pub(crate) struct FileMatchCount {
     pub path: String,
     pub matched_occurrences: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LineMatch {
+pub(crate) struct LineMatch {
     pub path: String,
     pub line_number: usize,
     #[serde(default)]

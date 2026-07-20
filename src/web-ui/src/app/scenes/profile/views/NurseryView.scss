@@ -1,4 +1,5 @@
 @use '../../../../component-library/styles/tokens' as *;
+@use '../../../styles/surface-stagger';
 
 // Same as GalleryLayout.scss — nursery sub-pages align with Agents / gallery lists
 $nursery-scene-gutter: clamp(40px, 6vw, 80px);
@@ -81,7 +82,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     135deg,
     color-mix(in srgb, var(--color-success) 10%, transparent) 0%,
     color-mix(in srgb, var(--color-accent-600) 7%, transparent) 55%,
-    var(--card-bg-purple) 100%
+    var(--color-purple-100) 100%
   );
   position: relative;
   text-align: left;
@@ -95,7 +96,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, var(--glass-green-base) 0%, var(--color-accent-100) 100%);
+    background: linear-gradient(135deg, var(--color-success-bg) 0%, var(--color-accent-100) 100%);
     opacity: 0;
     transition: opacity 0.32s ease;
     pointer-events: none;
@@ -275,7 +276,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   --assistant-card-default-gradient: linear-gradient(
     135deg,
     color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
-    var(--card-bg-purple-hover) 100%
+    var(--color-purple-200) 100%
   );
   --assistant-card-gradient: var(--assistant-card-default-gradient);
 
@@ -292,7 +293,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   text-align: left;
   font-family: $font-family-sans;
   animation: nursery-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index) * 40ms);
+  @include surface-stagger.animation-delay(40ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -1470,22 +1471,6 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   padding: 0;
 }
 
-.tc-template-model-panel {
-  min-width: 0;
-}
-
-// Template selector stack
-.tc-template-model-zone {
-  .gallery-zone__header {
-    align-items: flex-start;
-  }
-
-  .gallery-zone__tools {
-    flex: 0 0 min(360px, 100%);
-    width: min(360px, 100%);
-  }
-}
-
 .tc-template-detail {
   display: flex;
   flex-direction: column;
@@ -2228,81 +2213,6 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   }
 }
 
-// ── Inline model slot (horizontal pair inside tc-hero__models) ─────────────
-
-.tc-model-slot {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: $size-gap-2;
-
-  &--header {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  &__label {
-    flex-shrink: 0;
-    font-size: var(--font-size-sm);
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-secondary);
-  }
-
-  &__select {
-    flex: 1;
-    min-width: 0;
-  }
-
-  &__select--model-selector {
-    display: flex;
-    align-items: center;
-  }
-
-  &__selector {
-    width: 100%;
-
-    .bitfun-model-selector__trigger {
-      width: 100%;
-      justify-content: space-between;
-      min-height: 32px;
-      padding: 0 10px;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-base;
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
-      opacity: 1;
-      font-size: var(--font-size-sm);
-    }
-
-    .bitfun-model-selector__name {
-      max-width: none;
-      flex: 1;
-      text-align: left;
-    }
-  }
-}
-
-@media (max-width: 800px) {
-  .tc-template-model-zone {
-    .gallery-zone__header {
-      align-items: stretch;
-      flex-direction: column;
-    }
-
-    .gallery-zone__tools {
-      width: 100%;
-      flex-basis: auto;
-      margin-left: 0;
-      justify-content: stretch;
-    }
-  }
-
-  .tc-model-slot--header {
-    justify-content: stretch;
-  }
-}
-
 // ── Context window visualization ───────────────────────────────────────────
 
 .tc-ctx {
@@ -2497,8 +2407,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     &--connected,
     &--healthy {
       color: var(--color-success);
-      background: var(--glass-green-base);
-      border-color: color-mix(in srgb, var(--color-success) 22%, transparent);
+      background: var(--color-success-bg);
+      border-color: var(--color-success-border);
     }
 
     &--starting,
@@ -2819,8 +2729,8 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   display: flex;
   align-items: flex-start;
   gap: $size-gap-3;
-  // Match .aqi and .acp-sessions-area horizontal inset from the shared profile ACP token
-  padding: $acp-content-top var(--profile-acp-left-inline-pad) $size-gap-5;
+  // Match .aqi and .acp-sessions-area horizontal inset.
+  padding: $acp-content-top $size-gap-6 $size-gap-5;
   flex-shrink: 0;
 
   &__info {
@@ -2906,7 +2816,7 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: $size-gap-3 var(--profile-acp-left-inline-pad) $size-gap-5;
+  padding: $size-gap-3 $size-gap-6 $size-gap-5;
 
   &__title {
     margin: 0 0 $size-gap-2;

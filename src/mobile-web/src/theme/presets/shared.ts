@@ -49,14 +49,11 @@ export const commonMobileThemeVars: MobileThemeVars = {
   '--size-gap-12': '48px',
   '--size-gap-16': '64px',
 
-  '--motion-instant': '0.1s',
   '--motion-fast': '0.15s',
   '--motion-base': '0.3s',
   '--motion-slow': '0.6s',
 
   '--easing-standard': 'cubic-bezier(0.4, 0, 0.2, 1)',
-  '--easing-decelerate': 'cubic-bezier(0, 0, 0.2, 1)',
-  '--easing-smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
 
   '--font-family-sans': "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', Roboto, sans-serif",
   '--font-family-mono': "'Menlo', 'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', 'Courier New', 'Noto Sans Mono CJK SC', 'Noto Sans Mono', monospace",

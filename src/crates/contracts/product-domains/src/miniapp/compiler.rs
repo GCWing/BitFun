@@ -167,6 +167,10 @@ fn inject_data_theme_type(html: &str, theme: &str) -> String {
         let after_html = idx + 5;
         let rest = &html[after_html..];
         if let Some(close) = rest.find('>') {
+            let tag = &html[idx..after_html + close + 1];
+            if tag.contains("data-theme-type=") {
+                return html.to_string();
+            }
             let insert = format!(" data-theme-type=\"{}\"", safe);
             return format!(
                 "{}{}>{}",
@@ -286,5 +290,29 @@ mod tests {
         assert_eq!(compiled, legacy);
         assert!(compiled.contains("data-theme-type=\"dark\""));
         assert!(compiled.contains("console.log('ready');"));
+    }
+
+    #[test]
+    fn inject_data_theme_type_skips_existing_attribute() {
+        let source = MiniAppSource {
+            html:
+                r#"<!DOCTYPE html><html lang="zh-CN" data-theme-type="dark"><body></body></html>"#
+                    .to_string(),
+            css: String::new(),
+            ui_js: String::new(),
+            esm_dependencies: vec![],
+            worker_js: String::new(),
+            npm_dependencies: vec![],
+        };
+        let permissions = MiniAppPermissions::default();
+        let request = MiniAppCompileRequest {
+            app_id: "app-1".to_string(),
+            app_data_dir: "/tmp/miniapps/app-1".to_string(),
+            workspace_dir: "/tmp/workspace".to_string(),
+            theme: "dark".to_string(),
+        };
+
+        let compiled = compile_with_request(&source, &permissions, &request).unwrap();
+        assert_eq!(compiled.matches("data-theme-type=\"dark\"").count(), 1);
     }
 }

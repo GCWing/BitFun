@@ -38,12 +38,6 @@ pub struct StreamResponse {
     pub trace_handle: Option<ModelExchangeRequestTraceHandle>,
 }
 
-/// Default time to wait for the first effective streamed output after a request starts.
-pub const DEFAULT_STREAM_TTFT_TIMEOUT_SECS: u64 = 30;
-
-/// Default idle time between streamed chunks once the stream has started.
-pub const DEFAULT_STREAM_IDLE_TIMEOUT_SECS: u64 = 45;
-
 /// Runtime stream behavior shared across provider implementations.
 #[derive(Debug, Clone, Default)]
 pub struct StreamOptions {

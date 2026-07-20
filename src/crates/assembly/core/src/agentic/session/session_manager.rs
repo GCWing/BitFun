@@ -8,6 +8,7 @@ use crate::agentic::core::{
     SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
+use crate::agentic::keyed_lock::{KeyedAsyncLock, KeyedAsyncLockGuard};
 use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
@@ -17,8 +18,8 @@ use crate::agentic::session::{
     EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
     PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
     PromptCacheRestoreDecision, PromptCacheScope, SessionContextStore, SessionEvidenceLedger,
-    SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity,
-    TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
+    SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity, TokenAnchor,
+    TokenAnchorSelection, TokenAnchorStore, TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::agentic::workspace::WorkspaceBinding;
@@ -32,7 +33,7 @@ use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
     SessionRelationship, TextItemData, ThinkingItemData, ToolCallData, ToolItemData,
-    ToolResultData, TurnStatus, UserMessageData,
+    ToolResultData, TranscriptLineRange, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo, WorkspaceKind};
@@ -44,9 +45,10 @@ use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
-    set_deep_review_run_manifest, set_session_relationship,
+    set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
+    SessionStorageLayout,
 };
-use dashmap::DashMap;
+use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
 use serde_json::json;
 use std::collections::HashSet;
@@ -76,6 +78,12 @@ impl Default for SessionManagerConfig {
             prompt_cache_policy: PromptCachePolicy::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompressionTranscriptReference {
+    pub uri: String,
+    pub index_range: TranscriptLineRange,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,11 +130,19 @@ pub struct SessionManager {
     /// or resolve workspace-bound operations that only receive a session_id.
     /// This cache is intentionally retained across memory eviction, but should
     /// be cleared when a session is explicitly deleted.
-    session_storage_path_index: Arc<DashMap<String, PathBuf>>,
+    session_storage_path_index: Arc<DashMap<String, SessionStoragePathBinding>>,
+
+    /// Serializes create, restore, and delete mutations for one session ID.
+    ///
+    /// Storage-path claims prevent cross-workspace identity collisions, while
+    /// this permit prevents a slower restore from replacing a session that a
+    /// concurrent operation has already made active.
+    session_mutation_locks: KeyedAsyncLock,
 
     /// Sub-components
     context_store: Arc<SessionContextStore>,
     prompt_cache_store: Arc<SessionPromptCacheStore>,
+    token_anchor_store: Arc<TokenAnchorStore>,
     turn_skill_agent_snapshot_store: Arc<TurnSkillAgentSnapshotStore>,
     skill_agent_baseline_override_snapshot_store: Arc<DashMap<String, TurnSkillAgentSnapshot>>,
     file_read_state_store: Arc<FileReadStateStore>,
@@ -153,7 +169,196 @@ struct SessionCleanupCandidate {
     last_activity_at: SystemTime,
 }
 
+#[derive(Clone, Debug)]
+struct SessionStoragePathBinding {
+    path: PathBuf,
+    pending_claims: usize,
+    committed: bool,
+}
+
 impl SessionManager {
+    async fn lock_session_mutation(&self, session_id: &str) -> KeyedAsyncLockGuard {
+        self.session_mutation_locks.lock(session_id).await
+    }
+
+    pub(crate) async fn acquire_session_mutation(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<KeyedAsyncLockGuard> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        Ok(self.lock_session_mutation(session_id).await)
+    }
+
+    fn normalize_session_storage_path(path: &Path) -> PathBuf {
+        dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    }
+
+    fn claim_session_storage_path(
+        &self,
+        session_id: &str,
+        requested_path: &Path,
+        allow_existing_same_path: bool,
+    ) -> BitFunResult<bool> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        let requested_path = Self::normalize_session_storage_path(requested_path);
+        match self
+            .session_storage_path_index
+            .entry(session_id.to_string())
+        {
+            Entry::Vacant(entry) => {
+                entry.insert(SessionStoragePathBinding {
+                    path: requested_path,
+                    pending_claims: 1,
+                    committed: false,
+                });
+                Ok(true)
+            }
+            Entry::Occupied(mut entry) => {
+                let existing_path = Self::normalize_session_storage_path(&entry.get().path);
+                if existing_path != requested_path {
+                    return Err(BitFunError::Validation(format!(
+                        "Session ID is already bound to another workspace: session_id={}, existing_storage_path={}, requested_storage_path={}",
+                        session_id,
+                        existing_path.display(),
+                        requested_path.display()
+                    )));
+                }
+                if !allow_existing_same_path {
+                    return Err(BitFunError::Validation(format!(
+                        "Session ID already exists: {session_id}"
+                    )));
+                }
+                if entry.get().committed {
+                    Ok(false)
+                } else {
+                    entry.get_mut().pending_claims += 1;
+                    Ok(true)
+                }
+            }
+        }
+    }
+
+    fn commit_session_storage_path_claim(
+        &self,
+        session_id: &str,
+        requested_path: &Path,
+        claimed: bool,
+    ) {
+        if !claimed {
+            return;
+        }
+        let requested_path = Self::normalize_session_storage_path(requested_path);
+        if let Entry::Occupied(mut entry) = self
+            .session_storage_path_index
+            .entry(session_id.to_string())
+        {
+            if Self::normalize_session_storage_path(&entry.get().path) == requested_path {
+                let binding = entry.get_mut();
+                binding.committed = true;
+                binding.pending_claims = 0;
+            }
+        }
+    }
+
+    fn release_failed_session_storage_path_claim(
+        &self,
+        session_id: &str,
+        requested_path: &Path,
+        claimed: bool,
+    ) {
+        if !claimed {
+            return;
+        }
+        let requested_path = Self::normalize_session_storage_path(requested_path);
+        let session_exists = self.sessions.contains_key(session_id);
+        if let Entry::Occupied(mut entry) = self
+            .session_storage_path_index
+            .entry(session_id.to_string())
+        {
+            if Self::normalize_session_storage_path(&entry.get().path) != requested_path {
+                return;
+            }
+            if session_exists {
+                let binding = entry.get_mut();
+                binding.committed = true;
+                binding.pending_claims = 0;
+                return;
+            }
+            let binding = entry.get_mut();
+            binding.pending_claims = binding.pending_claims.saturating_sub(1);
+            if binding.pending_claims == 0 && !binding.committed {
+                entry.remove();
+            }
+        }
+    }
+
+    fn bind_session_storage_path_committed(&self, session_id: &str, path: PathBuf) {
+        self.session_storage_path_index.insert(
+            session_id.to_string(),
+            SessionStoragePathBinding {
+                path,
+                pending_claims: 0,
+                committed: true,
+            },
+        );
+    }
+
+    pub(crate) fn ensure_session_storage_path(
+        &self,
+        session_id: &str,
+        requested_path: &Path,
+    ) -> BitFunResult<()> {
+        let claimed = self.claim_session_storage_path(session_id, requested_path, true)?;
+        self.commit_session_storage_path_claim(session_id, requested_path, claimed);
+        Ok(())
+    }
+
+    pub(crate) fn validate_session_storage_path_binding(
+        &self,
+        session_id: &str,
+        requested_path: &Path,
+    ) -> BitFunResult<()> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        let requested_path = Self::normalize_session_storage_path(requested_path);
+        let Some(binding) = self.session_storage_path_index.get(session_id) else {
+            return Ok(());
+        };
+        let existing_path = Self::normalize_session_storage_path(&binding.path);
+        if existing_path != requested_path {
+            return Err(BitFunError::Validation(format!(
+                "Session ID is already bound to another workspace: session_id={}, existing_storage_path={}, requested_storage_path={}",
+                session_id,
+                existing_path.display(),
+                requested_path.display()
+            )));
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn is_session_loaded_for_workspace_path(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        let storage_path = self
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
+        self.is_session_loaded_from_storage_path(&storage_path, session_id)
+    }
+
+    pub(crate) fn is_session_loaded_from_storage_path(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        if !self.sessions.contains_key(session_id) {
+            return Ok(false);
+        }
+        self.ensure_session_storage_path(session_id, storage_path)?;
+        Ok(true)
+    }
+
     async fn load_ai_config_for_model_resolution() -> Option<crate::service::config::types::AIConfig>
     {
         let config_service = get_global_config_service().await.ok()?;
@@ -199,14 +404,12 @@ impl SessionManager {
             return Self::context_window_for_model_selection(ai_config, configured_model_id);
         }
 
-        let agent_model_id = ai_config
-            .agent_models
-            .get(&session.agent_type)
-            .map(String::as_str)
-            .map(str::trim)
+        let fallback_model_id = (session.kind != SessionKind::Subagent)
+            .then(|| ai_config.agent_model_defaults.mode.trim().to_string())
             .filter(|model_id| !Self::is_auto_model_selector(model_id));
 
-        agent_model_id
+        fallback_model_id
+            .as_deref()
             .and_then(|model_id| Self::context_window_for_model_selection(ai_config, model_id))
             .or_else(|| Self::context_window_for_model_selection(ai_config, "primary"))
     }
@@ -463,6 +666,12 @@ impl SessionManager {
     }
 
     async fn effective_storage_path_for_workspace_path(&self, workspace_path: &Path) -> PathBuf {
+        if self
+            .persistence_manager
+            .is_resolved_sessions_dir(workspace_path)
+        {
+            return workspace_path.to_path_buf();
+        }
         let tmp_config = SessionConfig {
             workspace_path: Some(workspace_path.to_string_lossy().to_string()),
             ..Default::default()
@@ -484,6 +693,24 @@ impl SessionManager {
             elapsed_ms_u64(storage_path_started_at)
         );
         session_storage_path
+    }
+
+    async fn resolve_storage_path_for_restore_workspace_path(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<PathBuf> {
+        if self
+            .persistence_manager
+            .is_resolved_sessions_dir(workspace_path)
+        {
+            return Err(BitFunError::Validation(format!(
+                "Expected a workspace path, received a resolved sessions directory: {}",
+                workspace_path.display()
+            )));
+        }
+        Ok(self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await)
     }
 
     async fn resolve_storage_path_for_request(
@@ -522,6 +749,74 @@ impl SessionManager {
         self.effective_storage_path_for_config(&config).await
     }
 
+    pub async fn create_compression_transcript_reference(
+        &self,
+        session_id: &str,
+        boundary_turn_index: usize,
+        compression_id: &str,
+        trigger: &str,
+    ) -> BitFunResult<Option<CompressionTranscriptReference>> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(None);
+        }
+        let storage_path = self
+            .effective_session_storage_path(session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(session_id)
+                    .map(|entry| entry.value().path.clone())
+            })
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session storage path is unavailable: {}",
+                    session_id
+                ))
+            })?;
+        let artifact = self
+            .persistence_manager
+            .create_compression_transcript(
+                &storage_path,
+                session_id,
+                boundary_turn_index,
+                compression_id,
+                trigger,
+            )
+            .await?;
+        if let Some(artifact) = artifact {
+            debug!(
+                "Created compression transcript: session_id={}, boundary_turn_index={}, transcript_path={}, meta_path={}",
+                session_id,
+                boundary_turn_index,
+                artifact.transcript_path.display(),
+                artifact.meta_path.display()
+            );
+            Ok(Some(CompressionTranscriptReference {
+                uri: artifact.uri,
+                index_range: artifact.index_range,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn persistent_model_exchange_trace_dir(&self, session_id: &str) -> Option<PathBuf> {
+        if !self.should_persist_session_id(session_id) {
+            return None;
+        }
+
+        let storage_path = self
+            .effective_session_storage_path(session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(session_id)
+                    .map(|entry| entry.value().path.clone())
+            })?;
+
+        Some(SessionStorageLayout::new(storage_path).request_traces_dir(session_id))
+    }
+
     pub async fn resolve_session_workspace_binding(
         &self,
         session_id: &str,
@@ -538,7 +833,7 @@ impl SessionManager {
         let indexed_storage_path = self
             .session_storage_path_index
             .get(session_id)
-            .map(|entry| entry.clone());
+            .map(|entry| entry.value().path.clone());
         if let Some(session_storage_path) = indexed_storage_path {
             if let Some(binding) = self
                 .resolve_persisted_session_workspace_binding(
@@ -567,8 +862,17 @@ impl SessionManager {
                 )
                 .await
             {
-                self.session_storage_path_index
-                    .insert(session_id.to_string(), session_storage_path);
+                if let Err(error) =
+                    self.ensure_session_storage_path(session_id, &session_storage_path)
+                {
+                    debug!(
+                        "Ignoring conflicting persisted session workspace binding: session_id={}, storage_path={}, error={}",
+                        session_id,
+                        session_storage_path.display(),
+                        error
+                    );
+                    continue;
+                }
                 return Some(binding);
             }
         }
@@ -655,9 +959,7 @@ impl SessionManager {
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
                     .map(str::to_string);
-                if config.remote_connection_id.is_none() {
-                    return None;
-                }
+                config.remote_connection_id.as_ref()?;
             }
         } else if remote_hostname.is_some() {
             return None;
@@ -671,9 +973,7 @@ impl SessionManager {
         workspace_path: &str,
         ssh_host: Option<&str>,
     ) -> Option<WorkspaceInfo> {
-        let Some(ssh_host) = ssh_host.map(str::trim).filter(|value| !value.is_empty()) else {
-            return None;
-        };
+        let ssh_host = ssh_host.map(str::trim).filter(|value| !value.is_empty())?;
 
         let normalized_workspace_path =
             crate::service::remote_ssh::normalize_remote_workspace_path(workspace_path);
@@ -707,7 +1007,7 @@ impl SessionManager {
     async fn tracked_workspace_candidates(&self) -> Option<Vec<WorkspaceInfo>> {
         let workspace_service = get_global_workspace_service()?;
         let mut workspaces = workspace_service.list_workspace_infos().await;
-        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        workspaces.sort_by_key(|workspace| std::cmp::Reverse(workspace.last_accessed));
         Some(workspaces)
     }
 
@@ -1021,6 +1321,132 @@ impl SessionManager {
         }
     }
 
+    async fn ensure_token_anchors_loaded(&self, session_id: &str) {
+        if self.token_anchor_store.has_session(session_id) {
+            return;
+        }
+
+        let anchors = if self.should_persist_session_id(session_id) {
+            match self.effective_session_storage_path(session_id).await {
+                Some(workspace_path) => match self
+                    .persistence_manager
+                    .load_token_anchors(&workspace_path, session_id)
+                    .await
+                {
+                    Ok(Some(anchors)) => anchors,
+                    Ok(None) => Vec::new(),
+                    Err(error) => {
+                        warn!(
+                            "Failed to load token anchors: session_id={}, workspace_path={}, error={}",
+                            session_id,
+                            workspace_path.display(),
+                            error
+                        );
+                        Vec::new()
+                    }
+                },
+                None => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+
+        if let Some(stats) = self.token_anchor_store.replace_session(session_id, anchors) {
+            debug!(
+                "Token anchor retention pruned loaded anchors: session_id={}, before={}, after={}, removed={}, recent_limit={}, retained_recent={}, retained_turn_boundaries={}",
+                session_id,
+                stats.before,
+                stats.after,
+                stats.removed,
+                stats.recent_limit,
+                stats.retained_recent,
+                stats.retained_turn_boundaries
+            );
+        }
+    }
+
+    async fn persist_token_anchors_best_effort(&self, session_id: &str, reason: &str) {
+        if !self.should_persist_session_id(session_id) {
+            return;
+        }
+
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+            debug!(
+                "Skipping token anchor persistence because workspace path is unavailable: session_id={}, reason={}",
+                session_id, reason
+            );
+            return;
+        };
+
+        let anchors = self.token_anchor_store.anchors(session_id);
+        let persist_result = if anchors.is_empty() {
+            self.persistence_manager
+                .delete_token_anchors(&workspace_path, session_id)
+                .await
+        } else {
+            self.persistence_manager
+                .save_token_anchors(&workspace_path, session_id, &anchors)
+                .await
+        };
+
+        if let Err(error) = persist_result {
+            warn!(
+                "Failed to persist token anchors: session_id={}, workspace_path={}, reason={}, error={}",
+                session_id,
+                workspace_path.display(),
+                reason,
+                error
+            );
+        }
+    }
+
+    pub async fn remember_token_anchor(&self, anchor: TokenAnchor) {
+        let session_id = anchor.session_id.clone();
+        self.ensure_token_anchors_loaded(&session_id).await;
+        if let Some(stats) = self.token_anchor_store.append(anchor) {
+            debug!(
+                "Token anchor retention pruned anchors: session_id={}, before={}, after={}, removed={}, recent_limit={}, retained_recent={}, retained_turn_boundaries={}",
+                session_id,
+                stats.before,
+                stats.after,
+                stats.removed,
+                stats.recent_limit,
+                stats.retained_recent,
+                stats.retained_turn_boundaries
+            );
+        }
+        self.persist_token_anchors_best_effort(&session_id, "token_anchor_recorded")
+            .await;
+    }
+
+    pub async fn latest_matching_token_anchor(
+        &self,
+        session_id: &str,
+        messages: &[Message],
+    ) -> Option<TokenAnchor> {
+        self.select_latest_matching_token_anchor(session_id, messages)
+            .await
+            .selected
+    }
+
+    pub async fn select_latest_matching_token_anchor(
+        &self,
+        session_id: &str,
+        messages: &[Message],
+    ) -> TokenAnchorSelection {
+        self.ensure_token_anchors_loaded(session_id).await;
+        self.token_anchor_store
+            .select_latest_matching(session_id, messages)
+    }
+
+    pub async fn prune_token_anchors_to_messages(&self, session_id: &str, messages: &[Message]) {
+        self.ensure_token_anchors_loaded(session_id).await;
+        self.token_anchor_store
+            .remove_non_matching(session_id, messages);
+        self.persist_token_anchors_best_effort(session_id, "token_anchor_pruned")
+            .await;
+    }
+
     pub fn new(
         context_store: Arc<SessionContextStore>,
         persistence_manager: Arc<PersistenceManager>,
@@ -1034,8 +1460,10 @@ impl SessionManager {
         let manager = Self {
             sessions: Arc::new(DashMap::new()),
             session_storage_path_index: Arc::new(DashMap::new()),
+            session_mutation_locks: KeyedAsyncLock::default(),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
+            token_anchor_store: Arc::new(TokenAnchorStore::new()),
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
             skill_agent_baseline_override_snapshot_store: Arc::new(DashMap::new()),
             file_read_state_store: Arc::new(FileReadStateStore::new()),
@@ -1053,6 +1481,10 @@ impl SessionManager {
         manager.spawn_model_reconciliation_listener();
 
         manager
+    }
+
+    pub(crate) fn persistence_manager(&self) -> Arc<PersistenceManager> {
+        self.persistence_manager.clone()
     }
 
     pub fn append_evidence_event(&self, event: EvidenceLedgerEvent) -> EvidenceLedgerEvent {
@@ -1224,8 +1656,10 @@ impl SessionManager {
     fn spawn_model_reconciliation_listener(&self) {
         let sessions = self.sessions.clone();
         let session_storage_path_index = self.session_storage_path_index.clone();
+        let session_mutation_locks = self.session_mutation_locks.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
+        let token_anchor_store = self.token_anchor_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
@@ -1249,8 +1683,10 @@ impl SessionManager {
             let manager = Self {
                 sessions,
                 session_storage_path_index,
+                session_mutation_locks,
                 context_store,
                 prompt_cache_store,
+                token_anchor_store,
                 turn_skill_agent_snapshot_store,
                 skill_agent_baseline_override_snapshot_store,
                 file_read_state_store,
@@ -1386,14 +1822,49 @@ impl SessionManager {
         session.created_by = created_by;
         session.kind = kind;
         let session_id = session.session_id.clone();
+        let _mutation_guard = self.lock_session_mutation(&session_id).await;
+
+        // Claim both the runtime session ID and its workspace storage identity before
+        // exposing the session. Persistent sessions must never reuse an on-disk ID:
+        // overwriting the header would retain old turns and silently mix histories.
+        if self.sessions.contains_key(&session_id) {
+            return Err(BitFunError::Validation(format!(
+                "Session ID already exists: {session_id}"
+            )));
+        }
+        if self.config.enable_persistence
+            && Self::should_persist_session(&session)
+            && self
+                .persistence_manager
+                .session_storage_exists(&session_storage_path, &session_id)?
+        {
+            return Err(BitFunError::Validation(format!(
+                "Persisted session ID already exists: {session_id}"
+            )));
+        }
+        let storage_claim =
+            self.claim_session_storage_path(&session_id, &session_storage_path, true)?;
 
         // 1. Add to memory
-        self.sessions.insert(session_id.clone(), session.clone());
-        self.session_storage_path_index
-            .insert(session_id.clone(), session_storage_path.clone());
-
+        match self.sessions.entry(session_id.clone()) {
+            Entry::Vacant(entry) => {
+                entry.insert(session.clone());
+            }
+            Entry::Occupied(entry) => {
+                drop(entry);
+                self.release_failed_session_storage_path_claim(
+                    &session_id,
+                    &session_storage_path,
+                    storage_claim,
+                );
+                return Err(BitFunError::Validation(format!(
+                    "Session ID already exists: {session_id}"
+                )));
+            }
+        }
         // 2. Initialize the in-memory context cache.
         self.context_store.create_session(&session_id);
+        self.token_anchor_store.create_session(&session_id);
         self.turn_skill_agent_snapshot_store
             .create_session(&session_id);
         self.file_read_state_store.create_session(&session_id);
@@ -1402,10 +1873,26 @@ impl SessionManager {
         // Use the local `session` directly -- no need to re-fetch from DashMap,
         // which would hold a Ref guard across the async save_session call.
         if self.config.enable_persistence && Self::should_persist_session(&session) {
-            self.persistence_manager
-                .save_session(&session_storage_path, &session)
-                .await?;
+            if let Err(error) = self
+                .persistence_manager
+                .create_session_if_absent(&session_storage_path, &session)
+                .await
+            {
+                self.sessions.remove(&session_id);
+                self.context_store.delete_session(&session_id);
+                self.token_anchor_store.delete_session(&session_id);
+                self.turn_skill_agent_snapshot_store
+                    .delete_session(&session_id);
+                self.file_read_state_store.delete_session(&session_id);
+                self.release_failed_session_storage_path_claim(
+                    &session_id,
+                    &session_storage_path,
+                    storage_claim,
+                );
+                return Err(error);
+            }
         }
+        self.commit_session_storage_path_claim(&session_id, &session_storage_path, storage_claim);
 
         info!("Session created: session_name={}", session.session_name);
 
@@ -1715,20 +2202,17 @@ impl SessionManager {
             return;
         };
 
-        match self
+        if let Err(error) = self
             .persistence_manager
             .save_skill_agent_baseline_override_snapshot(&workspace_path, session_id, &snapshot)
             .await
         {
-            Err(error) => {
-                warn!(
-                    "Failed to persist listing reminder baseline override snapshot: session_id={}, workspace_path={}, error={}",
-                    session_id,
-                    workspace_path.display(),
-                    error
-                );
-            }
-            Ok(()) => {}
+            warn!(
+                "Failed to persist listing reminder baseline override snapshot: session_id={}, workspace_path={}, error={}",
+                session_id,
+                workspace_path.display(),
+                error
+            );
         }
     }
 
@@ -2074,8 +2558,7 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            let persist = self.config.enable_persistence && Self::should_persist_session(&session);
-            persist
+            self.config.enable_persistence && Self::should_persist_session(&session)
         } else {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
@@ -2159,6 +2642,16 @@ impl SessionManager {
     /// Update session title (in-memory + persistence)
     pub async fn update_session_title(&self, session_id: &str, title: &str) -> BitFunResult<()> {
         let normalized_title = Self::normalize_session_title_input(title)?;
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        self.update_session_title_locked(session_id, normalized_title)
+            .await
+    }
+
+    async fn update_session_title_locked(
+        &self,
+        session_id: &str,
+        normalized_title: String,
+    ) -> BitFunResult<()> {
         let workspace_path = self.effective_session_storage_path(session_id).await;
 
         {
@@ -2210,6 +2703,8 @@ impl SessionManager {
         expected_current_title: &str,
         title: &str,
     ) -> BitFunResult<bool> {
+        let normalized_title = Self::normalize_session_title_input(title)?;
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
         let Some(session) = self.sessions.get(session_id) else {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
@@ -2226,7 +2721,8 @@ impl SessionManager {
         }
         drop(session);
 
-        self.update_session_title(session_id, title).await?;
+        self.update_session_title_locked(session_id, normalized_title)
+            .await?;
         Ok(true)
     }
 
@@ -2305,6 +2801,46 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Inherit parent dialog mode state when creating forked child sessions.
+    ///
+    /// `last_user_dialog_agent_type` drives first-entry mode reminders, while
+    /// `last_submitted_agent_type` preserves scheduler prompt-cache state.
+    pub async fn inherit_session_agent_type_state(
+        &self,
+        session_id: &str,
+        last_user_dialog_agent_type: Option<String>,
+        last_submitted_agent_type: Option<String>,
+    ) -> BitFunResult<()> {
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.last_user_dialog_agent_type = last_user_dialog_agent_type;
+            session.last_submitted_agent_type = last_submitted_agent_type;
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Session agent type state inherited: session_id={}",
+            session_id
+        );
+
+        Ok(())
+    }
+
     fn derive_last_user_dialog_agent_type_from_turns(
         turns: &[DialogTurnData],
         fallback_agent_type: Option<&str>,
@@ -2353,7 +2889,7 @@ impl SessionManager {
             let session_storage_path = self
                 .session_storage_path_index
                 .get(session_id)
-                .map(|entry| entry.clone());
+                .map(|entry| entry.value().path.clone());
             if let Some(session_storage_path) = session_storage_path {
                 debug!(
                     "Session evicted from memory, restoring for model update: session_id={}",
@@ -2364,6 +2900,12 @@ impl SessionManager {
                     .await;
             }
         }
+
+        // Restore owns the same keyed lock internally, so acquire the mutation
+        // permit only after the optional restore completes. From here through
+        // persistence, explicit deletion cannot remove and then be recreated by
+        // a late model update.
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.config.model_id = Some(model_id.to_string());
@@ -2430,19 +2972,137 @@ impl SessionManager {
         }
     }
 
+    async fn resolve_session_cleanup_workspace_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        fallback: &Path,
+    ) -> PathBuf {
+        if let Some(workspace_path) = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.config.workspace_path.as_deref().map(PathBuf::from))
+        {
+            return workspace_path;
+        }
+
+        if self.config.enable_persistence {
+            if let Ok(Some(metadata)) = self
+                .persistence_manager
+                .load_session_metadata(session_storage_path, session_id)
+                .await
+            {
+                if let Some(workspace_path) = metadata.workspace_path {
+                    return PathBuf::from(workspace_path);
+                }
+            }
+        }
+
+        fallback.to_path_buf()
+    }
+
     /// Delete session (cascade delete all resources)
     pub async fn delete_session(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        let _mutation_guard = self.lock_session_mutation(session_id).await;
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.validate_session_storage_path_binding(session_id, &session_storage_path)?;
+        let cleanup_workspace_path = self
+            .resolve_session_cleanup_workspace_path(
+                &session_storage_path,
+                session_id,
+                workspace_path,
+            )
+            .await;
+        self.delete_session_from_paths_locked(
+            &cleanup_workspace_path,
+            &session_storage_path,
+            session_id,
+        )
+        .await
+    }
+
+    pub(crate) async fn delete_session_by_id(&self, session_id: &str) -> BitFunResult<()> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        let _mutation_guard = self.lock_session_mutation(session_id).await;
+        let session = self
+            .sessions
+            .get(session_id)
+            .map(|entry| entry.value().clone());
+        let session_storage_path = if let Some(session) = session.as_ref() {
+            self.effective_storage_path_for_config(&session.config)
+                .await
+                .or_else(|| {
+                    self.session_storage_path_index
+                        .get(session_id)
+                        .map(|entry| entry.value().path.clone())
+                })
+        } else {
+            self.session_storage_path_index
+                .get(session_id)
+                .map(|entry| entry.value().path.clone())
+        };
+        let Some(session_storage_path) = session_storage_path else {
+            return Err(BitFunError::NotFound(format!(
+                "Session storage path not found: {}",
+                session_id
+            )));
+        };
+        self.validate_session_storage_path_binding(session_id, &session_storage_path)?;
+        let cleanup_workspace_path = self
+            .resolve_session_cleanup_workspace_path(
+                &session_storage_path,
+                session_id,
+                &session_storage_path,
+            )
+            .await;
+        self.delete_session_from_paths_locked(
+            &cleanup_workspace_path,
+            &session_storage_path,
+            session_id,
+        )
+        .await
+    }
+
+    async fn delete_session_from_paths_locked(
+        &self,
+        cleanup_workspace_path: &Path,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
         let delete_started_at = Instant::now();
         debug!(
-            "Session deletion started: session_id={}, workspace_path={}, persistence_enabled={}",
+            "Session deletion started: session_id={}, cleanup_workspace_path={}, session_storage_path={}, persistence_enabled={}",
             session_id,
-            workspace_path.display(),
+            cleanup_workspace_path.display(),
+            session_storage_path.display(),
             self.config.enable_persistence
         );
+
+        // Persisted deletion is the only fallible required stage. Complete it
+        // before mutating loaded runtime state so a storage failure leaves the
+        // active session usable and retryable.
+        if self.config.enable_persistence {
+            let persistence_stage_started_at = Instant::now();
+            debug!(
+                "Session deletion stage starting: session_id={}, stage=persistence_delete",
+                session_id
+            );
+            self.persistence_manager
+                .delete_session(session_storage_path, session_id)
+                .await?;
+            debug!(
+                "Session deletion stage completed: session_id={}, stage=persistence_delete, duration_ms={}",
+                session_id,
+                elapsed_ms_u64(persistence_stage_started_at)
+            );
+        }
 
         // 1. Clean up snapshot system resources (including physical snapshot files)
         let snapshot_stage_started_at = Instant::now();
@@ -2450,7 +3110,8 @@ impl SessionManager {
             "Session deletion stage starting: session_id={}, stage=snapshot_cleanup",
             session_id
         );
-        if let Ok(snapshot_manager) = ensure_snapshot_manager_for_workspace(workspace_path) {
+        if let Ok(snapshot_manager) = ensure_snapshot_manager_for_workspace(cleanup_workspace_path)
+        {
             let snapshot_service = snapshot_manager.get_snapshot_service();
             let snapshot_service = snapshot_service.read().await;
             if let Err(e) = snapshot_service.accept_session(session_id).await {
@@ -2475,6 +3136,7 @@ impl SessionManager {
         );
         self.context_store.delete_session(session_id);
         self.prompt_cache_store.delete_session(session_id);
+        self.token_anchor_store.delete_session(session_id);
         self.turn_skill_agent_snapshot_store
             .delete_session(session_id);
         self.skill_agent_baseline_override_snapshot_store
@@ -2485,23 +3147,6 @@ impl SessionManager {
             session_id,
             elapsed_ms_u64(context_stage_started_at)
         );
-
-        // 2. Delete persisted data
-        if self.config.enable_persistence {
-            let persistence_stage_started_at = Instant::now();
-            debug!(
-                "Session deletion stage starting: session_id={}, stage=persistence_delete",
-                session_id
-            );
-            self.persistence_manager
-                .delete_session(workspace_path, session_id)
-                .await?;
-            debug!(
-                "Session deletion stage completed: session_id={}, stage=persistence_delete, duration_ms={}",
-                session_id,
-                elapsed_ms_u64(persistence_stage_started_at)
-            );
-        }
 
         if let Some(cron) = crate::service::cron::get_global_cron_service() {
             let cron_stage_started_at = Instant::now();
@@ -2519,7 +3164,7 @@ impl SessionManager {
                 Ok(_) => {}
                 Err(e) => {
                     warn!(
-                        "Failed to remove scheduled jobs for deleted session_id={}: {}",
+                        "Failed to remove scheduled jobs for session_id={}: {}",
                         session_id, e
                     );
                 }
@@ -2573,9 +3218,10 @@ impl SessionManager {
         self.session_storage_path_index.remove(session_id);
 
         info!(
-            "Session deletion completed: session_id={}, workspace_path={}, duration_ms={}",
+            "Session deletion completed: session_id={}, cleanup_workspace_path={}, session_storage_path={}, duration_ms={}",
             session_id,
-            workspace_path.display(),
+            cleanup_workspace_path.display(),
+            session_storage_path.display(),
             elapsed_ms_u64(delete_started_at)
         );
 
@@ -2593,8 +3239,8 @@ impl SessionManager {
         session_id: &str,
     ) -> BitFunResult<Session> {
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         self.restore_session_from_storage_path(&session_storage_path, session_id)
             .await
     }
@@ -2615,8 +3261,8 @@ impl SessionManager {
         session_id: &str,
     ) -> BitFunResult<Session> {
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         self.restore_internal_session_from_storage_path(&session_storage_path, session_id)
             .await
     }
@@ -2689,8 +3335,8 @@ impl SessionManager {
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
         let storage_path_started_at = Instant::now();
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
         let (session, turns, mut timing) = self
             .restore_session_view_from_storage_path_timed(&session_storage_path, session_id)
@@ -2731,8 +3377,8 @@ impl SessionManager {
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
         let storage_path_started_at = Instant::now();
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
         let (session, turns, mut timing) = self
             .restore_internal_session_view_from_storage_path_timed(
@@ -2786,8 +3432,8 @@ impl SessionManager {
     )> {
         let storage_path_started_at = Instant::now();
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
         let (session, turns, total_turn_count, mut timing) = self
             .restore_session_view_from_storage_path_tail_timed(
@@ -2824,8 +3470,8 @@ impl SessionManager {
     )> {
         let storage_path_started_at = Instant::now();
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
         let (session, turns, total_turn_count, mut timing) = self
             .restore_internal_session_view_from_storage_path_tail_timed(
@@ -2920,6 +3566,7 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
         let restore_started_at = Instant::now();
         let resolve_storage_path_duration_ms = 0;
         debug!(
@@ -2930,7 +3577,7 @@ impl SessionManager {
         let metadata_started_at = Instant::now();
         if self
             .persistence_manager
-            .load_session_metadata(&session_storage_path, session_id)
+            .load_session_metadata(session_storage_path, session_id)
             .await?
             .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
@@ -2950,7 +3597,7 @@ impl SessionManager {
             if let Some(tail_turn_count) = tail_turn_count {
                 self.persistence_manager
                     .load_session_with_tail_turns_timed(
-                        &session_storage_path,
+                        session_storage_path,
                         session_id,
                         tail_turn_count,
                     )
@@ -2958,7 +3605,7 @@ impl SessionManager {
             } else {
                 let (session, turns, timing) = self
                     .persistence_manager
-                    .load_session_with_turns_timed(&session_storage_path, session_id)
+                    .load_session_with_turns_timed(session_storage_path, session_id)
                     .await?;
                 let total_turn_count = turns.len();
                 (session, turns, total_turn_count, timing)
@@ -3030,8 +3677,8 @@ impl SessionManager {
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         self.restore_session_with_turns_from_storage_path(&session_storage_path, session_id)
             .await
     }
@@ -3052,8 +3699,8 @@ impl SessionManager {
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let session_storage_path = self
-            .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         self.restore_internal_session_with_turns_from_storage_path(
             &session_storage_path,
             session_id,
@@ -3106,6 +3753,51 @@ impl SessionManager {
         session_id: &str,
         include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        let _mutation_guard = self.lock_session_mutation(session_id).await;
+
+        if self.is_session_loaded_from_storage_path(session_storage_path, session_id)? {
+            let session = self.get_session(session_id).ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Session not found after identity check: {session_id}"
+                ))
+            })?;
+            let (_, turns, _) = if include_internal {
+                self.restore_internal_session_view_from_storage_path_timed(
+                    session_storage_path,
+                    session_id,
+                )
+                .await?
+            } else {
+                self.restore_session_view_from_storage_path_timed(session_storage_path, session_id)
+                    .await?
+            };
+            return Ok((session, turns));
+        }
+
+        let claimed = self.claim_session_storage_path(session_id, session_storage_path, true)?;
+        let result = self
+            .restore_session_with_turns_from_claimed_storage_path_internal(
+                session_storage_path,
+                session_id,
+                include_internal,
+            )
+            .await;
+        if result.is_err() {
+            self.release_failed_session_storage_path_claim(
+                session_id,
+                session_storage_path,
+                claimed,
+            );
+        }
+        result
+    }
+
+    async fn restore_session_with_turns_from_claimed_storage_path_internal(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        include_internal: bool,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let restore_started_at = Instant::now();
         // Check if session is already in memory
         let session_already_in_memory = self.sessions.contains_key(session_id);
@@ -3118,7 +3810,7 @@ impl SessionManager {
         let metadata_started_at = Instant::now();
         let session_metadata = self
             .persistence_manager
-            .load_session_metadata(&session_storage_path, session_id)
+            .load_session_metadata(session_storage_path, session_id)
             .await?;
         if session_metadata
             .as_ref()
@@ -3141,7 +3833,7 @@ impl SessionManager {
         let session_started_at = Instant::now();
         let (mut session, persisted_turns) = self
             .persistence_manager
-            .load_session_with_turns(&session_storage_path, session_id)
+            .load_session_with_turns(session_storage_path, session_id)
             .await?;
         debug!(
             "Session restore phase completed: session_id={}, phase=load_session_with_turns, turn_count={}, duration_ms={}",
@@ -3234,13 +3926,13 @@ impl SessionManager {
         let context_snapshot_started_at = Instant::now();
         let mut messages = match self
             .persistence_manager
-            .load_latest_turn_context_snapshot(&session_storage_path, session_id)
+            .load_latest_turn_context_snapshot(session_storage_path, session_id)
             .await?
         {
             Some((turn_index, msgs)) => {
                 latest_turn_index = Some(turn_index);
                 self.sanitize_listing_diff_context_snapshot_if_needed(
-                    &session_storage_path,
+                    session_storage_path,
                     session_id,
                     turn_index,
                     msgs,
@@ -3286,6 +3978,7 @@ impl SessionManager {
         if session_already_in_memory {
             self.context_store.delete_session(session_id);
             self.prompt_cache_store.delete_session(session_id);
+            self.token_anchor_store.delete_session(session_id);
             self.turn_skill_agent_snapshot_store
                 .delete_session(session_id);
             self.skill_agent_baseline_override_snapshot_store
@@ -3362,15 +4055,14 @@ impl SessionManager {
 
         if should_persist_restored_session && self.should_persist_session_id(session_id) {
             self.persistence_manager
-                .save_session(&session_storage_path, &session)
+                .save_session(session_storage_path, &session)
                 .await?;
         }
 
         // 4. Add to memory (will overwrite if already exists)
         self.sessions
             .insert(session_id.to_string(), session.clone());
-        self.session_storage_path_index
-            .insert(session_id.to_string(), session_storage_path.to_path_buf());
+        self.bind_session_storage_path_committed(session_id, session_storage_path.to_path_buf());
 
         Ok((session, persisted_turns))
     }
@@ -3382,10 +4074,40 @@ impl SessionManager {
         session_id: &str,
         target_turn: usize,
     ) -> BitFunResult<()> {
-        // Ensure session is in memory (restore from persistence if necessary)
+        let session_storage_path = self
+            .resolve_storage_path_for_restore_workspace_path(workspace_path)
+            .await?;
         if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
-            let _ = self.restore_session(workspace_path, session_id).await;
+            self.restore_session_from_storage_path(&session_storage_path, session_id)
+                .await?;
         }
+        let _mutation_guard = self.lock_session_mutation(session_id).await;
+        self.validate_session_storage_path_binding(session_id, &session_storage_path)?;
+        self.rollback_context_to_turn_start_locked(&session_storage_path, session_id, target_turn)
+            .await
+    }
+
+    pub(crate) async fn rollback_context_to_turn_start_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        target_turn: usize,
+    ) -> BitFunResult<()> {
+        let workspace_path = session_storage_path;
+
+        self.validate_rollback_context_to_turn_start_locked(
+            session_storage_path,
+            session_id,
+            target_turn,
+        )
+        .await?;
+        let surviving_turns = if target_turn == 0 {
+            Vec::new()
+        } else {
+            self.persistence_manager
+                .load_session_turns(workspace_path, session_id)
+                .await?
+        };
 
         // Rollback may load a historical snapshot from before the latest rebuilt baseline. In
         // that case we must strip all listing diff reminders before the snapshot re-enters
@@ -3427,15 +4149,14 @@ impl SessionManager {
         };
 
         // 2) Restore the in-memory context cache.
-        self.context_store.replace_context(session_id, messages);
+        self.context_store
+            .replace_context(session_id, messages.clone());
+        self.prune_token_anchors_to_messages(session_id, &messages)
+            .await;
 
         let last_user_dialog_agent_type = if target_turn == 0 {
             None
         } else {
-            let surviving_turns = self
-                .persistence_manager
-                .load_session_turns(workspace_path, session_id)
-                .await?;
             let kept_turns = surviving_turns
                 .into_iter()
                 .take(target_turn)
@@ -3489,6 +4210,9 @@ impl SessionManager {
             self.persistence_manager
                 .delete_turn_context_snapshots_from(workspace_path, session_id, target_turn)
                 .await?;
+            self.persistence_manager
+                .delete_compression_transcripts_from(workspace_path, session_id, target_turn)
+                .await?;
             self.truncate_listing_baseline_rebuild_turn_index_after_rollback(
                 workspace_path,
                 session_id,
@@ -3499,6 +4223,37 @@ impl SessionManager {
         self.turn_skill_agent_snapshot_store
             .remove_from(session_id, target_turn);
 
+        Ok(())
+    }
+
+    pub(crate) async fn validate_rollback_context_to_turn_start_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        target_turn: usize,
+    ) -> BitFunResult<()> {
+        if !self.config.enable_persistence {
+            return Ok(());
+        }
+        self.persistence_manager
+            .load_session_metadata(session_storage_path, session_id)
+            .await?;
+        self.persistence_manager
+            .load_session_turns(session_storage_path, session_id)
+            .await?;
+        if target_turn > 0
+            && self
+                .persistence_manager
+                .load_turn_context_snapshot(session_storage_path, session_id, target_turn - 1)
+                .await?
+                .is_none()
+        {
+            return Err(BitFunError::NotFound(format!(
+                "turn context snapshot not found: session_id={} turn={}",
+                session_id,
+                target_turn - 1
+            )));
+        }
         Ok(())
     }
 
@@ -3748,6 +4503,17 @@ impl SessionManager {
         .await
     }
 
+    pub async fn set_session_review_target_evidence(
+        &self,
+        session_id: &str,
+        review_target_evidence: Option<serde_json::Value>,
+    ) -> BitFunResult<()> {
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            set_review_target_evidence(metadata, review_target_evidence)
+        })
+        .await
+    }
+
     // ============ Dialog Turn Management ============
 
     #[allow(clippy::too_many_arguments)]
@@ -3992,6 +4758,7 @@ impl SessionManager {
         timestamp_ms: Option<u64>,
         user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<DialogTurnData> {
+        let _mutation_guard = self.lock_session_mutation(session_id).await;
         let session = self
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
@@ -4171,25 +4938,24 @@ impl SessionManager {
                                     is_subagent_item: None,
                                     parent_task_tool_id: None,
                                     subagent_session_id: None,
+                                    subagent_dialog_turn_id: None,
                                     attempt_id: None,
                                     attempt_index: None,
                                     subagent_model_id: None,
-                                    subagent_model_alias: None,
+                                    subagent_model_display_name: None,
                                     status: Some("completed".to_string()),
                                     interruption_reason: None,
                                 });
                                 order_index += 1;
                             }
                         }
-                        MessageContent::Multimodal { text, .. } => {
-                            if !text.trim().is_empty() {
-                                text_items.push(Self::make_text_item(
-                                    &format!("{}-text-{}", round_id, order_index),
-                                    text,
-                                    timestamp,
-                                    order_index,
-                                ));
-                            }
+                        MessageContent::Multimodal { text, .. } if !text.trim().is_empty() => {
+                            text_items.push(Self::make_text_item(
+                                &format!("{}-text-{}", round_id, order_index),
+                                text,
+                                timestamp,
+                                order_index,
+                            ));
                         }
                         _ => {}
                     }
@@ -4212,8 +4978,8 @@ impl SessionManager {
                             end_time: Some(timestamp),
                             duration_ms: Some(0),
                             provider_id: None,
-                            model_id: None,
-                            model_alias: None,
+                            model_config_id: None,
+                            effective_model_name: None,
                             first_chunk_ms: None,
                             first_visible_output_ms: None,
                             stream_duration_ms: None,
@@ -4375,8 +5141,8 @@ impl SessionManager {
                     end_time: Some(completion_timestamp),
                     duration_ms: Some(0),
                     provider_id: None,
-                    model_id: None,
-                    model_alias: None,
+                    model_config_id: None,
+                    effective_model_name: None,
                     first_chunk_ms: None,
                     first_visible_output_ms: None,
                     stream_duration_ms: None,
@@ -4743,8 +5509,11 @@ impl SessionManager {
     /// Replace the runtime context cache for a session and immediately refresh the current turn
     /// snapshot. This is primarily used after compression rewrites the model-visible context.
     pub async fn replace_context_messages(&self, session_id: &str, messages: Vec<Message>) {
-        self.context_store.replace_context(session_id, messages);
+        self.context_store
+            .replace_context(session_id, messages.clone());
         self.file_read_state_store.clear_session(session_id);
+        self.prune_token_anchors_to_messages(session_id, &messages)
+            .await;
         self.persist_current_turn_context_snapshot_best_effort(session_id, "context_replaced")
             .await;
     }
@@ -4954,6 +5723,7 @@ impl SessionManager {
     fn spawn_auto_save_task(&self) {
         let sessions = self.sessions.clone();
         let persistence = self.persistence_manager.clone();
+        let session_mutation_locks = self.session_mutation_locks.clone();
         let interval = self.config.auto_save_interval;
 
         tokio::spawn(async move {
@@ -4963,6 +5733,7 @@ impl SessionManager {
                 ticker.tick().await;
 
                 for snapshot in Self::collect_auto_save_snapshots(&sessions) {
+                    let _mutation_guard = session_mutation_locks.lock(&snapshot.session_id).await;
                     if !Self::auto_save_snapshot_is_current(&sessions, &snapshot) {
                         continue;
                     }
@@ -4999,8 +5770,10 @@ impl SessionManager {
         let timeout = self.config.session_idle_timeout;
         let persistence = self.persistence_manager.clone();
         let enable_persistence = self.config.enable_persistence;
+        let session_mutation_locks = self.session_mutation_locks.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
+        let token_anchor_store = self.token_anchor_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
@@ -5016,6 +5789,7 @@ impl SessionManager {
                 let candidates = Self::collect_expired_session_candidates(&sessions, now, timeout);
 
                 for candidate in candidates {
+                    let _mutation_guard = session_mutation_locks.lock(&candidate.session_id).await;
                     debug!(
                         "Cleaning up expired session: session_id={}",
                         candidate.session_id
@@ -5066,6 +5840,7 @@ impl SessionManager {
                     {
                         context_store.delete_session(&candidate.session_id);
                         prompt_cache_store.delete_session(&candidate.session_id);
+                        token_anchor_store.delete_session(&candidate.session_id);
                         turn_skill_agent_snapshot_store.delete_session(&candidate.session_id);
                         skill_agent_baseline_override_snapshot_store.remove(&candidate.session_id);
                         file_read_state_store.delete_session(&candidate.session_id);
@@ -5082,7 +5857,8 @@ impl SessionManager {
 mod tests {
     use super::{CoreSessionStorePort, SessionManager, SessionManagerConfig};
     use crate::agentic::core::{
-        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig, SessionState,
+        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig,
+        SessionState, ToolCall, ToolResult,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
@@ -5129,6 +5905,67 @@ mod tests {
                 self.path.join("user-root"),
             ))
         }
+    }
+
+    #[test]
+    fn persisted_round_preserves_deferred_wire_call_and_effective_identity() {
+        let assistant = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+                arguments: json!({
+                    "tool_name": "WebFetch",
+                    "args": { "url": "https://example.test" }
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            }],
+        )
+        .with_turn_id("turn-1".to_string())
+        .with_round_id("round-1".to_string());
+        let result = Message::tool_result(ToolResult {
+            tool_id: "tool-1".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            effective_tool_name: Some("WebFetch".to_string()),
+            result: json!({ "content": "external content" }),
+            result_for_assistant: Some("external content".to_string()),
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        })
+        .with_turn_id("turn-1".to_string())
+        .with_round_id("round-1".to_string());
+
+        let persisted_messages: Vec<Message> = serde_json::from_value(
+            serde_json::to_value(vec![assistant, result]).expect("serialize messages"),
+        )
+        .expect("deserialize messages");
+        let provider_result: crate::util::types::Message = (&persisted_messages[1]).into();
+        assert_eq!(
+            provider_result.name.as_deref(),
+            Some(bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME)
+        );
+
+        let rounds =
+            SessionManager::build_model_rounds_from_messages(&persisted_messages, "turn-1", 1);
+
+        assert_eq!(rounds.len(), 1);
+        assert_eq!(rounds[0].tool_items.len(), 1);
+        let tool = &rounds[0].tool_items[0];
+        assert_eq!(tool.tool_name, bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME);
+        assert_eq!(
+            tool.tool_call.input,
+            json!({
+                "tool_name": "WebFetch",
+                "args": { "url": "https://example.test" }
+            })
+        );
+        let (effective_name, effective_input) =
+            crate::service::session::effective_tool_identity(tool);
+        assert_eq!(effective_name, "WebFetch");
+        assert_eq!(effective_input, &json!({ "url": "https://example.test" }));
     }
 
     impl Drop for TestWorkspace {
@@ -5186,6 +6023,475 @@ mod tests {
         )
     }
 
+    #[tokio::test]
+    async fn session_model_update_is_restored_from_persistence() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Persisted model update".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    model_id: Some("primary".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .update_session_model_id(&session.session_id, "auto")
+            .await
+            .expect("model update should persist");
+        manager.sessions.remove(&session.session_id);
+
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should restore from persistence");
+        assert_eq!(restored.config.model_id.as_deref(), Some("auto"));
+    }
+
+    #[tokio::test]
+    async fn session_storage_identity_rejects_same_id_in_another_workspace() {
+        let workspace = TestWorkspace::new();
+        let other_workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session_id = "shared-session-id";
+
+        assert!(manager
+            .claim_session_storage_path(session_id, workspace.path(), true)
+            .expect("first workspace claim"));
+        let error = manager
+            .claim_session_storage_path(session_id, other_workspace.path(), true)
+            .expect_err("a second workspace must not reuse an active session id");
+
+        let message = error.to_string();
+        assert!(message.contains(session_id));
+        assert!(message.contains("another workspace"));
+    }
+
+    #[tokio::test]
+    async fn failed_claim_does_not_release_a_concurrent_same_workspace_claim() {
+        let workspace = TestWorkspace::new();
+        let other_workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session_id = "concurrent-restore-session";
+
+        let first_claim = manager
+            .claim_session_storage_path(session_id, workspace.path(), true)
+            .expect("first restore claim");
+        manager
+            .claim_session_storage_path(session_id, workspace.path(), true)
+            .expect("concurrent restore in the same workspace");
+
+        manager.release_failed_session_storage_path_claim(
+            session_id,
+            workspace.path(),
+            first_claim,
+        );
+
+        let error = manager
+            .claim_session_storage_path(session_id, other_workspace.path(), true)
+            .expect_err("a concurrent same-workspace restore must retain the binding");
+        assert!(error.to_string().contains("another workspace"));
+    }
+
+    #[tokio::test]
+    async fn ephemeral_session_creation_rejects_active_duplicate_but_allows_evicted_id_reuse() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session_id = "reusable-session-id";
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+
+        manager
+            .create_session_with_id_and_details(
+                Some(session_id.to_string()),
+                "Original".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+                None,
+                SessionKind::EphemeralChild,
+            )
+            .await
+            .expect("first session should create");
+        let duplicate = manager
+            .create_session_with_id_and_details(
+                Some(session_id.to_string()),
+                "Duplicate".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+                None,
+                SessionKind::EphemeralChild,
+            )
+            .await
+            .expect_err("an active duplicate must fail");
+        assert!(duplicate.to_string().contains("already exists"));
+
+        manager.sessions.remove(session_id);
+        manager
+            .create_session_with_id_and_details(
+                Some(session_id.to_string()),
+                "Recreated".to_string(),
+                "agentic".to_string(),
+                config,
+                None,
+                SessionKind::EphemeralChild,
+            )
+            .await
+            .expect("an evicted same-workspace session id should be reusable");
+    }
+
+    #[tokio::test]
+    async fn persistent_session_creation_rejects_an_evicted_on_disk_id_without_overwriting_turns() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let manager = test_manager(persistence_manager);
+        let session_id = "persisted-session-id";
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+
+        manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Original".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+            )
+            .await
+            .expect("first persistent session should create");
+        let turns_dir = sessions_dir.join(session_id).join("turns");
+        std::fs::create_dir_all(&turns_dir).expect("turns directory");
+        let sentinel = turns_dir.join("existing-turn.json");
+        std::fs::write(&sentinel, b"existing history").expect("persisted turn sentinel");
+        manager.sessions.remove(session_id);
+
+        let error = manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Replacement".to_string(),
+                "agentic".to_string(),
+                config,
+            )
+            .await
+            .expect_err("an evicted persistent session id must not be reused");
+
+        assert!(error.to_string().contains("already exists"));
+        assert_eq!(
+            std::fs::read(&sentinel).expect("existing turns must remain untouched"),
+            b"existing history"
+        );
+        assert!(manager.get_session(session_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn invalid_fixed_session_id_does_not_claim_or_insert_runtime_state() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let invalid_id = "../other-session";
+
+        let error = manager
+            .create_session_with_id(
+                Some(invalid_id.to_string()),
+                "Invalid".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect_err("path-like session ids must be rejected");
+
+        assert!(error.to_string().contains("session_id"));
+        assert!(manager.get_session(invalid_id).is_none());
+        assert!(manager.session_storage_path_index.get(invalid_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn persistent_session_creation_failure_does_not_publish_runtime_state() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_id = "failed-persistent-session";
+        persistence_manager.fail_next_session_state_write_for_test(session_id);
+        let manager = test_manager(persistence_manager.clone());
+        let config = SessionConfig {
+            workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+
+        manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Must not become visible".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+            )
+            .await
+            .expect_err("state persistence failure must fail session creation");
+
+        assert!(manager.get_session(session_id).is_none());
+        assert!(manager.session_storage_path_index.get(session_id).is_none());
+        assert!(!persistence_manager
+            .session_storage_exists(workspace.path(), session_id)
+            .expect("session storage existence"));
+        assert!(persistence_manager
+            .load_session_metadata(workspace.path(), session_id)
+            .await
+            .expect("load session metadata")
+            .is_none());
+
+        manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Retry succeeds".to_string(),
+                "agentic".to_string(),
+                config,
+            )
+            .await
+            .expect("retry should not be blocked by partial persistence");
+    }
+
+    #[tokio::test]
+    async fn background_title_update_cannot_recreate_storage_during_deletion() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let manager = Arc::new(test_manager(persistence_manager.clone()));
+        let session = manager
+            .create_session(
+                "Original".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let session_id = session.session_id.clone();
+        let deletion_guard = manager
+            .acquire_session_mutation(&session_id)
+            .await
+            .expect("deletion mutation guard");
+
+        let title_manager = manager.clone();
+        let title_session_id = session_id.clone();
+        let title_update = tokio::spawn(async move {
+            title_manager
+                .update_session_title_if_current(&title_session_id, "Original", "Generated title")
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !title_update.is_finished(),
+            "title persistence must wait for the deletion mutation boundary"
+        );
+
+        persistence_manager
+            .delete_session(&sessions_dir, &session_id)
+            .await
+            .expect("persistence deletion");
+        manager.sessions.remove(&session_id);
+        manager.session_storage_path_index.remove(&session_id);
+        drop(deletion_guard);
+
+        let error = title_update
+            .await
+            .expect("title task should not panic")
+            .expect_err("deleted session title update must fail");
+        assert!(error.to_string().contains("not found"));
+        assert!(!sessions_dir.join(&session_id).exists());
+    }
+
+    #[tokio::test]
+    async fn loaded_session_identity_check_preserves_processing_state() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_session(
+                "Active".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let storage_path = manager
+            .session_storage_path_index
+            .get(&session.session_id)
+            .expect("storage binding")
+            .path
+            .clone();
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("active session")
+            .state = SessionState::Processing {
+            current_turn_id: "turn-active".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+
+        assert!(manager
+            .is_session_loaded_from_storage_path(&storage_path, &session.session_id)
+            .expect("identity check"));
+        assert!(matches!(
+            manager.get_session(&session.session_id).expect("session").state,
+            SessionState::Processing { ref current_turn_id, .. }
+                if current_turn_id == "turn-active"
+        ));
+    }
+
+    #[tokio::test]
+    async fn restoring_an_already_loaded_session_preserves_processing_state() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Active".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("active session")
+            .state = SessionState::Processing {
+            current_turn_id: "turn-active".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+
+        manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("idempotent restore");
+
+        assert!(matches!(
+            manager.get_session(&session.session_id).expect("session").state,
+            SessionState::Processing { ref current_turn_id, .. }
+                if current_turn_id == "turn-active"
+        ));
+    }
+
+    #[tokio::test]
+    async fn session_creation_waits_for_the_same_session_mutation_permit() {
+        let workspace = TestWorkspace::new();
+        let manager = Arc::new(in_memory_test_manager());
+        let session_id = "serialized-create-session";
+        let guard = manager.lock_session_mutation(session_id).await;
+        let manager_for_create = manager.clone();
+        let workspace_path = workspace.path().to_string_lossy().to_string();
+
+        let create_task = tokio::spawn(async move {
+            manager_for_create
+                .create_session_with_id(
+                    Some(session_id.to_string()),
+                    "Serialized".to_string(),
+                    "agentic".to_string(),
+                    SessionConfig {
+                        workspace_path: Some(workspace_path),
+                        ..Default::default()
+                    },
+                )
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(!create_task.is_finished());
+
+        drop(guard);
+        create_task
+            .await
+            .expect("create task should join")
+            .expect("create should continue after the permit is released");
+    }
+
+    #[tokio::test]
+    async fn session_restore_waits_for_the_same_session_mutation_permit() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = Arc::new(test_manager(persistence_manager));
+        let session = manager
+            .create_session(
+                "Persisted".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        manager.sessions.remove(&session.session_id);
+
+        let guard = manager.lock_session_mutation(&session.session_id).await;
+        let manager_for_restore = manager.clone();
+        let session_id = session.session_id.clone();
+        let workspace_path = workspace.path().to_path_buf();
+        let restore_task = tokio::spawn(async move {
+            manager_for_restore
+                .restore_session(&workspace_path, &session_id)
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(!restore_task.is_finished());
+
+        drop(guard);
+        restore_task
+            .await
+            .expect("restore task should join")
+            .expect("restore should continue after the permit is released");
+    }
+
+    #[tokio::test]
+    async fn persistence_manager_accessor_reuses_runtime_owner() {
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(test_path_manager()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+
+        assert!(Arc::ptr_eq(
+            &persistence_manager,
+            &manager.persistence_manager()
+        ));
+    }
+
     fn test_model(id: &str, context_window: u32) -> ServiceAIModelConfig {
         ServiceAIModelConfig {
             id: id.to_string(),
@@ -5199,8 +6505,10 @@ mod tests {
 
     #[test]
     fn sync_session_context_window_refreshes_stale_explicit_model_window() {
-        let mut ai_config = ServiceAIConfig::default();
-        ai_config.models = vec![test_model("deepseek-v4-pro", 1_000_000)];
+        let ai_config = ServiceAIConfig {
+            models: vec![test_model("deepseek-v4-pro", 1_000_000)],
+            ..Default::default()
+        };
 
         let mut session = Session::new_with_id(
             "session-804".to_string(),
@@ -5221,16 +6529,16 @@ mod tests {
     }
 
     #[test]
-    fn sync_session_context_window_resolves_auto_through_agent_model_then_primary() {
-        let mut ai_config = ServiceAIConfig::default();
-        ai_config.models = vec![
-            test_model("primary-model", 512_000),
-            test_model("agent-model", 1_000_000),
-        ];
+    fn sync_session_context_window_resolves_auto_through_mode_default_then_primary() {
+        let mut ai_config = ServiceAIConfig {
+            models: vec![
+                test_model("primary-model", 512_000),
+                test_model("agent-model", 1_000_000),
+            ],
+            ..Default::default()
+        };
         ai_config.default_models.primary = Some("primary-model".to_string());
-        ai_config
-            .agent_models
-            .insert("agentic".to_string(), "agent-model".to_string());
+        ai_config.agent_model_defaults.mode = "agent-model".to_string();
 
         let mut session = Session::new_with_id(
             "session-auto".to_string(),
@@ -5249,8 +6557,39 @@ mod tests {
         assert_eq!(resolved, Some(1_000_000));
         assert_eq!(session.config.max_context_tokens, 1_000_000);
 
-        ai_config.agent_models.clear();
+        ai_config.agent_model_defaults.mode = "auto".to_string();
         session.config.max_context_tokens = 256_000;
+
+        let resolved =
+            SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
+
+        assert_eq!(resolved, Some(512_000));
+        assert_eq!(session.config.max_context_tokens, 512_000);
+    }
+
+    #[test]
+    fn sync_session_context_window_resolves_subagent_auto_through_primary() {
+        let mut ai_config = ServiceAIConfig {
+            models: vec![
+                test_model("primary-model", 512_000),
+                test_model("mode-model", 1_000_000),
+            ],
+            ..Default::default()
+        };
+        ai_config.default_models.primary = Some("primary-model".to_string());
+        ai_config.agent_model_defaults.mode = "mode-model".to_string();
+
+        let mut session = Session::new_with_id(
+            "subagent-auto".to_string(),
+            "Auto subagent".to_string(),
+            "Explore".to_string(),
+            SessionConfig {
+                model_id: Some("auto".to_string()),
+                max_context_tokens: 256_000,
+                ..Default::default()
+            },
+        );
+        session.kind = SessionKind::Subagent;
 
         let resolved =
             SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
@@ -5475,6 +6814,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn append_completed_local_command_turn_waits_for_session_mutation() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = Arc::new(test_manager(persistence_manager));
+        let session = manager
+            .create_session(
+                "Serialized local command".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let mutation = manager
+            .acquire_session_mutation(&session.session_id)
+            .await
+            .expect("hold mutation boundary");
+        let append_manager = manager.clone();
+        let append_session_id = session.session_id.clone();
+        let append = tokio::spawn(async move {
+            append_manager
+                .append_completed_local_command_turn(
+                    &append_session_id,
+                    "usage report".to_string(),
+                    Some("usage-turn".to_string()),
+                    Some(1),
+                    None,
+                )
+                .await
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert!(!append.is_finished());
+        drop(mutation);
+        append
+            .await
+            .expect("append task should join")
+            .expect("append should succeed after mutation releases");
+    }
+
+    #[tokio::test]
     async fn restore_session_resets_processing_state_without_marking_unread_completion() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
@@ -5548,6 +6932,48 @@ mod tests {
             .await
             .expect("metadata lookup should succeed")
             .is_none());
+        assert_eq!(
+            manager
+                .persistent_model_exchange_trace_dir(&session.session_id)
+                .await,
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn persisted_session_uses_session_local_model_exchange_trace_dir() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager);
+
+        let session = manager
+            .create_session_with_id_and_details(
+                Some(Uuid::new_v4().to_string()),
+                "Main thread".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("standard session should create");
+
+        assert_eq!(
+            manager
+                .persistent_model_exchange_trace_dir(&session.session_id)
+                .await,
+            Some(
+                path_manager
+                    .project_sessions_dir(workspace.path())
+                    .join(&session.session_id)
+                    .join("request-traces")
+            )
+        );
     }
 
     #[tokio::test]
@@ -6183,10 +7609,11 @@ mod tests {
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                subagent_dialog_turn_id: None,
                 attempt_id: None,
                 attempt_index: None,
                 subagent_model_id: None,
-                subagent_model_alias: None,
+                subagent_model_display_name: None,
                 status: Some("completed".to_string()),
                 interruption_reason: None,
             }],
@@ -6195,8 +7622,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             provider_id: None,
-            model_id: None,
-            model_alias: None,
+            model_config_id: None,
+            effective_model_name: None,
             first_chunk_ms: None,
             first_visible_output_ms: None,
             stream_duration_ms: None,
@@ -6353,6 +7780,137 @@ mod tests {
             .expect("metadata should load")
             .expect("metadata should exist");
         assert_eq!(metadata.turn_count, 1);
+    }
+
+    #[tokio::test]
+    async fn rollback_context_failure_preserves_turn_history() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Rollback failure".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        for index in 0..2 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids = vec!["turn-0".to_string(), "turn-1".to_string()];
+
+        let error = manager
+            .rollback_context_to_turn_start(workspace.path(), &session.session_id, 1)
+            .await
+            .expect_err("missing context snapshot must fail rollback");
+
+        assert!(error.to_string().contains("context snapshot"), "{error}");
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session remains loaded")
+                .dialog_turn_ids,
+            vec!["turn-0".to_string(), "turn-1".to_string()]
+        );
+        assert_eq!(
+            persistence_manager
+                .load_session_turns(workspace.path(), &session.session_id)
+                .await
+                .expect("turns should remain")
+                .len(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn rollback_context_waits_for_the_session_mutation_boundary() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = Arc::new(test_manager(persistence_manager.clone()));
+        let session = manager
+            .create_session(
+                "Serialized rollback".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            session.session_id.clone(),
+            UserMessageData {
+                id: "turn-0-user".to_string(),
+                content: "prompt".to_string(),
+                timestamp: 0,
+                metadata: None,
+            },
+        );
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should be active")
+            .dialog_turn_ids = vec!["turn-0".to_string()];
+
+        let mutation = manager
+            .acquire_session_mutation(&session.session_id)
+            .await
+            .expect("hold mutation boundary");
+        let rollback_manager = manager.clone();
+        let rollback_workspace = workspace.path().to_path_buf();
+        let rollback_session_id = session.session_id.clone();
+        let rollback = tokio::spawn(async move {
+            rollback_manager
+                .rollback_context_to_turn_start(&rollback_workspace, &rollback_session_id, 0)
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(!rollback.is_finished());
+
+        drop(mutation);
+        rollback
+            .await
+            .expect("rollback task should join")
+            .expect("rollback should succeed after mutation releases");
+        assert!(persistence_manager
+            .load_session_turns(workspace.path(), &session.session_id)
+            .await
+            .expect("turns should load")
+            .is_empty());
     }
 
     #[tokio::test]
@@ -6877,7 +8435,7 @@ mod tests {
                 .session_storage_path_index
                 .get(&session.session_id)
                 .as_deref()
-                .map(|entry| entry.to_path_buf()),
+                .map(|entry| entry.path.clone()),
             Some(expected_storage_path)
         );
 
@@ -6890,6 +8448,156 @@ mod tests {
             .session_storage_path_index
             .get(&session.session_id)
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_session_accepts_an_already_resolved_sessions_directory() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let resolved_sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Resolved storage session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .delete_session(&resolved_sessions_dir, &session.session_id)
+            .await
+            .expect("resolved sessions path should be idempotent");
+
+        assert!(manager.get_session(&session.session_id).is_none());
+        assert!(!resolved_sessions_dir.join(&session.session_id).exists());
+    }
+
+    #[tokio::test]
+    async fn evicted_session_uses_persisted_workspace_identity_for_snapshot_cleanup() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let resolved_sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Evicted cleanup session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        manager.sessions.remove(&session.session_id);
+
+        let cleanup_workspace_path = manager
+            .resolve_session_cleanup_workspace_path(
+                &resolved_sessions_dir,
+                &session.session_id,
+                &resolved_sessions_dir,
+            )
+            .await;
+
+        assert_eq!(
+            dunce::canonicalize(cleanup_workspace_path).expect("cleanup workspace should exist"),
+            dunce::canonicalize(workspace.path()).expect("workspace should exist")
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_session_rejects_a_loaded_session_from_another_workspace() {
+        let workspace = TestWorkspace::new();
+        let other_workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Bound session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let error = manager
+            .delete_session(other_workspace.path(), &session.session_id)
+            .await
+            .expect_err("cross-workspace deletion must be rejected");
+
+        assert!(error.to_string().contains("another workspace"));
+        assert!(manager.get_session(&session.session_id).is_some());
+        assert!(manager
+            .session_storage_path_index
+            .contains_key(&session.session_id));
+    }
+
+    #[tokio::test]
+    async fn persistence_delete_failure_preserves_loaded_runtime_context() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Failure atomic session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        manager.context_store.add_message(
+            &session.session_id,
+            Message::user("runtime context must survive".to_string()),
+        );
+        let storage_path = manager
+            .session_storage_path_index
+            .get(&session.session_id)
+            .expect("storage binding")
+            .path
+            .clone();
+        let index_path = storage_path.join("index.json");
+        std::fs::remove_file(&index_path).expect("replace index file");
+        std::fs::create_dir(&index_path).expect("create invalid index directory");
+
+        manager
+            .delete_session(workspace.path(), &session.session_id)
+            .await
+            .expect_err("persistence failure should abort runtime cleanup");
+
+        assert!(manager.get_session(&session.session_id).is_some());
+        assert_eq!(
+            manager
+                .context_store
+                .get_context_messages(&session.session_id)
+                .len(),
+            1
+        );
+        assert!(manager
+            .session_storage_path_index
+            .contains_key(&session.session_id));
     }
 
     #[test]

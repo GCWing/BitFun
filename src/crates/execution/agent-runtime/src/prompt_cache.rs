@@ -279,21 +279,24 @@ impl SessionPromptCacheStore {
         ttl: Option<Duration>,
     ) -> PromptCacheLookup {
         let now_ms = current_time_ms();
-        let cached_entry = self
-            .session_caches
-            .get(session_id)
-            .and_then(|cache| cache.system_prompt.clone());
+        let Some(cache) = self.session_caches.get(session_id) else {
+            return PromptCacheLookup::Miss;
+        };
+        let Some(entry) = cache.system_prompt.as_ref() else {
+            return PromptCacheLookup::Miss;
+        };
 
-        match cached_entry {
-            Some(entry) if entry.is_usable(identity, ttl, now_ms) => {
-                PromptCacheLookup::Hit(entry.text.content)
-            }
-            Some(entry) if entry.text.is_expired(ttl, now_ms) => {
-                self.invalidate(session_id, PromptCacheScope::SystemPrompt);
-                PromptCacheLookup::Expired
-            }
-            _ => PromptCacheLookup::Miss,
+        if entry.is_usable(identity, ttl, now_ms) {
+            return PromptCacheLookup::Hit(entry.text.content.clone());
         }
+
+        if entry.text.is_expired(ttl, now_ms) {
+            drop(cache);
+            self.invalidate(session_id, PromptCacheScope::SystemPrompt);
+            return PromptCacheLookup::Expired;
+        }
+
+        PromptCacheLookup::Miss
     }
 
     pub fn lookup_user_context(
@@ -303,22 +306,24 @@ impl SessionPromptCacheStore {
         ttl: Option<Duration>,
     ) -> PromptCacheLookup {
         let now_ms = current_time_ms();
-        let cached_entry = self
-            .session_caches
-            .get(session_id)
-            .and_then(|cache| cache.user_context.clone());
+        let Some(cache) = self.session_caches.get(session_id) else {
+            return PromptCacheLookup::Miss;
+        };
+        let Some(entry) = cache.user_context.as_ref() else {
+            return PromptCacheLookup::Miss;
+        };
 
-        match cached_entry {
-            Some(entry) if entry.is_usable(identity, ttl, now_ms) => {
-                PromptCacheLookup::Hit(entry.text.content)
-            }
-            Some(entry) if entry.text.is_expired(ttl, now_ms) => {
-                self.invalidate(session_id, PromptCacheScope::UserContext);
-                PromptCacheLookup::Expired
-            }
-            Some(_) => PromptCacheLookup::Miss,
-            None => PromptCacheLookup::Miss,
+        if entry.is_usable(identity, ttl, now_ms) {
+            return PromptCacheLookup::Hit(entry.text.content.clone());
         }
+
+        if entry.text.is_expired(ttl, now_ms) {
+            drop(cache);
+            self.invalidate(session_id, PromptCacheScope::UserContext);
+            return PromptCacheLookup::Expired;
+        }
+
+        PromptCacheLookup::Miss
     }
 
     pub fn set_system_prompt(&self, session_id: &str, entry: CachedSystemPrompt) {

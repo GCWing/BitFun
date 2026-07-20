@@ -7,7 +7,9 @@
 //! assembly, concrete runtime hosts, and IM bot command routing that still needs
 //! session/runtime hosts stay in `bitfun-core` until their ports are explicit.
 
+pub mod account;
 pub mod bot;
+mod chat_projection;
 pub mod device;
 pub mod encryption;
 mod lan;
@@ -16,6 +18,8 @@ mod ngrok;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
+pub mod session_store;
+pub mod sync_state;
 
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
@@ -28,6 +32,10 @@ pub use bitfun_runtime_ports::{
     RemoteSessionWorkspaceIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
     RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
     RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+};
+pub use chat_projection::{
+    agent_input_attachment_from_remote_image_context, project_remote_chat_user,
+    RemoteChatUserProjection,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
@@ -50,6 +58,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -637,17 +646,36 @@ pub async fn read_remote_workspace_file_chunk(
         .map_err(|e| format!("Cannot read file metadata: {e}"))?
         .len();
 
-    let bytes = tokio::fs::read(&abs_path)
+    let range = resolve_remote_file_chunk_range(
+        usize::try_from(total_size).unwrap_or(usize::MAX),
+        offset,
+        limit,
+    );
+    let chunk_size = usize::try_from(range.chunk_size)
+        .map_err(|_| "Remote file chunk is too large to allocate".to_string())?;
+    let mut file = tokio::fs::File::open(&abs_path)
         .await
-        .map_err(|e| format!("Cannot read file: {e}"))?;
-    let range = resolve_remote_file_chunk_range(bytes.len(), offset, limit);
-    let chunk = bytes[range.start..range.end].to_vec();
+        .map_err(|e| format!("Cannot open file: {e}"))?;
+    file.seek(std::io::SeekFrom::Start(range.start as u64))
+        .await
+        .map_err(|e| format!("Cannot seek file: {e}"))?;
+    let mut chunk = Vec::with_capacity(chunk_size);
+    let mut limited_file = file.take(range.chunk_size);
+    limited_file
+        .read_to_end(&mut chunk)
+        .await
+        .map_err(|e| format!("Cannot read file chunk: {e}"))?;
+    let actual_chunk_size = u64::try_from(chunk.len()).unwrap_or(u64::MAX);
+    let total_size = tokio::fs::metadata(&abs_path)
+        .await
+        .map(|metadata| metadata.len())
+        .unwrap_or(total_size);
 
     Ok(RemoteWorkspaceFileChunk {
         name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
         bytes: chunk,
         offset,
-        chunk_size: range.chunk_size,
+        chunk_size: actual_chunk_size,
         total_size,
         mime_type: detect_remote_mime_type(&abs_path),
     })
@@ -868,6 +896,8 @@ pub fn remote_recent_workspaces_response(
                 name: workspace.name,
                 last_opened: workspace.last_opened,
                 workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+                remote_connection_id: workspace.remote_connection_id,
+                remote_ssh_host: workspace.remote_ssh_host,
             })
             .collect(),
     }
@@ -896,12 +926,16 @@ pub fn remote_workspace_updated_response(
             success: true,
             path: Some(update.path),
             project_name: Some(update.name),
+            remote_connection_id: update.remote_connection_id,
+            remote_ssh_host: update.remote_ssh_host,
             error: None,
         },
         Err(message) => RemoteResponse::WorkspaceUpdated {
             success: false,
             path: None,
             project_name: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
             error: Some(message),
         },
     }
@@ -1024,9 +1058,18 @@ where
         RemoteCommand::ListRecentWorkspaces => {
             remote_recent_workspaces_response(host.recent_workspaces().await)
         }
-        RemoteCommand::SetWorkspace { path } => {
-            remote_workspace_updated_response(host.open_workspace(path).await)
-        }
+        RemoteCommand::SetWorkspace {
+            path,
+            remote_connection_id,
+            remote_ssh_host,
+        } => remote_workspace_updated_response(
+            host.open_workspace(
+                path,
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await,
+        ),
         RemoteCommand::ListAssistants => {
             remote_assistant_list_response(host.assistant_workspaces().await)
         }
@@ -1171,11 +1214,12 @@ where
 
             let Some(workspace_path) = workspace_path
                 .as_deref()
-                .filter(|path| !path.is_empty())
+                .map(str::trim)
+                .filter(|path| !path.is_empty() && *path != "/")
                 .map(PathBuf::from)
             else {
                 return RemoteResponse::Error {
-                    message: "workspace_path is required for ListSessions".to_string(),
+                    message: "No workspace is open on the remote device; select a recent workspace or create one first".to_string(),
                 };
             };
 
@@ -1244,7 +1288,8 @@ where
             } else {
                 workspace_path
                     .as_deref()
-                    .filter(|path| !path.is_empty())
+                    .map(str::trim)
+                    .filter(|path| !path.is_empty() && *path != "/")
                     .map(ToOwned::to_owned)
             };
 
@@ -1253,7 +1298,7 @@ where
                     message: if is_claw {
                         "Failed to get or create assistant workspace".to_string()
                     } else {
-                        "workspace_path is required for CreateSession".to_string()
+                        "No workspace is open on the remote device; select a recent workspace or create one first".to_string()
                     },
                 };
             };
@@ -1952,6 +1997,10 @@ pub struct RecentWorkspaceEntry {
     pub last_opened: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1996,6 +2045,10 @@ pub enum RemoteCommand {
     ListRecentWorkspaces,
     SetWorkspace {
         path: String,
+        #[serde(default)]
+        remote_connection_id: Option<String>,
+        #[serde(default)]
+        remote_ssh_host: Option<String>,
     },
     ListAssistants,
     SetAssistant {
@@ -2086,7 +2139,56 @@ pub enum RemoteCommand {
         path: String,
         session_id: Option<String>,
     },
+    /// Ask the paired desktop to delegate its logged-in account identity
+    /// (token + master_key) to this room-channel client so it can call the
+    /// relay device APIs directly. Answered by the host runtime; other hosts
+    /// return an error response.
+    GetDelegatedIdentity,
     Ping,
+
+    // ── Device-to-device distributed control ──────────────────────────────
+    //
+    // These variants are carried *inside* an encrypted device-to-device
+    // payload (see `RelayMessage::DeviceMessage`). The relay never sees them
+    // in cleartext; the receiving device decrypts the outer envelope with the
+    // account master_key, then deserializes the inner JSON into `RemoteCommand`.
+    //
+    // Currently sent over the HTTP /api/sync/* path (encrypted with master_key)
+    // or the WS device-messaging path. The relay routes by device_id only.
+    /// Push a serialized chat session to a peer device so it can import it.
+    SendSessionToDevice {
+        /// The opaque session blob (exported session JSON, encrypted by the
+        /// caller before it reaches this layer if sent over WS).
+        session_data: String,
+        session_id: String,
+        session_name: Option<String>,
+    },
+    /// Ask a peer device to execute a prompt in an existing or new session.
+    ExecuteOnDevice {
+        session_id: Option<String>,
+        content: String,
+        agent_type: Option<String>,
+        workspace_path: Option<String>,
+    },
+    /// Query a peer device for workspace / session info (read-only).
+    DeviceQueryInfo,
+    /// Create a new workspace directory on the peer device.
+    CreateWorkspace {
+        path: String,
+    },
+    /// Proxy a desktop product Tauri command onto the peer host.
+    /// Used by Peer Device Mode so the controller UI can reuse the same invoke surface.
+    HostInvoke {
+        command: String,
+        #[serde(default)]
+        args: serde_json::Value,
+    },
+    /// Push a UI event from peer to controller (same event name as local Tauri emit).
+    DeviceEvent {
+        event: String,
+        #[serde(default)]
+        payload: serde_json::Value,
+    },
 }
 
 /// Responses sent from desktop back to remote clients.
@@ -2114,6 +2216,10 @@ pub enum RemoteResponse {
         success: bool,
         path: Option<String>,
         project_name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
         error: Option<String>,
     },
     AssistantList {
@@ -2220,6 +2326,44 @@ pub enum RemoteResponse {
         mime_type: String,
     },
     Pong,
+    /// Device-to-device: a session was received and imported.
+    SessionReceived {
+        session_id: String,
+    },
+    /// Device-to-device: a command was accepted by the peer device.
+    DeviceAccepted {
+        message: String,
+    },
+    /// Device-to-device: info response from a peer device.
+    DeviceInfo {
+        device_name: Option<String>,
+        workspace_path: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_kind: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
+        session_count: Option<usize>,
+    },
+    /// Result of a HostInvoke proxy call (JSON-compatible with local invoke).
+    HostInvokeResult {
+        ok: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    /// Event already delivered out-of-band; ack only.
+    DeviceEventAccepted,
+    /// Delegated account identity for a paired room-channel client.
+    /// `master_key` is base64-encoded; `device_id` is the delegating host.
+    DelegateIdentity {
+        token: String,
+        user_id: String,
+        master_key: String,
+        device_id: String,
+    },
     Error {
         message: String,
     },
@@ -2238,6 +2382,15 @@ pub trait RemoteCommandRuntimeHost: Send + Sync {
     async fn handle_poll_command(&self, command: &RemoteCommand) -> RemoteResponse;
     async fn handle_workspace_file_command(&self, command: &RemoteCommand) -> RemoteResponse;
     async fn handle_interaction_command(&self, command: &RemoteCommand) -> RemoteResponse;
+
+    /// Handle a device-to-device command arriving from a peer in the same
+    /// account.  Default implementation returns an error so existing
+    /// implementors don't break.
+    async fn handle_device_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        RemoteResponse::Error {
+            message: "Device-to-device commands are not supported on this device".to_string(),
+        }
+    }
 
     async fn submit_dialog(
         &self,
@@ -2331,6 +2484,20 @@ where
             })
             .await,
         ),
+
+        // Answered by the host runtime (which owns the delegated identity
+        // provider) before dispatch reaches this router; this is the fallback
+        // for hosts that cannot delegate an account identity.
+        RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
+            message: "Delegated identity is not available on this host".to_string(),
+        },
+
+        RemoteCommand::SendSessionToDevice { .. }
+        | RemoteCommand::ExecuteOnDevice { .. }
+        | RemoteCommand::DeviceQueryInfo
+        | RemoteCommand::CreateWorkspace { .. }
+        | RemoteCommand::HostInvoke { .. }
+        | RemoteCommand::DeviceEvent { .. } => host.handle_device_command(command).await,
     }
 }
 
@@ -2726,22 +2893,26 @@ impl RemoteSessionStateTracker {
                 }
             }
             AE::ToolEvent { tool_event, .. } => {
+                let tool_id = tool_event.tool_id().to_string();
+                let tool_name = tool_event.effective_tool_name().to_string();
+                let effective_params = match tool_event {
+                    bitfun_events::ToolEventData::Started {
+                        identity, params, ..
+                    }
+                    | bitfun_events::ToolEventData::ConfirmationNeeded {
+                        identity, params, ..
+                    } => Some(
+                        bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params)
+                            .1
+                            .clone(),
+                    ),
+                    _ => None,
+                };
                 if let Ok(value) = serde_json::to_value(tool_event) {
                     let event_type = value
                         .get("event_type")
                         .and_then(|value| value.as_str())
                         .unwrap_or("");
-                    let tool_id = value
-                        .get("tool_id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let tool_name = value
-                        .get("tool_name")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("")
-                        .to_string();
-
                     let mut state = self.state.write().unwrap();
                     let allow_name_fallback = tool_id.is_empty() && !tool_name.is_empty();
                     let mut pending_tool_event: Option<TrackerEvent> = None;
@@ -2758,7 +2929,7 @@ impl RemoteSessionStateTracker {
                             );
                         }
                         "ConfirmationNeeded" => {
-                            let params = value.get("params").cloned();
+                            let params = effective_params.clone();
                             let input_preview = params.as_ref().and_then(make_slim_tool_params);
                             Self::upsert_active_tool(
                                 &mut state,
@@ -2771,7 +2942,7 @@ impl RemoteSessionStateTracker {
                             );
                         }
                         "Started" => {
-                            let params = value.get("params").cloned();
+                            let params = effective_params.clone();
                             let input_preview = params.as_ref().and_then(make_slim_tool_params);
                             let tool_input = if tool_name == "AskUserQuestion"
                                 || tool_name == "Task"
@@ -3190,13 +3361,22 @@ mod tests {
                 name: "project".to_string(),
                 last_opened: "2026-05-29T00:00:00Z".to_string(),
                 kind: RemoteWorkspaceKind::Normal,
+                remote_connection_id: None,
+                remote_ssh_host: None,
             }]
         }
 
-        async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        async fn open_workspace(
+            &self,
+            path: &str,
+            _remote_connection_id: Option<&str>,
+            _remote_ssh_host: Option<&str>,
+        ) -> Result<RemoteWorkspaceUpdate, String> {
             Ok(RemoteWorkspaceUpdate {
                 path: path.to_string(),
                 name: "opened".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
         }
 
@@ -3215,6 +3395,8 @@ mod tests {
             Ok(RemoteWorkspaceUpdate {
                 path: path.to_string(),
                 name: "assistant".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
         }
     }
@@ -3242,6 +3424,8 @@ mod tests {
                 &host,
                 &RemoteCommand::SetWorkspace {
                     path: "/workspace/next".to_string(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
                 },
             )
             .await,
@@ -3249,6 +3433,8 @@ mod tests {
                 success: true,
                 path: Some("/workspace/next".to_string()),
                 project_name: Some("opened".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 error: None,
             }
         );
@@ -3403,16 +3589,17 @@ mod tests {
             sessions[0].workspace_path.as_deref(),
             Some("/workspace/project")
         );
-        let list_identities = host.list_identities.lock().unwrap();
-        assert_eq!(
-            list_identities[0].remote_connection_id.as_deref(),
-            Some("conn-1")
-        );
-        assert_eq!(
-            list_identities[0].remote_ssh_host.as_deref(),
-            Some("host-1")
-        );
-        drop(list_identities);
+        {
+            let list_identities = host.list_identities.lock().unwrap();
+            assert_eq!(
+                list_identities[0].remote_connection_id.as_deref(),
+                Some("conn-1")
+            );
+            assert_eq!(
+                list_identities[0].remote_ssh_host.as_deref(),
+                Some("host-1")
+            );
+        }
 
         let created = handle_remote_session_command(
             &host,

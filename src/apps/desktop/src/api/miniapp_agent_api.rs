@@ -228,7 +228,6 @@ pub async fn miniapp_agent_run(
             safe_mode: true,
             auto_compact: true,
             enable_context_compression: true,
-            compression_threshold: 0.65,
             ..Default::default()
         };
         // Cowork supplies the office skill group and research/file tools when

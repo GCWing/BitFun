@@ -209,9 +209,9 @@ impl ReviewPlatformTool {
             "authChallenge": {
                 "state": state,
                 "message": if status == 403 {
-                    "Review platform token is missing required permissions. Update the token in the pull request panel, then retry."
+                    "Review platform authentication is missing required permissions. Update authentication in the pull request panel, then retry."
                 } else {
-                    "Review platform authentication is required or the configured token was rejected. Add or update the token in the pull request panel, then retry."
+                    "Review platform authentication is required or was rejected. Configure authentication in the pull request panel, then retry."
                 },
             },
             "openPanel": {
@@ -260,7 +260,7 @@ impl Tool for ReviewPlatformTool {
 
 Use this for remote review-platform operations such as discovering remotes, loading the workspace PR snapshot, counting pull requests, listing pull requests, opening full or paginated pull request detail, loading CI logs, creating a pull request, replying to review threads, submitting a comment review, approving, revoking approval, requesting changes, or resolving a review thread. Use the Git tool for local repository state and branch/commit/push operations.
 
-Authentication-token actions are available only when the user explicitly provides a token or asks to clear a stored token. Never guess or expose token values.
+GitHub authentication is owned by the local `gh` CLI and must never use token actions. Authentication-token actions are only for GitLab and GitCode when the user explicitly provides a token or asks to clear a stored token. Never guess or expose token values.
 
 When returning pull request results to the user, include the provider web URL so the chat UI can open the pull request detail panel naturally."#.to_string())
     }
@@ -270,7 +270,7 @@ When returning pull request results to the user, include the provider web URL so
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {
@@ -335,7 +335,7 @@ When returning pull request results to the user, include the provider web URL so
                 "platform": {
                     "type": "string",
                     "enum": ["github", "gitlab", "gitcode", "unknown"],
-                    "description": "Review platform kind for update_auth_token or clear_auth_token."
+                    "description": "GitLab or GitCode platform kind for update_auth_token or clear_auth_token. GitHub uses local gh authentication."
                 },
                 "host": {
                     "type": "string",
@@ -343,7 +343,7 @@ When returning pull request results to the user, include the provider web URL so
                 },
                 "token": {
                     "type": "string",
-                    "description": "Personal access token for update_auth_token. Only provide this when the user explicitly asks to store that token."
+                    "description": "GitLab or GitCode personal access token for update_auth_token. Only provide this when the user explicitly asks to store that token. Never provide a GitHub token."
                 },
                 "title": {
                     "type": "string",
@@ -488,7 +488,7 @@ When returning pull request results to the user, include the provider web URL so
                 .pointer("/authChallenge/message")
                 .and_then(Value::as_str)
                 .unwrap_or("Review platform authentication is required.");
-            return format!("{} Ask the user to configure the token in the pull request panel, then retry this action.", message);
+            return format!("{} Ask the user to configure provider authentication in the pull request panel, then retry this action.", message);
         }
         if let Some(action_result) = Self::render_action_result(output) {
             return action_result;

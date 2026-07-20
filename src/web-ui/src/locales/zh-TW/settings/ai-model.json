@@ -8,6 +8,21 @@
   "editProviderSubtitle": "基礎服務商參數設定",
   "editSubtitle": "基礎模型參數設定",
   "confirmDelete": "確定刪除此設定？",
+  "subagentModels": {
+    "title": "Subagent 模型",
+    "default": {
+      "label": "Subagent 預設模型",
+      "configureTooltip": "設定 Subagent 的預設模型。前往「定製 > 專業智能體」可為每個 Subagent 個別設定模型",
+      "updateFailed": "更新 Subagent 預設模型失敗"
+    },
+    "options": {
+      "inherit": "繼承父會話",
+      "fast": "快速模型",
+      "primary": "主力模型",
+      "auto": "自動選擇"
+    },
+    "loadFailed": "載入 Subagent 模型設定失敗"
+  },
   "cliAuth": {
     "sectionTitle": "本機已登錄賬號",
     "sectionDescription": "可直接匯入本機 Codex CLI / Gemini CLI 已登錄賬號作為模型使用",

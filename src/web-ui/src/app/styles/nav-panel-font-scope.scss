@@ -13,5 +13,5 @@
   --font-size-xl: max(14px, calc(var(--flowchat-font-size-xl) - 1px));
   --font-size-2xl: max(16px, calc(var(--flowchat-font-size-2xl) - 1px));
   --font-size-3xl: max(20px, calc(var(--flowchat-font-size-3xl) - 1px));
-  --font-size-4xl: max(24px, calc(var(--flowchat-font-size-4xl) - 1px));
+  --font-size-4xl: max(24px, calc(var(--flowchat-font-size-3xl) + 3px));
 }

@@ -1,5 +1,4 @@
 pub mod agentic;
-pub mod agentic_projection_manifest;
 /// Events Layer
 ///
 /// Independent event definition layer, providing:
@@ -14,13 +13,7 @@ pub mod types;
 pub use agentic::{
     AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, DeepReviewQueueReason,
     DeepReviewQueueState, DeepReviewQueueStatus, SubagentParentInfo, ToolEventData,
-};
-pub use agentic_projection_manifest::{
-    agentic_event_projection_manifest_entry, is_legacy_websocket_agentic_event_type,
-    public_agentic_event_projection_manifest, AgenticEventProjectionAggregate,
-    AgenticEventProjectionManifestEntry, AgenticEventProjectionReplayPolicy,
-    AgenticEventProjectionRetentionPolicy, AgenticEventProjectionUiShape,
-    AGENTIC_EVENT_PROJECTION_MANIFEST,
+    ToolEventIdentity,
 };
 pub use backend::{
     BackgroundCommandLifecycleInfo, ToolExecutionCompletedInfo, ToolExecutionErrorInfo,

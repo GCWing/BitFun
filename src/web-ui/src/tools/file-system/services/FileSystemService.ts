@@ -1,6 +1,6 @@
 import { FileSystemNode, FileSystemOptions, IFileSystemService, FileSystemChangeEvent } from '../types';
 import { workspaceAPI } from '@/infrastructure/api';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import { normalizePath } from '@/shared/utils/pathUtils';
 
@@ -80,7 +80,7 @@ class FileSystemService implements IFileSystemService {
   }
 
   watchFileChanges(rootPath: string, callback: (event: FileSystemChangeEvent) => void): () => void {
-    let unlisten: UnlistenFn | null = null;
+    let unlisten: (() => void) | null = null;
     let isActive = true;
 
     const normalizeForCompare = (p: string) =>
@@ -117,10 +117,8 @@ class FileSystemService implements IFileSystemService {
           return normalizePath(path);
         };
 
-        unlisten = await listen<FileWatchEvent[]>('file-system-changed', (event) => {
+        unlisten = api.listen<FileWatchEvent[]>('file-system-changed', (events) => {
           if (!isActive) return;
-
-          const events = event.payload;
 
           const isUnderRoot = (absPath: string) =>
             absPath === resolvedRoot || absPath.startsWith(`${resolvedRoot}/`);

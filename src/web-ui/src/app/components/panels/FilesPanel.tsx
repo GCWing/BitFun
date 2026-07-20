@@ -23,6 +23,7 @@ import { InputDialog, CubeLoading } from '@/component-library';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import { PanelHeader } from './base';
 import { createLogger } from '@/shared/utils/logger';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import {
   basenamePath,
   normalizeLocalPathForRename,
@@ -547,6 +548,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
 
   const triggerFocusCompensatingRefresh = useCallback((reason: 'windowFocus' | 'visibilityVisible') => {
     if (!workspacePath || viewMode !== 'tree') {
+      return;
+    }
+
+    // Peer Mode relies on file-watch / DeviceEvent fan-out; focus refreshes flood HostInvoke.
+    if (isPeerDeviceModeActive()) {
       return;
     }
 

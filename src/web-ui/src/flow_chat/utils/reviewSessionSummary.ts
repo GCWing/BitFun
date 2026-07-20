@@ -1,4 +1,5 @@
 import type { FlowToolItem, Session } from '../types/flow-chat';
+import { getEffectiveToolName } from './toolInvocationIdentity';
 
 export interface CodeReviewSummaryData {
   overall_assessment?: string;
@@ -14,6 +15,7 @@ export interface CodeReviewIssueData {
 
 export interface CodeReviewResultData {
   schemaVersion?: number;
+  evidence_status?: 'complete' | 'limited' | 'stale' | 'failed';
   summary?: CodeReviewSummaryData;
   issues?: CodeReviewIssueData[];
   positive_points?: string[];
@@ -71,7 +73,7 @@ export function findLatestCodeReviewResultState(session?: Session | null): CodeR
         const item = items[i];
         if (item.type === 'tool') {
           const toolItem = item as FlowToolItem;
-          if (toolItem.toolName === 'submit_code_review') {
+          if (getEffectiveToolName(toolItem) === 'submit_code_review') {
             const parsed = parseReviewResult(toolItem.toolResult?.result);
             if (parsed) {
               return {

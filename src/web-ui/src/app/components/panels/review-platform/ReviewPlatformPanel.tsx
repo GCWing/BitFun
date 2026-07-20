@@ -7,6 +7,8 @@ import {
   CircleDot,
   Clock3,
   Code2,
+  Copy,
+  ExternalLink,
   GitCommitHorizontal,
   GitPullRequest,
   GitPullRequestClosed,
@@ -19,6 +21,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Terminal,
   UserRound,
   XCircle,
 } from 'lucide-react';
@@ -28,12 +31,30 @@ import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { i18nService } from '@/infrastructure/i18n';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
+import { openBtwSessionInAuxPane } from '@/flow_chat/services/btwSessionPane';
+import {
+  launchPreparedReviewSession,
+  prepareReviewLaunchFromPullRequest,
+} from '@/flow_chat/services/ReviewService';
+import { useDeepReviewConsent } from '@/flow_chat/components/DeepReviewConsentDialog';
+import { deriveDeepReviewSessionConcurrencyGuard } from '@/flow_chat/utils/deepReviewCapacityGuard';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { FlowToolItem, Session } from '@/flow_chat/types/flow-chat';
-import { findLatestCodeReviewResult, summarizeCodeReviewResult } from '@/flow_chat/utils/reviewSessionSummary';
+import { findLatestCodeReviewResultState, summarizeCodeReviewResult } from '@/flow_chat/utils/reviewSessionSummary';
 import { parsePullRequestUrl, remoteMatchesPullRequestLink } from '@/shared/utils/pullRequestLinks';
 import { useContextStore } from '@/shared/stores/contextStore';
+import { quickActions } from '@/shared/services/ide-control';
 import type { PullRequestContext } from '@/shared/types/context';
+import {
+  currentPullRequestReviewStatusText,
+  effectivePullRequestReviewFreshness,
+  mergeRevalidatedPullRequestOverview,
+  pullRequestReviewFreshness,
+  pullRequestReviewLaunchKey,
+  samePullRequestRevisions,
+  samePullRequestIdentity,
+  type PullRequestReviewFreshness,
+} from './reviewLinking';
 import './ReviewPlatformPanel.scss';
 
 const log = createLogger('ReviewPlatformPanel');
@@ -46,7 +67,7 @@ interface ReviewPlatformPanelProps {
   detailOnly?: boolean;
 }
 
-type DetailTab = 'overview' | 'ci' | 'changes' | 'commits' | 'reviews';
+type DetailTab = 'overview' | 'changes' | 'commits';
 type ListStateFilter = 'all' | 'open' | 'draft' | 'merged' | 'closed';
 type SnapshotCacheState = 'none' | 'cached' | 'refreshing';
 
@@ -105,15 +126,19 @@ interface LinkedReviewSession {
   kind: 'review' | 'deep_review';
   title: string;
   requestedFiles: string[];
+  resultState: 'loaded' | 'unloaded' | 'missing' | 'invalid';
   issueCount: number;
   riskLevel?: string;
   lifecycle: 'running' | 'completed' | 'error' | 'idle';
+  freshness: PullRequestReviewFreshness;
+  evidenceStatus: 'complete' | 'limited' | 'stale' | 'failed';
   updatedAt: number;
 }
 
 const snapshotCache = new Map<string, SnapshotCacheEntry>();
 const detailCache = new Map<string, DetailCacheEntry>();
 const detailPageCache = new Map<string, DetailPageCacheEntry>();
+const reviewLaunchesInFlight = new Set<string>();
 const EMPTY_REVIEW_THREADS: ReviewPlatformThread[] = [];
 
 function detailPageInfo(pagination: ReviewPlatformPagination, itemCount: number): PageInfo {
@@ -137,8 +162,8 @@ function detailPageInfo(pagination: ReviewPlatformPagination, itemCount: number)
   };
 }
 
-function snapshotCacheKey(workspacePath: string, remoteId: string | null, page: number, perPage: number): string {
-  return `${workspacePath}::${remoteId ?? 'default'}::${page}::${perPage}`;
+function snapshotCacheKey(workspacePath: string, remoteId: string | null, page: number, perPage: number, mode: 'list' | 'context'): string {
+  return `${workspacePath}::${remoteId ?? 'default'}::${page}::${perPage}::${mode}`;
 }
 
 function detailCacheKey(workspacePath: string, remoteId: string, pullRequestId: string): string {
@@ -177,6 +202,10 @@ function mergeDetailPage(
     files: page.section === 'files' ? page.files : base.files,
     commits: page.section === 'commits' ? page.commits : base.commits,
     threads: page.section === 'reviews' ? page.threads : base.threads,
+    // Section caches may predate the freshly revalidated overview. Never let
+    // them replace the revisions used to judge whether a Review is current.
+    baseRevision: current ? base.baseRevision : page.baseRevision,
+    headRevision: current ? base.headRevision : page.headRevision,
   };
 }
 
@@ -300,6 +329,8 @@ function authLabel(account: ReviewPlatformAccount | null): string {
 
 function authSourceLabel(source: ReviewPlatformAccount['authSource'] | undefined): string {
   switch (source) {
+    case 'gh_cli':
+      return 'GitHub CLI';
     case 'stored':
       return 'Saved token';
     case 'env':
@@ -312,6 +343,7 @@ function authSourceLabel(source: ReviewPlatformAccount['authSource'] | undefined
 }
 
 function authChallengeTitle(challenge: ReviewPlatformAuthChallenge): string {
+  if (challenge.platform === 'github') return 'GitHub CLI authentication required';
   switch (challenge.state) {
     case 'missing':
       return 'Token required';
@@ -383,12 +415,6 @@ function uniquePaths(paths: string[]): string[] {
   return next;
 }
 
-function pathsOverlap(left: string[], right: string[]): boolean {
-  if (!left.length || !right.length) return false;
-  const rightSet = new Set(right.map(normalizePath));
-  return left.some(path => rightSet.has(normalizePath(path)));
-}
-
 function isReviewSessionRunning(session: Session): boolean {
   const turn = session.dialogTurns[session.dialogTurns.length - 1];
   return turn?.status === 'pending' ||
@@ -399,9 +425,13 @@ function isReviewSessionRunning(session: Session): boolean {
 
 function reviewSessionLifecycle(session: Session): LinkedReviewSession['lifecycle'] {
   const turn = session.dialogTurns[session.dialogTurns.length - 1];
-  if (session.error || turn?.status === 'error') return 'error';
+  if (session.error || session.hasUnreadCompletion === 'error' || session.hasUnreadCompletion === 'interrupted' || turn?.status === 'error') return 'error';
   if (isReviewSessionRunning(session)) return 'running';
-  if (turn?.status === 'completed') return 'completed';
+  if (
+    turn?.status === 'completed' ||
+    session.hasUnreadCompletion === 'completed' ||
+    (session.historyState === 'metadata-only' && session.persistedStatus === 'completed')
+  ) return 'completed';
   return 'idle';
 }
 
@@ -627,10 +657,13 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   const snapshotRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const detailSectionRequestSeq = useRef(0);
+  const reviewLaunchInFlight = useRef(false);
   const [snapshot, setSnapshot] = useState<ReviewPlatformWorkspaceSnapshot>(emptySnapshot);
   const [selectedRemoteId, setSelectedRemoteId] = useState<string | null>(null);
+  const [listRemoteId, setListRemoteId] = useState<string | null>(null);
   const [selectedPrId, setSelectedPrId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReviewPlatformPullRequestDetail | null>(null);
+  const [verifiedDetailKey, setVerifiedDetailKey] = useState<string | null>(null);
   const [flowState, setFlowState] = useState(() => flowChatStore.getState());
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [loading, setLoading] = useState(true);
@@ -658,17 +691,33 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   const [authToken, setAuthToken] = useState('');
   const [authSaving, setAuthSaving] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [reviewLaunching, setReviewLaunching] = useState(false);
+  const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
 
-  const repository = snapshot.repository;
   const account = snapshot.accounts[0] ?? null;
   const selectedRemote = useMemo(
     () => snapshot.remotes.find(remote => remote.id === selectedRemoteId) ?? snapshot.remotes[0] ?? null,
     [selectedRemoteId, snapshot.remotes],
   );
+  const repository = useMemo<ReviewPlatformRepositoryRef | null>(() => {
+    if (!snapshot.repository || !selectedRemote) return snapshot.repository;
+    return {
+      ...snapshot.repository,
+      providerId: selectedRemote.id,
+      platform: selectedRemote.platform,
+      host: selectedRemote.host,
+      owner: selectedRemote.owner,
+      name: selectedRemote.repositoryName,
+      projectPath: selectedRemote.projectPath,
+      webUrl: selectedRemote.webUrl,
+    };
+  }, [selectedRemote, snapshot.repository]);
   const authChallenge = snapshot.authChallenge ?? null;
   const selectedPrFromList = useMemo(
-    () => snapshot.pullRequests.find(pr => pr.id === selectedPrId) ?? null,
-    [selectedPrId, snapshot.pullRequests],
+    () => snapshot.pullRequests.find(pr => (
+      pr.id === selectedPrId && (!pr.providerId || pr.providerId === selectedRemoteId)
+    )) ?? null,
+    [selectedPrId, selectedRemoteId, snapshot.pullRequests],
   );
   const selectedPr = detail ?? selectedPrFromList;
   const hasDetail = detail !== null;
@@ -717,17 +766,25 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     if (!workspacePath) {
       setSnapshot(emptySnapshot());
       setSelectedRemoteId(null);
+      setListRemoteId(null);
       setSelectedPrId(null);
       setDetail(null);
+      setVerifiedDetailKey(null);
       setDetailError(null);
       setError('No active workspace is available.');
       setLoading(false);
       return;
     }
 
-    const requestedRemoteId = nextRemoteId !== undefined ? nextRemoteId : readRememberedRemote(workspacePath);
+    const requestedRemoteId = nextRemoteId !== undefined
+      ? nextRemoteId
+      : detailOnly
+        ? readRememberedRemote(workspacePath)
+        : null;
     const requestedPage = Math.max(1, options?.page ?? 1);
-    const requestedCacheKey = snapshotCacheKey(workspacePath, requestedRemoteId ?? null, requestedPage, PR_PAGE_SIZE);
+    const snapshotMode = detailOnly ? 'context' : 'list';
+    setListRemoteId(requestedRemoteId ?? null);
+    const requestedCacheKey = snapshotCacheKey(workspacePath, requestedRemoteId ?? null, requestedPage, PR_PAGE_SIZE, snapshotMode);
     const cached = snapshotCache.get(requestedCacheKey);
     const force = options?.force === true;
 
@@ -736,8 +793,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       setSnapshot(cached.snapshot);
       setSelectedRemoteId(remoteId);
       setPageIndex(Math.max(0, (cached.snapshot.pagination.page || requestedPage) - 1));
-      setSelectedPrId(null);
+      setSelectedPrId(detailOnly ? null : cached.snapshot.pullRequests[0]?.id ?? null);
       setDetail(null);
+      setVerifiedDetailKey(null);
       setDetailError(null);
       setError(null);
       setSnapshotCacheState('cached');
@@ -747,6 +805,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       setSnapshot(emptySnapshot());
       setSelectedPrId(null);
       setDetail(null);
+      setVerifiedDetailKey(null);
       setDetailError(null);
       setSnapshotCacheState('none');
     }
@@ -754,20 +813,23 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const next = await reviewPlatformAPI.getWorkspaceSnapshot(workspacePath, requestedRemoteId ?? null, requestedPage, PR_PAGE_SIZE);
+      const next = detailOnly
+        ? await reviewPlatformAPI.getWorkspaceContext(workspacePath, requestedRemoteId ?? null)
+        : await reviewPlatformAPI.getWorkspaceSnapshot(workspacePath, requestedRemoteId ?? null, requestedPage, PR_PAGE_SIZE);
       if (snapshotRequestSeq.current !== requestSeq) return;
       setSnapshot(next);
       const remoteId = next.selectedRemoteId ?? next.remotes[0]?.id ?? null;
       setSelectedRemoteId(remoteId);
       setPageIndex(Math.max(0, (next.pagination.page || requestedPage) - 1));
       rememberRemote(workspacePath, remoteId);
-      setSelectedPrId(null);
+      setSelectedPrId(detailOnly ? null : next.pullRequests[0]?.id ?? null);
       setDetail(null);
+      setVerifiedDetailKey(null);
       setDetailError(null);
       const entry = { snapshot: next, fetchedAt: Date.now() };
       snapshotCache.set(requestedCacheKey, entry);
       if (remoteId) {
-        snapshotCache.set(snapshotCacheKey(workspacePath, remoteId, requestedPage, PR_PAGE_SIZE), entry);
+        snapshotCache.set(snapshotCacheKey(workspacePath, remoteId, requestedPage, PR_PAGE_SIZE, snapshotMode), entry);
       }
       setSnapshotCacheState('cached');
     } catch (err) {
@@ -783,7 +845,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         setLoading(false);
       }
     }
-  }, [workspacePath]);
+  }, [detailOnly, workspacePath]);
 
   const loadDetail = useCallback(async (repo: ReviewPlatformRepositoryRef | null, remoteId: string, pullRequestId: string, options?: { force?: boolean }) => {
     const requestSeq = ++detailRequestSeq.current;
@@ -794,6 +856,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     const force = options?.force === true;
 
     setDetailError(null);
+    setVerifiedDetailKey(null);
     if (force) {
       detailCache.delete(cacheKey);
       clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
@@ -801,8 +864,6 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
     if (cached && !force) {
       setDetail(cached.detail);
-      setDetailLoading(false);
-      return;
     } else {
       setDetail(null);
     }
@@ -818,8 +879,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         perPage: 1,
       });
       if (detailRequestSeq.current !== requestSeq) return;
-      setDetail(nextDetail);
+      if (cached && !samePullRequestRevisions(cached.detail, nextDetail)) {
+        clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
+      }
+      setDetail((current) => mergeRevalidatedPullRequestOverview(current, nextDetail));
       detailCache.set(cacheKey, { detail: nextDetail, fetchedAt: Date.now() });
+      setVerifiedDetailKey(cacheKey);
     } catch (err) {
       if (detailRequestSeq.current !== requestSeq) return;
       log.error('Failed to load pull request detail', { pullRequestId, error: err });
@@ -858,10 +923,20 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     const repositoryPath = workspacePath || repo?.workspacePath || '';
     const page = Math.max(1, pageIndex + 1);
     const cacheKey = detailPageCacheKey(repositoryPath, remoteId, pullRequestId, section, page, perPage);
+    const overviewCacheKey = detailCacheKey(repositoryPath, remoteId, pullRequestId);
     const cached = detailPageCache.get(cacheKey);
     const force = options?.force === true;
+    const matchesVerifiedOverview = (pageDetail: ReviewPlatformPullRequestDetail) => {
+      const overview = detailCache.get(overviewCacheKey)?.detail;
+      return Boolean(overview && samePullRequestRevisions(overview, pageDetail));
+    };
 
     if (cached && !force) {
+      if (!matchesVerifiedOverview(cached.detail)) {
+        clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
+        void loadDetail(repo, remoteId, pullRequestId, { force: true });
+        return;
+      }
       setDetail(prev => mergeDetailPage(prev, cached.detail));
       applySectionPagination(section, cached.detail.pagination);
       return;
@@ -880,6 +955,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         perPage,
       });
       if (detailSectionRequestSeq.current !== requestSeq) return;
+      if (!matchesVerifiedOverview(nextPage)) {
+        clearDetailPageCacheForPullRequest(repositoryPath, remoteId, pullRequestId);
+        void loadDetail(repo, remoteId, pullRequestId, { force: true });
+        return;
+      }
       detailPageCache.set(cacheKey, { detail: nextPage, fetchedAt: Date.now() });
       setDetail(prev => mergeDetailPage(prev, nextPage));
       applySectionPagination(section, nextPage.pagination);
@@ -892,7 +972,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         setDetailLoading(false);
       }
     }
-  }, [applySectionPagination, workspacePath]);
+  }, [applySectionPagination, loadDetail, workspacePath]);
 
   useEffect(() => {
     void loadSnapshot(detailOnly && initialRemoteId ? initialRemoteId : undefined);
@@ -903,11 +983,13 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   useEffect(() => {
     if (!selectedRemoteId) {
       setDetail(null);
+      setVerifiedDetailKey(null);
       setDetailError(null);
       return;
     }
     if (!selectedPrId || (!repository && !workspacePath)) {
       setDetail(null);
+      setVerifiedDetailKey(null);
       setDetailError(null);
       return;
     }
@@ -964,6 +1046,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   ]);
 
   useEffect(() => {
+    setActiveTab('overview');
     setExpandedFileKeys(new Set());
     setExpandedCiItemIds(new Set());
     setCiLogById({});
@@ -986,20 +1069,23 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
   useEffect(() => {
     if (!hasDetail || !selectedRemoteId || !selectedPrId || (!repository && !workspacePath)) return;
-    if (activeTab === 'ci') {
-      void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'ci', ciPageIndex, CI_PAGE_SIZE);
+    if (activeTab === 'overview') {
+      void (async () => {
+        await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'ci', ciPageIndex, CI_PAGE_SIZE);
+        await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'reviews', reviewPageIndex, REVIEW_PAGE_SIZE);
+      })();
     } else if (activeTab === 'changes') {
       void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'files', changePageIndex, CHANGE_PAGE_SIZE);
     } else if (activeTab === 'commits') {
       void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'commits', commitPageIndex, COMMIT_PAGE_SIZE);
-    } else if (activeTab === 'reviews') {
-      void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'reviews', reviewPageIndex, REVIEW_PAGE_SIZE);
     }
   }, [
     activeTab,
     ciPageIndex,
     changePageIndex,
     commitPageIndex,
+    detail?.baseRevision,
+    detail?.headRevision,
     hasDetail,
     loadDetailSection,
     repository,
@@ -1052,7 +1138,18 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       .sort((left, right) => (right.lastActiveAt || right.updatedAt || right.createdAt) - (left.lastActiveAt || left.updatedAt || left.createdAt))[0];
   }, [flowState.activeSessionId, flowState.sessions, workspacePath]);
 
+  const currentPullRequest = detail ?? selectedPr;
+  const selectedDetailKey = selectedRemoteId && selectedPrId
+    ? detailCacheKey(workspacePath || repository?.workspacePath || '', selectedRemoteId, selectedPrId)
+    : null;
+  const currentRevisionsVerified = Boolean(
+    selectedDetailKey && verifiedDetailKey === selectedDetailKey,
+  );
+
   const linkedReviewSessions = useMemo<LinkedReviewSession[]>(() => {
+    if (!selectedRemote || !repository || !selectedPr || !currentPullRequest) {
+      return [];
+    }
     const sessions = Array.from(flowState.sessions.values());
     const markersByChildId = new Map<string, ReviewSessionMarker>();
     for (const session of sessions) {
@@ -1061,42 +1158,68 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       }
     }
 
-    const selectedPaths = prFilePaths;
-    const sameWorkspace = (session: Session) =>
-      !workspacePath || normalizePath(session.workspacePath ?? '') === normalizePath(workspacePath);
-
     return sessions
       .filter(session =>
-        (session.sessionKind === 'review' || session.sessionKind === 'deep_review') &&
-        sameWorkspace(session),
+        session.sessionKind === 'review' || session.sessionKind === 'deep_review',
       )
       .map((session): LinkedReviewSession | null => {
         const marker = markersByChildId.get(session.sessionId);
-        const requestedFiles = marker?.requestedFiles ?? [];
-        if (selectedPaths.length > 0 && requestedFiles.length > 0 && !pathsOverlap(selectedPaths, requestedFiles)) {
+        const evidence = session.reviewTargetEvidence
+          ?? session.deepReviewRunManifest?.evidencePack?.reviewTarget;
+        const identity = evidence?.pullRequest;
+        if (
+          !samePullRequestIdentity(identity, {
+            platform: selectedRemote.platform,
+            host: selectedRemote.host,
+            projectPath: repository.projectPath,
+            pullRequestId: selectedPr.id,
+          })
+        ) {
           return null;
         }
+        const requestedFiles = marker?.requestedFiles ?? session.reviewTargetFilePaths ?? [];
 
-        const reviewResult = findLatestCodeReviewResult(session);
+        const reviewResultState = findLatestCodeReviewResultState(session);
+        const reviewResult = reviewResultState.status === 'valid' ? reviewResultState.result : null;
         const summary = summarizeCodeReviewResult(reviewResult);
         const kind = session.sessionKind === 'deep_review' ? 'deep_review' : 'review';
+        const runtimeEvidenceStatus = reviewResult?.evidence_status;
+        const evidenceStatus = runtimeEvidenceStatus
+          ?? (evidence?.completeness === 'complete' ? 'complete' : 'limited');
+        const resultState = reviewResultState.status === 'valid'
+          ? 'loaded'
+          : session.historyState === 'metadata-only' || session.historyState === 'hydrating'
+            ? 'unloaded'
+            : reviewResultState.status;
         return {
           childSession: session,
           parentSession: marker?.parentSessionId ? flowState.sessions.get(marker.parentSessionId) : undefined,
           marker,
           kind,
-          title: marker?.title || getSessionTitle(session, kind === 'deep_review' ? 'Deep review' : 'Code review'),
+          title: marker?.title || getSessionTitle(session, kind === 'deep_review' ? 'Review: Strict' : 'Review'),
           requestedFiles,
+          resultState,
           issueCount: summary.issueCount,
           riskLevel: summary.riskLevel,
           lifecycle: reviewSessionLifecycle(session),
+          freshness: effectivePullRequestReviewFreshness(
+            evidence,
+            currentPullRequest,
+            currentRevisionsVerified,
+            evidenceStatus,
+          ),
+          evidenceStatus,
           updatedAt: session.lastActiveAt || session.updatedAt || session.createdAt,
         };
       })
       .filter((session): session is LinkedReviewSession => Boolean(session))
       .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, MAX_LINKED_REVIEW_SESSIONS);
-  }, [flowState.sessions, prFilePaths, workspacePath]);
+  }, [currentPullRequest, currentRevisionsVerified, flowState.sessions, repository, selectedPr, selectedRemote]);
+
+  const latestCurrentReview = linkedReviewSessions.find((session) => session.freshness === 'current');
+  const latestStaleReview = linkedReviewSessions.find((session) => session.freshness === 'stale');
+  const latestUnknownReview = linkedReviewSessions.find((session) => session.freshness === 'unknown');
 
   const pagination = snapshot.pagination;
   const totalCount = pagination.total ?? null;
@@ -1120,7 +1243,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   }, [snapshot.pullRequests]);
 
   const headerLabel = selectedRemote ? remoteLabel(selectedRemote) : repository ? repository.projectPath : 'No repository';
-  const panelTitle = detailOnly ? 'Pull Request' : 'Pull Requests';
+  const isGithubUserList = !detailOnly && selectedRemote?.platform === 'github';
+  const panelTitle = detailOnly ? 'Pull Request' : isGithubUserList ? 'My Open Pull Requests' : 'Pull Requests';
 
   const handleRemoteChange = useCallback((value: string | number | (string | number)[]) => {
     const remoteId = Array.isArray(value) ? String(value[0] ?? '') : String(value);
@@ -1128,6 +1252,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setSelectedPrId(null);
     setDetail(null);
     setDetailError(null);
+    setStateFilter('all');
     setPageIndex(0);
     rememberRemote(workspacePath, remoteId || null);
     void loadSnapshot(remoteId || null, { page: 1 });
@@ -1139,8 +1264,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setDetail(null);
     setDetailError(null);
     setPageIndex(nextPage - 1);
-    void loadSnapshot(selectedRemoteId, { page: nextPage });
-  }, [loadSnapshot, selectedRemoteId]);
+    void loadSnapshot(listRemoteId, { page: nextPage });
+  }, [listRemoteId, loadSnapshot]);
 
   const toggleFileExpanded = useCallback((key: string) => {
     setExpandedFileKeys(prev => {
@@ -1285,14 +1410,6 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     }
   }, [expandedCiItemIds, loadCiLog, selectedRemote]);
 
-  const handleOpenParentChat = useCallback(async () => {
-    if (!parentSession) {
-      notificationService.warning('Open or create a chat session before linking PR context.', { duration: 3500 });
-      return;
-    }
-    await openMainSession(parentSession.sessionId);
-  }, [parentSession]);
-
   const addPullRequestContextToChat = useCallback(async (input: {
     label: string;
     section: PullRequestContext['section'];
@@ -1340,6 +1457,129 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       }),
     });
   }, [addPullRequestContextToChat, detail, prFilePaths, repository, reviewItemCount, selectedPr, selectedRemote]);
+
+  const handleStartReview = useCallback(async () => {
+    if (!workspacePath || !selectedRemote || !repository || !selectedPr || !parentSession) {
+      notificationService.warning('Open or create a chat session before reviewing this pull request.', {
+        duration: 3500,
+      });
+      return;
+    }
+    if (reviewLaunchInFlight.current || latestCurrentReview?.lifecycle === 'running') {
+      return;
+    }
+    reviewLaunchInFlight.current = true;
+    setReviewLaunching(true);
+    let sharedLaunchKey: string | null = null;
+    let ownsSharedLaunch = false;
+    try {
+      const reviewTarget = await reviewPlatformAPI.getPullRequestReviewTarget(
+        workspacePath,
+        selectedRemote.id,
+        selectedPr.id,
+      );
+      const freshPullRequest = reviewTarget.pullRequest;
+      const freshIdentity = {
+        platform: selectedRemote.platform,
+        host: selectedRemote.host,
+        projectPath: repository.projectPath,
+        pullRequestId: freshPullRequest.id,
+      };
+      const runningReviewExists = () => Array.from(flowChatStore.getState().sessions.values()).some((session) => {
+        if (
+          (session.sessionKind !== 'review' && session.sessionKind !== 'deep_review')
+          || reviewSessionLifecycle(session) !== 'running'
+        ) {
+          return false;
+        }
+        const evidence = session.reviewTargetEvidence
+          ?? session.deepReviewRunManifest?.evidencePack?.reviewTarget;
+        return samePullRequestIdentity(evidence?.pullRequest, freshIdentity)
+          && pullRequestReviewFreshness(evidence, freshPullRequest) === 'current';
+      });
+      sharedLaunchKey = pullRequestReviewLaunchKey({
+        ...freshIdentity,
+        baseRevision: freshPullRequest.baseRevision,
+        headRevision: freshPullRequest.headRevision,
+      });
+      const cacheKey = detailCacheKey(workspacePath, selectedRemote.id, selectedPr.id);
+      setDetail((current) => current ? { ...current, ...reviewTarget.pullRequest } : current);
+      setSnapshot((current) => ({
+        ...current,
+        pullRequests: current.pullRequests.map((pullRequest) =>
+          pullRequest.id === freshPullRequest.id
+            ? { ...pullRequest, ...freshPullRequest }
+            : pullRequest,
+        ),
+      }));
+      const cached = detailCache.get(cacheKey);
+      if (cached) {
+        detailCache.set(cacheKey, {
+          detail: { ...cached.detail, ...freshPullRequest },
+          fetchedAt: Date.now(),
+        });
+      }
+      setVerifiedDetailKey(cacheKey);
+      if (runningReviewExists()) {
+        return;
+      }
+      const prepared = await prepareReviewLaunchFromPullRequest({
+        workspacePath,
+        remote: selectedRemote,
+        repository,
+        reviewTarget,
+      });
+      if (prepared.mode === 'strict' && prepared.requiresConsent) {
+        const confirmed = await confirmDeepReviewLaunch(prepared.runManifest, {
+          sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+            flowChatStore.getState(),
+            parentSession.sessionId,
+          ),
+        });
+        if (!confirmed) return;
+      }
+      if (runningReviewExists() || reviewLaunchesInFlight.has(sharedLaunchKey)) {
+        return;
+      }
+      reviewLaunchesInFlight.add(sharedLaunchKey);
+      ownsSharedLaunch = true;
+      const launched = await launchPreparedReviewSession({
+        parentSessionId: parentSession.sessionId,
+        workspacePath,
+        displayMessage: `Review pull request #${reviewTarget.pullRequest.number}`,
+        childSessionName: `Review: PR #${reviewTarget.pullRequest.number}`,
+        prepared,
+      });
+      if (launched.launchStatus === 'uncertain') {
+        notificationService.warning('Review started, but its start acknowledgement is uncertain.', {
+          duration: 8000,
+        });
+      }
+    } catch (reviewError) {
+      log.error('Failed to start pull request Review', {
+        pullRequestId: selectedPr.id,
+        error: reviewError,
+      });
+      notificationService.error(
+        reviewError instanceof Error ? reviewError.message : 'Failed to start pull request Review.',
+        { duration: 6000 },
+      );
+    } finally {
+      if (sharedLaunchKey && ownsSharedLaunch) {
+        reviewLaunchesInFlight.delete(sharedLaunchKey);
+      }
+      reviewLaunchInFlight.current = false;
+      setReviewLaunching(false);
+    }
+  }, [
+    confirmDeepReviewLaunch,
+    latestCurrentReview?.lifecycle,
+    parentSession,
+    repository,
+    selectedPr,
+    selectedRemote,
+    workspacePath,
+  ]);
 
   const handleAddFileDiffContext = useCallback(async (file: ReviewPlatformFile) => {
     if (!selectedPr) return;
@@ -1399,8 +1639,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     snapshotCache.clear();
     detailCache.clear();
     detailPageCache.clear();
-    void loadSnapshot(remoteId, { force: true, page: currentPageIndex + 1 });
-  }, [currentPageIndex, loadSnapshot]);
+    void loadSnapshot(detailOnly ? remoteId : listRemoteId, { force: true, page: currentPageIndex + 1 });
+  }, [currentPageIndex, detailOnly, listRemoteId, loadSnapshot]);
 
   const handleOpenAuthModal = useCallback(() => {
     setAuthToken('');
@@ -1409,7 +1649,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   }, []);
 
   const handleSaveAuthToken = useCallback(async () => {
-    if (!selectedRemote || selectedRemote.platform === 'unknown') return;
+    if (!selectedRemote || selectedRemote.platform === 'unknown' || selectedRemote.platform === 'github') return;
     const token = authToken.trim();
     if (!token) {
       setAuthError('Token is required.');
@@ -1435,6 +1675,40 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       setAuthSaving(false);
     }
   }, [authToken, refreshAuthSnapshot, selectedRemote]);
+
+  const handleOpenGithubAuthTerminal = useCallback(async () => {
+    if (!selectedRemote || selectedRemote.platform !== 'github') return;
+    const command = `gh auth login --hostname ${selectedRemote.host}`;
+    setAuthSaving(true);
+    setAuthError(null);
+    try {
+      await systemAPI.setClipboard(command);
+      setAuthModalOpen(false);
+      quickActions.openTerminal(undefined, workspacePath);
+      notificationService.success('GitHub CLI login command copied. Paste it in the terminal to continue.', {
+        duration: 3500,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to open GitHub CLI authentication.';
+      setAuthError(message);
+      log.error('Failed to prepare GitHub CLI authentication', { error: err, host: selectedRemote.host });
+    } finally {
+      setAuthSaving(false);
+    }
+  }, [selectedRemote, workspacePath]);
+
+  const handleCopyGithubAuthCommand = useCallback(async () => {
+    if (!selectedRemote || selectedRemote.platform !== 'github') return;
+    setAuthError(null);
+    try {
+      await systemAPI.setClipboard(`gh auth login --hostname ${selectedRemote.host}`);
+      notificationService.success('GitHub CLI login command copied.', { duration: 2500 });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to copy GitHub CLI login command.';
+      setAuthError(message);
+      log.error('Failed to copy GitHub CLI authentication command', { error: err, host: selectedRemote.host });
+    }
+  }, [selectedRemote]);
 
   const handleClearAuthToken = useCallback(async () => {
     if (!selectedRemote || selectedRemote.platform === 'unknown') return;
@@ -1467,12 +1741,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           <strong>{authChallengeTitle(authChallenge)}</strong>
           <span>{authChallenge.message}</span>
           <span>{authChallenge.host} · {authChallenge.projectPath}</span>
-          <span>Required scopes: {authChallengeScopes(authChallenge)}</span>
+          <span>{selectedRemote.platform === 'github' ? 'CLI authorization' : 'Required scopes'}: {authChallengeScopes(authChallenge)}</span>
         </div>
         <div className="review-platform__auth-gate-actions">
           <Button className="review-platform__panel-button" size="small" variant="primary" onClick={handleOpenAuthModal} disabled={authSaving}>
             <KeyRound size={13} />
-            {authChallenge.state === 'missing' ? 'Add token' : 'Update token'}
+            {selectedRemote.platform === 'github' ? 'Authenticate' : authChallenge.state === 'missing' ? 'Add token' : 'Update token'}
           </Button>
           <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => refreshAuthSnapshot(selectedRemote.id)} disabled={authSaving || loading}>
             <RefreshCw size={13} />
@@ -1485,8 +1759,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
   const handleRetryDetail = useCallback(() => {
     if ((!repository && !workspacePath) || !selectedRemoteId || !selectedPrId) return;
-    if (activeTab === 'ci') {
-      void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'ci', ciPageIndex, CI_PAGE_SIZE, { force: true });
+    if (activeTab === 'overview') {
+      void (async () => {
+        await loadDetail(repository, selectedRemoteId, selectedPrId, { force: true });
+        await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'ci', ciPageIndex, CI_PAGE_SIZE, { force: true });
+        await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'reviews', reviewPageIndex, REVIEW_PAGE_SIZE, { force: true });
+      })();
       return;
     }
     if (activeTab === 'changes') {
@@ -1495,10 +1773,6 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     }
     if (activeTab === 'commits') {
       void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'commits', commitPageIndex, COMMIT_PAGE_SIZE, { force: true });
-      return;
-    }
-    if (activeTab === 'reviews') {
-      void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'reviews', reviewPageIndex, REVIEW_PAGE_SIZE, { force: true });
       return;
     }
     void loadDetail(repository, selectedRemoteId, selectedPrId, { force: true });
@@ -1516,26 +1790,34 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     workspacePath,
   ]);
 
-  const handleRefreshDetail = useCallback(() => {
+  const handleRefreshDetail = useCallback(async () => {
     if ((!repository && !workspacePath) || !selectedRemoteId || !selectedPrId) return;
-    if (activeTab === 'ci') {
-      void loadDetailSection(repository, selectedRemoteId, selectedPrId, 'ci', ciPageIndex, CI_PAGE_SIZE, { force: true });
-      return;
+    await loadDetail(repository, selectedRemoteId, selectedPrId, { force: true });
+    if (activeTab === 'overview') {
+      await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'ci', ciPageIndex, CI_PAGE_SIZE, { force: true });
+      await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'reviews', reviewPageIndex, REVIEW_PAGE_SIZE, { force: true });
+    } else if (activeTab === 'changes') {
+      await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'files', changePageIndex, CHANGE_PAGE_SIZE, { force: true });
+    } else if (activeTab === 'commits') {
+      await loadDetailSection(repository, selectedRemoteId, selectedPrId, 'commits', commitPageIndex, COMMIT_PAGE_SIZE, { force: true });
     }
-    void loadDetail(repository, selectedRemoteId, selectedPrId, { force: true });
-  }, [activeTab, ciPageIndex, loadDetail, loadDetailSection, repository, selectedPrId, selectedRemoteId, workspacePath]);
+  }, [activeTab, changePageIndex, ciPageIndex, commitPageIndex, loadDetail, loadDetailSection, repository, reviewPageIndex, selectedPrId, selectedRemoteId, workspacePath]);
 
   const remoteStatus = selectedRemote
     ? `${providerLabel(selectedRemote)} · ${authLabel(account)}`
     : 'No remote detected';
-  const displayPr = detail ?? selectedPr;
+  const displayPr = currentPullRequest;
   const checksText = displayPr && displayPr.checks.total > 0
     ? `${displayPr.checks.passed}/${displayPr.checks.total}`
     : 'N/A';
   const emptyStateMessage = snapshot.message
     || account?.message
     || selectedRemote?.message
-    || (snapshot.remotes.length ? 'No pull requests match the current filter.' : 'No supported remotes were detected.');
+    || (snapshot.remotes.length
+      ? isGithubUserList && !query.trim()
+        ? 'No open pull requests authored by the current GitHub CLI account.'
+        : 'No pull requests match the current filter.'
+      : 'No supported remotes were detected.');
   const loadingLabel = loading
     ? snapshotCacheState === 'refreshing'
       ? 'Refreshing cached pull requests...'
@@ -1543,7 +1825,37 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     : snapshotCacheState === 'cached'
       ? 'Cached pull requests'
       : null;
-  const parentSessionLabel = parentSession ? getSessionTitle(parentSession, 'Current chat') : 'No chat session linked';
+  const checksStatusText = !displayPr || displayPr.checks.total === 0
+    ? 'No checks'
+    : displayPr.checks.failed > 0
+      ? `${displayPr.checks.failed} failed`
+      : displayPr.checks.pending > 0
+        ? `${displayPr.checks.pending} pending`
+        : 'All checks passed';
+  const commentsText = reviewItemCount > 0
+    ? `${reviewItemCount} comment${reviewItemCount === 1 ? '' : 's'}`
+    : 'No comments';
+  const reviewStatusText = latestCurrentReview
+    ? currentPullRequestReviewStatusText(latestCurrentReview)
+    : latestStaleReview
+      ? 'Previous Review is stale because the PR revisions or runtime evidence changed'
+      : latestUnknownReview
+        ? 'Review result cannot be matched to current PR revisions · refresh PR'
+        : 'No Review has run for the current PR revisions';
+  const handleOpenLatestReview = () => {
+    const linked = latestCurrentReview ?? latestStaleReview ?? latestUnknownReview;
+    const linkedParentSessionId = linked?.childSession.parentSessionId ?? linked?.parentSession?.sessionId;
+    if (!linked || !linkedParentSessionId) return;
+    openBtwSessionInAuxPane({
+      childSessionId: linked.childSession.sessionId,
+      parentSessionId: linkedParentSessionId,
+      workspacePath: linked.childSession.workspacePath,
+      expand: true,
+      sessionKind: linked.kind,
+      sessionTitle: linked.title,
+      agentType: linked.childSession.config.agentType ?? (linked.kind === 'deep_review' ? 'DeepReview' : 'CodeReview'),
+    });
+  };
 
   return (
     <div className={`review-platform${detailOnly ? ' review-platform--detail-only' : ''}`}>
@@ -1581,7 +1893,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               className="review-platform__icon-button"
               size="xs"
               variant="ghost"
-              tooltip={account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+              tooltip={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
               disabled={!selectedRemote || selectedRemote.platform === 'unknown' || loading || authSaving}
               onClick={handleOpenAuthModal}
             >
@@ -1604,7 +1916,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               size="xs"
               variant="ghost"
               tooltip="Refresh"
-              onClick={() => void loadSnapshot(selectedRemoteId, { force: true, page: currentPageIndex + 1 })}
+              onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}
               isLoading={loading}
             >
               <RefreshCw size={14} />
@@ -1617,7 +1929,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       <div className="review-platform__subbar">
         <div className="review-platform__status-line">
           <span><CircleDot size={12} /> {summary.open} open on page</span>
-          <span><GitPullRequestClosed size={12} /> {summary.merged} merged on page</span>
+          {!isGithubUserList && <span><GitPullRequestClosed size={12} /> {summary.merged} merged on page</span>}
           <span><Sparkles size={12} /> {summary.reviewRequired} review on page</span>
           <span><Link2 size={12} /> {remoteStatus}</span>
           {loadingLabel && (
@@ -1644,18 +1956,20 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               prefix={<Search size={14} />}
               suffix={query ? <IconButton className="review-platform__icon-button" size="xs" variant="ghost" onClick={() => setQuery('')}><XCircle size={14} /></IconButton> : undefined}
             />
-            <div className="review-platform__state-filters">
-              {(['all', 'open', 'draft', 'merged', 'closed'] as ListStateFilter[]).map(state => (
-                <button
-                  key={state}
-                  type="button"
-                  className={`review-platform__state-chip${stateFilter === state ? ' is-active' : ''}`}
-                  onClick={() => setStateFilter(state)}
-                >
-                  {state === 'all' ? 'All' : stateLabel(state)}
-                </button>
-              ))}
-            </div>
+            {!isGithubUserList && (
+              <div className="review-platform__state-filters">
+                {(['all', 'open', 'draft', 'merged', 'closed'] as ListStateFilter[]).map(state => (
+                  <button
+                    key={state}
+                    type="button"
+                    className={`review-platform__state-chip${stateFilter === state ? ' is-active' : ''}`}
+                    onClick={() => setStateFilter(state)}
+                  >
+                    {state === 'all' ? 'All' : stateLabel(state)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="review-platform__list-scroll">
@@ -1666,7 +1980,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               <div className="review-platform__error-state">
                 <XCircle size={16} />
                 <span>{error}</span>
-                <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadSnapshot(selectedRemoteId, { force: true, page: currentPageIndex + 1 })}>
+                <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}>
                   Retry
                 </Button>
               </div>
@@ -1679,18 +1993,27 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             )}
             {!loading && !error && visiblePullRequests.map(pr => (
               (() => {
+                const pullRequestRemote = pr.providerId
+                  ? snapshot.remotes.find(remote => remote.id === pr.providerId)
+                  : selectedRemote;
                 return (
                   <button
-                    key={pr.id}
+                    key={`${pr.providerId ?? selectedRemoteId ?? 'remote'}:${pr.id}`}
                     type="button"
-                    className={`review-platform__pr-row${selectedPrId === pr.id ? ' is-selected' : ''}`}
-                    onClick={() => setSelectedPrId(pr.id)}
+                    className={`review-platform__pr-row${selectedPrId === pr.id && (!pr.providerId || pr.providerId === selectedRemoteId) ? ' is-selected' : ''}`}
+                    onClick={() => {
+                      if (pr.providerId && pr.providerId !== selectedRemoteId) {
+                        setSelectedRemoteId(pr.providerId);
+                        rememberRemote(workspacePath, pr.providerId);
+                      }
+                      setSelectedPrId(pr.id);
+                    }}
                   >
                     <span className="review-platform__pr-icon">{getPrIcon(pr)}</span>
                     <span className="review-platform__pr-main">
                       <span className="review-platform__pr-title">{pr.title}</span>
                       <span className="review-platform__pr-meta">
-                        #{pr.number} · {pr.sourceBranch} → {pr.targetBranch}
+                        {pullRequestRemote?.projectPath ? `${pullRequestRemote.projectPath} · ` : ''}#{pr.number} · {pr.sourceBranch} → {pr.targetBranch}
                       </span>
                       <span className="review-platform__pr-meta review-platform__pr-meta--secondary">
                         {pr.author} · {formatRelativeTime(pr.updatedAt)}
@@ -1766,7 +2089,38 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 {selectedRemote && selectedRemote.platform !== 'unknown' && (
                   <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleOpenAuthModal} disabled={authSaving}>
                     <KeyRound size={13} />
-                    {account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+                    {selectedRemote.platform === 'github' ? 'Authenticate' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!selectedPr && detailOnly && !loading && !detailLoading && !authChallenge && !detailError && !error && (
+            <div className="review-platform__detail-empty">
+              <GitPullRequest size={24} />
+              <span>
+                {snapshot.message
+                  || 'This pull request could not be resolved from the remotes of the current workspace.'}
+              </span>
+              <div className="review-platform__detail-empty-actions">
+                <Button
+                  className="review-platform__panel-button"
+                  size="small"
+                  variant="secondary"
+                  onClick={() => void loadSnapshot(undefined, { force: true })}
+                >
+                  Retry
+                </Button>
+                {initialPullRequestUrl && (
+                  <Button
+                    className="review-platform__panel-button"
+                    size="small"
+                    variant="secondary"
+                    onClick={handleOpenExternal}
+                  >
+                    <ExternalLink size={13} />
+                    Open in browser
                   </Button>
                 )}
               </div>
@@ -1787,15 +2141,54 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <div className="review-platform__detail-title-row">
                     {getPrIcon(selectedPr)}
                     <h3>{selectedPr.title}</h3>
+                    <span className={`review-platform__detail-state review-platform__detail-state--${displayPr?.state ?? selectedPr.state}`}>
+                      {stateLabel(displayPr?.state ?? selectedPr.state)}
+                    </span>
                   </div>
                   <div className="review-platform__detail-meta">
                     <span>#{selectedPr.number}</span>
-                    <span><UserRound size={12} /> {selectedPr.author}</span>
                     <span><Clock3 size={12} /> {formatAbsoluteTime(selectedPr.updatedAt) || formatRelativeTime(selectedPr.updatedAt)}</span>
-                    <span><Code2 size={12} /> {selectedPr.sourceBranch} → {selectedPr.targetBranch}</span>
                   </div>
                 </div>
                 <div className="review-platform__detail-actions">
+                  <Tooltip content={!parentSession ? 'Open or create a chat first' : 'Start Review'}>
+                    <span>
+                      <Button
+                        className="review-platform__panel-button"
+                        size="small"
+                        variant="primary"
+                        onClick={handleStartReview}
+                        disabled={
+                          !parentSession ||
+                          !repository ||
+                          !selectedRemote ||
+                          reviewLaunching ||
+                          detailLoading ||
+                          latestCurrentReview?.lifecycle === 'running'
+                        }
+                        isLoading={reviewLaunching}
+                      >
+                        <Sparkles size={13} />
+                        {latestCurrentReview?.lifecycle === 'running' ? 'Review running' : 'Review'}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleOpenExternal} disabled={!selectedPr.webUrl && !initialPullRequestUrl}>
+                    <Link2 size={13} />
+                    Open
+                  </Button>
+                  {detailOnly && selectedRemote && selectedRemote.platform !== 'unknown' && (
+                    <IconButton
+                      className="review-platform__icon-button"
+                      size="xs"
+                      variant="ghost"
+                      tooltip={selectedRemote.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+                      onClick={handleOpenAuthModal}
+                      disabled={authSaving}
+                    >
+                      <KeyRound size={14} />
+                    </IconButton>
+                  )}
                   <IconButton
                     className="review-platform__icon-button"
                     size="xs"
@@ -1807,62 +2200,50 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   >
                     <RefreshCw size={14} />
                   </IconButton>
-                  {detailOnly && selectedRemote && selectedRemote.platform !== 'unknown' && (
-                    <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleOpenAuthModal} disabled={authSaving}>
-                      <KeyRound size={13} />
-                      {account?.authSource === 'stored' ? 'Update token' : 'Token'}
-                    </Button>
-                  )}
-                  <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleFillPrContext} disabled={!selectedPr}>
-                    <MessageSquareText size={13} />
-                    Add context
-                  </Button>
-                  <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleOpenExternal} disabled={!selectedPr.webUrl && !initialPullRequestUrl}>
-                    <Link2 size={13} />
-                    Open
-                  </Button>
                 </div>
               </div>
 
-              <div className="review-platform__summary-strip">
-                <div className="review-platform__summary-card">
-                  <span className="review-platform__summary-label">Files</span>
-                  <strong>{displayPr?.changedFiles ?? selectedPr.changedFiles}</strong>
+              <div className="review-platform__fact-list">
+                <div className="review-platform__fact-row">
+                  <span className="review-platform__fact-label"><Code2 size={14} /> Branches</span>
+                  <div className="review-platform__fact-value review-platform__fact-value--branch">
+                    <strong>{displayPr?.sourceBranch ?? selectedPr.sourceBranch}</strong>
+                    <ChevronRight size={13} />
+                    <strong>{displayPr?.targetBranch ?? selectedPr.targetBranch}</strong>
+                    <span>{displayPr?.changedFiles ?? selectedPr.changedFiles} files</span>
+                    <span className="review-platform__additions">+{displayPr?.additions ?? selectedPr.additions}</span>
+                    <span className="review-platform__deletions">-{displayPr?.deletions ?? selectedPr.deletions}</span>
+                  </div>
                 </div>
-                <div className="review-platform__summary-card">
-                  <span className="review-platform__summary-label">Additions</span>
-                  <strong className="review-platform__additions">+{displayPr?.additions ?? selectedPr.additions}</strong>
+                <div className="review-platform__fact-row">
+                  <span className="review-platform__fact-label"><UserRound size={14} /> Author</span>
+                  <div className="review-platform__fact-value">
+                    <strong>{displayPr?.author ?? selectedPr.author}</strong>
+                  </div>
                 </div>
-                <div className="review-platform__summary-card">
-                  <span className="review-platform__summary-label">Deletions</span>
-                  <strong className="review-platform__deletions">-{displayPr?.deletions ?? selectedPr.deletions}</strong>
+                <div className="review-platform__fact-row">
+                  <span className="review-platform__fact-label"><MessageSquareText size={14} /> Comments</span>
+                  <div className="review-platform__fact-value">{commentsText}</div>
                 </div>
-                <div className="review-platform__summary-card">
-                  <span className="review-platform__summary-label">Checks</span>
-                  <strong>{checksText}</strong>
+                <div className="review-platform__fact-row">
+                  <span className="review-platform__fact-label"><CheckCircle2 size={14} /> Checks</span>
+                  <div className="review-platform__fact-value">
+                    <strong>{checksStatusText}</strong>
+                    {displayPr && displayPr.checks.total > 0 && <span>{checksText}</span>}
+                  </div>
+                </div>
+                <div className="review-platform__fact-row">
+                  <span className="review-platform__fact-label"><Sparkles size={14} /> BitFun Review</span>
+                  <div className="review-platform__fact-value review-platform__fact-value--review">
+                    <span>{reviewStatusText}</span>
+                    {(latestCurrentReview || latestStaleReview || latestUnknownReview) && (
+                      <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleOpenLatestReview}>
+                        Open Review
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              <section className="review-platform__agent-link-panel" aria-label="Conversation and review agents">
-                <div className="review-platform__agent-link-main">
-                  <span className="review-platform__agent-link-label">Conversation link</span>
-                  <strong>{parentSessionLabel}</strong>
-                  <span>
-                    {prFilePaths.length} changed files
-                    {linkedReviewSessions.length > 0 ? ` · ${linkedReviewSessions.length} related review sessions` : ''}
-                  </span>
-                </div>
-                <div className="review-platform__agent-link-actions">
-                  <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleOpenParentChat} disabled={!parentSession}>
-                    <MessageSquareText size={13} />
-                    Open chat
-                  </Button>
-                  <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleFillPrContext} disabled={!parentSession || !selectedPr}>
-                    <Code2 size={13} />
-                    Insert context
-                  </Button>
-                </div>
-              </section>
 
               <Tabs
                 activeKey={activeTab}
@@ -1872,10 +2253,10 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 className="review-platform__tabs"
               >
                 <TabPane tabKey="overview" label="Overview">
-                  <section className="review-platform__tab-content">
-                    <div className="review-platform__body-markdown">
-                      <div className="review-platform__card-heading">
-                        <span>Overview</span>
+                  <div className="review-platform__tab-content review-platform__overview-scroll">
+                    <section className="review-platform__detail-section">
+                      <div className="review-platform__detail-section-heading">
+                        <span>Description</span>
                         <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleFillPrContext} disabled={!selectedPr}>
                           <MessageSquareText size={13} />
                           Add to chat
@@ -1889,170 +2270,168 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                             Retry
                           </Button>
                         </div>
-                      ) : detail?.body ? (
-                        <MarkdownRenderer content={detail.body} basePath={workspacePath} />
+                      ) : detail ? (
+                        <div className="review-platform__body-markdown review-platform__body-markdown--plain">
+                          {detail.body
+                            ? <MarkdownRenderer content={detail.body} basePath={workspacePath} />
+                            : <span className="review-platform__section-empty">No description was provided.</span>}
+                        </div>
                       ) : (
                         renderDetailLoading('Loading pull request summary...')
                       )}
-                    </div>
-                    <div className="review-platform__capability-row">
-                      <span className="review-platform__capability-chip">State: {stateLabel(displayPr?.state ?? selectedPr.state)}</span>
-                      <span className={`review-platform__decision review-platform__decision--${displayPr?.reviewDecision ?? selectedPr.reviewDecision}`}>
-                        {decisionLabel(displayPr?.reviewDecision ?? selectedPr.reviewDecision)}
-                      </span>
-                      <span className="review-platform__capability-chip">
-                        {selectedRemote ? providerLabel(selectedRemote) : 'Unknown provider'}
-                      </span>
-                    </div>
-                    <div className="review-platform__summary-grid">
-                      <span><CheckCircle2 size={13} /> {checksText} checks</span>
-                      <span><MessageSquareText size={13} /> {reviewItemCount} review items</span>
-                      <span><UserRound size={13} /> {displayPr?.author ?? selectedPr.author}</span>
-                      <span><Clock3 size={13} /> {formatAbsoluteTime(displayPr?.updatedAt ?? selectedPr.updatedAt)}</span>
-                    </div>
-                  </section>
-                </TabPane>
+                    </section>
 
-                <TabPane tabKey="ci" label="CI">
-                  <section className="review-platform__tab-content review-platform__ci-list">
-                    <div className="review-platform__section-heading">
-                      <span>CI</span>
-                      <span className="review-platform__section-count">
-                        {ciTotal ? `${ciTotal} items · ${checksText}` : checksText}
-                      </span>
-                      <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddCiPageContext} disabled={!selectedPr || !detail || detailLoading}>
-                        <MessageSquareText size={13} />
-                        Add page
-                      </Button>
-                    </div>
-                    {detailError && (
-                      <div className="review-platform__detail-error">
-                        <XCircle size={14} />
-                        <span>{detailError}</span>
-                        <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleRetryDetail}>
-                          Retry
-                        </Button>
+                    <section className="review-platform__detail-section review-platform__ci-list">
+                      <div className="review-platform__detail-section-heading">
+                        <span>Checks</span>
+                        <div className="review-platform__detail-section-actions">
+                          <span className="review-platform__section-count">
+                            {ciTotal ? `${ciTotal} items · ${checksText}` : checksStatusText}
+                          </span>
+                          <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddCiPageContext} disabled={!selectedPr || !detail || detailLoading}>
+                            <MessageSquareText size={13} />
+                            Add page
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                    {detailLoading && renderDetailLoading(pagedCiItems.length ? 'Refreshing CI...' : 'Loading CI...', pagedCiItems.length > 0)}
-                    {pagedCiItems.map(item => {
-                      const tone = ciItemTone(item);
-                      const isCiExpanded = expandedCiItemIds.has(item.id);
-                      const ciLog = ciLogById[item.id];
-                      const ciLogLoading = ciLogLoadingIds.has(item.id);
-                      const ciLogError = ciLogErrorById[item.id];
-                      const logAvailable = canLoadCiLog(selectedRemote, item);
-                      const expandable = canExpandCiItem(selectedRemote, item);
-                      return (
-                        <article key={item.id} className={`review-platform__ci-item review-platform__ci-item--${tone}`}>
-                          <div className="review-platform__ci-head">
-                            <div className="review-platform__ci-main">
-                              <strong>{item.name}</strong>
-                              <span>
-                                {[item.detail, item.stage].filter(Boolean).join(' · ') || (item.webUrl ? 'Provider details available' : 'No extra details provided')}
-                              </span>
-                            </div>
-                            <div className="review-platform__ci-actions">
-                              {ciLog && logAvailable && (
-                                <span className="review-platform__ci-log-chip">
-                                  {ciLog.log ? (ciLog.truncated ? 'Errors truncated' : 'Errors loaded') : 'No errors'}
+                      {detailLoading && renderDetailLoading(pagedCiItems.length ? 'Refreshing checks...' : 'Loading checks...', pagedCiItems.length > 0)}
+                      {pagedCiItems.map(item => {
+                        const tone = ciItemTone(item);
+                        const isCiExpanded = expandedCiItemIds.has(item.id);
+                        const ciLog = ciLogById[item.id];
+                        const ciLogLoading = ciLogLoadingIds.has(item.id);
+                        const ciLogError = ciLogErrorById[item.id];
+                        const logAvailable = canLoadCiLog(selectedRemote, item);
+                        const expandable = canExpandCiItem(selectedRemote, item);
+                        return (
+                          <article key={item.id} className={`review-platform__ci-item review-platform__ci-item--${tone}`}>
+                            <div className="review-platform__ci-head">
+                              <div className="review-platform__ci-main">
+                                <strong>{item.name}</strong>
+                                <span>{[item.detail, item.stage].filter(Boolean).join(' · ')}</span>
+                              </div>
+                              <div className="review-platform__ci-actions">
+                                <span className={`review-platform__ci-status review-platform__ci-status--${tone}`}>
+                                  {ciItemStatusText(item)}
                                 </span>
-                              )}
-                              <span className={`review-platform__ci-status review-platform__ci-status--${tone}`}>
-                                {ciItemStatusText(item)}
-                              </span>
-                              {expandable && (
+                                {expandable && (
+                                  <IconButton
+                                    className="review-platform__icon-button review-platform__ci-action"
+                                    size="xs"
+                                    variant="ghost"
+                                    tooltip={isCiExpanded ? 'Collapse details' : 'Expand details'}
+                                    onClick={() => toggleCiExpanded(item)}
+                                    disabled={ciLogLoading}
+                                    aria-busy={ciLogLoading}
+                                  >
+                                    {isCiExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                  </IconButton>
+                                )}
                                 <IconButton
                                   className="review-platform__icon-button review-platform__ci-action"
                                   size="xs"
                                   variant="ghost"
-                                  tooltip={isCiExpanded ? 'Collapse details' : 'Expand details'}
-                                  onClick={() => toggleCiExpanded(item)}
-                                  disabled={ciLogLoading}
-                                  aria-busy={ciLogLoading}
+                                  tooltip="Add this result to chat"
+                                  onClick={() => void handleAddCiItemContext(item)}
+                                  disabled={!selectedPr}
                                 >
-                                  {isCiExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                  <MessageSquareText size={13} />
                                 </IconButton>
-                              )}
-                              <IconButton
-                                className="review-platform__icon-button review-platform__ci-action"
-                                size="xs"
-                                variant="ghost"
-                                tooltip="Add this result to chat"
-                                onClick={() => void handleAddCiItemContext(item)}
-                                disabled={!selectedPr}
-                              >
-                                <MessageSquareText size={13} />
-                              </IconButton>
-                              {item.webUrl && (
-                                <IconButton
-                                  className="review-platform__icon-button review-platform__ci-action"
-                                  size="xs"
-                                  variant="ghost"
-                                  tooltip="Open result in provider"
-                                  onClick={() => void handleOpenCiUrl(item.webUrl)}
-                                >
-                                  <Link2 size={12} />
-                                </IconButton>
-                              )}
-                            </div>
-                          </div>
-                          {(item.startedAt || item.finishedAt) && (
-                            <div className="review-platform__ci-meta">
-                              {item.startedAt && <span>Started: {formatAbsoluteTime(item.startedAt) || item.startedAt}</span>}
-                              {item.finishedAt && <span>Finished: {formatAbsoluteTime(item.finishedAt) || item.finishedAt}</span>}
-                            </div>
-                          )}
-                          {isCiExpanded && (
-                            <div className="review-platform__ci-log-panel">
-                              <div className="review-platform__ci-detail-grid">
-                                {item.stage && (
-                                  <div>
-                                    <span>Stage</span>
-                                    <strong>{item.stage}</strong>
-                                  </div>
-                                )}
-                                {item.detail && (
-                                  <div>
-                                    <span>Detail</span>
-                                    <strong>{item.detail}</strong>
-                                  </div>
-                                )}
                                 {item.webUrl && (
-                                  <div>
-                                    <span>URL</span>
-                                    <strong>{item.webUrl}</strong>
-                                  </div>
+                                  <IconButton
+                                    className="review-platform__icon-button review-platform__ci-action"
+                                    size="xs"
+                                    variant="ghost"
+                                    tooltip="Open result in provider"
+                                    onClick={() => void handleOpenCiUrl(item.webUrl)}
+                                  >
+                                    <Link2 size={12} />
+                                  </IconButton>
                                 )}
                               </div>
-                              {ciLogLoading && renderDetailLoading('Loading CI details...')}
-                              {!ciLogLoading && ciLogError && logAvailable && (
-                                <div className="review-platform__detail-error">
-                                  <XCircle size={14} />
-                                  <span>{ciLogError}</span>
-                                  <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadCiLog(item)}>
-                                    Retry
-                                  </Button>
-                                </div>
-                              )}
-                              {!ciLogLoading && !ciLogError && (ciLog?.log || item.log) && (
-                                <pre className="review-platform__ci-log-block">{ciLog?.log || item.log}</pre>
-                              )}
-                              {!ciLogLoading && !ciLogError && ciLog && !ciLog.log && !item.log && ciLog.message && (
-                                <div className="review-platform__ci-log-empty">
-                                  {ciLog.message}
-                                </div>
-                              )}
                             </div>
-                          )}
-                        </article>
-                      );
-                    })}
-                    {!detailLoading && detail && ciItems.length === 0 && (
-                      <div className="review-platform__empty-state">No CI entries were returned by this provider.</div>
-                    )}
-                    {renderDetailPagination('CI', ciPage, ciTotal, setCiPageIndex)}
-                  </section>
+                            {isCiExpanded && (
+                              <div className="review-platform__ci-log-panel">
+                                <div className="review-platform__ci-detail-grid">
+                                  {item.stage && <div><span>Stage</span><strong>{item.stage}</strong></div>}
+                                  {item.detail && <div><span>Detail</span><strong>{item.detail}</strong></div>}
+                                  {item.webUrl && <div><span>URL</span><strong>{item.webUrl}</strong></div>}
+                                </div>
+                                {ciLogLoading && renderDetailLoading('Loading check details...')}
+                                {!ciLogLoading && ciLogError && logAvailable && (
+                                  <div className="review-platform__detail-error">
+                                    <XCircle size={14} />
+                                    <span>{ciLogError}</span>
+                                    <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadCiLog(item)}>Retry</Button>
+                                  </div>
+                                )}
+                                {!ciLogLoading && !ciLogError && (ciLog?.log || item.log) && <pre className="review-platform__ci-log-block">{ciLog?.log || item.log}</pre>}
+                                {!ciLogLoading && !ciLogError && ciLog && !ciLog.log && !item.log && ciLog.message && <div className="review-platform__ci-log-empty">{ciLog.message}</div>}
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                      {!detailLoading && detail && ciItems.length === 0 && <div className="review-platform__empty-state">No checks were reported.</div>}
+                      {renderDetailPagination('Checks', ciPage, ciTotal, setCiPageIndex)}
+                    </section>
+
+                    <section className="review-platform__detail-section review-platform__threads">
+                      <div className="review-platform__detail-section-heading">
+                        <span>Comments</span>
+                        <div className="review-platform__detail-section-actions">
+                          <span className="review-platform__section-count">{reviewItemCount}</span>
+                          <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddReviewsContext} disabled={!selectedPr || !detail}>
+                            <MessageSquareText size={13} />
+                            Add to chat
+                          </Button>
+                        </div>
+                      </div>
+                      {detailLoading && renderDetailLoading(reviewThreads.length ? 'Refreshing comments...' : 'Loading comments...', reviewThreads.length > 0)}
+                      {pagedReviewThreads.map(thread => {
+                        const parent = thread.replyToProviderCommentId
+                          ? reviewThreadByCommentId.get(thread.replyToProviderCommentId)
+                          : null;
+                        return (
+                          <article
+                            key={thread.id}
+                            className={[
+                              'review-platform__thread',
+                              thread.resolved ? 'is-resolved' : '',
+                              `review-platform__thread--${thread.kind}`,
+                              parent ? 'review-platform__thread--reply' : '',
+                            ].filter(Boolean).join(' ')}
+                          >
+                            <div className="review-platform__thread-head">
+                              <div className="review-platform__thread-tags">
+                                <span className={`review-platform__thread-tag review-platform__thread-tag--${thread.kind}`}>
+                                  {thread.kind === 'review' ? 'Review' : 'Comment'}
+                                </span>
+                                <span className={`review-platform__thread-tag review-platform__thread-tag--${thread.resolved ? 'resolved' : 'open'}`}>
+                                  {thread.resolved ? 'Resolved' : 'Open'}
+                                </span>
+                              </div>
+                              <span>{formatRelativeTime(thread.updatedAt) || formatAbsoluteTime(thread.updatedAt)}</span>
+                            </div>
+                            <div className="review-platform__thread-meta"><strong>{thread.author}</strong></div>
+                            {parent && (
+                              <div className="review-platform__thread-reply-block">
+                                <div className="review-platform__thread-reply-header">
+                                  <span className="review-platform__thread-reply-label">Reply to</span>
+                                  <span className="review-platform__thread-reply-author">@{parent.author}</span>
+                                </div>
+                                <div className="review-platform__thread-reply-body"><MarkdownRenderer content={parent.body} basePath={workspacePath} /></div>
+                              </div>
+                            )}
+                            <div className="review-platform__thread-body"><MarkdownRenderer content={thread.body} basePath={workspacePath} /></div>
+                            {thread.filePath && <span className="review-platform__thread-anchor">{thread.filePath}{thread.line ? `:${thread.line}` : ''}</span>}
+                          </article>
+                        );
+                      })}
+                      {!detailLoading && detail && reviewThreads.length === 0 && <div className="review-platform__empty-state">No comments yet.</div>}
+                      {renderDetailPagination('Comments', reviewPage, reviewThreads.length, setReviewPageIndex)}
+                    </section>
+                  </div>
                 </TabPane>
 
                 <TabPane tabKey="changes" label="Changes">
@@ -2155,82 +2534,6 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   </section>
                 </TabPane>
 
-                <TabPane tabKey="reviews" label="Reviews">
-                  <section className="review-platform__tab-content review-platform__threads">
-                    <div className="review-platform__section-heading">
-                      <span>Reviews</span>
-                      <span className="review-platform__section-count">{reviewItemCount} items</span>
-                      <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddReviewsContext} disabled={!selectedPr || !detail}>
-                        <MessageSquareText size={13} />
-                        Add to chat
-                      </Button>
-                    </div>
-                    {detailError && (
-                      <div className="review-platform__detail-error">
-                        <XCircle size={14} />
-                        <span>{detailError}</span>
-                        <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleRetryDetail}>
-                          Retry
-                        </Button>
-                      </div>
-                    )}
-                    {detailLoading && renderDetailLoading(reviewThreads.length ? 'Refreshing reviews...' : 'Loading reviews...', reviewThreads.length > 0)}
-                    {pagedReviewThreads.map(thread => {
-                      const parent = thread.replyToProviderCommentId
-                        ? reviewThreadByCommentId.get(thread.replyToProviderCommentId)
-                        : null;
-                      return (
-                        <article
-                          key={thread.id}
-                          className={[
-                            'review-platform__thread',
-                            thread.resolved ? 'is-resolved' : '',
-                            `review-platform__thread--${thread.kind}`,
-                            parent ? 'review-platform__thread--reply' : '',
-                          ].filter(Boolean).join(' ')}
-                        >
-                          <div className="review-platform__thread-head">
-                            <div className="review-platform__thread-tags">
-                              <span className={`review-platform__thread-tag review-platform__thread-tag--${thread.kind}`}>
-                                {thread.kind === 'review' ? 'Review' : 'Comment'}
-                              </span>
-                              <span className={`review-platform__thread-tag review-platform__thread-tag--${thread.resolved ? 'resolved' : 'open'}`}>
-                                {thread.resolved ? 'Resolved' : 'Open'}
-                              </span>
-                            </div>
-                            <span>{formatRelativeTime(thread.updatedAt) || formatAbsoluteTime(thread.updatedAt)}</span>
-                          </div>
-                          <div className="review-platform__thread-meta">
-                            <strong>{thread.author}</strong>
-                          </div>
-                          {parent && (
-                            <div className="review-platform__thread-reply-block">
-                              <div className="review-platform__thread-reply-header">
-                                <span className="review-platform__thread-reply-label">Reply to</span>
-                                <span className="review-platform__thread-reply-author">@{parent.author}</span>
-                              </div>
-                              <div className="review-platform__thread-reply-body">
-                                <MarkdownRenderer content={parent.body} basePath={workspacePath} />
-                              </div>
-                            </div>
-                          )}
-                          <div className="review-platform__thread-body">
-                            <MarkdownRenderer content={thread.body} basePath={workspacePath} />
-                          </div>
-                          {thread.filePath && (
-                            <span className="review-platform__thread-anchor">
-                              {thread.filePath}{thread.line ? `:${thread.line}` : ''}
-                            </span>
-                          )}
-                        </article>
-                      );
-                    })}
-                    {!detailLoading && detail && reviewThreads.length === 0 && (
-                      <div className="review-platform__empty-state">No reviews or comments were returned by this provider.</div>
-                    )}
-                    {renderDetailPagination('Reviews', reviewPage, reviewThreads.length, setReviewPageIndex)}
-                  </section>
-                </TabPane>
               </Tabs>
             </>
           )}
@@ -2244,7 +2547,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             setAuthError(null);
           }
         }}
-        title={`${selectedRemote ? providerLabel(selectedRemote) : 'Provider'} token`}
+        title={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : `${selectedRemote ? providerLabel(selectedRemote) : 'Provider'} token`}
         size="small"
         contentInset
       >
@@ -2259,20 +2562,28 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             <span>{selectedRemote?.host ?? 'No remote'}</span>
             <strong>{selectedRemote?.projectPath ?? ''}</strong>
           </div>
-          <Input
-            type="password"
-            autoComplete="off"
-            autoFocus
-            label="Token"
-            value={authToken}
-            disabled={authSaving}
-            error={Boolean(authError)}
-            errorMessage={authError ?? undefined}
-            onChange={event => {
-              setAuthToken(event.target.value);
-              if (authError) setAuthError(null);
-            }}
-          />
+          {selectedRemote?.platform === 'github' ? (
+            <div className="review-platform__gh-auth">
+              <span>Run this command in the integrated terminal, finish the GitHub CLI flow, then retry.</span>
+              <code>{`gh auth login --hostname ${selectedRemote.host}`}</code>
+              {authError && <span className="review-platform__gh-auth-error">{authError}</span>}
+            </div>
+          ) : (
+            <Input
+              type="password"
+              autoComplete="off"
+              autoFocus
+              label="Token"
+              value={authToken}
+              disabled={authSaving}
+              error={Boolean(authError)}
+              errorMessage={authError ?? undefined}
+              onChange={event => {
+                setAuthToken(event.target.value);
+                if (authError) setAuthError(null);
+              }}
+            />
+          )}
           <div className="review-platform__auth-actions">
             <Button
               type="button"
@@ -2287,19 +2598,47 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              className="review-platform__panel-button"
-              size="small"
-              variant="primary"
-              isLoading={authSaving}
-              disabled={!authToken.trim()}
-            >
-              Save
-            </Button>
+            {selectedRemote?.platform === 'github' ? (
+              <>
+                <Button
+                  type="button"
+                  className="review-platform__panel-button"
+                  size="small"
+                  variant="secondary"
+                  disabled={authSaving}
+                  onClick={() => void handleCopyGithubAuthCommand()}
+                >
+                  <Copy size={13} />
+                  Copy
+                </Button>
+                <Button
+                  type="button"
+                  className="review-platform__panel-button"
+                  size="small"
+                  variant="primary"
+                  isLoading={authSaving}
+                  onClick={() => void handleOpenGithubAuthTerminal()}
+                >
+                  <Terminal size={13} />
+                  Open terminal
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="submit"
+                className="review-platform__panel-button"
+                size="small"
+                variant="primary"
+                isLoading={authSaving}
+                disabled={!authToken.trim()}
+              >
+                Save
+              </Button>
+            )}
           </div>
         </form>
       </Modal>
+      {deepReviewConsentDialog}
     </div>
   );
 };

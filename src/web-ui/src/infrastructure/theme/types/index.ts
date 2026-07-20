@@ -22,12 +22,10 @@ export interface BackgroundColors {
   primary: ColorValue;
   secondary: ColorValue;
   tertiary: ColorValue;
-  quaternary: ColorValue;
   elevated: ColorValue;
   workbench: ColorValue;
   /** Scene panel background — used by SceneViewport, FlowChat, and all scene content areas. */
   scene: ColorValue;
-  tooltip?: ColorValue;
 }
 
  
@@ -48,10 +46,9 @@ export interface AccentColors {
   500: ColorValue;
   600: ColorValue;
   700: ColorValue;
-  800: ColorValue;
 }
 
-export type SecondaryAccentStop = 50 | 100 | 200 | 400 | 500 | 600 | 800;
+export type SecondaryAccentStop = 100 | 200 | 500 | 600;
 export type SecondaryAccentColors = Pick<AccentColors, SecondaryAccentStop>;
 
 
@@ -89,7 +86,6 @@ export interface ElementBackgrounds {
   base: ColorValue;
   medium: ColorValue;
   strong: ColorValue;
-  elevated: ColorValue;
 }
 
  
@@ -97,13 +93,9 @@ export interface GitColors {
   branch: ColorValue;
   branchBg: ColorValue;
   changes: ColorValue;
-  changesBg: ColorValue;
   added: ColorValue;
-  addedBg: ColorValue;
   deleted: ColorValue;
-  deletedBg: ColorValue;
   staged: ColorValue;
-  stagedBg: ColorValue;
 }
 
  
@@ -200,17 +192,6 @@ export interface ButtonConfig {
   };
 }
 
-/**
- * @deprecated Legacy custom-theme compatibility only. New themes should use
- * semantic `colors.semantic.error`; the app no longer treats window controls
- * as an independent theme extension surface.
- */
-export interface WindowControlsConfig {
-  close: {
-    hoverColor: ColorValue;
-  };
-}
-
 export interface MotionConfig {
   instant: string;
   fast: string;
@@ -238,7 +219,6 @@ export interface FontWeightConfig {
   normal: number;
   medium: number;
   semibold: number;
-  bold: number;
 }
 
  
@@ -339,8 +319,6 @@ export interface ThemeConfig {
   
   components?: {
     button?: ButtonConfig;
-    /** @deprecated Legacy custom-theme compatibility only. */
-    windowControls?: WindowControlsConfig;
   };
   
   // Monaco Editor

@@ -19,6 +19,24 @@ import type { RemediationGroupId } from '../utils/codeReviewReport';
 import type { DeepReviewInterruption } from '../utils/deepReviewContinuation';
 
 export type ReviewActionMode = 'standard' | 'deep';
+export const PENDING_FOLLOW_UP_REVIEW_SESSION_ID = '__pending_follow_up_review__';
+
+export function buildPendingFollowUpReviewSessionId(requestId: string): string {
+  return `${PENDING_FOLLOW_UP_REVIEW_SESSION_ID}:${requestId}`;
+}
+
+export function getPendingFollowUpReviewRequestId(sessionId?: string | null): string | null {
+  const prefix = `${PENDING_FOLLOW_UP_REVIEW_SESSION_ID}:`;
+  if (!sessionId?.startsWith(prefix)) {
+    return null;
+  }
+  return sessionId.slice(prefix.length).trim() || null;
+}
+
+export function isPendingFollowUpReviewSessionId(sessionId?: string | null): boolean {
+  return sessionId === PENDING_FOLLOW_UP_REVIEW_SESSION_ID ||
+    getPendingFollowUpReviewRequestId(sessionId) !== null;
+}
 
 export type ReviewActionPhase =
   | 'idle'
@@ -105,9 +123,13 @@ export interface ReviewActionBarData {
   /** Whether the action bar is minimized (collapsed to a floating button) */
   minimized: boolean;
   /** Which fix action is currently in flight */
-  activeAction: 'fix' | 'fix-review' | 'resume' | 'retry' | null;
+  activeAction: 'fix' | 'fix-review' | 'review' | 'resume' | 'retry' | null;
+  /** Follow-up review created from this remediation result, if one has started. */
+  followUpReviewSessionId: string | null;
+  /** Original review files that remain mandatory in remediation follow-up. */
+  reviewTargetFilePaths: string[];
   /** Last user action that changed the action bar content */
-  lastSubmittedAction: 'fix' | 'fix-review' | 'resume' | 'retry' | null;
+  lastSubmittedAction: 'fix' | 'fix-review' | 'review' | 'resume' | 'retry' | null;
   /** User-supplied custom instructions (from the textarea) */
   customInstructions: string;
   /** Error message when phase is fix_failed or review_error */
@@ -118,6 +140,10 @@ export interface ReviewActionBarData {
   completedRemediationIds: Set<string>;
   /** IDs of items being fixed in the current fix_running session (snapshot at start) */
   fixingRemediationIds: Set<string>;
+  /** Files changed by ReviewFixer after the recorded remediation baseline. */
+  remediationModifiedFilePaths: string[];
+  /** True when command-capable tools make the exact remediation file delta uncertain. */
+  remediationScopeRequiresWorkspaceFallback: boolean;
   /** Last dialog turn that existed before the current fix request was submitted */
   fixingBaselineTurnId: string | null;
   /** Last dialog turn that existed before the current resume request was submitted */
@@ -167,10 +193,15 @@ export interface ReviewActionBarState extends ReviewActionBarData {
   toggleAllRemediation: (childSessionId?: string) => void;
   toggleGroupRemediation: (groupId: RemediationGroupId, childSessionId?: string) => void;
   setActiveAction: (
-    action: 'fix' | 'fix-review' | 'resume' | 'retry' | null,
+    action: 'fix' | 'fix-review' | 'review' | 'resume' | 'retry' | null,
     options?: { baselineTurnId?: string | null },
     childSessionId?: string,
   ) => void;
+  setFollowUpReviewSessionId: (followUpSessionId: string | null, childSessionId?: string) => void;
+  setReviewTargetFilePaths: (paths: string[], childSessionId?: string) => void;
+  setRemediationModifiedFilePaths: (paths: string[], childSessionId?: string) => void;
+  setRemediationScopeRequiresWorkspaceFallback: (required: boolean, childSessionId?: string) => void;
+  setFixingBaselineTurnId: (turnId: string | null, childSessionId?: string) => void;
   setCustomInstructions: (value: string, childSessionId?: string) => void;
   setSelectedRemediationIds: (ids: Set<string>, childSessionId?: string) => void;
   minimize: (childSessionId?: string) => void;
@@ -198,13 +229,17 @@ const initialState: ReviewActionBarData = {
   remediationItems: [] as ReviewRemediationItem[],
   selectedRemediationIds: new Set<string>(),
   minimized: false,
-  activeAction: null as 'fix' | 'fix-review' | 'resume' | 'retry' | null,
-  lastSubmittedAction: null as 'fix' | 'fix-review' | 'resume' | 'retry' | null,
+  activeAction: null as 'fix' | 'fix-review' | 'review' | 'resume' | 'retry' | null,
+  followUpReviewSessionId: null as string | null,
+  reviewTargetFilePaths: [] as string[],
+  lastSubmittedAction: null as 'fix' | 'fix-review' | 'review' | 'resume' | 'retry' | null,
   customInstructions: '',
   errorMessage: null as string | null,
   interruption: null as DeepReviewInterruption | null,
   completedRemediationIds: new Set<string>(),
   fixingRemediationIds: new Set<string>(),
+  remediationModifiedFilePaths: [] as string[],
+  remediationScopeRequiresWorkspaceFallback: false,
   fixingBaselineTurnId: null as string | null,
   resumeBaselineTurnId: null as string | null,
   remainingFixIds: [] as string[],
@@ -220,6 +255,8 @@ function cloneActionData(data: ReviewActionBarData): ReviewActionBarData {
     selectedRemediationIds: new Set(data.selectedRemediationIds),
     completedRemediationIds: new Set(data.completedRemediationIds),
     fixingRemediationIds: new Set(data.fixingRemediationIds),
+    reviewTargetFilePaths: [...data.reviewTargetFilePaths],
+    remediationModifiedFilePaths: [...data.remediationModifiedFilePaths],
     remainingFixIds: [...data.remainingFixIds],
     decisionSelections: { ...data.decisionSelections },
     capacityQueueState: data.capacityQueueState
@@ -422,12 +459,16 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       phase: phase ?? 'review_completed',
       minimized: false,
       activeAction: null,
+      followUpReviewSessionId: null,
+      reviewTargetFilePaths: [],
       lastSubmittedAction: null,
       customInstructions: '',
       errorMessage: null,
       interruption: null,
       completedRemediationIds: preservedCompleted,
       fixingRemediationIds: new Set(),
+      remediationModifiedFilePaths: [],
+      remediationScopeRequiresWorkspaceFallback: false,
       fixingBaselineTurnId: null,
       resumeBaselineTurnId: null,
       remainingFixIds: [],
@@ -448,12 +489,16 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       phase: 'review_running',
       minimized: true,
       activeAction: null,
+      followUpReviewSessionId: null,
+      reviewTargetFilePaths: [],
       lastSubmittedAction: null,
       customInstructions: '',
       errorMessage: null,
       interruption: null,
       completedRemediationIds: new Set(),
       fixingRemediationIds: new Set(),
+      remediationModifiedFilePaths: [],
+      remediationScopeRequiresWorkspaceFallback: false,
       fixingBaselineTurnId: null,
       resumeBaselineTurnId: null,
       remainingFixIds: [],
@@ -474,12 +519,16 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       phase: phase ?? interruption.phase,
       minimized: false,
       activeAction: null,
+      followUpReviewSessionId: null,
+      reviewTargetFilePaths: [],
       lastSubmittedAction: null,
       customInstructions: '',
       errorMessage: null,
       interruption,
       completedRemediationIds: new Set(),
       fixingRemediationIds: new Set(),
+      remediationModifiedFilePaths: [],
+      remediationScopeRequiresWorkspaceFallback: false,
       fixingBaselineTurnId: null,
       resumeBaselineTurnId: null,
       remainingFixIds: [],
@@ -501,6 +550,8 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       phase: 'review_waiting_capacity',
       minimized: false,
       activeAction: null,
+      followUpReviewSessionId: null,
+      reviewTargetFilePaths: current?.reviewTargetFilePaths ?? [],
       lastSubmittedAction: null,
       customInstructions: '',
       errorMessage: null,
@@ -509,6 +560,9 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
         ? new Set(current.completedRemediationIds)
         : new Set(),
       fixingRemediationIds: new Set(),
+      remediationModifiedFilePaths: current?.remediationModifiedFilePaths ?? [],
+      remediationScopeRequiresWorkspaceFallback:
+        current?.remediationScopeRequiresWorkspaceFallback ?? false,
       fixingBaselineTurnId: null,
       resumeBaselineTurnId: null,
       remainingFixIds: [],
@@ -629,6 +683,13 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
         activeAction: action,
         lastSubmittedAction: action,
         fixingRemediationIds: new Set(current.selectedRemediationIds),
+        ...(current.phase === 'review_completed'
+          ? {
+              remediationModifiedFilePaths: [],
+              remediationScopeRequiresWorkspaceFallback: false,
+              followUpReviewSessionId: null,
+            }
+          : {}),
         fixingBaselineTurnId: options?.baselineTurnId ?? null,
       });
     } else if (action === 'resume' || action === 'retry') {
@@ -644,6 +705,34 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       commitActionData({ ...current, activeAction: action });
     }
   },
+  setFollowUpReviewSessionId: (followUpSessionId, childSessionId) =>
+    updateActionData(childSessionId, (current) => ({
+      ...current,
+      followUpReviewSessionId: followUpSessionId,
+    })),
+  setReviewTargetFilePaths: (paths, childSessionId) =>
+    updateActionData(childSessionId, (current) => ({
+      ...current,
+      reviewTargetFilePaths: [...new Set(paths)],
+    })),
+  setRemediationModifiedFilePaths: (paths, childSessionId) =>
+    updateActionData(childSessionId, (current) => ({
+      ...current,
+      remediationModifiedFilePaths: [
+        ...new Set([...current.remediationModifiedFilePaths, ...paths]),
+      ],
+    })),
+  setRemediationScopeRequiresWorkspaceFallback: (required, childSessionId) =>
+    updateActionData(childSessionId, (current) => ({
+      ...current,
+      remediationScopeRequiresWorkspaceFallback:
+        current.remediationScopeRequiresWorkspaceFallback || required,
+    })),
+  setFixingBaselineTurnId: (turnId, childSessionId) =>
+    updateActionData(childSessionId, (current) => ({
+      ...current,
+      fixingBaselineTurnId: turnId,
+    })),
   setCustomInstructions: (value, childSessionId) =>
     updateActionData(childSessionId, (current) => ({ ...current, customInstructions: value })),
   setSelectedRemediationIds: (ids, childSessionId) =>
@@ -775,7 +864,13 @@ useReviewActionBarStore.subscribe((state, prevState) => {
     state.phase !== prevState.phase ||
     state.minimized !== prevState.minimized ||
     state.completedRemediationIds !== prevState.completedRemediationIds ||
-    state.customInstructions !== prevState.customInstructions;
+    state.customInstructions !== prevState.customInstructions ||
+    state.followUpReviewSessionId !== prevState.followUpReviewSessionId ||
+    state.reviewTargetFilePaths !== prevState.reviewTargetFilePaths ||
+    state.remediationModifiedFilePaths !== prevState.remediationModifiedFilePaths ||
+    state.remediationScopeRequiresWorkspaceFallback !==
+      prevState.remediationScopeRequiresWorkspaceFallback ||
+    state.fixingBaselineTurnId !== prevState.fixingBaselineTurnId;
 
   if (!shouldPersist) return;
 

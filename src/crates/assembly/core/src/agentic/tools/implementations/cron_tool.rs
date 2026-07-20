@@ -35,24 +35,7 @@ impl CronTool {
     }
 
     fn validate_session_id(session_id: &str) -> Result<(), String> {
-        if session_id.is_empty() {
-            return Err("session_id cannot be empty".to_string());
-        }
-        if session_id == "." || session_id == ".." {
-            return Err("session_id cannot be '.' or '..'".to_string());
-        }
-        if session_id.contains('/') || session_id.contains('\\') {
-            return Err("session_id cannot contain path separators".to_string());
-        }
-        if !session_id
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-        {
-            return Err(
-                "session_id can only contain ASCII letters, numbers, '-' and '_'".to_string(),
-            );
-        }
-        Ok(())
+        bitfun_core_types::validate_session_id(session_id)
     }
 
     fn validate_job_id(job_id: &str) -> Result<(), String> {
@@ -681,7 +664,7 @@ Patch schema for "update":
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {
@@ -1256,7 +1239,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -1284,7 +1267,7 @@ mod tests {
                 "Dev SSH".to_string(),
                 session_identity,
             )),
-            unlocked_collapsed_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,

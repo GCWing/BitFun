@@ -11,6 +11,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use super::agent_selector::{AgentItem, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::login_form::{LoginFormAction, LoginFormState};
 use super::markdown::MarkdownRenderer;
 use super::mcp_add_dialog::{McpAddAction, McpAddDialogState};
 use super::mcp_selector::{McpAction, McpItem, McpSelectorState};
@@ -26,11 +27,12 @@ use super::text_input::TextInput;
 use super::theme::{StyleKind, Theme};
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use super::widgets::Spinner;
+use crate::actions::{ActionState, ResolvedKeymap};
 use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
 
 /// Types of popups that can be shown in the ChatView
 #[derive(Debug, Clone, PartialEq)]
-pub enum PopupType {
+pub(crate) enum PopupType {
     CommandPalette,
     ModelSelector,
     AgentSelector,
@@ -41,23 +43,24 @@ pub enum PopupType {
     McpAddDialog,
     ProviderSelector,
     ModelConfigForm,
+    LoginForm,
     ThemeSelector,
     InfoPopup,
 }
 
 /// Navigation stack for managing popup hierarchy
 #[derive(Debug, Default)]
-pub struct PopupStack {
+pub(crate) struct PopupStack {
     stack: Vec<PopupType>,
 }
 
 impl PopupStack {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self { stack: Vec::new() }
     }
 
     /// Push a popup onto the stack
-    pub fn push(&mut self, popup: PopupType) {
+    fn push(&mut self, popup: PopupType) {
         // Avoid duplicates at the top
         if self.stack.last() != Some(&popup) {
             self.stack.push(popup);
@@ -65,47 +68,24 @@ impl PopupStack {
     }
 
     /// Pop the top popup from the stack
-    pub fn pop(&mut self) -> Option<PopupType> {
+    pub(crate) fn pop(&mut self) -> Option<PopupType> {
         self.stack.pop()
     }
 
     /// Peek at the top popup without removing it
-    pub fn peek(&self) -> Option<&PopupType> {
+    pub(crate) fn peek(&self) -> Option<&PopupType> {
         self.stack.last()
     }
 
-    /// Check if the stack is empty
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.stack.is_empty()
-    }
-
     /// Clear all popups from the stack
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.stack.clear();
-    }
-
-    /// Remove a specific popup type from the stack (for when popup is closed directly)
-    #[allow(dead_code)]
-    pub fn remove(&mut self, popup: &PopupType) {
-        self.stack.retain(|p| p != popup);
-    }
-
-    /// Get the previous popup (for navigation back)
-    #[allow(dead_code)]
-    pub fn previous(&self) -> Option<&PopupType> {
-        if self.stack.len() >= 2 {
-            self.stack.get(self.stack.len() - 2)
-        } else {
-            None
-        }
     }
 }
 
 /// Cached render result for a single message
 struct MessageRenderEntry {
     items: Vec<ListItem<'static>>,
-    #[allow(dead_code)] // Used in Phase 3 (virtual scroll)
     line_count: usize,
     version: u64,
     width: u16,
@@ -130,33 +110,35 @@ struct TextSelectionPoint {
 }
 
 /// Chat interface state (input + view state only, no session data)
-pub struct ChatView {
+pub(crate) struct ChatView {
     /// Theme
-    pub theme: Theme,
+    theme: Theme,
     /// Multiline text input component
-    pub text_input: TextInput,
+    pub(crate) text_input: TextInput,
     /// Slash command menu state
     command_menu: CommandMenuState,
     /// Command palette state (Ctrl+P)
     command_palette: CommandPaletteState,
+    /// Footer hints derived from the resolved CLI action bindings.
+    shortcut_hints: Vec<(String, &'static str)>,
     /// List scroll state
-    pub list_state: ListState,
+    list_state: ListState,
     /// Whether to auto-scroll to bottom
-    pub auto_scroll: bool,
+    auto_scroll: bool,
     /// Loading animation
-    pub spinner: Spinner,
+    spinner: Spinner,
     /// Status message
-    pub status: Option<String>,
+    status: Option<String>,
     /// Input history (for up/down arrows)
-    pub input_history: VecDeque<String>,
+    input_history: VecDeque<String>,
     /// History position
-    pub history_index: Option<usize>,
+    history_index: Option<usize>,
     /// Markdown renderer
     markdown_renderer: MarkdownRenderer,
     /// Whether in browse mode (for scrolling through history)
-    pub browse_mode: bool,
+    pub(crate) browse_mode: bool,
     /// Message scroll offset (from bottom up)
-    pub scroll_offset: usize,
+    scroll_offset: usize,
     /// Model selector popup state
     model_selector: ModelSelectorState,
     /// Agent selector popup state
@@ -175,14 +157,16 @@ pub struct ChatView {
     provider_selector: ProviderSelectorState,
     /// Model config form state (step 2 of add model)
     model_config_form: ModelConfigFormState,
+    /// Account login form (dedicated full-viewport page)
+    login_form: LoginFormState,
     /// Theme selector popup state
     theme_selector: ThemeSelectorState,
 
     // -- Tool card expand/collapse state --
     /// Set of collapsed tool IDs (block tools default to expanded; this tracks manually collapsed ones)
-    pub collapsed_tools: HashSet<String>,
+    collapsed_tools: HashSet<String>,
     /// Currently focused block tool ID (for Ctrl+O toggle)
-    pub focused_block_tool: Option<String>,
+    focused_block_tool: Option<String>,
 
     // -- Thinking expand/collapse state --
     /// Set of assistant message IDs whose thinking blocks are collapsed
@@ -207,20 +191,22 @@ pub struct ChatView {
     /// Pending subagent selector action from mouse click (consumed by caller)
     pending_subagent_action: Option<SubagentSelectorAction>,
 
-    /// Info popup message (rendered as overlay, dismissed by any key)
+    /// Info popup message and vertical scroll position.
     info_popup: Option<String>,
+    info_popup_scroll: u16,
+    info_popup_max_scroll: u16,
 
     /// Hovered thinking block (message_id) for mouse-over highlight
     hovered_thinking_block_id: Option<String>,
 
     /// Recorded y-coordinate regions for block tools: (tool_id, y_start, y_end)
     /// Updated each render frame for mouse click hit-testing.
-    pub block_tool_regions: Vec<(String, u16, u16)>,
+    block_tool_regions: Vec<(String, u16, u16)>,
     /// Recorded y-coordinate regions for thinking blocks: (message_id, y_start, y_end)
     /// Updated each render frame for mouse click hit-testing.
     thinking_regions: Vec<(String, u16, u16)>,
     /// The messages area rect (for converting absolute mouse coords to relative)
-    pub messages_area: Option<Rect>,
+    messages_area: Option<Rect>,
     /// Plain-text lines for the currently rendered message list subset.
     /// Index space matches the List rows before `list_state.offset`.
     visible_plain_lines: Vec<String>,
@@ -234,7 +220,7 @@ pub struct ChatView {
     selection_dragged: bool,
 
     /// Popup navigation stack for back navigation
-    pub popup_stack: PopupStack,
+    pub(crate) popup_stack: PopupStack,
 
     // -- Render cache state (performance optimization) --
     /// Cached total rendered line count (updated each render frame)
@@ -252,15 +238,16 @@ pub struct ChatView {
 
 impl ChatView {
     /// Create new Chat view
-    pub fn new(theme: Theme) -> Self {
+    pub(crate) fn new(theme: Theme, shortcut_hints: Vec<(String, &'static str)>) -> Self {
         let markdown_renderer = MarkdownRenderer::new(theme.clone());
         Self {
             spinner: Spinner::new(theme.style(StyleKind::Primary)),
             markdown_renderer,
             theme,
             text_input: TextInput::new(),
-            command_menu: CommandMenuState::new(),
+            command_menu: CommandMenuState::new(ActionState::chat(false, false)),
             command_palette: CommandPaletteState::new(),
+            shortcut_hints,
             list_state: ListState::default(),
             auto_scroll: true,
             status: None,
@@ -277,6 +264,7 @@ impl ChatView {
             mcp_add_dialog: McpAddDialogState::new(),
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
+            login_form: LoginFormState::new(),
             theme_selector: ThemeSelectorState::new(),
             pending_command: None,
             pending_mcp_toggle: None,
@@ -285,6 +273,8 @@ impl ChatView {
             pending_theme_preview: None,
             theme_preview_original: None,
             info_popup: None,
+            info_popup_scroll: 0,
+            info_popup_max_scroll: 0,
             hovered_thinking_block_id: None,
             collapsed_tools: HashSet::new(),
             focused_block_tool: None,
@@ -305,6 +295,15 @@ impl ChatView {
             cached_width: 0,
             lines_cache_dirty: true,
             render_cache: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn set_action_state(&mut self, state: ActionState, keymap: &ResolvedKeymap) {
+        self.shortcut_hints = keymap.compact_hints(state);
+        self.command_palette.set_action_state(state);
+        if self.command_menu.set_action_state(state) {
+            self.command_menu
+                .update(&self.text_input.input, self.text_input.cursor);
         }
     }
 }

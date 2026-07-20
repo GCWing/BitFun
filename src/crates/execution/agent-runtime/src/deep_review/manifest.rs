@@ -5,7 +5,13 @@
 //! compatible with older manifest field spellings and should not silently hide
 //! reduced coverage, omitted files, or stale evidence hints.
 
+use super::constants::{
+    MANAGED_REVIEW_MAX_BATCHES, MANAGED_REVIEW_MAX_FILES_PER_BATCH,
+    MANAGED_REVIEW_MAX_PARALLEL_INSTANCES, MANAGED_REVIEW_MAX_WORKER_TIMEOUT_SECONDS,
+    REVIEWER_GENERAL_AGENT_TYPE,
+};
 use super::execution_policy::DeepReviewPolicyViolation;
+use super::target_evidence::ReviewTargetEvidence;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -584,6 +590,8 @@ fn forbidden_evidence_pack_key(value: &Value) -> Option<String> {
 pub struct DeepReviewRunManifestGate {
     active_subagent_ids: HashSet<String>,
     skipped_subagent_reasons: HashMap<String, String>,
+    manifest_policy_error: Option<String>,
+    manifest_policy_error_code: &'static str,
 }
 
 impl DeepReviewRunManifestGate {
@@ -607,10 +615,6 @@ impl DeepReviewRunManifestGate {
             active_subagent_ids.insert(id);
         }
 
-        if active_subagent_ids.is_empty() {
-            return None;
-        }
-
         let mut skipped_subagent_reasons = HashMap::new();
         if let Some(skipped) = manifest.get("skippedReviewers").and_then(Value::as_array) {
             for member in skipped {
@@ -632,14 +636,47 @@ impl DeepReviewRunManifestGate {
                 );
             }
         }
+        let target_evidence_error = match ReviewTargetEvidence::from_manifest(raw) {
+            Ok(Some(evidence)) => evidence
+                .validate_manifest_scope(raw)
+                .err()
+                .map(|error| error.to_string()),
+            Ok(None) => None,
+            Err(error) => Some(error.to_string()),
+        };
+        let quality_decision_error = validate_quality_decision(manifest, &active_subagent_ids);
+        let managed_plan_error = validate_managed_review_plan(manifest);
+        let (manifest_policy_error_code, manifest_policy_error) =
+            if let Some(error) = target_evidence_error {
+                ("deep_review_target_evidence_invalid", Some(error))
+            } else if let Some(error) = managed_plan_error {
+                ("deep_review_managed_plan_invalid", Some(error))
+            } else {
+                (
+                    "deep_review_manifest_quality_decision_mismatch",
+                    quality_decision_error,
+                )
+            };
+
+        if active_subagent_ids.is_empty() && manifest_policy_error.is_none() {
+            return None;
+        }
 
         Some(Self {
             active_subagent_ids,
             skipped_subagent_reasons,
+            manifest_policy_error,
+            manifest_policy_error_code,
         })
     }
 
     pub fn ensure_active(&self, subagent_type: &str) -> Result<(), DeepReviewPolicyViolation> {
+        if let Some(error) = self.manifest_policy_error.as_deref() {
+            return Err(DeepReviewPolicyViolation::new(
+                self.manifest_policy_error_code,
+                error,
+            ));
+        }
         if self.active_subagent_ids.contains(subagent_type) {
             return Ok(());
         }
@@ -658,6 +695,222 @@ impl DeepReviewRunManifestGate {
             ),
         ))
     }
+}
+
+fn validate_managed_review_plan(manifest: &serde_json::Map<String, Value>) -> Option<String> {
+    let packets = manifest
+        .get("workPackets")
+        .or_else(|| manifest.get("work_packets"))
+        .and_then(Value::as_array);
+    let has_general_packet = packets.is_some_and(|packets| {
+        packets.iter().any(|packet| {
+            manifest_member_subagent_id(packet).as_deref() == Some(REVIEWER_GENERAL_AGENT_TYPE)
+        })
+    });
+    let Some(plan) = manifest
+        .get("managedReviewPlan")
+        .or_else(|| manifest.get("managed_review_plan"))
+        .and_then(Value::as_object)
+    else {
+        return has_general_packet
+            .then(|| "ReviewGeneral packets require managedReviewPlan runtime bounds".to_string());
+    };
+
+    let usize_field = |camel: &str, snake: &str| {
+        plan.get(camel)
+            .or_else(|| plan.get(snake))
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+    };
+    let version = usize_field("version", "version");
+    let total_file_count = usize_field("totalFileCount", "total_file_count");
+    let planned_file_count = usize_field("plannedFileCount", "planned_file_count");
+    let deferred_file_count = usize_field("deferredFileCount", "deferred_file_count");
+    let max_files_per_batch = usize_field("maxFilesPerBatch", "max_files_per_batch");
+    let max_batches = usize_field("maxBatches", "max_batches");
+    let max_parallel_instances = usize_field("maxParallelInstances", "max_parallel_instances");
+    let worker_timeout_seconds = plan
+        .get("workerTimeoutSeconds")
+        .or_else(|| plan.get("worker_timeout_seconds"))
+        .and_then(Value::as_u64);
+
+    if version != Some(1)
+        || total_file_count.is_none()
+        || planned_file_count.is_none()
+        || deferred_file_count.is_none()
+        || !matches!(
+            max_files_per_batch,
+            Some(1..=MANAGED_REVIEW_MAX_FILES_PER_BATCH)
+        )
+        || !matches!(max_batches, Some(1..=MANAGED_REVIEW_MAX_BATCHES))
+        || !matches!(
+            max_parallel_instances,
+            Some(1..=MANAGED_REVIEW_MAX_PARALLEL_INSTANCES)
+        )
+        || !matches!(
+            worker_timeout_seconds,
+            Some(1..=MANAGED_REVIEW_MAX_WORKER_TIMEOUT_SECONDS)
+        )
+    {
+        return Some("managedReviewPlan is missing required bounded fields".to_string());
+    }
+
+    let total_file_count = total_file_count.unwrap_or_default();
+    let planned_file_count = planned_file_count.unwrap_or_default();
+    let deferred_file_count = deferred_file_count.unwrap_or_default();
+    if total_file_count != planned_file_count.saturating_add(deferred_file_count) {
+        return Some("managedReviewPlan file counts are inconsistent".to_string());
+    }
+
+    let packets = packets.map(Vec::as_slice).unwrap_or_default();
+    if packets.len() > max_batches.unwrap_or_default() {
+        return Some("managed Review packet count exceeds maxBatches".to_string());
+    }
+
+    let mut packet_ids = HashSet::new();
+    let mut assigned_files = HashSet::new();
+    let mut launch_batch_counts = HashMap::<u64, usize>::new();
+    let mut packet_file_count = 0usize;
+    for packet in packets {
+        if manifest_member_subagent_id(packet).as_deref() != Some(REVIEWER_GENERAL_AGENT_TYPE)
+            || packet.get("phase").and_then(Value::as_str) != Some("reviewer")
+        {
+            return Some(
+                "managed Review packets must use ReviewGeneral reviewer workers".to_string(),
+            );
+        }
+        let packet_id = packet
+            .get("packetId")
+            .or_else(|| packet.get("packet_id"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty());
+        if packet_id.is_none() || !packet_ids.insert(packet_id.unwrap_or_default().to_string()) {
+            return Some("managed Review packet ids must be non-empty and unique".to_string());
+        }
+        let files = packet
+            .get("assignedScope")
+            .or_else(|| packet.get("assigned_scope"))
+            .and_then(|scope| scope.get("files"))
+            .and_then(Value::as_array);
+        let Some(files) = files else {
+            return Some("managed Review packet scope is missing files".to_string());
+        };
+        if files.is_empty()
+            || files.len() > max_files_per_batch.unwrap_or_default()
+            || files.iter().any(|file| file.as_str().is_none())
+        {
+            return Some("managed Review packet file scope exceeds its bound".to_string());
+        }
+        for file in files.iter().filter_map(Value::as_str) {
+            if !assigned_files.insert(file.to_string()) {
+                return Some(
+                    "managed Review packet scopes must not contain duplicate files".to_string(),
+                );
+            }
+        }
+        packet_file_count = packet_file_count.saturating_add(files.len());
+
+        let timeout = packet
+            .get("timeoutSeconds")
+            .or_else(|| packet.get("timeout_seconds"))
+            .and_then(Value::as_u64);
+        if !matches!(timeout, Some(1..=MANAGED_REVIEW_MAX_WORKER_TIMEOUT_SECONDS))
+            || timeout > worker_timeout_seconds
+        {
+            return Some("managed Review packet timeout exceeds its bound".to_string());
+        }
+        let launch_batch = packet
+            .get("launchBatch")
+            .or_else(|| packet.get("launch_batch"))
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0);
+        let Some(launch_batch) = launch_batch else {
+            return Some("managed Review packet is missing launchBatch".to_string());
+        };
+        let count = launch_batch_counts.entry(launch_batch).or_default();
+        *count += 1;
+        if *count > max_parallel_instances.unwrap_or_default() {
+            return Some("managed Review launch batch exceeds maxParallelInstances".to_string());
+        }
+    }
+    if packet_file_count != planned_file_count {
+        return Some("managed Review planned file count does not match packet scopes".to_string());
+    }
+
+    let concurrency_max = manifest
+        .get("concurrencyPolicy")
+        .or_else(|| manifest.get("concurrency_policy"))
+        .and_then(Value::as_object)
+        .and_then(|policy| {
+            policy
+                .get("maxParallelInstances")
+                .or_else(|| policy.get("max_parallel_instances"))
+        })
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok());
+    if concurrency_max != max_parallel_instances {
+        return Some(
+            "managed Review concurrency policy must match maxParallelInstances".to_string(),
+        );
+    }
+
+    let execution = manifest.get("executionPolicy").and_then(Value::as_object);
+    let max_reviewer_calls = execution
+        .and_then(|policy| policy.get("maxReviewerCalls"))
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok());
+    if max_reviewer_calls != Some(packets.len().max(1)) {
+        return Some("managed Review reviewer-call ceiling must match packet count".to_string());
+    }
+
+    None
+}
+
+fn validate_quality_decision(
+    manifest: &serde_json::Map<String, Value>,
+    active_subagent_ids: &HashSet<String>,
+) -> Option<String> {
+    let decision = manifest
+        .get("qualityDecision")
+        .or_else(|| manifest.get("quality_decision"))?;
+    let level = decision.get("level").and_then(Value::as_str).unwrap_or("");
+    let strategy_level = manifest
+        .get("strategyLevel")
+        .or_else(|| manifest.get("strategy_level"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let quality_gate_id = manifest
+        .get("qualityGateReviewer")
+        .or_else(|| manifest.get("quality_gate_reviewer"))
+        .and_then(manifest_member_subagent_id);
+
+    match level {
+        "l2" => {
+            if strategy_level != "normal" {
+                return Some("L2 Review requires the normal strategy".to_string());
+            }
+            if quality_gate_id.is_some() || active_subagent_ids.contains("ReviewJudge") {
+                return Some("L2 Review must not launch a quality-gate reviewer".to_string());
+            }
+            if active_subagent_ids.len() > 3 {
+                return Some(format!(
+                    "L2 Review allows at most 3 active reviewers, found {}",
+                    active_subagent_ids.len()
+                ));
+            }
+        }
+        "l3" => {
+            if strategy_level != "deep" {
+                return Some("L3 Review requires the deep strategy".to_string());
+            }
+            if quality_gate_id.is_some() && quality_gate_id.as_deref() != Some("ReviewJudge") {
+                return Some("L3 Review quality gate must use ReviewJudge".to_string());
+            }
+        }
+        _ => return Some(format!("Unsupported Review quality level: {level}")),
+    }
+
+    None
 }
 
 fn collect_manifest_members(raw: Option<&Value>, output: &mut HashSet<String>) {
@@ -685,6 +938,202 @@ fn manifest_member_subagent_id(value: &Value) -> Option<String> {
 mod tests {
     use super::*;
     use serde_json::{json, Value};
+
+    fn quality_manifest(level: &str, strategy: &str, reviewers: &[&str]) -> Value {
+        json!({
+            "reviewMode": "deep",
+            "strategyLevel": strategy,
+            "qualityDecision": { "level": level },
+            "coreReviewers": reviewers.iter().map(|id| json!({ "subagentId": id })).collect::<Vec<_>>()
+        })
+    }
+
+    #[test]
+    fn l2_manifest_accepts_up_to_three_reviewers_without_judge() {
+        let manifest = quality_manifest(
+            "l2",
+            "normal",
+            &[
+                "ReviewBusinessLogic",
+                "ReviewSecurity",
+                "ReviewArchitecture",
+            ],
+        );
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        assert!(gate.ensure_active("ReviewSecurity").is_ok());
+    }
+
+    #[test]
+    fn l2_manifest_rejects_more_than_three_reviewers() {
+        let manifest = quality_manifest(
+            "l2",
+            "normal",
+            &[
+                "ReviewBusinessLogic",
+                "ReviewSecurity",
+                "ReviewArchitecture",
+                "ReviewFrontend",
+            ],
+        );
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        let error = gate
+            .ensure_active("ReviewSecurity")
+            .expect_err("L2 must stay bounded");
+        assert_eq!(error.code, "deep_review_manifest_quality_decision_mismatch");
+    }
+
+    #[test]
+    fn l2_manifest_rejects_a_quality_gate_reviewer() {
+        let mut manifest = quality_manifest("l2", "normal", &["ReviewBusinessLogic"]);
+        manifest["qualityGateReviewer"] = json!({ "subagentId": "ReviewJudge" });
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        assert!(gate.ensure_active("ReviewBusinessLogic").is_err());
+    }
+
+    #[test]
+    fn l3_manifest_requires_deep_strategy_but_allows_on_demand_delegation() {
+        let manifest = quality_manifest("l3", "normal", &["ReviewBusinessLogic"]);
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+        assert!(gate.ensure_active("ReviewBusinessLogic").is_err());
+
+        let single_specialist = quality_manifest("l3", "deep", &["ReviewSecurity"]);
+        let single_specialist_gate =
+            DeepReviewRunManifestGate::from_value(&single_specialist).expect("gate should parse");
+        assert!(single_specialist_gate
+            .ensure_active("ReviewSecurity")
+            .is_ok());
+
+        let mut wrong_judge = quality_manifest("l3", "deep", &["ReviewSecurity"]);
+        wrong_judge["qualityGateReviewer"] = json!({ "subagentId": "ReviewSecurity" });
+        let wrong_judge_gate =
+            DeepReviewRunManifestGate::from_value(&wrong_judge).expect("gate should parse");
+        assert!(wrong_judge_gate.ensure_active("ReviewSecurity").is_err());
+
+        let mut valid = quality_manifest("l3", "deep", &["ReviewSecurity"]);
+        valid["qualityGateReviewer"] = json!({ "subagentId": "ReviewJudge" });
+        let valid_gate = DeepReviewRunManifestGate::from_value(&valid).expect("gate should parse");
+        assert!(valid_gate.ensure_active("ReviewJudge").is_ok());
+    }
+
+    #[test]
+    fn legacy_manifest_without_quality_decision_remains_compatible() {
+        let manifest = json!({
+            "reviewMode": "deep",
+            "coreReviewers": [{ "subagentId": "ReviewSecurity" }]
+        });
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        assert!(gate.ensure_active("ReviewSecurity").is_ok());
+    }
+
+    fn managed_manifest() -> Value {
+        json!({
+            "reviewMode": "deep",
+            "managedReviewPlan": {
+                "version": 1,
+                "totalFileCount": 2,
+                "plannedFileCount": 2,
+                "deferredFileCount": 0,
+                "maxFilesPerBatch": 40,
+                "maxBatches": 8,
+                "maxParallelInstances": 2,
+                "workerTimeoutSeconds": 120
+            },
+            "executionPolicy": {
+                "reviewerTimeoutSeconds": 120,
+                "maxSameRoleInstances": 2,
+                "maxReviewerCalls": 2,
+                "maxRetriesPerRole": 0
+            },
+            "concurrencyPolicy": {
+                "maxParallelInstances": 2
+            },
+            "workPackets": [
+                {
+                    "packetId": "managed-1",
+                    "phase": "reviewer",
+                    "launchBatch": 1,
+                    "subagentId": "ReviewGeneral",
+                    "timeoutSeconds": 120,
+                    "assignedScope": { "files": ["src/a.rs"] }
+                },
+                {
+                    "packetId": "managed-2",
+                    "phase": "reviewer",
+                    "launchBatch": 1,
+                    "subagentId": "ReviewGeneral",
+                    "timeoutSeconds": 120,
+                    "assignedScope": { "files": ["src/b.rs"] }
+                }
+            ]
+        })
+    }
+
+    #[test]
+    fn managed_manifest_admits_only_a_bounded_declared_plan() {
+        let manifest = managed_manifest();
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        assert!(gate.ensure_active("ReviewGeneral").is_ok());
+    }
+
+    #[test]
+    fn review_general_requires_a_managed_plan() {
+        let mut manifest = managed_manifest();
+        manifest
+            .as_object_mut()
+            .unwrap()
+            .remove("managedReviewPlan");
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        let error = gate
+            .ensure_active("ReviewGeneral")
+            .expect_err("ReviewGeneral must not enter a strict or legacy plan");
+        assert_eq!(error.code, "deep_review_managed_plan_invalid");
+    }
+
+    #[test]
+    fn managed_manifest_rejects_packet_scope_over_the_declared_bound() {
+        let mut manifest = managed_manifest();
+        manifest["workPackets"][0]["assignedScope"]["files"] = Value::Array(
+            (0..41)
+                .map(|index| json!(format!("src/{index}.rs")))
+                .collect(),
+        );
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        let error = gate
+            .ensure_active("ReviewGeneral")
+            .expect_err("managed packet must remain bounded");
+        assert_eq!(error.code, "deep_review_managed_plan_invalid");
+    }
+
+    #[test]
+    fn managed_manifest_rejects_duplicate_files_across_packets() {
+        let mut manifest = managed_manifest();
+        manifest["workPackets"][1]["assignedScope"]["files"] = json!(["src/a.rs"]);
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        let error = gate
+            .ensure_active("ReviewGeneral")
+            .expect_err("managed packet scopes must be disjoint");
+        assert_eq!(error.code, "deep_review_managed_plan_invalid");
+    }
+
+    #[test]
+    fn managed_manifest_rejects_a_wider_runtime_concurrency_policy() {
+        let mut manifest = managed_manifest();
+        manifest["concurrencyPolicy"]["maxParallelInstances"] = json!(4);
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        let error = gate
+            .ensure_active("ReviewGeneral")
+            .expect_err("runtime concurrency must match the managed plan");
+        assert_eq!(error.code, "deep_review_managed_plan_invalid");
+    }
 
     #[test]
     fn scope_profile_parses_camel_case_manifest() {

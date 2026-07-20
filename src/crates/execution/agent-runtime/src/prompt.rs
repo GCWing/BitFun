@@ -8,11 +8,16 @@ If the user names a skill (with `[$SkillName]` or plain text) OR the task clearl
 Below is the list of skills that can be used with the Skill tool. Each entry includes a name and description"#;
 const AGENT_LISTING_TITLE: &str = "# Agent Listing";
 const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";
-const COLLAPSED_TOOL_LISTING_TITLE: &str = "# Collapsed Tool Listing";
-const COLLAPSED_TOOL_LISTING_GUIDANCE: &str = r#"The folling tools are intentionally collapsed. Their listed descriptions are short summaries rather than full usage instructions.
-Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full schema.
-After reading the returned spec, call the real tool directly by its own name.
-If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again."#;
+const TOOL_CALLING_GUIDANCE_TITLE: &str = "# Tool Calling Guide";
+const TOOL_CALLING_GUIDANCE: &str = r#"You can access two types of tools:
+- Direct tools: tools in the available tool list include their full definitions. Call them directly using their listed names and input schemas.
+- Deferred tools: call them through `CallDeferredTool`.
+  Before the first call for a deferred tool whose full spec is not already available in the current conversation, call `GetToolSpec` with its exact name.
+  Once its spec is available, call `CallDeferredTool` directly with that tool name and its arguments inside `args`.
+  Do not call `GetToolSpec` again unless the system reports that the spec is stale or unavailable.
+
+## Deferred Tool Listing
+Each entry has the form `tool_name[: optional short description]`."#;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PromptEnvironmentFacts<'a> {
@@ -132,14 +137,30 @@ pub struct RuntimeContextFacts {
     pub remote_execution: Option<RemoteExecutionHints>,
     pub local_shell: Option<RuntimeShellFacts>,
     pub supports_image_understanding: Option<bool>,
+    pub inline_markdown_image_display: bool,
 }
 
 pub fn render_runtime_context_reminder(facts: &RuntimeContextFacts) -> Option<String> {
-    if facts.needs.is_empty() {
+    if facts.needs.is_empty() && !facts.inline_markdown_image_display {
         return None;
     }
 
     let mut lines = vec!["# Runtime Context".to_string()];
+
+    if facts.inline_markdown_image_display {
+        push_runtime_context_section(
+            &mut lines,
+            "Chat Image Display",
+            vec![
+                "- The current Desktop/Web chat renders Markdown images inline. To show an image to the user, use `![concise alt text](source)` in the response."
+                    .to_string(),
+                "- Supported sources are verified HTTP(S) image URLs and workspace-relative image paths. Prefer PNG, JPEG, GIF, or WebP for reliable rendering."
+                    .to_string(),
+                "- Do not invent image URLs, and do not call image-analysis tools solely to display an image. Use a URL you verified or a path to a file that exists in the active workspace."
+                    .to_string(),
+            ],
+        );
+    }
 
     if facts.needs.workspace_tools {
         let mut workspace_lines = Vec::new();
@@ -532,14 +553,14 @@ impl UserContextSection {
 pub struct ToolListingSections {
     pub skill_listing: Option<String>,
     pub agent_listing: Option<String>,
-    pub collapsed_tool_listing: Option<String>,
+    pub deferred_tool_listing: Option<String>,
 }
 
 impl ToolListingSections {
     pub fn is_empty(&self) -> bool {
         self.skill_listing.is_none()
             && self.agent_listing.is_none()
-            && self.collapsed_tool_listing.is_none()
+            && self.deferred_tool_listing.is_none()
     }
 
     pub fn render_skill_listing_reminder(&self) -> Option<String> {
@@ -562,14 +583,14 @@ impl ToolListingSections {
         })
     }
 
-    pub fn render_collapsed_tool_listing_reminder(&self) -> Option<String> {
-        self.collapsed_tool_listing
+    pub fn render_deferred_tool_listing_reminder(&self) -> Option<String> {
+        self.deferred_tool_listing
             .as_deref()
-            .map(|collapsed_tool_listing| {
+            .map(|deferred_tool_listing| {
                 Self::render_section(
-                    COLLAPSED_TOOL_LISTING_TITLE,
-                    collapsed_tool_listing,
-                    Some(COLLAPSED_TOOL_LISTING_GUIDANCE),
+                    TOOL_CALLING_GUIDANCE_TITLE,
+                    deferred_tool_listing,
+                    Some(TOOL_CALLING_GUIDANCE),
                 )
             })
     }
@@ -584,7 +605,7 @@ impl ToolListingSections {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PrependedPromptReminders {
-    pub collapsed_tool_listing: Option<String>,
+    pub deferred_tool_listing: Option<String>,
     pub skill_listing: Option<String>,
     pub agent_listing: Option<String>,
     pub runtime_context: Option<String>,
@@ -594,8 +615,8 @@ pub struct PrependedPromptReminders {
 impl PrependedPromptReminders {
     pub fn ordered_reminders(&self) -> Vec<&str> {
         let mut reminders = Vec::new();
-        if let Some(collapsed_tool_listing) = self.collapsed_tool_listing.as_deref() {
-            reminders.push(collapsed_tool_listing);
+        if let Some(deferred_tool_listing) = self.deferred_tool_listing.as_deref() {
+            reminders.push(deferred_tool_listing);
         }
         if let Some(skill_listing) = self.skill_listing.as_deref() {
             reminders.push(skill_listing);

@@ -42,7 +42,7 @@ fn tool_listing_sections_render_only_present_sections() {
     let sections = ToolListingSections {
         skill_listing: Some("skill-a\nskill-b".to_string()),
         agent_listing: None,
-        collapsed_tool_listing: Some("Search: summary".to_string()),
+        deferred_tool_listing: Some("Search: summary".to_string()),
     };
 
     assert!(!sections.is_empty());
@@ -51,16 +51,29 @@ fn tool_listing_sections_render_only_present_sections() {
         .expect("skill listing should render")
         .starts_with("# Skill Listing\nA skill is a set of instructions"));
     assert!(sections.render_agent_listing_reminder().is_none());
-    assert!(sections
-        .render_collapsed_tool_listing_reminder()
-        .expect("collapsed tool listing should render")
-        .starts_with("# Collapsed Tool Listing\n"));
+    let deferred_tool_listing = sections
+        .render_deferred_tool_listing_reminder()
+        .expect("deferred tool listing should render");
+    assert!(deferred_tool_listing.starts_with("# Tool Calling Guide\n"));
+    assert!(deferred_tool_listing.contains("Direct tools: tools in the available tool list"));
+    assert!(deferred_tool_listing.contains("Deferred tools: call them through `CallDeferredTool`"));
+    assert!(deferred_tool_listing.contains(
+        "Before the first call for a deferred tool whose full spec is not already available"
+    ));
+    assert!(deferred_tool_listing
+        .contains("Once its spec is available, call `CallDeferredTool` directly"));
+    assert!(deferred_tool_listing
+        .contains("unless the system reports that the spec is stale or unavailable"));
+    assert!(deferred_tool_listing.contains("tool_name[: optional short description]"));
+    assert!(deferred_tool_listing.contains(
+        "## Deferred Tool Listing\nEach entry has the form `tool_name[: optional short description]`.\n\nSearch: summary"
+    ));
 }
 
 #[test]
 fn prepended_prompt_reminders_keep_runtime_injection_order() {
     let reminders = PrependedPromptReminders {
-        collapsed_tool_listing: Some("collapsed-tools".to_string()),
+        deferred_tool_listing: Some("deferred-tools".to_string()),
         skill_listing: Some("skills".to_string()),
         agent_listing: Some("agents".to_string()),
         runtime_context: Some("runtime-context".to_string()),
@@ -70,7 +83,7 @@ fn prepended_prompt_reminders_keep_runtime_injection_order() {
     assert_eq!(
         reminders.ordered_reminders(),
         vec![
-            "collapsed-tools",
+            "deferred-tools",
             "skills",
             "agents",
             "runtime-context",
@@ -119,6 +132,7 @@ fn runtime_context_renderer_preserves_local_exec_and_computer_use_guidance() {
             invocation: "powershell.exe -NoLogo".to_string(),
         }),
         supports_image_understanding: None,
+        inline_markdown_image_display: false,
     })
     .expect("runtime context should render");
 
@@ -156,6 +170,7 @@ fn runtime_context_renderer_preserves_remote_workspace_split() {
             invocation: "powershell.exe".to_string(),
         }),
         supports_image_understanding: None,
+        inline_markdown_image_display: false,
     })
     .expect("remote runtime context should render");
 
@@ -176,6 +191,7 @@ fn runtime_context_renderer_adds_text_only_computer_use_guidance_for_non_visual_
         remote_execution: None,
         local_shell: None,
         supports_image_understanding: Some(false),
+        inline_markdown_image_display: false,
     })
     .expect("runtime context should render");
 
@@ -197,6 +213,7 @@ fn runtime_context_renderer_omits_text_only_guidance_for_visual_or_unknown_model
             remote_execution: None,
             local_shell: None,
             supports_image_understanding,
+            inline_markdown_image_display: false,
         })
         .expect("runtime context should render");
 
@@ -204,6 +221,38 @@ fn runtime_context_renderer_omits_text_only_guidance_for_visual_or_unknown_model
         assert!(!reminder.contains("## Computer Use Input Strategy"));
         assert!(!reminder.contains("primary model does not accept image inputs"));
     }
+}
+
+#[test]
+fn runtime_context_renderer_scopes_inline_image_guidance_to_capable_surfaces() {
+    let reminder = render_runtime_context_reminder(&RuntimeContextFacts {
+        needs: RuntimeContextNeeds::default(),
+        host_os: "linux".to_string(),
+        host_family: "unix".to_string(),
+        host_arch: "x86_64".to_string(),
+        remote_execution: None,
+        local_shell: None,
+        supports_image_understanding: None,
+        inline_markdown_image_display: true,
+    })
+    .expect("output-surface context should render without tool runtime facts");
+
+    assert!(reminder.contains("## Chat Image Display"));
+    assert!(reminder.contains("`![concise alt text](source)`"));
+    assert!(reminder.contains("workspace-relative image paths"));
+    assert!(reminder.contains("do not call image-analysis tools solely to display an image"));
+
+    assert!(render_runtime_context_reminder(&RuntimeContextFacts {
+        needs: RuntimeContextNeeds::default(),
+        host_os: "linux".to_string(),
+        host_family: "unix".to_string(),
+        host_arch: "x86_64".to_string(),
+        remote_execution: None,
+        local_shell: None,
+        supports_image_understanding: None,
+        inline_markdown_image_display: false,
+    })
+    .is_none());
 }
 
 #[test]

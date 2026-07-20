@@ -59,6 +59,14 @@ fn session_layout_preserves_legacy_file_names() {
             .join("prompt_cache.json")
     );
     assert_eq!(
+        layout.request_trace_path("session-1", 7),
+        root.path()
+            .join("sessions")
+            .join("session-1")
+            .join("request-traces")
+            .join("request-000007.json")
+    );
+    assert_eq!(
         layout.turn_path("session-1", 7),
         root.path()
             .join("sessions")
@@ -117,6 +125,10 @@ async fn session_layout_ensures_target_directories() {
         .ensure_session_dir("session-1")
         .await
         .expect("session dir should be created");
+    let request_traces_dir = layout
+        .ensure_request_traces_dir("session-1")
+        .await
+        .expect("request traces dir should be created");
     let turns_dir = layout
         .ensure_turns_dir("session-1")
         .await
@@ -131,6 +143,7 @@ async fn session_layout_ensures_target_directories() {
         .expect("artifacts dir should be created");
 
     assert!(session_dir.exists());
+    assert!(request_traces_dir.exists());
     assert!(turns_dir.exists());
     assert!(snapshots_dir.exists());
     assert!(artifacts_dir.exists());

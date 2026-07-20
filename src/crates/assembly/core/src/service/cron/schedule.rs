@@ -7,12 +7,15 @@ use chrono_tz::Tz;
 use cron::Schedule;
 use std::str::FromStr;
 
-pub fn validate_schedule(schedule: &CronSchedule, created_at_ms: i64) -> BitFunResult<()> {
+pub(super) fn validate_schedule(schedule: &CronSchedule, created_at_ms: i64) -> BitFunResult<()> {
     let _ = compute_next_run_after_ms(schedule, created_at_ms, created_at_ms - 1)?;
     Ok(())
 }
 
-pub fn compute_initial_next_run_at_ms(job: &CronJob, now_ms: i64) -> BitFunResult<Option<i64>> {
+pub(super) fn compute_initial_next_run_at_ms(
+    job: &CronJob,
+    now_ms: i64,
+) -> BitFunResult<Option<i64>> {
     match &job.schedule {
         CronSchedule::At { .. } => {
             if job.state.last_enqueued_at_ms.is_some() || job.state.active_turn_id.is_some() {
@@ -25,7 +28,7 @@ pub fn compute_initial_next_run_at_ms(job: &CronJob, now_ms: i64) -> BitFunResul
     }
 }
 
-pub fn compute_next_run_after_ms(
+pub(super) fn compute_next_run_after_ms(
     schedule: &CronSchedule,
     created_at_ms: i64,
     after_ms: i64,
@@ -50,7 +53,7 @@ pub fn compute_next_run_after_ms(
     }
 }
 
-pub fn parse_at_timestamp_ms(schedule: &CronSchedule) -> BitFunResult<i64> {
+fn parse_at_timestamp_ms(schedule: &CronSchedule) -> BitFunResult<i64> {
     let CronSchedule::At { at } = schedule else {
         return Err(BitFunError::validation(
             "parse_at_timestamp_ms requires an 'at' schedule",

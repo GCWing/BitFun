@@ -1,215 +1,364 @@
 # BitFun 产品运行时架构
 
-本文作为 BitFun 产品运行时架构入口，说明三件事：产品能力如何组合，代理运行时如何保持稳定，插件和外部生态如何受控接入。
-执行计划见 [`../plans/core-decomposition-plan.md`](../plans/core-decomposition-plan.md)；接口、产品组装和扩展注册开发约束见
-[`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件运行时、IPC、待确认效果和外部生态适配契约见
-[`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。
+本文件定义 BitFun 产品运行时的稳定架构边界。详细执行计划见
+[`../plans/core-decomposition-plan.md`](../plans/core-decomposition-plan.md)；智能体内核、运行时服务和 crate
+约束见 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件运行时主机内部 ABI 和生态适配细节见
+[`plugin-runtime-host-design.md`](extensions/plugin-runtime-host-design.md)；跨 GUI/TUI 的产品定制、布局选择和
+内置扩展边界见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；CLI 产品入口和配置
+兼容见 [`cli-product-line-design.md`](cli-product-line-design.md)；HarmonyOS PC 原生 CLI/TUI 平台规约见
+[`platform-portability-design.md`](platform-portability-design.md)。跨专题实施顺序见
+[`../plans/product-architecture-evolution-plan.md`](../plans/product-architecture-evolution-plan.md)。外部 AI 工作内容体验、OpenCode 扩展总矩阵、配置资产、插件执行、
+终端插件和外部集成适配分别见 [`external-ai-work-sources-design.md`](extensions/external-ai-work-sources-design.md)、
+[`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
+[`opencode-config-assets-adapter-design.md`](extensions/opencode-config-assets-adapter-design.md)、
+[`opencode-plugin-runtime-adapter-design.md`](extensions/opencode-plugin-runtime-adapter-design.md)、
+[`opencode-tui-plugin-adapter-design.md`](extensions/opencode-tui-plugin-adapter-design.md) 和
+[`opencode-external-integration-adapter-design.md`](extensions/opencode-external-integration-adapter-design.md)；BitFun 能力如何
+可装配并双向接入 Claude Code、Codex、OpenCode、Trae 等宿主见
+[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)。详细设计与本文件冲突时，以本文件为准。
 
-本文不记录实现进度，不展开 crate 内部设计，也不复述外部产品调研。本文聚焦职责和约束，细节文档补充接口形态、模块归属和验证要求。
+本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
-## 1. 要解决的问题
+## 1. 架构目标
 
-`bitfun-core` 曾同时承担兼容入口、完整运行时组装、代理循环、服务接线、工具注册、产品命令和部分领域逻辑。
-该形态能够支撑现有产品，但会让后续演进成本持续升高：
+BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和插件生态。架构目标是降低后端实现高频变更对稳定接口的影响，同时保持插件生态和 OpenCode-compatible 能力可以按受控路径扩展。
 
-- 新产品形态容易被完整桌面产品能力牵引，无法清晰裁剪。
-- `/goal`、DeepReview、MiniApp、工具、MCP、内置 hook、插件 hook 和界面扩展缺少统一能力边界。
-- 权限、事件、产物（artifact）、远程执行和审计事实分散在多条路径中，难以证明行为等价。
-- 插件或外部生态如果直接进入内部状态，会反向改写产品形态和安全边界。
+设计原则：
 
-目标是将 BitFun 从“一个完整运行时中心”调整为“可组合的产品运行时”。这不是增加更多抽象，而是明确三条主线：
+1. **接口少而稳定**：每个切面只有一个主入口；不能因为新增生态适配或实现重构而新增平行接口。
+2. **实现不外溢**：运行时、平台服务、生态适配器、插件执行单元和传输实现只能通过稳定接口、只读视图或内部 ABI 被消费。
+3. **外部语义可变换，最终提交有归属**：OpenCode Hook 可以按其稳定语义修改输入、输出和权限决定；BitFun
+   归属模块负责顺序、结构、一致性和用户/组织策略校验并提交最终状态，不能把可写 Hook 一律降级成只读候选。
+4. **OpenCode 是兼容目标，不是内部模型**：适配层尽量保持 OpenCode plugin、hook、custom tool、TUI plugin、
+   Client、配置和加载顺序的外部可观察行为，但这些类型不能反向成为 BitFun 智能体、配置或界面的内部数据模型。
+5. **公开接口有预算**：新增公开 DTO、trait、模块或门面必须同时具备归属模块、真实消费方、版本策略、验证方式和退场条件。
+6. **入口形态受宿主约束**：TUI、GUI、Web 和 SDK 共享能力服务接口和只读视图，不共享渲染句柄、主题键、键位模型或界面状态；插件界面贡献必须先声明目标入口形态，再由对应宿主适配。
+7. **产品定制先解析，运行时扩展后加载**：产品身份、能力上限和 GUI/TUI 布局选择在构建/组装期解析；用户配置和插件只能在该上限内扩展，不能反向改写产品事实。
+8. **平台差异留在入口和具体能力实现**：target 只选择 ABI，feature 只控制确实可选的依赖；共享内核不按平台
+   分叉业务语义，也不新增包含所有 OS 方法的总接口。新端口必须有当前调用方。
+9. **发现无感，生效按风险分级**：外部用户/项目来源后台发现，不阻塞产品入口；无冲突的低风险声明式内容可自动应用并提供撤销；
+   与产品本地能力或独立外部 provider 同名时必须由用户选择，且选择只在候选身份与内容版本不变时复用；可执行来源首次启用或能力扩大时形成非阻塞确认。激活后的本地 OpenCode 扩展默认按当前用户能力
+   运行；经 BitFun 能力接口的调用可细分限制，脚本直接文件/网络/进程能力只在真实操作系统或容器边界存在时可
+   粗粒度收紧，否则停用相应 target。策略降级必须与待确认、解析错误和插件故障分开显示。
+10. **开放权限不降低可靠性**：第三方代码始终位于受监督的独立执行进程，具备期限、取消、背压、崩溃回收、
+   错误去重和结构校验；业务等待不得被单个插件无限阻塞。缺少平台硬资源限制时，内存、CPU 或进程风暴仍是
+   明确残余风险，不能用“独立进程”宣称完全隔离。
+11. **来源发现与执行准入分离**：生态来源和加载顺序只决定候选输入，不自动授予执行权限。任何可执行来源在
+    首次激活、启动或 import 前，以及来源身份/内容版本、target、执行域/用户、策略上限或凭据/环境可见范围
+    变化时，由既有 owner 重新评估来源准入。经 BitFun owner/facade 的调用仍执行调用时权限判断；脚本运行时的
+    直接文件、网络和进程副作用只能依靠真实 OS/容器边界限制。来源/target 的首次选择由产品来源体验保存，
+    不因此新增对内部准备阶段的重复激活、通用 trusted-folder 模型或独立信任服务。
+12. **一个能力核心，多种宿主适配**：Memory、Context、Workflow、Subagent、Tool 等能力只在已有 owner 中按真实
+    第二实现增量开放 Provider/策略装配；对外通过窄能力门面和宿主 adapter 暴露。MCP、Plugin、Hook、SDK 或
+    Server 入口不能反向替换状态 owner、权限上限、取消树、资源硬额度、事件身份或审计，也不能被描述为一个
+    跨产品通用插件包。
 
-1. **产品成形路径**：产品入口声明自身约束，产品组装选择内置能力（first-party）和服务实现，产品能力负责体验与验证。
-2. **任务运行路径**：代理内核维护会话、任务、权限事实和事件，通过注入端口调用执行能力和平台能力。
-3. **扩展接入路径**：插件、MCP、ACP 外部代理/工具桥接和外部生态只能提交能力声明或待确认效果，不能直接写最终状态。
+调用路径长度只作为工程成本处理，不作为独立架构目标。允许保留承担兼容隔离、只读视图或能力选择职责的中间层；不允许为了兼容而长期暴露没有消费方的抽象接口。
 
-## 2. 总体结构
+## 2. 接口切面
 
-逻辑视图只保留三条主线。每条主线内部有必要的职责角色，但不要求读者先理解全部 crate。
+BitFun 只保留四个稳定接口切面；工具、事件和权限作为归属子接口被复用，不在插件层重复定义。本文使用“接口”描述可被调用或依赖的能力面；只有描述跨进程消息封装、结构化 schema、序列化对象或强兼容约束时才使用“契约”；只读状态视图表示从权威状态派生出的查询结果。
+
+| 切面 | 主要消费方 | 主入口 | 稳定内容 | 禁止暴露 |
+|---|---|---|---|---|
+| 前后端能力服务切面 | GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 客户端 | 能力服务接口 | 命令请求、会话/工作区状态、权限提示、诊断、产物引用、能力状态、事件流、类型化错误、插件状态只读视图 | 内核状态机、执行层内部类型、`PluginRuntimeClient`、主机内部状态、生态原始载荷、Tauri/React/TUI 实现、具体服务提供方、未预算的界面贡献接口 |
+| BitFun 与插件切面 | 插件运行时主机、安全控制面、产品组装、生态适配器 | 扩展贡献接口 | 插件来源、启用状态、能力与副作用、真实工具定义、钩子变换、权限要求、界面贡献、诊断和故障事实 | 最终权限结果、最终工具结果、审计写入、内核权威状态、前后端协议 DTO、界面实现代码 |
+| 插件通用运行时切面 | 智能体内核、执行层、产品组装、插件运行时主机 | 主机内部 ABI | 类型化调用、请求身份、期限、取消、有界队列、健康状态、响应校验和诊断 | SDK 门面、前后端接口、生态适配器对象、worker/subprocess 句柄、产品入口状态 |
+| 外部生态兼容适配切面 | 来源协调器、能力 owner、插件运行时主机和脚本执行进程内部 | 每生态独立兼容适配层 + 能力专属 provider 契约 | 各生态来源发现、优先级、格式/参数语义、诊断，以及到 Command/Tool/Subagent/Config 等 BitFun 模块的类型化映射 | 跨生态任意 payload、兄弟适配器依赖、生态原始类型泄漏到产品接口、把外部 CLI 作为默认前置依赖 |
+
+这四项是能力必须归入的概念切面，不表示表中每项已有稳定 API。当前接口仍须满足 2.1 节的真实消费方、版本与验证准入。
+
+归属子接口：
+
+| 子接口 | 归属 | 用法 |
+|---|---|---|
+| 工具 ABI | `tool-contracts` / 执行层 | 具备真实执行实现的插件 custom tool、MCP 工具和内置工具进入同一可调用工具集合、权限和陈旧调用保护路径；只有声明或候选项的插件工具不能进入该集合。 |
+| 事件清单 | `events` / 智能体内核事件 schema | 对固定生态版本维护各自事件清单；插件观察兼容事件，BitFun 内部私有字段在对应适配层转换或脱敏。 |
+| 权限与副作用 | 安全控制面 / runtime ports | 来源/target 激活后，默认兼容策略允许 OpenCode `permission.ask` 和直接脚本能力按当前用户权限运行；经 BitFun 接口的调用可细分收紧，直接脚本能力只能由真实 OS/容器环境粗粒度限制，否则停用 target。 |
+
+### 2.1 公开接口准入规则
+
+新增或保留公开接口必须满足以下条件：
+
+1. 属于上表一个明确接口切面，不能同时承担前后端协议、插件扩展、host ABI 和生态适配职责。
+2. 有当前消费方；仅为了未来兼容、完整矩阵或概念完整性保留的代码接口不进入稳定面。该规则不阻止需求、
+   风险、完整能力矩阵和阶段计划记录未来工作，也不能用来把官方稳定能力从兼容审计中删除。
+3. 能映射到 OpenCode-compatible P0 关键场景，或属于 BitFun 已有关键路径的稳定子接口。
+4. 不能由既有工具 ABI、事件清单、权限控制面或能力服务接口承接时，才允许新增。
+5. PR 必须说明版本影响、验证命令和退场条件。
+
+`scripts/core-boundaries/rules/source/public-api-rules.mjs` 当前是插件与运行时公开接口的增量 allowlist，不是全仓
+`pub` 符号扫描器。已登记接口必须声明 `contractSlice` 供机器校验归属；未登记接口仍须满足上述准入条件，并由
+PR 审查和最近的边界测试验证。边界脚本通过不能解释为全仓公开接口已经自动完成预算审计。
+
+没有 OpenCode 对应能力、没有当前消费方、不能归入关键 BitFun 场景的接口，处理方式只有三种：删除、降级为主机内部实现，或返回类型化 `unsupported` / 诊断。
+
+已批准后续工作所需的短期前置接口不等于占位实现。确需预留时，必须在相邻设计中写明首个消费方、稳定语义、
+接入验证和未接入时的删除条件；在端到端调用链落地前保持内部可见或显式标为未接入，不能用空实现、测试替身或
+公开 re-export 宣称产品支持。无法给出这些信息时，仍按无消费方接口处理。
+
+“前后端能力服务切面”是概念边界，不对应一个必须存在的统一 API crate。单一宿主使用的命令投影、宿主协议 DTO 和
+协议转换留在该宿主入口；只有多个当前生产宿主或独立版本化的外部消费者确实复用同一语义，并且版本与退场条件
+明确时，才抽取共享 API 模块。仅返回合成 ID、空历史、固定健康状态，或绕过既有服务直接执行文件 I/O 的占位
+handler，不构成生产消费闭环。
+
+传输 adapter 是已接入宿主的交付实现，不是未来协议路线图。保留一个 transport adapter 必须同时存在生产构造点、
+事件或请求消费方、宿主生命周期，以及错误、取消或背压语义的验证。独立存在的 Server 路由、前端 WebSocket
+client 或未来 CLI/HarmonyOS 计划，不能证明同名 Rust transport adapter 已接入；未接入实现应删除，待端到端
+调用链确定后再按宿主边界实现。
+
+### 2.2 宿主通信契约与 Tauri 薄适配
+
+前后端契约按能力语义归属，不按 Tauri command 名称归属。稳定的请求、响应、状态事实和类型化错误放在对应
+`contracts/*`、Runtime SDK 或能力 owner；Tauri、HTTP/WebSocket、CLI/TUI 与未来平台宿主只负责把各自协议映射到
+这些类型。该规则降低框架耦合，但不要求把每个 Desktop DTO 都搬进共享 crate。
+
+| 层 | 允许 | 禁止 |
+|---|---|---|
+| 能力 owner / Runtime SDK | 类型化请求/响应、状态事实、权限/取消语义、与框架无关的用例方法 | `tauri::State`、`AppHandle`、窗口/菜单对象、command 宏、HTTP/WebSocket envelope |
+| Desktop Tauri adapter | 解包宿主状态、构造稳定请求、调用 owner/SDK、把类型化错误映射为 Desktop 协议、投递桌面事件 | 复制业务校验、持有第二份权威状态、把 Tauri 类型传入下层 |
+| Server / Remote adapter | 路由鉴权、协议 envelope、连接生命周期、背压与取消映射 | 为同一能力另建语义不同的 DTO 或 handler |
+| GUI / TUI 消费方 | 依赖入口侧 API interface、稳定读模型或 Runtime SDK；各自保留渲染状态 | UI 组件直接持有平台句柄，或让 React/TUI 状态成为后端契约 |
+
+Rust 与 TypeScript 的字段一致性以能力所有者的 DTO 为事实源，不以 Tauri command 参数为事实源。单宿主阶段由
+前端基础设施层维护对应接口，并用序列化契约测试锁定字段命名、可选字段和错误形状；达到独立版本化门槛后，才使用
+不依赖 Tauri 的 JSON Schema 或类型生成任务输出只读 TypeScript 类型。生成结果只同步数据形状，不承载权限、重试或
+业务分支。本阶段不为此新增生成器或框架依赖。
+
+抽取共享契约需要满足以下任一条件：至少两个当前生产宿主复用同一语义，或存在独立版本化的外部消费者。只有一个
+Desktop command 使用的序列化对象继续留在 `src/apps/desktop`；即使它不含 Tauri 类型，也不因“未来可能复用”而
+提升为公共 DTO。共享的框架中立用例 handler 也遵循同一门槛：它必须拥有真实的编排、权限、取消或错误语义，不能
+只是通用转发层。
+
+单条能力按垂直切片迁移：
+
+1. 先确认权威 owner、当前生产消费方、远程/多产品形态语义和现有行为基线。
+2. 把稳定事实与请求/响应放到能力所有者的契约模块，并以序列化、错误、取消和行为等价测试锁定。
+3. 让非 Desktop 消费方或第二宿主先通过 Runtime SDK / owner 接口形成真实调用链。
+4. 将 Tauri command 收敛为薄 adapter；前端基础设施层负责 `invoke` 映射，UI 组件不直接依赖 Tauri API。
+5. 删除重复 DTO、旧 handler 或兼容方法；无法证明等价时保留已标注的兼容边界，不做批量迁移。
+
+因此仓库不恢复一个通用 `api-layer` 作为默认中转层。只有达到上述复用门槛且现有 owner 无法合理承载时，才评审
+窄范围共享 API 模块。HarmonyOS GUI/TUI 可复用稳定能力契约，但仍需各自的平台宿主、生命周期和交付验证；契约
+抽取只是前置条件，不代表 HarmonyOS 已受支持。
+
+### 2.3 入口形态接口规则
+
+入口形态接口只描述宿主可消费的声明，不描述具体渲染实现。TUI 与 GUI 的能力边界不同，不能因为存在一个界面插件就自动扩展为全入口稳定接口。
+
+| 目标入口形态 | 可进入稳定接口的内容 | 必须由宿主决定 | 禁止进入插件接口 |
+|---|---|---|---|
+| TUI / CLI | 斜杠命令、键位候选、状态行/通知候选、终端主题语义 token、只读状态视图 | 键位冲突处理、终端能力降级、ANSI/truecolor 映射、文本回退 | React/DOM/Tauri 句柄、CSS token、GUI 布局、可执行界面代码 |
+| Desktop GUI / Web | 路由、面板、槽位、对话框、提示、GUI 主题语义 token、只读状态视图 | 组件装载位置、布局约束、焦点与可访问性、设计 token 映射 | 终端键位、ANSI 颜色、TUI 状态行键、宿主组件实例 |
+| SDK / Server / Remote / ACP | 状态、诊断、能力清单、类型化 `unsupported` | 是否暴露只读状态或降级原因 | 任意界面贡献、主题键、渲染句柄 |
+
+主题贡献只能声明语义角色和目标入口形态，例如 `accent`、`danger`、`surface`、`text`、`border`。TUI 宿主把语义角色映射为终端颜色、ANSI 或 truecolor；GUI 宿主把语义角色映射为设计 token 或 CSS 变量。若插件只提供 GUI 主题键而当前入口是 TUI，系统只能使用语义回退或返回类型化 `unsupported`，不得把 GUI 主题键直接传给 TUI。
+
+## 3. 运行视图
 
 ```mermaid
 flowchart TB
-  subgraph Product["产品主线：决定交付形态"]
-    Surface["产品入口"]
-    Assembly["产品组装"]
-    Capability["产品能力"]
+  subgraph Entry["产品入口"]
+    Desktop["Desktop GUI"]
+    Cli["TUI / CLI"]
+    Web["Web / Mobile Web"]
+    Protocol["ACP / Server / Remote / SDK"]
   end
 
-  subgraph Runtime["运行主线：处理任务事实"]
-    Kernel["代理内核"]
-    Execution["执行层"]
-    Extension["扩展治理"]
+  CapabilitySurface["前后端能力服务切面"]
+  Projection["入口适配器和只读视图"]
+  Assembly["产品组装"]
+
+  subgraph Owners["后端归属模块"]
+    Feature["产品特性"]
+    Kernel["智能体内核"]
+    Execution["执行层 / 工具 ABI"]
+    Security["安全控制面"]
+    Events["事件清单"]
   end
 
-  Guard["共同规则\n稳定契约、安全决策、DTO、端口、产物和审计"]
+  Extension["BitFun 与插件切面"]
+  HostAbi["插件通用运行时切面"]
+  PluginHost["插件运行时主机"]
+  ProviderPorts["Command / Tool / Subagent 等能力专属 provider"]
+  EcosystemAdapters["同级生态 adapter：OpenCode / Codex / Claude Code"]
+  PluginUnit["插件执行单元"]
+  PlatformPorts["平台端口"]
+  PlatformAdapters["平台和外部系统适配器"]
 
-  subgraph Boundary["边界主线：调用外部系统"]
-    Adapter["平台适配"]
-  end
-
-  External[("外部资源")]
-
-  Surface --> Assembly
-  Assembly --> Capability
-  Assembly --> Kernel
-  Assembly --> Execution
-  Assembly --> Extension
-  Assembly --> Adapter
-  Capability --> Kernel
-  Kernel --> Execution
+  Entry --> CapabilitySurface
+  CapabilitySurface --> Projection
+  Projection --> Owners
+  Assembly -.-> Projection
+  Assembly -.-> Owners
+  Assembly -.-> Extension
   Kernel --> Extension
-  Execution --> Adapter
-  Extension --> Adapter
-  Assembly --> Guard
-  Capability --> Guard
-  Kernel --> Guard
-  Execution --> Guard
-  Extension --> Guard
-  Adapter --> Guard
-  Adapter -. "边界外调用" .-> External
+  Execution --> Extension
+  Security --> Extension
+  Events --> Extension
+  Extension --> HostAbi
+  HostAbi --> PluginHost
+  Owners --> ProviderPorts
+  Assembly -.-> EcosystemAdapters
+  EcosystemAdapters --> ProviderPorts
+  PluginHost --> EcosystemAdapters
+  EcosystemAdapters --> PluginUnit
+  Execution --> PlatformPorts
+  PluginHost --> PlatformPorts
+  PlatformPorts --> PlatformAdapters
 ```
 
-| 职责角色 | 负责 | 不负责 |
+关键规则：
+
+- 产品入口只消费能力服务接口和只读视图，不直接调用插件主机。
+- 插件只进入扩展贡献接口，不直接写内核状态、工具结果、权限结果或审计事实。
+- 插件运行时主机只负责类型化调用、期限、取消、有界队列、逻辑 target 状态、响应校验和故障状态；
+  物理进程健康、资源预算与进程树回收属于脚本执行服务。
+- 每个生态适配层独立保留该生态的外部格式、来源顺序和调用语义，并映射到 BitFun 归属模块；它本身不成为新的
+  业务归属模块，也不能依赖或修改兄弟生态 adapter。通用目录、生命周期协调器和能力 owner 只依赖开放生态 ID、
+  来源限定身份与能力专属 provider 契约，不按 OpenCode、Codex 或 Claude Code 分支行为。
+- 产品组装是组装根，只在组装期选择能力、服务实现、插件运行时绑定和降级策略。
+- 对外能力门面只投影现有 owner 的窄用例、只读状态、事件和类型化错误；它不是第二个 Agent Runtime、通用服务
+  定位器或插件 Host。外部产品扩展、外部 SDK 控制端和“使用外部 Runtime 组装新产品”是三种不同交付路径，
+  覆盖上限和兼容结论分别维护。
+- 依赖方向保持为产品入口 / interfaces → assembly → adapters / services / execution → contracts。assembly
+  可以选择下层提供方，但不能依赖 app crate；需要同时被独立应用和嵌入式模式复用的实现必须下沉到可复用 owner，
+  再由各 app 和 assembly 组合。
+
+## 4. OpenCode-compatible 当前基线与目标
+
+Plugin Runtime P0 只验证了 BitFun 专用插件目录中的来源校验、工作区审核、启停记录、CLI 诊断和 custom tool 名称预览。
+它不执行 JS/TS，不注册真实工具，也不运行 OpenCode 钩子、Client 或终端插件。现有能力只能称为“静态预览”，
+不能称为“OpenCode 插件运行时”。详细代码事实集中在
+[`plugin-runtime-host-design.md#8-当前实现附录`](extensions/plugin-runtime-host-design.md#8-当前实现附录)。
+
+与 Plugin Runtime 分离的 Prompt Command 基线已经通过能力专属 provider 契约接入：可发现本地用户/项目 OpenCode
+Command，处理跨来源冲突，并在 CLI/TUI 中执行受支持的 prompt-only 模板。该能力不执行 JS/TS，也不能推导 Tool、
+Hook、Subagent 或完整配置兼容已经可用。
+
+目标路线不要求 OpenCode 插件作者维护 `bitfun.plugin.json` 或复制到 `.bitfun/plugins`。BitFun 直接发现用户和
+项目的 OpenCode 配置、插件目录、工具目录和软件包来源；低风险内容按用户偏好自动应用或先询问，可执行来源在
+首次启用或能力扩大时非阻塞确认。已准入候选自动记录当前执行版本，在自有脚本进程中真实加载插件，再通过兼容
+适配层把工具、稳定钩子、Client 和 TUI target 接入现有归属模块。
+
+```mermaid
+flowchart LR
+  Source["OpenCode 用户 / 项目来源"] --> Discover["发现配置、入口与依赖"]
+  Discover --> Catalog["来源清单、作用域与能力摘要"]
+  Catalog --> Policy["自动应用 / 待确认 / 策略限制"]
+  Policy --> Prepare["记录已准入候选执行版本"]
+  Prepare --> Worker["BitFun 管理的脚本进程"]
+  Worker <--> Adapter["OpenCode 兼容适配层"]
+  Adapter <--> Host["插件运行时主机"]
+  Host <--> Owners["工具 / 配置 / 权限 / 会话 / TUI 归属模块"]
+  Owners --> Surface["桌面 / CLI / Web / Remote"]
+```
+
+稳定决策如下：
+
+- 不启动完整 OpenCode Runtime，也不依赖用户安装 OpenCode CLI；BitFun 实现自己的监督、适配和 Rust 转发层。
+  固定版本 Bun 只负责脚本执行，依赖按冻结 OpenCode 版本的 npm/Arborist 语义准备。
+- 用户全局和项目来源自动发现；低风险内容默认无感应用并显示可撤销摘要，可执行来源首次启用或能力扩大时等待
+  非阻塞确认。确认前不得 import module、启动 worker、读取凭据或产生直接脚本副作用。
+- 激活后的本地 target 默认按 OpenCode 语义运行，允许当前用户通常拥有的文件、网络、进程和环境能力；用户、
+  产品或组织可以按需收紧，差异必须明确显示为策略限制。
+- 每个外部插件 target 使用独立可终止进程；期限、取消、有界队列、大小限制、崩溃恢复和终端恢复始终生效，
+  不因默认权限开放而省略。
+- 执行进程实际加载的工具、钩子和导出是权威结果；静态扫描只可用于快速预览，不能作为拒绝动态插件的依据。
+- 插件工具只有具备真实定义和执行函数、接入现有 Tool Runtime 并经过调用时权限判断后，才能显示为可用工具。
+- OpenCode 可写钩子按固定版本和原始顺序执行合法变换，最后由对应归属模块做结构和策略校验。
+- 服务插件和终端插件独立加载、启停和恢复；一个 target 失败不使另一个 target 自动失效。
+- 来源变化先生成候选代次；import 前执行包络扩大先确认，已批准包络内的隔离 import 后若发现新增动态贡献则在
+  注册前确认。普通更新只有在来源身份/完整性和更新策略仍有效时才安全切换；候选失败可沿用仍合规的上一有效
+  代次，明确删除、撤销、停用或策略失效必须撤下旧贡献，不能靠缓存继续运行。
+- GUI、TUI、Web 和 Remote 只消费能力服务、稳定状态和操作接口，不直接依赖主机、worker 或 OpenCode 原始类型。
+
+最明显的首期降级是 OpenCode TUI 的原始 `CliRenderer`、Solid/OpenTUI 组件树。BitFun CLI 使用 Ratatui，无法直接
+执行这些组件；宿主操作和结构化贡献可以适配，原始组件必须返回明确降级且不能打开空白或无法退出的页面。
+其他暂不承诺项、原因和风险统一在
+[`opencode-extension-compatibility.md#6-明确限制与延期决策`](extensions/opencode-extension-compatibility.md#6-明确限制与延期决策)
+维护，不能因为某一项降级就把整体状态写成“完整覆盖”。
+
+产品内置扩展与用户插件可以复用主机可靠性和最终能力归属，但来源、升级、卸载和产品必要性不同。只有产品
+身份、安全恢复或法律要求等少量明确保护项不可被覆盖；普通内置命令、工具和主题默认可以按 OpenCode 兼容顺序
+被用户扩展替换或关闭。具体规则见
+[`product-customization-blueprint.md#8-产品内置扩展与用户插件`](product-customization-blueprint.md#8-产品内置扩展与用户插件)。
+
+完整能力状态、设计细节和阶段顺序分别见
+[`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
+[`opencode-plugin-runtime-adapter-design.md`](extensions/opencode-plugin-runtime-adapter-design.md) 和
+[`../plans/opencode-extension-compatibility-plan.md`](../plans/opencode-extension-compatibility-plan.md)。
+
+## 5. 产品形态与降级
+
+产品定义、Delivery Profile、Runtime Configuration 和 Capability Availability 必须分离：
+
+- 产品定义只在构建/组装期选择产品身份、品牌资源、产品能力上限、默认策略引用、内置扩展版本和发行事实；
+  不承载用户配置、凭据或任意脚本。
+- Delivery Profile 只表示 CLI、Desktop、ACP、SDK 等交付形态，不表示品牌或 SKU。
+- 声明一个 Delivery Profile、生成测试计划或通过 crate 单测，不等于该产品形态已经接入生产。只有入口实际提交
+  唯一 profile、消费组装结果和统一能力可用性，并通过入口级行为验证后，才能把该 profile 标为已接入。
+- 产品入口向组装根提交唯一 Delivery Profile；组装根只校验并派生静态计划，不在内部再次选择交付形态。
+- Runtime Configuration 承载用户、项目、工作区和本次运行的可变配置；不能启用产品定义
+  未组装的能力，也不能放宽产品或组织策略。
+- Capability Availability 是根据产品计划、服务健康和当前策略计算出的能力状态；所有入口读取同一状态，
+  入口隐藏不等于能力已禁用。
+- 构建期校验器读取产品定义、品牌资源和 GUI/TUI 布局选择，输出本次交付的产品组装结果；它不是常驻服务，
+  也不执行产品定义中携带的任意脚本。
+- Runtime Product Assembly 只消费产品组装结果和调用方唯一传入的 Delivery Profile；不读取原始品牌资源，
+  不运行构建脚本，也不从产品定义再次选择 Delivery。
+- GUI 与 TUI 布局由对应宿主独立校验，只共享产品身份、Capability ID、品牌资源索引和策略引用，不共享布局、
+  组件、主题键、键位或渲染状态。
+- 布局选择只能引用宿主已注册的稳定 ID；品牌生成和校验继续使用仓库现有构建流程，不新增通用脚本运行时。
+- 产品内置扩展、BitFun 原生包和 OpenCode 标准来源不共享来源根、信任/启用记录、安装状态、更新通道或卸载
+  生命周期；三者只复用适用的包校验、Host ABI、隔离和经 BitFun 能力接口的权限/审计路径。
+
+产品定制和品牌资源的详细边界见
+[`product-customization-blueprint.md`](product-customization-blueprint.md)；CLI/TUI 的消费方式和配置导入见
+[`cli-product-line-design.md`](cli-product-line-design.md)。
+
+产品形态由产品组装决定，不由插件配置、单个 Cargo feature 或生态适配器临时决定。
+
+| 产品形态 | 当前 P0 插件能力 | 入口行为 |
 |---|---|---|
-| 产品入口 | 桌面、CLI、Web、Server、Remote、ACP、SDK 的交互、协议转换和状态展示 | 选择完整产品形态；创建具体服务实现 |
-| 产品组装 | 根据产品配置和入口约束选择能力包、服务实现、插件绑定和默认策略 | 实现代理内核状态机；在任务运行时临时查找服务 |
-| 产品能力 | 维护用户可见功能的命令、界面贡献、权限/副作用、产物、降级和验证责任 | 直接执行系统 I/O；拥有代理内核状态；实现具体 UI/React/Tauri 组件 |
-| 代理内核 | 维护会话、工作区、任务、权限事实、事件、hook 事实、上下文、记忆和调度 | 依赖 Tauri、React、ACP 协议、模型客户端或文件系统具体实现 |
-| 执行层 | 执行工具、技能、MCP 工具、沙箱和评审工作流 | 决定产品形态；直接授权 |
-| 扩展治理 | 管理插件、外部 hook 贡献、外部生态适配和待确认效果 | 绕过安全控制；写审计或最终状态；改写内核 hook 顺序、超时或错误策略 |
-| 平台适配 | 实现文件、终端、Git、远程、模型服务、MCP 连接等外部系统调用 | 决定产品能力；要求普通模块直接依赖具体实现 |
-| 稳定契约与安全控制 | 定义跨产品、运行和边界的 DTO、事件、端口、能力/副作用、权限、审计、产物和类型化错误 | 依赖上层实现；承载具体界面或具体策略实现 |
+| Desktop / product-full | 生产入口仍直接依赖 `bitfun-core/product-full`；当前没有 managed-plugin 管理或 OpenCode 静态预览的生产 UI/调用方 | 共享代码可编译不等于 Desktop 已消费插件能力 |
+| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；只为 BitFun 原生包提供来源审核、启用预览、精确内容确认和停用 | 本地 Agent 与 Peer Host 路径选择 `DeliveryProfile::Cli`，校验必需 Runtime Service 注册并消费同一 Runtime Parts/SDK；SDK 缺口由单一 Core 兼容门面转发。Peer Host 不再构造第二套调度、持久化或事件 owner。部分注册仍是 compatibility marker，不代表实时探活；插件 binding 明确禁用，不执行 OpenCode 插件代码 |
+| HarmonyOS PC 原生 CLI/TUI | 未来平台目标，当前未实现 | 目标、问题和风险见平台规约；具体适配另立专题，HAP、手机 Remote App 与远端代执行均不替代 |
+| HarmonyOS PC GUI | 完整 HarmonyOS PC 支持的另一目标形态，当前未实现 | 与 CLI/TUI 共享稳定能力和 Runtime 语义，但独立设计宿主、界面与发布验证；Web、Remote 或现有 Tauri Desktop 均不能替代 |
+| HarmonyOS 手机 Remote App | `src/apps/mobile/harmonyos` 是 phone-only ArkTS 远程入口，不持有本地 Rust Agent Runtime | 保持当前能力并按移动端专题独立演进；本轮不提前设计移动 Runtime/TUI/GUI，也不能据此宣称 HarmonyOS PC 本地能力 |
+| ACP | CLI 托管的服务端仍以 `bitfun-core/product-full` 作为兼容执行层 | 入口已选择 `DeliveryProfile::Acp` 并消费 Runtime Parts；组装层在入队前原子拒绝忙碌会话，不改变其他产品入口的排队行为；活动会话模型写入走 SDK，会话恢复、模式、模型目录/提供方配置、MCP、客户端与协议生命周期仍留在现有 Core/ACP 归属，不据此宣称完整解耦 |
+| Server / Remote | 当前生产路由没有插件状态消费闭环；Remote 插件执行未实现 | 不在本地替远端项目发现、准备或执行插件；未接入时返回明确不支持 |
+| Web / Mobile Web | 依赖现有后端入口，不持有插件执行单元 | 对应 profile 当前为空计划或未接入生产，不能据枚举值宣称独立产品能力 |
+| SDK | 仅有 preview 门面、空 profile 计划和测试替身 | 不牵引 `product-full`、具体服务管理器或插件 host ABI；未满足独立嵌入验证前不宣称可发布 |
 
-依赖方向只允许流向稳定契约或注入端口。运行时可以从代理内核调用执行端口、从执行层调用平台端口，但这不等于编译期依赖具体实现。
-稳定契约与安全控制不是外部调用的子层，而是三条主线都要遵守的共同规则。除产品组装边界外，普通模块不应同时认识接口和
-具体服务实现（provider）。
+对外一级状态统一使用[外部 AI 工作内容设计](extensions/external-ai-work-sources-design.md#7-状态与提示规则)定义的
+已发现、已应用、可用、需确认、更新中、沿用上一版本、部分受限、暂时过期、已移除/已停用和不可用，并附带
+原因与恢复建议。Host 的准备完成、重启、暂停、不支持或失败只能作为详情映射，不能形成第二套并列产品状态。
+现有代码中的过渡状态只能展示为“静态预览、未执行”，不能因为进入来源清单就误报为已应用或可用。
 
-划分原则：
+## 6. 完成判定
 
-- 先按责任划分，再映射到 crate；不要用当前目录结构反推架构边界。
-- 用户可见能力归产品能力；会话、任务、权限事实和事件归代理内核；外部系统调用归平台适配。
-- 产品差异在产品入口、产品组装和产品能力中表达，不进入代理内核和执行层的通用逻辑。
-- 能力是否启用、降级或替换，由产品组装、安全控制面和对应能力责任方共同决定。
+架构或实现 PR 必须满足：
 
-依赖关系：
-
-- 产品组装是组装入口，可以选择具体服务实现，并把稳定端口注入代理内核、执行层、扩展治理和平台适配。
-- 代理内核只通过端口调用执行层；执行层和扩展治理只通过端口访问平台适配。
-- 稳定契约与安全控制为所有层提供共同语言；它定义 DTO、事件、端口、权限、审计和产物，不承载具体业务实现。
-- 外部资源只能通过平台适配进入系统；其他层不得直接调用 OS、Git、MCP server、模型服务或远程主机。
-
-## 3. 产品如何成形
-
-产品形态由组装期决定，不由运行时插件或 Cargo feature 单独决定。核心对象如下：
-
-| 概念 | 含义 |
-|---|---|
-| `SurfaceContract` | 产品入口声明：入口类型、宿主/协议、执行域、展示能力、权限和产物展示方式。它不选择完整产品形态。 |
-| `ProductProfile` | 产品配置：构建、发布或白标配置选择的内置能力、默认服务、默认策略和裁剪范围。 |
-| `CapabilityPack` | 能力包：一个产品能力的最小声明单元，包含命令、界面贡献、权限/副作用、产物、工具或服务实现需求。 |
-| `DeliveryProfile` | 组装结果：产品组装消费 `ProductProfile` 与 `SurfaceContract` 后生成的当前入口交付形态。 |
-| `CapabilityPlan` | 组装期能力计划：当前产品形态准备注册哪些能力、命令、服务和扩展入口。 |
-| `CapabilityAvailabilitySet` | 运行时可用性：当前环境、策略、授权状态和服务健康状态下哪些能力可用，哪些需要降级。 |
-| `CapabilitySet` | 产品组装输出的能力集合视图：由 `CapabilityPlan` 和 `CapabilityAvailabilitySet` 组成，用于策略判断和插件运行时绑定；不作为第三套权威来源。 |
-| `OverridePoint` | 显式覆写点：允许插件或能力包替换已声明扩展点时，必须声明稳定 id、责任方、适用入口、冲突策略、回退、权限/副作用、验证和回滚方式。 |
-
-组装流程：
-
-1. 产品入口提供 `SurfaceContract`，发布或白标配置选择 `ProductProfile`。
-2. 产品组装校验能力包的依赖、冲突、适用入口、服务实现需求、权限/副作用和覆写规则。
-3. 产品组装生成 `DeliveryProfile`、`CapabilityPlan`、`CapabilityAvailabilitySet`，并以 `CapabilitySet` 暴露能力集合视图。
-4. 产品组装注入稳定端口、服务实现、工具注册表、界面贡献、插件运行时绑定和安全策略。
-
-必须保持的规则：
-
-- 内置功能通过 `ProductProfile` 与 `CapabilityPack` 加入或裁剪；插件不是裁剪内置功能的主要机制。
-- 产品能力是 `/goal`、DeepReview、MiniApp、设置、评审入口等用户功能的责任方；它维护体验边界和验证责任，但不拥有内核状态机。
-- 运行时策略、授权状态和服务健康状态只能让能力降级，不能启用构建包里不存在的能力。
-- 能力事实不能散落在 Rust feature、前端路由、Tauri command、工具注册表和插件配置里各自维护；至少要有共同的能力 id、
-  责任方、依赖/冲突、适用入口、权限/副作用、产物、降级语义和验证责任方。
-
-## 4. 任务如何运行
-
-产品入口只负责把用户动作转换成稳定请求；代理内核负责维护任务事实；执行、扩展和平台访问都通过注入端口完成。
-
-运行步骤：
-
-1. 产品入口把命令、设置或界面贡献映射为稳定请求。
-2. 代理内核产生事件、权限请求、工具请求、任务状态、hook 事实和审计事实。
-3. 执行层处理工具、技能、MCP 工具、沙箱和评审工作流；执行前必须消费权限、沙箱和能力事实。
-4. 扩展治理处理插件生命周期、外部生态适配和待确认效果；待确认效果必须回到安全控制面后才能生效。
-5. 平台适配通过稳定端口访问文件、终端、Git、远程、MCP 服务端、模型服务等外部资源。
-6. 产品入口只展示状态、产物、错误和确认选项，不成为最终授权或审计来源。
-
-跨入口能力不要求界面完全一致，但降级语义必须一致。每个能力在每个入口上只能落入以下状态之一：`full`、
-`artifact-only`、`status-only`、`temporarily-unavailable`、`unsupported` 或 `policy-denied`。入口只能展示这些状态，
-不能自行发明新的状态；产物降级必须能追踪产出方和执行域。
-
-## 5. 扩展如何进入
-
-插件、MCP、ACP 外部代理/工具桥接和外部生态都属于边界能力，不得直接成为内部最终责任方。
-
-| 入口 | 正确位置 | 边界 |
-|---|---|---|
-| 插件运行时 | 扩展治理 | 管理插件生命周期、隔离执行域和待确认效果；不写代理内核状态、权限结果或审计事实。 |
-| 外部生态适配 | 扩展治理 | 把 OpenCode、Claude Code、Codex 等外部 API 映射为 BitFun 稳定描述符和待确认贡献。 |
-| MCP | 平台适配 + 执行层 + 稳定契约 | MCP 连接和目录在平台适配；tool/resource/prompt 的展示和执行映射在执行层和稳定契约。 |
-| ACP 协议入口 | 产品入口与接口责任方 | 拥有协议层请求/响应、客户端生命周期、启动探测和工作区选择。 |
-| ACP 外部 agent/tool bridge | 扩展治理 | 只暴露外部代理/工具描述符和权限/事件桥接，不写最终状态。 |
-
-插件和兼容适配默认只能追加贡献或产出待确认效果。只有产品明确声明 `OverridePoint` 时，才允许替换已声明扩展点。
-最终排序、冲突处理、回滚和审计必须由产品组装、安全控制面和能力责任方共同裁决。ACP 的 allow/ask 只能表达授权事实，
-不能替代 BitFun 对文件、shell、网络、凭据、远程执行和本地平台动作的安全判定。
-
-扩展点设计原则：
-
-- 每个扩展点必须有稳定 id、责任方、适用入口和默认行为。
-- 扩展点必须声明输入、输出、权限、副作用、数据类别和执行域。
-- 扩展点必须定义冲突处理、排序、回退和回滚方式；未定义时只能追加，不能替换。
-- 插件或外部生态只能返回待确认效果；最终是否生效由安全控制面和能力责任方判断。
-- 每个扩展点都必须能被测试和审计；不支持的入口必须返回明确的不可用或不支持状态。
-
-## 6. 安全与风险
-
-安全边界贯穿三条主线：产品主线声明能力和入口约束，运行主线消费权限和能力事实，边界主线执行外部调用并保留审计。
-每次工具、MCP、插件、hook、shell、网络、文件、浏览器/桌面或远程动作，都必须归一为能力、副作用和安全决策事实。
-
-关键约束：
-
-- 代理内核维护可审计事实：session、workspace、turn、agent/subagent、权限来源、执行域、事件序列、
-  hook 顺序/超时/错误策略、取消、恢复/检查点和可诊断性事实（DFX facts）。
-- 执行层在工具、MCP、skills、评审工作流执行前消费权限、沙箱和能力事实。
-- 扩展治理声明来源、hash、能力、数据类别、副作用、执行域和界面贡献范围；未知或声明不完整的能力默认受限。
-- 平台适配表达执行位置和降级原因，例如本地主机、远程 SSH、容器、ACP client、MCP server、plugin domain。
-- 界面只展示安全状态和用户选项；组织策略、安全拒绝和凭据保护不能被本地确认绕过。
-- 注册尽量在组装期完成；任务运行期间避免临时查找全局服务、修改全局注册表或做高成本扫描。
-
-默认不变要求是：除非经过单独设计评审并明确记录影响，迁移必须保持默认能力集合、权限语义、工具曝光、事件语义、
-session 生命周期、remote 行为和 release 构建形态等价。
-
-主要风险与保护方式：
-
-| 风险 | 保护方式 |
-|---|---|
-| 代理内核膨胀为新的巨型核心 | 内核只拥有平台无关任务状态；产品功能、工具具体实现、平台适配和界面留在对应边界 |
-| 产品组装变成全局状态中心 | 组装只输出不可变运行时部件；产品状态归入口、能力责任方或代理内核 |
-| 产品配置、Cargo feature、运行时可用性和插件配置互相替代 | 明确区分构建期产品形态、构建依赖、运行时状态和扩展贡献 |
-| 插件反向改变产品形态 | 插件默认只追加或产出待确认效果；覆写只能发生在显式 `OverridePoint` |
-| 外部系统被当成底层依赖层 | 外部资源只在平台适配输入输出边界出现；普通层依赖端口 / 契约 |
-| 权限、工具、MCP、ACP 语义迁移后不等价 | 保留兼容门面，补安全决策、事件映射、能力清单快照和产品形态检查 |
-
-## 7. 完成判定
-
-- `bitfun-core` 不再是事实上的完整运行时权威入口，而是兼容门面、`product-full` 组装边界和迁移期适配。
-- 代理内核能在不依赖 app crate、Tauri、Web UI 或服务具体实现的情况下完成最小 session / turn / event stream。
-- `/goal`、DeepReview、MiniApp 等产品功能通过能力包组装，不拥有代理内核状态机。
-- 内置能力通过 `ProductProfile` 和 `CapabilityPack` 加入或裁剪；运行时可用性通过 `CapabilityPlan`、
-  `CapabilityAvailabilitySet`、服务健康状态和策略结果表达。
-- 产品 API 同时包含 Rust 内核 API 和界面扩展契约；OpenCode、ACP 外部代理/工具桥接和 plugin adapter 通过扩展治理映射到这些 API。
-- 工具、MCP、skills、sandbox、local/remote runtime 和 harness 执行能力归执行层；具体 OS、服务实现和远程实现归平台适配层。
-- Desktop、CLI、Web、Server、ACP、Remote 和独立 SDK 都通过产品组装显式选择能力，不通过下层 `if desktop/cli/web/server`
-  分支表达差异。
-- 所有会影响默认能力、权限、工具、事件、session、remote 或 release 形态的迁移，都有行为等价保护、依赖边界检查、
-  产品形态验证和必要的性能/构建影响说明。
-
-外部产品和技术调研不写入本文主线；相关证据沉淀到 [`../sdlc-harness/research/`](../sdlc-harness/research/)。
+- 未新增无消费方的公开接口、空注册表、泛描述符或多生态稳定接口。
+- 没有把 OpenCode 类型或 CLI 可用性提升为 BitFun 内部数据模型；适配器仍应保持 OpenCode 配置、加载顺序和
+  冲突的外部可观察语义。
+- 插件可按 OpenCode Hook 语义提出并链式应用变换，最终结构、策略、审计和状态提交仍由对应模块完成。
+- 只有名称或静态声明、没有真实执行实现的插件工具不能进入最终可调用工具集合。
+- 前后端入口不能消费 `PluginRuntimeClient`、host 内部状态、生态原始载荷或插件执行单元句柄。
+- 工具、事件、权限能力优先复用既有归属子接口，不在插件层重复建模。
+- 可替换 Provider 只替换实现或策略，不替换 session/turn/run 身份、权威状态提交、最终权限、取消/资源硬上限、
+  事件因果和审计；Slot 的 exclusive、ordered-chain、namespace-union、fallback 或 fan-out 语义必须由能力 owner 明确。
+- TUI 与 GUI 不共享内部主题键、键位模型或界面状态；OpenCode TUI 原始键和组件只存在于适配层，转换后由
+  TUI 宿主消费，不能用构建期布局选择冒充运行时插件兼容。
+- 只有产品身份、安全恢复和法律要求等明确保护项不能被用户扩展覆盖；普通内置工具、命令和主题默认遵循
+  OpenCode 兼容优先级。产品内置扩展不能复用用户来源批准或启用记录，产品签名也不能绕过运行时
+  权限、审计和故障隔离。
+- GUI/TUI 布局选择不复制主题 schema，不固化动态能力状态，也不携带可执行 UI 或任意构建脚本。
+- 新 profile 只有在真实入口消费组装结果、能力可用性和类型化降级后才算接入；仅有枚举、空计划、re-export
+  或单测不构成产品支持。
+- assembly 不得依赖 app crate。relay 的 room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router
+  归属 `services/relay-service`，Cargo metadata 实际解析图检查阻止同类依赖回流。embedded TCP bind、静态 fallback
+  和任务生命周期暂留 assembly 兼容路径，仍需迁往具体宿主；这项边界修复不构成 HarmonyOS 本地产品支持。
+- HarmonyOS PC 的完整目标同时包含本地 CLI/TUI 与 GUI，当前均不能标记可用；两种宿主分别验收，具体支持证据和禁止替代项以平台规约及各自专题为准。
+- 文档、边界脚本和 focused 测试能说明本次变更保护了哪个稳定接口切面，或删除/降级了哪个过宽接口。

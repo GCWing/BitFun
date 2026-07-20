@@ -65,6 +65,32 @@ fn test_project_entry(id: &str, model: &str) -> AgentEntry {
         visibility_policy: SubagentVisibilityPolicy::public(),
         custom_config: Some(CustomSubagentConfig {
             model: model.to_string(),
+            model_is_explicit: true,
+        }),
+    }
+}
+
+fn test_project_custom_entry(id: &str, review: bool) -> AgentEntry {
+    let mut agent = CustomSubagent::new(
+        id.to_string(),
+        "Project custom subagent".to_string(),
+        vec!["Read".to_string()],
+        "prompt".to_string(),
+        review,
+        format!("{id}.md"),
+        CustomSubagentKind::Project,
+    );
+    agent.data.review = review;
+
+    AgentEntry {
+        category: AgentCategory::SubAgent,
+        source: AgentSource::Project,
+        subagent_source: Some(SubAgentSource::Project),
+        agent: Arc::new(agent),
+        visibility_policy: SubagentVisibilityPolicy::public(),
+        custom_config: Some(CustomSubagentConfig {
+            model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     }
 }
@@ -75,6 +101,67 @@ fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str,
     registry
         .write_project_subagents()
         .insert(workspace.to_path_buf(), entries);
+}
+
+#[tokio::test]
+async fn review_lookup_is_scoped_to_the_requested_workspace() {
+    let registry = AgentRegistry::new();
+    let review_workspace = PathBuf::from("review-workspace");
+    let ordinary_workspace = PathBuf::from("ordinary-workspace");
+    let agent_id = "SharedProjectAgent";
+
+    registry.write_project_subagents().insert(
+        review_workspace.clone(),
+        HashMap::from([(
+            agent_id.to_string(),
+            test_project_custom_entry(agent_id, true),
+        )]),
+    );
+    registry.write_project_subagents().insert(
+        ordinary_workspace.clone(),
+        HashMap::from([(
+            agent_id.to_string(),
+            test_project_custom_entry(agent_id, false),
+        )]),
+    );
+
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, Some(&review_workspace))
+            .await,
+        Some(true)
+    );
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, Some(&ordinary_workspace))
+            .await,
+        Some(false)
+    );
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, None)
+            .await,
+        None,
+        "a project agent must not leak into an unrelated workspace lookup"
+    );
+}
+
+#[tokio::test]
+async fn review_lookup_cold_loads_the_requested_project_registry() {
+    let env = CustomAgentTestEnv::new("bitfun-project-review-lookup");
+    let registry = AgentRegistry::new();
+    let agent_id = "ProjectReviewer";
+    write_project_custom_review_subagent(
+        &env.workspace_agents_dir.join("project-reviewer.md"),
+        agent_id,
+    );
+
+    assert_eq!(
+        registry
+            .get_subagent_is_review_for_workspace(agent_id, Some(&env.workspace_root))
+            .await,
+        Some(true)
+    );
 }
 
 #[test]
@@ -205,6 +292,7 @@ fn generate_doc_hidden_agent_defaults_to_fast() {
 fn deep_review_family_defaults_to_fast() {
     for agent_type in [
         "DeepReview",
+        "ReviewGeneral",
         "ReviewBusinessLogic",
         "ReviewPerformance",
         "ReviewSecurity",
@@ -235,16 +323,18 @@ async fn frontend_reviewer_is_registered_as_review_subagent() {
 }
 
 #[test]
-fn built_in_deep_review_reviewers_are_marked_as_review_agents() {
+fn built_in_readonly_reviewers_are_marked_as_review_agents() {
     let registry = AgentRegistry::new();
 
     for agent_type in [
+        "ReviewGeneral",
         "ReviewBusinessLogic",
         "ReviewPerformance",
         "ReviewSecurity",
         "ReviewArchitecture",
         "ReviewFrontend",
         "ReviewJudge",
+        "CodeReview",
     ] {
         assert_eq!(
             registry.get_subagent_is_review(agent_type),
@@ -270,6 +360,12 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
     assert!(agentic_visible
         .iter()
         .any(|agent| agent.id == "GeneralPurpose"));
+    let code_review = agentic_visible
+        .iter()
+        .find(|agent| agent.id == "CodeReview")
+        .expect("CodeReview should be available as an isolated review task");
+    assert!(code_review.is_review);
+    assert!(code_review.is_readonly);
     assert!(!agentic_visible
         .iter()
         .any(|agent| agent.id == "ReviewSecurity"));
@@ -408,6 +504,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
     registry.register_agent(
@@ -419,6 +516,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
     registry.set_user_custom_agents_loaded(true);
@@ -468,6 +566,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
+            model_is_explicit: true,
         }),
     );
     registry.set_user_custom_agents_loaded(true);
@@ -491,6 +590,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
             visibility_policy: SubagentVisibilityPolicy::public(),
             custom_config: Some(CustomSubagentConfig {
                 model: "fast".to_string(),
+                model_is_explicit: true,
             }),
         },
     );
@@ -735,7 +835,12 @@ async fn updating_custom_mode_model_persists_and_keeps_mode_category() {
         .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
         .await;
     registry
-        .update_and_save_custom_agent_config("PlannerPlus", Some("primary".to_string()), None)
+        .update_and_save_custom_agent_config(
+            "PlannerPlus",
+            Some("primary".to_string()),
+            false,
+            None,
+        )
         .expect("mode model update should save");
 
     let mode = registry
@@ -931,6 +1036,25 @@ fn write_project_custom_subagent(path: &Path, id: &str) {
     subagent
         .save_to_file(None)
         .expect("project subagent markdown should save");
+}
+
+fn write_project_custom_review_subagent(path: &Path, id: &str) {
+    let mut subagent = CustomSubagent::new_with_id(
+        id.to_string(),
+        id.to_string(),
+        "Project review subagent".to_string(),
+        vec!["Read".to_string()],
+        "Review the relevant files.".to_string(),
+        true,
+        path.to_string_lossy().to_string(),
+        CustomSubagentKind::Project,
+        "fast".to_string(),
+        UserContextPolicy::empty().with_workspace_instructions(),
+    );
+    subagent.data.review = true;
+    subagent
+        .save_to_file(None)
+        .expect("project review subagent markdown should save");
 }
 
 fn unique_suffix() -> String {

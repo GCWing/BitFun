@@ -4,7 +4,7 @@
  * Loaded once and cached to avoid querying the backend on every file open.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import { measureAsync } from '@/shared/utils/timing';
 
@@ -58,7 +58,7 @@ class LspExtensionRegistry {
   private async _doInitialize(): Promise<void> {
     try {
       const result = await measureAsync(() =>
-        invoke<SupportedExtensionsResponse>('lsp_get_supported_extensions')
+        api.invoke<SupportedExtensionsResponse>('lsp_get_supported_extensions')
       );
       const response = result.value;
       

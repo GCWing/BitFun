@@ -12,10 +12,10 @@ license: MIT
 
 ## 项目约定
 
-`{{ppt_project_dir}}` 为当前 deck 根目录，**只在此目录读写**。
+Agent 启动时的**当前工作区根目录就是当前 deck 根目录**，不是待替换的模板变量，也不是工作区下另建的同名子目录。所有交付路径都相对当前工作区根目录，且**只在此工作区读写**。
 
 - **页文件**：`slides/slide-01.html` …（两位数编号，与 `outline[].slide_id` 对应）
-- **大纲**：`project.json` → `outline[]`：`{ id, title, bullets[], slide_id }`
+- **大纲**：`project.json` → `outline[]`：`{ id, title, bullets[], slide_id }`；规划时 `status: "planning"`，仅在全部引用页面完整写入后改为 `status: "complete"`
 - **品牌图**：`brand/`
 
 ## 核心原则（严格遵守）
@@ -64,7 +64,7 @@ license: MIT
 | 既要复杂视觉又要可改字 pptx | **不可兼得**——说明限制；保留 1920 演讲版或另做简化 960 版 |
 
 ```
-{{ppt_project_dir}}/
+当前工作区根目录/
 ├── project.json      # outline[], slide_order[], style, assumptions
 ├── brand/
 ├── slides/slide-XX.html
@@ -161,10 +161,10 @@ DNA 与样例 → `references/design-styles.md`。
 
 ## 工作流
 
-1. **假设 + 纲**：更新 `project.json` 的 `outline[]` / `slide_order`；顺带识别可能受益于图表、图示或更强视觉表达的页面，先不批量写 HTML。**若主题涉及技术方案/工程/系统/项目分析，必须在 outline 阶段就识别出哪些页是「系统组成」「处理流程」「多角色协作」「根因分析」，并标注用架构图/流程图/泳道图/因果链**（参考上方「技术方案类内容的特别触发」）。
+1. **假设 + 纲**：先写 `project.json`，设置 `status: "planning"` 并完成 `outline[]` / `slide_order`，再开始任何 `slides/slide-NN.html`；顺带识别可能受益于图表、图示或更强视觉表达的页面，先不批量写 HTML。**若主题涉及技术方案/工程/系统/项目分析，必须在 outline 阶段就识别出哪些页是「系统组成」「处理流程」「多角色协作」「根因分析」，并标注用架构图/流程图/泳道图/因果链**（参考上方「技术方案类内容的特别触发」）。
 2. **≥5 页先打样**：做 2 页视觉差异最大的 showcase，定 grammar 再批量（见 slide-decks.md）。
 3. **逐页 HTML**：封面 `slide-01`（标题/副标题/作者或日期）→ 按 outline 生成其余页；根据内容与风格自由选择图表、图示、文字、图片或混合构图，每页完整内联 CSS。**写每页时一次写对**：写之前先做垂直预算心算（见「防溢出预算」），写的时候同时遵守四条 OOXML 硬约束（文字用 p/h\* 包裹、纯色无渐变、背景/边框只在 DIV、不用 background-image），写完即止。
-4. **禁止事后审计**：所有页面写完后**不得**再回头逐页 Read → Edit 返工，也不得用 Grep 批量检查约束。约束在写时遵守，不事后补救。写完最后一页后直接输出完成总结即可。
+4. **有界完成检查**：最后一页写完后仅检查一次生成文件协议：`outline[].slide_id` 与 `slide_order` 一一对应、每个 `slides/slide-NN.html` 存在且完整。只补写缺失或不完整文件，不做逐页内容审计，不用 Grep 批量检查设计约束；全部满足后将 `project.json.status` 改为 `"complete"` 并结束。
 5. **改稿范围**（输入里若有 `scope`）：
    - `deck`：可改 outline 与任意 `slides/*.html`
    - `current_slide` / `slide_index`：**只改指定页**，不动其他 slide 文件

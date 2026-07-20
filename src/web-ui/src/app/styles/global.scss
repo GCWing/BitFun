@@ -5,8 +5,6 @@
 
 /* ========== Import design tokens ========== */
 @use '../../component-library/styles/tokens.scss' as *;
-@use '../../component-library/styles/flowchat-markdown-table-vars.scss';
-@use '../../component-library/styles/flowchat-markdown-code-vars.scss';
 
 /* ========== Global CSS variables ========== */
 :root {
@@ -222,7 +220,6 @@ li {
   :root {
     --glass-border-base: rgba(var(--color-static-white-rgb), 0.3);
     --glass-border-hover: rgba(var(--color-static-white-rgb), 0.5);
-    --glass-border-focus: var(--color-overlay-white-70);
   }
 }
 

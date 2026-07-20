@@ -115,7 +115,9 @@ describe('ReviewActionBarPersistenceService', () => {
     });
 
     it('saves metadata with reviewActionState when session exists', async () => {
-      const mockSession = createStoreSession();
+      const mockSession = createStoreSession({
+        reviewTargetFilePaths: ['src/original.ts'],
+      });
       const existingMetadata = createMetadata({
         sessionName: 'Existing Session',
         customMetadata: { kind: 'deep_review' },
@@ -136,11 +138,15 @@ describe('ReviewActionBarPersistenceService', () => {
         selectedRemediationIds: new Set(),
         minimized: true,
         activeAction: null,
+        followUpReviewSessionId: 'follow-up-review',
         customInstructions: 'custom instruction',
         errorMessage: null,
         interruption: null,
         completedRemediationIds: new Set(['remediation-0']),
-        fixingRemediationIds: new Set(),
+        fixingRemediationIds: new Set(['remediation-0', 'remediation-1']),
+        fixingBaselineTurnId: 'turn-before-fix',
+        remediationModifiedFilePaths: ['src/helper.ts'],
+        remediationScopeRequiresWorkspaceFallback: true,
         remainingFixIds: [],
       } as any);
 
@@ -154,8 +160,14 @@ describe('ReviewActionBarPersistenceService', () => {
         version: 1,
         phase: 'review_completed',
         completedRemediationIds: ['remediation-0'],
+        fixingRemediationIds: ['remediation-0', 'remediation-1'],
         minimized: true,
         customInstructions: 'custom instruction',
+        followUpReviewSessionId: 'follow-up-review',
+        reviewTargetFilePaths: ['src/original.ts'],
+        remediationModifiedFilePaths: ['src/helper.ts'],
+        fixingBaselineTurnId: 'turn-before-fix',
+        remediationScopeRequiresWorkspaceFallback: true,
         persistedAt: expect.any(Number),
       });
       expect(workspacePath).toBe('/workspace/project');

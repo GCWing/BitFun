@@ -11,20 +11,20 @@ use std::sync::Arc;
 use crate::config::CliConfig;
 
 #[derive(Clone, Debug, ValueEnum)]
-pub enum AcpConfigClient {
+pub(crate) enum AcpConfigClient {
     Zed,
     Generic,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-pub enum ExternalAcpClient {
+pub(crate) enum ExternalAcpClient {
     Opencode,
     ClaudeCode,
     Codex,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-pub enum CliAcpPermissionMode {
+pub(crate) enum CliAcpPermissionMode {
     Ask,
     AllowOnce,
     RejectOnce,
@@ -78,7 +78,7 @@ impl CliAcpPermissionMode {
     }
 }
 
-pub fn print_status(command: &str) -> Result<()> {
+pub(crate) fn print_status(command: &str) -> Result<()> {
     let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
     let config_dir =
         CliConfig::config_dir().context("Failed to resolve BitFun config directory")?;
@@ -100,7 +100,7 @@ pub fn print_status(command: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn print_doctor(command: &str) -> Result<bool> {
+pub(crate) async fn print_doctor(command: &str) -> Result<bool> {
     let mut checks = Vec::new();
 
     checks.push(check_result(
@@ -188,14 +188,14 @@ pub async fn print_doctor(command: &str) -> Result<bool> {
     Ok(!has_error)
 }
 
-pub fn print_config(client: AcpConfigClient, command: &str) -> Result<()> {
+pub(crate) fn print_config(client: AcpConfigClient, command: &str) -> Result<()> {
     match client {
         AcpConfigClient::Zed => print_zed_config(command),
         AcpConfigClient::Generic => print_generic_config(command),
     }
 }
 
-pub fn acp_help_text(command: &str) -> String {
+pub(crate) fn acp_help_text(command: &str) -> String {
     format!(
         "\
 Agent Client Protocol (ACP)\n\
@@ -223,7 +223,7 @@ Notes:\n\
     )
 }
 
-pub async fn list_external_clients() -> Result<()> {
+pub(crate) async fn list_external_clients() -> Result<()> {
     let service = create_client_service().await?;
     let infos = service
         .list_clients()
@@ -265,7 +265,7 @@ pub async fn list_external_clients() -> Result<()> {
     Ok(())
 }
 
-pub async fn doctor_external_clients() -> Result<bool> {
+pub(crate) async fn doctor_external_clients() -> Result<bool> {
     let service = create_client_service().await?;
     let probes = service
         .probe_client_requirements(None, true)
@@ -294,7 +294,7 @@ pub async fn doctor_external_clients() -> Result<bool> {
     Ok(has_runnable)
 }
 
-pub async fn enable_external_client(
+pub(crate) async fn enable_external_client(
     client: ExternalAcpClient,
     permission: CliAcpPermissionMode,
 ) -> Result<()> {
@@ -315,7 +315,7 @@ pub async fn enable_external_client(
     Ok(())
 }
 
-pub async fn disable_external_client(client_id: &str) -> Result<()> {
+pub(crate) async fn disable_external_client(client_id: &str) -> Result<()> {
     let service = create_client_service().await?;
     let current = load_client_config_json(&service).await?;
     if client_entry(&current, client_id).is_none() {
@@ -327,7 +327,7 @@ pub async fn disable_external_client(client_id: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn print_external_client_config() -> Result<()> {
+pub(crate) async fn print_external_client_config() -> Result<()> {
     let service = create_client_service().await?;
     let json = service
         .load_json_config()
@@ -337,7 +337,7 @@ pub async fn print_external_client_config() -> Result<()> {
     Ok(())
 }
 
-pub async fn run_external_client(
+pub(crate) async fn run_external_client(
     client: ExternalAcpClient,
     prompt: String,
     workspace: Option<String>,

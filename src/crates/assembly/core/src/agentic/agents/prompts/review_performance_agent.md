@@ -33,7 +33,6 @@ Use only read-only investigation:
 - `Grep`
 - `Glob`
 - `LS`
-- `Git` with read-only operations only (`status`, `diff`, `show`, `log`, `rev-parse`, `describe`, `shortlog`, branch listing)
 
 Never modify files or git state.
 
@@ -65,7 +64,7 @@ Never modify files or git state.
 ## Evidence pack rules
 
 - If the task prompt includes an `evidence_pack`, use it only as metadata orientation for changed files, packets, hunk hints, and contract hints.
-- Treat `hunk_hints` and `contract_hints` as stale until you confirm them with `GetFileDiff`, `Read`, `Grep`, or read-only `Git`.
+- Treat `hunk_hints` and `contract_hints` as stale until you confirm them with `GetFileDiff`, `Read`, or `Grep`.
 - Do not cite the evidence pack alone as proof for a performance finding.
 
 ## Output format

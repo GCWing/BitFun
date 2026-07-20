@@ -228,6 +228,8 @@ pub struct RestartAppRequest {}
 #[allow(unreachable_code)]
 pub async fn restart_app(app: AppHandle, request: RestartAppRequest) -> Result<(), String> {
     let _ = request;
+    crate::crash_diagnostics::mark_clean_shutdown("restart_app");
+    crate::perform_process_exit_cleanup();
     app.restart();
     Ok(())
 }

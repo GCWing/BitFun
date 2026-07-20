@@ -310,8 +310,8 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   },
   {
     prefix: '--color-accent-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets; BitFun-Installer/src/theme',
-    reason: 'Theme runtime, mobile presets, and installer theme data export the active accent palette scale by numeric stop.',
+    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets',
+    reason: 'Theme runtime and mobile presets export the active accent palette scale by numeric stop; installer exposes only exact --color-accent-500.',
   },
   {
     prefix: '--color-purple-',

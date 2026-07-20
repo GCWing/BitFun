@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-pub fn load_fixture_bytes(relative_path: &str) -> Vec<u8> {
+pub(crate) fn load_fixture_bytes(relative_path: &str) -> Vec<u8> {
     let fixture_path = fixtures_root().join(relative_path);
     std::fs::read(&fixture_path)
         .unwrap_or_else(|err| panic!("failed to read fixture {}: {}", fixture_path.display(), err))

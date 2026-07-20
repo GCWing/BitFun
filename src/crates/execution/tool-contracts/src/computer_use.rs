@@ -1331,6 +1331,7 @@ pub fn parse_screenshot_navigate_quadrant(
 /// Parse `screenshot_window` / `window` truthy flags. Accepts:
 /// - boolean `true`
 /// - string `"focused"`, `"focused_window"`, `"app"`, `"window"` (case-insensitive)
+///
 /// Anything else (including `false` / `null` / missing) → `false`.
 pub fn parse_screenshot_window_flag(input: &Value) -> bool {
     let raw = input

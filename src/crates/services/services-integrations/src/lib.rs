@@ -33,6 +33,9 @@ pub mod mcp;
 #[cfg(feature = "miniapp-runtime")]
 pub mod miniapp;
 
+#[cfg(feature = "plugin-source")]
+pub mod plugin_source;
+
 #[cfg(feature = "remote-connect")]
 pub mod remote_connect;
 
@@ -44,6 +47,9 @@ pub mod review_platform;
 
 #[cfg(feature = "review-platform")]
 pub(crate) mod review_platform_http;
+
+#[cfg(feature = "script-tool-runtime")]
+pub mod script_tool;
 
 #[cfg(feature = "workspace-search")]
 pub mod workspace_search;

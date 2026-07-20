@@ -71,38 +71,6 @@ impl GetGoalTool {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn thread_goal_port_error_preserves_user_facing_policy() {
-        let invalid = thread_goal_port_error(PortError::new(
-            PortErrorKind::InvalidRequest,
-            "missing objective",
-        ));
-        let not_found = thread_goal_port_error(PortError::new(
-            PortErrorKind::NotFound,
-            "thread goal not found",
-        ));
-        let timeout = thread_goal_port_error(PortError::new(PortErrorKind::Timeout, "store lag"));
-
-        assert!(matches!(
-            invalid,
-            BitFunError::Validation(message) if message == "missing objective"
-        ));
-        assert!(matches!(
-            not_found,
-            BitFunError::NotFound(message) if message == "thread goal not found"
-        ));
-        assert!(matches!(
-            timeout,
-            BitFunError::Validation(message)
-                if message == "Thread goal operation failed. Check session state and try again."
-        ));
-    }
-}
-
 impl Default for GetGoalTool {
     fn default() -> Self {
         Self::new()
@@ -313,5 +281,37 @@ You cannot use this tool to pause, resume, budget-limit, or usage-limit a goal."
             result_for_assistant: Some(result.result_for_assistant),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thread_goal_port_error_preserves_user_facing_policy() {
+        let invalid = thread_goal_port_error(PortError::new(
+            PortErrorKind::InvalidRequest,
+            "missing objective",
+        ));
+        let not_found = thread_goal_port_error(PortError::new(
+            PortErrorKind::NotFound,
+            "thread goal not found",
+        ));
+        let timeout = thread_goal_port_error(PortError::new(PortErrorKind::Timeout, "store lag"));
+
+        assert!(matches!(
+            invalid,
+            BitFunError::Validation(message) if message == "missing objective"
+        ));
+        assert!(matches!(
+            not_found,
+            BitFunError::NotFound(message) if message == "thread goal not found"
+        ));
+        assert!(matches!(
+            timeout,
+            BitFunError::Validation(message)
+                if message == "Thread goal operation failed. Check session state and try again."
+        ));
     }
 }

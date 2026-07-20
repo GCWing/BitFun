@@ -129,7 +129,7 @@
 
     "template": {
       "title":        "Assistant Defaults",
-      "subtitle":     "Configure assistant models, skills, and tools",
+      "subtitle":     "Configure assistant tools and skills",
       "configure":    "Assistant Settings",
       "tokenTitle":   "Context Usage Estimate",
       "tokenSystemPrompt": "System Prompt",
@@ -138,9 +138,6 @@
       "tokenMemories": "Memories",
       "tokenTotal":   "Default Total",
       "stats": {
-        "autoDefault":    "Auto",
-        "primaryDefault": "Primary model",
-        "fastDefault":    "Fast model",
         "tools":          "{{count}} tools",
         "skills":         "{{count}} skills"
       },
@@ -152,7 +149,6 @@
       "mcpToolsSection": "MCP tools",
       "mcpEmptyTitle": "No MCP servers connected",
       "mcpEmptyHint": "Add MCP servers in Settings to see their tools here.",
-      "sectionModelsSubtitle": "Default model used by assistants",
       "mcpServerNoTools": "No tools available from this server",
       "closeDetail": "Close detail",
       "detailPanel": "Detail panel",

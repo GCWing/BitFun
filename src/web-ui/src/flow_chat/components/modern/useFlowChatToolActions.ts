@@ -3,6 +3,10 @@
  */
 
 import { useCallback } from 'react';
+import {
+  effectiveToolInvocation,
+  replaceEffectiveToolInput,
+} from '../../utils/toolInvocationIdentity';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -70,14 +74,20 @@ export function useFlowChatToolActions() {
         return;
       }
 
-      const finalInput = updatedInput || toolItem.toolCall?.input;
+      const effective = effectiveToolInvocation(toolItem.toolName, toolItem.toolCall?.input);
+      const finalInput = updatedInput || effective.input;
+      const finalWireInput = replaceEffectiveToolInput(
+        toolItem.toolName,
+        toolItem.toolCall?.input,
+        finalInput,
+      );
 
       flowChatStore.updateModelRoundItem(sessionId, turnId, toolId, {
         userConfirmed: approve,
         status: approve ? 'confirmed' : 'rejected',
         toolCall: {
           ...toolItem.toolCall,
-          input: finalInput,
+          input: finalWireInput,
         },
         ...(approve ? {} : {
           requiresConfirmation: false,

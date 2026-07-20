@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { buildMiniAppCustomizationSessionRequest } from './miniAppCustomizationSession';
+import {
+  buildMiniAppCustomizationSessionRequest,
+  createMiniAppCustomizationSessionId,
+} from './miniAppCustomizationSession';
 
 describe('buildMiniAppCustomizationSessionRequest', () => {
-  it('creates a hidden non-persisted agent session for MiniApp customization', () => {
+  it('creates a hidden subagent session request for MiniApp customization', () => {
     expect(buildMiniAppCustomizationSessionRequest({
-      sessionId: 'miniapp-customize:builtin-gomoku:1',
+      sessionId: 'miniapp-customize-builtin-gomoku-1',
       sessionName: 'Customize Gomoku',
       workspacePath: 'D:/workspace/BitFun',
     })).toMatchObject({
-      sessionId: 'miniapp-customize:builtin-gomoku:1',
+      sessionId: 'miniapp-customize-builtin-gomoku-1',
       sessionName: 'Customize Gomoku',
       agentType: 'agentic',
       workspacePath: 'D:/workspace/BitFun',
@@ -20,5 +23,11 @@ describe('buildMiniAppCustomizationSessionRequest', () => {
         enableContextCompression: true,
       },
     });
+  });
+
+  it('generates a portable session identifier', () => {
+    expect(createMiniAppCustomizationSessionId('builtin-gomoku')).toMatch(
+      /^miniapp-customize-builtin-gomoku-\d+$/,
+    );
   });
 });

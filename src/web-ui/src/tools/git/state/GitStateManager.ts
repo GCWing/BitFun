@@ -18,6 +18,7 @@
 import { gitAPI } from '@/infrastructure/api';
 import { gitEventService } from '../services/GitEventService';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import {
   GitState,
   GitStateLayer,
@@ -752,6 +753,12 @@ export class GitStateManager {
   }
 
   private handleWindowFocus = (): void => {
+    if (isPeerDeviceModeActive()) {
+      sendDebugProbe('GitStateManager.ts:handleWindowFocus', 'Git window focus refresh skipped in peer mode', {
+        participatingRepositoryCount: this.windowFocusRefreshCounts.size,
+      });
+      return;
+    }
     const repositories = Array.from(this.windowFocusRefreshCounts.keys());
     sendDebugProbe('GitStateManager.ts:handleWindowFocus', 'Git window focus refresh queued', {
       participatingRepositoryCount: repositories.length,

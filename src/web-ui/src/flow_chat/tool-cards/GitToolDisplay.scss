@@ -337,7 +337,7 @@
     color: color-mix(in srgb, var(--color-success) 80%, transparent);
     
     &:hover:not(:disabled) {
-      background: var(--git-color-staged-bg-hover);
+      background: color-mix(in srgb, var(--git-color-staged) 15%, transparent);
       color: var(--git-color-staged);
     }
 
@@ -350,8 +350,8 @@
     color: color-mix(in srgb, var(--color-error) 80%, transparent);
     
     &:hover:not(:disabled) {
-      background: var(--git-color-deleted-bg-hover);
-      color: var(--color-error);
+      background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
+      color: var(--git-color-deleted);
     }
 
     &:active:not(:disabled) {

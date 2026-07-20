@@ -230,7 +230,7 @@
 
   // Editor group badge
   &__group-badge {
-    --mission-control-group-color: var(--color-accent-500);
+    --private-thumbnail-group-color: var(--color-accent-500);
 
     position: absolute;
     bottom: 6px;
@@ -239,23 +239,23 @@
     font-size: 9px;
     font-weight: 600;
     color: var(--color-text-primary);
-    background: var(--mission-control-group-color);
+    background: color-mix(in srgb, var(--color-bg-primary) 82%, var(--private-thumbnail-group-color) 18%);
+    border: 1px solid var(--private-thumbnail-group-color);
     border-radius: 3px;
     z-index: 1;
     box-shadow: 0 1px 3px var(--color-overlay-black-30);
     backdrop-filter: blur(4px);
-    text-shadow: 0 1px 2px var(--color-overlay-black-20);
 
     &--primary {
-      --mission-control-group-color: var(--color-accent-500);
+      --private-thumbnail-group-color: var(--color-accent-500);
     }
 
     &--secondary {
-      --mission-control-group-color: var(--color-success);
+      --private-thumbnail-group-color: var(--color-success);
     }
 
     &--tertiary {
-      --mission-control-group-color: var(--color-warning);
+      --private-thumbnail-group-color: var(--color-warning);
     }
   }
 }

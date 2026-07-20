@@ -30,9 +30,6 @@ const LIGHT_ERROR = '#c26565';
 const lightInk = (alpha: number | string) => rgbaFromHex(LIGHT_INK, alpha);
 const lightAccent = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT, alpha);
 const lightAccentHover = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT_HOVER, alpha);
-const lightSuccess = (alpha: number | string) => rgbaFromHex(LIGHT_SUCCESS, alpha);
-const lightWarning = (alpha: number | string) => rgbaFromHex(LIGHT_WARNING, alpha);
-const lightError = (alpha: number | string) => rgbaFromHex(LIGHT_ERROR, alpha);
 
 export const bitfunLightTheme: ThemeConfig = {
 
@@ -53,11 +50,9 @@ export const bitfunLightTheme: ThemeConfig = {
       primary: '#f3f3f5',
       secondary: STATIC_WHITE,
       tertiary: '#e8e8e8',
-      quaternary: '#e8e8e8',
       elevated: STATIC_WHITE,
       workbench: '#e8e8e8',
       scene: STATIC_WHITE,
-      tooltip: rgbaFromHex(STATIC_WHITE, 0.98),
     },
 
     text: {
@@ -78,7 +73,6 @@ export const bitfunLightTheme: ThemeConfig = {
         200: lightInk(0.1),
         300: lightInk(0.16),
         400: lightInk(0.26),
-        800: rgbaFromHex(LIGHT_TEXT_STRONG, 0.94),
       },
     }),
 
@@ -86,7 +80,7 @@ export const bitfunLightTheme: ThemeConfig = {
     purple: createSecondaryAccentScale({
       base: '#6b5a89',
       hover: LIGHT_PURPLE_HOVER,
-      alpha: { 200: 0.14, 400: 0.36 },
+      alpha: { 200: 0.14 },
       stops: {
         500: LIGHT_PURPLE,
       },
@@ -122,7 +116,6 @@ export const bitfunLightTheme: ThemeConfig = {
       base: lightInk(0.09),
       medium: lightInk(0.12),
       strong: lightInk(0.16),
-      elevated: rgbaFromHex(STATIC_WHITE, 0.92),
     },
 
 
@@ -130,11 +123,8 @@ export const bitfunLightTheme: ThemeConfig = {
       branch: rgbFromHex(LIGHT_ACCENT_HOVER),
       branchBg: lightAccentHover(0.1),
       changes: rgbFromHex(LIGHT_WARNING),
-      changesBg: lightWarning(0.08),
       added: rgbFromHex(LIGHT_SUCCESS),
-      addedBg: lightSuccess(0.08),
       deleted: rgbFromHex(LIGHT_ERROR),
-      deletedBg: lightError(0.08),
     }),
   },
 

@@ -443,6 +443,24 @@ mod tests {
     }
 
     #[test]
+    fn validate_edit_content_freshness_allows_remote_content_missing_cached_trailing_newline() {
+        // Regression test: the Read tool's cached content is reconstructed via
+        // a line-split/join that drops a trailing newline, while a remote
+        // SFTP re-read of the same unchanged file preserves it. Remote
+        // workspaces have no mtime to short-circuit the comparison, so this
+        // must not be reported as "no longer matches the last Read result".
+        let state = read_state("alpha\nbeta", 100);
+
+        assert!(validate_edit_content_freshness_against_read_state(
+            "Caddyfile",
+            &state,
+            "alpha\nbeta\n",
+            None,
+        )
+        .is_none());
+    }
+
+    #[test]
     fn validate_edit_content_freshness_rejects_changed_remote_content_without_mtime() {
         let state = read_state("alpha\n", 100);
 

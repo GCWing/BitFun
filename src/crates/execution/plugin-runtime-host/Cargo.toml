@@ -1,0 +1,18 @@
+[package]
+name = "bitfun-plugin-runtime-host"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Plugin Runtime Host boundary for BitFun extension execution"
+
+[lib]
+name = "bitfun_plugin_runtime_host"
+crate-type = ["rlib"]
+
+[dependencies]
+async-trait = { workspace = true }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

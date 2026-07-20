@@ -46,6 +46,8 @@ interface MiniAppCustomizePanelProps {
   appName: string;
   themeType?: string;
   workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
   previewOpen: boolean;
   onPreviewChange: (preview: { draft: MiniAppDraft; previewKey: number } | null) => void;
   onClose: () => void;
@@ -58,6 +60,8 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
   appName,
   themeType,
   workspacePath,
+  remoteConnectionId,
+  remoteSshHost,
   previewOpen,
   onPreviewChange,
   onClose,
@@ -138,6 +142,8 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       appId: app.id,
       appName,
       workspacePath: workspace,
+      remoteConnectionId,
+      remoteSshHost,
       sessionName: t('customize.sessionName', { name: appName }),
       prompt,
       displayMessage: request,
@@ -149,7 +155,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       customizationSessionId: created.sessionId,
       error: null,
     }));
-  }, [app.id, appName, ensureWorkspace, t]);
+  }, [app.id, appName, ensureWorkspace, remoteConnectionId, remoteSshHost, t]);
 
   const handleStart = useCallback(async () => {
     if (!trimmedRequest || busy) {

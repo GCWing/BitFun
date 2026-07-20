@@ -2,41 +2,51 @@
 
 use std::path::Path;
 
-pub const EXIT_LINE_PREFIX: &str = "BITFUN_EXIT: ";
-pub const DETAIL_MAX_LEN: usize = 500;
+pub(crate) const EXIT_LINE_PREFIX: &str = "BITFUN_EXIT: ";
+pub(crate) const DETAIL_MAX_LEN: usize = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExitKind {
+pub(crate) enum ExitKind {
     SessionCreateFailed,
     SendMessageFailed,
     DialogTurnFailed,
+    PermissionRejected,
+    Cancelled,
+    EventStreamFailed,
+    SettlementTimedOut,
     SystemError,
     ExecError,
+    PatchUnavailable,
     PatchWriteFailed,
 }
 
 impl ExitKind {
-    pub fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::SessionCreateFailed => "session_create_failed",
             Self::SendMessageFailed => "send_message_failed",
             Self::DialogTurnFailed => "dialog_turn_failed",
+            Self::PermissionRejected => "permission_rejected",
+            Self::Cancelled => "cancelled",
+            Self::EventStreamFailed => "event_stream_failed",
+            Self::SettlementTimedOut => "settlement_timed_out",
             Self::SystemError => "system_error",
             Self::ExecError => "exec_error",
+            Self::PatchUnavailable => "patch_unavailable",
             Self::PatchWriteFailed => "patch_write_failed",
         }
     }
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ExitContext<'a> {
+pub(crate) struct ExitContext<'a> {
     pub session_id: Option<&'a str>,
     pub turn_id: Option<&'a str>,
     pub agent_type: Option<&'a str>,
     pub workspace: Option<&'a Path>,
 }
 
-pub fn sanitize_exit_detail(detail: &str) -> String {
+pub(crate) fn sanitize_exit_detail(detail: &str) -> String {
     let collapsed = detail.split_whitespace().collect::<Vec<_>>().join(" ");
     if collapsed.chars().count() <= DETAIL_MAX_LEN {
         return collapsed;
@@ -45,7 +55,7 @@ pub fn sanitize_exit_detail(detail: &str) -> String {
     format!("{truncated}...")
 }
 
-pub fn format_exit_line(kind: ExitKind, detail: &str) -> String {
+pub(crate) fn format_exit_line(kind: ExitKind, detail: &str) -> String {
     format!(
         "{}{}: {}",
         EXIT_LINE_PREFIX,
@@ -54,7 +64,7 @@ pub fn format_exit_line(kind: ExitKind, detail: &str) -> String {
     )
 }
 
-pub fn emit_exit_diagnostic(kind: ExitKind, detail: &str, ctx: &ExitContext<'_>) {
+pub(crate) fn emit_exit_diagnostic(kind: ExitKind, detail: &str, ctx: &ExitContext<'_>) {
     eprintln!("{}", format_exit_line(kind, detail));
     tracing::error!(
         kind = kind.as_str(),

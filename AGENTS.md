@@ -25,10 +25,10 @@ Keep crate dependencies inside each layer to the smallest set needed.
 | # | Layer | Path | Owns | Modules / entries | Layer doc |
 |---|---|---|---|---|---|
 | 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
-| 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, and adapter/service registration | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
-| 3 | Adapters | `src/crates/adapters` | AI/API/transport/WebDriver protocol adapters and external-provider translation | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
-| 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, LSP plugin registry, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
-| 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, DeepReview policy/report, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
+| 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, adapter/service registration, and ecosystem-neutral source coordination | `core`, `external-sources`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
+| 3 | Adapters | `src/crates/adapters` | AI/transport/WebDriver/OpenCode protocol adapters and external-provider translation | `ai-adapters`, `opencode-adapter`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, LSP plugin registry, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `relay-service`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, DeepReview policy/report, plugin host boundary, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-host`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | Stable contracts and product domains | `src/crates/contracts` | Shared DTOs, event shapes, runtime ports, LSP protocol/plugin DTOs, and product domain contracts/policies | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
 
 Boundary rules:
@@ -58,6 +58,7 @@ pnpm run desktop:dev               # full hot-reload: Vite HMR + Rust auto-rebui
 pnpm run desktop:preview:debug     # reuse pre-built binary + Vite HMR; no Rust auto-rebuild
 pnpm run dev:web                   # browser-only frontend
 pnpm run cli:dev                   # CLI runtime
+pnpm run cli:install               # build release + install bitfun-cli to ~/.local/bin (bashrc/zshrc PATH)
 
 # Check
 pnpm run fmt:rs                     # format only changed / staged Rust files
@@ -111,6 +112,18 @@ For the full script list, see [`package.json`](package.json).
   no-growth baselines, shared-term/l10n governance baselines, non-blocking
   same-text locale inventory, and the no-hardcoded-CJK source budget.
 
+### Theme and color tokens
+
+- Theme and color-token baselines are ratchet contracts, not editable test
+  expectations. Do not make a failing theme audit pass by raising values in
+  `scripts/theme-color-governance-baseline*.json`, loosening fixture/assertion
+  counts, adding broad allowlist entries, or removing CI audit coverage.
+- Lower theme baselines when measured debt is removed. If a change truly needs a
+  new color or key, add the smallest owner contract and document why existing
+  semantic, component, or specialized-domain tokens cannot cover it.
+- For theme, CSS variable, widget payload, mobile, installer, or CLI/TUI color
+  changes, run `pnpm run theme:color-audit:all`.
+
 ### Logging
 
 Logs must be English-only, with no emojis.
@@ -138,13 +151,17 @@ await api.invoke('your_command', { request: { ... } });
 ### Platform boundaries
 
 - Do not call Tauri APIs directly from UI components; go through the adapter/infrastructure layer.
-- Desktop-only host adapters belong in `src/apps/desktop`, then flow back through transport/API layers.
+- Desktop-only host adapters belong in `src/apps/desktop`, then flow through typed capability interfaces and, when event delivery is needed, the production transport adapter.
 - In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`.
 
 ### Remote compatibility
 
 - When adding features, consider remote workspace and remote control synchronization support from the start. Local-only behavior can silently leave remote scenarios incomplete.
 - If a feature cannot reasonably support remote workspaces, gate it or show a clear unsupported-state message instead of letting it fail with a generic error.
+- Every desktop Tauri command must declare its remote-workspace policy in
+ `src/apps/desktop/src/api/remote_workspace_policy.rs`; the contract test there
+ rejects new commands without an explicit policy and forbids growing the
+ legacy-unaudited backlog.
 
 ### Agent loop behavior
 
@@ -169,6 +186,47 @@ Repository-level decomposition rules:
 - Moving runtime ownership requires a reviewed port/provider design, old-path
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
+
+### CLI product-line guardrails
+
+For CLI/TUI parity work, non-interactive output contracts, external config
+imports, plugin management UX, CLI Agent behavior, or branded CLI distributions,
+read [`docs/architecture/cli-product-line-design.md`](docs/architecture/cli-product-line-design.md)
+and [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md). Keep CLI/TUI presentation
+in the app; move reusable product behavior through Product Assembly, Agent
+Runtime, Tool/Harness, Runtime Services, or the existing extension boundaries.
+
+### HarmonyOS PC CLI/TUI guardrails
+
+For changes that affect HarmonyOS PC CLI/TUI support, also read
+[`docs/architecture/platform-portability-design.md`](docs/architecture/platform-portability-design.md).
+This is a future platform target, not implemented support. The product target is
+the real PC system terminal; HAP, `hdc shell`, the phone Remote App, and remote
+execution are not substitutes. Design each concrete adaptation as a separate
+topic and keep the current mobile capability unchanged.
+
+### Product customization guardrails
+
+For product definitions, branded distributions, GUI/TUI layout selection,
+bundled product extensions, or customization build tasks, read
+[`docs/architecture/product-customization-blueprint.md`](docs/architecture/product-customization-blueprint.md).
+Keep product customization separate from user runtime configuration and plugins.
+GUI and TUI may share stable product facts, but not layout, component, theme-key,
+keybinding, or renderer schemas. Product assembly results and layout selections
+may carry a small immutable list of product identity, data-isolation, recovery,
+upgrade-integrity, or legal protection IDs. They must not carry user/source-level
+plugin policy, installation, activation, update, permission, or dynamic health state.
+Product Profile, Brand Pack, GUI/TUI Surface Blueprint, and Resolved Product Manifest are retired
+design terms, not current production objects. Do not create compatibility formats
+for them; implement only the smallest product-definition and assembly-result fields
+used by a real build and runtime consumer.
+
+For OpenCode live configuration or plugin execution, also read
+[`docs/architecture/extensions/opencode-extension-compatibility.md`](docs/architecture/extensions/opencode-extension-compatibility.md).
+The current P0 adapter remains a managed-package/static-preview path until the matching
+OC-R phase is implemented and verified. Do not extend the legacy managed-package
+path as the target OpenCode runtime model, and do not treat a design target as an
+already available capability.
 
 ### SDLC quality guardrails
 
@@ -196,7 +254,7 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
-| Shared Rust logic in `core`, `transport`, `api-layer`, adapters, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
+| Shared Rust logic in `core`, `transport`, adapters, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
 | Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
 | `src/crates/adapters/ai-adapters` | Relevant Rust checks above; add `cargo test -p bitfun-agent-stream` only when stream contracts changed |

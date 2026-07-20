@@ -7,6 +7,7 @@ export const noCoreDependencyCrates = [
   'agent-stream',
   'agent-runtime',
   'harness',
+  'plugin-runtime-host',
   'product-capabilities',
   'runtime-ports',
   'runtime-services',
@@ -15,11 +16,28 @@ export const noCoreDependencyCrates = [
   'agent-tools',
   'tool-packs',
   'product-domains',
+  'opencode-adapter',
+  'external-sources',
   'terminal',
   'tool-runtime',
   'transport',
-  'api-layer',
   'webdriver',
+];
+
+export const forbiddenManifestDependencyRules = [
+  {
+    dependencyNames: ['bitfun-opencode-adapter'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    allowManifestPaths: [
+      'src/crates/adapters/opencode-adapter/Cargo.toml',
+      'src/crates/assembly/core/Cargo.toml',
+    ],
+    reason:
+      'OpenCode adapter production dependencies are limited to the reviewed product composition root',
+    message:
+      'only bitfun-core product-full assembly may register bitfun-opencode-adapter through reviewed capability composition roots',
+  },
 ];
 
 export const lightweightBoundaryRules = [
@@ -164,6 +182,36 @@ export const lightweightBoundaryRules = [
     ],
   },
   {
+    crateName: 'plugin-runtime-host',
+    reason:
+      'plugin-runtime-host must own portable Host boundary logic without concrete ecosystem, product, or platform implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-opencode-adapter',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-capabilities',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
     crateName: 'product-capabilities',
     reason:
       'product-capabilities must own product capability assembly facts without concrete runtime implementations',
@@ -228,7 +276,7 @@ export const dependencyProfileRules = [
       'aes-gcm',
       'bitfun-product-capabilities',
       'bitfun-product-domains',
-      'bitfun-relay-server',
+      'bitfun-relay-service',
       'bitfun-tool-packs',
       'chrono-tz',
       'cron',
@@ -379,6 +427,37 @@ export const dependencyProfileRules = [
     ],
   },
   {
+    crateName: 'plugin-runtime-host',
+    profileName: 'default plugin host boundary profile',
+    reason:
+      'plugin-runtime-host default profile must not compile concrete plugin execution or product-surface implementations',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-opencode-adapter',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-capabilities',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
     crateName: 'agent-tools',
     profileName: 'tool contract-only profile',
     reason: 'agent-tools must stay a lightweight tool contract crate',
@@ -478,7 +557,6 @@ export const dependencyProfileRules = [
       'tokio-tungstenite',
       'uuid',
       'which',
-      'bitfun-relay-server',
     ],
   },
 ];

@@ -192,7 +192,7 @@ pub(super) fn analyze_canvas_module(
     if !parse_return.diagnostics.is_empty() {
         return Err(oxc_diagnostics_to_canvas(
             source,
-            parse_return.diagnostics.into_iter(),
+            parse_return.diagnostics,
             "canvas.compile.oxc.parse",
         ));
     }

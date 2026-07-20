@@ -70,16 +70,11 @@ vi.mock('@/tools/editor/components/CodeEditor', () => ({
   default: () => null,
 }));
 
-const originalCreateObjectUrl = URL.createObjectURL;
-const originalRevokeObjectUrl = URL.revokeObjectURL;
-
 describe('BitfunCanvasPanel message boundary', () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
-    URL.createObjectURL = vi.fn(() => 'blob:bitfun-canvas-test');
-    URL.revokeObjectURL = vi.fn();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -90,9 +85,28 @@ describe('BitfunCanvasPanel message boundary', () => {
       root.unmount();
     });
     container.remove();
-    URL.createObjectURL = originalCreateObjectUrl;
-    URL.revokeObjectURL = originalRevokeObjectUrl;
     vi.clearAllMocks();
+  });
+
+  it('renders Canvas HTML through document write instead of a blob URL', async () => {
+    await act(async () => {
+      root.render(
+        <BitfunCanvasPanel
+          artifactReference="bitfun-canvas://session/session_1/canvas/canvas_1"
+          html="<!doctype html><html><body>Canvas</body></html>"
+        />,
+      );
+    });
+
+    await act(async () => {
+      await new Promise(resolve => window.setTimeout(resolve, 0));
+    });
+
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    expect(iframe).toBeTruthy();
+    expect(iframe.getAttribute('src')).toBe('about:blank');
+    expect(iframe.getAttribute('srcdoc')).toBeNull();
+    expect(iframe.contentDocument?.documentElement.outerHTML).toContain('Canvas');
   });
 
   it('ignores Canvas host actions from non-iframe message sources', async () => {

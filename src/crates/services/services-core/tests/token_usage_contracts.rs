@@ -4,9 +4,10 @@ use bitfun_services_core::token_usage::{
 use chrono::Utc;
 
 #[test]
-fn token_usage_record_preserves_cached_availability_default() {
+fn token_usage_record_preserves_model_identity_and_cached_availability_default() {
     let record: TokenUsageRecord = serde_json::from_value(serde_json::json!({
-        "model_id": "model-a",
+        "model_config_id": "model-config-a",
+        "effective_model_name": "model-a",
         "session_id": "session-1",
         "turn_id": "turn-1",
         "timestamp": Utc::now(),
@@ -15,8 +16,10 @@ fn token_usage_record_preserves_cached_availability_default() {
         "cached_tokens": 0,
         "total_tokens": 15
     }))
-    .expect("legacy token usage record should deserialize");
+    .expect("token usage record should deserialize");
 
+    assert_eq!(record.model_config_id, "model-config-a");
+    assert_eq!(record.effective_model_name, "model-a");
     assert!(!record.cached_tokens_available);
 }
 

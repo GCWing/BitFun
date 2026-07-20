@@ -144,28 +144,42 @@ fn stored_agent_profile_from_tool_selection(
         }
     }
 
-    stored_agent_profile_from_overrides(
+    stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
         agent_id,
         added_tools,
         removed_tools,
         disabled_user_skills,
         enabled_user_skills,
         subagent_overrides,
-        &default_tools,
+        default_tools: &default_tools,
         valid_tools,
-    )
+    })
 }
 
-fn stored_agent_profile_from_overrides(
-    agent_id: &str,
+struct StoredAgentProfileOverrides<'a> {
+    agent_id: &'a str,
     added_tools: Vec<String>,
     removed_tools: Vec<String>,
     disabled_user_skills: Vec<String>,
     enabled_user_skills: Vec<String>,
     subagent_overrides: ParentSubagentOverrideConfig,
-    default_tools: &[String],
-    valid_tools: &HashSet<String>,
+    default_tools: &'a [String],
+    valid_tools: &'a HashSet<String>,
+}
+
+fn stored_agent_profile_from_overrides(
+    overrides: StoredAgentProfileOverrides<'_>,
 ) -> Option<AgentProfileConfig> {
+    let StoredAgentProfileOverrides {
+        agent_id,
+        added_tools,
+        removed_tools,
+        disabled_user_skills,
+        enabled_user_skills,
+        subagent_overrides,
+        default_tools,
+        valid_tools,
+    } = overrides;
     let profile_id = resolve_profile_id(agent_id);
     let default_set: HashSet<String> = default_tools.iter().cloned().collect();
     let mut added_tools = normalize_tools(added_tools, valid_tools);
@@ -250,14 +264,16 @@ fn canonicalize_agent_profile(
     }
 
     Ok(stored_agent_profile_from_overrides(
-        profile_id,
-        stored.added_tools,
-        stored.removed_tools,
-        stored.disabled_user_skills,
-        stored.enabled_user_skills,
-        stored.subagent_overrides,
-        default_tools,
-        valid_tools,
+        StoredAgentProfileOverrides {
+            agent_id: profile_id,
+            added_tools: stored.added_tools,
+            removed_tools: stored.removed_tools,
+            disabled_user_skills: stored.disabled_user_skills,
+            enabled_user_skills: stored.enabled_user_skills,
+            subagent_overrides: stored.subagent_overrides,
+            default_tools,
+            valid_tools,
+        },
     ))
 }
 
@@ -531,6 +547,7 @@ mod tests {
     use super::{
         agent_profile_member_mode_ids_for, canonicalize_agent_profile,
         normalize_skill_override_lists, stored_agent_profile_from_overrides,
+        StoredAgentProfileOverrides,
     };
     use crate::service::config::types::AgentSubagentOverrideState;
     use serde_json::Value;
@@ -557,16 +574,16 @@ mod tests {
     #[test]
     fn stored_agent_profile_from_overrides_keeps_enabled_user_skills() {
         let valid_tools = HashSet::new();
-        let stored = stored_agent_profile_from_overrides(
-            "agentic",
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            vec!["user::bitfun-system::pdf".to_string()],
-            Default::default(),
-            &[],
-            &valid_tools,
-        )
+        let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
+            agent_id: "agentic",
+            added_tools: Vec::new(),
+            removed_tools: Vec::new(),
+            disabled_user_skills: Vec::new(),
+            enabled_user_skills: vec!["user::bitfun-system::pdf".to_string()],
+            subagent_overrides: Default::default(),
+            default_tools: &[],
+            valid_tools: &valid_tools,
+        })
         .expect("mode config should be retained when skill overrides exist");
 
         assert_eq!(stored.profile_id, "coding_shared");
@@ -585,16 +602,16 @@ mod tests {
             "builtin::builtin::Explore".to_string(),
             AgentSubagentOverrideState::Disabled,
         );
-        let stored = stored_agent_profile_from_overrides(
-            "debug",
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            subagent_overrides.clone(),
-            &[],
-            &valid_tools,
-        )
+        let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
+            agent_id: "debug",
+            added_tools: Vec::new(),
+            removed_tools: Vec::new(),
+            disabled_user_skills: Vec::new(),
+            enabled_user_skills: Vec::new(),
+            subagent_overrides: subagent_overrides.clone(),
+            default_tools: &[],
+            valid_tools: &valid_tools,
+        })
         .expect("mode config should be retained when subagent overrides exist");
 
         assert_eq!(stored.profile_id, "coding_shared");

@@ -2,7 +2,7 @@
  * LSP diagnostics helpers (primarily for debugging).
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import { measureAsync } from '@/shared/utils/timing';
 
@@ -18,7 +18,7 @@ export class LspDiagnostics {
   /** Check backend LSP status. */
   static async checkBackendStatus(workspacePath: string): Promise<LspDiagnosticInfo> {
     try {
-      const result = await measureAsync(() => invoke('lsp_get_all_server_states', {
+      const result = await measureAsync(() => api.invoke('lsp_get_all_server_states', {
         request: { workspacePath },
       }));
       log.debug('Got server states', {
@@ -44,7 +44,7 @@ export class LspDiagnostics {
   /** Test a basic backend API call. */
   static async testBasicConnection(): Promise<boolean> {
     try {
-      await invoke('get_health_status');
+      await api.invoke('get_health_status');
       return true;
     } catch (error) {
       log.error('Basic connection test failed', { error });

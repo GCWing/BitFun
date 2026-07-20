@@ -61,10 +61,11 @@ fn tool_item(id: &str) -> ToolItemData {
         is_subagent_item: None,
         parent_task_tool_id: None,
         subagent_session_id: None,
+        subagent_dialog_turn_id: None,
         attempt_id: None,
         attempt_index: None,
         subagent_model_id: None,
-        subagent_model_alias: None,
+        subagent_model_display_name: None,
         status: Some("completed".to_string()),
         interruption_reason: None,
     }
@@ -88,8 +89,8 @@ fn round(turn_id: &str, text_count: usize, tool_count: usize) -> ModelRoundData 
         end_time: Some(1),
         duration_ms: Some(1),
         provider_id: None,
-        model_id: None,
-        model_alias: None,
+        model_config_id: None,
+        effective_model_name: None,
         first_chunk_ms: None,
         first_visible_output_ms: None,
         stream_duration_ms: None,
@@ -129,6 +130,22 @@ fn finished_turn(
     turn.end_time = Some(end_time);
     turn.duration_ms = Some(end_time.saturating_sub(turn.start_time));
     turn
+}
+
+#[test]
+fn deferred_tool_item_serializes_only_its_wire_invocation() {
+    let mut item = tool_item("deferred");
+    item.tool_name = "CallDeferredTool".to_string();
+    item.tool_call.input = serde_json::json!({
+        "tool_name": "WebFetch",
+        "args": { "url": "https://example.test" }
+    });
+
+    let value = serde_json::to_value(&item).expect("serialize tool item");
+    assert_eq!(value["toolName"], "CallDeferredTool");
+    assert_eq!(value["toolCall"]["input"], item.tool_call.input);
+    assert!(value.get("effectiveToolName").is_none());
+    assert!(value.get("effectiveToolInput").is_none());
 }
 
 #[test]
@@ -309,18 +326,28 @@ fn saved_turn_refresh_rejects_gaps_and_session_mismatches() {
 
 #[test]
 fn index_snapshot_keeps_visible_sessions_but_counts_all_metadata_files() {
-    let mut visible = metadata("visible");
-    visible.last_active_at = 1_000;
+    let mut first_tied = metadata("first-tied");
+    first_tied.last_active_at = 1_000;
+    let mut second_tied = metadata("second-tied");
+    second_tied.last_active_at = 1_000;
+    let mut older = metadata("older");
+    older.last_active_at = 500;
     let mut internal = metadata("internal");
     internal.session_kind = SessionKind::Subagent;
 
-    let (index, visible_sessions) = build_session_index_snapshot(vec![internal, visible], 99);
+    let (index, visible_sessions) =
+        build_session_index_snapshot(vec![first_tied, older, internal, second_tied], 99);
 
     assert_eq!(index.updated_at, 99);
-    assert_eq!(index.metadata_file_count, 2);
-    assert_eq!(index.sessions.len(), 1);
-    assert_eq!(index.sessions[0].session_id, "visible");
-    assert_eq!(visible_sessions.len(), 1);
+    assert_eq!(index.metadata_file_count, 4);
+    assert_eq!(index.sessions.len(), 3);
+    assert_eq!(
+        visible_sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["first-tied", "second-tied", "older"]
+    );
 }
 
 #[test]

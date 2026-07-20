@@ -57,7 +57,7 @@ impl CustomMode {
     }
 
     pub fn save_to_file(&self, model: Option<&str>) -> BitFunResult<()> {
-        self.data.save_to_file(model)
+        self.data.save_to_file(model, None)
     }
 }
 

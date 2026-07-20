@@ -34,6 +34,22 @@ pub mod relay_client {
     pub use bitfun_services_integrations::remote_connect::relay_client::*;
 }
 
+pub mod account {
+    pub use bitfun_services_integrations::remote_connect::account::*;
+}
+
+pub mod session_store {
+    pub use bitfun_services_integrations::remote_connect::session_store::*;
+}
+
+pub mod sync_state {
+    pub use bitfun_services_integrations::remote_connect::sync_state::*;
+}
+
+pub use account::{
+    AccountClient, AccountSession, DelegateToken, DelegatedIdentity, FetchedSession, KdfParams,
+    ListedSessionEntry, SettingsBlob,
+};
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 pub use pairing::{PairingProtocol, PairingState};
@@ -144,7 +160,25 @@ pub struct RemoteConnectService {
     bot_connected_info: Arc<RwLock<Option<String>>>,
     /// Trusted mobile identity for the current relay lifecycle only.
     trusted_mobile_identity: Arc<RwLock<Option<TrustedMobileIdentity>>>,
+    /// Account-authenticated device-routing relay client (P2). Independent from
+    /// the room-pairing relay_client above; connects after account login.
+    device_relay_client: Arc<RwLock<Option<RelayClient>>>,
+    /// Latest online-device presence for the account (P2).
+    online_devices: Arc<RwLock<Vec<relay_client::DevicePresenceEntry>>>,
+    /// Callback that provides a delegated identity (token + master_key)
+    /// for paired mobile/IM clients. Set by the desktop layer after account
+    /// login. Resolved on demand when a paired client sends
+    /// `get_delegated_identity` over the room channel.
+    delegated_identity_fn: Arc<RwLock<Option<DelegatedIdentityFn>>>,
 }
+
+/// Provider returning `(token, master_key, relay_url)` for the paired client.
+type DelegatedIdentityFn = Arc<
+    dyn Fn() -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Option<(String, [u8; 32], String)>> + Send + Sync>,
+        > + Send
+        + Sync,
+>;
 
 impl RemoteConnectService {
     pub fn new(config: RemoteConnectConfig) -> Result<Self> {
@@ -168,7 +202,23 @@ impl RemoteConnectService {
             weixin_bot: Arc::new(RwLock::new(None)),
             bot_connected_info: Arc::new(RwLock::new(None)),
             trusted_mobile_identity: Arc::new(RwLock::new(None)),
+            device_relay_client: Arc::new(RwLock::new(None)),
+            online_devices: Arc::new(RwLock::new(Vec::new())),
+            delegated_identity_fn: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Set the delegated identity provider (called by desktop after login).
+    /// Returns `(token, master_key, relay_url)` for the paired client.
+    pub async fn set_delegated_identity_provider<F, Fut>(&self, f: F)
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Option<(String, [u8; 32], String)>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        *self.delegated_identity_fn.write().await = Some(Arc::new(move || Box::pin(f())));
     }
 
     pub fn device_identity(&self) -> &DeviceIdentity {
@@ -218,6 +268,40 @@ impl RemoteConnectService {
         identity: TrustedMobileIdentity,
     ) {
         *trusted_mobile_identity.write().await = Some(identity);
+    }
+
+    /// Answer a paired client's `get_delegated_identity` request using the
+    /// provider registered by the desktop layer after account login.
+    async fn resolve_delegated_identity_response(
+        delegated_identity_fn: &Arc<RwLock<Option<DelegatedIdentityFn>>>,
+        trusted_mobile_identity: &Arc<RwLock<Option<TrustedMobileIdentity>>>,
+        local_device_id: &str,
+    ) -> remote_server::RemoteResponse {
+        let provider = delegated_identity_fn.read().await.clone();
+        let Some(get_identity) = provider else {
+            return remote_server::RemoteResponse::Error {
+                message: "Desktop is not logged into a BitFun account".to_string(),
+            };
+        };
+        let Some((token, master_key, _relay_url)) = get_identity().await else {
+            return remote_server::RemoteResponse::Error {
+                message: "Desktop is not logged into a BitFun account".to_string(),
+            };
+        };
+        let user_id = trusted_mobile_identity
+            .read()
+            .await
+            .as_ref()
+            .map(|identity| identity.user_id.clone())
+            .unwrap_or_default();
+        use base64::{engine::general_purpose::STANDARD as B64, Engine};
+        info!("Delegated identity resolved for paired client");
+        remote_server::RemoteResponse::DelegateIdentity {
+            token,
+            user_id,
+            master_key: B64.encode(master_key),
+            device_id: local_device_id.to_string(),
+        }
     }
 
     async fn send_pairing_error_response(
@@ -369,6 +453,40 @@ impl RemoteConnectService {
             )
             .await?;
 
+        // Wait for RoomCreated before HTTP upload / QR generation so the relay
+        // has registered the room (avoids upload 404 races on BitFun/Custom).
+        // Mirror start_device_connection's AuthOk wait pattern.
+        {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+            let expected_room = qr_payload.room_id.clone();
+            let mut got_room = false;
+            while !got_room {
+                match tokio::time::timeout_at(deadline, event_rx.recv()).await {
+                    Ok(Some(relay_client::RelayEvent::RoomCreated { room_id })) => {
+                        if room_id == expected_room {
+                            info!("Room created on relay: {room_id}");
+                            got_room = true;
+                        } else {
+                            log::warn!(
+                                "Unexpected RoomCreated room_id={room_id}, expected={expected_room}"
+                            );
+                        }
+                    }
+                    Ok(Some(other)) => {
+                        log::debug!(
+                            "Skipping relay event while waiting for RoomCreated: {other:?}"
+                        );
+                    }
+                    Ok(None) => {
+                        anyhow::bail!("relay connection closed before RoomCreated");
+                    }
+                    Err(_) => {
+                        anyhow::bail!("timeout waiting for RoomCreated");
+                    }
+                }
+            }
+        }
+
         let web_app_url: String = match &method {
             ConnectionMethod::Lan { .. } | ConnectionMethod::Ngrok => relay_url.clone(),
             ConnectionMethod::BitfunServer => {
@@ -434,6 +552,8 @@ impl RemoteConnectService {
         let relay_arc = self.relay_client.clone();
         let server_arc = self.remote_server.clone();
         let trusted_mobile_identity_arc = self.trusted_mobile_identity.clone();
+        let delegated_identity_fn_arc = self.delegated_identity_fn.clone();
+        let local_device_id = self.device_identity.device_id.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
@@ -479,7 +599,19 @@ impl RemoteConnectService {
                                     Ok((cmd, request_id)) => {
                                         handled_as_active_command = true;
                                         debug!("Remote command: {cmd:?}");
-                                        let response = server.dispatch(&cmd).await;
+                                        let response = if matches!(
+                                            cmd,
+                                            remote_server::RemoteCommand::GetDelegatedIdentity
+                                        ) {
+                                            RemoteConnectService::resolve_delegated_identity_response(
+                                                &delegated_identity_fn_arc,
+                                                &trusted_mobile_identity_arc,
+                                                &local_device_id,
+                                            )
+                                            .await
+                                        } else {
+                                            server.dispatch(&cmd).await
+                                        };
                                         match server
                                             .encrypt_response(&response, request_id.as_deref())
                                         {
@@ -580,6 +712,13 @@ impl RemoteConnectService {
                                                 }
 
                                                 *server_arc.write().await = Some(server);
+
+                                                // The delegated account identity is NOT
+                                                // pushed here: the relay pending request
+                                                // for this correlation_id is consumed by
+                                                // the initial_sync response, so a second
+                                                // frame would be dropped. Paired clients
+                                                // pull it via `get_delegated_identity`.
                                             }
                                         }
                                         Ok(false) => {
@@ -1050,6 +1189,162 @@ impl RemoteConnectService {
             .await
             .as_ref()
             .map(|identity| identity.user_id.clone())
+    }
+
+    // ── P2: Account-authenticated device routing ───────────────────────────
+
+    /// Connect to the relay's WS endpoint and authenticate with an account
+    /// token. This establishes a parallel device-routing pathway that does not
+    /// interfere with the room-pairing flow.  Incoming device messages are
+    /// forwarded via the returned event receiver.
+    ///
+    /// The caller (desktop Tauri layer) owns the AccountSession containing the
+    /// master_key and is responsible for decrypting device-message payloads.
+    /// Returns true if a device-routing WebSocket connection is currently
+    /// active (i.e. `start_device_connection` has been called and not yet
+    /// disconnected).
+    pub async fn is_device_connected(&self) -> bool {
+        let guard = self.device_relay_client.read().await;
+        let Some(client) = guard.as_ref() else {
+            return false;
+        };
+        matches!(
+            client.connection_state().await,
+            relay_client::ConnectionState::Connected | relay_client::ConnectionState::Reconnecting
+        )
+    }
+
+    pub async fn start_device_connection(
+        &self,
+        relay_url: &str,
+        token: &str,
+        device_name: &str,
+    ) -> Result<tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>> {
+        // Disconnect previous device connection if any.
+        self.stop_device_connection().await;
+
+        let ws_url = format!(
+            "{}/ws",
+            relay_url
+                .replace("https://", "wss://")
+                .replace("http://", "ws://")
+        );
+
+        let (client, mut event_rx) = RelayClient::new();
+        client.connect(&ws_url).await?;
+        client.connect_authenticated(token, device_name).await?;
+
+        // Wait for AuthOk (or AuthError) before proceeding so that the
+        // device is registered as online on the relay before the caller
+        // gets back control.  This prevents an immediate device-list
+        // query from seeing the local device as offline.
+        //
+        // The relay client may emit other events first (e.g. `Connected`),
+        // so we loop until we see AuthOk/AuthError or time out.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+        let mut got_auth = false;
+        let mut auth_error: Option<String> = None;
+        while !got_auth && auth_error.is_none() {
+            match tokio::time::timeout_at(deadline, event_rx.recv()).await {
+                Ok(Some(relay_client::RelayEvent::AuthOk { user_id, device_id })) => {
+                    log::info!("Device connection auth ok: user={user_id} device={device_id}");
+                    got_auth = true;
+                }
+                Ok(Some(relay_client::RelayEvent::AuthError { message })) => {
+                    auth_error = Some(message);
+                }
+                Ok(Some(other)) => {
+                    // Non-auth event (e.g. Connected) — skip and keep waiting.
+                    log::debug!(
+                        "Skipping non-auth relay event while waiting for AuthOk: {other:?}"
+                    );
+                }
+                Ok(None) => {
+                    anyhow::bail!("relay connection closed before auth response");
+                }
+                Err(_) => {
+                    anyhow::bail!("timeout waiting for relay auth response");
+                }
+            }
+        }
+        if let Some(msg) = auth_error {
+            anyhow::bail!("relay auth error: {msg}");
+        }
+
+        let online_arc = self.online_devices.clone();
+        let device_client_arc = self.device_relay_client.clone();
+        // Spawn event forwarder that updates presence state; the raw event stream
+        // is also forwarded to a new channel for the caller to consume.
+        let (forward_tx, forward_rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                match &event {
+                    relay_client::RelayEvent::DevicePresence { devices } => {
+                        *online_arc.write().await = devices.clone();
+                    }
+                    relay_client::RelayEvent::Disconnected => {
+                        *online_arc.write().await = Vec::new();
+                    }
+                    _ => {}
+                }
+                let _ = forward_tx.send(event);
+            }
+        });
+
+        *device_client_arc.write().await = Some(client);
+        Ok(forward_rx)
+    }
+
+    /// Disconnect the account-authenticated device-routing connection.
+    pub async fn stop_device_connection(&self) {
+        if let Some(client) = self.device_relay_client.write().await.take() {
+            client.disconnect().await;
+        }
+        self.online_devices.write().await.clear();
+    }
+
+    /// Send an encrypted device-to-device message via the account relay.
+    pub async fn send_device_message(
+        &self,
+        target_device_id: &str,
+        correlation_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+    ) -> Result<()> {
+        let guard = self.device_relay_client.read().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("device routing not connected"))?;
+        client
+            .send_device_message(target_device_id, correlation_id, encrypted_data, nonce)
+            .await
+    }
+
+    /// Current online devices in the account (presence list).
+    pub async fn online_devices(&self) -> Vec<relay_client::DevicePresenceEntry> {
+        self.online_devices.read().await.clone()
+    }
+
+    /// Send an encrypted response to the paired mobile/IM client via the room
+    /// channel. Used to delegate account identity after pairing.
+    pub async fn send_room_response(
+        &self,
+        correlation_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+    ) -> Result<()> {
+        let guard = self.relay_client.read().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("relay client not connected"))?;
+        client
+            .send_relay_response(correlation_id, encrypted_data, nonce)
+            .await
+    }
+
+    /// Get the pairing shared secret (for encrypting delegate identity).
+    pub async fn pairing_shared_secret(&self) -> Option<[u8; 32]> {
+        self.pairing.read().await.shared_secret().copied()
     }
 }
 

@@ -263,7 +263,7 @@ Use this tool when you recognize a common task pattern — it saves planning tim
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Deferred
     }
 
     fn input_schema(&self) -> Value {

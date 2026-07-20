@@ -1,5 +1,6 @@
 @use '../../../component-library/styles/tokens' as *;
 @use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
+@use '../../styles/surface-stagger';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Root wrapper
@@ -654,7 +655,7 @@
   background: var(--color-bg-secondary);
   cursor: pointer;
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index) * 30ms);
+  @include surface-stagger.animation-delay(30ms);
   transition:
     border-color $motion-fast $easing-standard,
     box-shadow $motion-fast $easing-standard,
@@ -819,7 +820,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.2s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index) * 40ms);
+  @include surface-stagger.animation-delay(40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -998,7 +999,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index) * 40ms);
+  @include surface-stagger.animation-delay(40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

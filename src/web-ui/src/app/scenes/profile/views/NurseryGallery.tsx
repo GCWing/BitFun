@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Egg, Settings, Star, Wrench } from 'lucide-react';
+import { Plus, Egg, Puzzle, Settings, Wrench } from 'lucide-react';
 import {
   GalleryLayout,
   GalleryPageHeader,
@@ -13,9 +13,6 @@ import { useSceneStore } from '@/app/stores/sceneStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type { WorkspaceInfo } from '@/shared/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import { getModelDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import { createLogger } from '@/shared/utils/logger';
 import AssistantCard from './AssistantCard';
 import { useNurseryStore } from '../nurseryStore';
@@ -29,8 +26,8 @@ const log = createLogger('NurseryGallery');
 const ASSISTANT_MODE_ID = 'Claw';
 
 interface TemplateStats {
-  defaultModelName: string;
   enabledToolCount: number;
+  enabledSkillCount: number;
 }
 
 const NurseryGallery: React.FC = () => {
@@ -47,44 +44,14 @@ const NurseryGallery: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const [allModels, defaultModels, agentModels, modeConf] = await Promise.all([
-          configManager.getConfig<AIModelConfig[]>('ai.models').catch(() => [] as AIModelConfig[]),
-          configManager.getConfig<DefaultModelsConfig>('ai.default_models').catch(() => ({} as DefaultModelsConfig)),
-          configManager.getConfig<Record<string, string>>('ai.agent_models').catch(() => ({} as Record<string, string>)),
+        const [modeConf, skills] = await Promise.all([
           configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null),
+          configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => []),
         ]);
-        const models = allModels ?? [];
-        const defaults = defaultModels ?? {};
-        const configuredAgentModels = agentModels ?? {};
-
-        const findEnabledModelByRef = (modelRef?: string | null): AIModelConfig | null => {
-          const trimmed = modelRef?.trim();
-          if (!trimmed) return null;
-          return models.find((model) => model.enabled && model.id === trimmed) ?? null;
-        };
-
-        const resolveClawDefaultModelName = (): string => {
-          const configuredModel = configuredAgentModels[ASSISTANT_MODE_ID]?.trim() || 'auto';
-          if (configuredModel === 'auto') {
-            return t('nursery.template.stats.autoDefault');
-          }
-          if (configuredModel === 'primary') {
-            return findEnabledModelByRef(defaults.primary)
-              ? getModelDisplayName(findEnabledModelByRef(defaults.primary)!)
-              : t('nursery.template.stats.primaryDefault');
-          }
-          if (configuredModel === 'fast') {
-            const fastModel = findEnabledModelByRef(defaults.fast) ?? findEnabledModelByRef(defaults.primary);
-            return fastModel ? getModelDisplayName(fastModel) : t('nursery.template.stats.fastDefault');
-          }
-
-          const explicitModel = findEnabledModelByRef(configuredModel);
-          return explicitModel ? getModelDisplayName(explicitModel) : configuredModel;
-        };
 
         setTemplateStats({
-          defaultModelName: resolveClawDefaultModelName(),
           enabledToolCount: modeConf?.enabled_tools?.length ?? 0,
+          enabledSkillCount: skills.filter((skill) => skill.effectiveEnabled).length,
         });
       } catch (e) {
         log.error('Failed to load template stats', e);
@@ -201,13 +168,13 @@ const NurseryGallery: React.FC = () => {
             {/* Key stats */}
             {templateStats && (
               <div className="nursery-template-card__stats">
-                <span className="nursery-template-card__stat">
-                  <Star size={10} strokeWidth={2} />
-                  {templateStats.defaultModelName}
-                </span>
                 <span className="nursery-template-card__stat nursery-template-card__stat--muted">
                   <Wrench size={10} strokeWidth={2} />
                   {t('nursery.template.stats.tools', { count: templateStats.enabledToolCount })}
+                </span>
+                <span className="nursery-template-card__stat nursery-template-card__stat--muted">
+                  <Puzzle size={10} strokeWidth={2} />
+                  {t('nursery.template.stats.skills', { count: templateStats.enabledSkillCount })}
                 </span>
               </div>
             )}

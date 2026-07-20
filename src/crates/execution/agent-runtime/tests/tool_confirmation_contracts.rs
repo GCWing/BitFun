@@ -1,7 +1,8 @@
 use bitfun_agent_runtime::tool_confirmation::{
     resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_gate,
-    resolve_tool_confirmation_plan, ConfirmationFailureKind, ToolConfirmationGateFacts,
-    ToolConfirmationGatePlan, ToolConfirmationOutcome, ToolConfirmationPlan,
+    resolve_tool_confirmation_plan, resolve_tool_confirmation_policy_gate, ConfirmationFailureKind,
+    ToolConfirmationContextPolicy, ToolConfirmationGateFacts, ToolConfirmationGatePlan,
+    ToolConfirmationOutcome, ToolConfirmationPlan, ToolConfirmationPolicyGateFacts,
     ToolConfirmationRequestFacts, ToolConfirmationWaitResult,
 };
 use std::time::{Duration, UNIX_EPOCH};
@@ -24,6 +25,18 @@ fn confirmation_gate_preserves_skip_policy_precedence() {
         }),
         ToolConfirmationGatePlan::SkipByPolicy
     );
+}
+
+#[test]
+fn invocation_require_policy_overrides_the_global_skip_default() {
+    let plan = resolve_tool_confirmation_policy_gate(ToolConfirmationPolicyGateFacts {
+        global_skip_tool_confirmation: true,
+        context_policy: ToolConfirmationContextPolicy::Require,
+        any_tool_needs_permission: true,
+    });
+
+    assert_eq!(plan, ToolConfirmationGatePlan::AwaitPermissionedTool);
+    assert!(plan.confirm_before_run());
 }
 
 #[test]

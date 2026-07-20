@@ -23,6 +23,7 @@ mod tests {
             builtin_skill_group_key("agent-browser"),
             Some("computer-use")
         );
+        assert_eq!(builtin_skill_group_key("agent-eval-canvas"), Some("canvas"));
         assert_eq!(builtin_skill_group_key("gstack-review"), Some("gstack"));
         assert_eq!(builtin_skill_group_key("unknown-skill"), None);
     }
@@ -31,7 +32,7 @@ mod tests {
     fn runtime_catalog_covers_all_embedded_builtin_skills() {
         for dir_name in builtin_skill_dir_names() {
             assert!(
-                builtin_skill_group_key(&dir_name).is_some(),
+                builtin_skill_group_key(dir_name).is_some(),
                 "Missing built-in skill catalog entry for '{}'",
                 dir_name
             );

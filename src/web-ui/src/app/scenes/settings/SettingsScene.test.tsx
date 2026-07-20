@@ -18,6 +18,10 @@ vi.mock('../../../infrastructure/config/components/AcpAgentsConfig', () => ({
   default: () => <div data-testid="acp-agents-config" />,
 }));
 
+vi.mock('../../../infrastructure/config/components/ExternalSourcesConfig', () => ({
+  default: () => <div data-testid="external-sources-config" />,
+}));
+
 vi.mock('../../../infrastructure/config/components/EditorConfig', () => ({
   default: () => <div data-testid="editor-config" />,
 }));
@@ -69,7 +73,7 @@ describe('SettingsScene lazy tab routing', () => {
     container.remove();
   });
 
-  async function renderActiveTab(tab: 'mcp-tools' | 'acp-agents') {
+  async function renderActiveTab(tab: 'mcp-tools' | 'acp-agents' | 'external-sources') {
     useSettingsStore.setState({ activeTab: tab });
     await act(async () => {
       root.render(<SettingsScene />);
@@ -86,5 +90,11 @@ describe('SettingsScene lazy tab routing', () => {
     await renderActiveTab('acp-agents');
 
     expect(container.querySelector('[data-testid="acp-agents-config"]')).not.toBeNull();
+  });
+
+  it('renders the lazy external sources config tab', async () => {
+    await renderActiveTab('external-sources');
+
+    expect(container.querySelector('[data-testid="external-sources-config"]')).not.toBeNull();
   });
 });

@@ -2,27 +2,128 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/execution/plugin-runtime-host/src/adapter.rs',
+    reason: 'plugin-runtime-host adapter trait method surface must stay narrow',
+    patterns: [
+      {
+        regex: /^\s*(?:async\s+)?fn\s+(?!(?:adapter_id|read_plugins|dispatch)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected PluginHostAdapter trait method; update the reviewed adapter method budget before exposing more Host API',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+    reason:
+      'plugin-runtime-host public Host method surface must stay narrow and must not expose status-write or test-helper side channels',
+    patterns: [
+      {
+        regex:
+          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|dispose_project|restart)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected public PluginRuntimeHost method; update the reviewed method budget before exposing more Host API',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/plugin_source.rs',
+    reason:
+      'managed plugin source service method surface must stay limited to source review and activation authority',
+    patterns: [
+      {
+        regex:
+          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|refresh|set_trust|load_package|activate|deactivate|load_activated_package|has_activation_authority)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected public ManagedPluginSourceService method; update the reviewed method budget before exposing more API',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/plugin_source.rs',
+    reason:
+      'plugin source contract methods must stay limited to manifest validation, source review, and activation authority',
+    patterns: [
+      {
+        regex:
+          /\bpub\s+(?:const\s+)?fn\s+(?!(?:parse_json|validate|content_hash|new|into_parts|epoch|activation_epoch|activation_sources|trust_level_for|apply_decision|reconcile_sources|is_activated|activation_authority|is_activation_current|activate|clear_activation_record)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected public plugin source contract method; update the reviewed method budget before exposing more API',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/plugin_source.rs',
+    reason: 'plugin source review must fail when product path initialization fails',
+    patterns: [
+      {
+        regex: /crate::infrastructure::get_path_manager_arc\s*\(/,
+        message:
+          'plugin source review must use try_get_path_manager_arc instead of the temporary fallback path manager',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/runtime-ports/src/lib.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+use\s+plugin::\*/,
+        message:
+          'runtime-ports root must not wildcard re-export plugin contracts; update the explicit public API budget',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/runtime-ports/src/plugin.rs',
+    patterns: [
+      {
+        regex: /\bserde_json::Value\b|\bserde_json::Map\b|\bjson!\b/,
+        message:
+          'plugin runtime contracts must not expose raw JSON ABI; use typed refs, descriptors, candidates, diagnostics, and quarantine facts',
+      },
+      {
+        regex: /\bpub\s+(?:\w+\s+)*payload\s*:\s*serde_json::Value\b/,
+        message:
+          'PluginDispatchEnvelope must not regress to raw payload transport across the Host boundary',
+      },
+      {
+        regex: /\bpub\s+accepted\s*:\s*bool\b/,
+        message:
+          'PluginResponseEnvelope must return typed effect candidates and diagnostics instead of an accepted bool',
+      },
+      {
+        regex: /product-full/,
+        message:
+          'plugin runtime contracts must not pull product-full delivery assumptions into runtime-ports',
+      },
+      {
+        regex: /\b(?:TrustEpochAdvanced|PluginUpdated|PolicyUpdated)\b/,
+        message:
+          'P0-B quarantine clear condition public API must only expose implemented HostRestarted semantics',
+      },
+      {
+        regex: /\brequires_permission\b|\bpermission_prompt\b/,
+        message:
+          'plugin effect permission state must use PluginPermissionGate to avoid invalid required-without-prompt combinations',
+      },
+      {
+        regex: /\bNotRequired\b|\bPluginMaterializeCondition\b|\bmaterialize_when\b/,
+        message:
+          'plugin effect materialization must be derived from an auditable PluginPermissionGate, not an unaudited no-op or free materialize flag',
+      },
+      {
+        regex: /\bPermissionPromptEffectKind\s*\{[^}]*\bUnsupported\b|\bPluginEffectCandidatePayload\s*\{[^}]*\bUnsupported\b/s,
+        message:
+          'unsupported plugin capabilities must be reported as typed diagnostics/status, not permission prompts or effect candidates',
+      },
+    ],
+  },
+  {
     path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
     patterns: [
       {
         regex: /\bAgenticEvent::[A-Z]/,
         message:
           'Tauri transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
-    patterns: [
-      {
-        regex: /\bAgenticEvent::[A-Z]/,
-        message:
-          'WebSocket transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
-      },
-      {
-        regex: /\bfn\s+is_legacy_websocket_agentic_event_type\b/,
-        message:
-          'WebSocket transport adapter must not own the agentic event allowlist; use bitfun-events event manifest',
       },
     ],
   },
@@ -71,6 +172,12 @@ export const forbiddenContentRules = [
       {
         regex: /\brmcp\b/,
         message: 'SDK facade must not expose concrete MCP clients',
+      },
+      {
+        regex:
+          /\b(?:PluginRuntime[A-Za-z0-9_]*|PluginDispatchEnvelope|PluginResponseEnvelope|PluginRuntimeReadRequest|PluginRuntimeReadResponse|PluginStatusSnapshot|PluginQuarantineState|PluginHostLifecycle[A-Za-z0-9_]*)\b/,
+        message:
+          'SDK facade must not expose raw Plugin Runtime Host ABI; use product assembly or Server/API projection instead',
       },
     ],
   },
@@ -175,6 +282,141 @@ export const forbiddenContentRules = [
         regex: /\breqwest::/,
         message:
           'core debug log facade must not own HTTP ingest posting; use bitfun-services-integrations debug log network provider',
+      },
+      {
+        regex: /\bOpenOptions\b/,
+        message:
+          'core debug log facade must not own debug log file append; use bitfun-services-integrations debug log owner',
+      },
+      {
+        regex: /\bUuid::new_v4\b/,
+        message:
+          'core debug log facade must not own debug log id generation; use bitfun-services-integrations debug log owner',
+      },
+      {
+        regex: /\bfn redact_value\b/,
+        message:
+          'core debug log facade must not own redaction policy; use bitfun-services-integrations debug log owner',
+      },
+      {
+        regex: /\bfn build_log_line\b/,
+        message:
+          'core debug log facade must not build debug log lines; use bitfun-services-integrations debug log owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/storage/persistence.rs',
+    patterns: [
+      {
+        regex: /\bstatic\s+FILE_LOCKS\b/,
+        message:
+          'core persistence wrapper must not own file locks; use bitfun-services-core persistence owner',
+      },
+      {
+        regex: /\bserde_json::to_string_pretty\b/,
+        message:
+          'core persistence wrapper must not own JSON serialization; use bitfun-services-core persistence owner',
+      },
+      {
+        regex: /\btokio::fs::rename\b/,
+        message:
+          'core persistence wrapper must not own atomic file replacement; use bitfun-services-core persistence owner',
+      },
+      {
+        regex: /\bfn create_backup\b/,
+        message:
+          'core persistence wrapper must not own backup creation; use bitfun-services-core persistence owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/storage/cleanup.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs::read_dir\b/,
+        message:
+          'core storage cleanup wrapper must not own directory traversal; use bitfun-services-core cleanup owner',
+      },
+      {
+        regex: /\btokio::fs::remove_file\b/,
+        message:
+          'core storage cleanup wrapper must not own cleanup deletion; use bitfun-services-core cleanup owner',
+      },
+      {
+        regex: /\bfn cleanup_recursively\b/,
+        message:
+          'core storage cleanup wrapper must not own recursive cleanup; use bitfun-services-core cleanup owner',
+      },
+      {
+        regex: /\bfn calculate_dir_size\b/,
+        message:
+          'core storage cleanup wrapper must not own cleanup size accounting; use bitfun-services-core cleanup owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/token_usage/service.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+MODEL_STATS_FILE\b/,
+        message:
+          'core token usage wrapper must not own token usage file layout; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\bRecordsBatch\b/,
+        message:
+          'core token usage wrapper must not own token usage persistence batches; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\bfn persist_record\b/,
+        message:
+          'core token usage wrapper must not own record persistence; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\btokio::fs::/,
+        message:
+          'core token usage wrapper must not own token usage file IO; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\bchrono::/,
+        message:
+          'core token usage wrapper must not own token usage time aggregation; use bitfun-services-core token usage owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/instruction_context.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs::read_to_string\b/,
+        message:
+          'core instruction context wrapper must not own workspace instruction file IO; use bitfun-services-core workspace instruction owner',
+      },
+      {
+        regex: /\bfor file_name in\b/,
+        message:
+          'core instruction context wrapper must not own instruction file ordering; use bitfun-services-core workspace instruction owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/util/front_matter_markdown.rs',
+    patterns: [
+      {
+        regex: /\bserde_yaml::from_str\b/,
+        message:
+          'core front-matter markdown facade must not own YAML parsing; use bitfun-services-core markdown owner',
+      },
+      {
+        regex: /\bserde_yaml::to_string\b/,
+        message:
+          'core front-matter markdown facade must not own YAML serialization; use bitfun-services-core markdown owner',
+      },
+      {
+        regex: /\bstd::fs::write\b/,
+        message:
+          'core front-matter markdown facade must not own markdown persistence; use bitfun-services-core markdown owner',
       },
     ],
   },
@@ -526,6 +768,46 @@ export const forbiddenContentRules = [
         message:
           'remote dialog runtime host must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
       },
+      {
+        regex: /\bfn\s+strip_remote_user_input_tags\b/,
+        message:
+          'service agent runtime must not own remote user display cleanup; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bfn\s+compress_remote_chat_data_url_for_mobile\b/,
+        message:
+          'service agent runtime must not own remote chat thumbnail compression; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bfn\s+normalize_remote_session_model_id\b/,
+        message:
+          'service agent runtime must not own remote session model id normalization; use services-integrations model selection helpers',
+      },
+      {
+        regex: /\.get\(\s*["']images["']\s*\)/,
+        message:
+          'service agent runtime must not extract remote chat image metadata directly; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bimage::load_from_memory\b/,
+        message:
+          'service agent runtime must not own remote chat image decoding/compression; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bJpegEncoder\b/,
+        message:
+          'service agent runtime must not own remote chat thumbnail encoding; use services-integrations projection helpers',
+      },
+      {
+        regex: /\.find\(\s*["']User's question:\\n["']\s*\)/,
+        message:
+          'service agent runtime must not parse remote chat legacy wrapper text; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bAgentInputAttachment\s*\{[\s\S]*?\bkind:\s*["']remote_image["']/,
+        message:
+          'service agent runtime must not construct remote image attachments directly; use services-integrations attachment mapping',
+      },
     ],
   },
   {
@@ -839,7 +1121,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
     patterns: [
       {
         regex: /\bDeepReviewIncrementalCache\b/,
@@ -2031,9 +2313,9 @@ export const forbiddenContentRules = [
           'core scheduler must not own dialog queue storage; use bitfun-agent-runtime scheduler',
       },
       {
-        regex: /\bdashmap::DashMap\b/,
+        regex: /\bactive_turns:\s*Arc<dashmap::DashMap\b/,
         message:
-          'core scheduler must not own scheduler state maps; use bitfun-agent-runtime scheduler stores',
+          'core scheduler must not own active-turn state maps; use bitfun-agent-runtime scheduler stores',
       },
       {
         regex: /\bstruct\s+ActiveTurn\b/,
@@ -2603,17 +2885,17 @@ export const forbiddenContentRules = [
       {
         regex: /\bGetToolSpecLoadObservation\b/,
         message:
-          'execution engine must not own collapsed-tool unlock observation details; use product_runtime unlock state owner',
+          'execution engine must not own deferred-tool loaded-spec observation details; use product_runtime loaded-spec state owner',
       },
       {
-        regex: /\bcollect_loaded_collapsed_tool_names\b/,
+        regex: /\bcollect_loaded_deferred_tool_specs\b/,
         message:
-          'execution engine must not call generic collapsed-tool collector directly; use product_runtime unlock state owner',
+          'execution engine must not call generic deferred-tool collector directly; use product_runtime loaded-spec state owner',
       },
       {
-        regex: /\bfn\s+collect_unlocked_collapsed_tools\b/,
+        regex: /\bfn\s+collect_loaded_deferred_tool_specs\b/,
         message:
-          'execution engine must not own collapsed-tool unlock collection; use product_runtime unlock state owner',
+          'execution engine must not own deferred-tool loaded-spec collection; use product_runtime loaded-spec state owner',
       },
     ],
   },
@@ -3383,7 +3665,7 @@ export const forbiddenContentRules = [
       {
         regex: /\bfn compress_data_url_for_mobile\b/,
         message:
-          'remote_server must not own remote chat thumbnail compression; keep it in service_agent_runtime',
+          'remote_server must not own remote chat thumbnail compression; use services-integrations projection helpers',
       },
       {
         regex: /\bfn turns_to_chat_messages\b/,
@@ -3398,7 +3680,7 @@ export const forbiddenContentRules = [
       {
         regex: /\bfn strip_user_input_tags\b/,
         message:
-          'remote_server must not own remote user input display cleanup; keep it in service_agent_runtime',
+          'remote_server must not own remote user input display cleanup; use services-integrations projection helpers',
       },
       {
         regex: /\bpub struct ImageAttachment\b/,
@@ -3759,6 +4041,104 @@ export const forbiddenContentRules = [
 
 export const forbiddenContentUnderRules = [
   {
+    path: 'src/apps',
+    reason:
+      'product entrypoints must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'product entrypoints must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/interfaces',
+    reason:
+      'Server/API interface crates must expose projected DTOs instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'Server/API interfaces must not consume raw Plugin Runtime Host ABI; define a projected contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui',
+    reason:
+      'frontend surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'frontend surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/mobile-web',
+    reason:
+      'mobile surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'mobile surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'BitFun-Installer',
+    reason:
+      'installer surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'installer surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'src',
+    reason:
+      'OpenCode adapter production imports are limited to the reviewed composition root',
+    patterns: [
+      {
+        regex:
+          /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
+        allowPaths: [
+          'src/crates/adapters/opencode-adapter/tests/opencode_source_adapter.rs',
+          'src/crates/adapters/opencode-adapter/tests/opencode_command_adapter.rs',
+          'src/crates/adapters/opencode-adapter/tests/tool_source_contracts.rs',
+          'src/crates/assembly/core/src/plugin_runtime.rs',
+          'src/crates/assembly/core/src/external_sources.rs',
+        ],
+        message:
+          'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',
+      },
+    ],
+  },
+  {
+    path: 'BitFun-Installer/src-tauri',
+    reason:
+      'OpenCode adapter production imports are limited to the reviewed composition root',
+    patterns: [
+      {
+        regex:
+          /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
+        message:
+          'only a reviewed product composition root may import bitfun-opencode-adapter and inject it into Plugin Runtime Host',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src',
     reason:
       'core must use runtime-ports as the owner path for portable subagent contracts',
@@ -3837,7 +4217,7 @@ export const forbiddenContentUnderRules = [
   {
     path: 'src/crates/execution/tool-contracts/src',
     reason:
-      'agent-tools may own pure tool manifest contracts, but not product manifest runtime or GetToolSpec execution without an approved provider migration',
+      'agent-tools may own pure tool manifest and deferred-tool state contracts, but not product manifest runtime or concrete GetToolSpec execution',
     patterns: [
       {
         regex: /\bGetToolSpecTool\b/,
@@ -3846,10 +4226,6 @@ export const forbiddenContentUnderRules = [
       {
         regex: /\bmanifest_resolver\b/,
         message: 'tool manifest resolution stays in core product tool runtime',
-      },
-      {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'collapsed-tool unlock state stays in core ToolUseContext/runtime',
       },
       {
         regex: /\bToolUseContext\b/,
@@ -3875,12 +4251,12 @@ export const forbiddenContentUnderRules = [
         message: 'tool manifest resolution stays in core product tool runtime',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'collapsed-tool unlock state stays in core ToolUseContext/runtime',
+        regex: /\bloaded_deferred_tool_specs\b/,
+        message: 'deferred-tool loaded-spec state stays in core ToolUseContext/runtime',
       },
       {
         regex: /\bToolExposure\b/,
-        message: 'expanded/collapsed exposure policy stays in core until provider migration',
+        message: 'direct/deferred exposure policy stays in core until provider migration',
       },
     ],
   },
@@ -3909,8 +4285,8 @@ export const forbiddenContentUnderRules = [
         message: 'runtime-restriction admission must stay behind validate_tool_execution_admission',
       },
       {
-        regex: /\bvalidate_collapsed_tool_usage\s*\(/,
-        message: 'collapsed-tool admission must stay behind validate_tool_execution_admission',
+        regex: /\bvalidate_deferred_tool_usage\s*\(/,
+        message: 'deferred-tool admission must stay behind validate_tool_execution_admission',
       },
     ],
   },

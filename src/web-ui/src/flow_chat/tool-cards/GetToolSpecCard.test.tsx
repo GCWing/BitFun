@@ -28,7 +28,7 @@ const config: ToolCardConfig = {
   icon: 'SPEC',
   requiresConfirmation: false,
   resultDisplayType: 'detailed',
-  description: 'Read usage instructions and schema for a collapsed tool',
+  description: 'Read usage instructions and schema for a deferred tool',
   displayMode: 'compact',
 };
 

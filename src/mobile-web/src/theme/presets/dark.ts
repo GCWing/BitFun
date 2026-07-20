@@ -20,7 +20,6 @@ const INFO = '225, 171, 128';
 const BG_PRIMARY = '#121214';
 const BG_SECONDARY = '#18181a';
 const BG_SCENE = BG_SECONDARY;
-const BG_QUATERNARY = '#202024';
 const TEXT_PRIMARY = '#e8e8e8';
 const TEXT_SECONDARY = '#b0b0b0';
 const TEXT_MUTED = '#858585';
@@ -41,12 +40,10 @@ export const darkTheme: MobileThemeVars = {
   '--color-bg-primary': BG_PRIMARY,
   '--color-bg-secondary': BG_SECONDARY,
   '--color-bg-tertiary': BG_PRIMARY,
-  '--color-bg-quaternary': BG_QUATERNARY,
   '--color-bg-elevated': BG_SECONDARY,
   '--color-bg-workbench': BG_PRIMARY,
   '--color-bg-scene': BG_SCENE,
   '--color-bg-flowchat': BG_SCENE,
-  '--color-bg-tooltip': alpha('30, 30, 32', '0.92'),
 
   '--color-text-primary': TEXT_PRIMARY,
   '--color-text-secondary': TEXT_SECONDARY,
@@ -58,7 +55,6 @@ export const darkTheme: MobileThemeVars = {
   '--element-bg-base': alpha(WHITE, '0.125'),
   '--element-bg-medium': alpha(WHITE, '0.155'),
   '--element-bg-strong': alpha(WHITE, '0.19'),
-  '--element-bg-elevated': alpha(WHITE, '0.24'),
 
   ...colorRamp('--color-accent', ACCENT, ACCENT_500, ACCENT_600),
   ...colorRamp('--color-purple', PURPLE, PURPLE_500, PURPLE_600),

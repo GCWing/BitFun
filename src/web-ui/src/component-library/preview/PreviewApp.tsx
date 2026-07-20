@@ -48,7 +48,7 @@ export const PreviewApp: React.FC = () => {
       <header className="preview-header">
         <div className="preview-logo">
           <h1>{t('componentLibrary.previewApp.title')}</h1>
-          <span className="preview-version">v0.2.12</span>
+          <span className="preview-version">v0.2.13</span>
         </div>
         <div className="preview-header-actions">
           <label className="preview-theme-selector">

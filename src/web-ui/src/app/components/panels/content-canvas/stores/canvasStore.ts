@@ -1230,6 +1230,18 @@ function applyEmptyAgentCanvas(): void {
   });
 }
 
+/** Clear agent canvas workspace snapshots when entering/exiting Peer Device Mode. */
+export function clearAgentCanvasForPeerSwitch(): void {
+  agentWorkspaceSnapshots.clear();
+  agentSnapshotLruOrder.length = 0;
+  lastAgentCanvasSwitchTargetKey = null;
+  applyEmptyAgentCanvas();
+  useProjectCanvasStore.getState().reset();
+  useGitCanvasStore.getState().reset();
+  usePanelViewCanvasStore.getState().reset();
+  useBottomTerminalCanvasStore.getState().reset();
+}
+
 /**
  * Save the current agent canvas under `prevWorkspaceId` (unless first mount) and restore the snapshot
  * for `nextWorkspaceId` (or empty canvas if none). Capture target snapshot before LRU eviction.
