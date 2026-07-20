@@ -371,6 +371,7 @@ impl ExternalSubagentCoordinator {
                     let suppressed = suppressed_keys.contains(&source.key);
                     sources.push(ExternalSourceCatalogEntry {
                         stable_key: source.preference_key(),
+                        presentation_group_id: None,
                         record: source.clone(),
                         lifecycle: if suppressed {
                             ExternalSourceLifecycleState::Suppressed

@@ -133,6 +133,7 @@ export interface ExternalSourceCatalogSnapshot {
   discoveryPending: boolean;
   sources: Array<{
     stableKey: string;
+    presentationGroupId?: string;
     record: ExternalSourceRecord;
     lifecycle: ExternalSourceLifecycle;
   }>;

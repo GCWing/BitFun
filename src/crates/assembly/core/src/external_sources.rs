@@ -1176,6 +1176,7 @@ impl WorkspaceExternalSourceService {
         }
         policy = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())?;
         snapshot.integration_policy = policy;
+        assign_external_source_presentation_groups(&mut snapshot);
         sanitize_external_snapshot_locations(&mut snapshot, self.workspace_root.as_deref());
         let mut current = lock_snapshot(&self.snapshot);
         let mcp_changed = snapshot.mcp_servers != current.mcp_servers
@@ -1296,6 +1297,7 @@ impl WorkspaceExternalSourceService {
             }
         }
         snapshot.integration_policy = policy;
+        assign_external_source_presentation_groups(&mut snapshot);
         sanitize_external_snapshot_locations(&mut snapshot, self.workspace_root.as_deref());
         let mut current = lock_snapshot(&self.snapshot);
         let mcp_changed = snapshot.mcp_servers != current.mcp_servers
@@ -2078,7 +2080,7 @@ impl WorkspaceExternalSourceService {
         enabled: bool,
         expected_preference_revision: u64,
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
-        let _refresh_guard = self.refresh_gate.lock().await;
+        let refresh_guard = self.refresh_gate.lock().await;
         if self.snapshot().preference_revision != expected_preference_revision {
             return Err(stale_operation_error(
                 "External source preferences changed; refresh before retrying",
@@ -2138,6 +2140,10 @@ impl WorkspaceExternalSourceService {
         lock_mcp_coordinator(&self.mcp_coordinator)
             .replace_suppressed_sources(authoritative.clone());
         propagate_suppressed_sources(&authoritative, self);
+        // Refresh acquires the same gate. Release the mutation critical section
+        // after the preference and in-memory coordinators agree, then refresh
+        // from the authoritative store to avoid self-deadlocking the request.
+        drop(refresh_guard);
         self.refresh_preserving_worker_recovery().await
     }
 
@@ -3217,6 +3223,47 @@ pub(super) fn safe_external_source_location(
             "<external-source>/{}",
             generic_tail().trim_start_matches('/')
         ),
+    }
+}
+
+fn assign_external_source_presentation_groups(snapshot: &mut ExternalSourceCatalogSnapshot) {
+    let mut groups = BTreeMap::<(String, String, String), Vec<usize>>::new();
+    for (index, source) in snapshot.sources.iter().enumerate() {
+        let normalized_location = source
+            .record
+            .location
+            .trim()
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .to_string();
+        let location_key = if normalized_location.is_empty() {
+            format!("<source:{}>", source.stable_key)
+        } else {
+            normalized_location
+        };
+        groups
+            .entry((
+                source.record.ecosystem_id.as_str().to_string(),
+                source.record.execution_domain_id.as_str().to_string(),
+                location_key,
+            ))
+            .or_default()
+            .push(index);
+    }
+
+    for indices in groups.into_values() {
+        let mut stable_keys = indices
+            .iter()
+            .map(|index| snapshot.sources[*index].stable_key.as_str())
+            .collect::<Vec<_>>();
+        stable_keys.sort_unstable();
+        let group_id = format!(
+            "external-source:{}",
+            serde_json::to_string(&stable_keys).unwrap_or_default()
+        );
+        for index in indices {
+            snapshot.sources[index].presentation_group_id = Some(group_id.clone());
+        }
     }
 }
 
@@ -5223,6 +5270,7 @@ mod tests {
             discovery_pending: false,
             sources: vec![ExternalSourceCatalogEntry {
                 stable_key: source_key.stable_key(),
+                presentation_group_id: None,
                 record: ExternalSourceRecord {
                     key: source_key.clone(),
                     ecosystem_id: EcosystemId::new("future-ai").unwrap(),
@@ -5285,6 +5333,84 @@ mod tests {
         let serialized = serde_json::to_string(&snapshot).unwrap();
         assert!(!serialized.contains("C:\\\\Users\\\\alice"));
         assert!(!serialized.contains("C:/Users/alice"));
+    }
+
+    #[test]
+    fn presentation_groups_are_assigned_before_location_redaction() {
+        let make_source = |provider_id: &str, stable_key: &str, location: &str| {
+            let source_key = SourceKey::new(provider_id, "user-configuration").unwrap();
+            ExternalSourceCatalogEntry {
+                stable_key: stable_key.to_string(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key,
+                    ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                    display_name: "OpenCode user configuration".to_string(),
+                    source_kind: "configuration".to_string(),
+                    scope: ExternalSourceScope::RemoteUser,
+                    location: location.to_string(),
+                    execution_domain_id: ExecutionDomainId::new("peer-a").unwrap(),
+                    health:
+                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: Vec::new(),
+                },
+                lifecycle: ExternalSourceLifecycleState::Available,
+            }
+        };
+        let mut snapshot = ExternalSourceCatalogSnapshot {
+            generation: 0,
+            discovery_pending: false,
+            sources: vec![
+                make_source(
+                    "opencode.commands",
+                    "command-source",
+                    "/remote/alice/.config/opencode/opencode.json",
+                ),
+                make_source(
+                    "opencode.subagents",
+                    "agent-source",
+                    "/remote/alice/.config/opencode/opencode.json",
+                ),
+                make_source(
+                    "opencode.mcp",
+                    "other-user-source",
+                    "/remote/bob/.config/opencode/opencode.json",
+                ),
+            ],
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
+            subagent_generation: 0,
+            preference_revision: 0,
+            subagents: Vec::new(),
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
+            diagnostics: Vec::new(),
+        };
+
+        assign_external_source_presentation_groups(&mut snapshot);
+        sanitize_external_snapshot_locations(&mut snapshot, None);
+
+        assert_eq!(
+            snapshot.sources[0].presentation_group_id,
+            snapshot.sources[1].presentation_group_id,
+        );
+        assert_ne!(
+            snapshot.sources[0].presentation_group_id,
+            snapshot.sources[2].presentation_group_id,
+        );
+        assert!(snapshot
+            .sources
+            .iter()
+            .all(|source| source.record.location == "<remote>/.config/opencode/opencode.json"));
     }
 
     struct DelayedProvider {

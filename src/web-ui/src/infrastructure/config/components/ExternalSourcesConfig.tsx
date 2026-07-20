@@ -39,10 +39,21 @@ import {
   ConfigPageRow,
   ConfigPageSection,
 } from './common';
+import {
+  buildExternalSourcePresentationGroups,
+  catalogDiagnosticsWithoutSourceDuplicates,
+  externalSourceDiagnosticKey,
+} from '../externalSourcePresentation';
 import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
 import './ExternalSourcesConfig.scss';
 
 const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
+const SOURCE_COUNT_LABELS = [
+  ['commands', 'sources.commandCount'],
+  ['tools', 'sources.toolCount'],
+  ['agents', 'sources.agentCount'],
+  ['mcps', 'sources.mcpCount'],
+] as const;
 
 type SnapshotLoadResult =
   | { status: 'accepted'; snapshot: ExternalSourceCatalogSnapshot }
@@ -439,58 +450,14 @@ const ExternalSourcesConfig: React.FC = () => {
     };
   }, [loadSnapshot, snapshot?.discoveryPending]);
 
-  const commandCounts = useMemo(() => {
-    const namesBySource = new Map<string, Set<string>>();
-    const add = (providerId: string, sourceId: string, commandName: string) => {
-      const key = `${providerId}\u0000${sourceId}`;
-      const names = namesBySource.get(key) ?? new Set<string>();
-      names.add(commandName.toLowerCase());
-      namesBySource.set(key, names);
-    };
-    for (const command of snapshot?.commands ?? []) {
-      const source = command.definition.id.source;
-      add(source.providerId, source.sourceId, command.definition.name);
-    }
-    for (const conflict of snapshot?.commandConflicts ?? []) {
-      for (const candidate of conflict.candidates) {
-        add(candidate.source.providerId, candidate.source.sourceId, conflict.commandName);
-      }
-    }
-    return new Map(
-      Array.from(namesBySource, ([source, names]) => [source, names.size]),
-    );
-  }, [snapshot]);
-
-  const toolCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const tool of snapshot?.tools ?? []) {
-      const source = tool.definition.id.target.source;
-      const key = `${source.providerId}\u0000${source.sourceId}`;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  }, [snapshot?.tools]);
-
-  const agentCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const agent of snapshot?.subagents ?? []) {
-      for (const source of agent.sourceKeys) {
-        const key = `${source.providerId}\u0000${source.sourceId}`;
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [snapshot]);
-
-  const mcpCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const server of snapshot?.mcpServers ?? []) {
-      const source = server.definition.id.source;
-      const key = `${source.providerId}\u0000${source.sourceId}`;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  }, [snapshot?.mcpServers]);
+  const sourceGroups = useMemo(
+    () => snapshot ? buildExternalSourcePresentationGroups(snapshot) : [],
+    [snapshot],
+  );
+  const catalogDiagnostics = useMemo(
+    () => snapshot ? catalogDiagnosticsWithoutSourceDuplicates(snapshot, sourceGroups) : [],
+    [snapshot, sourceGroups],
+  );
 
   const commandConflicts = useMemo(
     () => unresolvedFirst(snapshot?.commandConflicts ?? []),
@@ -591,18 +558,22 @@ const ExternalSourcesConfig: React.FC = () => {
     }
   }, [acceptMutationSnapshot, readOnlyHintKey, requestScope, t]);
 
-  const setEnabled = useCallback(async (sourceKey: string, enabled: boolean) => {
-    if (!snapshot) return;
+  const setEnabled = useCallback(async (
+    sourceKey: string,
+    enabled: boolean,
+  ) => {
+    const currentSnapshot = snapshotRef.current;
+    if (!currentSnapshot) return;
     await runMutation(
       sourceKey,
       () => externalSourcesAPI.setSourceEnabled(
         workspacePath,
         sourceKey,
         enabled,
-        snapshot.preferenceRevision ?? 0,
+        currentSnapshot.preferenceRevision ?? 0,
       ),
     );
-  }, [runMutation, snapshot, workspacePath]);
+  }, [runMutation, workspacePath]);
 
   const chooseConflict = useCallback(async (conflictKey: string, candidateId: string) => {
     if (!snapshot) return;
@@ -838,12 +809,9 @@ const ExternalSourcesConfig: React.FC = () => {
     }
     return accessRank[requested] <= accessRank[ceiling] ? requested : ceiling;
   };
-  const diagnosticAttentionCount = (snapshot?.diagnostics ?? [])
+  const diagnosticAttentionCount = catalogDiagnostics
     .filter((diagnostic) => diagnostic.severity !== 'info').length
-    + (snapshot?.sources ?? []).reduce((count, source) => (
-      count + (source.record.diagnostics ?? [])
-        .filter((diagnostic) => diagnostic.severity !== 'info').length
-    ), 0);
+    + sourceGroups.reduce((count, group) => count + group.diagnostics.length, 0);
   const externalAttentionCount = (snapshot?.toolApprovalRequests?.length ?? 0)
     + (snapshot?.pendingSubagentApprovals?.length ?? 0)
     + (snapshot?.mcpApprovalRequests?.length ?? 0)
@@ -1269,18 +1237,18 @@ const ExternalSourcesConfig: React.FC = () => {
                 {agentChangeNotice.message}
               </div>
             ) : null}
-            {(snapshot?.diagnostics?.length ?? 0) > 0 ? (
+            {catalogDiagnostics.length > 0 ? (
               <details
                 className="bitfun-external-sources-config__notice"
-                data-external-attention={(snapshot?.diagnostics ?? [])
+                data-external-attention={catalogDiagnostics
                   .some((diagnostic) => diagnostic.severity !== 'info') ? 'true' : undefined}
               >
                 <summary>
-                  {t('diagnostics.summary', { count: snapshot?.diagnostics?.length ?? 0 })}
+                  {t('diagnostics.summary', { count: catalogDiagnostics.length })}
                 </summary>
                 <ul className="bitfun-external-sources-config__diagnostics">
-                  {snapshot?.diagnostics?.map((diagnostic, index) => (
-                    <li key={`${diagnostic.code}-${index}`}>
+                  {catalogDiagnostics.map((diagnostic) => (
+                    <li key={externalSourceDiagnosticKey(diagnostic)}>
                       <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
                       <details>
                         <summary>{t('common.technicalDetails')}</summary>
@@ -2042,90 +2010,136 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
-            <ConfigPageSection
-              title={t('sources.title')}
-            >
-              {snapshot && !snapshot.discoveryPending && snapshot.sources.length === 0 ? (
-                <div className="bitfun-external-sources-config__empty">{t('sources.empty')}</div>
-              ) : snapshot?.sources.map((source) => {
-                const sourcePair = `${source.record.key.providerId}\u0000${source.record.key.sourceId}`;
-                const removed = source.lifecycle === 'removed';
-                const enabled = !removed && source.lifecycle !== 'suppressed';
-                const sourceDiagnostics = (source.record.diagnostics ?? [])
-                  .filter((diagnostic) => diagnostic.severity !== 'info');
-                return (
-                  <React.Fragment key={source.stableKey}>
-                  <ConfigPageRow
-                    label={source.record.displayName}
-                    description={(
-                      <>
-                        <span
-                          className="bitfun-external-sources-config__source-location"
-                          title={source.record.location}
+            {sourceGroups.length > 0 ? (
+              <ConfigPageSection title={t('sources.title')}>
+                {sourceGroups.map((group) => {
+                  return (
+                    <React.Fragment key={group.key}>
+                      <ConfigPageRow
+                        className="bitfun-external-sources-config__source-group"
+                        label={group.displayName}
+                        description={(
+                          <div className="bitfun-external-sources-config__source-description">
+                            <span className="bitfun-external-sources-config__source-origin">
+                              <span
+                                className="bitfun-external-sources-config__source-location"
+                                title={group.location}
+                                translate="no"
+                              >
+                                {group.location}
+                              </span>
+                              <span aria-hidden="true">·</span>
+                              <span className="bitfun-external-sources-config__source-scopes">
+                                {group.scopes.map((scope, index) => (
+                                  <React.Fragment key={scope}>
+                                    {index > 0 ? <span aria-hidden="true"> + </span> : null}
+                                    <span>
+                                      {scope === 'workspace_local'
+                                        ? t('shared:features.workspace')
+                                        : t(`scope.${scope}`)}
+                                    </span>
+                                  </React.Fragment>
+                                ))}
+                              </span>
+                            </span>
+                            {SOURCE_COUNT_LABELS.some(
+                              ([capability]) => group.counts[capability] > 0,
+                            ) ? (
+                              <span className="bitfun-external-sources-config__source-counts">
+                                {SOURCE_COUNT_LABELS.map(([capability, label]) => {
+                                  const count = group.counts[capability];
+                                  return count > 0 ? (
+                                    <span
+                                      key={capability}
+                                      className="bitfun-external-sources-config__source-count"
+                                    >
+                                      {t(label, { count })}
+                                    </span>
+                                  ) : null;
+                                })}
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                        align="center"
+                      >
+                        <div
+                          className="bitfun-external-sources-config__source-members"
+                          role="group"
+                          aria-label={t('sources.toggleLabel', { name: group.displayName })}
                         >
-                          {source.record.location}
-                        </span>
-                        {' · '}
-                        {source.record.scope === 'workspace_local'
-                          ? t('shared:features.workspace')
-                          : t(`scope.${source.record.scope}`)}
-                        {' · '}
-                        {t('sources.commandCount', { count: commandCounts.get(sourcePair) ?? 0 })}
-                        {' · '}
-                        {t('sources.toolCount', { count: toolCounts.get(sourcePair) ?? 0 })}
-                        {' · '}
-                        {t('sources.agentCount', { count: agentCounts.get(sourcePair) ?? 0 })}
-                        {' · '}
-                        {t('sources.mcpCount', { count: mcpCounts.get(sourcePair) ?? 0 })}
-                      </>
-                    )}
-                    align="center"
-                  >
-                    <div className="bitfun-external-sources-config__source-control">
-                      <span className={`bitfun-external-sources-config__state is-${source.lifecycle}`}>
-                        {t(`lifecycle.${source.lifecycle}`)}
-                      </span>
-                      <Switch
-                        size="small"
-                        checked={enabled}
-                        disabled={!policyCompatible || removed
-                          || !hostCapabilities.canManageSources}
-                        loading={busyKey === source.stableKey}
-                        aria-label={t('sources.toggleLabel', { name: source.record.displayName })}
-                        onChange={(event) => void setEnabled(source.stableKey, event.currentTarget.checked)}
-                      />
-                    </div>
-                  </ConfigPageRow>
-                  {sourceDiagnostics.length > 0 ? (
-                    <details
-                      className="bitfun-external-sources-config__notice"
-                      data-external-attention={sourceDiagnostics
-                        .some((diagnostic) => diagnostic.severity !== 'info') ? 'true' : undefined}
-                    >
-                      <summary>
-                        {t('diagnostics.sourceSummary', {
-                          name: source.record.displayName,
-                          count: sourceDiagnostics.length,
-                        })}
-                      </summary>
-                      <ul className="bitfun-external-sources-config__diagnostics">
-                        {sourceDiagnostics.map((diagnostic, index) => (
-                          <li key={`${diagnostic.code}-${index}`}>
-                            <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
-                            <details>
-                              <summary>{t('common.technicalDetails')}</summary>
-                              <code>{diagnostic.code}</code>
-                              <div>{diagnostic.message}</div>
-                            </details>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  ) : null}
-                  </React.Fragment>
-                );
-              })}
-            </ConfigPageSection>
+                          {group.members.map((member) => {
+                            const capabilityLabel = member.capability === 'source'
+                              ? group.displayName
+                              : t(`policy.capability.${member.capability}`);
+                            const scopeLabel = member.scope === 'workspace_local'
+                              ? t('shared:features.workspace')
+                              : t(`scope.${member.scope}`);
+                            return (
+                              <Switch
+                                key={member.stableKey}
+                                className="bitfun-external-sources-config__source-member"
+                                size="small"
+                                label={capabilityLabel}
+                                description={group.scopes.length > 1 ? scopeLabel : undefined}
+                                checked={member.enabled}
+                                disabled={!policyCompatible
+                                  || !member.mutable
+                                  || !hostCapabilities.canManageSources}
+                                loading={busyKey === member.stableKey}
+                                aria-label={t('sources.toggleLabel', {
+                                  name: [
+                                    group.displayName,
+                                    capabilityLabel,
+                                    scopeLabel,
+                                    t(`lifecycle.${member.lifecycle}`),
+                                  ].join(' · '),
+                                })}
+                                onChange={(event) => void setEnabled(
+                                  member.stableKey,
+                                  event.currentTarget.checked,
+                                )}
+                              >
+                                {member.lifecycle !== 'available' ? (
+                                  <span className={`bitfun-external-sources-config__state is-${member.lifecycle}`}>
+                                    {t(`lifecycle.${member.lifecycle}`)}
+                                  </span>
+                                ) : null}
+                              </Switch>
+                            );
+                          })}
+                        </div>
+                      </ConfigPageRow>
+                      {group.diagnostics.length > 0 ? (
+                        <details
+                          className="bitfun-external-sources-config__notice"
+                          data-external-attention="true"
+                        >
+                          <summary>
+                            {t('diagnostics.sourceSummary', {
+                              name: group.displayName,
+                              count: group.diagnostics.length,
+                            })}
+                          </summary>
+                          <ul className="bitfun-external-sources-config__diagnostics">
+                            {group.diagnostics.map((diagnostic) => (
+                              <li key={externalSourceDiagnosticKey(diagnostic)}>
+                                <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
+                                <details>
+                                  <summary>{t('common.technicalDetails')}</summary>
+                                  <code>{diagnostic.code}</code>
+                                  <div>{diagnostic.message}</div>
+                                </details>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })}
+              </ConfigPageSection>
+            ) : null}
 
             {(snapshot?.tools?.length ?? 0) > 0 ? (
               <ConfigPageSection title={t('tools.title')}>

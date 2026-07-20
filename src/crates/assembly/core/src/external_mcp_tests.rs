@@ -67,6 +67,7 @@ fn snapshot(behavior_version: &str) -> ExternalMcpCoordinatorSnapshot {
         discovery_pending: false,
         sources: vec![ExternalSourceCatalogEntry {
             stable_key: source.preference_key(),
+            presentation_group_id: None,
             record: source,
             lifecycle: ExternalSourceLifecycleState::Available,
         }],

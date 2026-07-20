@@ -12,10 +12,11 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
     ExternalMcpConflictCandidate, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
     ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
-    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
-    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
-    ExternalSourceProviderError, ExternalSourcePublicSnapshot, ExternalSourceRecord,
-    ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
+    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
+    ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
+    ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,
+    ExternalSourcePublicSnapshot, ExternalSourceRecord, ExternalSourceScope,
+    ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
     ExternalToolStaticStatus, ExternalWatchRoot, PreparedExternalMcpServer,
     PreparedExternalMcpTransport, PromptCommandAvailability, PromptCommandCatalogEntry,
     PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
@@ -98,6 +99,28 @@ fn source_and_command_identity_remain_provider_qualified() {
 
     assert_ne!(left, right);
     assert_ne!(left.stable_key(), right.stable_key());
+}
+
+#[test]
+fn presentation_group_id_is_optional_and_uses_the_camel_case_wire_name() {
+    let mut entry = ExternalSourceCatalogEntry {
+        stable_key: "opencode.commands:project".to_string(),
+        presentation_group_id: None,
+        record: source("opencode.commands", "opencode", "project"),
+        lifecycle: ExternalSourceLifecycleState::Available,
+    };
+
+    let legacy_value = serde_json::to_value(&entry).unwrap();
+    assert!(legacy_value.get("presentationGroupId").is_none());
+    let legacy_entry: ExternalSourceCatalogEntry = serde_json::from_value(legacy_value).unwrap();
+    assert!(legacy_entry.presentation_group_id.is_none());
+
+    entry.presentation_group_id = Some("external-source:[\"source\"]".to_string());
+    let current_value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(
+        current_value["presentationGroupId"],
+        "external-source:[\"source\"]"
+    );
 }
 
 #[test]

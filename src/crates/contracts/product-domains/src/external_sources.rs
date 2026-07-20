@@ -1458,6 +1458,11 @@ pub enum ExternalSourceLifecycleState {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceCatalogEntry {
     pub stable_key: String,
+    /// Opaque identity shared by provider records that describe the same
+    /// physical source. Product surfaces may coalesce matching entries without
+    /// comparing redacted display locations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation_group_id: Option<String>,
     pub record: ExternalSourceRecord,
     pub lifecycle: ExternalSourceLifecycleState,
 }

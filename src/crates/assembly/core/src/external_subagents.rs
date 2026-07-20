@@ -1167,6 +1167,7 @@ mod tests {
             )]),
             sources: vec![ExternalSourceCatalogEntry {
                 stable_key: "source".to_string(),
+                presentation_group_id: None,
                 record: ExternalSourceRecord {
                     key: source,
                     ecosystem_id: EcosystemId::new("fake").unwrap(),
