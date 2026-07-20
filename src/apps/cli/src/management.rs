@@ -346,7 +346,7 @@ pub(crate) async fn activate_plugin(package_id: &str, confirm: Option<&str>) -> 
         let diagnostic = crate::plugin_diagnostics::escape_terminal_text(&error.to_string());
         if confirm.is_some() {
             anyhow!(
-                "{}\nRe-run `bitfun-cli plugins activate {}` to preview the current content, then confirm with the new content hash.",
+                "{}\nRe-run `bitfun plugins activate {}` to preview the current content, then confirm with the new content hash.",
                 diagnostic,
                 crate::plugin_diagnostics::escape_terminal_text(package_id)
             )
@@ -359,7 +359,7 @@ pub(crate) async fn activate_plugin(package_id: &str, confirm: Option<&str>) -> 
     if confirm.is_none() {
         println!();
         println!(
-            "No activation state changed. Re-run `bitfun-cli plugins activate {} --confirm {}` to confirm this exact package content.",
+            "No activation state changed. Re-run `bitfun plugins activate {} --confirm {}` to confirm this exact package content.",
             crate::plugin_diagnostics::escape_terminal_text(package_id),
             crate::plugin_diagnostics::escape_terminal_text(&view.content_hash)
         );
@@ -378,7 +378,7 @@ pub(crate) async fn deactivate_plugin(package_id: &str) -> Result<()> {
                 ManagedPluginSourceError::DeactivationPersistenceUncertain { .. }
             ) {
                 anyhow!(
-                    "{diagnostic}\nThe saved state may already be cleared. Retry `bitfun-cli plugins deactivate {}` to confirm the result; the operation is idempotent.",
+                    "{diagnostic}\nThe saved state may already be cleared. Retry `bitfun plugins deactivate {}` to confirm the result; the operation is idempotent.",
                     crate::plugin_diagnostics::escape_terminal_text(package_id)
                 )
             } else {

@@ -7,10 +7,10 @@ use support::{
 };
 
 fn run_cli(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
+    Command::new(env!("CARGO_BIN_EXE_bitfun"))
         .args(args)
         .output()
-        .expect("run bitfun-cli")
+        .expect("run bitfun")
 }
 
 fn stdout(output: &Output) -> String {

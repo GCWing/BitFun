@@ -202,7 +202,7 @@ impl CliTestEnvironment {
     }
 
     pub(crate) fn std_command(&self) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_bitfun"));
         command.current_dir(&self.workspace);
         self.apply_std_environment(&mut command);
         command
@@ -224,7 +224,15 @@ impl CliTestEnvironment {
     }
 
     pub(crate) fn pty_command(&self) -> CommandBuilder {
-        let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_bitfun-cli"));
+        self.pty_command_for(env!("CARGO_BIN_EXE_bitfun"))
+    }
+
+    pub(crate) fn deprecated_pty_command(&self) -> CommandBuilder {
+        self.pty_command_for(env!("CARGO_BIN_EXE_bitfun-cli"))
+    }
+
+    fn pty_command_for(&self, binary: &str) -> CommandBuilder {
+        let mut command = CommandBuilder::new(binary);
         command.cwd(&self.workspace);
         command.env_remove("BITFUN_USER_ROOT");
         command.env_remove("BITFUN_HOME");

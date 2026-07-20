@@ -9,7 +9,7 @@ fn doctor_reports_the_validated_cli_runtime_assembly() {
     let config_root = temp.path().join("host-config");
     std::fs::create_dir_all(&workspace).expect("create workspace");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
+    let output = Command::new(env!("CARGO_BIN_EXE_bitfun"))
         .arg("doctor")
         .current_dir(&workspace)
         .env_remove("BITFUN_USER_ROOT")
@@ -21,7 +21,7 @@ fn doctor_reports_the_validated_cli_runtime_assembly() {
         .env("XDG_CONFIG_HOME", &config_root)
         .env("HOME", &home_root)
         .output()
-        .expect("run bitfun-cli doctor");
+        .expect("run bitfun doctor");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -57,7 +57,7 @@ fn health_reports_assembly_and_compatibility_boundaries() {
     let config_root = temp.path().join("host-config");
     std::fs::create_dir_all(&workspace).expect("create workspace");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
+    let output = Command::new(env!("CARGO_BIN_EXE_bitfun"))
         .arg("health")
         .current_dir(&workspace)
         .env_remove("BITFUN_USER_ROOT")
@@ -69,7 +69,7 @@ fn health_reports_assembly_and_compatibility_boundaries() {
         .env("XDG_CONFIG_HOME", &config_root)
         .env("HOME", &home_root)
         .output()
-        .expect("run bitfun-cli health");
+        .expect("run bitfun health");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -104,7 +104,7 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
         let config_root = temp.path().join("host-config");
         std::fs::create_dir_all(&workspace).expect("create workspace");
 
-        let mut command = Command::new(env!("CARGO_BIN_EXE_bitfun-cli"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_bitfun"));
         command
             .arg("doctor")
             .current_dir(&workspace)
@@ -123,7 +123,7 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
             command.env("BITFUN_E2E_HOME", &home_root);
         }
 
-        let output = command.output().expect("run bitfun-cli doctor");
+        let output = command.output().expect("run bitfun doctor");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success(), "{case_name}: {stderr}");
         assert!(

@@ -179,7 +179,7 @@ fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -
                 "Access: safely off; unsupported policy schema {}",
                 policy.schema_major
             ),
-            "Recover: bitfun-cli config external reset-incompatible".to_string(),
+            "Recover: bitfun config external reset-incompatible".to_string(),
         ];
     }
     if !policy.status.is_compatible() {
@@ -244,7 +244,7 @@ fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -
             descriptor.display_name
         ));
     }
-    lines.push("Manage: bitfun-cli config external --help".to_string());
+    lines.push("Manage: bitfun config external --help".to_string());
     lines
 }
 

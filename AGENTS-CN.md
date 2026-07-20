@@ -55,7 +55,7 @@ pnpm run desktop:dev               # 完整热更新：Vite HMR + Rust 自动重
 pnpm run desktop:preview:debug     # 复用预构建二进制 + Vite HMR；无 Rust 自动重编译
 pnpm run dev:web                   # 纯浏览器前端
 pnpm run cli:dev                   # CLI 运行时
-pnpm run cli:install               # release 编译并安装 bitfun-cli 到 ~/.local/bin（写入 bashrc/zshrc PATH）
+pnpm run cli:install               # release 编译并安装 bitfun（Windows/macOS/Linux；含废弃兼容入口 bitfun-cli）
 
 # 检查
 pnpm run fmt:rs                     # 只格式化已改动 / 已暂存的 Rust 文件

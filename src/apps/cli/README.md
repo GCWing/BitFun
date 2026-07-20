@@ -13,14 +13,21 @@ scheduler, persistence manager, or event queue. Plugin execution is not enabled 
 ## Common commands
 
 ```bash
-bitfun-cli                                  # interactive TUI
-bitfun-cli exec "summarize this project"   # non-interactive, rejects permission requests
-bitfun-cli exec "run tests" --auto         # approve tool requests for this invocation
-bitfun-cli sessions list
-bitfun-cli usage
-bitfun-cli doctor
-bitfun-cli health
+bitfun                                  # interactive TUI
+bitfun exec "summarize this project"   # non-interactive, rejects permission requests
+bitfun exec "run tests" --auto         # approve tool requests for this invocation
+bitfun sessions list
+bitfun usage
+bitfun doctor
+bitfun health
 ```
+
+`bitfun-cli` is a deprecated compatibility entrypoint. It writes
+`Warning: \`bitfun-cli\` is deprecated; use \`bitfun\` instead.` to stderr; new scripts and
+integrations must use `bitfun`. Official installers and archives ship both commands as a pair; a
+standalone legacy launcher is an incomplete installation and reports how to reinstall the pair.
+The naming change is limited to the shell command: the Cargo package, archive prefix, service
+identifiers, and persistent paths retain the `bitfun-cli` name.
 
 The TUI asks before protected tool calls and offers `Allow once`, `Allow always`, and `Reject`.
 `Allow always` applies only to matching tools in the current runtime context; it does not update the
@@ -64,23 +71,23 @@ up.
 Full setup flow on a server:
 
 ```bash
-bash src/apps/cli/install.sh    # build + install the CLI (see below)
-bitfun-cli                      # start the TUI, then /login with your account
-bitfun-cli daemon install       # register auto-start; device stays reachable after exit/reboot
-bitfun-cli daemon status        # verify: daemon running + service installed/active
+pnpm run cli:install       # build + install both entrypoints (see below)
+bitfun                     # start the TUI, then /login with your account
+bitfun daemon install      # register auto-start; device stays reachable after exit/reboot
+bitfun daemon status       # verify: daemon running + service installed/active
 ```
 
 ```bash
-bitfun-cli daemon status      # daemon liveness + auto-start service status
-bitfun-cli daemon install     # register and start the auto-start service (requires /login first)
-bitfun-cli daemon uninstall   # stop and remove the auto-start service
-bitfun-cli daemon run         # foreground mode (used by the service manager; also for debugging)
+bitfun daemon status      # daemon liveness + auto-start service status
+bitfun daemon install     # register and start the auto-start service (requires /login first)
+bitfun daemon uninstall   # stop and remove the auto-start service
+bitfun daemon run         # foreground mode (used by the service manager; also for debugging)
 ```
 
 - Prerequisites: a persisted account session (`/login` inside the TUI first), and on Linux a
   working systemd user session (`systemctl --user`). Containers, WSL, and some minimal images do
   not have one; there `daemon install` reports a clear error and you can instead run
-  `bitfun-cli daemon run` under your own supervisor (tmux, nohup, a custom unit, ...).
+  `bitfun daemon run` under your own supervisor (tmux, nohup, a custom unit, ...).
 - Linux: installs a systemd user unit (`~/.config/systemd/user/bitfun-cli-daemon.service`) and
   enables linger, so the daemon starts at boot and keeps running without an interactive login
   session. macOS: installs a LaunchAgent. Windows is not supported for auto-start; use
@@ -99,7 +106,7 @@ bitfun-cli daemon run         # foreground mode (used by the service manager; al
 Both the interactive CLI and the daemon continuously sync account settings (model configs,
 default model, agent preferences, ...) with the account cloud:
 
-- Local changes (TUI model picker / model forms, `bitfun-cli models set-default`, or a peer
+- Local changes (TUI model picker / model forms, `bitfun models set-default`, or a peer
   controller's `set_config`) upload after a ~5s debounce, deduped by content hash.
 - Cloud changes from other devices are pulled right after process start, then every ~30s, and
   applied to the running process (AI client cache invalidated, config reloaded).
@@ -111,37 +118,60 @@ default model, agent preferences, ...) with the account cloud:
 
 ### Upgrading
 
-Re-run `bash src/apps/cli/install.sh`. It installs the new binary and restarts the daemon's
-auto-start service when one is installed (a running daemon otherwise keeps executing the old
-binary). If you supervise the daemon yourself (`daemon run` under tmux/nohup/a custom unit),
-restart it manually after upgrading.
+Re-run `pnpm run cli:install`, or use the direct Bash/PowerShell command below for your platform.
+The installer stages and verifies both entrypoints before replacing an existing pair; a failed
+replacement restores the previous pair. It also restarts the daemon's auto-start service when one
+is installed (a running daemon otherwise keeps executing the old binary). If you supervise the
+daemon yourself (`daemon run` under tmux/nohup/a custom unit), restart it manually after upgrading.
 
-## One-click install (Linux / macOS, amd64 + arm64)
+## One-click install (Windows / macOS / Linux)
 
 From the repository root:
 
 ```bash
-bash src/apps/cli/install.sh
+pnpm run cli:install
 ```
 
-Or from this directory:
+The dispatcher selects PowerShell on Windows and Bash on macOS/Linux. Direct platform commands are:
 
 ```bash
-bash install.sh
+# macOS / Linux (amd64 + arm64)
+bash src/apps/cli/install.sh
+
+# Windows x64
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File src/apps/cli/install.ps1
 ```
 
-The script will:
+Both installers:
 
 1. `cargo build -p bitfun-cli --release` (native host CPU)
-2. Install `bitfun-cli` to `~/.local/bin` (override with `BITFUN_CLI_BIN_DIR`)
-3. Idempotently add a PATH block to `~/.bashrc` and `~/.zshrc`
-4. `source` the matching rc when the current shell is interactive bash/zsh
+2. Install `bitfun` and the deprecated `bitfun-cli` compatibility entrypoint
+3. Verify the primary command and the exact compatibility warning
+4. Add the install directory to PATH idempotently unless requested otherwise
 
-Then run:
+The Unix default directory is `~/.local/bin`; the Windows default is
+`%LOCALAPPDATA%\BitFun\bin`. Unix updates managed blocks in `~/.bashrc` and `~/.zshrc`;
+Windows updates the current user's PATH.
+
+The installer process cannot update the shell that launched it. Open a new terminal, then run:
 
 ```bash
-bitfun-cli
+bitfun
 ```
+
+For the current shell, either invoke the printed direct path or temporarily prepend the install
+directory to `PATH` using the copyable command printed by the installer.
+
+### Release archives
+
+Official macOS/Linux archives contain `bitfun`, deprecated `bitfun-cli`, `README.md`, and
+`PROJECT-README.md`; the Windows x64 ZIP contains the matching `.exe` pair and documents. Extract
+the whole archive and keep the two executables together in the same directory. Run `./bitfun` on
+macOS/Linux or `.\bitfun.exe` in PowerShell, then add that directory to `PATH` if desired.
+
+Do not copy only `bitfun-cli` from an archive. The deprecated command is intentionally a thin
+launcher for its sibling `bitfun`; if the sibling is missing, it reports an incomplete installation
+with recovery guidance instead of attempting another lookup.
 
 On a server that should stay reachable for account multi-device access, continue with the
 [daemon section](#always-on-account-device-host-daemon) above after `/login`.
@@ -154,6 +184,9 @@ On a server that should stay reachable for account multi-device access, continue
 | `BITFUN_CLI_SKIP_SHELLRC` | Set `1` to skip bashrc/zshrc edits |
 | `CARGO_TARGET_DIR` | Cargo target dir (e.g. `$HOME/bitfun-build/target` on shared mounts) |
 | `CARGO_BUILD_JOBS` | Limit rustc parallelism on small VPS |
+
+Windows accepts `-BinDir <path>` and `-SkipPathUpdate` arguments. Unix accepts the environment
+variables above.
 
 Example on a small arm64 VPS:
 
@@ -171,5 +204,5 @@ CARGO_BUILD_JOBS=1 bash src/apps/cli/install.sh
 ```bash
 pnpm run cli:dev      # cargo run
 pnpm run cli:build    # cargo build --release
-pnpm run cli:install  # same as bash src/apps/cli/install.sh
+pnpm run cli:install  # dispatch to install.ps1 on Windows or install.sh on macOS/Linux
 ```

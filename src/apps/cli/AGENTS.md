@@ -112,6 +112,6 @@ two-product build assertion.
 
 ## Install for end users
 
-Prefer [`install.sh`](install.sh) / [`README.md`](README.md): release build, copy to
-`~/.local/bin`, and idempotent `~/.bashrc` / `~/.zshrc` PATH wiring so users can
-run `bitfun-cli` after install.
+Use [`install.ps1`](install.ps1), [`install.sh`](install.sh), and [`README.md`](README.md) for
+platform-native per-user installation. Document `bitfun` as primary; ship `bitfun-cli` only as the
+deprecated compatibility entrypoint, and use `bitfun` in all new examples and integrations.
