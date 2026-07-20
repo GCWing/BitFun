@@ -6,6 +6,7 @@
 //! decisions and successful direct mutations in a session-scoped JSONL stream.
 
 use log::warn;
+use regex::Regex;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -140,33 +141,27 @@ fn has_prohibition_signal(message: &str) -> bool {
         "do not delete",
         "don't delete",
         "must not delete",
-        "no need to modify",
-        "no need to change",
-        "don't have to modify",
-        "do not have to modify",
         "not allowed to modify",
         "avoid modifying",
-        "already taken care of",
-        "keep tests unchanged",
-        "keep test files unchanged",
-        "leave tests unchanged",
-        "leave test files unchanged",
-        "tests are off limits",
-        "test files are off limits",
-        "tests must remain unchanged",
-        "test files must remain unchanged",
-        "without modifying tests",
-        "without modifying test files",
-        "only modify non-test",
+        "keep ",
+        "leave ",
+        "off limits",
+        "read-only",
+        "must remain unchanged",
+        "must remain untouched",
+        "without modifying",
+        "without changing",
+        "only modify",
+        "only change",
         "non-test files only",
-        "不要",
         "不得",
         "不能修改",
         "不能删除",
         "禁止修改",
         "禁止删除",
-        "无需修改",
-        "不需要修改",
+        "不要修改",
+        "不要更改",
+        "不要删除",
         "测试文件保持不变",
         "仅修改非测试",
     ]
@@ -205,6 +200,59 @@ fn has_relaxation_signal(message: &str) -> bool {
     .any(|signal| lower.contains(signal))
 }
 
+fn matches_any_regex(
+    patterns: &'static OnceLock<Vec<Regex>>,
+    sources: &[&str],
+    text: &str,
+) -> bool {
+    patterns
+        .get_or_init(|| {
+            sources
+                .iter()
+                .map(|source| Regex::new(source).expect("valid edit-constraint regex"))
+                .collect()
+        })
+        .iter()
+        .any(|pattern| pattern.is_match(text))
+}
+
+fn explicit_test_mutation_restriction(text: &str) -> bool {
+    static PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
+    matches_any_regex(
+        &PATTERNS,
+        &[
+            r"\b(?:do not|don't|dont|must not|should not|never|avoid)\s+(?:modify|change|edit|touch|update|alter|write)\s+(?:any\s+)?(?:of\s+)?(?:the\s+)?(?:test files?|tests?|testing logic)\b",
+            r"\b(?:test files?|tests?|testing logic)\s+(?:must|should|can)\s+not\s+be\s+(?:modified|changed|edited|touched|updated|altered|written)\b",
+            r"\b(?:keep|leave)\s+(?:the\s+)?(?:test files?|tests?|testing logic)\s+(?:unchanged|untouched|as[- ]is)\b",
+            r"\b(?:test files?|tests?|testing logic)\s+(?:are|is)\s+(?:off limits|read[- ]only)\b",
+            r"\b(?:test files?|tests?|testing logic)\s+must\s+remain\s+(?:unchanged|untouched)\b",
+            r"\bwithout\s+(?:modifying|changing|editing|touching|updating|altering)\s+(?:the\s+)?(?:test files?|tests?|testing logic)\b",
+            r"\bonly\s+(?:modify|change|edit|touch|update)\s+(?:the\s+)?non[- ]tests?(?:\s+files?)?\b",
+            r"\b(?:changes?|edits?)\s+(?:must|should)\s+be\s+(?:limited|restricted)\s+to\s+non[- ]tests?(?:\s+files?)?\b",
+            r"(?:不要|不得|禁止|不能)(?:修改|改动|更改|编辑|触碰|写入)(?:任何)?(?:测试文件|测试|测试逻辑)",
+            r"(?:测试文件|测试|测试逻辑)(?:不得|禁止|不能)(?:被)?(?:修改|改动|更改|编辑|触碰|写入)",
+            r"(?:保持|维持)(?:测试文件|测试|测试逻辑)不变",
+            r"(?:测试文件|测试|测试逻辑)(?:保持|维持)不变",
+            r"仅(?:修改|改动|更改|编辑)非测试(?:文件)?",
+        ],
+        text,
+    )
+}
+
+fn explicit_test_delete_restriction(text: &str) -> bool {
+    static PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
+    matches_any_regex(
+        &PATTERNS,
+        &[
+            r"\b(?:do not|don't|dont|must not|should not|never|avoid)\s+(?:delete|remove|unlink)\s+(?:any\s+)?(?:of\s+)?(?:the\s+)?(?:test files?|tests?|testing logic)\b",
+            r"\b(?:test files?|tests?|testing logic)\s+(?:must|should|can)\s+not\s+be\s+(?:deleted|removed|unlinked)\b",
+            r"(?:不要|不得|禁止|不能)(?:删除|移除)(?:任何)?(?:测试文件|测试|测试逻辑)",
+            r"(?:测试文件|测试|测试逻辑)(?:不得|禁止|不能)(?:被)?(?:删除|移除)",
+        ],
+        text,
+    )
+}
+
 fn deterministic_test_constraint(message: &str) -> Option<ExtractedConstraint> {
     relevant_sentences(message).find_map(|sentence| {
         let lower = sentence.to_lowercase();
@@ -231,46 +279,23 @@ fn deterministic_test_constraint(message: &str) -> Option<ExtractedConstraint> {
         if explicitly_relaxes_tests {
             return None;
         }
-        let mentions_tests = lower.contains("test file")
-            || lower.contains("tests")
-            || lower.contains("testing logic")
-            || lower.contains("测试");
-        let mentions_non_delete_mutation = [
-            "modify",
-            "change",
-            "edit",
-            "touch",
-            "update",
-            "alter",
-            "write",
-            "修改",
-            "改动",
-            "更改",
-            "编辑",
-            "保持不变",
-        ]
-        .iter()
-        .any(|word| lower.contains(word));
-        let mentions_delete = ["delete", "remove", "删除", "移除"]
-            .iter()
-            .any(|word| lower.contains(word));
-        let mentions_mutation = mentions_non_delete_mutation || mentions_delete;
-        let prohibits_mutation = has_prohibition_signal(&lower);
+        let prohibits_mutation = explicit_test_mutation_restriction(&lower);
+        let prohibits_delete = explicit_test_delete_restriction(&lower);
 
-        (mentions_tests && mentions_mutation && prohibits_mutation).then(|| {
+        (prohibits_mutation || prohibits_delete).then(|| {
             let source_text = sentence.chars().take(500).collect::<String>();
             ExtractedConstraint {
-                id: if mentions_delete && !mentions_non_delete_mutation {
+                id: if prohibits_delete && !prohibits_mutation {
                     "deterministic:test_files:delete_only".to_string()
                 } else {
                     "deterministic:test_files".to_string()
                 },
-                description: if mentions_delete && !mentions_non_delete_mutation {
+                description: if prohibits_delete && !prohibits_mutation {
                     "The task explicitly says not to delete test files or testing logic".to_string()
                 } else {
                     "The task explicitly says not to modify test files or testing logic".to_string()
                 },
-                operation_scope: if mentions_delete && !mentions_non_delete_mutation {
+                operation_scope: if prohibits_delete && !prohibits_mutation {
                     ConstraintOperationScope::DeleteOnly
                 } else {
                     ConstraintOperationScope::All

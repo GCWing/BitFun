@@ -45,8 +45,8 @@ fn test_files_matcher_covers_common_conventions() {
 }
 
 #[test]
-fn deterministic_extractor_recognizes_swebench_wording() {
-    let message = "I've already taken care of all changes to any of the test files. You DON'T have to modify the testing logic or any of the tests. Keep changes minimal and limited to non-tests.";
+fn deterministic_extractor_recognizes_direct_test_file_restriction() {
+    let message = "Do not modify the testing logic or any test files.";
     let extracted = deterministic_test_constraint(message).expect("test constraint");
     assert_eq!(extracted.matcher, ConstraintMatcher::TestFiles);
     assert_eq!(extracted.source, ConstraintSource::Deterministic);
@@ -56,6 +56,36 @@ fn deterministic_extractor_recognizes_swebench_wording() {
 #[test]
 fn deterministic_extractor_does_not_confuse_do_not_run_tests() {
     assert!(deterministic_test_constraint("Do not run the tests on Windows.").is_none());
+}
+
+#[test]
+fn deterministic_extractor_rejects_keyword_cooccurrence_false_positives() {
+    for message in [
+        "You don't have to modify tests.",
+        "Do not delete source files because tests fail.",
+        "Don't forget to modify tests.",
+        "The tests already cover this behavior.",
+        "Avoid modifying production behavior just to satisfy tests.",
+    ] {
+        assert!(
+            deterministic_test_constraint(message).is_none(),
+            "expected no deterministic constraint for: {message}"
+        );
+    }
+}
+
+#[test]
+fn generic_path_restriction_phrases_reach_the_model_prefilter() {
+    for message in [
+        "Cargo.lock is off limits.",
+        "Leave package.json untouched.",
+        "Keep generated/schema.rs unchanged.",
+    ] {
+        assert!(
+            has_prohibition_signal(message),
+            "expected prohibition signal for: {message}"
+        );
+    }
 }
 
 #[test]
