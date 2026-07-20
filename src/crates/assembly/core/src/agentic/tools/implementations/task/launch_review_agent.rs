@@ -108,13 +108,7 @@ impl LaunchReviewAgentTool {
     }
 
     fn parse_invocation(input: &Value) -> BitFunResult<LaunchReviewAgentInvocation> {
-        for field in [
-            "action",
-            "fork_context",
-            "session_id",
-            "run_in_background",
-            "allow_review_follow_up",
-        ] {
+        for field in ["action", "fork_context", "session_id", "run_in_background"] {
             if input.get(field).is_some() {
                 return Err(BitFunError::tool(format!(
                     "{field} is not supported for LaunchReviewAgent"

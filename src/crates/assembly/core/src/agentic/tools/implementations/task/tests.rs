@@ -526,13 +526,7 @@ async fn validate_input_rejects_timeout_for_regular_parent() {
 #[tokio::test]
 async fn launch_review_agent_rejects_task_context_controls() {
     let context = test_tool_context("DeepReview");
-    for field in [
-        "action",
-        "fork_context",
-        "session_id",
-        "run_in_background",
-        "allow_review_follow_up",
-    ] {
+    for field in ["action", "fork_context", "session_id", "run_in_background"] {
         let mut input = json!({
             "description": "delegate",
             "prompt": "Review security-sensitive files",
