@@ -1811,7 +1811,8 @@ impl SessionManager {
         parent_session_id: &str,
         child_session_id: &str,
     ) {
-        if let Some(state) = self.edit_constraint_state(parent_session_id) {
+        if let Some(mut state) = self.edit_constraint_state(parent_session_id) {
+            state.mark_current_state_as_fork_baseline();
             self.edit_constraints_store
                 .insert(child_session_id.to_string(), state.clone());
             if self.should_persist_session_id(child_session_id) {
@@ -6807,13 +6808,37 @@ mod tests {
             manager.edit_constraints("parent-session"),
             Some(constraints.clone())
         );
+        manager
+            .remember_edit_constraint_agent_created_paths(
+                "parent-session",
+                vec!["tests/parent_repro.rs".to_string()],
+                "turn-1",
+            )
+            .await;
 
         // A forked child with no prior extraction inherits the parent's list.
         assert_eq!(manager.edit_constraints("child-session"), None);
         manager
             .seed_forked_edit_constraints("parent-session", "child-session")
             .await;
-        assert_eq!(manager.edit_constraints("child-session"), Some(constraints));
+        assert_eq!(
+            manager.edit_constraints("child-session"),
+            Some(constraints.clone())
+        );
+        manager
+            .rollback_edit_constraint_state_to_turns(
+                "child-session",
+                &std::collections::HashSet::new(),
+            )
+            .await;
+        let child_state = manager
+            .edit_constraint_state("child-session")
+            .expect("forked state after rollback");
+        assert_eq!(child_state.constraints, constraints);
+        assert_eq!(
+            child_state.agent_created_paths,
+            vec!["tests/parent_repro.rs".to_string()]
+        );
 
         // Seeding from a parent with no cached constraints is a no-op, not a panic.
         manager
