@@ -14873,7 +14873,7 @@ function textNode(sourceId, box, text2, style, theme, paintOrder, subOrder = 1) 
     subOrder,
     style: {
       margin: 0.08,
-      fontFace: "Aptos",
+      fontFace: "Microsoft YaHei",
       fontSize: pxToPt(style.fontSize || 22),
       bold: Number(style.fontWeight || 500) >= 700,
       color: resolveColor(style.color || "ink", theme),
@@ -36541,6 +36541,34 @@ var PptxGenJS = class {
 var import_jszip2 = __toESM(require_jszip_min(), 1);
 var SLIDE_H_IN = 7.5;
 var OOXML_ROUND_RECT_ADJUSTMENTS = /* @__PURE__ */ Symbol("ppt-live-round-rect-adjustments");
+var PPTX_LATIN_FONT_FACE = "Arial";
+var PPTX_CJK_FONT_FACE = "Microsoft YaHei";
+var EMPTY_SHAPE_TX_BODY = `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="zh-CN"/></a:p></p:txBody>`;
+var PLATFORM_CJK_FONT_ALIASES = /* @__PURE__ */ new Set([
+  "pingfang sc",
+  "pingfang tc",
+  "hiragino sans gb",
+  "hiragino sans",
+  "stheiti",
+  "heiti sc",
+  "heiti tc",
+  "songti sc",
+  "source han sans sc",
+  "source han sans cn",
+  "noto sans cjk sc",
+  "noto sans sc",
+  "wenquanyi micro hei",
+  "wenquanyi zen hei",
+  "droid sans fallback",
+  "\u5FAE\u8F6F\u96C5\u9ED1",
+  "microsoft yahei",
+  "microsoft yahei ui",
+  "simhei",
+  "simsun",
+  "nsimsun",
+  "kaiti",
+  "fangsong"
+]);
 var WIDTH_SAFETY_BASE_IN = 0.36;
 var WIDTH_SAFETY_REF_PT = 14;
 var WIDTH_SAFETY_MIN_IN = 0.28;
@@ -36615,22 +36643,56 @@ var CSS_SYSTEM_FONT_FACES = /* @__PURE__ */ new Set([
 function textHintContainsCjk(textHint) {
   return /[\u4e00-\u9fff]/.test(String(textHint || ""));
 }
+function isPlatformCjkFontFace(fontFace) {
+  const lower = String(fontFace || "").replace(/['"]/g, "").trim().toLowerCase();
+  return PLATFORM_CJK_FONT_ALIASES.has(lower);
+}
 function resolvePptxFontFace(fontFace, textHint = "") {
   const face = String(fontFace || "").replace(/['"]/g, "").trim();
-  if (!face) return "PingFang SC";
+  if (!face) {
+    return textHintContainsCjk(textHint) ? PPTX_CJK_FONT_FACE : PPTX_LATIN_FONT_FACE;
+  }
   const lower = face.toLowerCase();
   if (CSS_SYSTEM_FONT_FACES.has(lower) || lower.startsWith(".")) {
-    return "PingFang SC";
+    return textHintContainsCjk(textHint) ? PPTX_CJK_FONT_FACE : PPTX_LATIN_FONT_FACE;
   }
-  if (textHintContainsCjk(textHint) && (lower === "arial" || lower === "helvetica" || lower === "times new roman")) {
-    return "PingFang SC";
+  if (isPlatformCjkFontFace(face) || lower === "aptos") {
+    if (lower === "aptos") {
+      return textHintContainsCjk(textHint) ? PPTX_CJK_FONT_FACE : PPTX_LATIN_FONT_FACE;
+    }
+    return PPTX_CJK_FONT_FACE;
+  }
+  if (textHintContainsCjk(textHint) && (lower === "arial" || lower === "helvetica" || lower === "times new roman" || lower === "calibri" || lower === "georgia" || lower === "verdana" || lower === "tahoma" || lower === "trebuchet ms")) {
+    return PPTX_CJK_FONT_FACE;
   }
   return face;
+}
+function resolveCrossPlatformFontPair(fontFace) {
+  const face = String(fontFace || "").replace(/['"]/g, "").trim();
+  if (!face) {
+    return {
+      latin: PPTX_LATIN_FONT_FACE,
+      ea: PPTX_CJK_FONT_FACE,
+      cs: PPTX_LATIN_FONT_FACE
+    };
+  }
+  if (isPlatformCjkFontFace(face) || face === PPTX_CJK_FONT_FACE) {
+    return {
+      latin: PPTX_LATIN_FONT_FACE,
+      ea: PPTX_CJK_FONT_FACE,
+      cs: PPTX_LATIN_FONT_FACE
+    };
+  }
+  return {
+    latin: face,
+    ea: PPTX_CJK_FONT_FACE,
+    cs: face
+  };
 }
 function withResolvedFontFace(options = {}, textHint = "") {
   if (!options || typeof options !== "object") return options;
   if (options.fontFace == null && options.fontFamily == null) {
-    return textHintContainsCjk(textHint) ? { ...options, fontFace: "PingFang SC" } : options;
+    return textHintContainsCjk(textHint) ? { ...options, fontFace: PPTX_CJK_FONT_FACE } : options;
   }
   return {
     ...options,
@@ -36851,26 +36913,144 @@ function uniquifySlideObjectIds(xml) {
   let nextId = 1;
   return xml.replace(/<p:cNvPr id="\d+"/g, () => `<p:cNvPr id="${nextId++}"`);
 }
+function fixContentTypesXml(xml) {
+  return String(xml || "").replace(
+    /<Override PartName="\/ppt\/slideMasters\/slideMaster(?:[2-9]|\d{2,})\.xml"[^>]*\/>/g,
+    ""
+  ).replace(
+    'ContentType="image/jpg"',
+    'ContentType="image/jpeg"'
+  );
+}
+function stripNotesMasterPlaceholderShapes(xml) {
+  return String(xml || "").replace(/<p:sp>[\s\S]*?<\/p:sp>/g, "");
+}
+function ensureShapeTextBodies(xml) {
+  return String(xml || "").replace(/<p:sp>([\s\S]*?)<\/p:sp>/g, (match, body) => {
+    if (body.includes("<p:txBody")) return match;
+    return `<p:sp>${body}${EMPTY_SHAPE_TX_BODY}</p:sp>`;
+  });
+}
+function ensureLineNoFill(xml) {
+  return String(xml || "").replace(/<a:ln([^>]*)\/>/g, "<a:ln$1><a:noFill/></a:ln>").replace(/<a:ln([^>]*)>\s*<\/a:ln>/g, "<a:ln$1><a:noFill/></a:ln>");
+}
+function ensureSolidBackgroundEffectList(xml) {
+  return String(xml || "").replace(/<p:bgPr>([\s\S]*?)<\/p:bgPr>/g, (match, body) => {
+    if (!body.includes("<a:solidFill") || body.includes("<a:effectLst")) return match;
+    return `<p:bgPr>${body}<a:effectLst/></p:bgPr>`;
+  });
+}
+function fixNegativeExtents(xml) {
+  return String(xml || "").replace(/<a:xfrm([^>]*)>([\s\S]*?)<\/a:xfrm>/g, (match, attrs, body) => {
+    const off = body.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>/);
+    const ext = body.match(/<a:ext cx="(-?\d+)" cy="(-?\d+)"\/>/);
+    if (!off || !ext) return match;
+    let x = Number(off[1]);
+    let y = Number(off[2]);
+    let cx2 = Number(ext[1]);
+    let cy2 = Number(ext[2]);
+    if (![x, y, cx2, cy2].every(Number.isFinite) || cx2 >= 0 && cy2 >= 0) return match;
+    let flipH = /\bflipH="1"/.test(attrs);
+    let flipV = /\bflipV="1"/.test(attrs);
+    if (cx2 < 0) {
+      x += cx2;
+      cx2 = Math.abs(cx2);
+      flipH = !flipH;
+    }
+    if (cy2 < 0) {
+      y += cy2;
+      cy2 = Math.abs(cy2);
+      flipV = !flipV;
+    }
+    let nextAttrs = String(attrs || "").replace(/\s*flipH="1"/g, "").replace(/\s*flipV="1"/g, "");
+    if (flipH) nextAttrs += ' flipH="1"';
+    if (flipV) nextAttrs += ' flipV="1"';
+    const nextBody = body.replace(/<a:off x="-?\d+" y="-?\d+"\/>/, `<a:off x="${x}" y="${y}"/>`).replace(/<a:ext cx="-?\d+" cy="-?\d+"\/>/, `<a:ext cx="${cx2}" cy="${cy2}"/>`);
+    return `<a:xfrm${nextAttrs}>${nextBody}</a:xfrm>`;
+  });
+}
+function fixInvalidTableCellAnchors(xml) {
+  return String(xml || "").replace(
+    /<a:tcPr\b([^>]*)>/g,
+    (match, attrs) => `<a:tcPr${String(attrs || "").replace(/\banchor="mid"/g, 'anchor="ctr"')}>`
+  );
+}
+function formatFontSlot(slot, typeface, attrs) {
+  const cleaned = String(attrs || "").replace(/\/\s*$/, "");
+  return `<a:${slot} typeface="${typeface}"${cleaned}/>`;
+}
+function normalizeOoxmlFonts(xml) {
+  let next = String(xml || "");
+  next = next.replace(
+    /<a:latin typeface="([^"]*)"([^>]*)\/?>\s*<a:ea typeface="([^"]*)"([^>]*)\/?>\s*<a:cs typeface="([^"]*)"([^>]*)\/?>/g,
+    (_match, latinFace, latinAttrs, eaFace, eaAttrs, _csFace, csAttrs) => {
+      const sourceFace = latinFace || eaFace || "";
+      const pair = resolveCrossPlatformFontPair(sourceFace);
+      return formatFontSlot("latin", pair.latin, latinAttrs) + formatFontSlot("ea", pair.ea, eaAttrs) + formatFontSlot("cs", pair.cs, csAttrs);
+    }
+  );
+  next = next.replace(/<a:ea typeface=""/g, `<a:ea typeface="${PPTX_CJK_FONT_FACE}"`);
+  next = next.replace(/<a:cs typeface=""/g, `<a:cs typeface="${PPTX_LATIN_FONT_FACE}"`);
+  next = next.replace(
+    /<a:latin typeface="(?:PingFang SC|Microsoft YaHei|微软雅黑)"/g,
+    `<a:latin typeface="${PPTX_LATIN_FONT_FACE}"`
+  );
+  return next;
+}
+function applyRoundRectAdjustments(xml, adjustments, startIndex) {
+  let adjustmentIndex = startIndex;
+  const next = xml.replace(
+    /<a:prstGeom prst="roundRect"><a:avLst(?:\/>|>[\s\S]*?<\/a:avLst>)<\/a:prstGeom>/g,
+    (match) => {
+      const adjustment = adjustments[adjustmentIndex];
+      adjustmentIndex += 1;
+      if (adjustment == null) return match;
+      return `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${adjustment}"/></a:avLst></a:prstGeom>`;
+    }
+  );
+  return { xml: next, adjustmentIndex };
+}
 async function postProcessPptxOutput(output, outputType, adjustments) {
   if (!["base64", "nodebuffer"].includes(outputType)) return output;
   const needsRoundRect = adjustments.length > 0;
   const zip = await import_jszip2.default.loadAsync(output, { base64: outputType === "base64" });
-  const slidePaths = Object.keys(zip.files).filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path)).sort((left, right) => Number(left.match(/\d+/)?.[0]) - Number(right.match(/\d+/)?.[0]));
+  const contentTypes = zip.file("[Content_Types].xml");
+  if (contentTypes) {
+    zip.file("[Content_Types].xml", fixContentTypesXml(await contentTypes.async("string")));
+  }
+  const xmlPaths = Object.keys(zip.files).filter((path) => path.endsWith(".xml") && !path.endsWith("/")).sort();
   let adjustmentIndex = 0;
-  for (const path of slidePaths) {
+  for (const path of xmlPaths) {
+    if (path === "[Content_Types].xml") continue;
     let xml = await zip.file(path).async("string");
-    if (needsRoundRect) {
-      xml = xml.replace(
-        /<a:prstGeom prst="roundRect"><a:avLst(?:\/>|>[\s\S]*?<\/a:avLst>)<\/a:prstGeom>/g,
-        (match) => {
-          const adjustment = adjustments[adjustmentIndex];
-          adjustmentIndex += 1;
-          if (adjustment == null) return match;
-          return `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${adjustment}"/></a:avLst></a:prstGeom>`;
-        }
-      );
+    const isSlide = /^ppt\/slides\/slide\d+\.xml$/.test(path);
+    const isNotesSlide = /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(path);
+    if (path === "ppt/notesMasters/notesMaster1.xml") {
+      xml = stripNotesMasterPlaceholderShapes(xml);
+      xml = ensureSolidBackgroundEffectList(xml);
+      xml = ensureLineNoFill(xml);
+      xml = normalizeOoxmlFonts(xml);
+      zip.file(path, xml);
+      continue;
     }
-    xml = uniquifySlideObjectIds(xml);
+    if (isSlide && needsRoundRect) {
+      ({ xml, adjustmentIndex } = applyRoundRectAdjustments(xml, adjustments, adjustmentIndex));
+    }
+    if (isSlide || isNotesSlide) {
+      xml = ensureShapeTextBodies(xml);
+    }
+    if (isSlide) {
+      xml = uniquifySlideObjectIds(xml);
+      xml = fixNegativeExtents(xml);
+      xml = fixInvalidTableCellAnchors(xml);
+    }
+    if (isSlide || isNotesSlide || path === "ppt/slideMasters/slideMaster1.xml" || /^ppt\/slideLayouts\/slideLayout\d+\.xml$/.test(path)) {
+      xml = ensureSolidBackgroundEffectList(xml);
+    }
+    if (isSlide || isNotesSlide) {
+      xml = ensureLineNoFill(xml);
+    }
+    xml = normalizeOoxmlFonts(xml);
     zip.file(path, xml);
   }
   if (needsRoundRect && adjustmentIndex !== adjustments.length) {
@@ -36890,8 +37070,8 @@ function createPptxDeck(deck = {}) {
   pptx.company = "BitFun";
   pptx.lang = "zh-CN";
   pptx.theme = {
-    headFontFace: "PingFang SC",
-    bodyFontFace: "PingFang SC",
+    headFontFace: PPTX_LATIN_FONT_FACE,
+    bodyFontFace: PPTX_LATIN_FONT_FACE,
     lang: "zh-CN"
   };
   pptx[OOXML_ROUND_RECT_ADJUSTMENTS] = [];

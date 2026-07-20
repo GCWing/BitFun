@@ -717,7 +717,8 @@ test('serializes an editable table scene node as native a:tbl OOXML without pict
     .map((match) => match[0]);
   const headerCellXml = tableCells.find((cellXml) => cellXml.includes('<a:t>Native </a:t>'));
   assert.ok(headerCellXml);
-  assert.match(headerCellXml, /<a:tcPr[^>]*marL="182880"[^>]*marR="91440"[^>]*marT="45720"[^>]*marB="137160"[^>]*anchor="mid"/);
+  // OOXML ST_TextAnchoringType uses ctr (not mid); post-process rewrites mid→ctr.
+  assert.match(headerCellXml, /<a:tcPr[^>]*marL="182880"[^>]*marR="91440"[^>]*marT="45720"[^>]*marB="137160"[^>]*anchor="ctr"/);
   assert.match(headerCellXml, /<a:lnL w="38100"[\s\S]*?<a:srgbClr val="444444"/);
   assert.match(headerCellXml, /<a:lnR w="19050"[\s\S]*?<a:srgbClr val="222222"/);
   assert.match(headerCellXml, /<a:lnT w="9525"[\s\S]*?<a:srgbClr val="111111"/);
@@ -2106,7 +2107,8 @@ test('production fixtures lock OOXML under a WebKit border-box regression simula
         `slide ${index + 1} cNvPr ids must be unique (got ${objectIds.join(',')})`,
       );
     });
-    assert.match(slideXml[2], /<a:ea typeface="PingFang SC"/);
+    assert.match(slideXml[2], /<a:ea typeface="Microsoft YaHei"/);
+    assert.match(slideXml[2], /<a:latin typeface="Arial"/);
     assert.match(slideXml[2], /<a:t>阶段<\/a:t>/);
   }, { realisticLayout: true, webkitBorderBoxRegressionSimulation: true });
 });
@@ -2185,7 +2187,7 @@ test('text box width safety scales with font size to prevent false wraps', async
       text: '大号标题防换行',
       style: {
         fontSize: 42,
-        fontFace: 'PingFang SC',
+        fontFace: 'Microsoft YaHei',
         color: '111111',
         align: 'left',
         valign: 'top',
@@ -2200,6 +2202,196 @@ test('text box width safety scales with font size to prevent false wraps', async
   assert.ok(titleShape, 'title shape must serialize');
   const expectedCx = Math.round(5.08 * 914400);
   assert.match(titleShape, new RegExp(`<a:ext cx="${expectedCx}"`));
+});
+
+test('pptx post-process removes PowerPoint repair triggers and uses cross-platform fonts', async () => {
+  const {
+    createPptxDeck,
+    buildSlideFromScene,
+    PPTX_CJK_FONT_FACE,
+    PPTX_LATIN_FONT_FACE,
+    resolvePptxFontFace,
+    resolveCrossPlatformFontPair,
+    normalizeOoxmlFonts,
+  } = await import('../src/pptx-html-build.js');
+
+  assert.equal(resolvePptxFontFace('PingFang SC'), PPTX_CJK_FONT_FACE);
+  assert.equal(resolvePptxFontFace('system-ui', '中文'), PPTX_CJK_FONT_FACE);
+  assert.equal(resolvePptxFontFace('Arial', '中文'), PPTX_CJK_FONT_FACE);
+  assert.deepEqual(resolveCrossPlatformFontPair('PingFang SC'), {
+    latin: PPTX_LATIN_FONT_FACE,
+    ea: PPTX_CJK_FONT_FACE,
+    cs: PPTX_LATIN_FONT_FACE,
+  });
+  assert.match(
+    normalizeOoxmlFonts('<a:ea typeface=""/><a:cs typeface=""/>'),
+    new RegExp(`typeface="${PPTX_CJK_FONT_FACE}"`),
+  );
+
+  const pptx = createPptxDeck({ title: 'Repair triggers' });
+  for (let index = 0; index < 3; index += 1) {
+    await buildSlideFromScene({
+      slideNumber: index + 1,
+      width: 13.333,
+      height: 7.5,
+      nodes: [
+        {
+          type: 'shape',
+          sourceId: `bg-${index}`,
+          shapeType: 'rect',
+          x: 0.5,
+          y: 0.5,
+          w: 2,
+          h: 1,
+          style: { fill: 'E11D48' },
+        },
+        {
+          type: 'text',
+          sourceId: `title-${index}`,
+          x: 1,
+          y: 2,
+          w: 6,
+          h: 1,
+          text: '跨平台中文与 Latin',
+          style: {
+            fontSize: 24,
+            fontFace: 'PingFang SC',
+            color: '111111',
+            align: 'left',
+            valign: 'top',
+          },
+        },
+      ],
+    }, pptx);
+  }
+
+  const zip = await writeAndOpen(pptx);
+  const contentTypes = await zipText(zip, '[Content_Types].xml');
+  assert.equal(
+    (contentTypes.match(/slideMasters\/slideMaster\d+\.xml/g) || []).length,
+    1,
+    'Content_Types must declare only slideMaster1',
+  );
+  assert.doesNotMatch(contentTypes, /slideMaster2\.xml/);
+  assert.doesNotMatch(contentTypes, /ContentType="image\/jpg"/);
+
+  const notesMaster = await zipText(zip, 'ppt/notesMasters/notesMaster1.xml');
+  assert.equal((notesMaster.match(/<p:sp>/g) || []).length, 0);
+
+  const slideXml = await zipText(zip, 'ppt/slides/slide1.xml');
+  const shapes = [...slideXml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].map((m) => m[0]);
+  assert.ok(shapes.length >= 2, 'expected decorative shape + text box');
+  for (const shape of shapes) {
+    assert.match(shape, /<p:txBody>/, 'every p:sp must include txBody');
+  }
+  assert.match(slideXml, new RegExp(`<a:ea typeface="${PPTX_CJK_FONT_FACE}"`));
+  assert.match(slideXml, new RegExp(`<a:latin typeface="${PPTX_LATIN_FONT_FACE}"`));
+  assert.doesNotMatch(slideXml, /typeface="PingFang SC"/);
+
+  const themeXml = await zipText(zip, 'ppt/theme/theme1.xml');
+  assert.match(themeXml, new RegExp(`<a:ea typeface="${PPTX_CJK_FONT_FACE}"`));
+  assert.doesNotMatch(themeXml, /<a:ea typeface=""/);
+});
+
+test('pptx post-process repairs notesSlide placeholders and empty line tags', async () => {
+  const {
+    createPptxDeck,
+    ensureShapeTextBodies,
+    ensureLineNoFill,
+    fixNegativeExtents,
+    fixInvalidTableCellAnchors,
+  } = await import('../src/pptx-html-build.js');
+
+  const notesPlaceholder = '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/>'
+    + '<p:cNvSpPr/><p:nvPr><p:ph type="sldImg"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp>';
+  assert.match(ensureShapeTextBodies(notesPlaceholder), /<p:txBody>/);
+  assert.equal(
+    ensureLineNoFill('<a:solidFill/><a:ln></a:ln>'),
+    '<a:solidFill/><a:ln><a:noFill/></a:ln>',
+  );
+  assert.match(
+    fixNegativeExtents('<a:xfrm><a:off x="100" y="200"/><a:ext cx="50" cy="-80"/></a:xfrm>'),
+    /<a:xfrm flipV="1"><a:off x="100" y="120"\/><a:ext cx="50" cy="80"\/>/,
+  );
+  assert.match(
+    fixInvalidTableCellAnchors('<a:tcPr marL="0" anchor="mid"><a:noFill/></a:tcPr>'),
+    /anchor="ctr"/,
+  );
+  assert.doesNotMatch(
+    fixInvalidTableCellAnchors('<a:tcPr marL="0" anchor="mid"><a:noFill/></a:tcPr>'),
+    /anchor="mid"/,
+  );
+
+  const pptx = createPptxDeck({ title: 'Notes placeholder' });
+  const slide = pptx.addSlide();
+  slide.addShape(pptx.shapes.RECTANGLE, {
+    x: 0.5,
+    y: 0.5,
+    w: 2,
+    h: 1,
+    fill: { color: 'FFFFFF' },
+  });
+  slide.addText('备注页占位', {
+    x: 1,
+    y: 2,
+    w: 4,
+    h: 1,
+    fontSize: 18,
+    fontFace: 'Arial',
+    color: '111111',
+  });
+
+  const zip = await writeAndOpen(pptx);
+  const notesXml = await zipText(zip, 'ppt/notesSlides/notesSlide1.xml');
+  const notesShapes = [...notesXml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].map((m) => m[0]);
+  assert.ok(notesShapes.length >= 1, 'notesSlide must contain shapes');
+  for (const shape of notesShapes) {
+    assert.match(shape, /<p:txBody>/, 'notesSlide shapes must include txBody');
+  }
+  const slideXml = await zipText(zip, 'ppt/slides/slide1.xml');
+  assert.doesNotMatch(slideXml, /<a:ln>\s*<\/a:ln>/);
+  assert.doesNotMatch(slideXml, /<a:ln\/>/);
+});
+
+test('pptx post-process adds effectLst to solid slide backgrounds (#1442)', async () => {
+  const {
+    createPptxDeck,
+    ensureSolidBackgroundEffectList,
+  } = await import('../src/pptx-html-build.js');
+
+  assert.equal(
+    ensureSolidBackgroundEffectList(
+      '<p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:bgPr>',
+    ),
+    '<p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr>',
+  );
+  assert.equal(
+    ensureSolidBackgroundEffectList(
+      '<p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr>',
+    ),
+    '<p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr>',
+    'idempotent when effectLst already present',
+  );
+
+  const pptx = createPptxDeck({ title: 'Solid background' });
+  const slide = pptx.addSlide();
+  slide.background = { color: 'F8FAFC' };
+  slide.addText('背景加固', {
+    x: 1,
+    y: 1,
+    w: 4,
+    h: 1,
+    fontSize: 20,
+    fontFace: 'Arial',
+    color: '111111',
+  });
+
+  const zip = await writeAndOpen(pptx);
+  const slideXml = await zipText(zip, 'ppt/slides/slide1.xml');
+  assert.match(
+    slideXml,
+    /<p:bgPr><a:solidFill><a:srgbClr val="F8FAFC"\/><\/a:solidFill><a:effectLst\/><\/p:bgPr>/,
+  );
 });
 
 test('CSS letter-spacing is preserved as PPTX charSpacing', async () => {

@@ -24,6 +24,42 @@ const SLIDE_W_IN = 13.333;
 const SLIDE_H_IN = 7.5;
 const OOXML_ROUND_RECT_ADJUSTMENTS = Symbol('ppt-live-round-rect-adjustments');
 
+// Cross-platform PPTX fonts. PingFang SC is macOS-only — Windows PowerPoint
+// substitutes poorly after a repair pass and CJK runs often become mojibake.
+// Microsoft YaHei is present on Windows Office and maps cleanly on Mac/Linux
+// Office / LibreOffice; Arial covers Latin glyphs on all three platforms.
+export const PPTX_LATIN_FONT_FACE = 'Arial';
+export const PPTX_CJK_FONT_FACE = 'Microsoft YaHei';
+
+const EMPTY_SHAPE_TX_BODY = '<p:txBody><a:bodyPr/><a:lstStyle/><a:p>'
+  + `<a:endParaRPr lang="zh-CN"/></a:p></p:txBody>`;
+
+const PLATFORM_CJK_FONT_ALIASES = new Set([
+  'pingfang sc',
+  'pingfang tc',
+  'hiragino sans gb',
+  'hiragino sans',
+  'stheiti',
+  'heiti sc',
+  'heiti tc',
+  'songti sc',
+  'source han sans sc',
+  'source han sans cn',
+  'noto sans cjk sc',
+  'noto sans sc',
+  'wenquanyi micro hei',
+  'wenquanyi zen hei',
+  'droid sans fallback',
+  '微软雅黑',
+  'microsoft yahei',
+  'microsoft yahei ui',
+  'simhei',
+  'simsun',
+  'nsimsun',
+  'kaiti',
+  'fangsong',
+]);
+
 // PowerPoint and browsers render the same font at the same point size with
 // measurably different glyph widths (different font metric tables / hinting).
 // For CJK text the drift is amplified because every glyph is full-width:
@@ -138,30 +174,77 @@ function textHintContainsCjk(textHint) {
   return /[\u4e00-\u9fff]/.test(String(textHint || ''));
 }
 
-function resolvePptxFontFace(fontFace, textHint = '') {
+function isPlatformCjkFontFace(fontFace) {
+  const lower = String(fontFace || '').replace(/['"]/g, '').trim().toLowerCase();
+  return PLATFORM_CJK_FONT_ALIASES.has(lower);
+}
+
+/**
+ * Resolve a CSS/computed face to a single pptxgenjs fontFace.
+ * PptxGenJS writes the same typeface into latin/ea/cs; postProcess then splits
+ * CJK faces into Arial (latin/cs) + Microsoft YaHei (ea) for Win/Mac/Linux.
+ */
+export function resolvePptxFontFace(fontFace, textHint = '') {
   const face = String(fontFace || '').replace(/['"]/g, '').trim();
-  if (!face) return 'PingFang SC';
+  if (!face) {
+    return textHintContainsCjk(textHint) ? PPTX_CJK_FONT_FACE : PPTX_LATIN_FONT_FACE;
+  }
   const lower = face.toLowerCase();
   if (CSS_SYSTEM_FONT_FACES.has(lower) || lower.startsWith('.')) {
-    return 'PingFang SC';
+    return textHintContainsCjk(textHint) ? PPTX_CJK_FONT_FACE : PPTX_LATIN_FONT_FACE;
+  }
+  if (isPlatformCjkFontFace(face) || lower === 'aptos') {
+    // Aptos is Windows 11 Office-only; map to the cross-platform CJK stack when
+    // the run may contain CJK, otherwise keep Latin-safe Arial.
+    if (lower === 'aptos') {
+      return textHintContainsCjk(textHint) ? PPTX_CJK_FONT_FACE : PPTX_LATIN_FONT_FACE;
+    }
+    return PPTX_CJK_FONT_FACE;
   }
   // PptxGenJS writes the same typeface into latin/ea/cs. Latin-only faces such
   // as Arial therefore lock East-Asian glyphs to tofu after PowerPoint opens
   // (or repairs) the table. Prefer the deck CJK body font for CJK runs.
   if (
     textHintContainsCjk(textHint)
-    && (lower === 'arial' || lower === 'helvetica' || lower === 'times new roman')
+    && (lower === 'arial' || lower === 'helvetica' || lower === 'times new roman'
+      || lower === 'calibri' || lower === 'georgia' || lower === 'verdana'
+      || lower === 'tahoma' || lower === 'trebuchet ms')
   ) {
-    return 'PingFang SC';
+    return PPTX_CJK_FONT_FACE;
   }
   return face;
+}
+
+/** Split a resolved face into OOXML latin / ea / cs typefaces. */
+export function resolveCrossPlatformFontPair(fontFace) {
+  const face = String(fontFace || '').replace(/['"]/g, '').trim();
+  if (!face) {
+    return {
+      latin: PPTX_LATIN_FONT_FACE,
+      ea: PPTX_CJK_FONT_FACE,
+      cs: PPTX_LATIN_FONT_FACE,
+    };
+  }
+  if (isPlatformCjkFontFace(face) || face === PPTX_CJK_FONT_FACE) {
+    return {
+      latin: PPTX_LATIN_FONT_FACE,
+      ea: PPTX_CJK_FONT_FACE,
+      cs: PPTX_LATIN_FONT_FACE,
+    };
+  }
+  // Keep designer / Latin faces for Western glyphs; always give CJK a fallback.
+  return {
+    latin: face,
+    ea: PPTX_CJK_FONT_FACE,
+    cs: face,
+  };
 }
 
 function withResolvedFontFace(options = {}, textHint = '') {
   if (!options || typeof options !== 'object') return options;
   if (options.fontFace == null && options.fontFamily == null) {
     return textHintContainsCjk(textHint)
-      ? { ...options, fontFace: 'PingFang SC' }
+      ? { ...options, fontFace: PPTX_CJK_FONT_FACE }
       : options;
   }
   return {
@@ -412,32 +495,203 @@ function uniquifySlideObjectIds(xml) {
   return xml.replace(/<p:cNvPr id="\d+"/g, () => `<p:cNvPr id="${nextId++}"`);
 }
 
+// PptxGenJS emits one slideMaster Override per slide, but only writes
+// slideMaster1.xml (gitbrent/PptxGenJS#1444). Phantom Overrides force the
+// PowerPoint "repair this presentation" dialog on every multi-slide deck.
+function fixContentTypesXml(xml) {
+  return String(xml || '')
+    .replace(
+      /<Override PartName="\/ppt\/slideMasters\/slideMaster(?:[2-9]|\d{2,})\.xml"[^>]*\/>/g,
+      '',
+    )
+    .replace(
+      'ContentType="image/jpg"',
+      'ContentType="image/jpeg"',
+    );
+}
+
+// Placeholder shapes on notesMaster are stripped by PowerPoint repair
+// (gitbrent/PptxGenJS#1443). Per-slide notesSlide parts keep their own ph shapes.
+function stripNotesMasterPlaceholderShapes(xml) {
+  return String(xml || '').replace(/<p:sp>[\s\S]*?<\/p:sp>/g, '');
+}
+
+// OOXML requires every <p:sp> to contain <p:txBody>. Decorative shapes from
+// addShape() omit it (gitbrent/PptxGenJS#1441), which also triggers repair.
+// notesSlide "Slide Image Placeholder" ships the same defect on every deck.
+export function ensureShapeTextBodies(xml) {
+  return String(xml || '').replace(/<p:sp>([\s\S]*?)<\/p:sp>/g, (match, body) => {
+    if (body.includes('<p:txBody')) return match;
+    return `<p:sp>${body}${EMPTY_SHAPE_TX_BODY}</p:sp>`;
+  });
+}
+
+// PptxGenJS emits empty <a:ln></a:ln> for shapes without a border. PowerPoint
+// repair rewrites these; normalize to an explicit noFill line.
+export function ensureLineNoFill(xml) {
+  return String(xml || '')
+    .replace(/<a:ln([^>]*)\/>/g, '<a:ln$1><a:noFill/></a:ln>')
+    .replace(/<a:ln([^>]*)>\s*<\/a:ln>/g, '<a:ln$1><a:noFill/></a:ln>');
+}
+
+// Solid slide backgrounds from pptxgen omit <a:effectLst/> inside <p:bgPr>
+// (gitbrent/PptxGenJS#1442). Image backgrounds already include it; solid ones
+// must match or PowerPoint may repair the package.
+export function ensureSolidBackgroundEffectList(xml) {
+  return String(xml || '').replace(/<p:bgPr>([\s\S]*?)<\/p:bgPr>/g, (match, body) => {
+    if (!body.includes('<a:solidFill') || body.includes('<a:effectLst')) return match;
+    return `<p:bgPr>${body}<a:effectLst/></p:bgPr>`;
+  });
+}
+
+// OOXML ST_PositiveCoordinate forbids negative a:ext cx/cy. Upward/leftward
+// lines from html2pptx often serialize as negative extents; PowerPoint repair
+// clamps them to 0. Rewrite as positive extents + flipH/flipV.
+export function fixNegativeExtents(xml) {
+  return String(xml || '').replace(/<a:xfrm([^>]*)>([\s\S]*?)<\/a:xfrm>/g, (match, attrs, body) => {
+    const off = body.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>/);
+    const ext = body.match(/<a:ext cx="(-?\d+)" cy="(-?\d+)"\/>/);
+    if (!off || !ext) return match;
+    let x = Number(off[1]);
+    let y = Number(off[2]);
+    let cx = Number(ext[1]);
+    let cy = Number(ext[2]);
+    if (![x, y, cx, cy].every(Number.isFinite) || (cx >= 0 && cy >= 0)) return match;
+    let flipH = /\bflipH="1"/.test(attrs);
+    let flipV = /\bflipV="1"/.test(attrs);
+    if (cx < 0) {
+      x += cx;
+      cx = Math.abs(cx);
+      flipH = !flipH;
+    }
+    if (cy < 0) {
+      y += cy;
+      cy = Math.abs(cy);
+      flipV = !flipV;
+    }
+    let nextAttrs = String(attrs || '')
+      .replace(/\s*flipH="1"/g, '')
+      .replace(/\s*flipV="1"/g, '');
+    if (flipH) nextAttrs += ' flipH="1"';
+    if (flipV) nextAttrs += ' flipV="1"';
+    const nextBody = body
+      .replace(/<a:off x="-?\d+" y="-?\d+"\/>/, `<a:off x="${x}" y="${y}"/>`)
+      .replace(/<a:ext cx="-?\d+" cy="-?\d+"\/>/, `<a:ext cx="${cx}" cy="${cy}"/>`);
+    return `<a:xfrm${nextAttrs}>${nextBody}</a:xfrm>`;
+  });
+}
+
+// PptxGenJS maps valign "mid" to OOXML anchor="mid", but ST_TextAnchoringType
+// only allows t/ctr/b. Invalid mid on a:tcPr triggers PowerPoint repair.
+export function fixInvalidTableCellAnchors(xml) {
+  return String(xml || '').replace(
+    /<a:tcPr\b([^>]*)>/g,
+    (match, attrs) => `<a:tcPr${String(attrs || '').replace(/\banchor="mid"/g, 'anchor="ctr"')}>`,
+  );
+}
+
+function formatFontSlot(slot, typeface, attrs) {
+  const cleaned = String(attrs || '').replace(/\/\s*$/, '');
+  return `<a:${slot} typeface="${typeface}"${cleaned}/>`;
+}
+
+/**
+ * Normalize DrawingML font slots for Win/Mac/Linux:
+ * - fill empty theme ea/cs
+ * - split identical latin/ea/cs triplets so CJK uses Microsoft YaHei on ea
+ *   while Latin stays on Arial (or the designer latin face)
+ */
+export function normalizeOoxmlFonts(xml) {
+  let next = String(xml || '');
+  next = next.replace(
+    /<a:latin typeface="([^"]*)"([^>]*)\/?>\s*<a:ea typeface="([^"]*)"([^>]*)\/?>\s*<a:cs typeface="([^"]*)"([^>]*)\/?>/g,
+    (_match, latinFace, latinAttrs, eaFace, eaAttrs, _csFace, csAttrs) => {
+      const sourceFace = latinFace || eaFace || '';
+      const pair = resolveCrossPlatformFontPair(sourceFace);
+      return (
+        formatFontSlot('latin', pair.latin, latinAttrs)
+        + formatFontSlot('ea', pair.ea, eaAttrs)
+        + formatFontSlot('cs', pair.cs, csAttrs)
+      );
+    },
+  );
+  // Theme often ships `<a:ea typeface=""/><a:cs typeface=""/>` beside latin.
+  next = next.replace(/<a:ea typeface=""/g, `<a:ea typeface="${PPTX_CJK_FONT_FACE}"`);
+  next = next.replace(/<a:cs typeface=""/g, `<a:cs typeface="${PPTX_LATIN_FONT_FACE}"`);
+  // Lone major/minor latin entries that still name a CJK-only face.
+  next = next.replace(
+    /<a:latin typeface="(?:PingFang SC|Microsoft YaHei|微软雅黑)"/g,
+    `<a:latin typeface="${PPTX_LATIN_FONT_FACE}"`,
+  );
+  return next;
+}
+
+function applyRoundRectAdjustments(xml, adjustments, startIndex) {
+  let adjustmentIndex = startIndex;
+  const next = xml.replace(
+    /<a:prstGeom prst="roundRect"><a:avLst(?:\/>|>[\s\S]*?<\/a:avLst>)<\/a:prstGeom>/g,
+    (match) => {
+      const adjustment = adjustments[adjustmentIndex];
+      adjustmentIndex += 1;
+      if (adjustment == null) return match;
+      return '<a:prstGeom prst="roundRect"><a:avLst>'
+        + `<a:gd name="adj" fmla="val ${adjustment}"/>`
+        + '</a:avLst></a:prstGeom>';
+    },
+  );
+  return { xml: next, adjustmentIndex };
+}
+
 async function postProcessPptxOutput(output, outputType, adjustments) {
   if (!['base64', 'nodebuffer'].includes(outputType)) return output;
   const needsRoundRect = adjustments.length > 0;
   const zip = await JSZip.loadAsync(output, { base64: outputType === 'base64' });
-  const slidePaths = Object.keys(zip.files)
-    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
-    .sort((left, right) => (
-      Number(left.match(/\d+/)?.[0]) - Number(right.match(/\d+/)?.[0])
-    ));
+
+  const contentTypes = zip.file('[Content_Types].xml');
+  if (contentTypes) {
+    zip.file('[Content_Types].xml', fixContentTypesXml(await contentTypes.async('string')));
+  }
+
+  const xmlPaths = Object.keys(zip.files)
+    .filter((path) => path.endsWith('.xml') && !path.endsWith('/'))
+    .sort();
   let adjustmentIndex = 0;
-  for (const path of slidePaths) {
+  for (const path of xmlPaths) {
+    if (path === '[Content_Types].xml') continue;
     let xml = await zip.file(path).async('string');
-    if (needsRoundRect) {
-      xml = xml.replace(
-        /<a:prstGeom prst="roundRect"><a:avLst(?:\/>|>[\s\S]*?<\/a:avLst>)<\/a:prstGeom>/g,
-        (match) => {
-          const adjustment = adjustments[adjustmentIndex];
-          adjustmentIndex += 1;
-          if (adjustment == null) return match;
-          return '<a:prstGeom prst="roundRect"><a:avLst>'
-            + `<a:gd name="adj" fmla="val ${adjustment}"/>`
-            + '</a:avLst></a:prstGeom>';
-        },
-      );
+    const isSlide = /^ppt\/slides\/slide\d+\.xml$/.test(path);
+    const isNotesSlide = /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(path);
+    if (path === 'ppt/notesMasters/notesMaster1.xml') {
+      xml = stripNotesMasterPlaceholderShapes(xml);
+      xml = ensureSolidBackgroundEffectList(xml);
+      xml = ensureLineNoFill(xml);
+      xml = normalizeOoxmlFonts(xml);
+      zip.file(path, xml);
+      continue;
     }
-    xml = uniquifySlideObjectIds(xml);
+    if (isSlide && needsRoundRect) {
+      ({ xml, adjustmentIndex } = applyRoundRectAdjustments(xml, adjustments, adjustmentIndex));
+    }
+    if (isSlide || isNotesSlide) {
+      xml = ensureShapeTextBodies(xml);
+    }
+    if (isSlide) {
+      xml = uniquifySlideObjectIds(xml);
+      xml = fixNegativeExtents(xml);
+      xml = fixInvalidTableCellAnchors(xml);
+    }
+    if (
+      isSlide
+      || isNotesSlide
+      || path === 'ppt/slideMasters/slideMaster1.xml'
+      || /^ppt\/slideLayouts\/slideLayout\d+\.xml$/.test(path)
+    ) {
+      xml = ensureSolidBackgroundEffectList(xml);
+    }
+    if (isSlide || isNotesSlide) {
+      xml = ensureLineNoFill(xml);
+    }
+    xml = normalizeOoxmlFonts(xml);
     zip.file(path, xml);
   }
   if (needsRoundRect && adjustmentIndex !== adjustments.length) {
@@ -458,8 +712,8 @@ export function createPptxDeck(deck = {}) {
   pptx.company = 'BitFun';
   pptx.lang = 'zh-CN';
   pptx.theme = {
-    headFontFace: 'PingFang SC',
-    bodyFontFace: 'PingFang SC',
+    headFontFace: PPTX_LATIN_FONT_FACE,
+    bodyFontFace: PPTX_LATIN_FONT_FACE,
     lang: 'zh-CN',
   };
   pptx[OOXML_ROUND_RECT_ADJUSTMENTS] = [];

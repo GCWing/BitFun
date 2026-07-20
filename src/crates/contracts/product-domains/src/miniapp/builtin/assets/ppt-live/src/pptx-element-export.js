@@ -84,7 +84,7 @@ function textNode(sourceId, box, text, style, theme, paintOrder, subOrder = 1) {
     subOrder,
     style: {
       margin: 0.08,
-      fontFace: 'Aptos',
+      fontFace: 'Microsoft YaHei',
       fontSize: pxToPt(style.fontSize || 22),
       bold: Number(style.fontWeight || 500) >= 700,
       color: resolveColor(style.color || 'ink', theme),
