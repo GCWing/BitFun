@@ -343,5 +343,31 @@ pub(crate) fn run_stop_hooks_for_round(
         round_has_more,
     };
     let mut executor = CorePostCallHookExecutor;
-    run_stop_hooks(&ctx, &mut executor)
+    let mut result = run_stop_hooks(&ctx, &mut executor);
+
+    // ── Bee-review: drain pending LLM results (cc-haha pattern) ──
+    if let Ok(mut buf) = REVIEW_BUFFER.lock() {
+        if let Some(results) = buf.remove(ctx.session_id.as_str()) {
+            for r in results {
+                let trimmed = r.trim();
+                if trimmed.is_empty() || trimmed == "PASS" {
+                    continue;
+                }
+                if trimmed.starts_with("ABORT:") || trimmed.starts_with("ABORT：") {
+                    // 审查蜂无拦截权限，ABORT 降级为 WARN
+                    result.additional_contexts.push(format!("[审查员] 提醒: {}", &trimmed[6..].trim()));
+                } else if trimmed.starts_with("CTX:") || trimmed.starts_with("CTX：") {
+                    result.additional_contexts.push(format!("[书记官] 上下文恢复: {}", &trimmed[4..].trim()));
+                } else if trimmed.starts_with("SKILL:") || trimmed.starts_with("SKILL：") {
+                    result.additional_contexts.push(format!("[提示蜂] 推荐加载: {}", &trimmed[6..].trim()));
+                } else if trimmed.starts_with("WARN:") || trimmed.starts_with("WARN：") {
+                    result.additional_contexts.push(format!("[审查员] 警告: {}", &trimmed[5..].trim()));
+                } else {
+                    result.additional_contexts.push(format!("[审查员] {}", trimmed));
+                }
+            }
+        }
+    }
+
+    result
 }

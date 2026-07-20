@@ -3296,7 +3296,8 @@ impl ExecutionEngine {
                     round_result.has_more_rounds,
                 );
 
-                // If C01 detected a violation, inject the abort message
+                // 审查蜂提醒模式：Abort 已在 post_call_hooks 降级为 WARN，
+                // 此处仅注入提醒上下文，不拦截任何操作
                 if aggregated.is_abort() {
                     if let Some(abort) = &aggregated.abort {
                         match abort {
@@ -3305,14 +3306,14 @@ impl ExecutionEngine {
                                 fix_instruction,
                                 ..
                             } => {
-                                let guard_message = format!(
-                                    "[ToolGuard Intercepted] {reason}\n\n{fix_instruction}"
+                                let remind = format!(
+                                    "[审查蜂提醒] {reason}\n\n建议: {fix_instruction}"
                                 );
                                 let msg =
-                                    Message::system(render_system_reminder(&guard_message));
+                                    Message::system(render_system_reminder(&remind));
                                 messages.push(msg);
                                 warn!(
-                                    "[Stop Hook] Round {}: Abort — {}",
+                                    "[Stop Hook] Round {}: Reminder — {}",
                                     round_index, reason
                                 );
                             }
@@ -3326,6 +3327,65 @@ impl ExecutionEngine {
                     let msg = Message::system(render_system_reminder(ctx_msg));
                     messages.push(msg);
                 }
+
+                // ── 蜂群审查（cc-haha模式：stop hook → fast LLM → 注入结果）──
+                if !tool_calls.is_empty() {
+                    let tl: Vec<String> = tool_calls.iter()
+                        .map(|tc| format!("{}{}", tc.tool_name, if tc.is_error { "(FAIL)" } else { "" }))
+                        .collect();
+                    let ts: String = assistant_text.chars().take(400).collect();
+                    let fr2: Vec<String> = file_reads.iter().take(5).cloned().collect();
+                    let fe2: Vec<String> = file_edits.iter().take(5).cloned().collect();
+
+                    let review_prompt = format!(
+                        "你是蜂群审查员（书记官+纪律委员+提示蜂）。审查Agent本轮：\n\
+                         工具:[{}] 读取:[{}] 编辑:[{}] 动作:{}\n\n\
+                         ## 书记官（上下文守护）\n\
+                         - 上下文压缩了？提取压缩前的关键决策/进度/用户纠正 → CTX:<要点>\n\
+                         - 轮次>20或token告急？预摘要关键状态 → CTX:<摘要>\n\
+                         - Agent忘记重要信息（重复提问/忽略决策）？→ CTX:<提醒>\n\n\
+                         ## 纪律委员（行为审查·仅提醒不拦截）\n\
+                         - 编辑前未Read？→ WARN:未读即改-<文件>\n\
+                         - 删除了LionHeart库文件？→ WARN:受保护路径-禁止删除\n\
+                         - LionHeart库读写操作正常，删除操作警告\n\
+                         - 同工具连续失败？→ WARN:策略死循环\n\
+                         - PS+中文+JSON？→ WARN:PS编码风险\n\
+                         - 全部工具失败？→ WARN:全部失败\n\
+                         - 改完不验证？→ WARN:未验证\n\n\
+                         ## 提示蜂（技能推荐）\n\
+                         - MiniApp相关但没加载miniapp-dev？→ SKILL:miniapp-dev\n\
+                         - 编码但没加载Pair-Programming？→ SKILL:Pair Programming\n\
+                         - 调研但没加载agent-reach？→ SKILL:agent-reach\n\n\
+                         输出（每行一个）：PASS / WARN:<问题> / CTX:<内容> / SKILL:<名称>\n\
+                         禁止输出ABORT——审查蜂只有提醒权限，不拦截任何操作。\n\
+                         一切正常只回复PASS。",
+                        tl.join(","), fr2.join(","), fe2.join(","), ts
+                    );
+
+                    let sid2 = context.session_id.clone();
+                    std::thread::spawn(move || {
+                        let rt = tokio::runtime::Runtime::new().expect("bee-review");
+                        rt.block_on(async move {
+                            if let Ok(factory) = crate::infrastructure::ai::get_global_ai_client_factory().await {
+                                if let Ok(client) = factory.get_client_resolved("primary").await {
+                                    let msgs = vec![bitfun_core_types::Message::user(review_prompt)];
+                                    if let Ok(mut stream) = client.send_message_stream(msgs, None, None).await {
+                                        use futures::StreamExt;
+                                        let mut result = String::new();
+                                        while let Some(Ok(chunk)) = stream.stream.next().await {
+                                            if let Some(t) = chunk.text { result.push_str(&t); }
+                                        }
+                                        let trimmed = result.trim().to_string();
+                                        if !trimmed.is_empty() && trimmed != "PASS" {
+                                            crate::agentic::tools::post_call_hooks::push_review_result(&sid2, trimmed);
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    });
+                }
+
             }
 
             // Track partial recovery reason from the last round
