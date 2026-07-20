@@ -1,25 +1,29 @@
 {
   "title": "MCP",
   "subtitle": "管理 MCP 伺服器連接",
+  "subtitleReadOnly": "檢視 MCP 連線",
   "section": {
     "serverList": {
       "title": "MCP 服務列表",
-      "description": "統一管理 MCP 服務狀態與 JSON 設定。"
+      "description": "MCP 服務與 JSON 設定",
+      "desktopUnavailable": "請在桌面端管理 BitFun MCP。",
+      "remoteUnavailable": "遠端連線時暫不支援管理 BitFun MCP。",
+      "loadFailed": "無法載入 MCP 服務。"
     }
   },
   "external": {
     "title": "外部 MCP 伺服器",
-    "description": "從相容生態發現的 MCP 伺服器。信任與衝突統一在外部擴充中管理。",
+    "description": "來自其他 AI 應用",
     "manage": "管理外部擴充",
     "retry": "重試載入外部 MCP",
     "loading": "正在檢查外部 MCP 來源...",
-    "unavailable": "目前主機無法讀取外部 MCP 來源。",
-    "empty": "未發現外部 MCP 伺服器。",
+    "unavailable": "外部 MCP 暫時無法使用。",
+    "empty": "未發現外部 MCP。",
     "unknown": "未知",
     "scope": {
-      "userGlobal": "使用者",
+      "userGlobal": "全域",
       "project": "專案",
-      "remoteUser": "遠端使用者",
+      "remoteUser": "遠端全域",
       "remoteProject": "遠端專案"
     },
     "status": {
@@ -180,6 +184,7 @@
   },
   "jsonEditor": {
     "title": "MCP JSON 設定",
+    "loadFailed": "無法載入 MCP 設定。",
     "hint1": "使用標準 Cursor 格式的 MCP 設定。設定將自動儲存到用戶目錄下的 app.json 檔案中。",
     "hint2": "格式說明：可以省略 type 字段。提供 \"command\" 時按 stdio（本地進程）解析；提供 \"url\" 時按 sse（遠程服務）解析。也可顯式設置 type=\"stdio\"/\"sse\" 以保持兼容。",
     "lintLocation": "（第 {{line}} 行，第 {{column}} 列）",

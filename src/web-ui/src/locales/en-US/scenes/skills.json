@@ -199,6 +199,10 @@
   "list": {
     "loading": "Loading...",
     "errorPrefix": "Failed to load: ",
+    "loadFailed": "Could not load skills",
+    "retry": "Retry",
+    "desktopUnavailable": "Manage skills in Desktop.",
+    "remoteUnavailable": "Skill management is unavailable during a remote connection.",
     "empty": {
       "noMatch": "No matching skills found",
       "noSkills": "No skills configured yet"

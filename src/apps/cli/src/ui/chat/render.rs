@@ -896,7 +896,7 @@ impl ChatView {
         self.mcp_selector.render(frame, area, &self.theme);
     }
 
-    fn render_mcp_add_dialog(&self, frame: &mut Frame, area: Rect) {
+    fn render_mcp_add_dialog(&mut self, frame: &mut Frame, area: Rect) {
         self.mcp_add_dialog.render(frame, area, &self.theme);
     }
 

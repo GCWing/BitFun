@@ -1,8 +1,8 @@
 {
   "title": "外部 AI 應用",
-  "subtitle": "無需複製檔案，即可使用其他 AI 應用中受支援的命令、工具、Agent 與 MCP 伺服器。",
+  "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP。",
   "loading": "正在檢查外部來源…",
-  "checkingNonBlocking": "仍在檢查變更；檢查完成前可以繼續使用目前設定。",
+  "checkingNonBlocking": "正在檢查更新…",
   "common": {
     "details": "詳細資料",
     "hideDetails": "收合詳細資料",
@@ -17,25 +17,28 @@
   "actions": {
     "refresh": "重新整理",
     "refreshing": "正在重新整理…",
-    "updated": "已儲存，目前狀態如下。",
+    "updated": "已儲存。",
     "waitForUpdate": "另一項變更仍在儲存，請等待完成後再做選擇。",
     "agentUpdated": "已儲存「{{name}}」的變更並重新整理狀態。",
     "mcpUpdated": "已儲存 MCP 伺服器選擇並重新整理狀態。"
   },
   "unavailable": {
-    "hostTitle": "相容服務無法使用",
-    "hostDescription": "目前工作區宿主尚未提供外部相容能力。BitFun 不會改用本機的檔案或設定。"
+    "hostTitle": "此處暫時無法使用",
+    "hostDescription": "請在桌面端檢視或管理外部設定。",
+    "remoteDescription": "此遠端專案暫不支援外部設定，請切回本機專案。",
+    "remoteConnectionDescription": "遠端連線無法使用，請重試或中斷連線。"
   },
   "policy": {
-    "title": "外部相容",
+    "title": "接入設定",
     "externalBadge": "外部",
-    "readySummary": "已發現 {{count}} 項外部內容，並採用低干擾的風險預設策略。",
-    "attentionSummary": "有 {{count}} 項需要處理，不影響無關工作。",
+    "readySummary": "已發現 {{count}} 項",
+    "attentionSummary": "{{count}} 項需要處理",
     "enabledLabel": "允許外部相容",
-    "updated": "外部相容設定已儲存。",
-    "recoveryRequired": "此策略由較新的 BitFun 版本寫入，外部能力已安全關閉。",
-    "unknownStatus": "目前 Host 回傳了不支援的策略狀態。升級 BitFun 前，外部能力維持關閉。",
-    "hostReadOnlyHint": "目前 Host 僅支援檢視。請在桌面端或已驗證的 Peer Host 中管理外部擴充。",
+    "updated": "已儲存。",
+    "recoveryRequired": "設定版本較新，外部能力已關閉。",
+    "unknownStatus": "設定狀態暫不支援，外部能力已關閉。",
+    "hostReadOnlyHint": "僅可檢視，請在桌面端管理。",
+    "remoteReadOnlyHint": "此遠端專案僅可檢視，請切回本機專案管理。",
     "backupAndReset": "備份並重設",
     "resetConfirmTitle": "備份並重設策略？",
     "resetConfirmMessage": "BitFun 會在本機保留新版策略備份，恢復安全預設值，並在你主動開啟前維持外部執行關閉。",
@@ -55,8 +58,8 @@
     "scope": {
       "user": "全域",
       "workspace": "目前專案",
-      "workspaceHint": "專案設定僅覆蓋目前工作區。",
-      "workspaceUnavailable": "開啟工作區後可新增專案覆蓋。"
+      "workspaceHint": "僅影響目前專案。",
+      "workspaceUnavailable": "開啟專案後可個別設定。"
     },
     "mode": {
       "recommended": "建議",
@@ -90,16 +93,16 @@
     }
   },
   "errors": {
-    "loadFailed": "BitFun 無法載入目前的外部設定。請勿假設外部內容可用，並重新整理後重試。",
-    "refreshFailed": "BitFun 無法檢查變更。先前已啟用的內容仍可使用，但可能未包含最近的變化；請重新整理後重試。",
-    "mutationUnknown": "BitFun 無法確認本次變更是否已儲存。請勿假設啟用、停用或來源選擇已經生效，並重新整理以確認目前狀態。"
+    "loadFailed": "暫時無法讀取外部設定，請重新整理後重試。",
+    "refreshFailed": "檢查失敗，目前已啟用內容維持不變。",
+    "mutationUnknown": "無法確認是否儲存，請重新整理確認。"
   },
   "operationErrors": {
-    "rejected": "目前 Host 或策略不允許此變更，設定未發生變化。",
+    "rejected": "目前設定不允許此變更。",
     "refreshRequired": "操作完成前目錄已變更。請重新整理並確認目前狀態後重試。",
     "policyIncompatible": "外部設定由較新的 BitFun 版本寫入。請先備份並重設，再進行變更。",
-    "unavailableRetry": "外部擴充 Host 暫時無法使用。請稍後重試或重新整理。",
-    "internal": "BitFun 無法完成此操作。請重試一次；若問題持續，請提供參考編號。",
+    "unavailableRetry": "暫時無法使用，請稍後重試。",
+    "internal": "操作失敗，請重新整理後重試。",
     "referenceId": "參考編號：{{id}}"
   },
   "diagnostics": {
@@ -123,7 +126,7 @@
     "title": "設定來源",
     "description": "設定仍保留在原位置；開啟此頁面後會自動檢查變更。",
     "globalOnly": "目前僅顯示適用於所有工作區的來源；開啟工作區後還會顯示該專案的來源。",
-    "empty": "未發現受支援的外部設定。",
+    "empty": "未發現設定。",
     "commandCount": "{{count}} 個命令",
     "toolCount": "{{count}} 個工具",
     "agentCount": "{{count}} 個 Agent",

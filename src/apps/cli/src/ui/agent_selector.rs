@@ -11,7 +11,10 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::theme::{StyleKind, Theme};
+use crate::ui::{
+    responsive_popup::{render_too_small, responsive_popup, ResponsivePopup},
+    theme::{StyleKind, Theme},
+};
 
 /// An agent item for display in the selector
 #[derive(Debug, Clone)]
@@ -37,6 +40,7 @@ pub(super) struct AgentSelectorState {
     include_external_sources: bool,
     allow_mode_switch: bool,
     last_area: Option<Rect>,
+    interaction_enabled: bool,
 }
 
 impl AgentSelectorState {
@@ -49,6 +53,7 @@ impl AgentSelectorState {
             include_external_sources: false,
             allow_mode_switch: true,
             last_area: None,
+            interaction_enabled: true,
         }
     }
 
@@ -71,6 +76,7 @@ impl AgentSelectorState {
         self.allow_mode_switch = allow_mode_switch;
         self.list_state.select(Some(initial_idx));
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     pub(super) fn hide(&mut self) {
@@ -95,7 +101,7 @@ impl AgentSelectorState {
     }
 
     pub(super) fn move_up(&mut self) {
-        if !self.visible || self.len() == 0 {
+        if !self.visible || !self.interaction_enabled || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
@@ -105,7 +111,7 @@ impl AgentSelectorState {
     }
 
     pub(super) fn move_down(&mut self) {
-        if !self.visible || self.len() == 0 {
+        if !self.visible || !self.interaction_enabled || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
@@ -115,7 +121,7 @@ impl AgentSelectorState {
 
     /// Get the selected action from the unified Agent entry.
     pub(super) fn confirm_selection(&self) -> Option<AgentSelectorAction> {
-        if !self.visible {
+        if !self.visible || !self.interaction_enabled {
             return None;
         }
         let idx = self.list_state.selected()?;
@@ -138,23 +144,20 @@ impl AgentSelectorState {
             return;
         }
 
-        let popup_width = area.width.saturating_sub(4).min(60);
-        let popup_height = (self.len() as u16 + 4).min(area.height.saturating_sub(2));
-        if popup_height < 5 || popup_width < 20 {
-            self.last_area = None;
-            return;
-        }
-
-        let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
-        let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
-
-        let popup_area = Rect {
-            x: popup_x,
-            y: popup_y,
-            width: popup_width,
-            height: popup_height,
+        let ideal_height = self.len() as u16 + 4;
+        let layout = responsive_popup(area, 60, ideal_height, 20, 5);
+        let popup_area = match layout {
+            ResponsivePopup::Content(area) => area,
+            ResponsivePopup::TooSmall(area) => {
+                self.last_area = None;
+                self.interaction_enabled = false;
+                render_too_small(frame, area, theme, "Agents");
+                return;
+            }
         };
+        self.interaction_enabled = true;
         self.last_area = Some(popup_area);
+        let compact = popup_area.width < 40;
 
         let mut list_items: Vec<ListItem> = self
             .items
@@ -180,49 +183,72 @@ impl AgentSelectorState {
                 let desc_style = theme.style(StyleKind::Muted);
                 let mut spans = vec![Span::styled(marker, marker_style)];
                 if !self.allow_mode_switch {
-                    spans.push(Span::styled("After current turn · ", desc_style));
+                    spans.push(Span::styled(
+                        if popup_area.width >= 28 {
+                            "After current turn · "
+                        } else {
+                            "Wait · "
+                        },
+                        desc_style,
+                    ));
                 }
-                spans.extend([
-                    Span::styled(&agent.id, name_style),
-                    Span::raw("  "),
-                    Span::styled(format!("Main agent · {}", agent.description), desc_style),
-                ]);
+                spans.push(Span::styled(&agent.id, name_style));
+                if !compact {
+                    spans.extend([
+                        Span::raw("  "),
+                        Span::styled(format!("Main agent · {}", agent.description), desc_style),
+                    ]);
+                }
                 let line = Line::from(spans);
                 ListItem::new(line)
             })
             .collect();
-        list_items.push(ListItem::new(Line::from(vec![
+        let mut subagent_spans = vec![
             Span::raw("  "),
             Span::styled(
                 "Subagents",
                 theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
             ),
-            Span::raw("  "),
-            Span::styled(
-                "List, launch, or configure delegated agents",
-                theme.style(StyleKind::Muted),
-            ),
-        ])));
+        ];
+        if !compact {
+            subagent_spans.extend([
+                Span::raw("  "),
+                Span::styled(
+                    "List, launch, or configure delegated agents",
+                    theme.style(StyleKind::Muted),
+                ),
+            ]);
+        }
+        list_items.push(ListItem::new(Line::from(subagent_spans)));
         if self.include_external_sources {
-            list_items.push(ListItem::new(Line::from(vec![
+            let mut external_spans = vec![
                 Span::raw("  "),
                 Span::styled(
                     "External AI applications",
                     theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
                 ),
-                Span::raw("  "),
-                Span::styled(
-                    "Review imported agents and choices",
-                    theme.style(StyleKind::Muted),
-                ),
-            ])));
+            ];
+            if !compact {
+                external_spans.extend([
+                    Span::raw("  "),
+                    Span::styled(
+                        "Review imported agents and choices",
+                        theme.style(StyleKind::Muted),
+                    ),
+                ]);
+            }
+            list_items.push(ListItem::new(Line::from(external_spans)));
         }
 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(theme.style(StyleKind::Primary))
             .style(Style::default().bg(theme.background))
-            .title(" Agents (↑↓ Navigate, Enter Select, Esc Cancel) ");
+            .title(if compact {
+                " Agents · Enter Select · Esc "
+            } else {
+                " Agents (↑↓ Navigate, Enter Select, Esc Cancel) "
+            });
 
         let list = List::new(list_items)
             .block(block)
@@ -443,5 +469,19 @@ mod tests {
             state.confirm_selection(),
             Some(AgentSelectorAction::ReviewExternalSources)
         ));
+    }
+
+    #[test]
+    fn too_small_fallback_disables_hidden_selection() {
+        let mut state = AgentSelectorState::new();
+        state.show(modes(), Some("agentic".to_string()), true, true);
+        let mut terminal = Terminal::new(TestBackend::new(10, 3)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render tiny agent selector");
+
+        assert!(state.confirm_selection().is_none());
+        state.move_down();
+        assert!(state.confirm_selection().is_none());
     }
 }

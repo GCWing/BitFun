@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/component-library';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
 import {
   type ExternalMcpActivation,
   type ExternalMcpCatalogEntry,
@@ -14,6 +15,7 @@ import {
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { ConfigCollectionItem, ConfigPageSection } from './common';
+import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
 
 const log = createLogger('ExternalMcpOverview');
 const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
@@ -108,31 +110,44 @@ const ExternalMcpDetail: React.FC<{
 const ExternalMcpOverview: React.FC = () => {
   const { t } = useTranslation('settings/mcp');
   const { t: tShared } = useTranslation('shared');
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspace, workspacePath } = useCurrentWorkspace();
+  const peerDevice = usePeerDeviceModeOptional();
   const setSettingsTab = useSettingsStore((state) => state.setActiveTab);
   const requestIdRef = useRef(0);
-  const workspaceScope = workspacePath || '';
+  const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
+  const requestScope = externalSourceRequestScopeKey({
+    peerDeviceId,
+    workspaceId: workspace?.id,
+    workspaceKind: workspace?.workspaceKind,
+    remoteConnectionId: workspace?.connectionId,
+    remoteHost: workspace?.sshHost,
+    workspacePath,
+  });
   const [snapshotState, setSnapshotState] = useState<{
     scope: string;
     snapshot: ExternalSourceCatalogSnapshot | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const snapshot = snapshotState?.scope === workspaceScope ? snapshotState.snapshot : null;
-  const scopedLoading = loading || snapshotState?.scope !== workspaceScope;
+  const snapshot = snapshotState?.scope === requestScope ? snapshotState.snapshot : null;
+  const scopedLoading = loading || snapshotState?.scope !== requestScope;
 
   const loadSnapshot = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setLoadFailed(false);
     try {
-      const nextSnapshot = await externalSourcesAPI.getSnapshot(workspaceScope || undefined);
+      const nextSnapshot = await externalSourcesAPI.getSnapshot(workspacePath || undefined);
       if (requestId === requestIdRef.current) {
-        setSnapshotState({ scope: workspaceScope, snapshot: nextSnapshot });
+        setSnapshotState({ scope: requestScope, snapshot: nextSnapshot });
       }
     } catch (error) {
       if (requestId === requestIdRef.current) {
-        setSnapshotState({ scope: workspaceScope, snapshot: null });
+        setSnapshotState((current) => (
+          current?.scope === requestScope && current.snapshot
+            ? current
+            : { scope: requestScope, snapshot: null }
+        ));
         setLoadFailed(true);
         log.warn('Failed to load external MCP summary', safeLoadErrorFacts(error));
       }
@@ -141,7 +156,7 @@ const ExternalMcpOverview: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [workspaceScope]);
+  }, [requestScope, workspacePath]);
 
   useEffect(() => {
     void loadSnapshot();
@@ -300,10 +315,8 @@ const ExternalMcpOverview: React.FC = () => {
     <ConfigPageSection
       className="bitfun-mcp-tools__external-section"
       title={t('external.title')}
-      description={t('external.description')}
       titleSuffix={snapshot ? (
         <span className="bitfun-mcp-tools__external-summary">
-          <span className="bitfun-collection-item__badge">{entries.length}</span>
           {snapshot.discoveryPending ? (
             <span className="bitfun-mcp-tools__status-badge is-pending">
               {t('external.status.checking')}
@@ -312,6 +325,11 @@ const ExternalMcpOverview: React.FC = () => {
           {hostReadOnly ? (
             <span className="bitfun-mcp-tools__status-badge is-muted">
               {t('external.status.readOnly')}
+            </span>
+          ) : null}
+          {loadFailed && snapshot ? (
+            <span className="bitfun-mcp-tools__status-badge is-pending">
+              {t('external.status.stale')}
             </span>
           ) : null}
           {hasMcpDiagnostics ? (

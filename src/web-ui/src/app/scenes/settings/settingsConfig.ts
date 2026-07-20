@@ -218,6 +218,7 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         id: 'external-sources',
         labelKey: 'configCenter.tabs.externalSources',
         descriptionKey: 'configCenter.tabDescriptions.externalSources',
+        beta: true,
         keywords: [
           'external ai applications',
           'import work',

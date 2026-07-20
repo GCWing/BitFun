@@ -14,6 +14,7 @@ use ratatui::{
     Frame,
 };
 
+use crate::ui::responsive_popup::{render_too_small, responsive_popup, ResponsivePopup};
 use crate::ui::theme::{StyleKind, Theme};
 
 /// Action returned by the MCP add dialog
@@ -56,6 +57,8 @@ pub(super) struct McpAddDialogState {
     value_cursor: usize,
     /// Error message to display
     error: Option<String>,
+    /// Disabled while the terminal cannot show a usable dialog.
+    interaction_enabled: bool,
 }
 
 impl McpAddDialogState {
@@ -69,6 +72,7 @@ impl McpAddDialogState {
             value_buf: String::new(),
             value_cursor: 0,
             error: None,
+            interaction_enabled: true,
         }
     }
 
@@ -81,6 +85,7 @@ impl McpAddDialogState {
         self.value_buf.clear();
         self.value_cursor = 0;
         self.error = None;
+        self.interaction_enabled = true;
     }
 
     pub(super) fn hide(&mut self) {
@@ -96,7 +101,7 @@ impl McpAddDialogState {
 
     /// Insert pasted text into the current active text field
     pub(super) fn insert_text(&mut self, text: &str) {
-        if !self.visible {
+        if !self.visible || !self.interaction_enabled {
             return;
         }
         let cleaned: String = text
@@ -111,6 +116,14 @@ impl McpAddDialogState {
     /// Handle a key event
     pub(super) fn handle_key_event(&mut self, key: KeyEvent) -> McpAddAction {
         if !self.visible {
+            return McpAddAction::None;
+        }
+
+        if !self.interaction_enabled {
+            if key.code == KeyCode::Esc {
+                self.hide();
+                return McpAddAction::Cancel;
+            }
             return McpAddAction::None;
         }
 
@@ -319,7 +332,7 @@ impl McpAddDialogState {
 
     // ── Rendering ──
 
-    pub(super) fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             return;
         }
@@ -333,20 +346,16 @@ impl McpAddDialogState {
         };
         let has_error = self.error.is_some();
         let dialog_height: u16 = 2 + completed_rows + 1 + 1 + 1 + if has_error { 1 } else { 0 };
-        let dialog_width = area.width.saturating_sub(4).min(65);
-        if dialog_width < 35 || area.height < dialog_height + 2 {
-            return;
-        }
-
-        let dialog_x = area.x + (area.width.saturating_sub(dialog_width)) / 2;
-        let dialog_y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
-
-        let dialog_area = Rect {
-            x: dialog_x,
-            y: dialog_y,
-            width: dialog_width,
-            height: dialog_height,
+        let dialog_area = match responsive_popup(area, 65, dialog_height, 18, 5) {
+            ResponsivePopup::Content(area) => area,
+            ResponsivePopup::TooSmall(area) => {
+                self.interaction_enabled = false;
+                render_too_small(frame, area, theme, "Add MCP");
+                return;
+            }
         };
+        self.interaction_enabled = true;
+        let compact = dialog_area.width < 35;
 
         frame.render_widget(Clear, dialog_area);
 
@@ -355,7 +364,11 @@ impl McpAddDialogState {
             Step::ServerType => "2/3",
             Step::CommandOrUrl => "3/3",
         };
-        let title = format!(" Add MCP Server ({}) ", step_label);
+        let title = if compact {
+            format!(" Add MCP {step_label} ")
+        } else {
+            format!(" Add MCP Server ({step_label}) ")
+        };
 
         let block = Block::default()
             .borders(Borders::ALL)
@@ -366,7 +379,7 @@ impl McpAddDialogState {
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
-        if inner.width < 20 {
+        if inner.width < 16 {
             return;
         }
 
@@ -374,7 +387,7 @@ impl McpAddDialogState {
 
         // ── Render completed steps as read-only summary ──
 
-        if self.step == Step::ServerType || self.step == Step::CommandOrUrl {
+        if !compact && (self.step == Step::ServerType || self.step == Step::CommandOrUrl) {
             let name_area = Rect {
                 x: inner.x,
                 y: inner.y + row,
@@ -393,7 +406,7 @@ impl McpAddDialogState {
             row += 1;
         }
 
-        if self.step == Step::CommandOrUrl {
+        if !compact && self.step == Step::CommandOrUrl {
             let type_area = Rect {
                 x: inner.x,
                 y: inner.y + row,
@@ -427,10 +440,12 @@ impl McpAddDialogState {
                     width: inner.width,
                     height: 1,
                 };
-                let prompt_line = Line::from(Span::styled(
-                    "Enter MCP server name (used as identifier):",
-                    theme.style(StyleKind::Info),
-                ));
+                let prompt = if compact {
+                    "Server name"
+                } else {
+                    "Enter MCP server name (used as identifier):"
+                };
+                let prompt_line = Line::from(Span::styled(prompt, theme.style(StyleKind::Info)));
                 frame.render_widget(Paragraph::new(prompt_line), prompt_area);
                 row += 1;
 
@@ -460,10 +475,12 @@ impl McpAddDialogState {
                     width: inner.width,
                     height: 1,
                 };
-                let prompt_line = Line::from(Span::styled(
-                    "Select MCP server type:",
-                    theme.style(StyleKind::Info),
-                ));
+                let prompt = if compact {
+                    "Connection"
+                } else {
+                    "Select MCP server type:"
+                };
+                let prompt_line = Line::from(Span::styled(prompt, theme.style(StyleKind::Info)));
                 frame.render_widget(Paragraph::new(prompt_line), prompt_area);
                 row += 1;
 
@@ -490,12 +507,25 @@ impl McpAddDialogState {
                 } else {
                     theme.style(StyleKind::Muted)
                 };
-                let type_line = Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(" \u{25b6} local (stdio) ", local_style),
-                    Span::raw("   "),
-                    Span::styled(" \u{25b6} remote (streamable-http) ", remote_style),
-                ]);
+                let type_line = if compact {
+                    match self.server_type {
+                        ServerType::Local => Line::from(vec![
+                            Span::styled(" > Local ", local_style),
+                            Span::styled("\u{2190}/\u{2192}", theme.style(StyleKind::Muted)),
+                        ]),
+                        ServerType::Remote => Line::from(vec![
+                            Span::styled(" > Remote ", remote_style),
+                            Span::styled("\u{2190}/\u{2192}", theme.style(StyleKind::Muted)),
+                        ]),
+                    }
+                } else {
+                    Line::from(vec![
+                        Span::raw("  "),
+                        Span::styled(" \u{25b6} local (stdio) ", local_style),
+                        Span::raw("   "),
+                        Span::styled(" \u{25b6} remote (streamable-http) ", remote_style),
+                    ])
+                };
                 frame.render_widget(Paragraph::new(type_line), type_area);
                 row += 1;
             }
@@ -507,12 +537,14 @@ impl McpAddDialogState {
                     width: inner.width,
                     height: 1,
                 };
-                let (prompt_text, placeholder) = match self.server_type {
-                    ServerType::Local => (
+                let (prompt_text, placeholder) = match (self.server_type, compact) {
+                    (ServerType::Local, true) => ("Command", "npx -y server"),
+                    (ServerType::Remote, true) => ("URL", "https://..."),
+                    (ServerType::Local, false) => (
                         "Enter command to run the MCP server:",
                         "npx -y @modelcontextprotocol/server-xxx",
                     ),
-                    ServerType::Remote => (
+                    (ServerType::Remote, false) => (
                         "Enter the remote MCP server URL:",
                         "https://example.com/mcp",
                     ),
@@ -568,10 +600,13 @@ impl McpAddDialogState {
                 width: inner.width,
                 height: 1,
             };
-            let hint_text = match self.step {
-                Step::Name => "Enter: Next  Esc: Cancel",
-                Step::ServerType => "\u{2190}\u{2192}/Tab: Switch  Enter: Next  Esc: Back",
-                Step::CommandOrUrl => "Enter: Confirm  Ctrl+U: Clear  Esc: Back",
+            let hint_text = match (self.step, compact) {
+                (Step::Name, true) => "Enter next  Esc close",
+                (Step::ServerType, true) => "Enter next  Esc back",
+                (Step::CommandOrUrl, true) => "Enter save  Esc back",
+                (Step::Name, false) => "Enter: Next  Esc: Cancel",
+                (Step::ServerType, false) => "\u{2190}\u{2192}/Tab: Switch  Enter: Next  Esc: Back",
+                (Step::CommandOrUrl, false) => "Enter: Confirm  Ctrl+U: Clear  Esc: Back",
             };
             let hint = Paragraph::new(Line::from(Span::styled(
                 hint_text,
@@ -698,4 +733,67 @@ fn char_to_byte(s: &str, char_pos: usize) -> usize {
         .nth(char_pos)
         .map(|(i, _)| i)
         .unwrap_or(s.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    #[test]
+    fn too_small_dialog_blocks_hidden_input_and_submit_but_allows_close() {
+        let mut state = McpAddDialogState::new();
+        state.show();
+        let mut terminal = Terminal::new(TestBackend::new(10, 3)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render tiny MCP add dialog");
+
+        state.insert_text("hidden-server");
+        assert!(state.name_buf.is_empty());
+        assert!(matches!(
+            state.handle_key_event(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE)),
+            McpAddAction::None
+        ));
+        assert!(state.name_buf.is_empty());
+        assert_eq!(state.step, Step::Name);
+        assert!(matches!(
+            state.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            McpAddAction::None
+        ));
+        assert_eq!(state.step, Step::Name);
+
+        assert!(matches!(
+            state.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            McpAddAction::Cancel
+        ));
+        assert!(!state.is_visible());
+    }
+
+    #[test]
+    fn compact_dialog_keeps_the_current_step_visible_and_editable() {
+        let mut state = McpAddDialogState::new();
+        state.show();
+        let mut terminal = Terminal::new(TestBackend::new(20, 6)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render compact MCP add dialog");
+
+        let buffer = terminal.backend().buffer();
+        let rendered = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            rendered.contains("Server name"),
+            "step missing: {rendered:?}"
+        );
+
+        state.insert_text("docs");
+        assert_eq!(state.name_buf, "docs");
+    }
 }

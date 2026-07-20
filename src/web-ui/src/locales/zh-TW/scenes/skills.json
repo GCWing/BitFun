@@ -199,6 +199,10 @@
   "list": {
     "loading": "載入中...",
     "errorPrefix": "載入失敗: ",
+    "loadFailed": "技能載入失敗",
+    "retry": "重試",
+    "desktopUnavailable": "請在桌面端管理技能。",
+    "remoteUnavailable": "遠端連線時暫不支援管理技能。",
     "empty": {
       "noMatch": "沒有找到匹配的技能",
       "noSkills": "還沒有設定任何技能"

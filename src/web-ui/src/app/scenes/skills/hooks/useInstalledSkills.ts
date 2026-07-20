@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { configAPI } from '@/infrastructure/api';
@@ -14,9 +14,14 @@ const log = createLogger('SkillsScene:useInstalledSkills');
 interface UseInstalledSkillsOptions {
   searchQuery: string;
   activeFilter: InstalledFilter;
+  enabled?: boolean;
 }
 
-export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSkillsOptions) {
+export function useInstalledSkills({
+  searchQuery,
+  activeFilter,
+  enabled = true,
+}: UseInstalledSkillsOptions) {
   const { t } = useTranslation('scenes/skills');
   const notification = useNotification();
   const { workspacePath, hasWorkspace, isRemoteWorkspace } = useWorkspaceManagerSync();
@@ -31,8 +36,33 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
   const [isValidating, setIsValidating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const loadRequestIdRef = useRef(0);
+  const validationRequestIdRef = useRef(0);
+  const capabilityKey = `${enabled}\u0000${workspacePath ?? ''}\u0000${isRemoteWorkspace}`;
+  const capabilityRef = useRef({ key: capabilityKey, epoch: 0, enabled });
+  useLayoutEffect(() => {
+    if (capabilityRef.current.key !== capabilityKey) {
+      capabilityRef.current = {
+        key: capabilityKey,
+        epoch: capabilityRef.current.epoch + 1,
+        enabled,
+      };
+    } else {
+      capabilityRef.current.enabled = enabled;
+    }
+  }, [capabilityKey, enabled]);
+
+  const currentCapabilityEpoch = useCallback((): number | null => (
+    capabilityRef.current.enabled ? capabilityRef.current.epoch : null
+  ), []);
+  const capabilityIsCurrent = useCallback((epoch: number): boolean => (
+    capabilityRef.current.enabled && capabilityRef.current.epoch === epoch
+  ), []);
 
   const loadSkills = useCallback(async (forceRefresh?: boolean) => {
+    const capabilityEpoch = currentCapabilityEpoch();
+    if (capabilityEpoch === null) {
+      return;
+    }
     const requestId = ++loadRequestIdRef.current;
 
     try {
@@ -42,28 +72,44 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
         forceRefresh,
         workspacePath: workspacePath || undefined,
       });
-      if (requestId !== loadRequestIdRef.current) {
+      if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
         return;
       }
       setSkills(list);
     } catch (err) {
-      if (requestId !== loadRequestIdRef.current) {
+      if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
         return;
       }
       log.error('Failed to load skills', err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      if (requestId === loadRequestIdRef.current) {
+      if (requestId === loadRequestIdRef.current && capabilityIsCurrent(capabilityEpoch)) {
         setLoading(false);
       }
     }
-  }, [workspacePath]);
+  }, [capabilityIsCurrent, currentCapabilityEpoch, workspacePath]);
 
   useEffect(() => {
-    loadSkills();
-  }, [loadSkills]);
+    loadRequestIdRef.current += 1;
+    validationRequestIdRef.current += 1;
+    setValidationResult(null);
+    setIsValidating(false);
+    setIsAdding(false);
+    if (!enabled) {
+      setSkills([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    void loadSkills();
+  }, [capabilityKey, enabled, loadSkills]);
 
   const validatePath = useCallback(async (path: string) => {
+    const capabilityEpoch = currentCapabilityEpoch();
+    if (capabilityEpoch === null) {
+      return;
+    }
+    const requestId = ++validationRequestIdRef.current;
     if (!path.trim()) {
       setValidationResult(null);
       return;
@@ -71,38 +117,59 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
     try {
       setIsValidating(true);
       const result = await configAPI.validateSkillPath(path);
+      if (
+        requestId !== validationRequestIdRef.current
+        || !capabilityIsCurrent(capabilityEpoch)
+      ) {
+        return;
+      }
       setValidationResult(result);
     } catch (err) {
+      if (
+        requestId !== validationRequestIdRef.current
+        || !capabilityIsCurrent(capabilityEpoch)
+      ) {
+        return;
+      }
       setValidationResult({
         valid: false,
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
-      setIsValidating(false);
+      if (
+        requestId === validationRequestIdRef.current
+        && capabilityIsCurrent(capabilityEpoch)
+      ) {
+        setIsValidating(false);
+      }
     }
-  }, []);
+  }, [capabilityIsCurrent, currentCapabilityEpoch]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       validatePath(formPath);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [formPath, validatePath]);
+  }, [capabilityKey, formPath, validatePath]);
 
   const handleBrowse = useCallback(async () => {
+    const capabilityEpoch = currentCapabilityEpoch();
+    if (capabilityEpoch === null) {
+      return;
+    }
     try {
       const selected = await open({
         directory: true,
         multiple: false,
         title: t('form.path.label'),
       });
-      if (selected) {
+      if (selected && capabilityIsCurrent(capabilityEpoch)) {
         setFormPath(selected as string);
       }
     } catch (err) {
       log.error('Failed to open file dialog', err);
     }
-  }, [t]);
+  }, [capabilityIsCurrent, currentCapabilityEpoch, t]);
 
   const resetForm = useCallback(() => {
     setFormPath('');
@@ -111,6 +178,10 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
   }, []);
 
   const handleAdd = useCallback(async () => {
+    const capabilityEpoch = currentCapabilityEpoch();
+    if (capabilityEpoch === null) {
+      return false;
+    }
     if (!validationResult?.valid || !formPath.trim()) {
       notification.warning(t('messages.invalidPath'));
       return false;
@@ -130,11 +201,17 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
         level: formLevel,
         workspacePath: workspacePath || undefined,
       });
+      if (!capabilityIsCurrent(capabilityEpoch)) {
+        return false;
+      }
       notification.success(t('messages.addSuccess', { name: validationResult.name }));
       resetForm();
       await loadSkills(true);
-      return true;
+      return capabilityIsCurrent(capabilityEpoch);
     } catch (err) {
+      if (!capabilityIsCurrent(capabilityEpoch)) {
+        return false;
+      }
       notification.error(
         t('messages.addFailed', {
           error: err instanceof Error ? err.message : String(err),
@@ -142,11 +219,17 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
       );
       return false;
     } finally {
-      setIsAdding(false);
+      if (capabilityIsCurrent(capabilityEpoch)) {
+        setIsAdding(false);
+      }
     }
-  }, [formLevel, formPath, hasWorkspace, isRemoteWorkspace, loadSkills, notification, resetForm, t, validationResult, workspacePath]);
+  }, [capabilityIsCurrent, currentCapabilityEpoch, formLevel, formPath, hasWorkspace, isRemoteWorkspace, loadSkills, notification, resetForm, t, validationResult, workspacePath]);
 
   const handleDelete = useCallback(async (skill: SkillInfo) => {
+    const capabilityEpoch = currentCapabilityEpoch();
+    if (capabilityEpoch === null) {
+      return false;
+    }
     if (!canDeleteSkill(skill)) {
       return false;
     }
@@ -155,10 +238,16 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
         skillKey: skill.key,
         workspacePath: workspacePath || undefined,
       });
+      if (!capabilityIsCurrent(capabilityEpoch)) {
+        return false;
+      }
       notification.success(t('messages.deleteSuccess', { name: skill.name }));
       await loadSkills(true);
-      return true;
+      return capabilityIsCurrent(capabilityEpoch);
     } catch (err) {
+      if (!capabilityIsCurrent(capabilityEpoch)) {
+        return false;
+      }
       notification.error(
         t('messages.deleteFailed', {
           error: err instanceof Error ? err.message : String(err),
@@ -166,7 +255,7 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
       );
       return false;
     }
-  }, [loadSkills, notification, t, workspacePath]);
+  }, [capabilityIsCurrent, currentCapabilityEpoch, loadSkills, notification, t, workspacePath]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 

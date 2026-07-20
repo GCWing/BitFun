@@ -12,7 +12,10 @@ use ratatui::{
 };
 use std::collections::HashMap;
 
-use crate::ui::theme::{StyleKind, Theme};
+use crate::ui::{
+    responsive_popup::{render_too_small, responsive_popup, ResponsivePopup},
+    theme::{StyleKind, Theme},
+};
 
 /// A skill item for display in the selector.
 #[derive(Debug, Clone)]
@@ -97,6 +100,7 @@ pub(super) struct SkillSelectorState {
     list_state: ListState,
     visible: bool,
     last_area: Option<Rect>,
+    interaction_enabled: bool,
     screen: SkillSelectorScreen,
 }
 
@@ -108,6 +112,7 @@ impl SkillSelectorState {
             list_state: ListState::default(),
             visible: false,
             last_area: None,
+            interaction_enabled: true,
             screen: SkillSelectorScreen::Menu,
         }
     }
@@ -118,6 +123,7 @@ impl SkillSelectorState {
         self.screen = SkillSelectorScreen::Menu;
         self.list_state.select(Some(0));
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     /// Show the current mode's runtime-visible skills.
@@ -131,6 +137,7 @@ impl SkillSelectorState {
         self.screen = SkillSelectorScreen::List;
         self.list_state.select(Some(0));
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     /// Show all discovered skills with mode-specific enablement checkboxes.
@@ -157,6 +164,7 @@ impl SkillSelectorState {
         self.screen = SkillSelectorScreen::Configure;
         self.list_state.select(Some(next_index));
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     pub(super) fn hide(&mut self) {
@@ -177,7 +185,7 @@ impl SkillSelectorState {
     }
 
     pub(super) fn move_up(&mut self) {
-        if !self.visible || self.len() == 0 {
+        if !self.visible || !self.interaction_enabled || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
@@ -187,7 +195,7 @@ impl SkillSelectorState {
     }
 
     pub(super) fn move_down(&mut self) {
-        if !self.visible || self.len() == 0 {
+        if !self.visible || !self.interaction_enabled || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
@@ -197,7 +205,7 @@ impl SkillSelectorState {
 
     /// Get the selected action.
     pub(super) fn confirm_selection(&self) -> Option<SkillSelectorAction> {
-        if !self.visible {
+        if !self.visible || !self.interaction_enabled {
             return None;
         }
         let idx = self.list_state.selected()?;
@@ -234,25 +242,32 @@ impl SkillSelectorState {
             return;
         }
 
-        let popup_width = area.width.saturating_sub(4).min(92);
-        let popup_height = (self.len() as u16 + 4).min(area.height.saturating_sub(2));
-        if popup_height < 5 || popup_width < 20 {
-            self.last_area = None;
-            return;
-        }
-
-        let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
-        let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
-
-        let popup_area = Rect {
-            x: popup_x,
-            y: popup_y,
-            width: popup_width,
-            height: popup_height,
+        let initial_layout = responsive_popup(area, 92, self.len() as u16 + 4, 20, 5);
+        let initial_area = match initial_layout {
+            ResponsivePopup::Content(area) => area,
+            ResponsivePopup::TooSmall(area) => {
+                self.last_area = None;
+                self.interaction_enabled = false;
+                render_too_small(frame, area, theme, "Skills");
+                return;
+            }
         };
+        let row_height = self.row_height(initial_area.width);
+        let ideal_height = self.len() as u16 * row_height + 4;
+        let layout = responsive_popup(area, 92, ideal_height, 20, 5);
+        let popup_area = match layout {
+            ResponsivePopup::Content(area) => area,
+            ResponsivePopup::TooSmall(area) => {
+                self.last_area = None;
+                self.interaction_enabled = false;
+                render_too_small(frame, area, theme, "Skills");
+                return;
+            }
+        };
+        self.interaction_enabled = true;
         self.last_area = Some(popup_area);
 
-        let content_width = popup_width.saturating_sub(2);
+        let content_width = popup_area.width.saturating_sub(2);
         let list_items = self.render_items(theme, content_width);
         let title = match self.screen {
             SkillSelectorScreen::Menu => " Skills ",
@@ -339,12 +354,25 @@ impl SkillSelectorState {
         }
 
         let offset = self.list_state.offset();
-        let index = (row - inner_y) as usize + offset;
+        let row_height = self.row_height(area.width);
+        let index = ((row - inner_y) / row_height) as usize + offset;
         if index >= self.len() {
             return None;
         }
 
         Some(index)
+    }
+
+    fn row_height(&self, popup_width: u16) -> u16 {
+        match self.screen {
+            SkillSelectorScreen::Menu => 1,
+            SkillSelectorScreen::List | SkillSelectorScreen::Configure
+                if popup_width.saturating_sub(2) < 40 =>
+            {
+                2
+            }
+            SkillSelectorScreen::List | SkillSelectorScreen::Configure => 1,
+        }
     }
 
     fn render_items(&self, theme: &Theme, content_width: u16) -> Vec<ListItem<'static>> {
@@ -456,6 +484,24 @@ impl SkillSelectorState {
             spans.push(Span::styled(skill.description.clone(), desc_style));
         }
 
+        if compact {
+            let scope = match skill.level.as_str() {
+                "project" => "project",
+                "user" => "user",
+                _ => "other",
+            };
+            return ListItem::new(vec![
+                Line::from(spans),
+                Line::from(Span::styled(
+                    format!(
+                        "  {scope} · {}",
+                        compact_source_label(skill.display_source_label())
+                    ),
+                    level_style,
+                )),
+            ]);
+        }
+
         ListItem::new(Line::from(spans))
     }
 }
@@ -553,5 +599,57 @@ mod tests {
             rendered.contains("[~] pdf < BitFun"),
             "narrow configuration should prioritize the skill name and coverage: {rendered:?}"
         );
+        assert!(
+            rendered.contains("user · Claude"),
+            "source and scope missing: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("project · BitFun"),
+            "source and scope missing: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn too_small_fallback_disables_hidden_selection() {
+        let mut state = SkillSelectorState::new();
+        state.show_list(vec![skill_item("project::bitfun::pdf", "BitFun")]);
+        let mut terminal = Terminal::new(TestBackend::new(10, 3)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render tiny skill selector");
+
+        assert!(state.confirm_selection().is_none());
+        state.move_down();
+        assert!(state.confirm_selection().is_none());
+    }
+
+    #[test]
+    fn compact_boundary_uses_two_line_height_for_render_and_mouse_hit_testing() {
+        let first = skill_item("project::bitfun::pdf", "BitFun");
+        let second = skill_item("user::home.claude::pdf", "Claude Code");
+        let mut state = SkillSelectorState::new();
+        state.show_config(vec![first, second]);
+        let mut terminal = Terminal::new(TestBackend::new(44, 8)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render boundary-width skill selector");
+
+        let area = state.last_area.expect("popup area");
+        assert_eq!(state.item_index_at(area.y + 2, area), Some(0));
+        assert_eq!(state.item_index_at(area.y + 4, area), Some(1));
+    }
+
+    #[test]
+    fn compact_menu_keeps_single_line_mouse_hit_testing() {
+        let mut state = SkillSelectorState::new();
+        state.show_menu();
+        let mut terminal = Terminal::new(TestBackend::new(44, 8)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render compact skill menu");
+
+        let area = state.last_area.expect("popup area");
+        assert_eq!(state.item_index_at(area.y + 1, area), Some(0));
+        assert_eq!(state.item_index_at(area.y + 2, area), Some(1));
     }
 }

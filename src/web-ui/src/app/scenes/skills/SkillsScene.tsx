@@ -29,6 +29,8 @@ import {
   getSkillSourceLabel,
 } from '@/infrastructure/config/skillSourcePresentation';
 import { workspaceAPI } from '@/infrastructure/api';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useNotification } from '@/shared/notification-system';
 import { isRemoteWorkspace } from '@/shared/types';
@@ -66,6 +68,9 @@ const CATEGORIES: CategoryInfo[] = [
 const SkillsScene: React.FC = () => {
   const { t } = useTranslation('scenes/skills');
   const notification = useNotification();
+  const peerDevice = usePeerDeviceModeOptional();
+  const remoteConnectionActive = peerDevice?.peerMode.active === true;
+  const desktopConfigAvailable = isTauriRuntime() && !remoteConnectionActive;
   const {
     searchDraft,
     marketQuery,
@@ -93,6 +98,7 @@ const SkillsScene: React.FC = () => {
   const installed = useInstalledSkills({
     searchQuery: installedSearch,
     activeFilter: installedFilter,
+    enabled: desktopConfigAvailable,
   });
 
   const installedSkillNames = useMemo(
@@ -118,14 +124,45 @@ const SkillsScene: React.FC = () => {
     }
   }, [installed.loading, selectedDetail, selectedInstalledSkill]);
 
+  useEffect(() => {
+    if (desktopConfigAvailable) {
+      return;
+    }
+    setActiveTab('installed');
+    setAddFormOpen(false);
+    setDeleteTarget(null);
+    setSelectedDetail(null);
+  }, [desktopConfigAvailable, setAddFormOpen]);
+
   const market = useSkillMarket({
     searchQuery: marketQuery,
     installedSkillNames,
     pageSize: 15,
+    enabled: desktopConfigAvailable,
     onInstalledChanged: async () => {
       await installed.loadSkills(true);
     },
   });
+  const installedSkillAriaLabel = useCallback((skill: SkillInfo) => {
+    const source = getSkillSourceLabel(skill, t('list.item.unknownSource'));
+    const scope = market.isRemoteWorkspace
+      ? skill.level === 'user'
+        ? t('list.item.localUser')
+        : t('list.item.remoteProject')
+      : skill.level === 'user'
+        ? t('list.item.user')
+        : t('list.item.project');
+    return [
+      skill.name,
+      source,
+      scope,
+      skill.isShadowed
+        ? t('list.item.shadowedTooltip', {
+            source: coverageSourceBySkillKey.get(skill.key) ?? t('list.item.unknownSource'),
+          })
+        : null,
+    ].filter(Boolean).join('. ');
+  }, [coverageSourceBySkillKey, market.isRemoteWorkspace, t]);
 
   const refetchSkillsScene = useCallback(async () => {
     await Promise.all([installed.loadSkills(true), market.refresh()]);
@@ -199,6 +236,7 @@ const SkillsScene: React.FC = () => {
           <button
             type="button"
             className={`skills-tabs-bar__tab ${activeTab === 'discover' ? 'is-active' : ''}`}
+            disabled={!desktopConfigAvailable}
             onClick={() => setActiveTab('discover')}
           ><span>{t('market.title')}</span></button>
         </div>
@@ -208,7 +246,7 @@ const SkillsScene: React.FC = () => {
 
         {activeTab === 'installed' && (
           <div className="skills-installed">
-            <aside className="skills-sidebar">
+            {desktopConfigAvailable && <aside className="skills-sidebar">
               <div className="skills-sidebar__header">
                 <h2 className="skills-sidebar__title">{t('installed.titleAll')}</h2>
               </div>
@@ -235,10 +273,15 @@ const SkillsScene: React.FC = () => {
                   {t(CATEGORIES.find((c) => c.id === installedFilter)?.descKey ?? 'categories.all')}
                 </p>
               </div>
-            </aside>
+            </aside>}
 
             <div className="skills-main">
-              {installedFilter === 'suite' ? (
+              {!desktopConfigAvailable ? (
+                <div className="skills-main__empty" data-testid="skills-management-unavailable">
+                  <Package size={28} strokeWidth={1.2} />
+                  <span>{t(remoteConnectionActive ? 'list.remoteUnavailable' : 'list.desktopUnavailable')}</span>
+                </div>
+              ) : installedFilter === 'suite' ? (
                 <SkillsSuiteView />
               ) : (
                 <>
@@ -281,7 +324,14 @@ const SkillsScene: React.FC = () => {
                   {!installed.loading && installed.error && (
                     <div className="skills-main__empty skills-main__empty--error">
                       <Package size={28} strokeWidth={1.2} />
-                      <span>{installed.error}</span>
+                      <span>{t('list.loadFailed')}</span>
+                      <Button
+                        variant="ghost"
+                        size="small"
+                        onClick={() => void installed.loadSkills(true)}
+                      >
+                        {t('list.retry')}
+                      </Button>
                     </div>
                   )}
 
@@ -316,7 +366,7 @@ const SkillsScene: React.FC = () => {
                                 setSelectedDetail({ type: 'installed', skillKey: skill.key });
                               }
                             }}
-                            aria-label={skill.name}
+                            aria-label={installedSkillAriaLabel(skill)}
                             data-testid="skill-list-item"
                             data-skill-key={skill.key}
                             data-skill-id={skill.key}
@@ -343,17 +393,6 @@ const SkillsScene: React.FC = () => {
                             </div>
 
                             <div className="skills-card__meta">
-                              {skill.isShadowed && (
-                                <span title={t('list.item.shadowedTooltip', {
-                                  source: coverageSourceBySkillKey.get(skill.key)
-                                    ?? t('list.item.unknownSource'),
-                                })}>
-                                  <Badge variant="warning">
-                                    <ShieldAlert size={11} />
-                                    {t('list.item.shadowed')}
-                                  </Badge>
-                                </span>
-                              )}
                               <Badge variant="neutral">
                                 {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
                               </Badge>
@@ -371,18 +410,16 @@ const SkillsScene: React.FC = () => {
                                     ? t('list.item.user')
                                     : t('list.item.project')}
                               </Badge>
-                              {skill.path && (
-                                <button
-                                  type="button"
-                                  className="skills-card__path"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRevealSkillPath(skill.path);
-                                  }}
-                                  title={skill.path}
-                                >
-                                  {skill.path}
-                                </button>
+                              {skill.isShadowed && (
+                                <span title={t('list.item.shadowedTooltip', {
+                                  source: coverageSourceBySkillKey.get(skill.key)
+                                    ?? t('list.item.unknownSource'),
+                                })}>
+                                  <Badge variant="warning">
+                                    <ShieldAlert size={11} />
+                                    {t('list.item.shadowed')}
+                                  </Badge>
+                                </span>
                               )}
                             </div>
 
@@ -451,7 +488,7 @@ const SkillsScene: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'discover' && (
+        {desktopConfigAvailable && activeTab === 'discover' && (
           <div className="skills-discover">
             <div className="skills-discover__hero">
               <div className="skills-discover__hero-content">
@@ -611,7 +648,7 @@ const SkillsScene: React.FC = () => {
       </div>
 
       <GalleryDetailModal
-        isOpen={Boolean(selectedDetail)}
+        isOpen={desktopConfigAvailable && Boolean(selectedDetail)}
         onClose={() => setSelectedDetail(null)}
         icon={selectedMarketSkill ? <Package size={24} strokeWidth={1.6} /> : <Puzzle size={24} strokeWidth={1.6} />}
         iconGradient={getCardGradient(
@@ -779,7 +816,7 @@ const SkillsScene: React.FC = () => {
       </GalleryDetailModal>
 
       <Modal
-        isOpen={isAddFormOpen}
+        isOpen={desktopConfigAvailable && isAddFormOpen}
         onClose={() => {
           installed.resetForm();
           setAddFormOpen(false);
@@ -882,10 +919,10 @@ const SkillsScene: React.FC = () => {
       </Modal>
 
       <ConfirmDialog
-        isOpen={Boolean(deleteTarget)}
+        isOpen={desktopConfigAvailable && Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
         onConfirm={async () => {
-          if (!deleteTarget || !canDeleteSkill(deleteTarget)) {
+          if (!desktopConfigAvailable || !deleteTarget || !canDeleteSkill(deleteTarget)) {
             setDeleteTarget(null);
             return;
           }

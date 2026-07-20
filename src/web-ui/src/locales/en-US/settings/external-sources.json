@@ -1,8 +1,8 @@
 {
   "title": "External AI applications",
-  "subtitle": "Use supported commands, tools, agents, and MCP servers from other AI applications without copying their files into BitFun.",
+  "subtitle": "Use commands, tools, agents, and MCP from other AI applications.",
   "loading": "Checking external sources…",
-  "checkingNonBlocking": "Still checking for changes. You can continue using settings while this finishes.",
+  "checkingNonBlocking": "Checking for updates…",
   "common": {
     "details": "Details",
     "hideDetails": "Hide details",
@@ -17,25 +17,28 @@
   "actions": {
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
-    "updated": "Saved. The current status is shown below.",
+    "updated": "Saved.",
     "waitForUpdate": "Another change is still being saved. Wait for it to finish before making another choice.",
     "agentUpdated": "Saved changes to {{name}} and refreshed its status.",
     "mcpUpdated": "Saved the MCP server choice and refreshed its status."
   },
   "unavailable": {
-    "hostTitle": "Compatibility service unavailable",
-    "hostDescription": "This workspace host does not provide external compatibility yet. BitFun did not fall back to files or settings from this device."
+    "hostTitle": "Unavailable here",
+    "hostDescription": "View or manage external settings in Desktop.",
+    "remoteDescription": "External settings are unavailable for this remote project. Switch to a local project.",
+    "remoteConnectionDescription": "Remote connection unavailable. Retry or disconnect."
   },
   "policy": {
-    "title": "External compatibility",
+    "title": "Integration settings",
     "externalBadge": "External",
-    "readySummary": "{{count}} external items detected with quiet, risk-based defaults.",
-    "attentionSummary": "{{count}} items need attention; unrelated work is not blocked.",
+    "readySummary": "{{count}} items found",
+    "attentionSummary": "{{count}} items need attention",
     "enabledLabel": "Allow external compatibility",
-    "updated": "External compatibility settings were saved.",
-    "recoveryRequired": "This policy was written by a newer BitFun version, so external access is safely off.",
-    "unknownStatus": "This Host reports an unsupported policy state. External access stays off until BitFun is updated.",
-    "hostReadOnlyHint": "View only on this Host. Manage external integrations from Desktop or an authenticated Peer Host.",
+    "updated": "Saved.",
+    "recoveryRequired": "These settings are newer, so external access is off.",
+    "unknownStatus": "This settings state is unsupported, so external access is off.",
+    "hostReadOnlyHint": "View only. Manage this in Desktop.",
+    "remoteReadOnlyHint": "This remote project is view only. Switch to a local project to manage it.",
     "backupAndReset": "Back up and reset",
     "resetConfirmTitle": "Back up and reset policy?",
     "resetConfirmMessage": "BitFun will preserve the newer policy in a local backup, replace it with safe defaults, and keep external execution off until you enable it.",
@@ -55,8 +58,8 @@
     "scope": {
       "user": "Global",
       "workspace": "This project",
-      "workspaceHint": "Project settings override only this workspace.",
-      "workspaceUnavailable": "Open a workspace to add a project override."
+      "workspaceHint": "Affects this project only.",
+      "workspaceUnavailable": "Open a project to configure it separately."
     },
     "mode": {
       "recommended": "Recommended",
@@ -90,16 +93,16 @@
     }
   },
   "errors": {
-    "loadFailed": "BitFun could not load the current external settings. Do not assume external content is available; refresh to try again.",
-    "refreshFailed": "BitFun could not check for changes. Previously enabled content remains available, but recent changes may be missing; refresh to retry.",
-    "mutationUnknown": "BitFun could not confirm whether your change was saved. Do not assume an enable, disable, or source choice took effect; refresh to confirm the current state."
+    "loadFailed": "External settings could not be read. Refresh to retry.",
+    "refreshFailed": "The check failed. Enabled items are unchanged.",
+    "mutationUnknown": "Save status is unknown. Refresh to confirm."
   },
   "operationErrors": {
-    "rejected": "This change is not allowed in the current Host or policy. No settings were changed.",
+    "rejected": "The current settings do not allow this change.",
     "refreshRequired": "The catalog changed before this action completed. Refresh, review the current state, and try again.",
     "policyIncompatible": "External settings were written by a newer BitFun version. Back up and reset them before making changes.",
-    "unavailableRetry": "The external integration Host is temporarily unavailable. Retry or refresh in a moment.",
-    "internal": "BitFun could not complete this operation. Retry once; use the reference id if it continues.",
+    "unavailableRetry": "Temporarily unavailable. Try again later.",
+    "internal": "The action failed. Refresh to retry.",
     "referenceId": "Reference: {{id}}"
   },
   "diagnostics": {
@@ -123,7 +126,7 @@
     "title": "Configuration sources",
     "description": "Settings stay in their original locations. Open this page to check for changes automatically.",
     "globalOnly": "Showing sources available to all workspaces. Open a workspace to also show sources from that project.",
-    "empty": "No supported external settings were found.",
+    "empty": "No configuration found.",
     "commandCount": "{{count}} commands",
     "toolCount": "{{count}} tools",
     "agentCount": "{{count}} agents",

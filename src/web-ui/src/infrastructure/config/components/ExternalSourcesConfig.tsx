@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,6 +21,8 @@ import {
   Tooltip,
 } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { WorkspaceKind } from '@/shared/types';
 import {
   externalSourcesAPI,
   type ExternalIntegrationAccess,
@@ -37,7 +39,15 @@ import {
   ConfigPageRow,
   ConfigPageSection,
 } from './common';
+import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
 import './ExternalSourcesConfig.scss';
+
+const DISCOVERY_POLL_DELAYS_MS = [750, 1_500, 3_000, 5_000] as const;
+
+type SnapshotLoadResult =
+  | { status: 'accepted'; snapshot: ExternalSourceCatalogSnapshot }
+  | { status: 'ignored' }
+  | { status: 'error' };
 
 function abbreviatedLocation(location: string): string {
   const normalized = location.replace(/\\/g, '/');
@@ -195,9 +205,10 @@ function activeAgentAvailabilityChanges(
 const ExternalSourcesConfig: React.FC = () => {
   const { t } = useTranslation('settings/external-sources');
   const { workspace, workspacePath } = useCurrentWorkspace();
+  const peerDevice = usePeerDeviceModeOptional();
   const translateRef = useRef(t);
   translateRef.current = t;
-  const [snapshot, setSnapshot] = useState<ExternalSourceCatalogSnapshot | null>(null);
+  const peerDeviceId = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : undefined;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -211,7 +222,11 @@ const ExternalSourcesConfig: React.FC = () => {
     workspacePath ? 'workspace' : 'user',
   );
   const [expandedEcosystems, setExpandedEcosystems] = useState<Set<string>>(() => new Set());
-  const [resetPolicyConfirmOpen, setResetPolicyConfirmOpen] = useState(false);
+  const [resetPolicyConfirmation, setResetPolicyConfirmation] = useState<{
+    requestScope: string;
+    workspacePath?: string;
+    preferenceRevision: number;
+  } | null>(null);
   const [agentChangeNotice, setAgentChangeNotice] = useState<AgentChangeNotice | null>(null);
   const snapshotRef = useRef<ExternalSourceCatalogSnapshot | null>(null);
   const agentChangeNoticeRef = useRef<AgentChangeNotice | null>(null);
@@ -219,26 +234,35 @@ const ExternalSourcesConfig: React.FC = () => {
   const acceptedSequence = useRef(0);
   const pendingMutations = useRef(new Map<number, string>());
   const latestMutationByScope = useRef(new Map<string, number>());
-  const mutationInFlight = useRef(false);
+  const activeMutation = useRef<{ scope: string; sequence: number } | null>(null);
   const foregroundSequence = useRef<number | null>(null);
-  const requestScope = workspace
-    ? JSON.stringify({
-        id: workspace.id,
-        kind: workspace.workspaceKind,
-        connectionId: workspace.connectionId ?? null,
-        sshHost: workspace.sshHost ?? null,
-        path: workspacePath,
-      })
-    : '__user_global__';
+  const requestScope = externalSourceRequestScopeKey({
+    peerDeviceId,
+    workspaceId: workspace?.id,
+    workspaceKind: workspace?.workspaceKind,
+    remoteConnectionId: workspace?.connectionId,
+    remoteHost: workspace?.sshHost,
+    workspacePath,
+  });
+  const [snapshotState, setSnapshotState] = useState<{
+    scope: string;
+    snapshot: ExternalSourceCatalogSnapshot;
+  } | null>(null);
+  const snapshot = snapshotState?.scope === requestScope ? snapshotState.snapshot : null;
   const requestScopeRef = useRef(requestScope);
-  if (requestScopeRef.current !== requestScope) {
-    requestScopeRef.current = requestScope;
-    requestSequence.current += 1;
-    acceptedSequence.current = requestSequence.current;
-  }
+  useLayoutEffect(() => {
+    if (requestScopeRef.current !== requestScope) {
+      requestScopeRef.current = requestScope;
+      requestSequence.current += 1;
+      acceptedSequence.current = requestSequence.current;
+      snapshotRef.current = null;
+      agentChangeNoticeRef.current = null;
+    }
+  }, [requestScope]);
 
   const applySnapshot = useCallback((
     next: ExternalSourceCatalogSnapshot,
+    scope: string,
     partition: 'all' | 'subagents' = 'all',
     origin: 'read' | 'mutation' = 'read',
   ) => {
@@ -299,7 +323,7 @@ const ExternalSourcesConfig: React.FC = () => {
     }
 
     snapshotRef.current = selected;
-    setSnapshot(selected);
+    setSnapshotState({ scope, snapshot: selected });
   }, []);
 
   const acceptReadSnapshot = useCallback((
@@ -310,7 +334,7 @@ const ExternalSourcesConfig: React.FC = () => {
     if (requestScopeRef.current !== scope || sequence < acceptedSequence.current) return false;
     if (Array.from(pendingMutations.current.values()).includes(scope)) return false;
     acceptedSequence.current = sequence;
-    applySnapshot(next);
+    applySnapshot(next, scope);
     return true;
   }, [applySnapshot]);
 
@@ -323,11 +347,14 @@ const ExternalSourcesConfig: React.FC = () => {
     if (requestScopeRef.current !== scope) return false;
     if ((latestMutationByScope.current.get(scope) ?? sequence) > sequence) return false;
     acceptedSequence.current = Math.max(acceptedSequence.current, sequence);
-    applySnapshot(next, partition, 'mutation');
+    applySnapshot(next, scope, partition, 'mutation');
     return true;
   }, [applySnapshot]);
 
-  const loadSnapshot = useCallback(async (forceRefresh: boolean, foreground: boolean) => {
+  const loadSnapshot = useCallback(async (
+    forceRefresh: boolean,
+    foreground: boolean,
+  ): Promise<SnapshotLoadResult> => {
     const scope = requestScope;
     const sequence = ++requestSequence.current;
     if (foreground) {
@@ -336,12 +363,18 @@ const ExternalSourcesConfig: React.FC = () => {
     }
     try {
       const next = await externalSourcesAPI.getSnapshot(workspacePath, forceRefresh);
-      if (!acceptReadSnapshot(next, scope, sequence)) return;
+      if (!acceptReadSnapshot(next, scope, sequence)) return { status: 'ignored' };
       setError(null);
+      return { status: 'accepted', snapshot: next };
     } catch (loadError) {
-      if (requestScopeRef.current !== scope || sequence < acceptedSequence.current) return;
+      if (requestScopeRef.current !== scope
+        || sequence < acceptedSequence.current
+        || Array.from(pendingMutations.current.values()).includes(scope)) {
+        return { status: 'ignored' };
+      }
       acceptedSequence.current = sequence;
       setError({ kind: 'load', ...externalOperationErrorFacts(loadError) });
+      return { status: 'error' };
     } finally {
       if (requestScopeRef.current === scope) {
         if (sequence >= acceptedSequence.current) setLoading(false);
@@ -354,7 +387,7 @@ const ExternalSourcesConfig: React.FC = () => {
   }, [acceptReadSnapshot, requestScope, workspacePath]);
 
   useEffect(() => {
-    setSnapshot(null);
+    setSnapshotState(null);
     snapshotRef.current = null;
     agentChangeNoticeRef.current = null;
     setAgentChangeNotice(null);
@@ -365,6 +398,7 @@ const ExternalSourcesConfig: React.FC = () => {
     setReviewingAgentKey(null);
     setReviewingMcpKey(null);
     setReviewingMcpConflictKey(null);
+    setResetPolicyConfirmation(null);
     setLoading(true);
     setPolicyScope(workspacePath ? 'workspace' : 'user');
     void loadSnapshot(false, false);
@@ -383,8 +417,26 @@ const ExternalSourcesConfig: React.FC = () => {
 
   useEffect(() => {
     if (!snapshot?.discoveryPending) return undefined;
-    const timer = window.setInterval(() => void loadSnapshot(false, false), 750);
-    return () => window.clearInterval(timer);
+    let cancelled = false;
+    let timer: number | undefined;
+    let attempt = 0;
+    const schedulePoll = () => {
+      const delay = DISCOVERY_POLL_DELAYS_MS[
+        Math.min(attempt, DISCOVERY_POLL_DELAYS_MS.length - 1)
+      ];
+      timer = window.setTimeout(async () => {
+        const result = await loadSnapshot(false, false);
+        if (cancelled) return;
+        if (result.status === 'accepted' && !result.snapshot.discoveryPending) return;
+        attempt += 1;
+        schedulePoll();
+      }, delay);
+    };
+    schedulePoll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [loadSnapshot, snapshot?.discoveryPending]);
 
   const commandCounts = useMemo(() => {
@@ -474,6 +526,10 @@ const ExternalSourcesConfig: React.FC = () => {
   const hostReadOnly = !hostCapabilities.canMutatePolicy
     && !hostCapabilities.canManageSources
     && !hostCapabilities.canApproveRuntime;
+  const remoteWorkspace = workspace?.workspaceKind === WorkspaceKind.Remote;
+  const readOnlyHintKey = remoteWorkspace
+    ? 'policy.remoteReadOnlyHint'
+    : 'policy.hostReadOnlyHint';
 
   const runMutation = useCallback(async (
     mutationKey: string,
@@ -494,16 +550,16 @@ const ExternalSourcesConfig: React.FC = () => {
     if (!current || currentCapabilities[requiredCapability] !== true
       || (currentStatus !== 'compatible'
         && !(allowIncompatiblePolicy && currentStatus === 'incompatible_schema'))) {
-      setOperationStatus(t('policy.hostReadOnlyHint'));
+      setOperationStatus(t(readOnlyHintKey));
       return false;
     }
-    if (mutationInFlight.current) {
+    if (activeMutation.current?.scope === requestScope) {
       setOperationStatus(t('actions.waitForUpdate'));
       return false;
     }
-    mutationInFlight.current = true;
     const scope = requestScope;
     const sequence = ++requestSequence.current;
+    activeMutation.current = { scope, sequence };
     pendingMutations.current.set(sequence, scope);
     latestMutationByScope.current.set(scope, sequence);
     setBusyKey(mutationKey);
@@ -524,13 +580,16 @@ const ExternalSourcesConfig: React.FC = () => {
       }
       return false;
     } finally {
-      mutationInFlight.current = false;
+      if (activeMutation.current?.scope === scope
+        && activeMutation.current.sequence === sequence) {
+        activeMutation.current = null;
+      }
       pendingMutations.current.delete(sequence);
       if (requestScopeRef.current === scope) {
         setBusyKey((current) => (current === mutationKey ? null : current));
       }
     }
-  }, [acceptMutationSnapshot, requestScope, t]);
+  }, [acceptMutationSnapshot, readOnlyHintKey, requestScope, t]);
 
   const setEnabled = useCallback(async (sourceKey: string, enabled: boolean) => {
     if (!snapshot) return;
@@ -779,10 +838,6 @@ const ExternalSourcesConfig: React.FC = () => {
     }
     return accessRank[requested] <= accessRank[ceiling] ? requested : ceiling;
   };
-  const externalAssetCount = (snapshot?.commands.length ?? 0)
-    + (snapshot?.tools?.length ?? 0)
-    + (snapshot?.subagents?.length ?? 0)
-    + (snapshot?.mcpServers?.length ?? 0);
   const diagnosticAttentionCount = (snapshot?.diagnostics ?? [])
     .filter((diagnostic) => diagnostic.severity !== 'info').length
     + (snapshot?.sources ?? []).reduce((count, source) => (
@@ -829,12 +884,16 @@ const ExternalSourcesConfig: React.FC = () => {
     access,
   }), [updatePolicy]);
 
-  const resetIncompatiblePolicy = useCallback(() => {
-    if (!snapshot) return Promise.resolve(false);
+  const resetIncompatiblePolicy = useCallback((confirmation: {
+    requestScope: string;
+    workspacePath?: string;
+    preferenceRevision: number;
+  }) => {
+    if (requestScope !== confirmation.requestScope) return Promise.resolve(false);
     return runMutation(
       'integration-policy:recovery',
-      () => externalSourcesAPI.updateIntegrationPolicy(workspacePath, {
-        expectedPreferenceRevision: snapshot.preferenceRevision ?? 0,
+      () => externalSourcesAPI.updateIntegrationPolicy(confirmation.workspacePath, {
+        expectedPreferenceRevision: confirmation.preferenceRevision,
         scope: 'user',
         change: { operation: 'reset_incompatible_policy' },
       }),
@@ -844,7 +903,7 @@ const ExternalSourcesConfig: React.FC = () => {
       'canMutatePolicy',
       true,
     );
-  }, [runMutation, snapshot, t, workspacePath]);
+  }, [requestScope, runMutation, t]);
 
   const scrollToFirstAttentionItem = useCallback(() => {
     const target = document.querySelector<HTMLElement>(
@@ -878,22 +937,31 @@ const ExternalSourcesConfig: React.FC = () => {
         title={t('title')}
         subtitle={t('subtitle')}
         extra={(
-          <Button
-            variant="secondary"
-            size="small"
-            disabled={refreshing || !hostCapabilities.canRefresh}
-            onClick={() => void loadSnapshot(true, true)}
+          <Tooltip
+            content={refreshing ? t('actions.refreshing') : t('actions.refresh')}
+            placement="top"
           >
-            <RefreshCw size={14} aria-hidden="true" />
-            {refreshing ? t('actions.refreshing') : t('actions.refresh')}
-          </Button>
+            <Button
+              variant="ghost"
+              size="small"
+              aria-label={refreshing ? t('actions.refreshing') : t('actions.refresh')}
+              disabled={refreshing || (!hostCapabilities.canRefresh && !error)}
+              onClick={() => void loadSnapshot(true, true)}
+            >
+              <RefreshCw size={15} aria-hidden="true" />
+            </Button>
+          </Tooltip>
         )}
       />
       <ConfigPageContent id="external-integration-attention-region">
         {hostUnavailable ? (
           <ConfigPageSection
             title={t('unavailable.hostTitle')}
-            description={t('unavailable.hostDescription')}
+            description={t(peerDeviceId
+              ? 'unavailable.remoteConnectionDescription'
+              : remoteWorkspace
+                ? 'unavailable.remoteDescription'
+                : 'unavailable.hostDescription')}
           >
             {null}
           </ConfigPageSection>
@@ -917,44 +985,27 @@ const ExternalSourcesConfig: React.FC = () => {
             {snapshot && hostReadOnly ? (
               <div className="bitfun-external-sources-config__host-mode" role="status">
                 <ShieldCheck size={16} aria-hidden="true" />
-                <span>{t('policy.hostReadOnlyHint')}</span>
+                <span>{t(readOnlyHintKey)}</span>
               </div>
             ) : null}
             {snapshot && policy ? (
-              <section
+              <ConfigPageSection
                 className="bitfun-external-sources-config__policy-card"
-                aria-labelledby="external-integration-policy-title"
-              >
-                <div className="bitfun-external-sources-config__policy-heading">
-                  <div className="bitfun-external-sources-config__policy-identity">
-                    <span className="bitfun-external-sources-config__policy-icon" aria-hidden="true">
-                      <ShieldCheck size={18} />
-                    </span>
-                    <div>
-                      <div
-                        id="external-integration-policy-title"
-                        className="bitfun-external-sources-config__policy-title"
-                      >
-                        {t('policy.title')}
-                        <span className="bitfun-external-sources-config__origin-badge">
-                          {t('policy.externalBadge')}
-                        </span>
-                      </div>
-                      <div className="bitfun-external-sources-config__policy-summary">
-                        {externalAttentionCount > 0 ? (
-                          <button
-                            type="button"
-                            aria-controls="external-integration-attention-region"
-                            onClick={scrollToFirstAttentionItem}
-                          >
-                            {t('policy.attentionSummary', {
-                              count: externalAttentionCount,
-                            })}
-                          </button>
-                        ) : t('policy.readySummary', { count: externalAssetCount })}
-                      </div>
-                    </div>
-                  </div>
+                title={t('policy.title')}
+                description={externalAttentionCount > 0 ? (
+                  <span className="bitfun-external-sources-config__policy-summary">
+                    <button
+                      type="button"
+                      aria-controls="external-integration-attention-region"
+                      onClick={scrollToFirstAttentionItem}
+                    >
+                      {t('policy.attentionSummary', {
+                        count: externalAttentionCount,
+                      })}
+                    </button>
+                  </span>
+                ) : undefined}
+                extra={(
                   <Switch
                     size="small"
                     checked={selectedPolicyEnabled}
@@ -966,8 +1017,8 @@ const ExternalSourcesConfig: React.FC = () => {
                       enabled: event.currentTarget.checked,
                     })}
                   />
-                </div>
-
+                )}
+              >
                 {policyIncompatible ? (
                   <div
                     className="bitfun-external-sources-config__policy-recovery"
@@ -980,7 +1031,11 @@ const ExternalSourcesConfig: React.FC = () => {
                       variant="secondary"
                       size="small"
                       disabled={busyKey !== null || !hostCapabilities.canMutatePolicy}
-                      onClick={() => setResetPolicyConfirmOpen(true)}
+                      onClick={() => setResetPolicyConfirmation({
+                        requestScope,
+                        workspacePath,
+                        preferenceRevision: snapshot.preferenceRevision ?? 0,
+                      })}
                     >
                       {t('policy.backupAndReset')}
                     </Button>
@@ -1060,9 +1115,6 @@ const ExternalSourcesConfig: React.FC = () => {
                   <React.Fragment key={ecosystem.ecosystemId}>
                 <div className="bitfun-external-sources-config__ecosystem-card">
                   <div className="bitfun-external-sources-config__ecosystem-heading">
-                    <span className="bitfun-external-sources-config__ecosystem-mark" aria-hidden="true">
-                      {ecosystem.descriptor.displayName.slice(0, 2).toUpperCase()}
-                    </span>
                     <div>
                       <div className="bitfun-external-sources-config__ecosystem-name">
                         {ecosystem.descriptor.displayName}
@@ -1073,13 +1125,6 @@ const ExternalSourcesConfig: React.FC = () => {
                           {ecosystem.state === 'noConfig' ? <MinusCircle size={13} aria-hidden="true" /> : null}
                           {t(`policy.state.${ecosystem.state}`)}
                         </span>
-                      </div>
-                      <div className="bitfun-external-sources-config__ecosystem-meta">
-                        {t('policy.adapterRevision', {
-                          revision: ecosystem.descriptor.adapterRevision,
-                        })}
-                        {' · '}
-                        {t('policy.sourceCount', { count: ecosystem.sourceLocations.length })}
                       </div>
                     </div>
                   </div>
@@ -1204,7 +1249,7 @@ const ExternalSourcesConfig: React.FC = () => {
                 ) : null}
                   </React.Fragment>
                 ))}
-              </section>
+              </ConfigPageSection>
             ) : null}
             {operationStatus ? (
               <div
@@ -1247,12 +1292,6 @@ const ExternalSourcesConfig: React.FC = () => {
                 </ul>
               </details>
             ) : null}
-            {!workspacePath ? (
-              <div className="bitfun-external-sources-config__notice" role="status">
-                {t('sources.globalOnly')}
-              </div>
-            ) : null}
-
             {snapshot?.discoveryPending ? (
               <div className="bitfun-external-sources-config__notice" role="status">
                 {t('checkingNonBlocking')}
@@ -1262,7 +1301,6 @@ const ExternalSourcesConfig: React.FC = () => {
             {(snapshot?.mcpApprovalRequests?.length ?? 0) > 0 ? (
               <ConfigPageSection
                 title={t('mcpApprovals.title')}
-                description={t('mcpApprovals.description')}
               >
                 {snapshot?.mcpApprovalRequests?.map((request) => {
                   const source = snapshot.sources.find((candidate) => (
@@ -1368,7 +1406,7 @@ const ExternalSourcesConfig: React.FC = () => {
             ) : null}
 
             {(snapshot?.mcpServers?.length ?? 0) > 0 ? (
-              <ConfigPageSection title={t('mcp.title')} description={t('mcp.description')}>
+              <ConfigPageSection title={t('mcp.title')}>
                 {snapshot?.mcpServers?.map((server) => {
                   const state = server.activationState.state;
                   const reviewing = reviewingMcpKey === server.candidateId;
@@ -1493,7 +1531,6 @@ const ExternalSourcesConfig: React.FC = () => {
             {mcpConflicts.length > 0 ? (
               <ConfigPageSection
                 title={t('mcpConflicts.title')}
-                description={t('mcpConflicts.description')}
               >
                 {mcpConflicts.map((conflict) => (
                   <div
@@ -1662,7 +1699,7 @@ const ExternalSourcesConfig: React.FC = () => {
             ) : null}
 
             {(snapshot?.subagents?.length ?? 0) > 0 ? (
-              <ConfigPageSection title={t('agents.title')} description={t('agents.description')}>
+              <ConfigPageSection title={t('agents.title')}>
                 {snapshot?.subagents?.map((agent) => {
                   const reviewing = reviewingAgentKey === agent.candidateId;
                   const state = agent.activationState.state;
@@ -1782,7 +1819,6 @@ const ExternalSourcesConfig: React.FC = () => {
             {agentConflicts.length > 0 ? (
               <ConfigPageSection
                 title={t('agentConflicts.title')}
-                description={t('agentConflicts.description')}
               >
                 {agentConflicts.map((conflict) => {
                   const selectedExternalAgent = snapshot?.subagents?.find((agent) => (
@@ -1906,7 +1942,6 @@ const ExternalSourcesConfig: React.FC = () => {
             {(snapshot?.toolApprovalRequests?.length ?? 0) > 0 ? (
               <ConfigPageSection
                 title={t('toolApprovals.title')}
-                description={t('toolApprovals.description')}
               >
                 {snapshot?.toolApprovalRequests?.map((request) => {
                   const targetTools = (snapshot.tools ?? []).filter((tool) => (
@@ -2009,9 +2044,8 @@ const ExternalSourcesConfig: React.FC = () => {
 
             <ConfigPageSection
               title={t('sources.title')}
-              description={t('sources.description')}
             >
-              {!snapshot?.discoveryPending && (snapshot?.sources.length ?? 0) === 0 ? (
+              {snapshot && !snapshot.discoveryPending && snapshot.sources.length === 0 ? (
                 <div className="bitfun-external-sources-config__empty">{t('sources.empty')}</div>
               ) : snapshot?.sources.map((source) => {
                 const sourcePair = `${source.record.key.providerId}\u0000${source.record.key.sourceId}`;
@@ -2094,7 +2128,7 @@ const ExternalSourcesConfig: React.FC = () => {
             </ConfigPageSection>
 
             {(snapshot?.tools?.length ?? 0) > 0 ? (
-              <ConfigPageSection title={t('tools.title')} description={t('tools.description')}>
+              <ConfigPageSection title={t('tools.title')}>
                 {snapshot?.tools?.map((tool) => {
                   const toolKey = `${tool.definition.id.target.source.providerId}:${tool.definition.id.target.source.sourceId}:${tool.definition.id.target.localId}:${tool.definition.id.exportId}`;
                   const source = snapshot.sources.find((candidate) => matchesToolSource(candidate, tool));
@@ -2259,7 +2293,6 @@ const ExternalSourcesConfig: React.FC = () => {
             {commandConflicts.length > 0 ? (
               <ConfigPageSection
                 title={t('conflicts.title')}
-                description={t('conflicts.description')}
               >
                 {commandConflicts.map((conflict) => {
                   const selectedChoiceUnavailable = conflict.candidates.some((candidate) => (
@@ -2343,7 +2376,6 @@ const ExternalSourcesConfig: React.FC = () => {
             {toolConflicts.length > 0 ? (
               <ConfigPageSection
                 title={t('toolConflicts.title')}
-                description={t('toolConflicts.description')}
               >
                 {toolConflicts.map((conflict) => {
                   const selectedCandidate = conflict.candidates.find((candidate) => (
@@ -2426,11 +2458,12 @@ const ExternalSourcesConfig: React.FC = () => {
         )}
       </ConfigPageContent>
       <ConfirmDialog
-        isOpen={resetPolicyConfirmOpen}
-        onClose={() => setResetPolicyConfirmOpen(false)}
+        isOpen={resetPolicyConfirmation !== null}
+        onClose={() => setResetPolicyConfirmation(null)}
         onConfirm={() => {
-          setResetPolicyConfirmOpen(false);
-          void resetIncompatiblePolicy();
+          const confirmation = resetPolicyConfirmation;
+          setResetPolicyConfirmation(null);
+          if (confirmation) void resetIncompatiblePolicy(confirmation);
         }}
         title={t('policy.resetConfirmTitle')}
         message={t('policy.resetConfirmMessage')}

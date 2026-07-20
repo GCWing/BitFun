@@ -199,6 +199,10 @@
   "list": {
     "loading": "加载中...",
     "errorPrefix": "加载失败: ",
+    "loadFailed": "技能加载失败",
+    "retry": "重试",
+    "desktopUnavailable": "请在桌面端管理技能。",
+    "remoteUnavailable": "远程连接时暂不支持管理技能。",
     "empty": {
       "noMatch": "没有找到匹配的技能",
       "noSkills": "还没有配置任何技能"

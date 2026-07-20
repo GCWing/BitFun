@@ -15,7 +15,8 @@ const chooseSubagentConflictMock = vi.hoisted(() => vi.fn());
 const setMcpServerDecisionMock = vi.hoisted(() => vi.fn());
 const chooseMcpConflictMock = vi.hoisted(() => vi.fn());
 const updateIntegrationPolicyMock = vi.hoisted(() => vi.fn());
-const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project' }));
+const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project', kind: 'normal' }));
+const peerState = vi.hoisted(() => ({ deviceId: '' }));
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -30,13 +31,23 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   useCurrentWorkspace: () => ({
-    workspace: { rootPath: workspaceState.path },
+    workspace: { id: workspaceState.path, workspaceKind: workspaceState.kind, rootPath: workspaceState.path },
     workspacePath: workspaceState.path,
+  }),
+}));
+vi.mock('@/infrastructure/peer-device/PeerDeviceContext', () => ({
+  usePeerDeviceModeOptional: () => ({
+    peerMode: peerState.deviceId
+      ? { active: true, deviceId: peerState.deviceId, deviceName: peerState.deviceId }
+      : { active: false },
   }),
 }));
 
 vi.mock('@/infrastructure/runtime', () => ({ isTauriRuntime: () => true }));
-vi.mock('@/shared/types', () => ({ isRemoteWorkspace: () => false }));
+vi.mock('@/shared/types', () => ({
+  isRemoteWorkspace: () => false,
+  WorkspaceKind: { Normal: 'normal', Assistant: 'assistant', Remote: 'remote' },
+}));
 vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
   externalSourcesAPI: {
     getSnapshot: getSnapshotMock,
@@ -193,6 +204,8 @@ describe('ExternalSourcesConfig', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     workspaceState.path = 'D:/workspace/project';
+    workspaceState.kind = 'normal';
+    peerState.deviceId = '';
     getSnapshotMock.mockResolvedValue(snapshot);
     setSourceEnabledMock.mockResolvedValue(snapshot);
     setConflictChoiceMock.mockResolvedValue({
@@ -239,7 +252,7 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('policy.title');
-    expect(container.textContent).toContain('policy.externalBadge');
+    expect(container.textContent).not.toContain('policy.externalBadge');
     expect(container.textContent).toContain('OpenCode');
     expect(container.textContent).toContain('policy.mode.recommended');
     expect(container.textContent).toContain('policy.inherited');
@@ -749,6 +762,94 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).not.toContain('checkingNonBlocking');
   });
 
+  it('waits for each discovery poll before scheduling the next backoff step', async () => {
+    let resolvePoll: ((value: typeof snapshot) => void) | undefined;
+    getSnapshotMock
+      .mockResolvedValueOnce({
+        ...snapshot,
+        discoveryPending: true,
+        sources: [],
+        diagnostics: [],
+        commandConflicts: [],
+      })
+      .mockImplementationOnce(() => new Promise<typeof snapshot>((resolve) => {
+        resolvePoll = resolve;
+      }))
+      .mockResolvedValue(snapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolvePoll?.({
+        ...snapshot,
+        discoveryPending: true,
+        sources: [],
+        diagnostics: [],
+        commandConflicts: [],
+      });
+      await Promise.resolve();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(1_499));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps polling when a read overlaps a source change', async () => {
+    let resolveMutation: ((value: typeof snapshot) => void) | undefined;
+    const pendingSnapshot = { ...snapshot, discoveryPending: true };
+    getSnapshotMock
+      .mockResolvedValueOnce(pendingSnapshot)
+      .mockResolvedValueOnce(pendingSnapshot)
+      .mockResolvedValue(snapshot);
+    setSourceEnabledMock.mockImplementationOnce(() => new Promise<typeof snapshot>((resolve) => {
+      resolveMutation = resolve;
+    }));
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
+    await act(async () => sourceToggle.click());
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveMutation?.(pendingSnapshot);
+      await Promise.resolve();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(1_500));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('recovers discovery polling after a transient read failure', async () => {
+    getSnapshotMock
+      .mockResolvedValueOnce({ ...snapshot, discoveryPending: true })
+      .mockRejectedValueOnce(new Error('temporary discovery failure'))
+      .mockResolvedValue(snapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(750));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(1_500));
+    expect(getSnapshotMock).toHaveBeenCalledTimes(3);
+    expect(container.textContent).toContain('OpenCode project commands');
+  });
+
   it('distinguishes initial load failures from uncertain mutation results', async () => {
     getSnapshotMock.mockRejectedValueOnce(new Error('initial load failed'));
     await act(async () => {
@@ -757,6 +858,7 @@ describe('ExternalSourcesConfig', () => {
     });
     expect(container.textContent).toContain('errors.loadFailed');
     expect(container.textContent).not.toContain('initial load failed');
+    expect(container.textContent).not.toContain('sources.empty');
 
     await act(async () => root.unmount());
     container.remove();
@@ -786,8 +888,11 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
     const refresh = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('actions.refresh'));
-    await act(async () => refresh?.click());
+      button.getAttribute('aria-label') === 'actions.refresh');
+    await act(async () => {
+      refresh?.click();
+      await Promise.resolve();
+    });
     expect(container.textContent).toContain('errors.refreshFailed');
     expect(container.textContent).toContain('OpenCode project commands');
     expect(container.textContent).not.toContain('refresh failed');
@@ -1383,6 +1488,47 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).not.toContain('OpenCode project commands');
   });
 
+  it('isolates an in-flight response when the controlling Peer Host changes', async () => {
+    let resolveFirstHost: ((value: typeof snapshot) => void) | undefined;
+    getSnapshotMock
+      .mockImplementationOnce(() => new Promise<typeof snapshot>((resolve) => {
+        resolveFirstHost = resolve;
+      }))
+      .mockResolvedValueOnce({
+        ...snapshot,
+        generation: 2,
+        sources: [{
+          ...snapshot.sources[0],
+          stableKey: 'peer-b-source',
+          record: {
+            ...snapshot.sources[0].record,
+            displayName: 'Peer B commands',
+          },
+        }],
+        diagnostics: [],
+        commandConflicts: [],
+      });
+
+    peerState.deviceId = 'peer-a';
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    peerState.deviceId = 'peer-b';
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      resolveFirstHost?.(snapshot);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Peer B commands');
+    expect(container.textContent).not.toContain('OpenCode project commands');
+  });
+
   it('ignores a source mutation response from the previous workspace', async () => {
     let resolveMutation: ((value: typeof snapshot) => void) | undefined;
     const pendingMutation = new Promise<typeof snapshot>((resolve) => {
@@ -1461,6 +1607,76 @@ describe('ExternalSourcesConfig', () => {
     ) as HTMLInputElement;
     expect(updatedToggle.checked).toBe(false);
     expect(container.textContent).toContain('lifecycle.suppressed');
+  });
+
+  it('ignores a failed refresh while a source mutation is pending', async () => {
+    let resolveMutation: ((value: typeof snapshot) => void) | undefined;
+    getSnapshotMock
+      .mockResolvedValueOnce(snapshot)
+      .mockRejectedValueOnce(new Error('stale refresh failure'));
+    setSourceEnabledMock.mockReturnValue(new Promise<typeof snapshot>((resolve) => {
+      resolveMutation = resolve;
+    }));
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    const sourceToggle = container.querySelector(
+      'input[aria-label^="sources.toggleLabel"]',
+    ) as HTMLInputElement;
+    await act(async () => sourceToggle.click());
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).not.toContain('errors.refreshFailed');
+
+    await act(async () => {
+      resolveMutation?.({
+        ...snapshot,
+        generation: 2,
+        sources: [{ ...snapshot.sources[0], lifecycle: 'suppressed' }],
+      });
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('lifecycle.suppressed');
+    expect(container.textContent).not.toContain('errors.refreshFailed');
+  });
+
+  it('gives remote projects a useful unavailable next step', async () => {
+    workspaceState.kind = 'remote';
+    getSnapshotMock.mockRejectedValueOnce({
+      code: 'host_unavailable',
+      message: 'unavailable',
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('unavailable.remoteDescription');
+    expect(container.textContent).not.toContain('unavailable.hostDescription');
+  });
+
+  it('gives a failed remote connection a useful next step', async () => {
+    peerState.deviceId = 'remote-device';
+    getSnapshotMock.mockRejectedValueOnce({
+      code: 'host_unavailable',
+      message: 'unavailable',
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('unavailable.remoteConnectionDescription');
+    expect(container.textContent).not.toContain('unavailable.hostDescription');
+    expect(container.textContent).not.toContain('unavailable.remoteDescription');
   });
 
   it('fails closed for a legacy read-only host and never sends a mutation', async () => {

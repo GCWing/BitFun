@@ -12,7 +12,10 @@ OpenCode Prompt Command 适配器接入本地用户全局/项目来源；Desktop
 交互式 TUI（ChatMode）可列出并执行 prompt-only Command。第二条纵向切片已让受支持的单文件 OpenCode `.js` standalone Tool 经静态
 预览、来源/能力确认和同名冲突选择后进入现有 Tool Runtime；Desktop 与交互式 TUI（ChatMode）使用同一决策状态。第三条纵向
 切片已把 OpenCode 全局/项目 Subagent 的安全子集通过独立 provider 契约接入现有 Subagent owner：首次启用与
-同名冲突使用非阻塞决策，fresh 调用固定不可变 generation，更新和撤下不会静默切换到同名实现。完整
+同名冲突使用非阻塞决策，fresh 调用固定不可变 generation，更新和撤下不会静默切换到同名实现。第四条纵向切片
+已把 OpenCode 用户/项目 MCP 的 local stdio 与 HTTPS remote 安全子集接入现有 MCP owner，沿用显式审批、冲突、
+工作区隔离和失败回推；现有 Skill Registry 另行展示来源、用户/项目作用域和固定优先级产生的覆盖结果，不并入上述
+可执行来源选择规则。完整
 TypeScript/Bun、包依赖、package plugin、Codex/Claude Code 适配器、primary agent 替换和外部 Subagent 续接仍属于
 后续阶段，不能因来源被识别就宣称已经可用。
 
@@ -60,7 +63,9 @@ TypeScript/Bun、包依赖、package plugin、Codex/Claude Code 适配器、prim
 
 ### 3.1 首次发现
 
-发现始终在后台进行。Desktop、交互式 TUI（ChatMode）和未来 Web 入口消费同一只读来源状态，但按宿主展示：
+发现始终在后台进行。Desktop、交互式 TUI（ChatMode）和 Peer 控制界面消费事实所在 Host 的同一来源状态，但按
+宿主展示；Peer 控制界面只代理 Peer Host，不读取控制端同名来源。Server 当前只提供只读快照，未来 Web 入口必须
+通过已接入的 Host 能力消费，不能由浏览器扫描来源：
 
 ```text
 已发现 OpenCode 工作内容

@@ -8,6 +8,7 @@ import ExternalMcpOverview from './ExternalMcpOverview';
 
 const getSnapshotMock = vi.hoisted(() => vi.fn());
 const workspaceState = vi.hoisted(() => ({ path: 'D:/workspace/project' }));
+const peerState = vi.hoisted(() => ({ deviceId: '' }));
 const warnMock = vi.hoisted(() => vi.fn());
 const apiErrorState = vi.hoisted(() => ({
   ExternalSourceApiError: class ExternalSourceApiError extends Error {
@@ -30,7 +31,17 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
-  useCurrentWorkspace: () => ({ workspacePath: workspaceState.path }),
+  useCurrentWorkspace: () => ({
+    workspace: { id: workspaceState.path, workspaceKind: 'local' },
+    workspacePath: workspaceState.path,
+  }),
+}));
+vi.mock('@/infrastructure/peer-device/PeerDeviceContext', () => ({
+  usePeerDeviceModeOptional: () => ({
+    peerMode: peerState.deviceId
+      ? { active: true, deviceId: peerState.deviceId, deviceName: peerState.deviceId }
+      : { active: false },
+  }),
 }));
 
 vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
@@ -121,6 +132,7 @@ describe('ExternalMcpOverview', () => {
     getSnapshotMock.mockReset().mockResolvedValue(snapshot);
     warnMock.mockReset();
     workspaceState.path = 'D:/workspace/project';
+    peerState.deviceId = '';
     useSettingsStore.setState({ activeTab: 'mcp-tools', searchQuery: '' });
   });
 
@@ -192,6 +204,42 @@ describe('ExternalMcpOverview', () => {
 
     expect(container.textContent).toContain('external.unavailable');
     expect(container.textContent).not.toContain('OpenCode');
+  });
+
+  it('does not project a snapshot returned by the previous Peer Host', async () => {
+    let resolvePeerA: ((value: typeof snapshot) => void) | undefined;
+    getSnapshotMock
+      .mockImplementationOnce(() => new Promise<typeof snapshot>((resolve) => {
+        resolvePeerA = resolve;
+      }))
+      .mockResolvedValueOnce({
+        ...snapshot,
+        mcpServers: [{
+          ...snapshot.mcpServers[0],
+          candidateId: 'peer-b-docs',
+          definition: { ...snapshot.mcpServers[0].definition, name: 'peer-b-docs' },
+        }],
+      });
+
+    peerState.deviceId = 'peer-a';
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+    });
+    peerState.deviceId = 'peer-b';
+    await act(async () => {
+      root.render(<ExternalMcpOverview />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      resolvePeerA?.(snapshot);
+      await Promise.resolve();
+    });
+
+    expect(Array.from(
+      container.querySelectorAll('[data-testid="external-mcp-item"] .bitfun-collection-item__name'),
+    ).map((node) => node.textContent)).toEqual(['peer-b-docs']);
   });
 
   it('logs typed failure facts without logging raw error details', async () => {
@@ -271,6 +319,32 @@ describe('ExternalMcpOverview', () => {
       expect(getSnapshotMock).toHaveBeenCalledTimes(2);
       expect(container.textContent).toContain('docs');
       expect(container.textContent).not.toContain('external.status.checking');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the last external MCP snapshot when a refresh fails', async () => {
+    vi.useFakeTimers();
+    try {
+      getSnapshotMock
+        .mockResolvedValueOnce({ ...snapshot, discoveryPending: true })
+        .mockRejectedValueOnce(new Error('refresh failed'));
+
+      await act(async () => {
+        root.render(<ExternalMcpOverview />);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750);
+        await Promise.resolve();
+      });
+
+      expect(container.textContent).toContain('docs');
+      expect(container.textContent).toContain('external.status.stale');
+      expect(container.querySelector('[aria-label="external.retry"]')).not.toBeNull();
+      expect(container.textContent).not.toContain('external.unavailable');
     } finally {
       vi.useRealTimers();
     }

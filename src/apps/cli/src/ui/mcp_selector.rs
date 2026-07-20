@@ -18,7 +18,10 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthChar;
 
-use crate::ui::theme::{StyleKind, Theme};
+use crate::ui::{
+    responsive_popup::{render_too_small, responsive_popup, ResponsivePopup},
+    theme::{StyleKind, Theme},
+};
 
 fn wrap_confirmation_detail(value: &str, width: usize) -> Vec<String> {
     let width = width.max(1);
@@ -132,6 +135,7 @@ pub(super) struct McpSelectorState {
     confirmation_max_scroll: u16,
     confirmation_reviewed: bool,
     last_area: Option<Rect>,
+    interaction_enabled: bool,
 }
 
 impl McpSelectorState {
@@ -147,6 +151,7 @@ impl McpSelectorState {
             confirmation_max_scroll: 0,
             confirmation_reviewed: false,
             last_area: None,
+            interaction_enabled: true,
         }
     }
 
@@ -160,6 +165,7 @@ impl McpSelectorState {
         }
         self.loading_id = None;
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     /// Update items in-place (after toggle completes) without closing
@@ -260,7 +266,7 @@ impl McpSelectorState {
     }
 
     pub(super) fn move_up(&mut self) {
-        if !self.visible || self.items.is_empty() {
+        if !self.visible || !self.interaction_enabled || self.items.is_empty() {
             return;
         }
         if self.confirm_external_id.is_some() {
@@ -274,7 +280,7 @@ impl McpSelectorState {
     }
 
     pub(super) fn move_down(&mut self) {
-        if !self.visible || self.items.is_empty() {
+        if !self.visible || !self.interaction_enabled || self.items.is_empty() {
             return;
         }
         if self.confirm_external_id.is_some() {
@@ -294,7 +300,7 @@ impl McpSelectorState {
 
     /// Get the selected MCP item (for toggle action)
     pub(super) fn confirm_selection(&self) -> Option<McpItem> {
-        if !self.visible {
+        if !self.visible || !self.interaction_enabled {
             return None;
         }
         let idx = self.list_state.selected()?;
@@ -311,36 +317,51 @@ impl McpSelectorState {
             return;
         }
 
-        let popup_width = area.width.saturating_sub(4).min(72);
-        // +5 for border(2) + title(1) + hint(1) + padding(1)
+        let provisional_width = area.width.saturating_sub(4).min(72).max(1);
         let confirmation_height = self
             .confirm_external_id
             .as_ref()
             .and_then(|id| self.items.iter().find(|item| &item.id == id))
             .map(|item| {
-                wrap_confirmation_detail(&item.detail, popup_width.saturating_sub(6) as usize).len()
-                    as u16
+                wrap_confirmation_detail(&item.detail, provisional_width.saturating_sub(6) as usize)
+                    .len() as u16
                     + 2
             })
             .unwrap_or(0);
-        let max_popup_height = area.height.saturating_sub(2);
-        if max_popup_height < 6 || popup_width < 30 {
-            self.last_area = None;
-            return;
-        }
-        let popup_height = (self.items.len() as u16 + 5 + confirmation_height)
-            .min(max_popup_height)
-            .max(6);
-
-        let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
-        let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
-
-        let popup_area = Rect {
-            x: popup_x,
-            y: popup_y,
-            width: popup_width,
-            height: popup_height,
+        let initial_layout = responsive_popup(
+            area,
+            72,
+            (self.items.len() as u16 + 5 + confirmation_height).max(6),
+            18,
+            6,
+        );
+        let initial_area = match initial_layout {
+            ResponsivePopup::Content(area) => area,
+            ResponsivePopup::TooSmall(area) => {
+                self.last_area = None;
+                self.interaction_enabled = false;
+                render_too_small(frame, area, theme, "MCP Servers");
+                return;
+            }
         };
+        let compact_layout = initial_area.width < 50;
+        let list_height = self.items.len() as u16 * if compact_layout { 2 } else { 1 };
+        // Compact rows keep source/name and status on separate lines and omit the footer.
+        let chrome_height = if compact_layout { 2 } else { 5 };
+        let ideal_height = (list_height + chrome_height + confirmation_height).max(6);
+        let layout = responsive_popup(area, 72, ideal_height, 18, 6);
+        let popup_area = match layout {
+            ResponsivePopup::Content(area) => area,
+            ResponsivePopup::TooSmall(area) => {
+                self.last_area = None;
+                self.interaction_enabled = false;
+                render_too_small(frame, area, theme, "MCP Servers");
+                return;
+            }
+        };
+        self.interaction_enabled = true;
+        let popup_width = popup_area.width;
+        let popup_height = popup_area.height;
         self.last_area = Some(popup_area);
 
         if let Some(item) = self
@@ -399,21 +420,33 @@ impl McpSelectorState {
 
                 // If this item is pending delete confirmation, show special style
                 if is_confirm_delete {
-                    let line = Line::from(vec![
-                        Span::styled(
-                            "\u{2717} ",
-                            theme.style(StyleKind::Error).add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            &item.name,
-                            theme.style(StyleKind::Error).add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            "  \u{2190} Press 'd' again to delete, any other key to cancel",
-                            theme.style(StyleKind::Error),
-                        ),
-                    ]);
-                    return ListItem::new(line);
+                    let identity_spans = || {
+                        vec![
+                            Span::styled(
+                                "\u{2717} ",
+                                theme.style(StyleKind::Error).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                &item.name,
+                                theme.style(StyleKind::Error).add_modifier(Modifier::BOLD),
+                            ),
+                        ]
+                    };
+                    if popup_width < 50 {
+                        return ListItem::new(vec![
+                            Line::from(identity_spans()),
+                            Line::from(Span::styled(
+                                "  Press 'd' again to delete",
+                                theme.style(StyleKind::Error),
+                            )),
+                        ]);
+                    }
+                    let mut spans = identity_spans();
+                    spans.push(Span::styled(
+                        "  \u{2190} Press 'd' again to delete, any other key to cancel",
+                        theme.style(StyleKind::Error),
+                    ));
+                    return ListItem::new(Line::from(spans));
                 }
 
                 // Status indicator
@@ -457,20 +490,40 @@ impl McpSelectorState {
                     String::new()
                 };
 
-                let line = Line::from(vec![
-                    Span::styled(marker, marker_style),
-                    Span::styled(&item.name, name_style),
-                    Span::raw("  "),
-                    Span::styled(&item.server_type, type_style),
-                    Span::raw("  "),
-                    Span::styled(status_text, status_style),
-                    Span::styled(tool_text, theme.style(StyleKind::Muted)),
-                    Span::styled(
-                        format!("  [{}]", item.source_label),
-                        theme.style(StyleKind::Muted),
-                    ),
-                ]);
-                ListItem::new(line)
+                if popup_width < 50 {
+                    ListItem::new(vec![
+                        Line::from(vec![
+                            Span::styled(
+                                if item.external {
+                                    "[External] "
+                                } else {
+                                    "[BitFun] "
+                                },
+                                theme.style(StyleKind::Muted),
+                            ),
+                            Span::styled(&item.name, name_style),
+                        ]),
+                        Line::from(vec![
+                            Span::raw("  "),
+                            Span::styled(marker, marker_style),
+                            Span::styled(status_text, status_style),
+                        ]),
+                    ])
+                } else {
+                    ListItem::new(Line::from(vec![
+                        Span::styled(marker, marker_style),
+                        Span::styled(&item.name, name_style),
+                        Span::raw("  "),
+                        Span::styled(&item.server_type, type_style),
+                        Span::raw("  "),
+                        Span::styled(status_text, status_style),
+                        Span::styled(tool_text, theme.style(StyleKind::Muted)),
+                        Span::styled(
+                            format!("  [{}]", item.source_label),
+                            theme.style(StyleKind::Muted),
+                        ),
+                    ]))
+                }
             })
             .collect();
 
@@ -494,10 +547,12 @@ impl McpSelectorState {
         } else {
             " a:Add  d:Delete  e:Edit Config  Space:Toggle  Esc:Close"
         };
-        list_items.push(ListItem::new(Line::from(Span::styled(
-            hint_text,
-            theme.style(StyleKind::Muted),
-        ))));
+        if popup_width >= 50 {
+            list_items.push(ListItem::new(Line::from(Span::styled(
+                hint_text,
+                theme.style(StyleKind::Muted),
+            ))));
+        }
 
         let block = Block::default()
             .borders(Borders::ALL)
@@ -593,7 +648,8 @@ impl McpSelectorState {
         }
 
         let offset = self.list_state.offset();
-        let index = (row - inner_y) as usize + offset;
+        let row_height = if area.width < 50 { 2 } else { 1 };
+        let index = ((row - inner_y) / row_height) as usize + offset;
         if index >= self.items.len() {
             return None;
         }
@@ -608,7 +664,10 @@ mod tests {
         confirmation_max_scroll, confirmation_review_lines, wrap_confirmation_detail, McpItem,
         McpItemAction, McpSelectorState,
     };
+    use ratatui::{backend::TestBackend, Terminal};
     use unicode_width::UnicodeWidthStr;
+
+    use crate::ui::theme::Theme;
 
     fn item(action: McpItemAction, external: bool) -> McpItem {
         McpItem {
@@ -733,5 +792,107 @@ mod tests {
         assert!(state.list_state.selected().is_none());
         assert!(state.loading_id.is_none());
         assert!(state.confirm_external_id.is_none());
+    }
+
+    #[test]
+    fn twenty_by_six_popup_keeps_source_name_and_status_visible() {
+        let mut native = item(McpItemAction::NativeToggle, false);
+        native.status = "Healthy".to_string();
+        let mut external = item(
+            McpItemAction::ReadOnly {
+                reason: "Managed externally".to_string(),
+            },
+            true,
+        );
+        external.id = "docs".to_string();
+        external.name = "docs".to_string();
+        external.status = "Pending".to_string();
+
+        let mut state = McpSelectorState::new();
+        state.show(vec![native, external]);
+        let mut terminal = Terminal::new(TestBackend::new(20, 6)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render compact MCP selector");
+
+        let buffer = terminal.backend().buffer();
+        let rendered = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            rendered.contains("[BitFun] github"),
+            "native row missing: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("[External] docs"),
+            "external row missing: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("Healthy"),
+            "native status missing: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("Pending"),
+            "external status missing: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn too_small_fallback_disables_hidden_selection() {
+        let mut state = McpSelectorState::new();
+        state.show(vec![item(McpItemAction::NativeToggle, false)]);
+        let mut terminal = Terminal::new(TestBackend::new(10, 3)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render tiny MCP selector");
+
+        assert!(state.confirm_selection().is_none());
+        state.move_down();
+        assert!(state.confirm_selection().is_none());
+    }
+
+    #[test]
+    fn compact_boundary_uses_two_line_height_for_render_and_mouse_hit_testing() {
+        let first = item(McpItemAction::NativeToggle, false);
+        let mut second = item(McpItemAction::NativeToggle, false);
+        second.id = "second".to_string();
+        second.name = "second".to_string();
+        let mut state = McpSelectorState::new();
+        state.show(vec![first, second]);
+        let mut terminal = Terminal::new(TestBackend::new(53, 10)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render boundary-width MCP selector");
+
+        let area = state.last_area.expect("popup area");
+        assert!(area.width < 50);
+        assert_eq!(state.item_index_at(area.y + 2, area), Some(0));
+        assert_eq!(state.item_index_at(area.y + 4, area), Some(1));
+    }
+
+    #[test]
+    fn compact_delete_confirmation_keeps_following_item_mouse_hit_aligned() {
+        let first = item(McpItemAction::NativeToggle, false);
+        let first_id = first.id.clone();
+        let mut second = item(McpItemAction::NativeToggle, false);
+        second.id = "second".to_string();
+        second.name = "second".to_string();
+        let mut state = McpSelectorState::new();
+        state.show(vec![first, second]);
+        state.start_confirm_delete(first_id);
+        let mut terminal = Terminal::new(TestBackend::new(53, 10)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render compact MCP delete confirmation");
+
+        let area = state.last_area.expect("popup area");
+        assert!(area.width < 50);
+        assert_eq!(state.item_index_at(area.y + 3, area), Some(1));
     }
 }

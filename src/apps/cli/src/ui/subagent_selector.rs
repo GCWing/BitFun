@@ -11,6 +11,7 @@ use ratatui::{
     Frame,
 };
 
+use crate::ui::responsive_popup::{render_too_small, responsive_popup, ResponsivePopup};
 use crate::ui::theme::{StyleKind, Theme};
 
 /// A subagent item for display in the selector
@@ -45,6 +46,7 @@ pub(super) struct SubagentSelectorState {
     list_state: ListState,
     visible: bool,
     last_area: Option<Rect>,
+    interaction_enabled: bool,
     screen: SubagentSelectorScreen,
 }
 
@@ -55,6 +57,7 @@ impl SubagentSelectorState {
             list_state: ListState::default(),
             visible: false,
             last_area: None,
+            interaction_enabled: true,
             screen: SubagentSelectorScreen::Menu,
         }
     }
@@ -64,6 +67,7 @@ impl SubagentSelectorState {
         self.screen = SubagentSelectorScreen::Menu;
         self.list_state.select(Some(0));
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     /// Show subagents available to the current parent mode.
@@ -76,6 +80,7 @@ impl SubagentSelectorState {
         self.screen = SubagentSelectorScreen::List;
         self.list_state.select(Some(0));
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     /// Show all discovered subagents with mode-specific enablement checkboxes.
@@ -101,6 +106,7 @@ impl SubagentSelectorState {
         self.screen = SubagentSelectorScreen::Configure;
         self.list_state.select(Some(next_index));
         self.visible = true;
+        self.interaction_enabled = true;
     }
 
     pub(super) fn hide(&mut self) {
@@ -121,7 +127,7 @@ impl SubagentSelectorState {
     }
 
     pub(super) fn move_up(&mut self) {
-        if !self.visible || self.len() == 0 {
+        if !self.visible || !self.interaction_enabled || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
@@ -131,7 +137,7 @@ impl SubagentSelectorState {
     }
 
     pub(super) fn move_down(&mut self) {
-        if !self.visible || self.len() == 0 {
+        if !self.visible || !self.interaction_enabled || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
@@ -141,7 +147,7 @@ impl SubagentSelectorState {
 
     /// Get the selected action.
     pub(super) fn confirm_selection(&self) -> Option<SubagentSelectorAction> {
-        if !self.visible {
+        if !self.visible || !self.interaction_enabled {
             return None;
         }
         let idx = self.list_state.selected()?;
@@ -178,22 +184,18 @@ impl SubagentSelectorState {
             return;
         }
 
-        let popup_width = area.width.saturating_sub(4).min(92);
-        let popup_height = (self.len() as u16 + 4).min(area.height.saturating_sub(2));
-        if popup_height < 5 || popup_width < 20 {
-            self.last_area = None;
-            return;
-        }
-
-        let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;
-        let popup_y = area.y + (area.height.saturating_sub(popup_height)) / 2;
-
-        let popup_area = Rect {
-            x: popup_x,
-            y: popup_y,
-            width: popup_width,
-            height: popup_height,
+        let ideal_height = self.len() as u16 + 4;
+        let layout = responsive_popup(area, 92, ideal_height, 20, 5);
+        let popup_area = match layout {
+            ResponsivePopup::Content(area) => area,
+            ResponsivePopup::TooSmall(area) => {
+                self.last_area = None;
+                self.interaction_enabled = false;
+                render_too_small(frame, area, theme, "Subagents");
+                return;
+            }
         };
+        self.interaction_enabled = true;
         self.last_area = Some(popup_area);
 
         let list_items = self.render_items(theme);
@@ -371,5 +373,33 @@ impl SubagentSelectorState {
         spans.push(Span::styled(subagent.description.clone(), desc_style));
 
         ListItem::new(Line::from(spans))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SubagentItem, SubagentSelectorState};
+    use crate::ui::theme::Theme;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    #[test]
+    fn too_small_fallback_disables_hidden_selection() {
+        let mut state = SubagentSelectorState::new();
+        state.show_list(vec![SubagentItem {
+            key: "review".to_string(),
+            id: "review".to_string(),
+            name: "Review".to_string(),
+            description: String::new(),
+            source: "builtin".to_string(),
+            enabled: true,
+        }]);
+        let mut terminal = Terminal::new(TestBackend::new(10, 3)).expect("test terminal");
+        terminal
+            .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))
+            .expect("render tiny subagent selector");
+
+        assert!(state.confirm_selection().is_none());
+        state.move_down();
+        assert!(state.confirm_selection().is_none());
     }
 }
