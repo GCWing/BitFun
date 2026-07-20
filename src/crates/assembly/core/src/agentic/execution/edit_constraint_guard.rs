@@ -2,8 +2,8 @@
 //!
 //! Extracts explicit "don't modify X" constraints from user instructions and
 //! exposes deterministic checks for file-mutation tools. Extraction evidence is
-//! persisted with the session, while every guard decision and successful direct
-//! file mutation is appended to a session-scoped JSONL telemetry stream.
+//! persisted with the session. Optional product diagnostics can record guard
+//! decisions and successful direct mutations in a session-scoped JSONL stream.
 
 use log::warn;
 use serde::Deserialize;
@@ -41,6 +41,7 @@ const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
 const MAX_MODEL_ATTEMPTS: usize = 2;
 const MAX_RECURSIVE_INSPECTION_ENTRIES: usize = 100_000;
 const TELEMETRY_RELATIVE_PATH: &str = "telemetry/edit-constraint-guard.jsonl";
+const TELEMETRY_ENV: &str = "BITFUN_EDIT_CONSTRAINT_TELEMETRY";
 
 const EXTRACTION_SYSTEM_PROMPT: &str = r#"You update the active file-edit prohibitions for a software task.
 
@@ -168,6 +169,37 @@ fn has_prohibition_signal(message: &str) -> bool {
         "不需要修改",
         "测试文件保持不变",
         "仅修改非测试",
+    ]
+    .iter()
+    .any(|signal| lower.contains(signal))
+}
+
+fn has_relaxation_signal(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    [
+        "may modify",
+        "can modify",
+        "may change",
+        "can change",
+        "may edit",
+        "can edit",
+        "allowed to modify",
+        "allowed to change",
+        "allowed to edit",
+        "feel free to modify",
+        "feel free to change",
+        "feel free to edit",
+        "restriction is lifted",
+        "restriction no longer applies",
+        "no longer off limits",
+        "forget that restriction",
+        "remove that restriction",
+        "可以修改",
+        "可以改",
+        "允许修改",
+        "不再禁止",
+        "取消限制",
+        "解除限制",
     ]
     .iter()
     .any(|signal| lower.contains(signal))
@@ -400,9 +432,10 @@ pub async fn extract_constraints_with_active_and_revocation_authorization(
     let (truncated, input_truncated) = truncate_for_extraction(user_message);
     let prompt_chars = truncated.chars().count();
 
-    // Once constraints are active, every new user instruction is sent to fast
-    // so an explicit relaxation cannot be missed by a keyword prefilter.
-    if !has_prohibition_signal(user_message) && active_constraints.is_empty() {
+    // Irrelevant follow-ups stay on the local fast path even when constraints
+    // are active. Only messages that may add or relax a file-edit boundary use
+    // the model-backed classifier.
+    if !has_prohibition_signal(user_message) && !has_relaxation_signal(user_message) {
         return ConstraintExtractionRecord {
             message_sha256,
             dialog_turn_id: None,
@@ -597,6 +630,13 @@ pub async fn extract_constraints_with_active_and_revocation_authorization(
     }
 }
 
+/// Returns whether an extraction contains state or diagnostic evidence worth
+/// persisting. The common no-signal path deliberately leaves session metadata
+/// untouched so ordinary turns do not grow the guard history.
+pub fn extraction_requires_session_state(record: &ConstraintExtractionRecord) -> bool {
+    record.status != ExtractionStatus::NoConstraints || record.model_attempts > 0
+}
+
 #[allow(clippy::too_many_arguments)]
 fn extraction_with_failure(
     started_at: Instant,
@@ -681,6 +721,20 @@ fn telemetry_lock() -> &'static Mutex<()> {
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
+fn telemetry_setting_enabled(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
+}
+
+fn edit_constraint_telemetry_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| telemetry_setting_enabled(std::env::var(TELEMETRY_ENV).ok().as_deref()))
+}
+
 fn try_append_tool_telemetry(
     context: &ToolUseContext,
     event: &Value,
@@ -718,6 +772,9 @@ fn append_jsonl(path: &Path, event: &Value) -> Result<(), String> {
 }
 
 fn append_tool_telemetry(context: &ToolUseContext, event: &Value) {
+    if !edit_constraint_telemetry_enabled() {
+        return;
+    }
     if let Err(error) = try_append_tool_telemetry(context, event) {
         warn!("Failed to append edit constraint telemetry event: {error}");
     }
@@ -742,30 +799,36 @@ fn decision_result(
     message: Option<String>,
     error_code: Option<i32>,
 ) -> Option<ValidationResult> {
+    let telemetry_enabled = edit_constraint_telemetry_enabled();
+    if message.is_none() && !telemetry_enabled {
+        return None;
+    }
     let decision_id = Uuid::new_v4().to_string();
-    if let Some(context) = context {
-        append_tool_telemetry(
-            context,
-            &json!({
-                "event": "guard_decision",
-                "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
-                "decision_id": decision_id,
-                "timestamp_ms": timestamp_ms(),
-                "session_id": context.session_id,
-                "dialog_turn_id": context.dialog_turn_id,
-                "tool_call_id": context.tool_call_id,
-                "agent_type": context.agent_type,
-                "tool_name": tool_name,
-                "operation": operation,
-                "requested_path": file_path,
-                "resolved_path": resolved_path(context, file_path),
-                "workspace_kind": if context.is_remote() { "remote" } else { "local" },
-                "decision": decision,
-                "force_requested": force_requested,
-                "extraction_status": state.and_then(EditConstraintState::latest_status),
-                "constraint": violation,
-            }),
-        );
+    if telemetry_enabled {
+        if let Some(context) = context {
+            append_tool_telemetry(
+                context,
+                &json!({
+                    "event": "guard_decision",
+                    "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
+                    "decision_id": decision_id,
+                    "timestamp_ms": timestamp_ms(),
+                    "session_id": context.session_id,
+                    "dialog_turn_id": context.dialog_turn_id,
+                    "tool_call_id": context.tool_call_id,
+                    "agent_type": context.agent_type,
+                    "tool_name": tool_name,
+                    "operation": operation,
+                    "requested_path": file_path,
+                    "resolved_path": resolved_path(context, file_path),
+                    "workspace_kind": if context.is_remote() { "remote" } else { "local" },
+                    "decision": decision,
+                    "force_requested": force_requested,
+                    "extraction_status": state.and_then(EditConstraintState::latest_status),
+                    "constraint": violation,
+                }),
+            );
+        }
     }
 
     message.map(|message| ValidationResult {
@@ -801,6 +864,36 @@ pub fn check(
                 .get_session_manager()
                 .edit_constraint_state(session_id)
         });
+
+    if !force_requested
+        && !edit_constraint_telemetry_enabled()
+        && state
+            .as_ref()
+            .map_or(true, |state| !state.has_enforceable_constraints())
+    {
+        return None;
+    }
+    if !force_requested
+        && state
+            .as_ref()
+            .map_or(true, |state| !state.has_enforceable_constraints())
+    {
+        if edit_constraint_telemetry_enabled() {
+            decision_result(
+                context,
+                tool_name,
+                operation,
+                file_path,
+                "allow_no_active_constraint",
+                false,
+                state.as_ref(),
+                None,
+                None,
+                None,
+            );
+        }
+        return None;
+    }
 
     if force_requested {
         return decision_result(
@@ -926,6 +1019,14 @@ pub async fn check_write(
                 .edit_constraint_state(session_id)
         });
 
+    if !force_requested
+        && state
+            .as_ref()
+            .map_or(true, |state| !state.tracks_agent_created_test_paths())
+    {
+        return check(context, tool_name, operation, file_path, false);
+    }
+
     let is_new_file = if force_requested {
         false
     } else if let Some(context) = context {
@@ -974,6 +1075,21 @@ pub fn check_edit(
                 .get_session_manager()
                 .edit_constraint_state(session_id)
         });
+    if !force_requested
+        && !edit_constraint_telemetry_enabled()
+        && state
+            .as_ref()
+            .map_or(true, |state| !state.has_enforceable_constraints())
+    {
+        return None;
+    }
+    if !force_requested
+        && state
+            .as_ref()
+            .map_or(true, |state| !state.tracks_agent_created_test_paths())
+    {
+        return check(context, tool_name, operation, file_path, false);
+    }
     let paths = candidate_paths(context, file_path);
     if !force_requested
         && can_mutate_agent_created_test_file(state.as_ref(), &paths, operation, false)
@@ -1013,6 +1129,18 @@ pub fn check_delete(
 /// remain dynamic or implicit are rejected before execution; ordinary build,
 /// test, and read-only commands retain the normal shell path.
 pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<ValidationResult> {
+    let has_active_constraints = context.session_id.as_deref().is_some_and(|session_id| {
+        get_global_coordinator()
+            .and_then(|coordinator| {
+                coordinator
+                    .get_session_manager()
+                    .edit_constraint_state(session_id)
+            })
+            .is_some_and(|state| state.has_enforceable_constraints())
+    });
+    if !has_active_constraints {
+        return None;
+    }
     let targets = explicit_bash_mutation_targets(command);
     for target in &targets {
         if let Some(rejection) = check(
@@ -1371,8 +1499,20 @@ pub async fn remember_agent_created_file(context: &ToolUseContext, file_path: &s
     let Some(session_id) = context.session_id.as_deref() else {
         return;
     };
+    let coordinator = get_global_coordinator();
+    let should_track = coordinator.as_ref().is_some_and(|coordinator| {
+        coordinator
+            .get_session_manager()
+            .edit_constraint_state(session_id)
+            .is_some_and(|state| state.tracks_agent_created_test_paths())
+    });
+    let telemetry_enabled = edit_constraint_telemetry_enabled();
+    if !should_track && !telemetry_enabled {
+        return;
+    }
     let paths = candidate_paths(Some(context), file_path);
-    if let Some(coordinator) = get_global_coordinator() {
+    if should_track {
+        let coordinator = coordinator.expect("coordinator checked above");
         coordinator
             .get_session_manager()
             .remember_edit_constraint_agent_created_paths(
@@ -1382,9 +1522,10 @@ pub async fn remember_agent_created_file(context: &ToolUseContext, file_path: &s
             )
             .await;
     }
-    append_tool_telemetry(
-        context,
-        &json!({
+    if telemetry_enabled {
+        append_tool_telemetry(
+            context,
+            &json!({
             "event": "session_file_origin",
             "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
             "timestamp_ms": timestamp_ms(),
@@ -1394,8 +1535,9 @@ pub async fn remember_agent_created_file(context: &ToolUseContext, file_path: &s
             "requested_path": file_path,
             "resolved_path": resolved_path(context, file_path),
             "origin": "agent_created",
-        }),
-    );
+            }),
+        );
+    }
 }
 
 /// Clears agent-created provenance after a successful direct delete.
@@ -1403,16 +1545,29 @@ pub async fn forget_agent_created_file(context: &ToolUseContext, file_path: &str
     let Some(session_id) = context.session_id.as_deref() else {
         return;
     };
+    let coordinator = get_global_coordinator();
+    let should_forget = coordinator.as_ref().is_some_and(|coordinator| {
+        coordinator
+            .get_session_manager()
+            .edit_constraint_state(session_id)
+            .is_some_and(|state| state.has_agent_created_paths())
+    });
+    let telemetry_enabled = edit_constraint_telemetry_enabled();
+    if !should_forget && !telemetry_enabled {
+        return;
+    }
     let paths = candidate_paths(Some(context), file_path);
-    if let Some(coordinator) = get_global_coordinator() {
+    if should_forget {
+        let coordinator = coordinator.expect("coordinator checked above");
         coordinator
             .get_session_manager()
             .forget_edit_constraint_agent_created_paths_under(session_id, paths.clone())
             .await;
     }
-    append_tool_telemetry(
-        context,
-        &json!({
+    if telemetry_enabled {
+        append_tool_telemetry(
+            context,
+            &json!({
             "event": "session_file_origin",
             "schema_version": EDIT_CONSTRAINT_SCHEMA_VERSION,
             "timestamp_ms": timestamp_ms(),
@@ -1422,19 +1577,21 @@ pub async fn forget_agent_created_file(context: &ToolUseContext, file_path: &str
             "requested_path": file_path,
             "resolved_path": resolved_path(context, file_path),
             "origin": "removed",
-        }),
-    );
+            }),
+        );
+    }
 }
 
-/// Records a successful direct mutation. Offline evaluation can join these
-/// events with the final patch and mark paths with no matching event as
-/// unattributed; this function never blocks or repairs the patch.
+/// Records a successful direct mutation when product diagnostics are enabled.
 pub fn record_mutation_applied(
     context: &ToolUseContext,
     tool_name: &str,
     operation: &str,
     file_path: &str,
 ) {
+    if !edit_constraint_telemetry_enabled() {
+        return;
+    }
     append_tool_telemetry(
         context,
         &json!({

@@ -276,6 +276,17 @@ impl EditConstraintState {
             .any(|constraint| constraint.matcher.enforceable())
     }
 
+    pub(super) fn tracks_agent_created_test_paths(&self) -> bool {
+        self.constraints.iter().any(|constraint| {
+            matches!(constraint.matcher, ConstraintMatcher::TestFiles)
+                && constraint.operation_scope == ConstraintOperationScope::All
+        })
+    }
+
+    pub(super) fn has_agent_created_paths(&self) -> bool {
+        !self.agent_created_paths.is_empty()
+    }
+
     pub fn remember_agent_created_paths(
         &mut self,
         paths: impl IntoIterator<Item = String>,
