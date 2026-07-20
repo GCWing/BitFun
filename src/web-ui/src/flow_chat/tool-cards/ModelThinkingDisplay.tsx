@@ -12,6 +12,7 @@ import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
+import { useReportTypewriterReveal } from '../hooks/TypewriterRevealGate';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import './ModelThinkingDisplay.scss';
@@ -38,7 +39,8 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   const touchScrollStartYRef = useRef<number | null>(null);
 
   const isActive = isStreaming || status === 'streaming';
-  const displayContent = useTypewriter(content, isActive);
+  const { displayText: displayContent, isRevealing } = useTypewriter(content, isActive);
+  useReportTypewriterReveal(thinkingItem.id, isRevealing);
   const shouldDefaultExpanded =
     displayContext === 'subagent-projection'
       ? isActive || isLastItem
@@ -74,7 +76,14 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
     }
   }, [applyExpandedState, isExpanded, shouldDefaultExpanded]);
 
-  const renderedContent = isActive ? displayContent : content;
+  // Keep rendering the typewriter output while it drains after the stream
+  // ends. Snapping to full `content` here would make the drain invisible
+  // while `isRevealing` still holds the reveal gate, delaying the round
+  // footer for no visible reason.
+  const renderedContent = isRevealing ? displayContent : content;
+  // Cover the whole reveal with Markdown streaming mode so the Prism upgrade
+  // does not land mid-drain.
+  const isVisuallyStreaming = isActive || isRevealing;
 
   const getThinkingScrollGap = useCallback((el: HTMLElement) => (
     el.scrollHeight - el.scrollTop - el.clientHeight
@@ -278,7 +287,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
           >
             <Markdown
               content={renderedContent}
-              isStreaming={isActive}
+              isStreaming={isVisuallyStreaming}
               className="thinking-markdown"
             />
           </div>

@@ -16,6 +16,15 @@ const log = createLogger('EventBatcher');
 
 export type MergeStrategy = 'accumulate' | 'replace';
 
+/** Default max latency for tool / non-text batched events. */
+export const DEFAULT_EVENT_MAX_LATENCY_MS = 100;
+
+/**
+ * Max latency for streaming text chunks. Keeps inflow steady for the
+ * adaptive typewriter without forcing a flush on every token.
+ */
+export const TEXT_CHUNK_MAX_LATENCY_MS = 32;
+
 export interface BatchedEvent<T = any> {
   key: string;
   payload: T;
@@ -23,6 +32,12 @@ export interface BatchedEvent<T = any> {
   accumulator?: (existing: T, incoming: T) => T;
   sourceCount: number;
   timestamp: number;
+  /** Flush this event (and the batch) within this many ms. */
+  maxLatencyMs: number;
+}
+
+export interface EventBatcherAddOptions {
+  maxLatencyMs?: number;
 }
 
 export interface EventBatcherOptions {
@@ -83,12 +98,13 @@ export function getBatchedEventsLogPayload(
   return {
     rawEventCount,
     mergedEventCount,
-    mergedEvents: bufferedEvents.map(({ key, payload, strategy, sourceCount, timestamp }) => ({
+    mergedEvents: bufferedEvents.map(({ key, payload, strategy, sourceCount, timestamp, maxLatencyMs }) => ({
       key,
       payload,
       strategy,
       sourceCount,
       timestamp,
+      maxLatencyMs,
     })),
   };
 }
@@ -99,10 +115,10 @@ export class EventBatcher {
   private onFlush: (events: Array<{ key: string; payload: any }>) => void;
   private frameId: number | null = null;
 
-  // Update frequency control to prevent UI blocking with many events
-  private UPDATE_INTERVAL = 100; // Update every 100ms instead of every frame (16.67ms)
   private lastUpdateTime = 0;
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
+  /** Delay currently armed for the pending flush; used to reschedule earlier. */
+  private scheduledDelayMs: number | null = null;
 
   constructor(options: EventBatcherOptions) {
     this.onFlush = options.onFlush;
@@ -112,8 +128,13 @@ export class EventBatcher {
     key: string,
     payload: T,
     strategy: MergeStrategy = 'replace',
-    accumulator?: (existing: T, incoming: T) => T
+    accumulator?: (existing: T, incoming: T) => T,
+    options?: EventBatcherAddOptions
   ): void {
+    const maxLatencyMs = Math.max(
+      0,
+      options?.maxLatencyMs ?? DEFAULT_EVENT_MAX_LATENCY_MS
+    );
     const existing = this.buffer.get(key);
 
     if (existing) {
@@ -125,6 +146,7 @@ export class EventBatcher {
         existing.timestamp = Date.now();
       }
       existing.sourceCount += 1;
+      existing.maxLatencyMs = Math.min(existing.maxLatencyMs, maxLatencyMs);
     } else {
       this.buffer.set(key, {
         key,
@@ -132,39 +154,78 @@ export class EventBatcher {
         strategy,
         accumulator,
         sourceCount: 1,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        maxLatencyMs,
       });
     }
 
     this.scheduleFlush();
   }
 
-  private scheduleFlush(): void {
-    if (this.scheduled) return;
+  private getBufferMaxLatencyMs(): number {
+    let minLatency = DEFAULT_EVENT_MAX_LATENCY_MS;
+    for (const event of this.buffer.values()) {
+      minLatency = Math.min(minLatency, event.maxLatencyMs);
+    }
+    return minLatency;
+  }
+
+  private cancelScheduledFlush(): void {
+    if (this.frameId !== null) {
+      cancelAnimationFrame(this.frameId);
+      this.frameId = null;
+    }
+    if (this.timeoutId !== null) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+    this.scheduled = false;
+    this.scheduledDelayMs = null;
+  }
+
+  private armFlush(delayMs: number): void {
     this.scheduled = true;
+    this.scheduledDelayMs = delayMs;
 
-    const now = nowMs();
-    const timeSinceLastUpdate = now - this.lastUpdateTime;
-
-    if (timeSinceLastUpdate >= this.UPDATE_INTERVAL) {
+    if (delayMs <= 0) {
       this.frameId = requestAnimationFrame(() => {
         this.flush();
         this.scheduled = false;
         this.frameId = null;
+        this.scheduledDelayMs = null;
         this.lastUpdateTime = nowMs();
       });
-    } else {
-      const delay = this.UPDATE_INTERVAL - timeSinceLastUpdate;
-      this.timeoutId = setTimeout(() => {
-        this.frameId = requestAnimationFrame(() => {
-          this.flush();
-          this.scheduled = false;
-          this.frameId = null;
-          this.lastUpdateTime = nowMs();
-        });
-        this.timeoutId = null;
-      }, delay);
+      return;
     }
+
+    this.timeoutId = setTimeout(() => {
+      this.timeoutId = null;
+      this.frameId = requestAnimationFrame(() => {
+        this.flush();
+        this.scheduled = false;
+        this.frameId = null;
+        this.scheduledDelayMs = null;
+        this.lastUpdateTime = nowMs();
+      });
+    }, delayMs);
+  }
+
+  private scheduleFlush(): void {
+    const now = nowMs();
+    const maxLatencyMs = this.getBufferMaxLatencyMs();
+    const timeSinceLastUpdate = now - this.lastUpdateTime;
+    const delayMs = Math.max(0, maxLatencyMs - timeSinceLastUpdate);
+
+    if (this.scheduled) {
+      // A more urgent event (e.g. text after tools) must pull the flush earlier.
+      if (this.scheduledDelayMs !== null && delayMs < this.scheduledDelayMs) {
+        this.cancelScheduledFlush();
+      } else {
+        return;
+      }
+    }
+
+    this.armFlush(delayMs);
   }
 
   private flush(): void {
@@ -196,16 +257,14 @@ export class EventBatcher {
   }
 
   flushNow(): void {
-    if (this.frameId !== null) {
-      cancelAnimationFrame(this.frameId);
-      this.frameId = null;
-    }
-    if (this.timeoutId !== null) {
-      clearTimeout(this.timeoutId);
-      this.timeoutId = null;
-    }
-    this.scheduled = false;
+    const hadBufferedEvents = this.buffer.size > 0;
+    this.cancelScheduledFlush();
     this.flush();
+    // Keep the throttle baseline in sync so the next event is not flushed
+    // earlier than its latency budget allows.
+    if (hadBufferedEvents) {
+      this.lastUpdateTime = nowMs();
+    }
   }
 
   getBufferSize(): number {
@@ -213,16 +272,8 @@ export class EventBatcher {
   }
 
   clear(): void {
-    if (this.frameId !== null) {
-      cancelAnimationFrame(this.frameId);
-      this.frameId = null;
-    }
-    if (this.timeoutId !== null) {
-      clearTimeout(this.timeoutId);
-      this.timeoutId = null;
-    }
+    this.cancelScheduledFlush();
     this.buffer.clear();
-    this.scheduled = false;
   }
 
   destroy(): void {

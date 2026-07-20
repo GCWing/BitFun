@@ -208,7 +208,15 @@ function shouldSplitModelRoundForVirtualItems(
   round: ModelRound,
   isTurnComplete: boolean,
   nowMs: number,
+  isLastRound: boolean,
 ): boolean {
+  // Never split the turn-tail round on completion: replacing one Virtuoso key
+  // with N segment keys remounts the visible assistant message and flashes the
+  // chat pane. Older non-tail rounds may still split for virtualization.
+  if (isLastRound) {
+    return false;
+  }
+
   return (
     isTurnComplete &&
     isTerminalRoundStatus(round.status) &&
@@ -225,8 +233,9 @@ function splitModelRoundForVirtualItems(
   round: ModelRound,
   isTurnComplete: boolean,
   nowMs: number,
+  isLastRound: boolean,
 ): ModelRoundVirtualChunk[] {
-  if (!shouldSplitModelRoundForVirtualItems(round, isTurnComplete, nowMs)) {
+  if (!shouldSplitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound)) {
     return [{ round }];
   }
 
@@ -541,7 +550,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           groupIndex++;
         } else {
           const isLastRound = roundIndex === rounds.length - 1;
-          const roundChunks = splitModelRoundForVirtualItems(round, isTurnComplete, nowMs);
+          const roundChunks = splitModelRoundForVirtualItems(round, isTurnComplete, nowMs, isLastRound);
           roundChunks.forEach((chunk, chunkIndex) => {
             items.push({
               type: 'model-round',
