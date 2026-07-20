@@ -23,12 +23,6 @@ interface Props {
   onBack: () => void;
 }
 
-/** Check whether an error is an HTTP 401 (token expired/unauthorized). */
-function isTokenExpiredError(e: unknown): boolean {
-  const msg = String((e as { message?: string })?.message || '');
-  return msg.includes('HTTP 401') || msg.includes('Unauthorized');
-}
-
 const BackIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m15 18-6-6 6-6" />
@@ -70,7 +64,6 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tokenExpired, setTokenExpired] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -86,30 +79,28 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       const list = await client.listDevices();
       if (!mountedRef.current) return;
       setDevices(list);
-      setTokenExpired(false);
       setError(null);
+      setIdentityReady(true);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      if (isTokenExpiredError(e)) {
-        setTokenExpired(true);
+      const message = String((e as { message?: string })?.message || e);
+      if (message.includes('No delegated identity')) {
+        setIdentityReady(false);
+        setDevices([]);
       } else {
-        setError(String((e as { message?: string })?.message || e));
+        setError(message);
       }
     }
   }, [client]);
 
   // Acquire the delegated identity lazily: the desktop may have logged into
-  // its account after this mobile session was paired.
-  const ensureIdentity = useCallback(async () => {
-    if (client.hasDelegatedIdentity) {
-      setIdentityReady(true);
-      setIdentityChecking(false);
-      return true;
-    }
+  // its account after this mobile session was paired. Force-refresh so a
+  // desktop account switch is reflected without re-scanning.
+  const ensureIdentity = useCallback(async (force = false) => {
     setIdentityChecking(true);
     let granted = false;
     try {
-      granted = await client.requestDelegatedIdentity();
+      granted = await client.requestDelegatedIdentity({ force: force || !client.hasDelegatedIdentity });
     } catch {
       granted = false;
     }
@@ -123,7 +114,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined;
     const init = async () => {
-      const granted = await ensureIdentity();
+      const granted = await ensureIdentity(false);
       if (!granted || !mountedRef.current) return;
       setLoading(true);
       await refreshDevices();
@@ -138,7 +129,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
   const handleManualRefresh = useCallback(async () => {
     if (loading || switchingId) return;
-    const granted = await ensureIdentity();
+    // Force refresh so desktop account switches are picked up immediately.
+    const granted = await ensureIdentity(true);
     if (!granted) return;
     setLoading(true);
     await refreshDevices();
@@ -170,10 +162,12 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       onBack();
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      if (isTokenExpiredError(e)) {
-        setTokenExpired(true);
+      const message = String((e as { message?: string })?.message || e);
+      if (message.includes('No delegated identity')) {
+        setIdentityReady(false);
+        setDevices([]);
       } else {
-        setError(String((e as { message?: string })?.message || e) || t('devices.switchFailed'));
+        setError(message || t('devices.switchFailed'));
       }
     } finally {
       if (mountedRef.current) setSwitchingId(null);
@@ -198,15 +192,6 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
           <button type="button" className="devices-page__retry-btn" onClick={handleManualRefresh}>
             {t('devices.retry')}
           </button>
-        </div>
-      );
-    }
-
-    if (tokenExpired) {
-      return (
-        <div className="devices-page__empty-card">
-          <span className="devices-page__empty-icon"><NoIdentityIcon /></span>
-          <p className="devices-page__empty-text">{t('devices.tokenExpired')}</p>
         </div>
       );
     }
@@ -300,7 +285,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         </button>
       </div>
 
-      {error && !tokenExpired && <div className="devices-page__error">{error}</div>}
+      {error && <div className="devices-page__error">{error}</div>}
 
       <div className="devices-page__body">
         {renderBody()}

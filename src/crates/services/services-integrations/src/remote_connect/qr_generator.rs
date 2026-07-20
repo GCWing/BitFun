@@ -12,12 +12,19 @@ impl QrGenerator {
     /// Build the URL that the QR code points to.
     /// `web_app_url` = where the mobile web app is hosted.
     /// `payload.url` = the relay server that the mobile WebSocket should connect to.
-    pub fn build_url(payload: &QrPayload, web_app_url: &str, language: &str) -> String {
+    /// When `account_username` is set, the URL requests account password pairing
+    /// (`auth=account&user=...`) so mobile can prefill the logged-in username.
+    pub fn build_url(
+        payload: &QrPayload,
+        web_app_url: &str,
+        language: &str,
+        account_username: Option<&str>,
+    ) -> String {
         let relay_ws = payload
             .url
             .replace("https://", "wss://")
             .replace("http://", "ws://");
-        format!(
+        let mut url = format!(
             "{web_app}/#/pair?room={room}&did={did}&pk={pk}&dn={dn}&relay={relay}&v={v}&lang={lang}",
             web_app = web_app_url.trim_end_matches('/'),
             room = urlencoding::encode(&payload.room_id),
@@ -27,7 +34,18 @@ impl QrGenerator {
             relay = urlencoding::encode(&relay_ws),
             v = payload.version,
             lang = urlencoding::encode(language),
-        )
+        );
+        // `Some(_)` enables account-password pairing even when username prefill
+        // is unavailable (e.g. restored session without a credential hint).
+        if let Some(username) = account_username {
+            url.push_str("&auth=account");
+            let trimmed = username.trim();
+            if !trimmed.is_empty() {
+                url.push_str("&user=");
+                url.push_str(&urlencoding::encode(trimmed));
+            }
+        }
+        url
     }
 
     /// Generate a QR code as a base64-encoded PNG from a pre-built URL.
@@ -76,7 +94,34 @@ mod tests {
             version: 1,
         };
 
-        let url = QrGenerator::build_url(&payload, "https://mobile.example.com", "en-US");
+        let url = QrGenerator::build_url(&payload, "https://mobile.example.com", "en-US", None);
         assert!(url.contains("lang=en-US"));
+        assert!(!url.contains("auth=account"));
+    }
+
+    #[test]
+    fn build_url_includes_account_auth_when_username_provided() {
+        let payload = QrPayload {
+            room_id: "room_123".to_string(),
+            url: "https://relay.example.com".to_string(),
+            device_id: "device_123".to_string(),
+            device_name: "BitFun Desktop".to_string(),
+            public_key: "public_key_value".to_string(),
+            version: 1,
+        };
+
+        let url = QrGenerator::build_url(
+            &payload,
+            "https://mobile.example.com",
+            "zh-CN",
+            Some("alice"),
+        );
+        assert!(url.contains("auth=account"));
+        assert!(url.contains("user=alice"));
+
+        let auth_only =
+            QrGenerator::build_url(&payload, "https://mobile.example.com", "zh-CN", Some(""));
+        assert!(auth_only.contains("auth=account"));
+        assert!(!auth_only.contains("user="));
     }
 }

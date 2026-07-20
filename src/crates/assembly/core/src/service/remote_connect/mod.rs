@@ -171,12 +171,29 @@ pub struct RemoteConnectService {
     /// login. Resolved on demand when a paired client sends
     /// `get_delegated_identity` over the room channel.
     delegated_identity_fn: Arc<RwLock<Option<DelegatedIdentityFn>>>,
+    /// Non-secret username embedded in the QR when the desktop is logged in.
+    account_pairing_username: Arc<RwLock<Option<String>>>,
+    /// When set, pairing requires BitFun account username+password and the
+    /// verifier returns the canonical account `user_id` on success.
+    account_pairing_verifier: Arc<RwLock<Option<AccountPairingVerifierFn>>>,
 }
 
 /// Provider returning `(token, master_key, relay_url)` for the paired client.
 type DelegatedIdentityFn = Arc<
     dyn Fn() -> std::pin::Pin<
             Box<dyn std::future::Future<Output = Option<(String, [u8; 32], String)>> + Send + Sync>,
+        > + Send
+        + Sync,
+>;
+
+/// Verifies mobile-submitted account credentials. Returns the canonical
+/// account `user_id` when the credentials match the logged-in desktop account.
+type AccountPairingVerifierFn = Arc<
+    dyn Fn(
+            String,
+            String,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<String, String>> + Send + Sync>,
         > + Send
         + Sync,
 >;
@@ -210,6 +227,8 @@ impl RemoteConnectService {
             device_relay_client: Arc::new(RwLock::new(None)),
             online_devices: Arc::new(RwLock::new(Vec::new())),
             delegated_identity_fn: Arc::new(RwLock::new(None)),
+            account_pairing_username: Arc::new(RwLock::new(None)),
+            account_pairing_verifier: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -226,26 +245,53 @@ impl RemoteConnectService {
         *self.delegated_identity_fn.write().await = Some(Arc::new(move || Box::pin(f())));
     }
 
+    /// Enable account-password pairing in the QR.
+    /// `None` disables account mode; `Some(username)` enables it (username may
+    /// be empty when only `auth=account` should be advertised without prefill).
+    pub async fn set_account_pairing_username(&self, username: Option<String>) {
+        *self.account_pairing_username.write().await = username.map(|u| u.trim().to_string());
+    }
+
+    /// Register account password verification for mobile pairing.
+    pub async fn set_account_pairing_verifier<F, Fut>(&self, f: F)
+    where
+        F: Fn(String, String) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<String, String>> + Send + Sync + 'static,
+    {
+        *self.account_pairing_verifier.write().await = Some(Arc::new(move |username, password| {
+            Box::pin(f(username, password))
+        }));
+    }
+
+    /// Clear account pairing context (username + verifier) on logout.
+    pub async fn clear_account_pairing_context(&self) {
+        *self.account_pairing_username.write().await = None;
+        *self.account_pairing_verifier.write().await = None;
+    }
+
+    /// Drop the URL-bound mobile identity. Call when the desktop account
+    /// changes so a later pair can bind to the new account user id.
+    pub async fn clear_trusted_mobile_identity(&self) {
+        *self.trusted_mobile_identity.write().await = None;
+    }
+
     pub fn device_identity(&self) -> &DeviceIdentity {
         &self.device_identity
     }
 
     async fn validate_mobile_identity(
         trusted_mobile_identity: &Arc<RwLock<Option<TrustedMobileIdentity>>>,
-        response: &pairing::PairingResponse,
+        mobile_install_id: &str,
+        user_id: &str,
     ) -> std::result::Result<TrustedMobileIdentity, String> {
-        let mobile_install_id = response
-            .mobile_install_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| "Missing mobile installation ID".to_string())?;
-        let user_id = response
-            .user_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| "Missing user ID".to_string())?;
+        let mobile_install_id = mobile_install_id.trim();
+        let user_id = user_id.trim();
+        if mobile_install_id.is_empty() {
+            return Err("Missing mobile installation ID".to_string());
+        }
+        if user_id.is_empty() {
+            return Err("Missing user ID".to_string());
+        }
 
         let submitted = TrustedMobileIdentity {
             mobile_install_id: mobile_install_id.to_string(),
@@ -266,6 +312,53 @@ impl RemoteConnectService {
             ),
             _ => Ok(submitted),
         }
+    }
+
+    /// When the desktop is logged in, require and verify account credentials.
+    /// Returns the canonical account `user_id` to bind as the trusted identity.
+    async fn resolve_pairing_user_id(
+        account_pairing_verifier: &Arc<RwLock<Option<AccountPairingVerifierFn>>>,
+        response: &pairing::PairingResponse,
+    ) -> std::result::Result<String, String> {
+        let verifier = account_pairing_verifier.read().await.clone();
+        let Some(verify) = verifier else {
+            // The mobile submitted account credentials (QR advertised
+            // auth=account) but the desktop logged out after generating the
+            // code. Never downgrade to password-less pairing.
+            if response
+                .password
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty())
+            {
+                return Err(
+                    "Desktop signed out of the BitFun account; sign in again and refresh the QR code"
+                        .to_string(),
+                );
+            }
+            let user_id = response
+                .user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "Missing user ID".to_string())?;
+            return Ok(user_id.to_string());
+        };
+
+        let username = response
+            .user_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "Missing username".to_string())?;
+        let password = response
+            .password
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "Missing password".to_string())?;
+
+        verify(username.to_string(), password.to_string()).await
     }
 
     async fn persist_mobile_identity(
@@ -539,7 +632,13 @@ impl RemoteConnectService {
         };
 
         let client_language = crate::service::config::get_app_language_code().await;
-        let qr_url = QrGenerator::build_url(&qr_payload, &web_app_url, &client_language);
+        let account_username = self.account_pairing_username.read().await.clone();
+        let qr_url = QrGenerator::build_url(
+            &qr_payload,
+            &web_app_url,
+            &client_language,
+            account_username.as_deref(),
+        );
         let qr_svg = QrGenerator::generate_svg_from_url(&qr_url)?;
         let qr_data = QrGenerator::generate_png_base64_from_url(&qr_url)?;
 
@@ -551,6 +650,7 @@ impl RemoteConnectService {
         let server_arc = self.remote_server.clone();
         let trusted_mobile_identity_arc = self.trusted_mobile_identity.clone();
         let delegated_identity_fn_arc = self.delegated_identity_fn.clone();
+        let account_pairing_verifier_arc = self.account_pairing_verifier.clone();
         let local_device_id = self.device_identity.device_id.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
@@ -652,10 +752,34 @@ impl RemoteConnectService {
                                 if let Ok(response) =
                                     serde_json::from_str::<pairing::PairingResponse>(&json)
                                 {
+                                    let canonical_user_id = match RemoteConnectService::resolve_pairing_user_id(
+                                        &account_pairing_verifier_arc,
+                                        &response,
+                                    )
+                                    .await
+                                    {
+                                        Ok(user_id) => user_id,
+                                        Err(message) => {
+                                            drop(p);
+                                            RemoteConnectService::send_pairing_error_response(
+                                                &relay_arc,
+                                                &correlation_id,
+                                                &shared_secret,
+                                                message,
+                                            )
+                                            .await;
+                                            continue;
+                                        }
+                                    };
+                                    let mobile_install_id = response
+                                        .mobile_install_id
+                                        .clone()
+                                        .unwrap_or_default();
                                     let submitted_identity =
                                         match RemoteConnectService::validate_mobile_identity(
                                             &trusted_mobile_identity_arc,
-                                            &response,
+                                            &mobile_install_id,
+                                            &canonical_user_id,
                                         )
                                         .await
                                         {
@@ -1366,5 +1490,114 @@ impl RemoteConnectService {
     /// Get the pairing shared secret (for encrypting delegate identity).
     pub async fn pairing_shared_secret(&self) -> Option<[u8; 32]> {
         self.pairing.read().await.shared_secret().copied()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pairing_response(user_id: Option<&str>, password: Option<&str>) -> pairing::PairingResponse {
+        pairing::PairingResponse {
+            challenge_echo: "echo".to_string(),
+            device_id: "mobile-1".to_string(),
+            device_name: "Phone".to_string(),
+            mobile_install_id: Some("install-1".to_string()),
+            user_id: user_id.map(str::to_string),
+            password: password.map(str::to_string),
+        }
+    }
+
+    fn no_verifier() -> Arc<RwLock<Option<AccountPairingVerifierFn>>> {
+        Arc::new(RwLock::new(None))
+    }
+
+    fn verifier_returning(
+        canonical_user_id: &'static str,
+    ) -> Arc<RwLock<Option<AccountPairingVerifierFn>>> {
+        Arc::new(RwLock::new(Some(
+            Arc::new(move |_username: String, _password: String| {
+                Box::pin(async move { Ok(canonical_user_id.to_string()) })
+                    as std::pin::Pin<
+                        Box<dyn std::future::Future<Output = Result<String, String>> + Send + Sync>,
+                    >
+            }) as AccountPairingVerifierFn,
+        )))
+    }
+
+    #[tokio::test]
+    async fn account_mode_requires_password() {
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &verifier_returning("user-123"),
+            &pairing_response(Some("alice"), None),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "Missing password");
+    }
+
+    #[tokio::test]
+    async fn account_mode_requires_username() {
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &verifier_returning("user-123"),
+            &pairing_response(None, Some("secret")),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "Missing username");
+    }
+
+    #[tokio::test]
+    async fn account_credentials_are_never_downgraded_when_verifier_is_gone() {
+        // QR advertised auth=account, but the desktop signed out before the
+        // scan finished: reject instead of falling back to password-less pairing.
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &no_verifier(),
+            &pairing_response(Some("alice"), Some("secret")),
+        )
+        .await;
+        assert!(result.unwrap_err().contains("signed out"));
+    }
+
+    #[tokio::test]
+    async fn legacy_mode_without_verifier_uses_plain_user_id() {
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &no_verifier(),
+            &pairing_response(Some("local-user"), None),
+        )
+        .await;
+        assert_eq!(result.unwrap(), "local-user");
+    }
+
+    #[tokio::test]
+    async fn verifier_result_binds_canonical_user_id() {
+        let canonical = RemoteConnectService::resolve_pairing_user_id(
+            &verifier_returning("canonical-user-123"),
+            &pairing_response(Some("alice"), Some("secret")),
+        )
+        .await
+        .expect("verification should succeed");
+        assert_eq!(canonical, "canonical-user-123");
+
+        let trusted = Arc::new(RwLock::new(None));
+        let identity =
+            RemoteConnectService::validate_mobile_identity(&trusted, "install-1", &canonical)
+                .await
+                .expect("first pairing binds the identity");
+        assert_eq!(identity.user_id, "canonical-user-123");
+        RemoteConnectService::persist_mobile_identity(&trusted, identity).await;
+
+        // Reconnect with the same canonical id still matches.
+        assert!(
+            RemoteConnectService::validate_mobile_identity(&trusted, "install-1", &canonical)
+                .await
+                .is_ok()
+        );
+        // A different account user id is rejected against the bound identity.
+        assert!(RemoteConnectService::validate_mobile_identity(
+            &trusted,
+            "install-1",
+            "other-user"
+        )
+        .await
+        .is_err());
     }
 }
