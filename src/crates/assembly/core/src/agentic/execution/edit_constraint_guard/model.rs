@@ -189,6 +189,10 @@ pub struct ConstraintExtractionRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EditConstraintState {
     pub schema_version: u32,
+    /// Active constraints inherited at fork time. Child rollbacks always begin
+    /// from this baseline before replaying surviving child turns.
+    #[serde(default)]
+    pub inherited_constraints: Vec<ExtractedConstraint>,
     #[serde(default)]
     pub constraints: Vec<ExtractedConstraint>,
     #[serde(default)]
@@ -197,6 +201,10 @@ pub struct EditConstraintState {
     /// They remain distinct from repository files across session restoration.
     #[serde(default)]
     pub agent_created_paths: Vec<String>,
+    /// Agent-created paths inherited at fork time. They are part of the child
+    /// baseline rather than parent turn-scoped history.
+    #[serde(default)]
+    pub inherited_agent_created_paths: Vec<String>,
     /// Turn-scoped provenance used to rewind helper-file permissions when a
     /// session is rolled back. `agent_created_paths` remains for backwards
     /// compatibility and is rebuilt from these records when possible.
@@ -214,15 +222,23 @@ impl Default for EditConstraintState {
     fn default() -> Self {
         Self {
             schema_version: EDIT_CONSTRAINT_SCHEMA_VERSION,
+            inherited_constraints: Vec::new(),
             constraints: Vec::new(),
             extractions: Vec::new(),
             agent_created_paths: Vec::new(),
+            inherited_agent_created_paths: Vec::new(),
             agent_created_path_records: Vec::new(),
         }
     }
 }
 
 impl EditConstraintState {
+    pub fn mark_current_state_as_fork_baseline(&mut self) {
+        self.schema_version = EDIT_CONSTRAINT_SCHEMA_VERSION;
+        self.inherited_constraints = self.constraints.clone();
+        self.inherited_agent_created_paths = self.agent_created_paths.clone();
+    }
+
     pub fn merge_extraction(&mut self, extraction: ConstraintExtractionRecord) {
         self.schema_version = EDIT_CONSTRAINT_SCHEMA_VERSION;
         self.constraints.retain(|constraint| {
@@ -330,12 +346,12 @@ impl EditConstraintState {
             .collect::<Vec<_>>();
 
         self.schema_version = EDIT_CONSTRAINT_SCHEMA_VERSION;
-        self.constraints.clear();
+        self.constraints = self.inherited_constraints.clone();
         self.extractions.clear();
         for extraction in retained_extractions {
             self.merge_extraction(extraction);
         }
-        self.agent_created_paths.clear();
+        self.agent_created_paths = self.inherited_agent_created_paths.clone();
         self.agent_created_path_records = retained_path_records;
         for record in &self.agent_created_path_records {
             if !self.agent_created_paths.contains(&record.path) {

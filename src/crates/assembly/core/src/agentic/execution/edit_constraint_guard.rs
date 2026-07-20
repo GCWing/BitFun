@@ -35,7 +35,7 @@ use shell_targets::ShellMutationOperation;
 use shell_targets::{explicit_bash_mutation_targets, has_unresolved_bash_mutation};
 
 pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
-const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 5;
+const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 6;
 const MAX_PROMPT_CHARS: usize = 8_000;
 const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
 const MAX_MODEL_ATTEMPTS: usize = 2;

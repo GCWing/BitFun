@@ -620,6 +620,54 @@ fn rollback_discards_future_constraints_and_helper_provenance() {
 }
 
 #[test]
+fn fork_baseline_survives_child_rollback_and_replays_child_revocation() {
+    let inherited = constraint("don't modify tests", ConstraintMatcher::TestFiles);
+    let inherited_id = inherited.id.clone();
+    let mut child_state = EditConstraintState {
+        constraints: vec![inherited.clone()],
+        agent_created_paths: vec!["tests/parent_repro.rs".to_string()],
+        ..Default::default()
+    };
+    child_state.mark_current_state_as_fork_baseline();
+
+    let mut rolled_back_to_fork = child_state.clone();
+    rolled_back_to_fork.rollback_to_surviving_turns(&HashSet::new());
+    assert_eq!(rolled_back_to_fork.constraints, vec![inherited.clone()]);
+    assert_eq!(
+        rolled_back_to_fork.agent_created_paths,
+        vec!["tests/parent_repro.rs".to_string()]
+    );
+
+    child_state.merge_extraction(ConstraintExtractionRecord {
+        message_sha256: "child-revocation".to_string(),
+        dialog_turn_id: Some("child-turn-1".to_string()),
+        status: ExtractionStatus::Extracted,
+        constraints: Vec::new(),
+        deterministic_constraint_count: 0,
+        model_attempts: 1,
+        active_constraint_ids: vec![inherited_id.clone()],
+        revocation_authorized: true,
+        model_status: ModelExtractionStatus::Parsed,
+        model_constraints: Vec::new(),
+        model_revocations: vec![ConstraintRevocation {
+            constraint_id: inherited_id.clone(),
+            description: "tests may now be modified".to_string(),
+        }],
+        revoked_constraint_ids: vec![inherited_id],
+        unmatched_revocation_ids: Vec::new(),
+        input_chars: 25,
+        prompt_chars: 25,
+        input_truncated: false,
+        latency_ms: 1,
+        extracted_at_ms: 2,
+        failure: None,
+        response_excerpt: None,
+    });
+    child_state.rollback_to_surviving_turns(&HashSet::from(["child-turn-1".to_string()]));
+    assert!(child_state.constraints.is_empty());
+}
+
+#[test]
 fn deterministic_extractor_marks_explicit_test_deletion_as_delete_only() {
     let constraint = deterministic_test_constraint("Do not delete test files.")
         .expect("explicit test deletion should be extracted");
