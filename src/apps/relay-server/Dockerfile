@@ -1,7 +1,8 @@
 # BitFun Relay Server standalone Docker build.
 # The reduced repository-root context contains only the relay app and services.
 
-FROM rust:1-slim AS builder
+# Pin builder to bookworm so the linked glibc matches the runtime image.
+FROM rust:1-bookworm AS builder
 
 WORKDIR /build/src/apps/relay-server
 
