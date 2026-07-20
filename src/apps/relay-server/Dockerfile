@@ -1,5 +1,5 @@
 # BitFun Relay Server standalone Docker build.
-# The reduced repository-root context contains only the relay app and service.
+# The reduced repository-root context contains only the relay app and services.
 
 FROM rust:1-slim AS builder
 
@@ -17,37 +17,50 @@ RUN apt-get update \
         libssl-dev \
         build-essential \
         ca-certificates \
+        clang \
+        cmake \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY src/apps/relay-server/Cargo.toml ./Cargo.toml
 COPY src/crates/services/relay-service/Cargo.toml ../../crates/services/relay-service/Cargo.toml
+COPY src/crates/services/page-function-runtime/Cargo.toml ../../crates/services/page-function-runtime/Cargo.toml
 
 # Build placeholders first so unchanged dependencies remain cached.
 # BuildKit exposes ARG as an env during RUN; cargo rejects CARGO_BUILD_JOBS="".
-RUN mkdir -p src/bin ../../crates/services/relay-service/src \
+RUN mkdir -p src/bin \
+        ../../crates/services/relay-service/src \
+        ../../crates/services/page-function-runtime/src \
     && printf 'fn main() {}\n' > src/main.rs \
     && printf 'pub use bitfun_relay_service::*;\n' > src/lib.rs \
     && printf 'fn main() {}\n' > src/bin/relay_admin.rs \
     && printf '// placeholder\n' > ../../crates/services/relay-service/src/lib.rs \
+    && printf '// placeholder\n' > ../../crates/services/page-function-runtime/src/lib.rs \
     && { [ -n "${CARGO_BUILD_JOBS:-}" ] || unset CARGO_BUILD_JOBS; } \
     && cargo build --release
 
-# Cargo emits libbitfun_relay_service-*.rlib/.rmeta — a bare bitfun_relay_service*
-# glob misses those and leaves the empty placeholder crate for the real rebuild.
-RUN rm -rf src ../../crates/services/relay-service/src \
+# Cargo emits libbitfun_*-*.rlib/.rmeta — a bare crate-name glob misses those
+# and leaves the empty placeholder crate for the real rebuild.
+RUN rm -rf src \
+        ../../crates/services/relay-service/src \
+        ../../crates/services/page-function-runtime/src \
     target/release/bitfun-relay-server \
     target/release/relay-admin \
     target/release/deps/*bitfun_relay_service* \
+    target/release/deps/*bitfun_page_function_runtime* \
     target/release/deps/*bitfun_relay_server* \
     target/release/deps/*relay_admin* \
     target/release/.fingerprint/bitfun-relay-service-* \
+    target/release/.fingerprint/bitfun-page-function-runtime-* \
     target/release/.fingerprint/bitfun-relay-server-* \
     target/release/.fingerprint/relay-admin-*
 
 COPY src/apps/relay-server/src/ ./src/
 COPY src/crates/services/relay-service/src/ ../../crates/services/relay-service/src/
+COPY src/crates/services/page-function-runtime/src/ ../../crates/services/page-function-runtime/src/
 
 RUN touch ../../crates/services/relay-service/src/lib.rs \
+        ../../crates/services/page-function-runtime/src/lib.rs \
         src/lib.rs \
         src/main.rs \
         src/bin/relay_admin.rs \
