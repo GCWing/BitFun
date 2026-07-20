@@ -190,6 +190,57 @@ fn terminal_preflight_finds_explicit_mutation_targets() {
             ShellMutationOperation::Write
         )]
     );
+    assert_eq!(
+        parsed_shell_targets("dd if=/tmp/input of=tests/example.rs"),
+        vec![(
+            "tests/example.rs".to_string(),
+            ShellMutationOperation::Write
+        )]
+    );
+    assert_eq!(
+        parsed_shell_targets("rsync -a src/ tests/generated/"),
+        vec![(
+            "tests/generated/".to_string(),
+            ShellMutationOperation::Write
+        )]
+    );
+}
+
+#[test]
+fn terminal_preflight_marks_unresolved_mutations() {
+    for command in [
+        "target=tests/example.rs; printf x > \"$target\"",
+        "python -c \"from pathlib import Path; Path(target).write_text('x')\"",
+        "bash",
+        "find tests -type f -exec rm {} +",
+        "git checkout HEAD tests/example.rs",
+        "tar -xf generated-tests.tar",
+        "unzip generated-tests.zip",
+        "patch -p1 < change.patch",
+    ] {
+        let targets = explicit_bash_mutation_targets(command);
+        assert!(
+            has_unresolved_bash_mutation(command, &targets),
+            "expected unresolved mutation: {command}"
+        );
+    }
+
+    for command in [
+        "cargo test -p core",
+        "bash -lc 'cargo test -p core'",
+        "git status",
+        "git checkout HEAD -- tests/example.rs",
+        "dd if=/tmp/input of=tests/example.rs",
+        "rsync -a src/ tests/generated/",
+        "tar -tf generated-tests.tar",
+        "unzip -l generated-tests.zip",
+    ] {
+        let targets = explicit_bash_mutation_targets(command);
+        assert!(
+            !has_unresolved_bash_mutation(command, &targets),
+            "expected resolved or read-only command: {command}"
+        );
+    }
 }
 
 #[test]

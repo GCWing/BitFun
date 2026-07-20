@@ -89,6 +89,30 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<ShellMutation
                     push_bash_target(&mut targets, path, ShellMutationOperation::Write);
                 }
             }
+            "dd" => {
+                for argument in arguments {
+                    if let Some(path) = argument.strip_prefix("of=") {
+                        push_bash_target(&mut targets, path, ShellMutationOperation::Write);
+                    }
+                }
+            }
+            "ln" | "rsync" => {
+                if let Some(path) = arguments
+                    .iter()
+                    .rev()
+                    .find(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(&mut targets, path, ShellMutationOperation::Write);
+                }
+            }
+            "mkdir" => {
+                for argument in arguments
+                    .iter()
+                    .filter(|argument| !argument.starts_with('-'))
+                {
+                    push_bash_target(&mut targets, argument, ShellMutationOperation::Write);
+                }
+            }
             "mv" => {
                 // Moving a protected source removes it from its original
                 // location, so both sides are mutation targets. The previous
@@ -124,10 +148,7 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<ShellMutation
                 }
             }
             "sed" | "perl" => {
-                if arguments
-                    .iter()
-                    .any(|argument| *argument == "-i" || argument.starts_with("-i"))
-                {
+                if arguments.iter().any(|argument| in_place_flag(argument)) {
                     let mut script_seen = false;
                     for argument in arguments
                         .iter()
@@ -154,6 +175,203 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<ShellMutation
         }
     }
     targets
+}
+
+pub(super) fn has_unresolved_bash_mutation(command: &str, targets: &[ShellMutationTarget]) -> bool {
+    if targets
+        .iter()
+        .any(|target| path_has_shell_expansion(&target.path))
+    {
+        return true;
+    }
+
+    let lower_command = command.to_ascii_lowercase();
+    if (lower_command.contains("python") || lower_command.contains("path("))
+        && python_segment_may_mutate(&lower_command)
+    {
+        let mut python_targets = Vec::new();
+        push_python_mutation_targets(&mut python_targets, command);
+        if python_targets.is_empty() {
+            return true;
+        }
+    }
+    if lower_command.contains("node") && node_segment_may_mutate(&lower_command) {
+        let mut node_targets = Vec::new();
+        push_node_mutation_targets(&mut node_targets, command);
+        if node_targets.is_empty() {
+            return true;
+        }
+    }
+
+    for segment in command
+        .split(['\n', ';', '|'])
+        .flat_map(|part| part.split("&&"))
+        .flat_map(|part| part.split("||"))
+    {
+        let words = segment
+            .split_whitespace()
+            .map(|word| {
+                word.trim_matches(|c: char| matches!(c, '\'' | '"' | '(' | ')' | '[' | ']'))
+            })
+            .filter(|word| !word.is_empty())
+            .collect::<Vec<_>>();
+        let Some(command_index) = words.iter().position(|word| !word.contains('=')) else {
+            continue;
+        };
+        let command_name = Path::new(words[command_index])
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(words[command_index])
+            .to_ascii_lowercase();
+        let arguments = &words[command_index + 1..];
+        let lower_segment = segment.to_ascii_lowercase();
+        let segment_targets = explicit_bash_mutation_targets(segment);
+
+        if matches!(command_name.as_str(), "bash" | "sh" | "zsh" | "fish") {
+            let Some(payload) = nested_shell_payload(segment) else {
+                return true;
+            };
+            let nested_targets = explicit_bash_mutation_targets(payload);
+            if has_unresolved_bash_mutation(payload, &nested_targets) {
+                return true;
+            }
+            continue;
+        }
+        if matches!(
+            command_name.as_str(),
+            "eval"
+                | "xargs"
+                | "patch"
+                | "apply_patch"
+                | "ruby"
+                | "php"
+                | "powershell"
+                | "pwsh"
+                | "cmd"
+        ) {
+            return true;
+        }
+        if command_name == "tar"
+            && !arguments.iter().any(|argument| {
+                matches!(*argument, "-t" | "--list")
+                    || (argument.starts_with('-') && argument.contains('t'))
+            })
+        {
+            return true;
+        }
+        if command_name == "unzip"
+            && !arguments
+                .iter()
+                .any(|argument| matches!(*argument, "-l" | "-v"))
+        {
+            return true;
+        }
+        if command_name == "awk"
+            && (arguments.iter().any(|argument| in_place_flag(argument))
+                || lower_segment.contains("system("))
+        {
+            return true;
+        }
+        if command_name == "find"
+            && arguments
+                .iter()
+                .any(|argument| matches!(*argument, "-delete" | "-exec" | "-execdir"))
+        {
+            return true;
+        }
+        if matches!(command_name.as_str(), "python" | "python3")
+            && python_segment_may_mutate(&lower_segment)
+            && segment_targets.is_empty()
+        {
+            return true;
+        }
+        if command_name == "node"
+            && node_segment_may_mutate(&lower_segment)
+            && segment_targets.is_empty()
+        {
+            return true;
+        }
+        if command_name == "git"
+            && git_command_may_change_worktree(arguments)
+            && segment_targets.is_empty()
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn in_place_flag(argument: &str) -> bool {
+    argument == "--in-place"
+        || argument.starts_with("--in-place=")
+        || argument
+            .strip_prefix('-')
+            .is_some_and(|flags| !flags.starts_with('-') && flags.contains('i'))
+}
+
+fn nested_shell_payload(segment: &str) -> Option<&str> {
+    let mut parts = segment.trim().splitn(3, char::is_whitespace);
+    parts.next()?;
+    let flags = parts.next()?;
+    if !flags.starts_with('-') || !flags.contains('c') {
+        return None;
+    }
+    let payload = parts.next()?.trim();
+    Some(payload.trim_matches(|character| matches!(character, '\'' | '"')))
+}
+
+fn path_has_shell_expansion(path: &str) -> bool {
+    path.contains('$')
+        || path.contains('`')
+        || path.contains('*')
+        || path.contains('?')
+        || path.contains('[')
+        || path.contains('{')
+}
+
+fn python_segment_may_mutate(segment: &str) -> bool {
+    segment.contains("write_text")
+        || segment.contains("write_bytes")
+        || segment.contains(".unlink(")
+        || segment.contains(".rename(")
+        || segment.contains(".replace(")
+        || (segment.contains("open(")
+            && ["'w'", "\"w\"", "'a'", "\"a\"", "'x'", "\"x\""]
+                .iter()
+                .any(|mode| segment.contains(mode)))
+}
+
+fn node_segment_may_mutate(segment: &str) -> bool {
+    [
+        "writefile",
+        "appendfile",
+        "unlink",
+        "rmsync",
+        "rename",
+        "copyfile",
+    ]
+    .iter()
+    .any(|operation| segment.contains(operation))
+}
+
+fn git_command_may_change_worktree(arguments: &[&str]) -> bool {
+    let Some(subcommand) = arguments.iter().find(|argument| !argument.starts_with('-')) else {
+        return false;
+    };
+    matches!(
+        *subcommand,
+        "checkout"
+            | "switch"
+            | "pull"
+            | "merge"
+            | "rebase"
+            | "reset"
+            | "restore"
+            | "stash"
+            | "clean"
+            | "cherry-pick"
+    )
 }
 
 fn push_git_mutation_targets(targets: &mut Vec<ShellMutationTarget>, arguments: &[&str]) {
