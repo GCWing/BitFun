@@ -30,9 +30,9 @@ pub use model::{
     ConstraintOperationScope, ConstraintRevocation, ConstraintSource, EditConstraintState,
     ExtractedConstraint, ExtractionFailure, ExtractionStatus, ModelExtractionStatus,
 };
-use shell_targets::explicit_bash_mutation_targets;
 #[cfg(test)]
 use shell_targets::ShellMutationOperation;
+use shell_targets::{explicit_bash_mutation_targets, has_unresolved_bash_mutation};
 
 pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
 const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 5;
@@ -1008,13 +1008,13 @@ pub fn check_delete(
     check_edit(context, tool_name, operation, file_path, force_requested)
 }
 
-/// Preflight explicit file targets in terminal commands. This covers the
-/// normal shell forms agents use for mutation while retaining Bash for build
-/// and test execution. Commands whose write targets are computed dynamically
-/// remain observable through the final patch/provenance telemetry instead of
-/// being silently treated as guarded direct-file writes.
+/// Preflight file targets in terminal commands. Explicit targets are checked
+/// directly. When constraints are active, high-risk commands whose targets
+/// remain dynamic or implicit are rejected before execution; ordinary build,
+/// test, and read-only commands retain the normal shell path.
 pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<ValidationResult> {
-    for target in explicit_bash_mutation_targets(command) {
+    let targets = explicit_bash_mutation_targets(command);
+    for target in &targets {
         if let Some(rejection) = check(
             Some(context),
             "Bash",
@@ -1025,7 +1025,51 @@ pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<Val
             return Some(rejection);
         }
     }
+    if has_unresolved_bash_mutation(command, &targets) {
+        let state = context.session_id.as_deref().and_then(|session_id| {
+            get_global_coordinator()?
+                .get_session_manager()
+                .edit_constraint_state(session_id)
+        });
+        if let Some((state, constraint)) = state.and_then(|state| {
+            let constraint = state
+                .constraints
+                .iter()
+                .find(|constraint| constraint.matcher.enforceable())?
+                .clone();
+            Some((state, constraint))
+        }) {
+            return decision_result(
+                Some(context),
+                "Bash",
+                "unresolved_shell_mutation",
+                "<dynamic shell target>",
+                "deny_unresolved_target",
+                false,
+                Some(&state),
+                Some(&constraint),
+                Some(
+                    "This command may modify files through a dynamic or implicit target while an edit constraint is active. Use a direct file tool or a command with explicit literal paths so the protected scope can be checked before execution."
+                        .to_string(),
+                ),
+                Some(403),
+            );
+        }
+    }
     None
+}
+
+pub fn check_git_command(
+    context: &ToolUseContext,
+    operation: &str,
+    arguments: &str,
+) -> Option<ValidationResult> {
+    let command = if arguments.trim().is_empty() {
+        format!("git {operation}")
+    } else {
+        format!("git {operation} {}", arguments.trim())
+    };
+    check_bash_command(context, &command)
 }
 
 /// Checks the target and every non-symlink descendant before recursive delete.
