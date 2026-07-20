@@ -1,13 +1,16 @@
 //! Embedded Page Function runtime backed by rquickjs.
 //!
 //! User workers define a global `fetch(request, env)` that returns
-//! `{ status, headers, body }`. Host bindings expose KV / DB / BLOBS / ASSETS /
-//! PAGE via a JSON host-call bridge. No arbitrary outbound network.
+//! `{ status, headers, body }` (or a Promise of that shape). Host bindings
+//! expose KV / DB / BLOBS / ASSETS / PAGE via a JSON host-call bridge.
+//! No arbitrary outbound network. Async handlers may only await microtasks;
+//! host bindings are synchronous.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use rquickjs::promise::MaybePromise;
 use rquickjs::{Context, Ctx, Function, Object, Runtime};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -115,10 +118,10 @@ pub fn run_fetch(
             .map_err(|_| PageFunctionError::MissingFetch)?;
 
         // Serialize response in JS to avoid RefCell re-entrancy when reading objects.
+        // Support both sync returns and Promise / async function fetch.
         ctx.eval::<(), _>(
             r#"
-            globalThis.__bitfun_invoke = function(req, env) {
-              var r = fetch(req, env);
+            globalThis.__bitfun_normalize = function(r) {
               if (typeof r === "string") {
                 return JSON.stringify({ status: 200, headers: { "content-type": "text/plain; charset=utf-8" }, body: r });
               }
@@ -138,6 +141,13 @@ pub fn run_fetch(
                 body: (r && r.body != null) ? String(r.body) : ""
               });
             };
+            globalThis.__bitfun_invoke = function(req, env) {
+              var r = fetch(req, env);
+              if (r && typeof r.then === "function") {
+                return r.then(globalThis.__bitfun_normalize);
+              }
+              return globalThis.__bitfun_normalize(r);
+            };
             "#,
         )
         .map_err(|e| PageFunctionError::Eval(format!("wrap fetch: {e}")))?;
@@ -148,9 +158,31 @@ pub fn run_fetch(
 
         let env = build_env_object(&ctx, host)?;
         let req_obj = request_to_object(&ctx, request)?;
-        let out: String = invoke
+        let maybe: MaybePromise = invoke
             .call((req_obj, env))
             .map_err(|e| PageFunctionError::Handler(format!("{e}")))?;
+
+        // Drive QuickJS microtasks until the (maybe) promise settles, respecting timeout.
+        let out = loop {
+            if started.elapsed() > timeout {
+                return Err(PageFunctionError::Timeout(timeout));
+            }
+            match maybe.result::<String>() {
+                Some(Ok(s)) => break s,
+                Some(Err(e)) => {
+                    return Err(PageFunctionError::Handler(format!("async fetch failed: {e}")));
+                }
+                None => {
+                    if !ctx.execute_pending_job() {
+                        return Err(PageFunctionError::Handler(
+                            "async fetch returned a pending promise with no runnable jobs \
+                             (host bindings are synchronous; do not await external I/O)"
+                                .into(),
+                        ));
+                    }
+                }
+            }
+        };
         Ok(out)
     })?;
 
@@ -433,5 +465,36 @@ mod tests {
             err,
             PageFunctionError::MissingFetch | PageFunctionError::Eval(_)
         ));
+    }
+
+    #[test]
+    fn async_fetch_promise_is_awaited() {
+        let host = Arc::new(MemoryPageHost::default());
+        host.kv_put("name", "async").unwrap();
+        let worker = r#"
+            async function fetch(request, env) {
+                var name = env.KV.get("name") || "anon";
+                return { status: 200, headers: { "content-type": "application/json" }, body: JSON.stringify({ hello: name }) };
+            }
+        "#;
+        let resp = run_fetch(
+            worker,
+            &FetchRequest {
+                method: "GET".into(),
+                url: "https://example/p/u/s/api/hello".into(),
+                path: "/api/hello".into(),
+                headers: HashMap::new(),
+                body: None,
+            },
+            host,
+            DEFAULT_TIMEOUT,
+        )
+        .unwrap();
+        assert_eq!(resp.status, 200);
+        assert_eq!(resp.body, r#"{"hello":"async"}"#);
+        assert_eq!(
+            resp.headers.get("content-type").map(String::as_str),
+            Some("application/json")
+        );
     }
 }
