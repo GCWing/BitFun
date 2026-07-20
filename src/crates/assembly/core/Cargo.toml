@@ -64,10 +64,6 @@ globset = { workspace = true, optional = true }
 
 eventsource-stream = { workspace = true, optional = true }
 
-# MCP Streamable HTTP client (official rust-sdk)
-rmcp = { workspace = true, features = [
-    "transport-streamable-http-client-reqwest",
-], optional = true }
 sse-stream = { workspace = true, optional = true }
 
 # Shared AI protocol adapters
@@ -157,6 +153,18 @@ win32job = { workspace = true }
 rustls = { workspace = true }
 rustls-native-certs = "0.8"
 schannel = "0.1"
+
+# MCP Streamable HTTP client (official rust-sdk)
+[target.'cfg(not(target_env = "ohos"))'.dependencies]
+rmcp = { workspace = true, features = [
+    "transport-streamable-http-client-reqwest",
+    "reqwest",
+], optional = true }
+
+[target.'cfg(target_env = "ohos")'.dependencies]
+rmcp = { workspace = true, features = [
+    "transport-streamable-http-client-reqwest",
+], optional = true }
 
 [features]
 # Full product runtime feature set. Product crates should depend on this

@@ -110,7 +110,7 @@ encoding_rs = "0.8.35"
 url = "2"
 
 # HTTP client
-reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "rustls", "json", "stream", "multipart", "query", "form"] }
+reqwest = { version = "0.12", default-features = false, features = ["native-tls", "rustls-tls-native-roots", "json", "stream", "multipart"] }
 
 # Debug Log HTTP Server
 axum = { version = "0.8", features = ["json", "ws"] }
@@ -137,7 +137,7 @@ toml = "0.9"
 git2 = { version = "0.21", default-features = false, features = ["https", "vendored-libgit2"] }
 
 # Terminal
-portable-pty = "0.8"
+portable-pty = "0.9"
 vte = "0.15.0"
 clap = { version = "4.6.1", features = ["derive"] }
 crossterm = "0.28"
@@ -235,7 +235,6 @@ rmcp = { version = "1.7", default-features = false, features = [
     "client",
     "elicitation",
     "macros",
-    "reqwest",
     "schemars",
     "server",
 ] }
