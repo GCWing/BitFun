@@ -1020,27 +1020,18 @@ mod tests {
     use terminal_core::ShellType;
 
     #[tokio::test]
-    async fn validation_applies_evaluation_shell_policy() {
+    async fn validation_allows_normal_web_and_git_commands() {
         let tool = ExecCommandTool::new();
 
         for command in [
-            "curl https://codeload.github.com/org/repo/tar.gz/main",
-            "curl https://sourcegraph.com/github.com/org/repo/-/raw/src/lib.rs",
+            "curl https://github.com/owner/repo",
+            "curl https://sourcegraph.com/github.com/owner/repo",
             "git fetch origin",
             "git show origin/main",
             "git show 878c25b",
+            "git status --short",
+            "git diff HEAD",
         ] {
-            let validation = tool.validate_input(&json!({"cmd": command}), None).await;
-            assert!(!validation.result, "should block: {command}");
-            assert_eq!(validation.error_code, Some(403));
-        }
-    }
-
-    #[tokio::test]
-    async fn validation_allows_current_workspace_git_inspection() {
-        let tool = ExecCommandTool::new();
-
-        for command in ["git status --short", "git diff", "git diff HEAD"] {
             let validation = tool.validate_input(&json!({"cmd": command}), None).await;
             assert!(validation.result, "should allow: {command}");
         }

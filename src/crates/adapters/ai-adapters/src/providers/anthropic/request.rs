@@ -352,7 +352,6 @@ pub(crate) async fn send_stream(
 
     execute_sse_request(
         "Anthropic Streaming API",
-        "anthropic",
         &url,
         &request_body,
         max_tries,

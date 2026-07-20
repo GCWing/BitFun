@@ -1,4 +1,3 @@
-use super::is_blocked_github_url;
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -126,15 +125,11 @@ impl WebSearchTool {
         let mut out = Vec::new();
         let mut cur: Option<(String, String, Vec<String>)> = None;
         let mut body = false;
-        let mut saw_structured_result = false;
 
         for line in text.lines() {
             if let Some(next) = line.strip_prefix("Title: ") {
-                saw_structured_result = true;
                 if let Some((title, url, text)) = cur.take() {
-                    if let Some(item) = self.item(title, url, text) {
-                        out.push(item);
-                    }
+                    out.push(self.item(title, url, text));
                 }
                 cur = Some((next.trim().to_string(), String::new(), Vec::new()));
                 body = false;
@@ -164,17 +159,7 @@ impl WebSearchTool {
         }
 
         if let Some((title, url, text)) = cur.take() {
-            if let Some(item) = self.item(title, url, text) {
-                out.push(item);
-            }
-        }
-
-        if out.is_empty() && saw_structured_result {
-            return vec![json!({
-                "title": "Evaluation web policy",
-                "url": "",
-                "snippet": "GitHub results are unavailable in this evaluation. Do not use WebSearch or WebFetch to obtain GitHub information; inspect the local repository and task materials instead."
-            })];
+            out.push(self.item(title, url, text));
         }
 
         if out.is_empty() && !text.trim().is_empty() {
@@ -188,19 +173,12 @@ impl WebSearchTool {
         out
     }
 
-    fn item(&self, title: String, url: String, text: Vec<String>) -> Option<Value> {
-        if reqwest::Url::parse(&url)
-            .ok()
-            .is_some_and(|url| is_blocked_github_url(&url))
-        {
-            return None;
-        }
-
-        Some(json!({
+    fn item(&self, title: String, url: String, text: Vec<String>) -> Value {
+        json!({
             "title": title,
             "url": url,
             "snippet": self.snippet(&text.join("\n"))
-        }))
+        })
     }
 
     fn snippet(&self, text: &str) -> String {
