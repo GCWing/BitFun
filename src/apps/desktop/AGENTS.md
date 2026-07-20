@@ -19,6 +19,17 @@ Main areas:
 
 Peer Device Mode ownership and boundaries:
 `docs/architecture/peer-device-mode.md`.
+Frontend regression guards:
+`src/web-ui/src/infrastructure/peer-device/README.md`.
+
+Account login (pending sync choice / finalize) lives in
+`src/api/remote_connect_api.rs` (`PENDING_SYNC_CHOICE`, `account_login`,
+`account_finalize_login`). Do not persist a session before the user chooses
+cloud vs local settings.
+
+One-click relay deploy: Tauri surface `src/api/relay_deploy_api.rs`, orchestration
+in `bitfun-services-integrations` `remote_ssh/relay_deploy.rs`. Feature invariants:
+`src/web-ui/src/features/relay-deploy/README.md`.
 
 If a change affects behavior shared by multiple runtimes, place stable contracts,
 execution policy, and services in their owning lower-layer crates. Keep only

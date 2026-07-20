@@ -106,11 +106,11 @@ function isPercentage(value) {
 const TEXT_STYLE_FIELDS = new Set([
   'fontSize', 'fontFace', 'color', 'bold', 'italic', 'underline',
   'align', 'valign', 'lineSpacing', 'paraSpaceBefore', 'paraSpaceAfter',
-  'margin', 'rotate', 'vert', 'transparency', 'bulletColor',
+  'charSpacing', 'margin', 'rotate', 'vert', 'transparency', 'bulletColor',
 ]);
 const TEXT_RUN_OPTION_FIELDS = new Set([
   'fontSize', 'fontFace', 'color', 'bold', 'italic', 'underline',
-  'breakLine', 'bullet', 'transparency',
+  'breakLine', 'bullet', 'transparency', 'charSpacing',
 ]);
 const BULLET_FIELDS = new Set(['type', 'indent']);
 const LINE_STYLE_FIELDS = new Set([
@@ -169,6 +169,7 @@ function hasValidTextStyle(style) {
     && ['lineSpacing', 'paraSpaceBefore', 'paraSpaceAfter'].every((field) => (
       style[field] === undefined || isNonNegativeFinite(style[field])
     ))
+    && (style.charSpacing === undefined || Number.isFinite(style.charSpacing))
     && hasValidMargin(style.margin)
     && (style.rotate === undefined || Number.isFinite(style.rotate))
     && (style.vert === undefined || TEXT_VERTS.has(style.vert))
@@ -190,6 +191,7 @@ function hasValidTextRunOptions(options) {
       || typeof options.underline === 'boolean'
       || typeof options.underline === 'string')
     && (options.transparency === undefined || isPercentage(options.transparency))
+    && (options.charSpacing === undefined || Number.isFinite(options.charSpacing))
     && (options.bullet === undefined || (
       hasOnlyFields(options.bullet, BULLET_FIELDS)
       && (options.bullet.type === undefined || options.bullet.type === 'bullet')

@@ -183,6 +183,17 @@ pub struct AccountClient {
     http: reqwest::Client,
 }
 
+/// Check whether an account/relay error message indicates an invalid or
+/// expired account token (relay auth failure). Shared by Desktop, CLI, and
+/// the settings sync engine so they all react to the same relay wording.
+pub fn error_indicates_expired_token(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("http 401")
+        || lower.contains("unauthorized")
+        || lower.contains("invalid or expired token")
+        || lower.contains("relay auth error")
+}
+
 impl Default for AccountClient {
     fn default() -> Self {
         Self::new()
@@ -477,17 +488,20 @@ impl AccountClient {
     }
 
     /// Upload an encrypted settings blob (keyed by the user, not per-device).
+    /// Returns the version sent with the upload so callers can record a sync
+    /// cursor that matches what the relay actually stored.
     pub async fn upload_settings(
         &self,
         relay_url: &str,
         session: &AccountSession,
         plaintext: &str,
-    ) -> Result<()> {
+    ) -> Result<i64> {
         let (data, nonce) = Self::seal(session, plaintext)?;
+        let version = chrono::Utc::now().timestamp_millis();
         let body = serde_json::json!({
             "encrypted_data": data,
             "nonce": nonce,
-            "version": chrono::Utc::now().timestamp_millis(),
+            "version": version,
         });
         let resp = self
             .http
@@ -499,7 +513,7 @@ impl AccountClient {
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
-        Ok(())
+        Ok(version)
     }
 
     /// Fetch and decrypt the settings blob. Returns `None` if no settings exist.

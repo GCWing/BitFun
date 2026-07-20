@@ -7,8 +7,10 @@
 能力进入 BitFun 的渐进导入轨道，不代表 BitFun 能力导出到 OpenCode 已经完成。兼容矩阵是审计库存，不是默认路线图。
 
 PR1 已建立通用外部来源目录、生命周期协调器和 OpenCode Prompt Command 纵向切片，PR2 已把受支持的单文件
-`.js` standalone Tool 接入现有 Tool Runtime，PR3 已把 Subagent 安全子集交给现有 Subagent owner。BitFun 原有
-受管插件包来源确认和 custom tool 静态预览继续保留，但不等同于 OpenCode package plugin 可执行。三个切片均沿用
+`.js` standalone Tool 接入现有 Tool Runtime，PR3 已把 Subagent 安全子集交给现有 Subagent owner，PR4 补齐现有
+Skill 多来源的身份与覆盖状态展示。BitFun 原有
+受管插件包来源确认和 custom tool 静态预览继续保留，但不等同于 OpenCode package plugin 可执行。Command、Tool、Subagent
+三个可执行切片均沿用
 稳定的跨生态来源契约，不建设“大而全的 OpenCode Plugin Runtime”，也不提前承诺尚未执行的生态能力。
 
 ## 1. 稳定架构基线
@@ -62,6 +64,7 @@ Product Assembly registers adapter implementations with the coordinator
 | PR1：来源目录 + OpenCode Command（已实现） | Desktop 可查看、抑制/恢复并刷新全局/项目 OpenCode 来源；交互式 TUI（ChatMode）可列出并执行支持的 `/command`；运行中修改、删除、恢复后自动刷新 | 通用来源目录与生命周期协调器；Prompt Command 契约；OpenCode Command adapter | JS/TS Tool 执行、Hook、MCP、OpenCode Client/Server、Subagent 执行、复制式导入 |
 | PR2：OpenCode standalone Tool（已实现） | 一个真实、受支持的单文件 `.opencode/tools/` 样例经预览和确认后进入现有 Tool Runtime，可调用、取消、更新和撤下 | 现有 Tool Runtime + 独立 Tool 兼容接口 | package plugin、npm 依赖安装、Hook、TUI renderer、完整 `metadata`/`ask` |
 | PR3：OpenCode Subagent（已实现） | 全局/项目 agent 定义经一次非阻塞确认后进入现有 Subagent owner，可选择、单次调用、更新和撤下；同名冲突由用户选择，unsupported 字段有明确诊断 | 现有 Subagent owner + 独立 Subagent 兼容接口 + generation lease | 原始 OpenCode 会话内核、完整 primary-agent 替换、外部 agent 续接、跨产品通用 agent JSON |
+| PR4：Skill 来源与覆盖状态（本轮） | GUI/TUI 对已发现 Skill 显示生态来源；被现有优先级覆盖的同名项继续可见，并标明较高优先级来源；模式配置按实际选择结果标明当前覆盖来源 | 现有 Skill Registry；只补 provider-neutral 来源元数据和宿主展示 | 修改 Skill 优先级、引入审批弹窗、复制导入、URL/脚本执行、把 Skill 并入外部来源协调器 |
 
 Tool 与 Subagent 不复用 Command 的贡献对象，只复用来源身份、状态、代次、诊断和观察生命周期。未来接入 Codex 或
 Claude Code 时新增同级 adapter，并在 Product Assembly 注册；不能修改 OpenCode adapter 来容纳其他生态。
@@ -157,8 +160,9 @@ Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCo
 ### 4.2 产品与决策语义
 
 - Desktop 在“外部 AI 应用”中显示来源、文件、工作目录、工具名和直接文件/网络/环境/进程能力，并明确提示当前 worker
-  不是 OS 沙箱。交互式 TUI（ChatMode）使用同一快照：状态栏只做一次非阻塞提醒，`/external-tools` 提供静态预览以及
-  `enable`、`disable`、`choose`、`refresh` 操作；等待处理不阻塞输入或普通会话。
+  不是 OS 沙箱。交互式 TUI（ChatMode）使用同一快照：状态栏只做一次非阻塞提醒，通用 `/tools` 入口以“外部 AI 应用”
+  分组提供静态预览以及 `enable`、`disable`、`choose`、`refresh` 操作；等待处理不阻塞输入或普通会话，不再注册平行的
+  `external-*` 命令。
 - 首次启用键由“来源限定 target + 执行域 + runtime + 能力集合”组成。纯内容更新且能力集合不变时复用已批准
   结果；能力、runtime 或执行域扩大时重新确认。用户选择保持停用后，同一内容版本不再主动询问；来源内容更新后
   才形成新 decision key。Desktop 仍允许用户主动重新审核，避免“一次拒绝后永久不可恢复”。
@@ -230,8 +234,8 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
   旧绑定事实，若执行时配置已漂移则安全失败，不静默切换模型。
 - fresh Task 在进入调度前固定不可变 runtime generation，并以 lease 保持到完成、取消、超时或提交失败；来源稳定
   删除、显式停用或抑制会立即阻止新调用，短暂读取失败最多在有界窗口内沿用 exact last-valid。
-- Desktop 的“外部 AI 应用”设置和 TUI `/external-agents` 使用同一 generation/revision 校验的非阻塞审批与冲突
-  操作；同一工作区的 Agent 决策串行提交，完成后刷新权威状态并说明具体对象。冲突候选在选择前原位展示模型、
+- Desktop 的“外部 AI 应用”设置和 TUI `/agents` 中的“外部 AI 应用”选项使用同一 generation/revision 校验的
+  非阻塞审批与冲突操作；同一工作区的 Agent 决策串行提交，完成后刷新权威状态并说明具体对象。冲突候选在选择前原位展示模型、
   工具、执行域、安全来源标签、兼容影响和恢复动作，一次点击才原子完成“选择并批准”。Agents 场景只显示已激活的
   只读 `External · provider`、`Single-run` 投影，并可跳转到统一管理入口；外部 prompt、绝对用户路径和内部行为摘要
   不进入 IPC 或普通列表摘要。
@@ -249,9 +253,12 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
 
 本轮不新增扩展类型，只修复会误导用户或掩盖真实故障的两处问题，并校正文档事实：
 
-- `NodeScriptToolRuntime` 在共享外部 Tool 运行时首次初始化时解析 Node.js 可执行文件，并在当前进程内持有结果。
-  本轮保持该生命周期，不增加运行时热替换；首次初始化时未找到 Node.js 后，Desktop 与 TUI 必须明确提示安装或修复后
-  重启 BitFun。刷新只重新发现来源，不能描述为会重新读取进程 `PATH`。运行时状态不得把尚未实际启动的可执行文件写成“已验证”。
+- `NodeScriptToolRuntime` 在共享外部 Tool 运行时首次初始化时解析 Node.js 可执行文件，并在当前进程内持有成功结果；
+  只有缓存仍为空时，后续可用性检查或加载才重新执行当前进程可见范围内的 `which(node)`，不会替换已持有路径、worker
+  或活动调用。首次未找到 Node.js 后，Desktop 与 TUI 只提示安装或修复、刷新，以及可继续使用其他功能；当前宿主未记录
+  “安装后已经刷新但仍不可见”的独立证据，因此不主动建议重启，也不提供自动重启或“立即重启”动作，更不能中断活动 session。
+  刷新会重新发现来源并触发运行环境可用性检查，但不能承诺继承父进程后续收到的环境变量变化；运行时状态不得把
+  尚未实际启动的可执行文件写成“已验证”。
 - Subagent owner 读取 BitFun 模型配置失败时必须 fail closed，并生成与“模型不存在”不同的通用诊断。GUI/TUI
   提示用户先确认 BitFun 模型设置能够正常读取和保存，再刷新；日志只保留经过脱敏的失败阶段和错误类别。不得用 `AIConfig::default()`
   把配置服务异常转换成候选模型不匹配，也不得把原始错误或绝对配置路径投影到普通快照。临时故障期间不得改写已持久化的
@@ -265,7 +272,79 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
 代次租约、通用 watcher 事件限流、偏好记录压缩、完整 metrics/打点平台。它们分别涉及平台执行、安全控制面、
 通用服务或数据保留策略，不能以“稳定性修复”为名并入本轮。
 
-## 6. 暂停条件
+## 6. PR4：Skill 来源与覆盖状态
+
+PR4 只解释现有 Skill Registry 已经执行的选择结果，不改变选择本身。Skill 是历史上已经无感发现并按固定根顺序
+解析的声明式内容，与 Command、Tool、Subagent 等可执行扩展的首次接入和冲突确认不同；本轮不把两种策略强行合并。
+
+### 6.1 优先级回归契约
+
+- 项目根保持 `.bitfun`、`.claude`、`.codex`、`.cursor`、`.opencode`、`.agents` 的现有顺序；项目根整体先于
+  用户根。用户根、BitFun 用户目录、BitFun 内置目录、OpenCode config/home 延迟根继续沿用当前实现顺序。
+- “BitFun 优先”只适用于当前已经如此定义的项目级 `.bitfun/skills`，不得误写成所有 BitFun 用户或内置 Skill
+  都高于其他生态。PR4 用精确顺序测试冻结这一事实，来源元数据不参与排序或决胜。
+- `source_slot` 继续标识具体发现槽位；新增开放的 `source_id` 和稳定产品名只负责把多个槽位归为 BitFun、
+  Claude Code、Codex、Cursor、OpenCode 或 Agent Skills 来源。能力 owner 和界面不得根据 `source_id` 另算优先级。
+- 本地与远程项目继续消费同一项目根契约。远程工作区只扫描真实远程项目根，同时保留当前本机用户级 Skill 行为；
+  PR4 不借来源展示改变远程执行域或回退规则。
+
+### 6.2 精简的 GUI/TUI 体验
+
+- Skills 场景和设置列表沿用现有卡片/列表，在作用域旁显示来源。普通项不增加确认步骤；按默认优先关系被覆盖的项
+  保留在原位置，使用弱化名称、删除线和“已覆盖”状态，并标明较高优先级来源，不把无模式页面误写成某一模式
+  “当前一定不会使用”。内部 stable key 不作为主要解释文案。
+- 交互式 TUI 的可用列表显示来源；配置列表继续使用既有勾选框，并把 `shadowed` 改为
+  `covered by <source>`。模式配置中的覆盖关系由 Skill owner 在应用模式禁用规则后输出；高优先级项在该模式被禁用时，
+  实际采用的低优先级项不得仍显示为被前者覆盖。未保存的勾选变化只标为待保存，不预判新的运行时赢家。
+- GUI 与 TUI 都消费 Registry 返回的来源和覆盖事实，不解析路径猜测生态，不新增 system prompt 文本，也不建立
+  跨宿主渲染协议。来源展示元数据缺失时只用已知 `source_id`/`source_slot` 映射产品名，最终显示本地化的“其他来源”，
+  不泄露内部槽位，也不能因为展示元数据异常隐藏可用 Skill。远程工作区同时标明“此设备 · 用户级”或
+  “远程工作区 · 项目级”，不改变现有扫描与执行域。
+- 当前 Skill 刷新、删除和模式开关生命周期保持不变；本轮不增加 watcher、通知、持久化选择或重启提示。
+
+### 6.3 后续可执行扩展的统一原则
+
+Command、Tool、Subagent、MCP 以及未来可执行扩展默认把 BitFun 原生/内置实现作为安全候选，但不允许外部候选
+通过注册顺序静默覆盖。出现同名参与者时由用户选择；选择绑定参与者集合与行为版本，集合或行为更新后才重新询问。
+冲突选择列表固定先展示 BitFun 候选，其余生态按稳定 `provider_id` 排序，同一生态内部保留该 adapter 的正式来源顺序；
+展示顺序只帮助用户理解，不代替选择，也不把 Skill 的固定根优先级复制到可执行扩展。
+被 BitFun/其他候选覆盖、被用户拒绝或尚未选择的外部项必须继续出现在统一管理入口，并以“已覆盖”“未启用”或
+“等待选择”及原因展示，不能从列表消失。该原则由各能力 owner 的独立冲突契约实现，不复用 Skill 的固定优先级，
+也不在 PR4 修改 PR1—PR3 已有执行路径。
+
+## 7. PR5：同名扩展的选择可见性与统一入口
+
+PR5 不新增扩展类型或运行能力，只补齐 Command、Tool、Subagent 已有冲突决策的管理闭环，并纠正 TUI 信息架构：
+
+- 三类 owner 继续维护各自 DTO、冲突指纹和选择持久化，主体逻辑不按 OpenCode 等生态 ID 分支。候选列表由 owner 输出；
+  存在 BitFun 原生/本地候选时固定在首位，其余外部候选使用 adapter 已确定的稳定顺序。Skill Registry 的发现顺序和覆盖
+  关系完全不变，不能复用这里的交互式选择规则。
+- Desktop 同时显示待选择和已处理冲突，待选择项排在前面。每个候选明确标识“当前使用”“已选择但当前不可用”“未使用”或“可选”；已选择、
+  被覆盖以及 Subagent 的“保持不可用”状态都不会因决策完成而消失，用户可直接改选。候选或行为版本变化使冲突指纹变化后，
+  旧选择失效并重新要求选择；没有变化时不重复打断。
+- 交互式 TUI 不提供 `/external-tools`、`/external-agents` 等平行命令。工具使用通用 `/tools` 入口，并在内容中以
+  “外部 AI 应用”分组；Agent 相关能力统一进入 `/agents`，同一列表以文字区分主 Agent、Subagent 和外部 AI 应用，
+  删除历史 `/subagents` 命令。待选择与当前选择分区显示，只有待选择项进入
+  状态栏提醒计数；编号操作绑定产生当前视图的快照和稳定 key，改选仍由 owner 做 generation/revision 校验。
+  活动 turn 期间 `/agents` 仍可查看和管理 Subagent/外部来源，只禁用主 Agent 切换，并在对应行和状态栏解释原因。
+- GUI/TUI 都保持原生异常语义：读取失败不假定变更成功，刷新失败保留已知可用内容并提示状态可能过期，存储异常使受影响
+  名称 fail closed，Remote 明确不支持且不回退本机。模型设置读取失败只要求修复设置并刷新，不把重启当作通用恢复动作。
+- 本轮不新增重启编排。Node.js 是当前唯一可能受宿主进程环境影响的扩展依赖，但现有宿主没有可靠的刷新前后证据，
+  因此只建议安装或修复后刷新，并说明用户可以继续使用其他能力；扩展入口不得建议或触发重启，也不得打断执行中的 session。
+  未来若产品增加统一重启动作，必须由 session owner
+  提供活动任务保护与恢复契约，默认允许“稍后”，不能由扩展模块自行判断。
+- Remote 工作区继续显示明确不支持；不加载本机配置代替远程配置。普通轮询仍为 5 秒，仅发现进行中使用 750 ms 有界轮询；
+  本轮不增加 watcher、全局扫描、遥测平台或磁盘缓存，不改变 system prompt。
+
+PR5 的退出条件是：三类已处理冲突在 GUI 中可见可改选；Tool/Subagent 在 TUI 中使用通用能力入口；原生候选顺序、
+待处理提醒去重、选择指纹失效、Remote 无回退和非强迫恢复文案均有聚焦测试。该切片不以统一入口为由构造通用 `ExtensionAsset`
+或第二套选择状态。
+
+TUI 命令命名属于产品契约。新增命令前必须先核对 BitFun 既有入口以及至少一个同类竞品的用户可见命令；能力已有对应
+入口时优先在原列表中通过分组、状态或二级选项表达来源差异。只有对象、生命周期或权限边界确实不同，并且复用入口会产生
+歧义时，才允许新增命令，并须在设计与测试中写明理由。adapter 名、provider ID 或“external”来源标签都不能单独构成新命令依据。
+
+## 8. 暂停条件
 
 出现以下情况时停止扩面并先修复架构：
 
@@ -273,6 +352,6 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
 - 为未来可能需求新增任意 payload 资产、通用脚本 SDK、第二套 Tool Runtime/Agent Runtime；
 - 只有静态解析却把 Tool、Hook、Subagent 或受限 Command 标为可用；
 - watcher 更新能绕过用户抑制，或一个 provider 的失败清空其他 provider；
-- 同名候选仍由固定优先级静默选中，或候选内容版本变化后继续沿用旧冲突选择；
+- Command、Tool、Subagent 等可执行扩展的同名候选仍由固定优先级静默选中，或候选内容版本变化后继续沿用旧冲突选择；
 - 为完整兼容一次性引入 package manager、Hook、renderer、Server 和权限系统；
 - 本地可用被直接推导为 Remote/HarmonyOS PC 可用，缺少同一 fixture 的真实运行证据。

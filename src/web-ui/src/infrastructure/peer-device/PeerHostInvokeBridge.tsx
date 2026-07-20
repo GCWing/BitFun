@@ -11,6 +11,20 @@ import { isTauriRuntime } from '@/infrastructure/runtime';
 
 const log = createLogger('PeerHostInvokeBridge');
 
+function serializeInvokeError(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Host operation failed';
+  }
+}
+
+function safeCommandForLog(command: string): string {
+  return /^[a-z0-9_]{1,80}$/i.test(command) ? command : 'invalid';
+}
+
 interface HostInvokeBridgeRequest {
   id: string;
   command: string;
@@ -42,8 +56,12 @@ export function PeerHostInvokeBridge(): null {
               error: null,
             });
           } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            log.warn('Peer host invoke failed', { command, message });
+            const message = serializeInvokeError(error);
+            const loggedCommand = safeCommandForLog(command);
+            log.warn('Peer host invoke failed', {
+              command: loggedCommand,
+              error_category: 'host_invoke',
+            });
             try {
               await invoke('peer_host_invoke_complete', {
                 id,
@@ -51,13 +69,18 @@ export function PeerHostInvokeBridge(): null {
                 value: null,
                 error: message,
               });
-            } catch (completeError) {
-              log.error('Failed to report peer host invoke error', completeError);
+            } catch {
+              log.error('Failed to report peer host invoke error', {
+                command: loggedCommand,
+                error_category: 'completion',
+              });
             }
           }
         });
-      } catch (error) {
-        log.error('Failed to register peer host invoke listener', error);
+      } catch {
+        log.error('Failed to register peer host invoke listener', {
+          error_category: 'listener_registration',
+        });
       }
     })();
 

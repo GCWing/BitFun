@@ -4,9 +4,14 @@
 //! branches on ecosystem identity. Concrete provider selection remains in the
 //! product composition root.
 
+mod mcp;
 mod subagent;
 mod tool;
 
+pub use mcp::{
+    ExternalMcpCoordinator, ExternalMcpCoordinatorSnapshot, ExternalMcpDiscoveryRequest,
+    ExternalMcpDiscoveryResult,
+};
 pub use subagent::{
     ExternalSubagentCoordinator, ExternalSubagentCoordinatorSnapshot,
     ExternalSubagentDiscoveryRequest, ExternalSubagentDiscoveryResult,
@@ -17,7 +22,7 @@ pub use tool::{
 };
 
 use bitfun_product_domains::external_sources::{
-    prompt_command_conflict_key, ExpandedPromptCommand, ExternalSourceCatalogEntry,
+    prompt_command_conflict_key, EcosystemId, ExpandedPromptCommand, ExternalSourceCatalogEntry,
     ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,
     ExternalSourceRecord, ExternalWatchRoot, PromptCommandAvailability, PromptCommandCatalogEntry,
@@ -49,6 +54,7 @@ struct SourceGeneration {
 /// its own concurrency and timeout policy.
 pub struct ExternalSourceDiscoveryRequest {
     provider_id: ProviderId,
+    ecosystem_id: EcosystemId,
     provider: Arc<dyn PromptCommandSourceProvider>,
     context: ExternalSourceContext,
 }
@@ -56,6 +62,23 @@ pub struct ExternalSourceDiscoveryRequest {
 impl ExternalSourceDiscoveryRequest {
     pub fn provider_id(&self) -> &ProviderId {
         &self.provider_id
+    }
+
+    pub fn ecosystem_id(&self) -> &EcosystemId {
+        &self.ecosystem_id
+    }
+
+    pub fn disabled(self) -> ExternalSourceDiscoveryResult {
+        ExternalSourceDiscoveryResult {
+            provider_id: self.provider_id,
+            candidate: Ok(PromptCommandProviderSnapshot {
+                provider: self.provider.identity(),
+                sources: Vec::new(),
+                commands: Vec::new(),
+                unavailable_command_ids: Vec::new(),
+                diagnostics: Vec::new(),
+            }),
+        }
     }
 
     pub fn execute(self) -> ExternalSourceDiscoveryResult {
@@ -157,11 +180,16 @@ impl ExternalSourceCoordinator {
                 tools: Vec::new(),
                 tool_approval_requests: Vec::new(),
                 tool_conflicts: Vec::new(),
+                mcp_generation: 0,
+                mcp_servers: Vec::new(),
+                mcp_approval_requests: Vec::new(),
+                mcp_conflicts: Vec::new(),
                 subagent_generation: 0,
                 preference_revision: 0,
                 subagents: Vec::new(),
                 subagent_conflicts: Vec::new(),
                 pending_subagent_approvals: Vec::new(),
+                integration_policy: Default::default(),
                 diagnostics: Vec::new(),
             },
         })
@@ -181,6 +209,7 @@ impl ExternalSourceCoordinator {
             .iter()
             .map(|generation| ExternalSourceDiscoveryRequest {
                 provider_id: generation.identity.provider_id.clone(),
+                ecosystem_id: generation.identity.ecosystem_id.clone(),
                 provider: Arc::clone(&generation.provider),
                 context: self.context.clone(),
             })
@@ -226,6 +255,13 @@ impl ExternalSourceCoordinator {
 
     pub fn snapshot(&self) -> ExternalSourceCatalogSnapshot {
         self.snapshot.clone()
+    }
+
+    pub fn ecosystem_for_provider(&self, provider_id: &ProviderId) -> Option<EcosystemId> {
+        self.providers
+            .iter()
+            .find(|provider| &provider.identity.provider_id == provider_id)
+            .map(|provider| provider.identity.ecosystem_id.clone())
     }
 
     pub fn set_source_enabled(&mut self, stable_key: &str, enabled: bool) -> Result<(), String> {
@@ -360,6 +396,25 @@ impl ExternalSourceCoordinator {
         let mut roots = self
             .providers
             .iter()
+            .flat_map(|provider| provider.provider.watch_roots(&self.context))
+            .collect::<Vec<_>>();
+        roots.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then_with(|| left.recursive.cmp(&right.recursive))
+        });
+        roots.dedup_by(|left, right| left.path == right.path && left.recursive == right.recursive);
+        roots
+    }
+
+    pub fn watch_roots_for_ecosystems(
+        &self,
+        ecosystems: &BTreeSet<EcosystemId>,
+    ) -> Vec<ExternalWatchRoot> {
+        let mut roots = self
+            .providers
+            .iter()
+            .filter(|provider| ecosystems.contains(&provider.identity.ecosystem_id))
             .flat_map(|provider| provider.provider.watch_roots(&self.context))
             .collect::<Vec<_>>();
         roots.sort_by(|left, right| {
@@ -651,11 +706,16 @@ impl ExternalSourceCoordinator {
             tools: Vec::new(),
             tool_approval_requests: Vec::new(),
             tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
             subagent_generation: 0,
             preference_revision: 0,
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
             diagnostics,
         };
         self.snapshot.clone()

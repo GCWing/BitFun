@@ -12,9 +12,10 @@ services:
     container_name: bitfun-relay
     restart: unless-stopped
     ports:
-      - "${RELAY_HOST_BIND_IP:-0.0.0.0}:9700:9700"
+      # Host and container port both follow RELAY_PORT (default 9700).
+      - "${RELAY_HOST_BIND_IP:-0.0.0.0}:${RELAY_PORT:-9700}:${RELAY_PORT:-9700}"
     environment:
-      - RELAY_PORT=9700
+      - RELAY_PORT=${RELAY_PORT:-9700}
       - RELAY_STATIC_DIR=/app/static
       - RELAY_ROOM_WEB_DIR=/app/room-web
       - RELAY_ROOM_TTL=3600
@@ -24,7 +25,7 @@ services:
       - room-web:/app/room-web
       - relay-db:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9700/health"]
+      test: ["CMD-SHELL", "curl -fsS \"http://127.0.0.1:$${RELAY_PORT}/health\" || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

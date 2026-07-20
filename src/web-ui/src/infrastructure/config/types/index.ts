@@ -48,6 +48,30 @@ export interface AppConfig {
   notifications: NotificationConfig;
   flow_chat?: AppFlowChatConfig;
   ai_experience: AIExperienceConfig;
+  user_tool_groups?: UserToolGroupsConfig;
+  user_skill_groups?: UserSkillGroupsConfig;
+}
+
+export interface UserToolGroupsConfig {
+  version: number;
+  groups: UserToolGroup[];
+}
+
+export interface UserToolGroup {
+  id: string;
+  name: string;
+  toolNames: string[];
+}
+
+export interface UserSkillGroupsConfig {
+  version: number;
+  groups: UserSkillGroup[];
+}
+
+export interface UserSkillGroup {
+  id: string;
+  name: string;
+  skillKeys: string[];
 }
 
 export type BackendLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'off';
@@ -273,6 +297,10 @@ export interface SkillInfo {
   path: string;
   level: SkillLevel;
   sourceSlot: string;
+  /** Provider-neutral ecosystem identity shared by related discovery slots. */
+  sourceId?: string;
+  /** Stable product name supplied by the skill source definition. */
+  sourceLabel?: string;
   dirName: string;
   isBuiltin: boolean;
   groupKey?: string | null;

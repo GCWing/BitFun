@@ -169,7 +169,7 @@
 
 - 每页严格为 **1280px × 720px**。只使用 solid color；不得生成 CSS gradient 或 `background-image`。
 - HTML 文字只可放在 `<p>`、`<h1>`–`<h6>`、`<li>` 中；`span` 只作文本 run，不得生成 `div` 裸文字。
-- `box-shadow` 只支持单层 outer、非 inset、zero spread；多层、inset、blur+spread 等不支持形态必须 blocking。`text-shadow` 任何非 `none` 形态均必须 blocking。
+- `box-shadow` 只支持单层 outer、非 inset、zero spread 的原生映射；多层 shadow 只取首个可用层，负 spread 按 0 近似，inset 等其余不支持形态导出时自动移除，不得依赖。`text-shadow` 任何非 `none` 形态在导出时一律自动移除，不得依赖其呈现层次。
 - 图表、流程箭头、虚线和曲线必须使用支持的可编辑原语；线与曲线优先直接生成 `line` 或 `polyline`。
 - 条形、柱形、进度、堆叠条使用纯色 shape；点图使用 ellipse；目标线、坐标轴和连接线使用 line。
 - Authoring 流程箭头只由 editable line + CSS border triangle，或 SVG line + strict symmetric triangle polygon 构成。

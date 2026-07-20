@@ -15,23 +15,10 @@ use crate::service::token_usage::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionUsageReportRequest {
-    pub session_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub workspace_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_connection_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_ssh_host: Option<String>,
-    #[serde(default)]
-    pub include_hidden_subagents: bool,
-}
+pub use bitfun_runtime_ports::AgentSessionUsageRequest as SessionUsageReportRequest;
 
 pub async fn generate_session_usage_report(
     persistence_manager: &PersistenceManager,

@@ -10,6 +10,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState},
     Frame,
 };
+use std::collections::HashMap;
 
 use crate::ui::theme::{StyleKind, Theme};
 
@@ -20,10 +21,58 @@ pub(crate) struct SkillItem {
     pub name: String,
     pub description: String,
     pub level: String, // "project" or "user"
+    pub source_slot: String,
+    pub source_label: String,
     pub enabled: bool,
     pub selected_for_runtime: bool,
     pub default_enabled: bool,
     pub is_shadowed: bool,
+    pub shadowed_by_key: Option<String>,
+}
+
+impl SkillItem {
+    fn display_source_label(&self) -> &str {
+        let label = self.source_label.trim();
+        if !label.is_empty() {
+            return label;
+        }
+
+        match self.source_slot.trim().trim_start_matches("home.") {
+            "bitfun" | "bitfun-system" => "BitFun",
+            "claude" => "Claude Code",
+            "codex" => "Codex",
+            "cursor" => "Cursor",
+            "opencode" | "config.opencode" => "OpenCode",
+            "agents" => "Agent Skills",
+            _ => "Other source",
+        }
+    }
+}
+
+fn build_coverage_source_map(items: &[SkillItem]) -> HashMap<String, String> {
+    let source_by_key: HashMap<&str, &str> = items
+        .iter()
+        .map(|item| (item.key.as_str(), item.display_source_label()))
+        .collect();
+
+    items
+        .iter()
+        .filter_map(|item| {
+            let winner_key = item.shadowed_by_key.as_deref()?;
+            let winner_source = source_by_key.get(winner_key)?;
+            Some((item.key.clone(), (*winner_source).to_string()))
+        })
+        .collect()
+}
+
+fn skill_checkbox_marker(skill: &SkillItem) -> &'static str {
+    if !skill.enabled {
+        "[ ] "
+    } else if skill.selected_for_runtime {
+        "[x] "
+    } else {
+        "[~] "
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +93,7 @@ enum SkillSelectorScreen {
 /// Skill selector popup state
 pub(super) struct SkillSelectorState {
     items: Vec<SkillItem>,
+    coverage_source_by_key: HashMap<String, String>,
     list_state: ListState,
     visible: bool,
     last_area: Option<Rect>,
@@ -54,6 +104,7 @@ impl SkillSelectorState {
     pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
+            coverage_source_by_key: HashMap::new(),
             list_state: ListState::default(),
             visible: false,
             last_area: None,
@@ -63,6 +114,7 @@ impl SkillSelectorState {
 
     pub(super) fn show_menu(&mut self) {
         self.items.clear();
+        self.coverage_source_by_key.clear();
         self.screen = SkillSelectorScreen::Menu;
         self.list_state.select(Some(0));
         self.visible = true;
@@ -74,6 +126,7 @@ impl SkillSelectorState {
             return;
         }
 
+        self.coverage_source_by_key = build_coverage_source_map(&skills);
         self.items = skills;
         self.screen = SkillSelectorScreen::List;
         self.list_state.select(Some(0));
@@ -99,6 +152,7 @@ impl SkillSelectorState {
             .and_then(|key| skills.iter().position(|item| item.key == key))
             .unwrap_or_else(|| selected_index.min(skills.len().saturating_sub(1)));
 
+        self.coverage_source_by_key = build_coverage_source_map(&skills);
         self.items = skills;
         self.screen = SkillSelectorScreen::Configure;
         self.list_state.select(Some(next_index));
@@ -198,7 +252,8 @@ impl SkillSelectorState {
         };
         self.last_area = Some(popup_area);
 
-        let list_items = self.render_items(theme);
+        let content_width = popup_width.saturating_sub(2);
+        let list_items = self.render_items(theme, content_width);
         let title = match self.screen {
             SkillSelectorScreen::Menu => " Skills ",
             SkillSelectorScreen::List => " List Skills (current mode) ",
@@ -292,7 +347,7 @@ impl SkillSelectorState {
         Some(index)
     }
 
-    fn render_items(&self, theme: &Theme) -> Vec<ListItem<'static>> {
+    fn render_items(&self, theme: &Theme, content_width: u16) -> Vec<ListItem<'static>> {
         match self.screen {
             SkillSelectorScreen::Menu => vec![
                 ListItem::new(Line::from(vec![
@@ -321,12 +376,12 @@ impl SkillSelectorState {
             SkillSelectorScreen::List => self
                 .items
                 .iter()
-                .map(|skill| self.render_skill_line(skill, theme, false))
+                .map(|skill| self.render_skill_line(skill, theme, false, content_width))
                 .collect(),
             SkillSelectorScreen::Configure => self
                 .items
                 .iter()
-                .map(|skill| self.render_skill_line(skill, theme, true))
+                .map(|skill| self.render_skill_line(skill, theme, true, content_width))
                 .collect(),
         }
     }
@@ -336,6 +391,7 @@ impl SkillSelectorState {
         skill: &SkillItem,
         theme: &Theme,
         include_checkbox: bool,
+        content_width: u16,
     ) -> ListItem<'static> {
         let level_marker = match skill.level.as_str() {
             "project" => "P",
@@ -346,38 +402,156 @@ impl SkillSelectorState {
             "project" => theme.style(StyleKind::Info),
             _ => theme.style(StyleKind::Muted),
         };
-        let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);
-        let desc_style = theme.style(StyleKind::Muted);
-        let status = if skill.is_shadowed {
-            " shadowed"
-        } else if include_checkbox && skill.enabled && !skill.selected_for_runtime {
-            " enabled"
+        let name_style = if skill.is_shadowed {
+            theme
+                .style(StyleKind::Muted)
+                .add_modifier(Modifier::BOLD | Modifier::CROSSED_OUT)
         } else {
-            ""
+            theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)
+        };
+        let desc_style = theme.style(StyleKind::Muted);
+        let compact = content_width < 40;
+        let status = if skill.is_shadowed {
+            self.coverage_source_by_key
+                .get(&skill.key)
+                .map(|source| {
+                    if compact {
+                        format!(" < {}", compact_source_label(source))
+                    } else {
+                        format!(" covered by {}", source)
+                    }
+                })
+                .unwrap_or_else(|| " covered".to_string())
+        } else if include_checkbox && skill.enabled && skill.selected_for_runtime {
+            " active".to_string()
+        } else if include_checkbox && skill.enabled {
+            " enabled, not selected".to_string()
+        } else {
+            String::new()
         };
 
         let mut spans = Vec::new();
         if include_checkbox {
+            let checkbox_style = if !skill.enabled {
+                theme.style(StyleKind::Muted)
+            } else if skill.selected_for_runtime {
+                theme.style(StyleKind::Success)
+            } else {
+                theme.style(StyleKind::Warning)
+            };
+            spans.push(Span::styled(skill_checkbox_marker(skill), checkbox_style));
+        }
+        if !compact {
             spans.push(Span::styled(
-                if skill.enabled { "[x] " } else { "[ ] " },
-                if skill.enabled {
-                    theme.style(StyleKind::Success)
-                } else {
-                    theme.style(StyleKind::Muted)
-                },
+                format!("[{}/{}] ", level_marker, skill.display_source_label()),
+                level_style,
             ));
         }
-        spans.push(Span::styled(format!("[{}] ", level_marker), level_style));
         spans.push(Span::styled(skill.name.clone(), name_style));
         if !status.is_empty() {
-            spans.push(Span::styled(
-                status.to_string(),
-                theme.style(StyleKind::Muted),
-            ));
+            spans.push(Span::styled(status, theme.style(StyleKind::Muted)));
         }
-        spans.push(Span::raw("  "));
-        spans.push(Span::styled(skill.description.clone(), desc_style));
+        if !compact {
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(skill.description.clone(), desc_style));
+        }
 
         ListItem::new(Line::from(spans))
+    }
+}
+
+fn compact_source_label(source: &str) -> &str {
+    match source {
+        "Claude Code" => "Claude",
+        "Agent Skills" => "Agents",
+        _ => source,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn skill_item(key: &str, source_label: &str) -> SkillItem {
+        SkillItem {
+            key: key.to_string(),
+            name: "pdf".to_string(),
+            description: String::new(),
+            level: "project".to_string(),
+            source_slot: "bitfun".to_string(),
+            source_label: source_label.to_string(),
+            enabled: true,
+            selected_for_runtime: true,
+            default_enabled: true,
+            is_shadowed: false,
+            shadowed_by_key: None,
+        }
+    }
+
+    #[test]
+    fn skill_coverage_uses_winner_source_label() {
+        let winner = skill_item("project::bitfun::pdf", "BitFun");
+        let mut covered = skill_item("user::home.codex::pdf", "Codex");
+        covered.is_shadowed = true;
+        covered.shadowed_by_key = Some(winner.key.clone());
+
+        let coverage = build_coverage_source_map(&[covered.clone(), winner]);
+        assert_eq!(
+            coverage.get(&covered.key).map(String::as_str),
+            Some("BitFun")
+        );
+        assert!(!build_coverage_source_map(&[covered.clone()]).contains_key(&covered.key));
+    }
+
+    #[test]
+    fn covered_enabled_skill_uses_an_indeterminate_checkbox_marker() {
+        let selected = skill_item("project::bitfun::pdf", "BitFun");
+        let mut covered = skill_item("user::home.codex::pdf", "Codex");
+        covered.selected_for_runtime = false;
+        covered.is_shadowed = true;
+        covered.shadowed_by_key = Some(selected.key.clone());
+
+        assert_eq!(skill_checkbox_marker(&selected), "[x] ");
+        assert_eq!(skill_checkbox_marker(&covered), "[~] ");
+
+        let mut disabled = covered;
+        disabled.enabled = false;
+        assert_eq!(skill_checkbox_marker(&disabled), "[ ] ");
+    }
+
+    #[test]
+    fn narrow_configuration_popup_keeps_name_and_coverage_visible() {
+        let selected = skill_item("project::bitfun::pdf", "BitFun");
+        let mut covered = skill_item("user::home.claude::pdf", "Claude Code");
+        covered.level = "user".to_string();
+        covered.selected_for_runtime = false;
+        covered.is_shadowed = true;
+        covered.shadowed_by_key = Some(selected.key.clone());
+
+        let mut state = SkillSelectorState::new();
+        state.show_config(vec![covered, selected]);
+        let mut terminal = Terminal::new(TestBackend::new(24, 8)).expect("test terminal");
+        terminal
+            .draw(|frame| {
+                let area = frame.area();
+                state.render(frame, area, &Theme::dark_ansi16());
+            })
+            .expect("render narrow skill selector");
+
+        let buffer = terminal.backend().buffer();
+        let rendered = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            rendered.contains("[~] pdf < BitFun"),
+            "narrow configuration should prioritize the skill name and coverage: {rendered:?}"
+        );
     }
 }

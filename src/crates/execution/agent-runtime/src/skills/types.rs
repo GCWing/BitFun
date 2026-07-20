@@ -38,6 +38,12 @@ pub struct SkillInfo {
     pub path: String,
     pub level: SkillLocation,
     pub source_slot: String,
+    /// Ecosystem identity shared by all roots owned by the same source.
+    #[serde(default)]
+    pub source_id: String,
+    /// Stable product name supplied by the source definition.
+    #[serde(default)]
+    pub source_label: String,
     pub dir_name: String,
     #[serde(default)]
     pub is_builtin: bool,

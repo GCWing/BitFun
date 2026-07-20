@@ -30,8 +30,8 @@ impl ChatMode {
         // Create or restore core session
         let rt_handle = tokio::runtime::Handle::current();
 
-        let (mut session_id, mut chat_state) = if let Some(ref restore_id) = self.restore_session_id
-        {
+        let (mut session_id, mut chat_state, mode_migration_notice) =
+            if let Some(ref restore_id) = self.restore_session_id {
             // Restore existing session
             tracing::info!("Restoring session: {}", restore_id);
             let agent = self.agent.clone();
@@ -40,7 +40,7 @@ impl ChatMode {
             tokio::task::block_in_place(|| {
                 rt_handle.block_on(async {
                     // Restore session in core (loads metadata, messages, managers)
-                    let (summary, effective_workspace_path) =
+                    let (summary, effective_workspace_path, migration_notice) =
                         agent.restore_session_in_current_workspace(&rid).await?;
                     let effective_workspace =
                         Some(effective_workspace_path.to_string_lossy().to_string());
@@ -67,7 +67,7 @@ impl ChatMode {
                         transcript.messages.len()
                     );
 
-                    Ok::<_, anyhow::Error>((rid, state))
+                    Ok::<_, anyhow::Error>((rid, state, migration_notice))
                 })
             })?
         } else {
@@ -83,7 +83,7 @@ impl ChatMode {
                 self.agent_type.clone(),
                 self.workspace.clone(),
             );
-            (session_id, state)
+            (session_id, state, None)
         };
 
         // Keep ChatMode workspace in sync with the session's effective workspace
@@ -159,13 +159,23 @@ impl ChatMode {
 
         let mut event_rx = self.agent.event_source().subscribe();
 
+        if let Some(notice) = &mode_migration_notice {
+            chat_state.add_system_message(notice.user_message());
+        }
+
         // Send initial prompt if provided (from startup page input)
         if let Some(prompt) = self.initial_prompt.take() {
-            tracing::info!("Sending initial prompt: {}", prompt);
-            if prompt.starts_with('/') {
+            if mode_migration_notice.is_some() {
+                chat_view.text_input.set_text(&prompt);
+                chat_view.set_status(Some(
+                    "The restored session uses a fallback mode. Review it, then send the preserved input explicitly."
+                        .to_string(),
+                ));
+            } else if prompt.starts_with('/') {
                 // Slash commands will be handled in the main loop
                 chat_view.text_input.set_text(&prompt);
             } else {
+                tracing::info!("Sending initial prompt: {}", prompt);
                 let display_name = agent_display_name(&self.agent_type);
                 chat_view.set_status(Some(format!("{} is thinking...", display_name)));
 
@@ -218,6 +228,15 @@ impl ChatMode {
             // Poll completion of non-blocking MCP operations before rendering.
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
+            }
+            match self.poll_mode_change_completion(&mut chat_view, &mut chat_state, &rt_handle) {
+                ModeChangePollOutcome::NoChange => {}
+                ModeChangePollOutcome::Redraw => needs_redraw = true,
+                ModeChangePollOutcome::ExitAfterSave => {
+                    should_quit = true;
+                    exit_reason = ChatExitReason::Quit;
+                    continue;
+                }
             }
             if self.poll_external_tool_mutation(&mut chat_view) {
                 needs_redraw = true;
@@ -281,6 +300,10 @@ impl ChatMode {
                         )));
                     }
                     self.external_source_snapshot = Some(snapshot);
+                    if chat_view.mcp_selector_visible() {
+                        chat_view.mcp_selector_cancel_confirm_external();
+                        chat_view.mcp_selector_update_items(self.get_mcp_items(&rt_handle));
+                    }
                     needs_redraw = true;
                 }
             }
@@ -316,6 +339,14 @@ impl ChatMode {
                         PendingMcpOp::Toggle(server_id) => {
                             self.execute_mcp_toggle(
                                 &server_id,
+                                &mut chat_view,
+                                &mut chat_state,
+                                &rt_handle,
+                            );
+                        }
+                        PendingMcpOp::External(item) => {
+                            self.execute_external_mcp_action(
+                                item,
                                 &mut chat_view,
                                 &mut chat_state,
                                 &rt_handle,

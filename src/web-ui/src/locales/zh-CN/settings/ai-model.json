@@ -12,6 +12,7 @@
     "title": "Subagent 模型",
     "default": {
       "label": "Subagent 默认模型",
+      "description": "未单独指定时，Subagent 使用的默认模型",
       "configureTooltip": "设置 Subagent 的默认模型。前往“定制 > 专业智能体”可为每个 Subagent 单独配置模型",
       "updateFailed": "更新 Subagent 默认模型失败"
     },
@@ -22,6 +23,26 @@
       "auto": "自动选择"
     },
     "loadFailed": "加载 Subagent 模型配置失败"
+  },
+  "sessionTitle": {
+    "title": "会话标题自动生成",
+    "subtitle": "新对话时 AI 自动生成简洁标题",
+    "enable": "启用",
+    "loadFailed": "加载会话标题配置失败",
+    "model": {
+      "label": "模型",
+      "primary": "主力模型",
+      "fast": "快速模型"
+    },
+    "models": {
+      "empty": "暂无可用模型，请先在「模型」中添加模型。",
+      "updateSuccess": "{{agentName}} 将使用 {{modelName}}"
+    },
+    "messages": {
+      "saveSuccess": "设置已保存",
+      "saveFailed": "保存失败",
+      "updateFailed": "设置失败"
+    }
   },
   "cliAuth": {
     "sectionTitle": "本机已登录账号",
@@ -287,6 +308,7 @@
     "fillModelName": "请填写模型名称",
     "duplicateModelNameUnderProvider": "该服务商下已有同名模型，请改用其他名称或编辑已有条目",
     "invalidBaseUrlScheme": "API地址必须以 http:// 或 https:// 开头",
+    "contextWindowTooSmall": "上下文窗口大小不能小于 32K Tokens",
     "saveFailed": "保存失败",
     "deleteFailed": "删除配置失败",
     "loadFailed": "加载AI配置失败",

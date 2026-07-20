@@ -41,6 +41,73 @@
     flex-direction: column;
   }
 
+  &__deploy-entry {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+  }
+
+  &__deploy-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--color-accent-500);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+
+    &:hover:not(:disabled) { text-decoration: underline; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+
+  &__server-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 16px 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+
+    svg { flex-shrink: 0; color: var(--color-text-muted); }
+  }
+
+  &__server-url {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-family-mono);
+  }
+
+  &__copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: color 0.15s, background 0.15s;
+
+    &:hover {
+      color: var(--color-accent-500);
+      background: var(--element-bg-hover);
+    }
+  }
+
   &__actions {
     display: flex;
     justify-content: flex-end;

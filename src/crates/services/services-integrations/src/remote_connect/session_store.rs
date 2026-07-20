@@ -29,6 +29,10 @@ struct SessionPayload {
     /// Base64-encoded 32-byte master key.
     master_key_b64: String,
     relay_url: String,
+    /// Account-bound device id used when the session token was issued.
+    /// Optional for backward compatibility with sessions saved before this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    device_id: Option<String>,
 }
 
 /// Resolve the persistent session file path.
@@ -121,11 +125,26 @@ pub fn save_session(
     master_key: &[u8; 32],
     relay_url: &str,
 ) -> Result<()> {
+    save_session_with_device(token, user_id, master_key, relay_url, None)
+}
+
+/// Persist the session including the account-bound `device_id`.
+pub fn save_session_with_device(
+    token: &str,
+    user_id: &str,
+    master_key: &[u8; 32],
+    relay_url: &str,
+    device_id: Option<&str>,
+) -> Result<()> {
     let payload = SessionPayload {
         token: token.to_string(),
         user_id: user_id.to_string(),
         master_key_b64: BASE64.encode(master_key),
         relay_url: relay_url.to_string(),
+        device_id: device_id
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string),
     };
     let json = serde_json::to_string(&payload).context("serialize session payload")?;
 
@@ -156,9 +175,24 @@ pub fn save_session(
     Ok(())
 }
 
+/// Loaded account session fields from disk.
+#[derive(Debug, Clone)]
+pub struct LoadedSession {
+    pub token: String,
+    pub user_id: String,
+    pub master_key: [u8; 32],
+    pub relay_url: String,
+    pub device_id: Option<String>,
+}
+
 /// Load and decrypt the session from disk.
 /// Returns `Ok(None)` if the file doesn't exist (not an error).
 pub fn load_session() -> Result<Option<(String, String, [u8; 32], String)>> {
+    Ok(load_session_detailed()?.map(|s| (s.token, s.user_id, s.master_key, s.relay_url)))
+}
+
+/// Load and decrypt the session, including optional account-bound `device_id`.
+pub fn load_session_detailed() -> Result<Option<LoadedSession>> {
     let path = session_file_path()?;
     let encoded = match std::fs::read_to_string(&path) {
         Ok(data) => data,
@@ -200,12 +234,13 @@ pub fn load_session() -> Result<Option<(String, String, [u8; 32], String)>> {
     }
     master_key.copy_from_slice(&master_key_bytes);
 
-    Ok(Some((
-        payload.token,
-        payload.user_id,
+    Ok(Some(LoadedSession {
+        token: payload.token,
+        user_id: payload.user_id,
         master_key,
-        payload.relay_url,
-    )))
+        relay_url: payload.relay_url,
+        device_id: payload.device_id,
+    }))
 }
 
 /// Remove the persisted session file (called on logout).

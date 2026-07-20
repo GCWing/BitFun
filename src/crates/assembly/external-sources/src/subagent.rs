@@ -1,5 +1,5 @@
 use bitfun_product_domains::external_sources::{
-    ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceDiagnostic,
+    EcosystemId, ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceDiagnostic,
     ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState, ExternalSourceProviderError,
     ExternalSourceRecord, ExternalWatchRoot, ProviderId,
 };
@@ -40,6 +40,7 @@ pub struct ExternalSubagentCoordinatorSnapshot {
 
 pub struct ExternalSubagentDiscoveryRequest {
     provider_id: ProviderId,
+    ecosystem_id: EcosystemId,
     provider: Arc<dyn ExternalSubagentSourceProvider>,
     input: ExternalSubagentDiscoveryInput,
 }
@@ -47,6 +48,22 @@ pub struct ExternalSubagentDiscoveryRequest {
 impl ExternalSubagentDiscoveryRequest {
     pub fn provider_id(&self) -> &ProviderId {
         &self.provider_id
+    }
+
+    pub fn ecosystem_id(&self) -> &EcosystemId {
+        &self.ecosystem_id
+    }
+
+    pub fn disabled(self) -> ExternalSubagentDiscoveryResult {
+        ExternalSubagentDiscoveryResult {
+            provider_id: self.provider_id,
+            candidate: Ok(ExternalSubagentProviderSnapshot {
+                provider: self.provider.identity(),
+                sources: Vec::new(),
+                definitions: Vec::new(),
+                diagnostics: Vec::new(),
+            }),
+        }
     }
 
     pub fn input(&self) -> &ExternalSubagentDiscoveryInput {
@@ -171,6 +188,7 @@ impl ExternalSubagentCoordinator {
             .iter()
             .map(|generation| ExternalSubagentDiscoveryRequest {
                 provider_id: generation.identity.provider_id.clone(),
+                ecosystem_id: generation.identity.ecosystem_id.clone(),
                 provider: generation.provider.clone(),
                 input: ExternalSubagentDiscoveryInput {
                     context: self.context.clone(),
@@ -234,6 +252,13 @@ impl ExternalSubagentCoordinator {
         self.snapshot.clone()
     }
 
+    pub fn ecosystem_for_provider(&self, provider_id: &ProviderId) -> Option<EcosystemId> {
+        self.providers
+            .iter()
+            .find(|provider| &provider.identity.provider_id == provider_id)
+            .map(|provider| provider.identity.ecosystem_id.clone())
+    }
+
     pub fn replace_suppressed_sources(&mut self, sources: BTreeSet<String>) {
         self.suppressed_sources = sources;
         self.rebuild_snapshot_at(Instant::now());
@@ -267,6 +292,28 @@ impl ExternalSubagentCoordinator {
     pub fn watch_roots(&self) -> Vec<ExternalWatchRoot> {
         let mut roots = BTreeMap::new();
         for provider in &self.providers {
+            for root in provider.provider.watch_roots(&self.context) {
+                roots
+                    .entry(root.path)
+                    .and_modify(|recursive| *recursive |= root.recursive)
+                    .or_insert(root.recursive);
+            }
+        }
+        roots
+            .into_iter()
+            .map(|(path, recursive)| ExternalWatchRoot { path, recursive })
+            .collect()
+    }
+
+    pub fn watch_roots_for_ecosystems(
+        &self,
+        ecosystems: &BTreeSet<EcosystemId>,
+    ) -> Vec<ExternalWatchRoot> {
+        let mut roots = BTreeMap::new();
+        for provider in &self.providers {
+            if !ecosystems.contains(&provider.identity.ecosystem_id) {
+                continue;
+            }
             for root in provider.provider.watch_roots(&self.context) {
                 roots
                     .entry(root.path)

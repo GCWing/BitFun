@@ -8,7 +8,7 @@ import type { ExplorerControllerConfig, ExplorerNodeRecord, ExplorerSnapshot } f
 
 const DEFAULT_OPTIONS: FileSystemOptions = {
   enablePathCompression: true,
-  showHiddenFiles: false,
+  showHiddenFiles: true,
   sortBy: 'name',
   sortOrder: 'asc',
   maxDepth: undefined,

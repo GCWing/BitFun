@@ -1,6 +1,6 @@
 {
   "title": "外部 AI 应用",
-  "subtitle": "无需复制文件，即可使用其他 AI 应用中受支持的命令、工具和 Agent。",
+  "subtitle": "无需复制文件，即可使用其他 AI 应用中受支持的命令、工具、Agent 和 MCP 服务器。",
   "loading": "正在检查外部来源…",
   "checkingNonBlocking": "仍在检查变更；检查完成前可以继续使用当前设置。",
   "common": {
@@ -8,27 +8,103 @@
     "hideDetails": "收起详情",
     "close": "关闭",
     "unknown": "未知",
-    "technicalDetails": "技术详情"
+    "technicalDetails": "技术详情",
+    "selected": "当前使用",
+    "selectedUnavailable": "已选择，当前不可用",
+    "notSelected": "未使用",
+    "availableChoice": "可选"
   },
   "actions": {
     "refresh": "刷新",
     "refreshing": "正在刷新…",
     "updated": "已保存，当前状态如下。",
     "waitForUpdate": "另一项更改仍在保存，请等待完成后再做选择。",
-    "agentUpdated": "已保存“{{name}}”的更改并刷新状态。"
+    "agentUpdated": "已保存“{{name}}”的更改并刷新状态。",
+    "mcpUpdated": "已保存 MCP 服务器选择并刷新状态。"
   },
   "unavailable": {
-    "title": "外部配置暂不可用",
-    "desktopOnly": "外部来源目前仅在桌面应用中可用。",
-    "remoteWorkspace": "远程工作区暂不能使用本机外部配置，BitFun 也不会改为加载本机配置。"
+    "hostTitle": "兼容服务不可用",
+    "hostDescription": "当前工作区宿主尚未提供外部兼容能力。BitFun 不会改用本机的文件或配置。"
+  },
+  "policy": {
+    "title": "外部兼容",
+    "externalBadge": "外部",
+    "readySummary": "已发现 {{count}} 项外部内容，并采用低打扰的风险默认策略。",
+    "attentionSummary": "有 {{count}} 项需要处理，不影响无关工作。",
+    "enabledLabel": "允许外部兼容",
+    "updated": "外部兼容设置已保存。",
+    "recoveryRequired": "此策略由较新的 BitFun 版本写入，外部能力已安全关闭。",
+    "unknownStatus": "当前 Host 返回了不支持的策略状态。升级 BitFun 前，外部能力保持关闭。",
+    "hostReadOnlyHint": "当前 Host 仅支持查看。请在桌面端或已认证的 Peer Host 中管理外部扩展。",
+    "backupAndReset": "备份并重置",
+    "resetConfirmTitle": "备份并重置策略？",
+    "resetConfirmMessage": "BitFun 会在本地保留新版策略备份，恢复安全默认值，并在你主动开启前保持外部执行关闭。",
+    "recoveryResetComplete": "不兼容策略已备份，并已恢复安全默认值。",
+    "inherited": "继承全局",
+    "projectOverride": "项目覆盖",
+    "resetWorkspace": "使用全局设置",
+    "adapterRevision": "适配器 {{revision}}",
+    "sourceCount": "{{count}} 个来源位置",
+    "capabilities": "定制能力",
+    "capabilitiesFor": "定制 {{ecosystem}} 能力",
+    "modeLabel": "{{ecosystem}} 兼容模式",
+    "capabilityAccessLabel": "{{ecosystem}} 的{{capability}}访问策略",
+    "unsupportedSafelyOff": "当前版本不支持（已安全关闭）",
+    "capabilitiesHint": "分别选择各类外部内容的发现与使用方式。",
+    "safetyLimited": "安全上限",
+    "scope": {
+      "user": "全局",
+      "workspace": "当前项目",
+      "workspaceHint": "项目设置仅覆盖当前工作区。",
+      "workspaceUnavailable": "打开工作区后可添加项目覆盖。"
+    },
+    "mode": {
+      "recommended": "推荐",
+      "discoverOnly": "仅发现",
+      "disabled": "关闭",
+      "custom": "自定义"
+    },
+    "access": {
+      "disabled": "关闭",
+      "discoverOnly": "仅发现",
+      "askBeforeUse": "使用前询问",
+      "auto": "自动使用"
+    },
+    "capability": {
+      "command": "命令",
+      "tool": "工具",
+      "subagent": "Agent",
+      "mcp": "MCP 服务器"
+    },
+    "state": {
+      "checking": "检查中",
+      "attention": "需要处理",
+      "ready": "已就绪",
+      "noConfig": "未发现配置"
+    },
+    "health": {
+      "available": "适配器可用",
+      "partial": "适配器部分可用",
+      "degraded": "适配器已降级",
+      "unavailable": "适配器不可用"
+    }
   },
   "errors": {
     "loadFailed": "BitFun 无法加载当前外部配置。请勿假定外部内容可用，并刷新重试。",
     "refreshFailed": "BitFun 无法检查变更。之前已启用的内容仍可使用，但可能未包含最近的变化；请刷新重试。",
     "mutationUnknown": "BitFun 无法确认本次更改是否已保存。请勿假定启用、停用或来源选择已经生效，并刷新确认当前状态。"
   },
+  "operationErrors": {
+    "rejected": "当前 Host 或策略不允许此更改，设置未发生变化。",
+    "refreshRequired": "操作完成前目录已变化。请刷新并确认当前状态后重试。",
+    "policyIncompatible": "外部设置由较新的 BitFun 版本写入。请先备份并重置，再进行更改。",
+    "unavailableRetry": "外部扩展 Host 暂时不可用。请稍后重试或刷新。",
+    "internal": "BitFun 无法完成此操作。请重试一次；若问题持续，请提供参考编号。",
+    "referenceId": "参考编号：{{id}}"
+  },
   "diagnostics": {
     "summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。",
+    "sourceSummary": "{{name}} 有 {{count}} 项问题",
     "category": {
       "confirmationStateUnavailable": "BitFun 无法验证已保存的工具确认状态，因此相关工具保持停用。请检查 BitFun 设置存储后刷新。",
       "conflictHistoryUnavailable": "BitFun 无法保存冲突信息，因此相关名称保持不可用。请检查 BitFun 设置存储后刷新。",
@@ -51,6 +127,7 @@
     "commandCount": "{{count}} 个命令",
     "toolCount": "{{count}} 个工具",
     "agentCount": "{{count}} 个 Agent",
+    "mcpCount": "{{count}} 个 MCP 服务器",
     "toggleLabel": "启用 {{name}}"
   },
   "agents": {
@@ -96,7 +173,7 @@
     "configurationUnavailable": {
       "reason": "BitFun 无法读取模型设置。",
       "impact": "{{impact}}",
-      "nextStep": "请打开 BitFun 的模型设置并确认可以正常加载；如无法加载，请重启 BitFun。问题仍存在时，请确认 BitFun 可以正常读取和保存设置，然后刷新。"
+      "nextStep": "请打开 BitFun 的模型设置，确认 BitFun 可以正常读取和保存设置，然后刷新。"
     },
     "modelUnavailable": {
       "reason": "该 Agent 请求的模型在 BitFun 中不可用。",
@@ -125,12 +202,72 @@
     }
   },
   "agentConflicts": {
-    "title": "选择同名 Agent",
-    "description": "BitFun 不会替你决定使用哪一个。你的选择会保留，直到其中一个 Agent 的设置发生变化。",
+    "title": "同名 Agent",
+    "description": "BitFun 不会静默替你选择。待选择项和当前选择都会保留显示；其中一个 Agent 发生变化前，BitFun 会记住你的选择。",
     "agentName": "找到多个名为 {{name}} 的 Agent",
     "disableAll": "暂不使用任何一个",
     "pending": "请选择今后执行任务时使用哪一个 Agent。选择外部 Agent 时，也会确认下方显示的模型、工具和运行位置。",
+    "currentSelection": "新任务会使用当前选择。如需更改，请在上方选择其他选项。",
+    "currentSelectionUnavailable": "仍保留此来源为当前选择，但它目前已停用或无法用于新任务。请启用或修复它、改选其他来源，或保持此名称不可用。",
+    "keptUnavailable": "当前保持此 Agent 名称不可用。需要使用时，可在上方选择一个 Agent。",
     "selectionApproves": "选择后，也表示你确认了下方显示的模型、工具、运行位置和配置来源。"
+  },
+  "mcp": {
+    "title": "发现的 MCP 服务器",
+    "description": "MCP 配置仍保存在原应用中。外部服务器在此处为只读；你可以将其停用，或回到原应用修改配置。",
+    "externalSource": "外部 AI 应用",
+    "source": "来源：{{source}}",
+    "sourceLocation": "配置位置：{{location}}",
+    "scope": "作用范围：{{scope}}",
+    "command": "命令：{{command}}",
+    "url": "地址：{{url}}",
+    "workingDirectory": "启动目录：{{location}}",
+    "environmentCount": "已配置 {{count}} 个环境变量",
+    "environmentNames": "环境变量：{{names}}",
+    "environmentReads": "将读取 BitFun 环境变量：{{names}}",
+    "argumentCount": "命令参数数量：{{count}}",
+    "headerCount": "已配置 {{count}} 个 HTTP 请求头",
+    "headerNames": "HTTP 请求头：{{names}}",
+    "changePolicy": "服务器配置发生变化后，BitFun 会在再次加载前请你确认。",
+    "runtimeUnavailableGuidance": "请先停用此服务器，修复来源配置或认证后再启用，通常无需重启 BitFun。",
+    "unsupportedGuidance": "请在来源应用中修改此配置，然后刷新。",
+    "enable": "启用服务器",
+    "disable": "停用",
+    "transport": {
+      "local_stdio": "本地进程",
+      "streamable_http": "远程连接"
+    }
+  },
+  "mcpApprovals": {
+    "title": "待确认的 MCP 服务器",
+    "description": "BitFun 从其他 AI 应用中发现了可执行命令或网络连接配置；确认前不会启动进程或访问远程地址。",
+    "warning": "启用后，BitFun 可能以你的用户权限启动本地进程，或连接到上方显示的远程服务。服务器可以向 Agent 提供工具，并接收调用这些工具时提交的参数。",
+    "keepDisabled": "保持停用",
+    "enable": "启用服务器"
+  },
+  "mcpState": {
+    "approval_required": "待确认",
+    "starting": "正在启动",
+    "active": "已启用",
+    "declined": "保持停用",
+    "conflict": "需要选择",
+    "covered": "未选用",
+    "source_disabled": "来源已停用",
+    "configuration_changed": "配置已变化，需再次确认",
+    "unsupported": "暂不支持",
+    "runtime_unavailable": "暂时不可用",
+    "removed": "已删除"
+  },
+  "mcpConflicts": {
+    "title": "同名 MCP 服务器",
+    "description": "BitFun 不会自行选择。请选择使用 BitFun 或外部服务器；其中任一配置变化前，BitFun 会记住本次选择。",
+    "serverName": "有多个 MCP 服务器名为 {{name}}",
+    "pending": "请选择一个服务器。选择外部服务器时，也会确认其当前配置。",
+    "currentSelection": "当前使用已选择的服务器；可选择其他可用项进行更改。",
+    "unavailable": "当前不可用",
+    "nativeDisabled": "请先启用此 BitFun 服务器，再选择它",
+    "review": "查看 {{name}}",
+    "approveAndUse": "批准并使用 {{name}}"
   },
   "tools": {
     "title": "发现的工具",
@@ -187,14 +324,16 @@
     "active": "无需操作。如需停止使用该来源的全部工具，请停用这些工具。",
     "conflict": "请在下方选择要使用的工具，或继续保持停用。",
     "unsupported": "请将来源改为 BitFun 当前支持的单文件 JavaScript 格式，然后刷新。",
-    "runtime_unavailable": "请安装或修复 Node.js，然后重启 BitFun 重新检查。",
+    "runtime_unavailable": "请安装或修复 Node.js，然后刷新。运行环境不可用期间，你仍可继续使用其他功能。",
     "load_failed": "请修复来源后刷新，或继续停用这些工具。"
   },
   "toolConflicts": {
-    "title": "选择同名工具",
-    "description": "选择前，BitFun 会继续使用当前可用的本地或 MCP 工具；如果没有可用工具，则暂时停用该名称。选项发生变化前不会再次询问。",
+    "title": "同名工具",
+    "description": "待选择项和当前选择都会保留显示。选择前，BitFun 会继续使用可用的本地或 MCP 工具；若没有可用工具，则停用该名称。可用工具发生变化前，BitFun 会记住你的选择。",
     "toolName": "找到多个名为 {{name}} 的工具",
-    "pending": "请选择今后调用这个工具名称时使用哪一个工具。"
+    "pending": "请选择今后调用这个工具名称时使用哪一个工具。",
+    "currentSelection": "调用此工具名称时会使用当前选择。如需更改，请在上方选择其他工具。",
+    "currentSelectionUnavailable": "仍保留此工具来源为当前选择，但它目前已停用或不可用。请启用或修复它，或选择其他工具。"
   },
   "toolCandidateKind": {
     "built_in": "内置",
@@ -226,10 +365,12 @@
     "using_last_valid_version": "正在使用上次可用的内容"
   },
   "conflicts": {
-    "title": "选择同名命令",
-    "description": "多个来源提供同名命令时，BitFun 不会替你选择。你的选择会保留，直到其中一个来源发生变化。",
+    "title": "同名命令",
+    "description": "BitFun 不会静默替你选择。待选择项和当前选择都会保留显示；其中一个来源发生变化前，BitFun 会记住你的选择。",
     "commandName": "多个来源提供了 /{{name}}",
     "pending": "请选择使用哪个来源的命令。",
+    "currentSelection": "当前命令会使用已选来源。如需更改，请在上方选择其他可用来源。",
+    "currentSelectionUnavailable": "仍保留此命令来源为当前选择，但它目前无法运行。请改选可用来源，或先修复此来源。",
     "restricted": "当前版本暂不支持"
   }
 }

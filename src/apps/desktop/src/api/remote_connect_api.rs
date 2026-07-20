@@ -1,6 +1,7 @@
 //! Tauri commands for Remote Connect.
 
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::embedded_relay_host::DesktopEmbeddedRelayHost;
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::service::remote_connect::session_store::{
     clear_credential_hint, load_credential_hint, save_credential_hint, AccountHint,
@@ -11,6 +12,7 @@ use bitfun_core::service::remote_connect::{
     ConnectionResult, DeviceIdentity, PairingState, RemoteConnectConfig, RemoteConnectService,
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
+use bitfun_services_integrations::remote_connect::account::error_indicates_expired_token;
 use futures::stream::{self, StreamExt};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -300,15 +302,6 @@ pub async fn account_token_expired() -> bool {
     TOKEN_EXPIRED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Internal helper: check if an error message indicates an invalid/expired token.
-fn error_indicates_expired_token(msg: &str) -> bool {
-    let lower = msg.to_ascii_lowercase();
-    lower.contains("http 401")
-        || lower.contains("unauthorized")
-        || lower.contains("invalid or expired token")
-        || lower.contains("relay auth error")
-}
-
 /// Internal helper: check if an error message indicates HTTP 401.
 fn is_token_expired_error(e: &anyhow::Error) -> bool {
     error_indicates_expired_token(&e.to_string())
@@ -429,15 +422,25 @@ pub fn init_on_startup() {
     tokio::spawn(async {
         // Restore persisted account session (if any) before anything else
         // so that auto-sync, device routing, and bot delegation work on restart.
-        match session_store::load_session() {
-            Ok(Some((token, user_id, master_key, relay_url))) => {
+        match session_store::load_session_detailed() {
+            Ok(Some(loaded)) => {
+                let user_id = loaded.user_id.clone();
+                let relay_url = loaded.relay_url.clone();
+                if let Some(device_id) = loaded.device_id.as_deref() {
+                    if let Err(e) = DeviceIdentity::adopt_account_device_id(device_id) {
+                        log::warn!("Failed to adopt restored session device_id: {e}");
+                    }
+                }
                 let session = AccountSession {
-                    token,
+                    token: loaded.token,
                     user_id: user_id.clone(),
-                    master_key,
+                    master_key: loaded.master_key,
                 };
                 *get_account_session().write().await = Some(session);
                 *get_account_relay_url().write().await = Some(relay_url.clone());
+                // Keep the mirrored "Self-Hosted" server field in sync for
+                // sessions restored from an older version without the mirror.
+                set_self_hosted_form_url(Some(&relay_url));
                 log::info!("Restored account session for user {user_id}");
 
                 // Initialize the remote-connect service if not yet ready.
@@ -496,13 +499,17 @@ async fn ensure_service() -> Result<(), String> {
         ..RemoteConnectConfig::default()
     };
     let service =
-        RemoteConnectService::new(config).map_err(|e| format!("init remote connect: {e}"))?;
+        new_remote_connect_service(config).map_err(|e| format!("init remote connect: {e}"))?;
     *holder.write().await = Some(service);
 
     // Auto-restore previously paired bots
     restore_saved_bots().await;
 
     Ok(())
+}
+
+fn new_remote_connect_service(config: RemoteConnectConfig) -> anyhow::Result<RemoteConnectService> {
+    RemoteConnectService::new(config, Arc::new(DesktopEmbeddedRelayHost::default()))
 }
 
 /// Restore any bot connections that were previously saved to disk.
@@ -837,14 +844,13 @@ fn is_ipv4(s: &str) -> bool {
 #[tauri::command]
 pub async fn remote_connect_get_device_info() -> Result<DeviceInfo, String> {
     ensure_service().await?;
-    let holder = get_service_holder();
-    let guard = holder.read().await;
-    let service = guard.as_ref().ok_or("service not initialized")?;
-    let id = service.device_identity();
+    // Always read the persisted/account-adopted identity — not a stale copy
+    // captured when RemoteConnectService was first constructed.
+    let id = DeviceIdentity::from_current_machine().map_err(|e| format!("detect device: {e}"))?;
     Ok(DeviceInfo {
-        device_id: id.device_id.clone(),
-        device_name: id.device_name.clone(),
-        mac_address: id.mac_address.clone(),
+        device_id: id.device_id,
+        device_name: id.device_name,
+        mac_address: id.mac_address,
     })
 }
 
@@ -1055,7 +1061,7 @@ pub async fn remote_connect_configure_custom_server(url: String) -> Result<(), S
             custom_server_url: Some(url),
             ..RemoteConnectConfig::default()
         };
-        let service = RemoteConnectService::new(config).map_err(|e| format!("init: {e}"))?;
+        let service = new_remote_connect_service(config).map_err(|e| format!("init: {e}"))?;
         *guard = Some(service);
     }
     Ok(())
@@ -1122,7 +1128,7 @@ pub async fn remote_connect_configure_bot(request: ConfigureBotRequest) -> Resul
                 ..RemoteConnectConfig::default()
             },
         };
-        let service = RemoteConnectService::new(config).map_err(|e| format!("init: {e}"))?;
+        let service = new_remote_connect_service(config).map_err(|e| format!("init: {e}"))?;
         *guard = Some(service);
     } else if let Some(service) = guard.as_mut() {
         service.update_bot_config(bot_config);
@@ -1201,6 +1207,52 @@ fn current_device_identity() -> Result<DeviceIdentity, String> {
     DeviceIdentity::from_current_machine().map_err(|e| format!("detect device: {e}"))
 }
 
+/// True while credentials succeeded but the user has not yet chosen
+/// cloud-vs-local settings. Session is held in memory only; a process kill
+/// must not restore a logged-in state.
+static PENDING_SYNC_CHOICE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Persist the in-memory account session so restart restores login.
+async fn persist_account_session(device_id: Option<&str>) -> Result<(), String> {
+    let (session, relay_url) = read_account_context().await?;
+    session_store::save_session_with_device(
+        &session.token,
+        &session.user_id,
+        &session.master_key,
+        &relay_url,
+        device_id,
+    )
+    .map_err(|e| format!("persist session: {e}"))
+}
+
+/// Finish a login that was waiting on the cloud/local settings choice:
+/// persist session, register providers, and emit the logged-in event.
+///
+/// Pair with `PENDING_SYNC_CHOICE` / `account_login`: never persist or emit
+/// logged-in before this runs when `has_cloud_settings` was true. Closing the
+/// overwrite UI must `account_logout` instead of leaving a memory-only session.
+#[tauri::command]
+pub async fn account_finalize_login() -> Result<(), String> {
+    let device = current_device_identity()?;
+    persist_account_session(Some(device.device_id.as_str())).await?;
+    PENDING_SYNC_CHOICE.store(false, std::sync::atomic::Ordering::Relaxed);
+    TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    register_delegated_identity_providers().await;
+
+    let relay_url = get_account_relay_url().read().await.clone();
+    emit_account_event(
+        "account://login-state",
+        serde_json::json!({
+            "logged_in": true,
+            "relay_url": relay_url,
+        }),
+    );
+    log::info!("Account login finalized (sync choice accepted)");
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
     let device = current_device_identity()?;
@@ -1228,40 +1280,61 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
         user_id: session.user_id.clone(),
         has_cloud_settings,
     };
-    let master_key = session.master_key; // Copy ([u8; 32])
     *get_account_session().write().await = Some(session);
     *get_account_relay_url().write().await = Some(request.relay_url.clone());
     // Persist non-secret credentials for next startup pre-fill
     save_credential_hint(&request.username, &request.relay_url);
-    // Persist the full session (token + master_key, encrypted) so the
-    // user stays logged in across app restarts.
-    if let Err(e) = session_store::save_session(
-        &result.token,
-        &result.user_id,
-        &master_key,
-        &request.relay_url,
-    ) {
-        log::warn!("Failed to persist session: {e}");
-    }
+    // Mirror the relay URL into the Remote Connect "Self-Hosted" server field
+    // so phone pairing can ride the same relay the account is logged into.
+    set_self_hosted_form_url(Some(&request.relay_url));
     // Reset the token-expired flag on fresh login
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
 
+    if has_cloud_settings {
+        // Hold the session in memory only until the user picks cloud vs local.
+        // Persisting here would restore "logged in" after a kill with no choice.
+        PENDING_SYNC_CHOICE.store(true, std::sync::atomic::Ordering::Relaxed);
+        log::info!(
+            "Account authenticated pending sync choice: {} (has_cloud_settings=true)",
+            result.user_id
+        );
+        return Ok(result);
+    }
+
+    PENDING_SYNC_CHOICE.store(false, std::sync::atomic::Ordering::Relaxed);
+    if let Err(e) = persist_account_session(Some(device.device_id.as_str())).await {
+        log::warn!("Failed to persist session: {e}");
+    }
+
     register_delegated_identity_providers().await;
 
+    emit_account_event(
+        "account://login-state",
+        serde_json::json!({
+            "logged_in": true,
+            "relay_url": request.relay_url,
+        }),
+    );
+
     log::info!(
-        "Account logged in: {} (has_cloud_settings={})",
-        result.user_id,
-        result.has_cloud_settings
+        "Account logged in: {} (has_cloud_settings=false)",
+        result.user_id
     );
     Ok(result)
 }
 
 #[tauri::command]
 pub async fn account_status() -> Result<AccountStatus, String> {
+    let pending = PENDING_SYNC_CHOICE.load(std::sync::atomic::Ordering::Relaxed);
     let guard = get_account_session().read().await;
+    let logged_in = guard.is_some() && !pending;
     Ok(AccountStatus {
-        logged_in: guard.is_some(),
-        user_id: guard.as_ref().map(|s| s.user_id.clone()),
+        logged_in,
+        user_id: if logged_in {
+            guard.as_ref().map(|s| s.user_id.clone())
+        } else {
+            None
+        },
     })
 }
 
@@ -1279,11 +1352,29 @@ pub async fn account_logout() -> Result<(), String> {
     }
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
+    PENDING_SYNC_CHOICE.store(false, std::sync::atomic::Ordering::Relaxed);
     clear_credential_hint();
     session_store::clear_session();
+    // Clear the mirrored "Self-Hosted" server field on logout.
+    set_self_hosted_form_url(None);
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
+    emit_account_event(
+        "account://login-state",
+        serde_json::json!({ "logged_in": false }),
+    );
     log::info!("Account logged out");
     Ok(())
+}
+
+/// Persist (or clear) the account relay URL in the Remote Connect
+/// "Self-Hosted" form field so the pairing UI follows account login state.
+fn set_self_hosted_form_url(url: Option<&str>) {
+    let mut data = bot::load_bot_persistence();
+    let value = url.unwrap_or_default();
+    if data.form_state.custom_server_url != value {
+        data.form_state.custom_server_url = value.to_string();
+        bot::save_bot_persistence(&data);
+    }
 }
 
 // ── P2: Device routing commands ──────────────────────────────────────────
@@ -1307,24 +1398,36 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
         .as_ref()
         .ok_or_else(|| "remote connect service not initialized".to_string())?;
 
-    // Skip reconnecting if the device WS is already active.  Repeated calls
-    // (e.g. dialog re-open) should not tear down an existing connection.
+    // Skip reconnecting if the device WS is already active AND local identity
+    // already matches an online device. Otherwise reconnect so AuthOk can heal
+    // a drifted MAC-derived device_id (AuthOk is consumed inside start_device_connection).
     if service.is_device_connected().await {
         let devices = service.online_devices().await;
-        return Ok(devices
-            .into_iter()
-            .map(|d| OnlineDeviceInfo {
-                device_id: d.device_id,
-                device_name: d.device_name,
-            })
-            .collect());
+        let local_id = DeviceIdentity::from_current_machine()
+            .ok()
+            .map(|d| d.device_id);
+        let local_known = local_id
+            .as_ref()
+            .is_some_and(|id| devices.iter().any(|d| d.device_id == *id));
+        if local_known {
+            return Ok(devices
+                .into_iter()
+                .map(|d| OnlineDeviceInfo {
+                    device_id: d.device_id,
+                    device_name: d.device_name,
+                })
+                .collect());
+        }
+        log::info!(
+            "Device WS connected but local device_id not in online set; reconnecting to heal identity"
+        );
     }
 
-    let mut event_rx = match service
+    let (mut event_rx, auth_device_id) = match service
         .start_device_connection(&relay_url, &session.token, &device_name)
         .await
     {
-        Ok(rx) => rx,
+        Ok(result) => result,
         Err(e) => {
             let msg = format!("{e}");
             drop(holder);
@@ -1335,14 +1438,28 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
         }
     };
 
+    if let Err(e) = session_store::save_session_with_device(
+        &session.token,
+        &session.user_id,
+        &session.master_key,
+        &relay_url,
+        Some(auth_device_id.as_str()),
+    ) {
+        log::warn!("Failed to persist AuthOk device_id into session: {e}");
+    }
+
     // Background task: consume events (presence / device messages / auth errors)
+    // Note: AuthOk is consumed inside start_device_connection (adopt happens there).
     let session_arc = get_account_session().clone();
     tokio::spawn(async move {
         use bitfun_core::service::remote_connect::relay_client::RelayEvent;
         while let Some(event) = event_rx.recv().await {
             match event {
                 RelayEvent::AuthOk { user_id, device_id } => {
-                    log::info!("Device routing auth ok: user={user_id} device={device_id}");
+                    // Should not normally arrive — start_device_connection consumes AuthOk.
+                    log::info!(
+                        "Device routing auth ok (forwarded unexpectedly): user={user_id} device={device_id}"
+                    );
                 }
                 RelayEvent::AuthError { message } => {
                     log::warn!("Device routing auth error: {message}");
@@ -1633,10 +1750,14 @@ pub async fn account_delete_synced_session(session_id: String) -> Result<(), Str
 #[tauri::command]
 pub async fn account_sync_settings(settings_json: String) -> Result<(), String> {
     let (session, relay_url) = read_account_context().await?;
-    AccountClient::new()
-        .upload_settings(&relay_url, &session, &settings_json)
-        .await
-        .map_err(|e| format!("{e}"))
+    bitfun_core::service::remote_connect::settings_sync::upload_settings_payload(
+        &session,
+        &relay_url,
+        &settings_json,
+    )
+    .await
+    .map_err(|e| format!("{e}"))?;
+    Ok(())
 }
 
 /// Fetch and decrypt the settings blob. Returns null if none exists.
@@ -1664,6 +1785,42 @@ pub struct SessionBundle {
     pub turns: Vec<serde_json::Value>,
     pub source_device_id: Option<String>,
     pub source_device_name: Option<String>,
+}
+
+const RELAY_TURNS_IMPORT_STATE_KEY: &str = "relayTurnsImportState";
+const RELAY_TURNS_IMPORT_PENDING: &str = "pending";
+const RELAY_TURNS_IMPORT_COMPLETE: &str = "complete";
+
+fn relay_turns_import_state(metadata: &SessionMetadata) -> Option<&str> {
+    metadata
+        .custom_metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+        .and_then(|custom| custom.get(RELAY_TURNS_IMPORT_STATE_KEY))
+        .and_then(serde_json::Value::as_str)
+}
+
+fn relay_turns_import_is_complete(metadata: &SessionMetadata, local_turn_count: usize) -> bool {
+    metadata.turn_count == local_turn_count
+        && relay_turns_import_state(metadata) == Some(RELAY_TURNS_IMPORT_COMPLETE)
+}
+
+fn set_relay_turns_import_state(metadata: &mut SessionMetadata, state: &str) {
+    let mut custom = metadata
+        .custom_metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    custom.insert(
+        RELAY_TURNS_IMPORT_STATE_KEY.to_string(),
+        serde_json::Value::String(state.to_string()),
+    );
+    metadata.custom_metadata = Some(serde_json::Value::Object(custom));
+}
+
+fn mark_relay_turns_import_complete(metadata: &mut SessionMetadata) {
+    set_relay_turns_import_state(metadata, RELAY_TURNS_IMPORT_COMPLETE);
 }
 
 /// Export a single local session as an encrypted blob and upload it to the relay.
@@ -1838,17 +1995,6 @@ pub async fn account_import_remote_sessions(
     for fetched in remote_sessions {
         let session_id = fetched.session_id;
         let bundle_json = fetched.plaintext;
-        // Skip if session already exists locally
-        if manager
-            .load_session_metadata(&storage_path, &session_id)
-            .await
-            .ok()
-            .flatten()
-            .is_some()
-        {
-            continue;
-        }
-
         // Deserialize the bundle and write metadata as-is. The source device's
         // workspace_path is preserved for display (read-only history). Tasks
         // are always executed on the receiving device's own workspace, so
@@ -1856,14 +2002,25 @@ pub async fn account_import_remote_sessions(
         let bundle: SessionBundle =
             serde_json::from_str(&bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
 
-        let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+        let mut metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
             .map_err(|e| format!("deserialize metadata: {e}"))?;
+        if metadata.session_id != session_id {
+            log::warn!(
+                "Skipping remote session bundle with mismatched metadata identity: expected_session_id={}, metadata_session_id={}",
+                session_id,
+                metadata.session_id
+            );
+            continue;
+        }
         // Only write metadata — turns are lazy-loaded when the user opens
         // the session (see `account_fetch_session_turns`).
-        if manager
-            .save_session_metadata(&storage_path, &metadata)
+        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        if !manager
+            .create_session_metadata_if_absent(&storage_path, &metadata)
             .await
-            .is_err()
+            .map_err(|error| {
+                format!("persist imported metadata for session {session_id}: {error}")
+            })?
         {
             continue;
         }
@@ -1892,21 +2049,38 @@ pub async fn account_fetch_session_turns(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<bool, String> {
+    // Soft-skip before any disk IO so accidental callers cannot fail-closed
+    // Peer hydrate on metadata load errors. History comes from the peer host.
     if crate::api::peer_host_invoke::is_peer_controller_active() {
-        return Err(
-            "cloud session turn fetch is paused while Peer Device Mode is active".to_string(),
-        );
+        log::info!("Skipping cloud session turn fetch in Peer Device Mode (session={session_id})");
+        return Ok(false);
     }
+
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("create persistence manager: {e}"))?;
 
-    // If turns already exist locally, no fetch needed.
-    if let Ok(turns) = manager.load_session_turns(&storage_path, &session_id).await {
-        if !turns.is_empty() {
-            return Ok(false);
-        }
+    // Ordinary local sessions carry no relay marker and return without an
+    // account or network lookup. A non-empty turn prefix is not proof that an
+    // import completed, so pending or inconsistent imports are retried.
+    let Some(metadata) = manager
+        .load_session_metadata(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("load imported metadata: {error}"))?
+    else {
+        return Ok(false);
+    };
+    if relay_turns_import_state(&metadata).is_none() {
+        return Ok(false);
+    }
+
+    let local_turns = manager
+        .load_session_turns(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("load imported turns: {error}"))?;
+    if relay_turns_import_is_complete(&metadata, local_turns.len()) {
+        return Ok(false);
     }
 
     // Fetch the full bundle from the relay (which includes turns).
@@ -1920,18 +2094,41 @@ pub async fn account_fetch_session_turns(
     let bundle: SessionBundle =
         serde_json::from_str(&fetched.plaintext).map_err(|e| format!("deserialize bundle: {e}"))?;
 
-    // Write turns first, then metadata (self-healing on crash).
-    for turn_val in &bundle.turns {
-        let turn: DialogTurnData = serde_json::from_value(turn_val.clone())
-            .map_err(|e| format!("deserialize turn: {e}"))?;
-        let _ = manager.save_dialog_turn(&storage_path, &turn).await;
-    }
-    // Re-save metadata to ensure consistency.
-    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())
         .map_err(|e| format!("deserialize metadata: {e}"))?;
-    let _ = manager
-        .save_session_metadata(&storage_path, &metadata)
-        .await;
+    if metadata.session_id != session_id {
+        return Err("relay session metadata identity does not match request".to_string());
+    }
+    let turns = bundle
+        .turns
+        .iter()
+        .map(|turn| {
+            serde_json::from_value::<DialogTurnData>(turn.clone())
+                .map_err(|error| format!("deserialize turn: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if turns.iter().any(|turn| turn.session_id != session_id) {
+        return Err("relay session turn identity does not match request".to_string());
+    }
+
+    manager
+        .create_session_metadata_if_absent(&storage_path, &metadata)
+        .await
+        .map_err(|e| format!("persist imported metadata: {e}"))?;
+
+    // Each turn save refreshes counts through an owner-side metadata RMW.
+    for turn in &turns {
+        manager
+            .save_dialog_turn(&storage_path, turn)
+            .await
+            .map_err(|e| format!("persist imported turn: {e}"))?;
+    }
+    manager
+        .update_session_metadata(&storage_path, &session_id, |metadata| {
+            mark_relay_turns_import_complete(metadata);
+        })
+        .await
+        .map_err(|e| format!("mark imported turns complete: {e}"))?;
 
     log::info!(
         "Lazy-loaded {} turns for session {session_id}",
@@ -2106,17 +2303,14 @@ pub async fn account_auto_sync(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<AutoSyncResult, String> {
-    AUTO_SYNC_IN_FLIGHT.store(true, std::sync::atomic::Ordering::SeqCst);
-    let sync_result = account_auto_sync_inner(
+    account_auto_sync_inner(
         is_first_login,
         workspace_path,
         config_json,
         app_state,
         path_manager,
     )
-    .await;
-    AUTO_SYNC_IN_FLIGHT.store(false, std::sync::atomic::Ordering::SeqCst);
-    sync_result
+    .await
 }
 
 async fn account_auto_sync_inner(
@@ -2126,23 +2320,26 @@ async fn account_auto_sync_inner(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<AutoSyncResult, String> {
+    // Soft no-op while controlling a peer: cloud sync would rewrite the
+    // controller's local disk mid-remote. Match account_fetch_session_turns.
     if crate::api::peer_host_invoke::is_peer_controller_active() {
-        return Err("account auto-sync is paused while Peer Device Mode is active".to_string());
+        log::info!("Skipping account auto-sync while Peer Device Mode is active");
+        return Ok(AutoSyncResult {
+            settings_synced: false,
+            sessions_exported: 0,
+            sessions_imported: 0,
+        });
     }
     let (acct_session, relay_url) = read_account_context().await?;
     let client = AccountClient::new();
+    use bitfun_core::service::remote_connect::settings_sync;
 
     // 1. Settings sync
     let settings_synced = if is_first_login {
         emit_sync_progress("uploading_settings", 5, None, None, None);
-        client
-            .upload_settings(&relay_url, &acct_session, &config_json)
+        settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json)
             .await
             .map_err(|e| format!("upload settings: {e}"))?;
-        LAST_SETTINGS_VERSION.store(
-            chrono::Utc::now().timestamp_millis(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
         log::info!("First login: uploaded local settings to cloud");
         emit_sync_progress("settings_done", 15, None, None, None);
         true
@@ -2154,30 +2351,13 @@ async fn account_auto_sync_inner(
             .map_err(|e| format!("fetch settings: {e}"))?;
         if let Some(blob) = cloud {
             emit_sync_progress("applying_settings", 10, None, None, None);
-            let config_value: serde_json::Value = serde_json::from_str(&blob.plaintext)
-                .map_err(|e| format!("parse cloud config: {e}"))?;
-            // Extract the .config field from the ConfigExport wrapper —
-            // the upload path stores the full ConfigExport JSON which has
-            // { config: GlobalConfig, export_timestamp, version }, but
-            // import_config_data expects the inner GlobalConfig directly.
-            let inner_config = config_value.get("config").cloned().unwrap_or(config_value);
-            let import_result = app_state
-                .config_service
-                .import_config_data(inner_config)
+            // Explicit user choice — always apply, even when the cursor says
+            // this device already has this version. Applies into the global
+            // config service, invalidates the AI client cache, reloads, and
+            // emits `account://settings-applied`.
+            settings_sync::apply_settings_blob(&acct_session, &blob, true)
                 .await
-                .map_err(|e| format!("import cloud config: {e}"))?;
-            if !import_result.success {
-                return Err(format!(
-                    "import cloud config failed: {}",
-                    import_result.errors.join("; ")
-                ));
-            }
-            app_state.ai_client_factory.invalidate_cache();
-            if let Err(e) = app_state.config_service.reload().await {
-                log::warn!("reload after cloud config import failed: {e}");
-            }
-            emit_settings_applied();
-            LAST_SETTINGS_VERSION.store(blob.version, std::sync::atomic::Ordering::Relaxed);
+                .map_err(|e| format!("apply cloud config: {e}"))?;
             log::info!(
                 "Applied cloud settings to local device (version={})",
                 blob.version
@@ -2304,22 +2484,15 @@ async fn account_auto_sync_inner(
     })
 }
 
-// ── Auto-sync: debounced upload on session/config changes ──────────────────
+// ── Auto-sync: debounced upload on session changes ─────────────────────────
+//
+// Settings sync (debounced push + 30s pull) is owned by the shared engine in
+// `bitfun_core::service::remote_connect::settings_sync`; this module only
+// keeps the desktop-specific session backup loop and wires engine hooks.
 
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-/// Tracks the last-known cloud settings version so the periodic pull can
-/// skip re-applying unchanged settings. Updated by both the push path
-/// (after upload) and the pull path (after fetch).
-static LAST_SETTINGS_VERSION: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
-
-/// True while `account_auto_sync` is running — periodic pull must not apply
-/// settings we just uploaded (causes mid-sync UI reload).
-static AUTO_SYNC_IN_FLIGHT: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// What to sync. `Session` carries the session_id + workspace_path.
 /// What to sync. Each variant maps to a single relay operation.
 #[derive(Debug, Clone)]
 enum SyncRequest {
@@ -2330,18 +2503,49 @@ enum SyncRequest {
     },
     /// Tombstone a session on the relay — fired on delete. Prevents re-import.
     SessionDelete { session_id: String },
-    /// Upload config blob — fired on set_config/import_config/reset_config.
-    Settings,
 }
 
 /// Global channel for notifying the sync background task.
 static SYNC_TX: OnceLock<mpsc::UnboundedSender<SyncRequest>> = OnceLock::new();
 
-/// Called once at app startup to start the debounced sync background task.
+/// Called once at app startup to start the settings sync engine and the
+/// debounced session sync background task.
 pub fn init_auto_sync() {
+    start_settings_sync_engine();
     let (tx, rx) = mpsc::unbounded_channel::<SyncRequest>();
     let _ = SYNC_TX.set(tx);
     tokio::spawn(sync_background_loop(rx));
+}
+
+/// Start the shared settings sync engine with desktop hooks.
+fn start_settings_sync_engine() {
+    use bitfun_core::service::remote_connect::settings_sync;
+    let hooks = settings_sync::SettingsSyncHooks {
+        account_context: Some(std::sync::Arc::new(|| {
+            Box::pin(async { read_account_context().await.map_err(anyhow::Error::msg) })
+        })),
+        should_pause: Some(std::sync::Arc::new(|| {
+            crate::api::peer_host_invoke::is_peer_controller_active()
+        })),
+        on_settings_applied: Some(std::sync::Arc::new(|| {
+            emit_settings_applied();
+            fanout_peer_device_event(
+                "account://settings-applied".to_string(),
+                serde_json::json!({ "applied": true }),
+            );
+        })),
+        on_settings_pushed: Some(std::sync::Arc::new(|| {
+            fanout_peer_device_event(
+                "account://settings-applied".to_string(),
+                serde_json::json!({ "applied": true }),
+            );
+        })),
+        on_token_expired: Some(std::sync::Arc::new(|| {
+            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+        })),
+        ..Default::default()
+    };
+    settings_sync::start_settings_sync_engine(hooks);
 }
 
 /// Non-blocking notification that a session was created/modified. Called from
@@ -2368,82 +2572,65 @@ pub fn notify_session_deleted(session_id: &str) {
 }
 
 /// Non-blocking notification that config was changed. Called from `set_config`.
+/// Forwards to the shared settings sync engine (debounced + hash-deduped).
 pub fn notify_settings_changed() {
-    if let Some(tx) = SYNC_TX.get() {
-        let _ = tx.send(SyncRequest::Settings);
-    }
+    bitfun_core::service::remote_connect::settings_sync::notify_settings_changed();
 }
 
-/// Background loop: collects sync requests, debounces 5 seconds, then uploads.
+/// Background loop: collects session sync requests, debounces 5 seconds,
+/// then uploads. Settings push/pull is handled by the settings sync engine.
 async fn sync_background_loop(mut rx: mpsc::UnboundedReceiver<SyncRequest>) {
     let debounce = Duration::from_secs(5);
-    let pull_interval = Duration::from_secs(30);
-    let mut next_pull = tokio::time::Instant::now() + pull_interval;
     loop {
-        // Wait for either a sync request (push) or the pull timer
-        let pull_deadline = tokio::time::sleep_until(next_pull);
-        tokio::pin!(pull_deadline);
+        // Wait for the next session sync request, then drain during the
+        // debounce window.
+        let Some(first) = rx.recv().await else {
+            return;
+        };
+        let mut pending_upserts: HashMap<String, String> = HashMap::new();
+        let mut pending_deletes: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        match first {
+            SyncRequest::SessionUpsert {
+                session_id,
+                workspace_path,
+            } => {
+                pending_upserts.insert(session_id, workspace_path);
+            }
+            SyncRequest::SessionDelete { session_id } => {
+                pending_deletes.insert(session_id);
+            }
+        }
 
-        tokio::select! {
-            // Push path: collect and debounce
-            Some(first) = rx.recv() => {
-                let mut pending_upserts: HashMap<String, String> = HashMap::new();
-                let mut pending_deletes: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
-                let mut pending_settings = false;
-                match first {
-                    SyncRequest::SessionUpsert { session_id, workspace_path } => {
-                        pending_upserts.insert(session_id, workspace_path);
-                    }
-                    SyncRequest::SessionDelete { session_id } => {
-                        pending_deletes.insert(session_id);
-                    }
-                    SyncRequest::Settings => {
-                        pending_settings = true;
-                    }
-                }
-
-                // Drain during debounce window
-                let deadline = tokio::time::sleep(debounce);
-                tokio::pin!(deadline);
-                loop {
-                    tokio::select! {
-                        _ = &mut deadline => break,
-                        Some(req) = rx.recv() => {
-                            match req {
-                                SyncRequest::SessionUpsert { session_id, workspace_path } => {
-                                    pending_deletes.remove(&session_id);
-                                    pending_upserts.insert(session_id, workspace_path);
-                                }
-                                SyncRequest::SessionDelete { session_id } => {
-                                    pending_upserts.remove(&session_id);
-                                    pending_deletes.insert(session_id);
-                                }
-                                SyncRequest::Settings => {
-                                    pending_settings = true;
-                                }
-                            }
+        let deadline = tokio::time::sleep(debounce);
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                _ = &mut deadline => break,
+                Some(req) = rx.recv() => {
+                    match req {
+                        SyncRequest::SessionUpsert { session_id, workspace_path } => {
+                            pending_deletes.remove(&session_id);
+                            pending_upserts.insert(session_id, workspace_path);
+                        }
+                        SyncRequest::SessionDelete { session_id } => {
+                            pending_upserts.remove(&session_id);
+                            pending_deletes.insert(session_id);
                         }
                     }
                 }
-
-                execute_debounced_sync(pending_upserts, pending_deletes, pending_settings).await;
-            }
-            // Pull path: periodic remote fetch + reconcile
-            _ = &mut pull_deadline => {
-                next_pull = tokio::time::Instant::now() + pull_interval;
-                pull_and_reconcile().await;
             }
         }
+
+        execute_debounced_sync(pending_upserts, pending_deletes).await;
     }
 }
 
 /// Execute the debounced sync: upload changed sessions, tombstone deleted
-/// sessions, optionally upload settings.
+/// sessions.
 async fn execute_debounced_sync(
     upserts: HashMap<String, String>,
     deletes: std::collections::HashSet<String>,
-    sync_settings: bool,
 ) {
     if crate::api::peer_host_invoke::is_peer_controller_active() {
         log::debug!("Debounced sync skipped while peer controller mode is active");
@@ -2522,38 +2709,6 @@ async fn execute_debounced_sync(
         }
     }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
-
-    // Upload settings if changed
-    if sync_settings {
-        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await
-        {
-            match config_service.export_config().await {
-                Ok(export_data) => {
-                    let json = serde_json::to_string(&export_data).unwrap_or_else(|_| "{}".into());
-                    if let Err(e) = client
-                        .upload_settings(&relay_url, &acct_session, &json)
-                        .await
-                    {
-                        if is_token_expired_error(&e) {
-                            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
-                        }
-                        log::warn!("Auto-sync settings failed: {e}");
-                    } else {
-                        // Record the version we just uploaded so the pull path
-                        // doesn't immediately re-apply our own upload.
-                        LAST_SETTINGS_VERSION.store(
-                            chrono::Utc::now().timestamp_millis(),
-                            std::sync::atomic::Ordering::Relaxed,
-                        );
-                        log::debug!("Auto-synced settings");
-                    }
-                }
-                Err(e) => {
-                    log::warn!("Auto-sync: export config failed: {e}");
-                }
-            }
-        }
-    }
 }
 
 /// Load a single session from disk, serialize to bundle, and upload.
@@ -2739,120 +2894,42 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
         dir
     });
 
-    // Skip if session already exists locally
-    if manager
-        .load_session_metadata(&target_dir, &bundle.session_id)
-        .await
-        .ok()
-        .flatten()
-        .is_some()
-    {
-        return Ok(());
+    let mut metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
+    if metadata.session_id != bundle.session_id {
+        return Err(anyhow::anyhow!(
+            "relay session metadata identity does not match bundle"
+        ));
     }
-
-    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
 
     // Only write metadata — turns are lazy-loaded when the user opens the
     // session. This keeps the import fast and avoids writing potentially
     // large turn data that may never be read.
+    set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
     manager
-        .save_session_metadata(&target_dir, &metadata)
+        .create_session_metadata_if_absent(&target_dir, &metadata)
         .await
         .map_err(|e| anyhow::anyhow!("save metadata: {e}"))?;
 
     Ok(())
 }
 
-/// Periodic pull: fetch all remote sessions, import any that don't exist
-/// locally anywhere. Does NOT delete local sessions based on remote
-/// absence — that would risk deleting locally-created sessions that
-/// haven't been uploaded yet. Deletion propagation is handled by the
-/// explicit tombstone call in the SessionDelete sync path (the relay
-/// marks deleted=1, and future pulls simply won't return that session,
-/// so it won't be re-imported).
-///
-/// To avoid cross-workspace duplication, we first collect ALL local
-/// session IDs across ALL workspaces, then only import a remote session
-/// if it doesn't exist in ANY workspace.
+/// One-shot cloud settings pull, triggered when another same-account device
+/// comes online. The periodic pull lives in the shared settings sync engine.
 async fn pull_and_reconcile() {
     if crate::api::peer_host_invoke::is_peer_controller_active() {
         log::debug!("Pull: skip while peer controller mode is active");
         return;
     }
-    let (acct_session, relay_url) = match read_account_context().await {
-        Ok(ctx) => ctx,
-        Err(_) => return,
+    let Ok((acct_session, relay_url)) = read_account_context().await else {
+        return;
     };
-    let client = AccountClient::new();
-
-    // ── Settings pull ──
-    // Fetch the cloud settings blob; if the version changed since our last
-    // known version, apply it locally. Skip while login auto-sync is running —
-    // otherwise we re-apply the settings we just uploaded and flash the UI.
-    if AUTO_SYNC_IN_FLIGHT.load(std::sync::atomic::Ordering::SeqCst) {
-        log::debug!("Pull: skip settings apply while account_auto_sync in flight");
-    } else {
-        match client
-            .fetch_settings_with_version(&relay_url, &acct_session)
-            .await
-        {
-            Ok(Some(blob)) => {
-                let known = LAST_SETTINGS_VERSION.load(std::sync::atomic::Ordering::Relaxed);
-                if blob.version != known {
-                    if let Ok(config_value) =
-                        serde_json::from_str::<serde_json::Value>(&blob.plaintext)
-                    {
-                        let inner_config =
-                            config_value.get("config").cloned().unwrap_or(config_value);
-                        if let Ok(config_service) =
-                            bitfun_core::service::config::get_global_config_service().await
-                        {
-                            match config_service.import_config_data(inner_config).await {
-                                Ok(result) if result.success => {
-                                    LAST_SETTINGS_VERSION
-                                        .store(blob.version, std::sync::atomic::Ordering::Relaxed);
-                                    if let Ok(factory) =
-                                    bitfun_core::infrastructure::ai::AIClientFactory::get_global()
-                                        .await
-                                {
-                                    factory.invalidate_cache();
-                                }
-                                    if let Err(e) = config_service.reload().await {
-                                        log::warn!("Pull: reload after config import failed: {e}");
-                                    }
-                                    emit_settings_applied();
-                                    log::info!(
-                                        "Pull: applied cloud settings (version={})",
-                                        blob.version
-                                    );
-                                }
-                                Ok(result) => {
-                                    log::warn!(
-                                        "Pull: import config unsuccessful: {}",
-                                        result.errors.join("; ")
-                                    );
-                                }
-                                Err(e) => {
-                                    log::warn!("Pull: import config failed: {e}");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Ok(None) => {} // no cloud settings yet
-            Err(e) => {
-                if is_token_expired_error(&e) {
-                    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                log::debug!("Pull: fetch_settings failed: {e}");
-            }
+    use bitfun_core::service::remote_connect::settings_sync;
+    if let Err(e) = settings_sync::pull_and_apply_settings(&acct_session, &relay_url).await {
+        if is_token_expired_error(&e) {
+            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
-    } // end AUTO_SYNC_IN_FLIGHT settings guard
-
-    // Session cloud import into local disk is intentionally disabled.
-    // Peer Remote Mode reads the peer device's live session store via HostInvoke;
-    // merging cloud session metadata into this machine pollutes local UX.
+        log::debug!("Pull: fetch_settings failed: {e}");
+    }
 }
 
 #[cfg(test)]
@@ -2878,5 +2955,29 @@ mod sync_state_tests {
         assert_eq!(state.last_session_since, 5);
         state.advance_session_since([9]);
         assert_eq!(state.last_session_since, 9);
+    }
+
+    #[test]
+    fn relay_turn_import_requires_an_explicit_complete_marker_and_exact_count() {
+        let mut metadata = SessionMetadata::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        metadata.turn_count = 2;
+
+        assert_eq!(relay_turns_import_state(&metadata), None);
+        assert!(!relay_turns_import_is_complete(&metadata, 1));
+        assert!(!relay_turns_import_is_complete(&metadata, 2));
+        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        assert_eq!(
+            relay_turns_import_state(&metadata),
+            Some(RELAY_TURNS_IMPORT_PENDING)
+        );
+        assert!(!relay_turns_import_is_complete(&metadata, 2));
+        mark_relay_turns_import_complete(&mut metadata);
+        assert!(!relay_turns_import_is_complete(&metadata, 1));
+        assert!(relay_turns_import_is_complete(&metadata, 2));
     }
 }

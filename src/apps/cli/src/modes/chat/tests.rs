@@ -3,24 +3,29 @@ mod tests {
     use tokio::sync::broadcast::error::TryRecvError;
 
     use super::{
-        agent_event_stream_failure, apply_model_selection_feedback, builtin_command_reconfirmation,
-        command_route, external_agent_attention, external_agent_diagnostic_lines,
+        action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
+        apply_model_selection_feedback, builtin_command_reconfirmation, command_route,
+        external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
         external_agent_review_text, external_command_projections,
+        external_integration_policy_lines, external_operation_error_status,
         external_tool_mutation_result_label, external_tool_pending_notice_key,
         external_tool_result_is_stale, external_tool_review_text, external_tool_run_location_label,
-        mark_active_turn_failed, merge_external_agent_mutation_snapshot, parse_command_token,
-        parse_external_agent_review_action, parse_external_tool_review_action, CommandQualifier,
+        mark_active_turn_failed, merge_external_agent_mutation_snapshot,
+        mode_change_blocks_typed_submission, mode_change_completion_should_exit,
+        native_command_conflict_key, parse_command_token, parse_external_agent_review_action,
+        parse_external_tool_review_action, previous_session_mode_change_status, CommandQualifier,
         CommandRoute, ExternalAgentReviewAction, ExternalSourceConflictPreferences,
-        ExternalToolReviewAction, ModelSelectionApplyOutcome,
+        ExternalToolReviewAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
     };
-    use crate::actions::{ActionState, ResolvedKeymap};
+    use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use bitfun_core::external_sources::{
         ExternalSourceAssetKind, ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic,
-        ExternalSourceDiagnosticSeverity, ExternalSubagentActivationState,
+        ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+        ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
         ExternalToolActivationState,
     };
     use std::collections::{BTreeMap, BTreeSet};
@@ -191,6 +196,68 @@ mod tests {
                     "sourceLocation": "<workspace>/.opencode/tools/review.js"
                 }]
             }],
+            "integrationPolicy": {
+                "schemaMajor": 1,
+                "status": "compatible",
+                "userDefaults": { "enabled": true },
+                "globalEffective": {
+                    "enabled": true,
+                    "ecosystems": {
+                        "opencode": {
+                            "ecosystemId": "opencode",
+                            "mode": "recommended",
+                            "capabilities": {
+                                "command": "auto",
+                                "tool": "ask_before_use",
+                                "subagent": "ask_before_use",
+                                "mcp": "ask_before_use"
+                            }
+                        }
+                    }
+                },
+                "effective": {
+                    "enabled": true,
+                    "ecosystems": {
+                        "opencode": {
+                            "ecosystemId": "opencode",
+                            "mode": "recommended",
+                            "capabilities": {
+                                "command": "auto",
+                                "tool": "ask_before_use",
+                                "subagent": "ask_before_use",
+                                "mcp": "ask_before_use"
+                            }
+                        }
+                    }
+                },
+                "registeredEcosystems": [{
+                    "ecosystemId": "opencode",
+                    "displayName": "OpenCode",
+                    "adapterRevision": "1",
+                    "capabilities": [
+                        {
+                            "capabilityId": "command",
+                            "recommendedAccess": "auto",
+                            "safetyCeiling": "auto"
+                        },
+                        {
+                            "capabilityId": "tool",
+                            "recommendedAccess": "ask_before_use",
+                            "safetyCeiling": "ask_before_use"
+                        },
+                        {
+                            "capabilityId": "subagent",
+                            "recommendedAccess": "ask_before_use",
+                            "safetyCeiling": "ask_before_use"
+                        },
+                        {
+                            "capabilityId": "mcp",
+                            "recommendedAccess": "ask_before_use",
+                            "safetyCeiling": "ask_before_use"
+                        }
+                    ]
+                }]
+            },
             "diagnostics": [{
                 "severity": "warning",
                 "code": "opencode.tool.directory_read_failed",
@@ -202,15 +269,65 @@ mod tests {
     }
 
     #[test]
+    fn external_review_projects_effective_scope_and_capability_policy() {
+        let lines = external_integration_policy_lines(&external_tool_review_snapshot());
+        let text = lines.join("\n");
+
+        assert!(text.contains("Access: enabled"));
+        assert!(text.contains("this project inherits global settings"));
+        assert!(text.contains("OpenCode: recommended"));
+        assert!(text.contains("command auto"));
+        assert!(text.contains("tool ask"));
+        assert!(text.contains("bitfun-cli config external --help"));
+    }
+
+    #[test]
+    fn external_operation_errors_use_stable_tui_copy_without_raw_details() {
+        let stale = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::StaleRevision,
+            "raw stale detail",
+            true,
+        );
+        let policy = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::PolicyLimited,
+            "raw policy detail",
+            false,
+        );
+        let internal = ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::Internal,
+            "database password must not be shown",
+            true,
+        )
+        .with_correlation_id("external-source-ref-9");
+
+        let stale_status = external_operation_error_status("tools", &stale);
+        assert!(stale_status.contains("settings changed"));
+        assert!(stale_status.contains("refresh and try again"));
+        assert!(!stale_status.contains("raw stale detail"));
+
+        let policy_status = external_operation_error_status("agents", &policy);
+        assert!(policy_status.contains("safety policy"));
+        assert!(policy_status.contains("review the current state"));
+        assert!(!policy_status.contains("raw policy detail"));
+
+        let internal_status = external_operation_error_status("tools", &internal);
+        assert!(internal_status.contains("external-source-ref-9"));
+        assert!(!internal_status.contains("database password"));
+    }
+
+    #[test]
     fn external_tool_review_summary_discloses_execution_boundary_and_commands() {
         let summary = external_tool_review_text(Some(&external_tool_review_snapshot()));
 
+        assert!(summary.contains("BitFun and MCP"));
+        assert!(summary.contains("External AI applications"));
+        assert!(summary.contains("Use /mcps to manage MCP servers"));
         assert!(summary.contains("BitFun does not run external code while checking sources"));
         assert!(summary.contains("filesystem, network, process, environment variables"));
         assert!(summary.contains("inherited environment variables"));
         assert!(summary.contains("processes it starts may keep running after cancellation"));
-        assert!(summary.contains("/external-tools enable 1"));
-        assert!(summary.contains("/external-tools choose 1 2"));
+        assert!(summary.contains("/builtin:tools enable 1"));
+        assert!(summary.contains("/builtin:tools choose 1 2"));
         assert!(summary.contains("<workspace>/.opencode/tools/review.js"));
         assert!(summary.contains("Source folder: <workspace>/.opencode/tools"));
         assert!(summary.contains("Applies to: current workspace"));
@@ -229,16 +346,47 @@ mod tests {
     }
 
     #[test]
-    fn external_tool_runtime_recovery_explains_that_bitfun_must_restart() {
+    fn external_tool_runtime_recovery_starts_with_refresh_without_restart_pressure() {
         let mut snapshot = external_tool_review_snapshot();
         snapshot.tools[0].activation = ExternalToolActivationState::RuntimeUnavailable {
             reason: "BitFun could not find Node.js for external tools".to_string(),
         };
 
         let summary = external_tool_review_text(Some(&snapshot));
-        assert!(summary.contains("install or repair Node.js, then restart BitFun"));
-        assert!(!summary.contains("environment, then refresh"));
-        assert!(!summary.contains("when BitFun started"));
+        assert!(summary.contains("Install or repair Node.js, then refresh"));
+        assert!(summary.contains("continue without external JavaScript tools"));
+        assert!(!summary.to_ascii_lowercase().contains("restart"));
+    }
+
+    #[test]
+    fn external_tool_review_keeps_remembered_conflicts_visible_and_changeable() {
+        let mut snapshot = external_tool_review_snapshot();
+        let external_candidate_id = snapshot.tools[0].definition.candidate_id();
+        snapshot.tool_conflicts[0].candidates[1].candidate_id = external_candidate_id.clone();
+        snapshot.tool_conflicts[0].selected_candidate_id = Some(external_candidate_id);
+
+        let summary = external_tool_review_text(Some(&snapshot));
+        assert!(summary.contains("Current choices"));
+        assert!(summary.contains("OpenCode review [selected, currently unavailable]"));
+        assert!(summary.contains("BitFun review [not selected]"));
+        assert!(summary.contains("/builtin:tools choose 1 1"));
+
+        snapshot.tools[0].activation = ExternalToolActivationState::Active;
+        let active_summary = external_tool_review_text(Some(&snapshot));
+        assert!(active_summary.contains("OpenCode review [selected]"));
+        assert!(!active_summary.contains("selected, currently unavailable"));
+
+        assert_eq!(
+            parse_external_tool_review_action("choose 1 1", Some(&snapshot), None).unwrap(),
+            ExternalToolReviewAction::Choose {
+                conflict_key: "conflict-v1".to_string(),
+                candidate_id: "bitfun:review".to_string(),
+            }
+        );
+        let notice = external_tool_pending_notice_key(&snapshot).unwrap();
+        assert!(notice.contains("approval:decision-v1"));
+        assert!(notice.contains("opencode.tool.directory_read_failed"));
+        assert!(!notice.contains("conflict:conflict-v1"));
     }
 
     #[test]
@@ -624,6 +772,86 @@ mod tests {
     }
 
     #[test]
+    fn mode_selection_commits_visible_state_only_after_runtime_success() {
+        let mut current_mode = "agentic".to_string();
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        let applied = apply_agent_mode_feedback(
+            &mut current_mode,
+            &mut state,
+            "plan",
+            ModeSelectionApplyOutcome::Applied,
+        );
+
+        assert!(applied);
+        assert_eq!(current_mode, "plan");
+        assert_eq!(state.agent_type, "plan");
+    }
+
+    #[test]
+    fn mode_selection_failure_preserves_visible_state_and_explains_retry() {
+        let mut current_mode = "agentic".to_string();
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        let applied = apply_agent_mode_feedback(
+            &mut current_mode,
+            &mut state,
+            "plan",
+            ModeSelectionApplyOutcome::SessionUpdateFailed(
+                "session storage unavailable".to_string(),
+            ),
+        );
+
+        assert!(!applied);
+        assert_eq!(current_mode, "agentic");
+        assert_eq!(state.agent_type, "agentic");
+        let notice = state.messages.last().expect("failure notice");
+        let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
+            panic!("failure notice must be text");
+        };
+        assert!(content.contains("was not changed"));
+        assert!(content.contains("retry"));
+    }
+
+    #[test]
+    fn previous_session_mode_failure_is_not_reported_as_a_success() {
+        let status = previous_session_mode_change_status(
+            "Plan",
+            &ModeSelectionApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
+        );
+
+        assert!(status.contains("failed"));
+        assert!(status.contains("storage unavailable"));
+        assert!(status.contains("retry"));
+    }
+
+    #[test]
+    fn pending_mode_change_allows_host_commands_but_blocks_agent_submission() {
+        assert!(mode_change_blocks_typed_submission(true, "continue"));
+        assert!(!mode_change_blocks_typed_submission(true, "/new"));
+        assert!(!mode_change_blocks_typed_submission(true, "/sessions"));
+        assert!(!mode_change_blocks_typed_submission(true, "/exit"));
+        assert!(!mode_change_blocks_typed_submission(false, "continue"));
+    }
+
+    #[test]
+    fn failed_mode_save_cancels_automatic_exit() {
+        assert!(mode_change_completion_should_exit(true, true));
+        assert!(!mode_change_completion_should_exit(true, false));
+        assert!(!mode_change_completion_should_exit(false, true));
+    }
+
+    #[test]
     fn shortcut_registry_contract_help_uses_resolved_keymap() {
         let keymap = ResolvedKeymap::new(&ShortcutsConfig::default());
 
@@ -687,9 +915,9 @@ mod tests {
         assert!(summary.contains("one run only; no follow-up"));
         assert!(summary.contains("Model: fast"));
         assert!(summary.contains("Tools: read, search"));
-        assert!(summary.contains("/external-agents enable 1"));
-        assert!(summary.contains("/external-agents choose 1 2"));
-        assert!(summary.contains("/external-agents choose 1 0"));
+        assert!(summary.contains("/builtin:agents enable 1"));
+        assert!(summary.contains("/builtin:agents choose 1 2"));
+        assert!(summary.contains("/builtin:agents choose 1 0"));
         assert!(summary.contains("Runs on: this computer in the current workspace"));
         assert!(summary.contains("instructions guide the selected model"));
         assert!(summary.contains("may call the tools listed below"));
@@ -702,6 +930,83 @@ mod tests {
         let mut unavailable = external_agent_review_snapshot();
         unavailable.subagents[0].effective_model_label = None;
         assert!(external_agent_review_text(Some(&unavailable)).contains("Model: unavailable"));
+    }
+
+    #[test]
+    fn opening_unified_management_does_not_imply_a_native_command_choice() {
+        let tools = crate::actions::action_for_alias("/tools", crate::actions::ActionContext::Chat)
+            .unwrap();
+        let agents =
+            crate::actions::action_for_alias("/agents", crate::actions::ActionContext::Chat)
+                .unwrap();
+        let help =
+            crate::actions::action_for_alias("/help", crate::actions::ActionContext::Chat).unwrap();
+
+        assert!(action_opens_extension_management(tools));
+        assert!(action_opens_extension_management(agents));
+        assert!(!action_opens_extension_management(help));
+    }
+
+    #[test]
+    fn agents_management_behavior_change_invalidates_an_old_native_choice() {
+        let candidate_id = "bitfun.cli:switch_agent";
+        let old_key =
+            native_command_conflict_key("local-user", "agents", [(candidate_id, "switch-mode-v1")]);
+        let current_key = native_command_conflict_key(
+            "local-user",
+            "agents",
+            [(
+                candidate_id,
+                action_conflict_behavior_version("switch_agent"),
+            )],
+        );
+
+        assert_ne!(old_key, current_key);
+    }
+
+    #[test]
+    fn external_agent_review_keeps_remembered_conflicts_visible_and_changeable() {
+        let mut snapshot = external_agent_review_snapshot();
+        snapshot.subagent_conflicts[0].selected_candidate_id =
+            Some("external_subagent:opencode:review:v1".to_string());
+        snapshot.pending_subagent_approvals.clear();
+
+        let summary = external_agent_review_text(Some(&snapshot));
+        assert!(summary.contains("Current choices"));
+        assert!(
+            summary.contains("Review agent (OpenCode, external) [selected, currently unavailable]")
+        );
+        assert!(summary.contains("BitFun review (BitFun, BitFun/local) [not selected]"));
+        assert!(summary.contains("/builtin:agents choose 1 1"));
+
+        snapshot.subagents[0].activation_state = ExternalSubagentActivationState::Active;
+        let active_summary = external_agent_review_text(Some(&snapshot));
+        assert!(active_summary.contains("Review agent (OpenCode, external) [selected]"));
+        assert!(!active_summary.contains("selected, currently unavailable"));
+
+        assert_eq!(
+            parse_external_agent_review_action("choose 1 1", Some(&snapshot), None).unwrap(),
+            ExternalAgentReviewAction::Choose {
+                conflict_key: "conflict-v1".to_string(),
+                candidate_id: "bitfun:review".to_string(),
+                approve_external: false,
+                expected_subagent_generation: 4,
+                expected_preference_revision: 7,
+            }
+        );
+        assert_eq!(external_agent_attention(None, &snapshot).conflicts, 0);
+    }
+
+    #[test]
+    fn external_agent_model_settings_recovery_does_not_require_restart() {
+        let lines = external_agent_diagnostic_lines(
+            "external_subagent.configuration_unavailable",
+            true,
+            "",
+        );
+        let text = lines.join("\n");
+        assert!(text.contains("check that BitFun can read and save its settings, then refresh"));
+        assert!(!text.to_ascii_lowercase().contains("restart"));
     }
 
     #[test]

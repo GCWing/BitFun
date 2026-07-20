@@ -57,7 +57,9 @@ fn thread_goal_port_error(port_error: PortError) -> BitFunError {
         PortErrorKind::NotAvailable => {
             user_facing_thread_goal_error(BitFunError::NotImplemented(port_error.message))
         }
-        PortErrorKind::PermissionDenied | PortErrorKind::Backend => {
+        PortErrorKind::PermissionDenied
+        | PortErrorKind::CleanupRequired
+        | PortErrorKind::Backend => {
             user_facing_thread_goal_error(BitFunError::Tool(port_error.message))
         }
     }
@@ -110,10 +112,23 @@ impl Tool for GetGoalTool {
     ) -> BitFunResult<Vec<ToolResult>> {
         let runtime = require_agent_runtime()?;
         let (session_id, workspace_path) = require_session_context(context)?;
+        let remote_connection_id = context
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.connection_id())
+            .map(ToOwned::to_owned);
+        let remote_ssh_host = context.workspace.as_ref().and_then(|workspace| {
+            workspace
+                .is_remote()
+                .then(|| workspace.session_identity.hostname.trim().to_string())
+                .filter(|host| !host.is_empty() && host != "_unresolved")
+        });
         let goal = runtime
             .get_thread_goal(AgentThreadGoalGetRequest {
                 session_id,
                 workspace_path: workspace_path.to_string_lossy().into_owned(),
+                remote_connection_id,
+                remote_ssh_host,
             })
             .await
             .map_err(thread_goal_runtime_error)?;

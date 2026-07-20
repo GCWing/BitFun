@@ -6,11 +6,17 @@ use bitfun_core::service::snapshot::{
     ensure_snapshot_manager_for_workspace, get_snapshot_manager_for_workspace,
     initialize_snapshot_manager_for_workspace, OperationType, SnapshotConfig, SnapshotManager,
 };
+use bitfun_runtime_ports::{
+    LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest,
+    LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind,
+};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::{path::PathBuf, sync::Arc, time::Duration};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
+
+use crate::runtime::DesktopRuntimeContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotInitRequest {
@@ -234,6 +240,82 @@ async fn resolve_workspace_dir(workspace_path: &str) -> Result<PathBuf, String> 
     Ok(workspace_dir)
 }
 
+fn local_snapshot_command_error(operation: &str, workspace_path: &str, error: PortError) -> String {
+    if error.kind == PortErrorKind::NotAvailable {
+        format!(
+            "Failed to initialize snapshot system for workspace {}: {}",
+            workspace_path, error.message
+        )
+    } else {
+        format!("Failed to {operation}: {}", error.message)
+    }
+}
+
+async fn rollback_local_workspace_files(
+    port: &dyn LocalWorkspaceSnapshotPort,
+    workspace_path: PathBuf,
+    workspace_display: &str,
+    session_id: String,
+    turn_index: usize,
+) -> Result<Vec<String>, String> {
+    let restored_files = port
+        .rollback_workspace_files_to_turn(LocalWorkspaceSnapshotTurnRequest {
+            workspace_path,
+            session_id,
+            turn_index,
+        })
+        .await
+        .map_err(|error| local_snapshot_command_error("rollback turn", workspace_display, error))?;
+    Ok(restored_files
+        .iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect())
+}
+
+async fn local_snapshot_session_files(
+    port: &dyn LocalWorkspaceSnapshotPort,
+    workspace_path: PathBuf,
+    workspace_display: &str,
+    session_id: String,
+) -> Result<Vec<String>, String> {
+    let files = port
+        .get_session_files(LocalWorkspaceSnapshotSessionRequest {
+            workspace_path,
+            session_id,
+        })
+        .await
+        .map_err(|error| {
+            local_snapshot_command_error("get session files", workspace_display, error)
+        })?;
+    Ok(files
+        .iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect())
+}
+
+async fn local_snapshot_session_stats(
+    port: &dyn LocalWorkspaceSnapshotPort,
+    workspace_path: PathBuf,
+    workspace_display: &str,
+    session_id: String,
+) -> Result<serde_json::Value, String> {
+    let stats = port
+        .get_session_stats(LocalWorkspaceSnapshotSessionRequest {
+            workspace_path,
+            session_id,
+        })
+        .await
+        .map_err(|error| {
+            local_snapshot_command_error("get session stats", workspace_display, error)
+        })?;
+    Ok(serde_json::json!({
+        "session_id": stats.session_id,
+        "total_files": stats.total_files,
+        "total_turns": stats.total_turns,
+        "total_changes": stats.total_changes
+    }))
+}
+
 async fn ensure_snapshot_manager_ready_for(
     workspace_path: &str,
     caller: &str,
@@ -378,12 +460,14 @@ pub async fn rollback_session(
 #[tauri::command]
 pub async fn rollback_to_turn(
     app_handle: AppHandle,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: RollbackTurnRequest,
 ) -> Result<Vec<String>, String> {
     // Remote workspaces have no local snapshots — nothing to roll back
     if is_remote_path(&request.workspace_path).await {
         return Ok(vec![]);
     }
+    let workspace_path = resolve_workspace_dir(&request.workspace_path).await?;
 
     {
         use bitfun_core::agentic::coordination::get_global_coordinator;
@@ -401,18 +485,14 @@ pub async fn rollback_to_turn(
         }
     }
 
-    let manager =
-        ensure_snapshot_manager_ready_for(&request.workspace_path, "rollback_to_turn").await?;
-
-    let restored_files = manager
-        .rollback_to_turn(&request.session_id, request.turn_index)
-        .await
-        .map_err(|e| format!("Failed to rollback turn: {}", e))?;
-
-    let restored_files_str: Vec<String> = restored_files
-        .iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
+    let restored_files_str = rollback_local_workspace_files(
+        runtime.local_workspace_snapshot(),
+        workspace_path,
+        &request.workspace_path,
+        request.session_id.clone(),
+        request.turn_index,
+    )
+    .await?;
 
     let mut deleted_turns_count = 0;
     if request.delete_turns {
@@ -627,23 +707,22 @@ pub async fn reject_file(
 }
 
 #[tauri::command]
-pub async fn get_session_files(request: GetSessionFilesRequest) -> Result<Vec<String>, String> {
+pub async fn get_session_files(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: GetSessionFilesRequest,
+) -> Result<Vec<String>, String> {
     if is_remote_path(&request.workspace_path).await {
         return Ok(vec![]);
     }
+    let workspace_path = resolve_workspace_dir(&request.workspace_path).await?;
 
-    let manager =
-        ensure_snapshot_manager_ready_for(&request.workspace_path, "get_session_files").await?;
-
-    let files = manager
-        .get_session_files(&request.session_id)
-        .await
-        .map_err(|e| format!("Failed to get session files: {}", e))?;
-
-    Ok(files
-        .iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect())
+    local_snapshot_session_files(
+        runtime.local_workspace_snapshot(),
+        workspace_path,
+        &request.workspace_path,
+        request.session_id,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -931,6 +1010,7 @@ pub async fn reject_operation(
 
 #[tauri::command]
 pub async fn get_session_stats(
+    runtime: State<'_, DesktopRuntimeContext>,
     request: GetSessionStatsRequest,
 ) -> Result<serde_json::Value, String> {
     if is_remote_path(&request.workspace_path).await {
@@ -941,16 +1021,15 @@ pub async fn get_session_stats(
             "total_changes": 0
         }));
     }
+    let workspace_path = resolve_workspace_dir(&request.workspace_path).await?;
 
-    let manager =
-        ensure_snapshot_manager_ready_for(&request.workspace_path, "get_session_stats").await?;
-
-    let stats = manager
-        .get_session_stats(&request.session_id)
-        .await
-        .map_err(|e| format!("Failed to get session stats: {}", e))?;
-
-    Ok(stats)
+    local_snapshot_session_stats(
+        runtime.local_workspace_snapshot(),
+        workspace_path,
+        &request.workspace_path,
+        request.session_id,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1060,4 +1139,126 @@ pub async fn get_baseline_snapshot_diff(
         "originalContent": baseline_content,
         "modifiedContent": current_content,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use bitfun_runtime_ports::{
+        LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest,
+        LocalWorkspaceSnapshotStats, LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind,
+        PortResult,
+    };
+
+    use super::{
+        local_snapshot_command_error, local_snapshot_session_files, local_snapshot_session_stats,
+        rollback_local_workspace_files,
+    };
+
+    #[derive(Default)]
+    struct RecordingSnapshotPort {
+        file_calls: AtomicUsize,
+        stats_calls: AtomicUsize,
+        rollback_calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl LocalWorkspaceSnapshotPort for RecordingSnapshotPort {
+        async fn prepare_local_workspace(&self, _workspace_path: PathBuf) -> PortResult<()> {
+            Ok(())
+        }
+
+        async fn get_session_files(
+            &self,
+            _request: LocalWorkspaceSnapshotSessionRequest,
+        ) -> PortResult<Vec<PathBuf>> {
+            self.file_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![PathBuf::from("changed.txt")])
+        }
+
+        async fn get_session_stats(
+            &self,
+            request: LocalWorkspaceSnapshotSessionRequest,
+        ) -> PortResult<LocalWorkspaceSnapshotStats> {
+            self.stats_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(LocalWorkspaceSnapshotStats {
+                session_id: request.session_id,
+                total_files: 1,
+                total_turns: 2,
+                total_changes: 3,
+            })
+        }
+
+        async fn rollback_workspace_files_to_turn(
+            &self,
+            _request: LocalWorkspaceSnapshotTurnRequest,
+        ) -> PortResult<Vec<PathBuf>> {
+            self.rollback_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![PathBuf::from("restored.txt")])
+        }
+    }
+
+    #[test]
+    fn local_snapshot_errors_preserve_desktop_initialization_and_operation_context() {
+        let initialization = local_snapshot_command_error(
+            "get session files",
+            "C:\\workspace",
+            PortError::new(PortErrorKind::NotAvailable, "backend unavailable"),
+        );
+        assert_eq!(
+            initialization,
+            "Failed to initialize snapshot system for workspace C:\\workspace: backend unavailable"
+        );
+
+        let operation = local_snapshot_command_error(
+            "get session stats",
+            "C:\\workspace",
+            PortError::new(PortErrorKind::Backend, "stats failed"),
+        );
+        assert_eq!(operation, "Failed to get session stats: stats failed");
+    }
+
+    #[tokio::test]
+    async fn local_snapshot_adapters_call_each_port_operation_once_and_keep_json_shape() {
+        let port = RecordingSnapshotPort::default();
+        let workspace = PathBuf::from("workspace");
+
+        let files = local_snapshot_session_files(
+            &port,
+            workspace.clone(),
+            "workspace",
+            "session-1".to_string(),
+        )
+        .await
+        .expect("file adapter should succeed");
+        let stats = local_snapshot_session_stats(
+            &port,
+            workspace.clone(),
+            "workspace",
+            "session-1".to_string(),
+        )
+        .await
+        .expect("stats adapter should succeed");
+        let restored = rollback_local_workspace_files(
+            &port,
+            workspace,
+            "workspace",
+            "session-1".to_string(),
+            4,
+        )
+        .await
+        .expect("rollback adapter should succeed");
+
+        assert_eq!(port.file_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(port.stats_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(port.rollback_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(files, vec!["changed.txt"]);
+        assert_eq!(restored, vec!["restored.txt"]);
+        assert_eq!(stats["session_id"], "session-1");
+        assert_eq!(stats["total_files"], 1);
+        assert_eq!(stats["total_turns"], 2);
+        assert_eq!(stats["total_changes"], 3);
+    }
 }

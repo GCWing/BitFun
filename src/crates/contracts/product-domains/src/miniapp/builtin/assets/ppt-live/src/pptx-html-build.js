@@ -4,12 +4,16 @@
 // buildSlideFromScene() validates and serializes only scene.nodes.
 //
 // Key design decisions:
-//   WIDTH_SAFETY_IN  — text boxes are widened by 0.15" to absorb cross-renderer
-//     font metric drift (PowerPoint renders CJK glyphs slightly wider than
-//     browsers). safeTextBoxGeometry() shifts the x coordinate for right/center
-//     aligned text so the extra width doesn't shift the visual anchor.
+//   width safety — text boxes are widened to absorb cross-renderer font metric
+//     drift (PowerPoint renders CJK glyphs slightly wider than browsers). The
+//     safety scales with font size (calibrated as ~0.36" at 14pt ≈ ~2.4 CJK em);
+//     a fixed margin under-compensates large titles and causes false wraps.
+//     safeTextBoxGeometry() shifts x for right/center align so the extra width
+//     does not move the visual anchor.
 //   margin — set from the element's CSS padding so PPTX internal inset matches
 //     the HTML box model (prevents text from shifting toward top-left).
+//   charSpacing — CSS letter-spacing is preserved so negative tracking in the
+//     preview cannot become looser (and wrap) in PowerPoint.
 //   valign — resolved from CSS flex/grid align-items or line-height ratio.
 // ─────────────────────────────────────────────────────────────────────────────
 import pptxgen from 'pptxgenjs';
@@ -26,43 +30,66 @@ const OOXML_ROUND_RECT_ADJUSTMENTS = Symbol('ppt-live-round-rect-adjustments');
 // if a line of CJK text *barely* fits on one line in the browser, PowerPoint's
 // slightly wider rendering pushes the last character to the next line.
 //
-// 0.15 inch (~14.4px @ 96dpi) ≈ one CJK glyph at ~14pt body text. This is
-// large enough to absorb the worst-case cross-renderer metric drift while
-// capTextBoxWidth() prevents any overflow past the slide edge.
+// Calibration: 0.36" ≈ ~2.4 CJK em at 14pt body text. Prefer a generous
+// right-side slack over false wraps — empty padding rarely hurts layout.
+// Safety must scale with font size — a 42pt title needs ~3× that margin.
+// Boxes may extend past the slide edge; PowerPoint allows off-slide shapes,
+// and clipping the safety margin would reintroduce wraps near the right edge.
 //
 // IMPORTANT: the safety width widens the text box to prevent wrapping, but
 // for right/center-aligned text this alone would shift the rendered glyphs
 // (right edge moves right, center moves right).  The callers compensate by
 // adjusting the x coordinate so that the *original* text region is preserved.
-const WIDTH_SAFETY_IN = 0.15;
+const WIDTH_SAFETY_BASE_IN = 0.36;
+const WIDTH_SAFETY_REF_PT = 14;
+const WIDTH_SAFETY_MIN_IN = 0.28;
+const WIDTH_SAFETY_MAX_IN = 1.6;
 
-function capTextBoxWidth(x, w) {
-  return Math.min(w, Math.max(0.15, SLIDE_W_IN - x - 0.02));
+export function textBoxWidthSafetyInches(fontSizePt) {
+  const size = Math.max(8, Number(fontSizePt) || WIDTH_SAFETY_REF_PT);
+  const scaled = WIDTH_SAFETY_BASE_IN * (size / WIDTH_SAFETY_REF_PT);
+  return Math.min(WIDTH_SAFETY_MAX_IN, Math.max(WIDTH_SAFETY_MIN_IN, scaled));
+}
+
+function resolveTextFontSizePt(el) {
+  const base = Number(el?.style?.fontSize) || WIDTH_SAFETY_REF_PT;
+  if (!Array.isArray(el?.text)) return base;
+  const runSizes = el.text
+    .map((run) => Number(run?.options?.fontSize) || 0)
+    .filter((size) => size > 0);
+  return runSizes.length ? Math.max(base, ...runSizes) : base;
+}
+
+function textUsesBold(el) {
+  if (el?.style?.bold) return true;
+  if (!Array.isArray(el?.text)) return false;
+  return el.text.some((run) => run?.options?.bold);
 }
 
 // Given an element's original x/w and its text-align, return {x, w} for the
-// PPTX text box.  The box is widened by WIDTH_SAFETY_IN to prevent wrapping,
-// but the x coordinate is shifted so the original left/right/center anchor
-// stays in the same visual position:
+// PPTX text box.  The box is widened by a font-size-scaled safety margin to
+// prevent wrapping, but the x coordinate is shifted so the original
+// left/right/center anchor stays in the same visual position:
 //   left   → extra width extends to the right (x unchanged)
 //   right  → extra width extends to the left  (x shifts left by safety)
 //   center → split equally                    (x shifts left by safety/2)
-function safeTextBoxGeometry(origX, origW, align, isVerticalText) {
-  const safety = isVerticalText ? 0 : WIDTH_SAFETY_IN;
-  const rawW = origW + safety;
-  if (!safety || align === 'left' || !align) {
-    return { x: origX, w: capTextBoxWidth(origX, rawW) };
+export function safeTextBoxGeometry(origX, origW, align, isVerticalText, fontSizePt, options = {}) {
+  if (isVerticalText) return { x: origX, w: Math.max(0.15, origW) };
+  let safety = textBoxWidthSafetyInches(fontSizePt);
+  // Faux / true bold can widen CJK runs by a few percent beyond the base drift.
+  if (options.bold) safety *= 1.12;
+  const w = Math.max(0.15, origW + safety);
+  if (align === 'left' || !align) {
+    return { x: origX, w };
   }
   if (align === 'right') {
-    const x = Math.max(0, origX - safety);
-    return { x, w: capTextBoxWidth(x, rawW) };
+    return { x: Math.max(0, origX - safety), w };
   }
   if (align === 'center') {
-    const x = Math.max(0, origX - safety / 2);
-    return { x, w: capTextBoxWidth(x, rawW) };
+    return { x: Math.max(0, origX - safety / 2), w };
   }
   // justify behaves like left for anchoring
-  return { x: origX, w: capTextBoxWidth(origX, rawW) };
+  return { x: origX, w };
 }
 
 function toImagePayload(src) {
@@ -301,7 +328,15 @@ function addSceneNodes(slideData, targetSlide, pres) {
       }
     } else if (el.type === 'text') {
       const isVerticalText = el.style.vert && el.style.vert !== 'horz';
-      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.x, el.w, el.style.align, isVerticalText);
+      const fontSizePt = resolveTextFontSizePt(el);
+      const { x: boxX, w: boxW } = safeTextBoxGeometry(
+        el.x,
+        el.w,
+        el.style.align,
+        isVerticalText,
+        fontSizePt,
+        { bold: textUsesBold(el) },
+      );
       const textOptions = {
         x: boxX,
         y: el.y,
@@ -331,6 +366,9 @@ function addSceneNodes(slideData, targetSlide, pres) {
       if (el.style.vert) textOptions.vert = el.style.vert;
       if (el.style.transparency != null && el.style.transparency !== undefined) {
         textOptions.transparency = el.style.transparency;
+      }
+      if (Number.isFinite(el.style.charSpacing)) {
+        textOptions.charSpacing = el.style.charSpacing;
       }
       targetSlide.addText(pptxTextValue(el.text), textOptions);
     }

@@ -8,7 +8,7 @@ import {
 } from '../src/editable-slide-scene.js';
 import { normalizeDocumentToEditableScene } from '../src/editable-slide-normalize.js';
 import { extractSlideDataFromDocument } from '../src/html2pptx-dom-core.js';
-import { buildSlideFromScene } from '../src/pptx-html-build.js';
+import { buildSlideFromScene, createPptxDeck } from '../src/pptx-html-build.js';
 import { sanitizeSlideDocumentRoot } from '../src/sanitize-slide-html.js';
 import {
   HTML_ALLOWED_TAGS,
@@ -1554,6 +1554,55 @@ test('removes a manual bullet split from its text by inline formatting', () => {
   assert.doesNotMatch(list.items.map((run) => run.text).join(''), /[•●]/u);
 });
 
+test('keeps dense list body text authored as li > p wrappers', async () => {
+  // Stress-test decks (and the element-model path) wrap every bullet in <p>.
+  // sanitize unwraps <li><p> into <ul><p>; empty list payloads previously
+  // failed scene validation and degrade deleted the whole UL (all body copy).
+  const doc = createDocument(`
+    <div class="quad" style="position:absolute;left:40px;top:125px;width:340px;height:200px;background:#1C1C1C;padding:12px">
+      <h3 style="color:#7f1d1d">高影响 · 高紧迫</h3>
+      <ul>
+        <li><p>支付链路抖动必须在 Q1 前根治。</p></li>
+        <li><p>多语种架构改造可提升可用性。</p></li>
+        <li><p>风控模型升级涉及监管报备。</p></li>
+      </ul>
+    </div>
+  `);
+  sanitizeSlideDocumentRoot(doc);
+  installMeasurableLayout(doc);
+
+  const slideData = extractSlideDataFromDocument(doc);
+  const list = slideData.elements.find((element) => element.type === 'list');
+  assert.ok(list, 'post-sanitize ul>p lists must still extract as a list element');
+  const listText = list.items.map((run) => run.text).join('');
+  assert.match(listText, /支付链路抖动/);
+  assert.match(listText, /多语种架构/);
+  assert.match(listText, /风控模型升级/);
+
+  const scene = normalizeDocumentToEditableScene(doc, {
+    slideNumber: 6,
+    width: 1280 / 96,
+    height: 720 / 96,
+  });
+  const sceneText = scene.nodes
+    .filter((node) => node.type === 'text')
+    .map((node) => (Array.isArray(node.text) ? node.text.map((run) => run.text).join('') : node.text))
+    .join('\n');
+  assert.match(sceneText, /支付链路抖动/);
+  assert.match(sceneText, /多语种架构/);
+
+  const pptx = createPptxDeck({ title: 'li-p-list' });
+  await buildSlideFromScene(scene, pptx);
+  const base64 = String(await pptx.write({ outputType: 'base64' })).replace(/^data:.*;base64,/, '');
+  const requireFromPptxGen = createRequire(import.meta.resolve('pptxgenjs'));
+  const JSZip = requireFromPptxGen('jszip');
+  const zip = await JSZip.loadAsync(base64, { base64: true });
+  const xml = await zip.file('ppt/slides/slide1.xml').async('string');
+  assert.match(xml, /支付链路抖动/);
+  assert.match(xml, /多语种架构/);
+  assert.match(xml, /风控模型升级/);
+});
+
 test('does not classify a dash without following whitespace as a manual bullet', () => {
   const doc = createDocument('<p>–40°C remains a normal sentence</p>');
 
@@ -2183,7 +2232,7 @@ test('scene serializer rejects legacy visual metadata before adding slide object
   assert.equal(objectCalls, 0);
 });
 
-test('export summaries count rewrites and blocking evidence only', () => {
+test('export summaries count rewrites degradations and blocking evidence', () => {
   const summary = summarizePptxExportDiagnostics([{
     slideNumber: 3,
     nodes: [{
@@ -2191,10 +2240,17 @@ test('export summaries count rewrites and blocking evidence only', () => {
       sourceId: 'gradient-strip',
       rewrite: 'css_gradient',
     }],
+  }], [{
+    slideNumber: 3,
+    sourceId: 'shadow-card',
+    severity: 'degrade',
+    code: 'box_shadow_removed',
   }]);
-  assert.deepEqual(summary.counts, { rewritten: 1, blocking: 0 });
+  assert.deepEqual(summary.counts, { rewritten: 1, blocking: 0, degraded: 1 });
   assert.equal(summary.hasWarnings, true);
   assert.equal(summary.locations[0].severity, 'rewrite');
+  assert.equal(summary.locations[1].severity, 'degrade');
+  assert.equal(summary.locations[1].code, 'box_shadow_removed');
   assert.equal(Object.hasOwn(summary.counts, 'localPng'), false);
   assert.equal(Object.hasOwn(summary.counts, 'fullPage'), false);
 });

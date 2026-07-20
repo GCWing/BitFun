@@ -5,6 +5,13 @@
  * After login / overwrite choice the dialog closes immediately while cloud
  * sync continues in the background; reopening Online Devices shows progress.
  * Clicking an online peer device enters Peer Device Mode and closes the dialog.
+ *
+ * Sync-choice invariants (do not regress):
+ * - When the relay already has cloud settings, `account_login` keeps the
+ *   session memory-only until `account_finalize_login`. Closing / canceling
+ *   the overwrite view must logout so a killed process does not restore login.
+ * - One-click deploy opens `RelayDeployWizard` (same feature as Remote Connect),
+ *   not an external README. See `src/features/relay-deploy/README.md`.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -13,10 +20,12 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { Modal, Button, Input, Alert } from '@/component-library';
 import {
   User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
-  ChevronRight, RefreshCw, Eye, EyeOff, X,
+  ChevronRight, RefreshCw, Eye, EyeOff, X, Rocket, Copy, Check,
 } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type { AccountHint, AccountDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { RelayDeployWizard } from '@/features/relay-deploy';
+import type { RelayDeployResult } from '@/features/relay-deploy';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -92,12 +101,16 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [view, setView] = useState<View>('login');
+  const [showRelayDeploy, setShowRelayDeploy] = useState(false);
 
   const [devices, setDevices] = useState<AccountDeviceInfo[]>([]);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   /** Only true after a successful list_devices response; gates the empty-state copy. */
   const [devicesReady, setDevicesReady] = useState(false);
   const [relayError, setRelayError] = useState<string | null>(null);
+  /** Relay URL of the current account session, shown in the devices view. */
+  const [accountRelayUrl, setAccountRelayUrl] = useState('');
+  const [copiedServerUrl, setCopiedServerUrl] = useState(false);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   /** Prevent overlapping background syncs from rapid clicks. */
   const syncInFlightRef = useRef(false);
@@ -107,8 +120,21 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setLocalDeviceId(null);
     setDevicesReady(false);
     setRelayError(null);
+    setAccountRelayUrl('');
+    setCopiedServerUrl(false);
     if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
   }, []);
+
+  const handleCopyRelayUrl = useCallback(async () => {
+    if (!accountRelayUrl) return;
+    try {
+      await navigator.clipboard.writeText(accountRelayUrl);
+      setCopiedServerUrl(true);
+      window.setTimeout(() => setCopiedServerUrl(false), 1500);
+    } catch (e) {
+      log.warn('copy relay url failed', e);
+    }
+  }, [accountRelayUrl]);
 
   const handleSessionExpired = useCallback(async (_error: unknown) => {
     try {
@@ -214,13 +240,20 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       setLocalDeviceId(info.device_id);
     }).catch((e) => { log.warn('getDeviceInfo failed', e); });
     remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
-      if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); }
+      if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); setAccountRelayUrl(hint.relay_url); }
     });
     remoteConnectAPI.accountStatus().then(async (status) => {
       if (status.logged_in && status.user_id) {
         setView('devices');
         try {
           await remoteConnectAPI.accountConnectDevices();
+          // Re-read after AuthOk may have adopted the account-bound device_id.
+          try {
+            const info = await remoteConnectAPI.getDeviceInfo();
+            setLocalDeviceId(info.device_id);
+          } catch (e) {
+            log.warn('getDeviceInfo after connect failed', e);
+          }
         } catch (err) {
           log.warn('accountConnectDevices failed', err);
           if (isAccountAuthFailure(err)) {
@@ -359,37 +392,68 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     workspacePath,
   ]);
 
-  const handleLogin = useCallback(async () => {
-    if (!validate()) return;
+  const performLogin = useCallback(async (server: string, user: string, pass: string) => {
     setLoading(true); setError(null);
     try {
-      const result = await remoteConnectAPI.accountLogin(authServer.trim(), username.trim(), password);
+      const result = await remoteConnectAPI.accountLogin(server, user, pass);
       if (result.has_cloud_settings) {
         setView('overwrite');
         setLoading(false);
         return;
       }
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
+      setAccountRelayUrl(server);
       startBackgroundSync(true);
       onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [validate, authServer, username, password, startBackgroundSync, success, t, onClose]);
+  }, [startBackgroundSync, success, t, onClose]);
+
+  const handleLogin = useCallback(async () => {
+    if (!validate()) return;
+    await performLogin(authServer.trim(), username.trim(), password);
+  }, [validate, authServer, username, password, performLogin]);
+
+  /**
+   * Deploy wizard finished: relay deployed and the first account registered.
+   * Fill the form and sign in against the new relay right away.
+   */
+  const handleRelayRegistered = useCallback((result: RelayDeployResult) => {
+    setShowRelayDeploy(false);
+    setAuthServer(result.relayUrl);
+    setUsername(result.username);
+    setPassword(result.password);
+    void performLogin(result.relayUrl, result.username, result.password);
+  }, [performLogin]);
+
+  const finalizeAndSync = useCallback(async (isFirstLogin: boolean) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await remoteConnectAPI.accountFinalizeLogin();
+      success(t('accountLogin.loginSuccess', { user_id: username }));
+      startBackgroundSync(isFirstLogin);
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+      try { await remoteConnectAPI.accountLogout(); } catch (logoutErr) {
+        log.warn('logout after finalize failure failed', logoutErr);
+      }
+      resetState();
+      setView('login');
+    } finally {
+      setLoading(false);
+    }
+  }, [onClose, resetState, startBackgroundSync, success, t, username]);
 
   const handleConfirmOverwrite = useCallback(() => {
-    setError(null);
-    success(t('accountLogin.loginSuccess', { user_id: username }));
-    startBackgroundSync(false);
-    onClose();
-  }, [onClose, startBackgroundSync, success, t, username]);
+    void finalizeAndSync(false);
+  }, [finalizeAndSync]);
 
   const handleUseLocalOverwrite = useCallback(() => {
-    setError(null);
-    success(t('accountLogin.loginSuccess', { user_id: username }));
-    startBackgroundSync(true);
-    onClose();
-  }, [onClose, startBackgroundSync, success, t, username]);
+    void finalizeAndSync(true);
+  }, [finalizeAndSync]);
 
   const handleCancelOverwrite = useCallback(async () => {
     try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
@@ -397,6 +461,15 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setView('login');
     onClose();
   }, [onClose, resetState]);
+
+  /** Closing the dialog during the sync-choice step abandons the incomplete login. */
+  const handleDialogClose = useCallback(() => {
+    if (view === 'overwrite') {
+      void handleCancelOverwrite();
+      return;
+    }
+    onClose();
+  }, [handleCancelOverwrite, onClose, view]);
 
   const handleLogout = useCallback(async () => {
     setLoading(true);
@@ -445,8 +518,9 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     : t('accountLogin.devices');
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="medium"
-      showCloseButton closeOnOverlayClick={false} contentClassName="modal__content--fill-flex">
+    <>
+      <Modal isOpen={isOpen} onClose={handleDialogClose} title={title} size="medium"
+        showCloseButton closeOnOverlayClick={false} contentClassName="modal__content--fill-flex">
       <div className="account-login-dialog">
         {error && (
           <div className="account-login-dialog__error-banner">
@@ -485,6 +559,18 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                   onChange={(e) => setAuthServer(e.target.value)}
                   placeholder={t('accountLogin.authServerPlaceholder')}
                   prefix={<Server size={16} />} size="medium" disabled={loading} />
+              </div>
+              <div className="account-login-dialog__deploy-entry">
+                <span>{t('relayDeploy.entryHint')}</span>
+                <button
+                  type="button"
+                  className="account-login-dialog__deploy-link"
+                  onClick={() => setShowRelayDeploy(true)}
+                  disabled={loading}
+                >
+                  <Rocket size={13} />
+                  {t('relayDeploy.entryAction')}
+                </button>
               </div>
             </div>
             <div className="account-login-dialog__actions">
@@ -539,6 +625,22 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
         {view === 'devices' && (
           <div className="account-login-dialog__scroll">
+            {accountRelayUrl && (
+              <div className="account-login-dialog__server-line">
+                <Server size={13} />
+                <span className="account-login-dialog__server-url" title={accountRelayUrl}>
+                  {accountRelayUrl}
+                </span>
+                <button
+                  type="button"
+                  className="account-login-dialog__copy-btn"
+                  onClick={handleCopyRelayUrl}
+                  title={t('accountLogin.copyServerUrl')}
+                >
+                  {copiedServerUrl ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              </div>
+            )}
             {syncStatus !== 'idle' && !relayError && (
               <div className={`account-login-dialog__sync-indicator ${syncStatus}`}>
                 <div className="account-login-dialog__sync-indicator-row">
@@ -644,7 +746,16 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
           </div>
         )}
       </div>
-    </Modal>
+      </Modal>
+
+      {showRelayDeploy && (
+        <RelayDeployWizard
+          isOpen={showRelayDeploy}
+          onClose={() => setShowRelayDeploy(false)}
+          onRegistered={handleRelayRegistered}
+        />
+      )}
+    </>
   );
 };
 

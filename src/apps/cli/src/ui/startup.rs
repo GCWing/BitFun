@@ -1,4 +1,4 @@
-use super::agent_selector::{AgentItem, AgentSelectorState};
+use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
 use super::login_form::{LoginFormAction, LoginFormState};
@@ -15,8 +15,8 @@ use super::theme::{
 };
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::actions::{
-    action_by_id, action_for_alias, ActionContext, ActionHandler, ActionSpec, ActionState,
-    ResolvedKeymap,
+    action_by_id, action_for_alias, removed_management_command_hint, ActionContext, ActionHandler,
+    ActionSpec, ActionState, ResolvedKeymap,
 };
 use crate::config::CliConfig;
 /// Startup page module
@@ -781,9 +781,8 @@ impl StartupPage {
                 KeyCode::Up => self.agent_selector.move_up(),
                 KeyCode::Down => self.agent_selector.move_down(),
                 KeyCode::Enter => {
-                    if let Some(selected) = self.agent_selector.confirm_selection() {
-                        self.agent_selector.hide();
-                        self.apply_agent_selection(&selected);
+                    if let Some(action) = self.agent_selector.confirm_selection() {
+                        self.handle_agent_selector_action(action);
                     }
                 }
                 KeyCode::Esc => self.navigate_back(),
@@ -998,7 +997,6 @@ impl StartupPage {
             ActionHandler::SwitchAgent => self.cycle_agent(1),
             ActionHandler::SwitchAgentReverse => self.cycle_agent(-1),
             ActionHandler::Skills => self.show_skill_selector(),
-            ActionHandler::Subagents => self.show_subagent_selector(),
             ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
                     prompt: Some("/mcps".to_string()),
@@ -1043,8 +1041,7 @@ impl StartupPage {
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::ClearConversation
             | ActionHandler::ReloadSkills
-            | ActionHandler::ExternalTools
-            | ActionHandler::ExternalAgents
+            | ActionHandler::Tools
             | ActionHandler::History
             | ActionHandler::Interrupt
             | ActionHandler::ToggleFocusedTool
@@ -1112,9 +1109,13 @@ impl StartupPage {
         self.text_input.clear();
         self.refresh_command_menu();
         let Some(action) = action_for_alias(cmd, ActionContext::Startup) else {
-            self.status = Some(format!(
-                "Unknown command: {cmd}. Type /help for available commands."
-            ));
+            self.status = Some(
+                removed_management_command_hint(cmd, ActionContext::Startup)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        format!("Unknown command: {cmd}. Type /help for available commands.")
+                    }),
+            );
             return None;
         };
         self.dispatch_action(action, ActionState::startup(false))
@@ -1257,9 +1258,33 @@ impl StartupPage {
                 }
             }
             LoginFormAction::SyncUseLocal => {
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(crate::account::finalize_login_after_sync_choice())
+                }) {
+                    self.login_form
+                        .set_error(format!("Finalize login failed: {e}"));
+                    let _ = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    });
+                    self.login_form.show();
+                    return None;
+                }
                 self.start_sync_and_show_account(true);
             }
             LoginFormAction::SyncUseCloud => {
+                if let Err(e) = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(crate::account::finalize_login_after_sync_choice())
+                }) {
+                    self.login_form
+                        .set_error(format!("Finalize login failed: {e}"));
+                    let _ = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(crate::account::logout())
+                    });
+                    self.login_form.show();
+                    return None;
+                }
                 self.start_sync_and_show_account(false);
             }
             LoginFormAction::SyncCancel => {
@@ -1435,6 +1460,7 @@ impl StartupPage {
         if success {
             self.model_display_name = selected_display_name.clone();
             self.status = Some(format!("Model switched to: {}", selected_display_name));
+            crate::account_sync::notify_local_settings_changed();
         } else {
             self.status = Some("Failed to switch model".to_string());
         }
@@ -1560,6 +1586,7 @@ impl StartupPage {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model added: {}", result_name));
             tracing::info!("Added new AI model: {}", model_id);
+            crate::account_sync::notify_local_settings_changed();
             // Reload model name display
             self.load_current_model_name();
         } else {
@@ -1683,6 +1710,7 @@ impl StartupPage {
             self.model_display_name = result_model_display;
             self.status = Some(format!("Model updated: {}", result_name));
             tracing::info!("Updated AI model: {}", model_id);
+            crate::account_sync::notify_local_settings_changed();
             self.load_current_model_name();
         } else {
             self.status = Some("Failed to update model".to_string());
@@ -1694,8 +1722,9 @@ impl StartupPage {
 
         let modes = self.get_mode_agents();
         if modes.is_empty() {
-            self.status = Some("No mode agents available".to_string());
-            return;
+            self.status = Some(
+                "Main agent modes are unavailable; agent management remains available.".to_string(),
+            );
         }
 
         let agent_items: Vec<AgentItem> = modes
@@ -1707,7 +1736,22 @@ impl StartupPage {
             .collect();
 
         self.agent_selector
-            .show(agent_items, Some(self.agent_type.clone()));
+            .show(agent_items, Some(self.agent_type.clone()), false, true);
+    }
+
+    fn handle_agent_selector_action(&mut self, action: AgentSelectorAction) {
+        match action {
+            AgentSelectorAction::SwitchMode(selected) => {
+                self.agent_selector.hide();
+                self.apply_agent_selection(&selected);
+            }
+            AgentSelectorAction::ManageSubagents => self.show_subagent_selector(),
+            AgentSelectorAction::ReviewExternalSources => {
+                self.status = Some(
+                    "External agent sources are available after starting a session.".to_string(),
+                );
+            }
+        }
     }
 
     fn apply_agent_selection(&mut self, selected: &AgentItem) {
@@ -1961,10 +2005,13 @@ impl StartupPage {
             name: info.name,
             description: info.description,
             level: info.level.as_str().to_string(),
+            source_slot: info.source_slot,
+            source_label: info.source_label,
             enabled: true,
             selected_for_runtime: true,
             default_enabled: true,
             is_shadowed: info.is_shadowed,
+            shadowed_by_key: info.shadowed_by_key,
         }
     }
 
@@ -1974,10 +2021,13 @@ impl StartupPage {
             name: info.skill.name,
             description: info.skill.description,
             level: info.skill.level.as_str().to_string(),
+            source_slot: info.skill.source_slot,
+            source_label: info.skill.source_label,
             enabled: info.effective_enabled,
             selected_for_runtime: info.selected_for_runtime,
             default_enabled: info.default_enabled,
             is_shadowed: info.skill.is_shadowed,
+            shadowed_by_key: info.skill.shadowed_by_key,
         }
     }
 

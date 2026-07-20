@@ -110,6 +110,25 @@
       color: var(--color-error);
       border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
     }
+
+    &.is-muted {
+      background: var(--element-bg-medium);
+      color: var(--color-text-muted);
+      border-color: var(--border-subtle);
+    }
+  }
+
+  &__external-source-badge {
+    color: var(--color-accent-500);
+    border-color: color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  }
+
+  &__external-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex-wrap: wrap;
   }
 
   &__runtime-badge {
@@ -151,5 +170,17 @@
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     word-break: break-all;
+  }
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-mcp-tools__external-section > .bitfun-config-page-section__header {
+    flex-direction: row;
+    align-items: flex-start;
+
+    .bitfun-config-page-section__extra {
+      width: auto;
+      justify-content: flex-end;
+    }
   }
 }

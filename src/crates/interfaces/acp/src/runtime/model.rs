@@ -22,7 +22,9 @@ impl BitfunAcpRuntime {
     ) -> Result<SetSessionModelResponse> {
         let session_id = request.session_id.to_string();
         let model_id = request.model_id.to_string();
-        self.set_session_model_id(&session_id, &model_id).await?;
+        let (session, _lifecycle_guard) = self.lock_active_session(&session_id).await?;
+        self.set_session_model_id_for_active(&session, &model_id)
+            .await?;
         Ok(SetSessionModelResponse::new())
     }
 
@@ -37,13 +39,16 @@ impl BitfunAcpRuntime {
             .as_value_id()
             .ok_or_else(|| Error::invalid_params().data("config option value must be a string"))?
             .to_string();
+        let (session, _lifecycle_guard) = self.lock_active_session(&session_id).await?;
 
         match config_id.as_str() {
             MODEL_CONFIG_ID => {
-                self.set_session_model_id(&session_id, &value).await?;
+                self.set_session_model_id_for_active(&session, &value)
+                    .await?;
             }
             MODE_CONFIG_ID => {
-                self.update_session_mode_inner(&session_id, &value).await?;
+                self.update_session_mode_for_active(&session, &value)
+                    .await?;
             }
             _ => {
                 return Err(Error::invalid_params()
@@ -64,27 +69,26 @@ impl BitfunAcpRuntime {
         ))
     }
 
-    async fn set_session_model_id(&self, session_id: &str, model_id: &str) -> Result<()> {
-        let acp_session = self
-            .sessions
-            .get(session_id)
-            .ok_or_else(|| Error::resource_not_found(Some(session_id.to_string())))?;
-        let bitfun_session_id = acp_session.bitfun_session_id.clone();
-        drop(acp_session);
-
+    async fn set_session_model_id_for_active(
+        &self,
+        session: &super::AcpSessionState,
+        model_id: &str,
+    ) -> Result<()> {
         let normalized_model_id = normalize_model_selection(model_id).await?;
 
         self.agent_runtime
             .update_session_model(AgentSessionModelUpdateRequest {
-                session_id: bitfun_session_id,
+                session_id: session.bitfun_session_id.clone(),
                 model_id: normalized_model_id.clone(),
             })
             .await
-            .map_err(|error| Self::internal_error(error.into_message()))?;
+            .map_err(|error| Self::session_runtime_error(&session.acp_session_id, error))?;
 
-        if let Some(mut state) = self.sessions.get_mut(session_id) {
-            state.model_id = normalized_model_id;
-        }
+        let mut state = self
+            .sessions
+            .get_mut(&session.acp_session_id)
+            .ok_or_else(|| Error::resource_not_found(Some(session.acp_session_id.clone())))?;
+        state.model_id = normalized_model_id;
 
         Ok(())
     }

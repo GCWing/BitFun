@@ -47,7 +47,10 @@ fn external_command_projections(
                     source.record.execution_domain_id.as_str(),
                     &entry.definition.name,
                     [
-                        (native_candidate_id.as_str(), env!("CARGO_PKG_VERSION")),
+                        (
+                            native_candidate_id.as_str(),
+                            action_conflict_behavior_version(action.id),
+                        ),
                         (
                             external_candidate_id.as_str(),
                             entry.definition.content_version.as_str(),
@@ -106,7 +109,10 @@ fn external_command_projections(
                     )
                 })
                 .collect::<Vec<_>>();
-            candidates.push((native_candidate_id.as_str(), env!("CARGO_PKG_VERSION")));
+            candidates.push((
+                native_candidate_id.as_str(),
+                action_conflict_behavior_version(action.id),
+            ));
             let conflict_key =
                 native_command_conflict_key(execution_domain, &conflict.command_name, candidates);
             Some((action.id.to_string(), native_candidate_id, conflict_key))
@@ -163,6 +169,85 @@ fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, 
         })
 }
 
+fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -> Vec<String> {
+    let policy = &snapshot.integration_policy;
+    if policy.status
+        == bitfun_core::external_sources::ExternalIntegrationPolicyStatus::IncompatibleSchema
+    {
+        return vec![
+            format!(
+                "Access: safely off; unsupported policy schema {}",
+                policy.schema_major
+            ),
+            "Recover: bitfun-cli config external reset-incompatible".to_string(),
+        ];
+    }
+    if !policy.status.is_compatible() {
+        return vec![
+            format!(
+                "Access: safely off; unsupported policy status '{}'",
+                policy.status.as_str()
+            ),
+            "Recover: upgrade BitFun or connect through a compatible workspace host".to_string(),
+        ];
+    }
+    let scope = if policy.workspace_override.is_some() {
+        "this project overrides global settings"
+    } else {
+        "this project inherits global settings"
+    };
+    if policy.registered_ecosystems.is_empty() {
+        return vec![format!("Access: unavailable; {scope}")];
+    }
+    let mut lines = vec![format!(
+        "Access: {}; {scope}",
+        if policy.effective.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    )];
+    for descriptor in &policy.registered_ecosystems {
+        let Some(ecosystem) = policy.effective.ecosystems.get(&descriptor.ecosystem_id) else {
+            lines.push(format!("{}: unavailable", descriptor.display_name));
+            continue;
+        };
+        let mode = match ecosystem.mode.as_str() {
+            "recommended" => "recommended",
+            "discover_only" => "discover only",
+            "disabled" => "off",
+            "custom" => "custom",
+            _ => "unsupported, safely off",
+        };
+        let capability_summary = descriptor
+            .capabilities
+            .iter()
+            .filter_map(|capability| {
+                ecosystem
+                    .capabilities
+                    .get(&capability.capability_id)
+                    .map(|access| {
+                        let access = match access.as_str() {
+                            "disabled" => "off",
+                            "discover_only" => "discover",
+                            "ask_before_use" => "ask",
+                            "auto" => "auto",
+                            _ => "unsupported, safely off",
+                        };
+                        format!("{} {access}", capability.capability_id.as_str())
+                    })
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        lines.push(format!(
+            "{}: {mode}; {capability_summary}",
+            descriptor.display_name
+        ));
+    }
+    lines.push("Manage: bitfun-cli config external --help".to_string());
+    lines
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ExternalToolReviewAction {
     Show,
@@ -180,7 +265,49 @@ enum ExternalToolReviewAction {
 
 struct ExternalToolMutationResult {
     action: ExternalToolReviewAction,
-    result: std::result::Result<ExternalSourceCatalogSnapshot, String>,
+    result: std::result::Result<ExternalSourceCatalogSnapshot, ExternalSourceOperationError>,
+}
+
+fn external_operation_error_status(surface: &str, error: &ExternalSourceOperationError) -> String {
+    let reason = match error.code {
+        ExternalSourceOperationErrorCode::InvalidRequest => {
+            "The requested change is no longer valid."
+        }
+        ExternalSourceOperationErrorCode::HostUnavailable => "The workspace host is not available.",
+        ExternalSourceOperationErrorCode::HostCapabilityUnavailable => {
+            "This workspace host is read-only for external integrations."
+        }
+        ExternalSourceOperationErrorCode::PolicyIncompatible => {
+            "Compatibility settings were written by a newer BitFun version."
+        }
+        ExternalSourceOperationErrorCode::PolicyLimited => {
+            "The current safety policy does not allow this change."
+        }
+        ExternalSourceOperationErrorCode::StaleRevision => {
+            "Compatibility settings changed before the update completed."
+        }
+        ExternalSourceOperationErrorCode::Conflict => {
+            "The available choices changed before the update completed."
+        }
+        ExternalSourceOperationErrorCode::NotFound => "That external item is no longer available.",
+        ExternalSourceOperationErrorCode::Unavailable => {
+            "The external integration is temporarily unavailable."
+        }
+        ExternalSourceOperationErrorCode::Internal => {
+            "BitFun could not complete the external integration update."
+        }
+    };
+    let next_step = if error.retryable {
+        format!(" Run /builtin:{surface} refresh and try again.")
+    } else {
+        format!(" Run /builtin:{surface} refresh to review the current state.")
+    };
+    let reference = error
+        .correlation_id
+        .as_deref()
+        .map(|id| format!(" Reference: {id}."))
+        .unwrap_or_default();
+    format!("{reason}{next_step}{reference}")
 }
 
 struct ExternalToolTargetSummary<'a> {
@@ -283,7 +410,7 @@ fn external_tool_next_step(activation: &ExternalToolActivationState) -> &'static
             "Change the code to a single JavaScript file supported by BitFun, then refresh."
         }
         ExternalToolActivationState::RuntimeUnavailable { .. } => {
-            "Please install or repair Node.js, then restart BitFun."
+            "Install or repair Node.js, then refresh. You can continue without external JavaScript tools while the run environment is unavailable."
         }
         ExternalToolActivationState::LoadFailed { .. } => {
             "Refresh to retry. If it still fails, fix the source code or keep these tools disabled."
@@ -394,15 +521,21 @@ fn external_tool_runtime_label(runtime: ExternalToolRuntimeKind) -> &'static str
 
 fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -> String {
     let Some(snapshot) = snapshot else {
-        return "External tools\n\nBitFun has not finished checking external tools. Run /external-tools refresh and try again."
+        return "Tools\n\nBitFun and MCP\nBuilt-in tools are provided by BitFun. Use /mcps to manage MCP servers.\n\nExternal AI applications\nBitFun has not finished checking imported tools. Run /builtin:tools refresh and try again."
             .to_string();
     };
     let mut lines = vec![
-        "External tools".to_string(),
+        "Tools".to_string(),
         String::new(),
+        "BitFun and MCP".to_string(),
+        "Built-in tools are provided by BitFun. Use /mcps to manage MCP servers.".to_string(),
+        String::new(),
+        "External AI applications".to_string(),
         "BitFun does not run external code while checking sources. Enabling tools runs their code with your user permissions and inherited environment variables. The code is not isolated by an OS sandbox, and processes it starts may keep running after cancellation."
             .to_string(),
     ];
+    lines.push(String::new());
+    lines.extend(external_integration_policy_lines(snapshot));
 
     if snapshot.discovery_pending {
         lines.push(String::new());
@@ -490,10 +623,10 @@ fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -
             ));
             let mut commands = Vec::new();
             if external_tool_can_enable(target.activation()) {
-                commands.push(format!("/external-tools enable {}", index + 1));
+                commands.push(format!("/builtin:tools enable {}", index + 1));
             }
             if external_tool_can_disable(target.activation()) {
-                commands.push(format!("/external-tools disable {}", index + 1));
+                commands.push(format!("/builtin:tools disable {}", index + 1));
             }
             if !commands.is_empty() {
                 lines.push(format!("     Commands: {}", commands.join("  or  ")));
@@ -502,12 +635,23 @@ fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -
     }
 
     lines.push(String::new());
-    lines.push("Name conflicts".to_string());
-    let pending_conflicts = snapshot
+    lines.push("Name conflicts - needs a choice".to_string());
+    let conflicts = snapshot
         .tool_conflicts
         .iter()
         .filter(|conflict| conflict.selected_candidate_id.is_none())
+        .chain(
+            snapshot
+                .tool_conflicts
+                .iter()
+                .filter(|conflict| conflict.selected_candidate_id.is_some()),
+        )
         .collect::<Vec<_>>();
+    let pending_count = conflicts
+        .iter()
+        .take_while(|conflict| conflict.selected_candidate_id.is_none())
+        .count();
+    let pending_conflicts = &conflicts[..pending_count];
     if pending_conflicts.is_empty() {
         lines.push("  None".to_string());
     } else {
@@ -519,7 +663,7 @@ fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -
             ));
             for (candidate_index, candidate) in conflict.candidates.iter().enumerate() {
                 lines.push(format!(
-                    "     {}. {} - /external-tools choose {} {}",
+                    "     {}. {} - /builtin:tools choose {} {}",
                     candidate_index + 1,
                     candidate.display_name,
                     conflict_index + 1,
@@ -533,11 +677,57 @@ fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -
         }
     }
 
+    lines.push(String::new());
+    lines.push("Current choices".to_string());
+    let resolved_conflicts = &conflicts[pending_count..];
+    if resolved_conflicts.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for (resolved_index, conflict) in resolved_conflicts.iter().enumerate() {
+            let conflict_index = pending_count + resolved_index;
+            lines.push(format!(
+                "  {}. Tools named '{}':",
+                conflict_index + 1,
+                conflict.tool_name
+            ));
+            for (candidate_index, candidate) in conflict.candidates.iter().enumerate() {
+                let status = if conflict.selected_candidate_id.as_deref()
+                    == Some(candidate.candidate_id.as_str())
+                {
+                    let selected_external_unavailable = candidate.source.is_some()
+                        && !snapshot.tools.iter().any(|tool| {
+                            tool.definition.candidate_id() == candidate.candidate_id
+                                && tool.activation == ExternalToolActivationState::Active
+                        });
+                    if selected_external_unavailable {
+                        "selected, currently unavailable"
+                    } else {
+                        "selected"
+                    }
+                } else {
+                    "not selected"
+                };
+                lines.push(format!(
+                    "     {}. {} [{}] - /builtin:tools choose {} {}",
+                    candidate_index + 1,
+                    candidate.display_name,
+                    status,
+                    conflict_index + 1,
+                    candidate_index + 1
+                ));
+            }
+            lines.push(
+                "     This choice is remembered until one of these tools changes. Choose another entry above to change it."
+                    .to_string(),
+            );
+        }
+    }
+
     append_external_source_issues(&mut lines, snapshot, ExternalIssueSurface::Tools);
 
     lines.push(String::new());
     lines.push(
-        "Use /external-tools refresh after editing, upgrading, or removing external tools."
+        "Use /builtin:tools refresh after editing, upgrading, or removing tools from an external AI application."
             .to_string(),
     );
     lines.join("\n")
@@ -565,7 +755,7 @@ enum ExternalAgentReviewAction {
 
 struct ExternalAgentMutationResult {
     action: ExternalAgentReviewAction,
-    result: std::result::Result<ExternalSourceCatalogSnapshot, String>,
+    result: std::result::Result<ExternalSourceCatalogSnapshot, ExternalSourceOperationError>,
 }
 
 fn external_tool_run_location_label(execution_domain_id: &str) -> &'static str {
@@ -713,15 +903,18 @@ fn external_agent_model_label(model: Option<&str>) -> &str {
 
 fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -> String {
     let Some(snapshot) = snapshot else {
-        return "External agents\n\nBitFun has not finished checking external agents. Run /external-agents refresh and try again."
+        return "Agents\n\nExternal AI applications\nBitFun has not finished checking imported agents. Run /builtin:agents refresh and try again."
             .to_string();
     };
     let mut lines = vec![
-        "External agents".to_string(),
+        "Agents".to_string(),
         String::new(),
+        "External AI applications".to_string(),
         "BitFun only reads supported settings while checking sources. Agent instructions stay hidden and are not added to the current agent. Once enabled, those instructions guide the selected model and may call the tools listed below. Before enabling, review the model, tools, and where the agent runs. BitFun asks again if the instructions, model, tools, or configuration sources change. Each use starts a new task; follow-up is not supported in this version."
             .to_string(),
     ];
+    lines.push(String::new());
+    lines.extend(external_integration_policy_lines(snapshot));
     if snapshot.discovery_pending {
         lines.push(String::new());
         lines.push(
@@ -787,11 +980,11 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
             match agent.activation_state {
                 ExternalSubagentActivationState::ApprovalRequired
                 | ExternalSubagentActivationState::Declined => lines.push(format!(
-                    "     Command: /external-agents enable {}",
+                    "     Command: /builtin:agents enable {}",
                     index + 1
                 )),
                 ExternalSubagentActivationState::Active => lines.push(format!(
-                    "     Command: /external-agents disable {}",
+                    "     Command: /builtin:agents disable {}",
                     index + 1
                 )),
                 _ => {}
@@ -800,16 +993,27 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
     }
 
     lines.push(String::new());
-    lines.push("Name conflicts".to_string());
+    lines.push("Name conflicts - needs a choice".to_string());
     let conflicts = snapshot
         .subagent_conflicts
         .iter()
         .filter(|conflict| conflict.selected_candidate_id.is_none())
+        .chain(
+            snapshot
+                .subagent_conflicts
+                .iter()
+                .filter(|conflict| conflict.selected_candidate_id.is_some()),
+        )
         .collect::<Vec<_>>();
-    if conflicts.is_empty() {
+    let pending_count = conflicts
+        .iter()
+        .take_while(|conflict| conflict.selected_candidate_id.is_none())
+        .count();
+    let pending_conflicts = &conflicts[..pending_count];
+    if pending_conflicts.is_empty() {
         lines.push("  None".to_string());
     } else {
-        for (conflict_index, conflict) in conflicts.iter().enumerate() {
+        for (conflict_index, conflict) in pending_conflicts.iter().enumerate() {
             lines.push(format!(
                 "  {}. Multiple agents are named '{}'. Choose one:",
                 conflict_index + 1,
@@ -822,7 +1026,7 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                     "BitFun/local"
                 };
                 lines.push(format!(
-                    "     {}. {} ({}, {}) - /external-agents choose {} {}",
+                    "     {}. {} ({}, {}) - /builtin:agents choose {} {}",
                     candidate_index + 1,
                     candidate.display_name,
                     candidate.source_label,
@@ -873,7 +1077,7 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                 }
             }
             lines.push(format!(
-                "     Keep unavailable: /external-agents choose {} 0",
+                "     Keep unavailable: /builtin:agents choose {} 0",
                 conflict_index + 1
             ));
             lines.push(
@@ -883,8 +1087,72 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
     }
 
     lines.push(String::new());
+    lines.push("Current choices".to_string());
+    let resolved_conflicts = &conflicts[pending_count..];
+    if resolved_conflicts.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for (resolved_index, conflict) in resolved_conflicts.iter().enumerate() {
+            let conflict_index = pending_count + resolved_index;
+            lines.push(format!(
+                "  {}. Agents named '{}':",
+                conflict_index + 1,
+                conflict.logical_id
+            ));
+            for (candidate_index, candidate) in conflict.candidates.iter().enumerate() {
+                let kind = if candidate.external {
+                    "external"
+                } else {
+                    "BitFun/local"
+                };
+                let status = if conflict.selected_candidate_id.as_deref()
+                    == Some(candidate.candidate_id.as_str())
+                {
+                    if candidate.external
+                        && snapshot.subagents.iter().any(|agent| {
+                            agent.candidate_id == candidate.candidate_id
+                                && agent.activation_state != ExternalSubagentActivationState::Active
+                        })
+                    {
+                        "selected, currently unavailable"
+                    } else {
+                        "selected"
+                    }
+                } else {
+                    "not selected"
+                };
+                lines.push(format!(
+                    "     {}. {} ({}, {}) [{}] - /builtin:agents choose {} {}",
+                    candidate_index + 1,
+                    candidate.display_name,
+                    candidate.source_label,
+                    kind,
+                    status,
+                    conflict_index + 1,
+                    candidate_index + 1
+                ));
+            }
+            let disabled = conflict.selected_candidate_id.as_deref()
+                == Some(DISABLED_EXTERNAL_AGENT_CONFLICT_CHOICE);
+            lines.push(format!(
+                "     Keep unavailable{}: /builtin:agents choose {} 0",
+                if disabled {
+                    " [selected]"
+                } else {
+                    " [not selected]"
+                },
+                conflict_index + 1
+            ));
+            lines.push(
+                "     This choice is remembered until one of these agents changes. Choose another entry above to change it."
+                    .to_string(),
+            );
+        }
+    }
+
+    lines.push(String::new());
     lines.push(
-        "Run /external-agents refresh after editing, upgrading, or removing external agent configuration."
+        "Run /builtin:agents refresh after editing, upgrading, or removing agent configuration in an external AI application."
             .to_string(),
     );
     lines.join("\n")
@@ -898,7 +1166,7 @@ fn external_agent_diagnostic_lines(
     let (reason, next_step) = if code.contains("configuration_unavailable") {
         (
             "BitFun could not read its model settings.",
-            "Open BitFun model settings and confirm they load. If not, restart BitFun. If the problem continues, check that BitFun can read and save its settings; then refresh.",
+            "Open BitFun model settings, check that BitFun can read and save its settings, then refresh.",
         )
     } else if code.contains("model_unavailable") {
         (
@@ -1081,7 +1349,7 @@ fn parse_external_agent_review_action(
     };
     if command.eq_ignore_ascii_case("refresh") {
         if parts.next().is_some() {
-            return Err("usage: /external-agents refresh".to_string());
+            return Err("usage: /builtin:agents refresh".to_string());
         }
         return Ok(ExternalAgentReviewAction::Refresh);
     }
@@ -1089,15 +1357,15 @@ fn parse_external_agent_review_action(
         return Ok(ExternalAgentReviewAction::Show);
     }
     let snapshot = reviewed_snapshot.or(current_snapshot).ok_or_else(|| {
-        "BitFun has not finished checking external agents; run /external-agents refresh".to_string()
+        "BitFun has not finished checking agents from external AI applications; run /builtin:agents refresh".to_string()
     })?;
     if command.eq_ignore_ascii_case("enable") || command.eq_ignore_ascii_case("disable") {
         let index = parse_positive_index(parts.next(), "agent number")?;
         if parts.next().is_some() {
-            return Err(format!("usage: /external-agents {command} <agent-number>"));
+            return Err(format!("usage: /builtin:agents {command} <agent-number>"));
         }
         let agent = snapshot.subagents.get(index).ok_or_else(|| {
-            "that agent is no longer available; reopen /external-agents".to_string()
+            "that agent is no longer available; run /builtin:agents refresh".to_string()
         })?;
         let approved = command.eq_ignore_ascii_case("enable");
         let allowed = if approved {
@@ -1114,7 +1382,7 @@ fn parse_external_agent_review_action(
         };
         if !allowed {
             return Err(format!(
-                "agent {} is {}; reopen /external-agents for its next step",
+                "agent {} is {}; run /builtin:agents refresh for its next step",
                 index + 1,
                 external_agent_activation_label(&agent.activation_state)
             ));
@@ -1137,16 +1405,22 @@ fn parse_external_agent_review_action(
             .map_err(|_| "choice number must be zero or a positive number".to_string())?;
         if parts.next().is_some() {
             return Err(
-                "usage: /external-agents choose <conflict-number> <choice-number>".to_string(),
+                "usage: /builtin:agents choose <conflict-number> <choice-number>".to_string(),
             );
         }
         let conflict = snapshot
             .subagent_conflicts
             .iter()
             .filter(|conflict| conflict.selected_candidate_id.is_none())
+            .chain(
+                snapshot
+                    .subagent_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_some()),
+            )
             .nth(conflict_index)
             .ok_or_else(|| {
-                "that conflict is no longer available; reopen /external-agents".to_string()
+                "that conflict is no longer available; run /builtin:agents refresh".to_string()
             })?;
         let (candidate_id, approve_external) = if candidate_number == 0 {
             (DISABLED_EXTERNAL_AGENT_CONFLICT_CHOICE.to_string(), false)
@@ -1155,7 +1429,7 @@ fn parse_external_agent_review_action(
                 .candidates
                 .get(candidate_number - 1)
                 .ok_or_else(|| {
-                    "that choice is no longer available; reopen /external-agents".to_string()
+                    "that choice is no longer available; run /builtin:agents refresh".to_string()
                 })?;
             (candidate.candidate_id.clone(), candidate.external)
         };
@@ -1167,7 +1441,7 @@ fn parse_external_agent_review_action(
             expected_preference_revision: snapshot.preference_revision,
         });
     }
-    Err("usage: /external-agents [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]".to_string())
+    Err("usage: /builtin:agents [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]".to_string())
 }
 
 fn external_agent_mutation_result_label(
@@ -1192,7 +1466,7 @@ fn external_agent_mutation_result_label(
                 (false, Some(ExternalSubagentActivationState::Declined)) => {
                     "External agent disabled".to_string()
                 }
-                _ => "External agent decision saved; reopen /external-agents to review its current state"
+                _ => "External agent decision saved; run /builtin:agents refresh to review its current state"
                     .to_string(),
             }
         }
@@ -1212,7 +1486,7 @@ fn external_agent_mutation_result_label(
                     "Agent source selected".to_string()
                 }
             } else {
-                "Agent choices changed; reopen /external-agents before choosing".to_string()
+                "Agent choices changed; run /builtin:agents refresh before choosing".to_string()
             }
         }
         ExternalAgentReviewAction::Show => "External agents".to_string(),

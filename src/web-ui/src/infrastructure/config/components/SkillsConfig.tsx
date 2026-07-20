@@ -9,6 +9,11 @@ import { useNotification } from '@/shared/notification-system';
 import { isRemoteWorkspace } from '@/shared/types';
 import { configAPI } from '../../api/service-api/ConfigAPI';
 import type { SkillInfo, SkillLevel, SkillMarketItem, SkillValidationResult } from '../types';
+import {
+  buildSkillCoverageSourceMap,
+  canDeleteSkill,
+  getSkillSourceLabel,
+} from '../skillSourcePresentation';
 import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './SkillsConfig.scss';
@@ -40,6 +45,10 @@ const SkillsConfig: React.FC = () => {
   const [marketError, setMarketError] = useState<string | null>(null);
   const [downloadingPackage, setDownloadingPackage] = useState<string | null>(null);
   const loadRequestIdRef = useRef(0);
+  const coverageSourceBySkillKey = useMemo(
+    () => buildSkillCoverageSourceMap(skills, t('list.item.unknownSource')),
+    [skills, t],
+  );
 
   const { workspace, workspacePath, hasWorkspace } = useCurrentWorkspace();
   const isRemote = isRemoteWorkspace(workspace);
@@ -138,7 +147,10 @@ const SkillsConfig: React.FC = () => {
 
   const confirmDelete = async () => {
     const skill = deleteConfirm.skill;
-    if (!skill) return;
+    if (!skill || !canDeleteSkill(skill)) {
+      setDeleteConfirm({ show: false, skill: null });
+      return;
+    }
     try {
       await configAPI.deleteSkill({
         skillKey: skill.key,
@@ -277,26 +289,61 @@ const SkillsConfig: React.FC = () => {
   };
 
   const renderSkillRow = (skill: SkillInfo) => {
+    const sourceLabel = getSkillSourceLabel(skill, t('list.item.unknownSource'));
+    const coverageSourceLabel = coverageSourceBySkillKey.get(skill.key);
     const badge = (
-      <span className="bitfun-collection-item__badge">
-        {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
-      </span>
-    );
-    const control = (
       <>
+        <span className="bitfun-collection-item__badge">
+          {isRemote
+            ? skill.level === 'user'
+              ? t('list.item.localUser')
+              : t('list.item.remoteProject')
+            : skill.level === 'user'
+              ? t('list.item.user')
+              : t('list.item.project')}
+        </span>
+        <span className="bitfun-collection-item__badge bitfun-skills-config__source-badge">
+          {sourceLabel}
+        </span>
+        {skill.isShadowed && (
+          <span
+            className="bitfun-collection-item__badge bitfun-skills-config__covered-badge"
+            title={t('list.item.shadowedTooltip', {
+              source: coverageSourceLabel ?? t('list.item.unknownSource'),
+            })}
+          >
+            {t('list.item.shadowed')}
+          </span>
+        )}
+      </>
+    );
+    const control = canDeleteSkill(skill) ? (
         <button
           type="button"
           className="bitfun-collection-btn bitfun-collection-btn--danger"
-          onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ show: true, skill }); }}
+          onClick={() => setDeleteConfirm({ show: true, skill })}
           title={t('list.item.deleteTooltip')}
         >
           <Trash2 size={14} />
         </button>
-      </>
-    );
+    ) : null;
     const details = (
       <>
         <div className="bitfun-collection-details__field">{skill.description}</div>
+        <div className="bitfun-collection-details__meta">
+          <span className="bitfun-collection-details__label">{t('list.item.sourceLabel')}</span>
+          <span>{sourceLabel}</span>
+        </div>
+        {skill.isShadowed && (
+          <div className="bitfun-collection-details__meta bitfun-skills-config__coverage-detail">
+            <span className="bitfun-collection-details__label">{t('list.item.shadowedLabel')}</span>
+            <span>
+              {t('list.item.shadowedDetail', {
+                source: coverageSourceLabel ?? t('list.item.unknownSource'),
+              })}
+            </span>
+          </div>
+        )}
         <div className="bitfun-collection-details__meta">
           <span className="bitfun-collection-details__label">{t('list.item.pathLabel')}</span>
           <code className="bitfun-skills-config__path-value">{skill.path}</code>
@@ -308,10 +355,12 @@ const SkillsConfig: React.FC = () => {
         key={skill.key}
         label={skill.name}
         badge={badge}
+        badgePlacement="below"
         control={control}
         details={details}
         expanded={expandedSkillIds.has(skill.key)}
         onToggle={() => toggleSkillExpanded(skill.key)}
+        className={skill.isShadowed ? 'bitfun-skills-config__item--covered' : undefined}
       />
     );
   };

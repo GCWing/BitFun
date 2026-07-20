@@ -28,6 +28,10 @@ use tokio::sync::mpsc;
 const SEND_MESSAGE_STREAM_ATTEMPTS: usize = 10;
 const TEST_CONNECTION_STREAM_ATTEMPTS: usize = 5;
 const SEND_MESSAGE_RETRY_BASE_DELAY_MS: u64 = 500;
+const SEND_MESSAGE_RATE_LIMIT_RETRY_BASE_DELAY_MS: u64 = 2_000;
+const SEND_MESSAGE_MAX_EXPONENTIAL_DELAY_MS: u64 = 30_000;
+const SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS: u64 = 60_000;
+const SEND_MESSAGE_MAX_RETRY_EXPONENT_SHIFT: u32 = 6;
 
 /// Streamed response result with the parsed stream and optional raw SSE receiver.
 pub struct StreamResponse {
@@ -249,7 +253,7 @@ impl AIClient {
                         &error.to_string(),
                     )
                     .await;
-                    let delay_ms = send_message_retry_delay_ms(attempt);
+                    let delay_ms = send_message_retry_delay_ms(attempt, &error.to_string());
                     warn!(
                         "Retrying aggregated AI stream after transient error: attempt={}/{}, delay_ms={}, error={}",
                         attempt + 1,
@@ -344,8 +348,23 @@ impl AIClient {
     }
 }
 
-fn send_message_retry_delay_ms(attempt_index: usize) -> u64 {
-    SEND_MESSAGE_RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
+fn send_message_retry_delay_ms(attempt_index: usize, error_message: &str) -> u64 {
+    let shift = u32::try_from(attempt_index)
+        .unwrap_or(u32::MAX)
+        .min(SEND_MESSAGE_MAX_RETRY_EXPONENT_SHIFT);
+    let msg = error_message.to_lowercase();
+    let is_rate_limit =
+        msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests");
+
+    if is_rate_limit {
+        SEND_MESSAGE_RATE_LIMIT_RETRY_BASE_DELAY_MS
+            .saturating_mul(1u64 << shift)
+            .min(SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS)
+    } else {
+        SEND_MESSAGE_RETRY_BASE_DELAY_MS
+            .saturating_mul(1u64 << shift)
+            .min(SEND_MESSAGE_MAX_EXPONENTIAL_DELAY_MS)
+    }
 }
 
 fn is_transient_stream_error(error_message: &str) -> bool {
@@ -485,7 +504,7 @@ fn gemini_response_to_trace(response: &GeminiResponse) -> ModelExchangeResponseT
 
 #[cfg(test)]
 mod tests {
-    use super::{is_transient_stream_error, AIClient};
+    use super::{is_transient_stream_error, send_message_retry_delay_ms, AIClient};
     use crate::providers::{anthropic, gemini, gemini::GeminiMessageConverter, openai};
     use crate::types::ReasoningMode;
     use crate::types::{AIConfig, ToolDefinition};
@@ -1472,6 +1491,28 @@ mod tests {
                 "expected transient stream error: {msg}"
             );
         }
+    }
+
+    #[test]
+    fn aggregated_retry_delay_grows_beyond_previous_four_second_cap() {
+        assert_eq!(send_message_retry_delay_ms(0, "connection reset"), 500);
+        assert_eq!(send_message_retry_delay_ms(3, "connection reset"), 4_000);
+        assert_eq!(send_message_retry_delay_ms(5, "connection reset"), 16_000);
+        assert_eq!(send_message_retry_delay_ms(6, "connection reset"), 30_000);
+        assert_eq!(send_message_retry_delay_ms(9, "connection reset"), 30_000);
+    }
+
+    #[test]
+    fn aggregated_rate_limit_retry_delay_uses_longer_ladder() {
+        assert_eq!(
+            send_message_retry_delay_ms(0, "Anthropic Streaming API error 429"),
+            2_000
+        );
+        assert_eq!(
+            send_message_retry_delay_ms(3, "rate limit exceeded"),
+            16_000
+        );
+        assert_eq!(send_message_retry_delay_ms(5, "too many requests"), 60_000);
     }
 
     #[test]

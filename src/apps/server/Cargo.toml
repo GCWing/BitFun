@@ -10,6 +10,8 @@ name = "bitfun-server"
 path = "src/main.rs"
 
 [dependencies]
+bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+
 # Web framework
 axum = { workspace = true }
 tower-http = { workspace = true }
@@ -19,6 +21,7 @@ tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+clap = { workspace = true }
 base64 = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

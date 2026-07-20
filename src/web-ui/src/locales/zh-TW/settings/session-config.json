@@ -1,18 +1,13 @@
 {
   "personalizationPage": {
     "title": "個性化",
-    "subtitle": "會話標題自動生成、Agent 夥伴"
+    "subtitle": "個性化配置你的 BitFun"
   },
   "permissionsPage": {
     "title": "權限管理",
     "subtitle": "加速工作區搜尋、工具執行、工具定義載入、Computer use、瀏覽器控制與偵錯模式"
   },
   "features": {
-    "sessionTitle": {
-      "title": "會話標題自動生成",
-      "subtitle": "新對話時 AI 自動生成簡潔標題",
-      "warning": "會話標題將使用用戶消息的前 20 個字符"
-    },
     "agentCompanion": {
       "title": "Agent 夥伴",
       "subtitle": "控制 BitFun 夥伴的顯示方式。",
@@ -101,17 +96,8 @@
     "preferredBrowserDesc": "選擇要由 BitFun 透過 CDP 控制的瀏覽器；預設表示跟隨系統預設瀏覽器。",
     "notInstalled": "未安裝"
   },
-  "model": {
-    "label": "模型",
-    "primary": "主力模型",
-    "fast": "快速模型"
-  },
   "common": {
     "enable": "啟用"
-  },
-  "models": {
-    "empty": "暫無可用模型，請先在「模型」中新增模型。",
-    "updateSuccess": "{{agentName}} 將使用 {{modelName}}"
   },
   "loading": {
     "text": "載入設定中..."

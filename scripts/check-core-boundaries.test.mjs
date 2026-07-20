@@ -380,6 +380,31 @@ test('public event projection stays limited to current host needs', async () => 
   );
 });
 
+test('embedded relay concrete lifecycle stays desktop-owned', async () => {
+  const [coreManifest, corePort, desktopManifest, desktopHost] = await Promise.all([
+    readFile(new URL('../src/crates/assembly/core/Cargo.toml', import.meta.url), 'utf8'),
+    readFile(
+      new URL(
+        '../src/crates/assembly/core/src/service/remote_connect/embedded_relay_host.rs',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    readFile(new URL('../src/apps/desktop/Cargo.toml', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/apps/desktop/src/embedded_relay_host.rs', import.meta.url),
+      'utf8',
+    ),
+  ]);
+
+  assert.doesNotMatch(coreManifest, /bitfun-relay-service/);
+  assert.doesNotMatch(corePort, /\b(?:axum|TcpListener|ServeDir|build_relay_router)\b/);
+  assert.match(desktopManifest, /bitfun-relay-service/);
+  assert.match(desktopHost, /impl EmbeddedRelayHost for DesktopEmbeddedRelayHost/);
+  assert.match(desktopHost, /TcpListener::bind/);
+  assert.match(desktopHost, /ServeDir::new/);
+});
+
 test('desktop preview rebuild inputs use the current crate layout', async () => {
   const devScript = await readFile(new URL('./dev.cjs', import.meta.url), 'utf8');
 

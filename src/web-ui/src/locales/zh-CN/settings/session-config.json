@@ -1,18 +1,13 @@
 {
   "personalizationPage": {
     "title": "个性化",
-    "subtitle": "会话标题自动生成、Agent 伙伴"
+    "subtitle": "个性化配置你的 BitFun"
   },
   "permissionsPage": {
     "title": "权限管理",
     "subtitle": "加速工作区搜索、工具执行、工具定义加载、Computer use、浏览器控制与调试模式"
   },
   "features": {
-    "sessionTitle": {
-      "title": "会话标题自动生成",
-      "subtitle": "新对话时 AI 自动生成简洁标题",
-      "warning": "会话标题将使用用户消息的前 20 个字符"
-    },
     "agentCompanion": {
       "title": "Agent 伙伴",
       "subtitle": "控制 BitFun 伙伴的显示方式。",
@@ -101,17 +96,8 @@
     "createLauncherDesc": "创建带调试端口的浏览器快捷方式。",
     "tabs": "个标签页"
   },
-  "model": {
-    "label": "模型",
-    "primary": "主力模型",
-    "fast": "快速模型"
-  },
   "common": {
     "enable": "启用"
-  },
-  "models": {
-    "empty": "暂无可用模型，请先在「模型」中添加模型。",
-    "updateSuccess": "{{agentName}} 将使用 {{modelName}}"
   },
   "loading": {
     "text": "加载配置中..."

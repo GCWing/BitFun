@@ -28,6 +28,7 @@ import type { FlowChatState } from '../types/flow-chat';
 import type { ContextItem, FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
 import { getInlineSlashCommandPickerQuery, getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
 import {
@@ -3093,12 +3094,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const sessionMode = currentSessionId
           ? FlowChatStore.getInstance().getState().sessions.get(currentSessionId)?.mode
           : undefined;
-        await FlowChatManager.getInstance().createChatSession({}, sessionMode);
+        await FlowChatManager.getInstance().createChatSession(
+          flowChatSessionConfigForCurrentWorkspace(workspace),
+          sessionMode,
+        );
       } catch (error) {
         log.error('Failed to create new session from boost menu', { error });
       }
     },
-    [currentSessionId]
+    [currentSessionId, workspace]
   );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

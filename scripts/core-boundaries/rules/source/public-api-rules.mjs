@@ -8,6 +8,8 @@ export const publicApiContractSlices = [
   'external-source-command-contract',
   'external-source-tool-contract',
   'external-source-subagent-contract',
+  'external-source-mcp-contract',
+  'external-integration-policy-contract',
 ];
 
 const contractSlices = {
@@ -18,6 +20,8 @@ const contractSlices = {
   externalSourceCommandContract: 'external-source-command-contract',
   externalSourceToolContract: 'external-source-tool-contract',
   externalSourceSubagentContract: 'external-source-subagent-contract',
+  externalSourceMcpContract: 'external-source-mcp-contract',
+  externalIntegrationPolicyContract: 'external-integration-policy-contract',
 };
 
 function pluginRuntimeEntry(symbol, p0, consumer, verification, contractSlice, wireImpact = true) {
@@ -202,6 +206,14 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeSubagentProviderOptions',
     'OpenCode subagent adapter fixture tests and explicit environment injection',
   ),
+  opencodeAdapterEntry(
+    'OpenCodeMcpProvider',
+    'bitfun-core external source composition root and OpenCode MCP adapter tests',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeMcpProviderOptions',
+    'OpenCode MCP adapter fixture tests and explicit environment injection',
+  ),
 ];
 
 function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
@@ -219,6 +231,55 @@ function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
     exit: 'remove only through a reviewed capability-contract migration with equivalent isolation and product tests',
   };
 }
+
+function externalIntegrationPolicyEntry(
+  symbol,
+  owner = 'product-domains external integration policy contract owner',
+  consumer = 'bitfun-core product composition and cross-host product surfaces',
+  wireImpact = true,
+) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'external integration policy contract tests, core policy lifecycle tests, cross-host route tests, and Web policy-control tests',
+    p0: 'host-owned external integration policy and OpenCode-compatible product defaults',
+    contractSlice: contractSlices.externalIntegrationPolicyContract,
+    wireImpact,
+    rationale:
+      'all product surfaces need one ecosystem-neutral, versioned, fail-closed policy contract while concrete ecosystem defaults remain in product assembly',
+    exit:
+      'remove only through a reviewed policy-contract migration with equivalent compatibility, safety-ceiling, and cross-host behavior tests',
+  };
+}
+
+export const externalIntegrationPolicyPublicApiEntries = [
+  'EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR',
+  'ExternalIntegrationMode',
+  'ExternalIntegrationAccess',
+  'ExternalEcosystemPolicy',
+  'ExternalIntegrationPolicySettings',
+  'ExternalIntegrationPolicySettingsView',
+  'ExternalEcosystemPolicyOverride',
+  'ExternalEcosystemPolicyOverrideView',
+  'ExternalIntegrationPolicyOverride',
+  'ExternalIntegrationPolicyOverrideView',
+  'ExternalIntegrationPolicyDocument',
+  'ExternalIntegrationCapabilityDescriptor',
+  'ExternalIntegrationEcosystemDescriptor',
+  'ExternalEcosystemPolicyView',
+  'EffectiveExternalEcosystemPolicy',
+  'EffectiveExternalIntegrationPolicy',
+  'ExternalIntegrationPolicyStatus',
+  'ExternalIntegrationPolicySnapshot',
+  'ExternalIntegrationPolicyScope',
+  'ExternalIntegrationPolicyOperation',
+  'ExternalIntegrationPolicyMutation',
+  'evaluate_external_integration_policy',
+  'external_integration_policy_snapshot',
+  'incompatible_external_integration_policy_snapshot',
+].map((symbol) => externalIntegrationPolicyEntry(symbol));
 
 function externalToolEntry(symbol, owner, consumer, wireImpact = false) {
   return {
@@ -253,6 +314,23 @@ function externalSubagentEntry(symbol, owner, consumer, wireImpact = false) {
   };
 }
 
+function externalMcpEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'external MCP contract, coordinator, OpenCode adapter, MCP owner lifecycle, TUI, Desktop, and Web tests',
+    p0: 'PR6 ecosystem-neutral MCP source activation and OpenCode MCP configuration vertical slice',
+    contractSlice: contractSlices.externalSourceMcpContract,
+    wireImpact,
+    rationale:
+      'PR6 needs typed static discovery, versioned approval, conflict, preparation, and runtime status contracts without OpenCode or MCP-owner payload leakage',
+    exit:
+      'remove only through a reviewed MCP source contract migration with equivalent fail-closed activation and lifecycle tests',
+  };
+}
+
 export const externalSourceContractPublicApiEntries = [
   'ExternalSourceContractError',
   'SourceKey',
@@ -271,6 +349,9 @@ export const externalSourceContractPublicApiEntries = [
   'ExternalSourceContext',
   'ExternalWatchRoot',
   'ExternalSourceProviderError',
+  'ExternalSourceOperationErrorCode',
+  'ExternalSourceOperationError',
+  'ExternalSourceOperationResult',
   'PromptCommandSourceProvider',
   'ExternalSourceLifecycleState',
   'ExternalSourceCatalogEntry',
@@ -279,6 +360,10 @@ export const externalSourceContractPublicApiEntries = [
   'PromptCommandConflict',
   'prompt_command_conflict_key',
   'ExternalSourceCatalogSnapshot',
+  'ExternalPromptCommandDefinitionSummary',
+  'ExternalPromptCommandSummary',
+  'ExternalSourcePublicSnapshot',
+  'ExternalSourceHostCapabilities',
 ].map((symbol) =>
   externalSourceEntry(
     symbol,
@@ -313,6 +398,33 @@ export const externalSourceContractPublicApiEntries = [
       symbol,
       'product-domains external tool contract owner',
       'ecosystem tool providers, external-tool coordinator, product composition, and neutral product surfaces',
+      true,
+    ),
+  ),
+  [
+    'SourceQualifiedMcpServerId',
+    'ExternalMcpTransportKind',
+    'ExternalMcpStaticStatus',
+    'ExternalMcpServerDefinition',
+    'ExternalMcpActivationState',
+    'ExternalMcpCatalogEntry',
+    'ExternalMcpApprovalRequest',
+    'ExternalMcpConflictCandidate',
+    'ExternalMcpConflict',
+    'SecretValue',
+    'PreparedExternalMcpTransport',
+    'PreparedExternalMcpServer',
+    'ExternalMcpProviderIdentity',
+    'ExternalMcpProviderSnapshot',
+    'ExternalMcpSourceProvider',
+    'external_mcp_approval_key',
+    'external_mcp_conflict_key',
+    'ExternalMcpDiscoveryInput',
+  ].map((symbol) =>
+    externalMcpEntry(
+      symbol,
+      'product-domains external MCP contract owner',
+      'ecosystem MCP providers, external-MCP coordinator, product reconciliation, and MCP runtime owner',
       true,
     ),
   ),
@@ -390,9 +502,45 @@ export const externalSourceCoordinatorPublicApiEntries = [
       'bitfun-core bounded concurrent external-subagent provider scheduler',
     ),
   ),
+  ...[
+    'ExternalMcpCoordinator',
+    'ExternalMcpCoordinatorSnapshot',
+    'ExternalMcpDiscoveryRequest',
+    'ExternalMcpDiscoveryResult',
+  ].map((symbol) =>
+    externalMcpEntry(
+      symbol,
+      'external-sources assembly owner',
+      'bitfun-core bounded concurrent external-MCP provider scheduler',
+    ),
+  ),
 ];
 
 export const externalSourceCorePublicApiEntries = [
+  ...[
+    'ExternalIntegrationAccess',
+    'ExternalIntegrationMode',
+    'ExternalIntegrationPolicyMutation',
+    'ExternalIntegrationPolicyOperation',
+    'ExternalIntegrationPolicyScope',
+    'EffectiveExternalIntegrationPolicy',
+    'ExternalIntegrationPolicySnapshot',
+    'ExternalIntegrationPolicyStatus',
+    'EcosystemId',
+    'ExternalIntegrationCapabilityId',
+    'EXTERNAL_CAPABILITY_COMMAND',
+    'EXTERNAL_CAPABILITY_TOOL',
+    'EXTERNAL_CAPABILITY_SUBAGENT',
+    'EXTERNAL_CAPABILITY_MCP',
+    'update_external_integration_policy',
+  ].map((symbol) =>
+    externalIntegrationPolicyEntry(
+      symbol,
+      'bitfun-core external integration policy composition facade',
+      'bitfun-cli, Desktop, Server, Peer Host, and Web API adapters',
+      true,
+    ),
+  ),
   ...[
     'ExpandedPromptCommand',
     'ExternalSourceCatalogEntry',
@@ -401,6 +549,10 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalSourceDiagnostic',
     'ExternalSourceDiagnosticSeverity',
     'ExternalSourceLifecycleState',
+    'ExternalSourceHostCapabilities',
+    'ExternalSourceOperationError',
+    'ExternalSourceOperationErrorCode',
+    'ExternalSourceOperationResult',
     'PromptCommandAvailability',
     'PromptCommandCatalogEntry',
     'PromptCommandDefinition',
@@ -410,10 +562,13 @@ export const externalSourceCorePublicApiEntries = [
     'remember_external_source_conflict_choice',
     'set_external_prompt_command_conflict_choice',
     'external_source_snapshot',
+    'external_source_read_only_snapshot',
     'set_external_source_enabled',
     'expand_external_prompt_command',
+    'sanitize_external_source_operation_error',
     'subscribe_external_source_updates',
     'ExternalSourceSubscription',
+    'ExternalSourcePublicSnapshot',
   ].map((symbol) =>
     externalSourceEntry(
       symbol,
@@ -427,6 +582,7 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalToolCapability',
     'ExternalToolCatalogEntry',
     'ExternalToolConflict',
+    'ExternalToolConflictCandidateKind',
     'ExternalToolRuntimeKind',
     'set_external_tool_target_decision',
     'set_external_tool_conflict_choice',
@@ -449,6 +605,22 @@ export const externalSourceCorePublicApiEntries = [
     externalSubagentEntry(
       symbol,
       'bitfun-core external subagent composition facade',
+      'bitfun-cli and desktop host APIs',
+    ),
+  ),
+  ...[
+    'ExternalMcpActivationState',
+    'ExternalMcpApprovalRequest',
+    'ExternalMcpCatalogEntry',
+    'ExternalMcpConflict',
+    'ExternalMcpTransportKind',
+    'native_mcp_candidate_id',
+    'set_external_mcp_server_decision',
+    'choose_external_mcp_conflict',
+  ].map((symbol) =>
+    externalMcpEntry(
+      symbol,
+      'bitfun-core external MCP composition facade',
       'bitfun-cli and desktop host APIs',
     ),
   ),
@@ -574,6 +746,12 @@ export const publicApiAllowlistRules = [
     reason:
       'managed plugin package and trust contracts must stay explicitly budgeted and ecosystem-neutral',
     allowedSymbolEntries: pluginSourceContractPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/external_integration_policy.rs',
+    reason:
+      'external integration policy contracts must stay ecosystem-neutral, versioned, fail-closed, and explicitly consumer-backed',
+    allowedSymbolEntries: externalIntegrationPolicyPublicApiEntries,
   },
   {
     path: 'src/crates/contracts/product-domains/src/external_sources.rs',

@@ -31,6 +31,7 @@ impl CoworkMode {
                 "AskUserQuestion".to_string(),
                 "TodoWrite".to_string(),
                 "Task".to_string(),
+                "AgentWait".to_string(),
                 "Skill".to_string(),
                 // Discovery + editing
                 "LS".to_string(),

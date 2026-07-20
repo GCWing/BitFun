@@ -6712,7 +6712,7 @@ var STRINGS = {
     generationPlanningSlides: "Planning slide content\u2026",
     generationPlanProgress: "Planned {{count}} slides so far\u2026",
     generationPlanReady: "{{count}} slides planned.",
-    generationOutlineReady: "Outline ready: {{count}} slides. Writing briefs\u2026",
+    generationOutlineReady: "Outline ready: {{count}} slides. Writing pages\u2026",
     generationBriefsBatchReady: "Briefs done for slides {{start}}-{{end}} ({{total}} total).",
     generationBriefsRetry: "Briefs for slides {{start}}-{{end}} issue; retrying ({{attempt}}/{{max}})\u2026",
     generationPlanRetry: "Planning issue; retrying ({{attempt}}/{{max}})\u2026",
@@ -6720,6 +6720,10 @@ var STRINGS = {
     generationSlidesPhase: "Generating {{count}} slides\u2026",
     generationAuditPhase: "Reviewing the full deck\u2026",
     generationRenderingSlide: "Generating slide {{slide}}/{{total}}\u2026",
+    generationWritingSlideProgress: "Writing slides {{done}}/{{total}}\u2026",
+    generationResearching: "Looking up reference material\u2026",
+    generationLoadingSkill: "Loading design guidelines\u2026",
+    generationVerifyingDeck: "Checking slide files\u2026",
     generationSlideReady: "Slide {{slide}}/{{total}} done.",
     generationSlideRetry: "Slide {{slide}} issue; retrying ({{attempt}}/{{max}})\u2026",
     generationSlideRepair: "Slide {{slide}} needs adjustment; retrying ({{attempt}}/{{max}})\u2026",
@@ -6727,7 +6731,7 @@ var STRINGS = {
     generationPartialDeck: "Slides {{missing}} did not finish. The finished slides are kept \u2014 send a follow-up prompt to fill the missing pages.",
     agentWorkingTitle: "Building your deck",
     agentWorkingKicker: "In progress",
-    agentWorkingClaim: "Your slides will appear in the canvas when generation finishes.",
+    agentWorkingClaim: "Pages appear here as soon as each slide file is written.",
     agentWorkingProof: "Progress",
     agentWorkingDetail: "This is a live preview area while your deck is being created.",
     agentWorkingSourceNote: "Content is generated from your prompt.",
@@ -6789,20 +6793,28 @@ var STRINGS = {
     generationProgressPulse: "Still generating\u2026",
     generationPageProgress: "Generating page {{current}}",
     generationSlideProgress: "{{count}} slides generated",
-    generationStepBrief: "Assumptions",
-    generationStepBriefDetail: "Read the prompt and plan the deck.",
+    generationStepSkill: "Guidelines",
+    generationStepSkillDetail: "Load the ppt-design skill and defaults.",
+    generationStepOutline: "Outline",
+    generationStepOutlineDetail: "Write project.json with the slide plan.",
+    generationStepSlides: "Slides",
+    generationStepSlidesDetail: "Write each slide HTML file.",
+    generationStepVerify: "Load",
+    generationStepVerifyDetail: "Verify files and open the deck.",
+    generationStepBrief: "Guidelines",
+    generationStepBriefDetail: "Load the ppt-design skill and defaults.",
     generationStepSpine: "Outline",
-    generationStepSpineDetail: "Create assertion-led slide titles from the request.",
-    generationStepProof: "Slide copy",
-    generationStepProofDetail: "Ground each page in source facts or clear assumptions.",
-    generationStepDesign: "Visual design",
-    generationStepDesignDetail: "Apply theme, layout, and visual hierarchy.",
-    generationStepCompile: "Load slides",
-    generationStepCompileDetail: "Load the generated deck into the editor.",
-    generationReadingBrief: "Reading your prompt...",
+    generationStepSpineDetail: "Write project.json with the slide plan.",
+    generationStepProof: "Research",
+    generationStepProofDetail: "Look up facts only when the topic needs them.",
+    generationStepDesign: "Slides",
+    generationStepDesignDetail: "Write each slide HTML file.",
+    generationStepCompile: "Load",
+    generationStepCompileDetail: "Verify files and open the deck.",
+    generationReadingBrief: "Loading design guidelines...",
     generationWritingClaims: "Building the outline...",
-    generationChoosingProof: "Writing slide copy...",
-    generationDesigningLayouts: "Designing slide layouts...",
+    generationChoosingProof: "Looking up reference material...",
+    generationDesigningLayouts: "Writing slide pages...",
     generationCompiled: "Your deck is ready.",
     generationSpineReady: "Claim spine ready.",
     generationLocalSpine: "Generation is unavailable. Please try again later.",
@@ -6894,9 +6906,11 @@ var STRINGS = {
     exportPptxFailed: "PPTX export failed:",
     exportDiagnosticsSummary: "Exported with visual adjustments: {{counts}}. {{locations}}",
     exportDiagnosticsRepaired: "{{count}} automatic repairs",
+    exportDiagnosticsDegraded: "{{count}} degraded",
     exportDiagnosticsBlocking: "{{count}} blocking failures",
     exportDiagnosticsLocation: "Slide {{slide}}, element {{source}} ({{phase}}): {{reason}}",
     exportDiagnosticsPhaseRepair: "automatic repair",
+    exportDiagnosticsPhaseDegraded: "degraded",
     exportDiagnosticsPhaseBlocking: "blocking failure",
     exportPdfWorking: "Rendering PDF...",
     exportPdfDone: "PDF downloaded.",
@@ -7005,6 +7019,10 @@ var STRINGS = {
     propertiesFont: "Font",
     propertiesColorMode: "Slide colors",
     propertiesStylePreset: "Style preset",
+    propertiesModel: "Model",
+    modelOptionAuto: "Auto (host default)",
+    modelOptionPrimary: "Primary",
+    modelOptionFast: "Fast",
     colorModeLight: "Light",
     colorModeDark: "Dark",
     fontSansSerif: "Sans-serif",
@@ -7094,7 +7112,7 @@ var STRINGS = {
     generationPlanningSlides: "\u6B63\u5728\u89C4\u5212\u5404\u9875\u5185\u5BB9\u2026",
     generationPlanProgress: "\u5DF2\u89C4\u5212 {{count}} \u9875\u5185\u5BB9\u2026",
     generationPlanReady: "\u5DF2\u89C4\u5212 {{count}} \u9875\u5185\u5BB9",
-    generationOutlineReady: "\u5927\u7EB2\u5DF2\u5B8C\u6210\uFF1A\u5171 {{count}} \u9875\uFF0C\u6B63\u5728\u64B0\u5199\u5404\u9875\u8981\u70B9\u2026",
+    generationOutlineReady: "\u5927\u7EB2\u5DF2\u5B8C\u6210\uFF1A\u5171 {{count}} \u9875\uFF0C\u5F00\u59CB\u5199\u9875\u9762\u2026",
     generationBriefsBatchReady: "\u7B2C {{start}}-{{end}} \u9875\u8981\u70B9\u5DF2\u5B8C\u6210\uFF08\u7D2F\u8BA1 {{total}} \u9875\uFF09\u3002",
     generationBriefsRetry: "\u7B2C {{start}}-{{end}} \u9875\u8981\u70B9\u9047\u5230\u95EE\u9898\uFF0C\u6B63\u5728\u91CD\u8BD5\uFF08{{attempt}}/{{max}}\uFF09\u2026",
     generationPlanRetry: "\u89C4\u5212\u9047\u5230\u95EE\u9898\uFF0C\u6B63\u5728\u91CD\u8BD5\uFF08{{attempt}}/{{max}}\uFF09\u2026",
@@ -7102,6 +7120,10 @@ var STRINGS = {
     generationSlidesPhase: "\u5F00\u59CB\u751F\u6210 {{count}} \u9875 PPT",
     generationAuditPhase: "\u6B63\u5728\u68C0\u67E5\u6574\u5957\u6F14\u793A\u7A3F\u2026",
     generationRenderingSlide: "\u6B63\u5728\u751F\u6210\u7B2C {{slide}}/{{total}} \u9875\u2026",
+    generationWritingSlideProgress: "\u6B63\u5728\u5199\u7B2C {{done}}/{{total}} \u9875\u2026",
+    generationResearching: "\u6B63\u5728\u68C0\u7D22\u53C2\u8003\u8D44\u6599\u2026",
+    generationLoadingSkill: "\u6B63\u5728\u52A0\u8F7D\u8BBE\u8BA1\u89C4\u8303\u2026",
+    generationVerifyingDeck: "\u6B63\u5728\u6821\u9A8C\u9875\u9762\u6587\u4EF6\u2026",
     generationSlideReady: "\u7B2C {{slide}}/{{total}} \u9875\u5DF2\u751F\u6210",
     generationSlideRetry: "\u7B2C {{slide}} \u9875\u751F\u6210\u9047\u5230\u95EE\u9898\uFF0C\u6B63\u5728\u91CD\u8BD5\uFF08{{attempt}}/{{max}}\uFF09\u2026",
     generationSlideRepair: "\u7B2C {{slide}} \u9875\u9700\u8981\u8C03\u6574\uFF0C\u6B63\u5728\u91CD\u65B0\u751F\u6210\uFF08{{attempt}}/{{max}}\uFF09\u2026",
@@ -7109,7 +7131,7 @@ var STRINGS = {
     generationPartialDeck: "\u7B2C {{missing}} \u9875\u672A\u5B8C\u6210\u3002\u5DF2\u5B8C\u6210\u7684\u9875\u9762\u5DF2\u4FDD\u7559\uFF0C\u53EF\u7EE7\u7EED\u53D1\u9001\u6307\u4EE4\u8865\u5168\u7F3A\u5931\u9875\u3002",
     agentWorkingTitle: "\u6B63\u5728\u751F\u6210\u6F14\u793A\u7A3F",
     agentWorkingKicker: "\u751F\u6210\u4E2D",
-    agentWorkingClaim: "\u5B8C\u6210\u540E\uFF0C\u6700\u7EC8\u9875\u9762\u4F1A\u51FA\u73B0\u5728\u4E2D\u95F4\u753B\u5E03\u3002",
+    agentWorkingClaim: "\u6BCF\u5199\u5B8C\u4E00\u9875\uFF0C\u5C31\u4F1A\u7ACB\u523B\u51FA\u73B0\u5728\u4E2D\u95F4\u753B\u5E03\u3002",
     agentWorkingProof: "\u8FDB\u5EA6",
     agentWorkingDetail: "\u8FD9\u662F\u751F\u6210\u8FC7\u7A0B\u4E2D\u7684\u9884\u89C8\u533A\u57DF\u3002",
     agentWorkingSourceNote: "\u5185\u5BB9\u5C06\u6839\u636E\u4F60\u7684 Prompt \u81EA\u52A8\u751F\u6210\u3002",
@@ -7171,20 +7193,28 @@ var STRINGS = {
     generationProgressPulse: "\u4ECD\u5728\u751F\u6210\u4E2D\u2026",
     generationPageProgress: "\u6B63\u5728\u751F\u6210\u7B2C {{current}} \u9875",
     generationSlideProgress: "\u5DF2\u751F\u6210 {{count}} \u9875",
-    generationStepBrief: "\u53D1\u5E03\u5047\u8BBE",
-    generationStepBriefDetail: "\u9605\u8BFB Prompt \u5E76\u89C4\u5212\u6F14\u793A\u7A3F\u3002",
-    generationStepSpine: "\u751F\u6210\u5927\u7EB2",
-    generationStepSpineDetail: "\u628A\u9700\u6C42\u8F6C\u6210\u65AD\u8A00\u5F0F\u9875\u9762\u6807\u9898\u3002",
-    generationStepProof: "\u9875\u9762\u6587\u6848",
-    generationStepProofDetail: "\u7528\u7D20\u6750\u4E8B\u5B9E\u6216\u660E\u786E\u5047\u8BBE\u652F\u6491\u6BCF\u9875\u3002",
-    generationStepDesign: "\u8BBE\u8BA1\u6392\u7248",
-    generationStepDesignDetail: "\u5E94\u7528\u4E3B\u9898\u3001\u7248\u5F0F\u4E0E\u89C6\u89C9\u5C42\u6B21\u3002",
-    generationStepCompile: "\u52A0\u8F7D\u9875\u9762",
-    generationStepCompileDetail: "\u5C06\u751F\u6210\u7ED3\u679C\u52A0\u8F7D\u4E3A\u53EF\u7F16\u8F91\u9875\u9762\u3002",
-    generationReadingBrief: "\u6B63\u5728\u7406\u89E3\u4F60\u7684 Prompt\u2026",
+    generationStepSkill: "\u8BBE\u8BA1\u89C4\u8303",
+    generationStepSkillDetail: "\u52A0\u8F7D ppt-design Skill \u4E0E\u9ED8\u8BA4\u5047\u8BBE\u3002",
+    generationStepOutline: "\u5927\u7EB2",
+    generationStepOutlineDetail: "\u5199\u5165 project.json \u5E7B\u706F\u7247\u8BA1\u5212\u3002",
+    generationStepSlides: "\u5199\u9875\u9762",
+    generationStepSlidesDetail: "\u9010\u9875\u5199\u5165 slide HTML \u6587\u4EF6\u3002",
+    generationStepVerify: "\u52A0\u8F7D",
+    generationStepVerifyDetail: "\u6821\u9A8C\u6587\u4EF6\u5E76\u6253\u5F00\u6F14\u793A\u7A3F\u3002",
+    generationStepBrief: "\u8BBE\u8BA1\u89C4\u8303",
+    generationStepBriefDetail: "\u52A0\u8F7D ppt-design Skill \u4E0E\u9ED8\u8BA4\u5047\u8BBE\u3002",
+    generationStepSpine: "\u5927\u7EB2",
+    generationStepSpineDetail: "\u5199\u5165 project.json \u5E7B\u706F\u7247\u8BA1\u5212\u3002",
+    generationStepProof: "\u68C0\u7D22",
+    generationStepProofDetail: "\u4EC5\u5728\u4E3B\u9898\u9700\u8981\u4E8B\u5B9E\u65F6\u68C0\u7D22\u8D44\u6599\u3002",
+    generationStepDesign: "\u5199\u9875\u9762",
+    generationStepDesignDetail: "\u9010\u9875\u5199\u5165 slide HTML \u6587\u4EF6\u3002",
+    generationStepCompile: "\u52A0\u8F7D",
+    generationStepCompileDetail: "\u6821\u9A8C\u6587\u4EF6\u5E76\u6253\u5F00\u6F14\u793A\u7A3F\u3002",
+    generationReadingBrief: "\u6B63\u5728\u52A0\u8F7D\u8BBE\u8BA1\u89C4\u8303\u2026",
     generationWritingClaims: "\u6B63\u5728\u751F\u6210\u5927\u7EB2\u2026",
-    generationChoosingProof: "\u6B63\u5728\u64B0\u5199\u9875\u9762\u6587\u6848\u2026",
-    generationDesigningLayouts: "\u6B63\u5728\u8BBE\u8BA1\u9875\u9762\u7248\u5F0F\u2026",
+    generationChoosingProof: "\u6B63\u5728\u68C0\u7D22\u53C2\u8003\u8D44\u6599\u2026",
+    generationDesigningLayouts: "\u6B63\u5728\u5199\u9875\u9762\u2026",
     generationCompiled: "\u6F14\u793A\u7A3F\u5DF2\u5C31\u7EEA\u3002",
     generationSpineReady: "\u8BBA\u70B9\u4E3B\u7EBF\u5DF2\u751F\u6210\u3002",
     generationLocalSpine: "\u751F\u6210\u670D\u52A1\u6682\u4E0D\u53EF\u7528\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002",
@@ -7276,9 +7306,11 @@ var STRINGS = {
     exportPptxFailed: "PPTX \u5BFC\u51FA\u5931\u8D25\uFF1A",
     exportDiagnosticsSummary: "\u5DF2\u5B8C\u6210\u5BFC\u51FA\uFF0C\u5E76\u8FDB\u884C\u4E86\u89C6\u89C9\u8C03\u6574\uFF1A{{counts}}\u3002{{locations}}",
     exportDiagnosticsRepaired: "\u81EA\u52A8\u4FEE\u590D {{count}} \u5904",
+    exportDiagnosticsDegraded: "\u964D\u7EA7\u5904\u7406 {{count}} \u5904",
     exportDiagnosticsBlocking: "\u963B\u65AD\u5931\u8D25 {{count}} \u5904",
     exportDiagnosticsLocation: "\u7B2C {{slide}} \u9875\uFF0C\u5143\u7D20 {{source}}\uFF08{{phase}}\uFF09\uFF1A{{reason}}",
     exportDiagnosticsPhaseRepair: "\u81EA\u52A8\u4FEE\u590D",
+    exportDiagnosticsPhaseDegraded: "\u964D\u7EA7\u5904\u7406",
     exportDiagnosticsPhaseBlocking: "\u963B\u65AD\u5931\u8D25",
     exportPdfWorking: "\u6B63\u5728\u6E32\u67D3 PDF...",
     exportPdfDone: "PDF \u5DF2\u4E0B\u8F7D\u3002",
@@ -7387,6 +7419,10 @@ var STRINGS = {
     propertiesFont: "\u5B57\u4F53",
     propertiesColorMode: "\u5E7B\u706F\u7247\u914D\u8272",
     propertiesStylePreset: "\u98CE\u683C\u9884\u8BBE",
+    propertiesModel: "\u6A21\u578B",
+    modelOptionAuto: "\u81EA\u52A8\uFF08\u8DDF\u968F\u4E3B\u673A\u9ED8\u8BA4\uFF09",
+    modelOptionPrimary: "\u4E3B\u6A21\u578B",
+    modelOptionFast: "\u5FEB\u901F\u6A21\u578B",
     colorModeLight: "\u6D45\u8272",
     colorModeDark: "\u6DF1\u8272",
     fontSansSerif: "\u975E\u886C\u7EBF",
@@ -7684,6 +7720,11 @@ function getAllStylePresets(locale) {
 var STORAGE_KEY = "pptLiveStudioStateV6";
 var HISTORY_KEY = "pptLiveDeckHistoryV1";
 var SCHEMA_VERSION = 6;
+var DEFAULT_PREFERRED_MODEL = "primary";
+function normalizePreferredModel(value2) {
+  const raw = String(value2 || "").trim();
+  return raw || DEFAULT_PREFERRED_MODEL;
+}
 var ELEMENT_TYPES = ["text", "list", "shape", "metric", "chart", "media"];
 var THEME_PRESETS = {
   executive: {
@@ -7841,6 +7882,7 @@ function createInitialState() {
       runId: "",
       skillKey: ""
     },
+    preferredModel: DEFAULT_PREFERRED_MODEL,
     style: defaultStyle(),
     outline: [],
     sources: { items: [], facts: [], warnings: [], summary: "", fetchedAt: 0 },
@@ -7881,6 +7923,7 @@ function ensureState(value2) {
     runId: String(state2.agentSession?.runId || ""),
     skillKey: String(state2.agentSession?.skillKey || "")
   };
+  state2.preferredModel = normalizePreferredModel(state2.preferredModel);
   state2.style = { ...defaultStyle(), ...state2.style || {} };
   delete state2.style.brandPrimary;
   delete state2.style.brandAccent;
@@ -7920,13 +7963,13 @@ function normalizeSources(value2 = {}) {
     fetchedAt: Number(value2.fetchedAt || 0)
   };
 }
+var GENERATION_PHASE_ORDER = ["skill", "outline", "slides", "verify"];
 function generationSteps() {
   return [
-    { id: "brief", label: translate("generationStepBrief"), detail: translate("generationStepBriefDetail") },
-    { id: "spine", label: translate("generationStepSpine"), detail: translate("generationStepSpineDetail") },
-    { id: "proof", label: translate("generationStepProof"), detail: translate("generationStepProofDetail") },
-    { id: "design", label: translate("generationStepDesign"), detail: translate("generationStepDesignDetail") },
-    { id: "compile", label: translate("generationStepCompile"), detail: translate("generationStepCompileDetail") }
+    { id: "skill", label: translate("generationStepSkill"), detail: translate("generationStepSkillDetail") },
+    { id: "outline", label: translate("generationStepOutline"), detail: translate("generationStepOutlineDetail") },
+    { id: "slides", label: translate("generationStepSlides"), detail: translate("generationStepSlidesDetail") },
+    { id: "verify", label: translate("generationStepVerify"), detail: translate("generationStepVerifyDetail") }
   ];
 }
 var GENERATION_EVENT_LIMIT = 80;
@@ -9642,6 +9685,7 @@ function renderGeneration(state2) {
   const hasError = steps.some((step) => step.status === "error");
   document.querySelector(".ppt-live")?.classList.toggle("is-generating", isActive);
   document.querySelector(".ppt-live")?.classList.toggle("has-generation-error", hasError);
+  renderGenerationProgress(state2, { isActive, hasError });
   if (!list) return;
   const merged = mergeTimeline(events, stream2);
   list.innerHTML = "";
@@ -9667,6 +9711,34 @@ function renderGeneration(state2) {
     }
   }
   scrollGenerationListToLatest(list);
+}
+function renderGenerationProgress(state2, { isActive, hasError }) {
+  const panel = byId("generationProgress");
+  const labelEl = byId("generationProgressLabel");
+  const countEl = byId("generationProgressCount");
+  const fillEl = byId("generationProgressFill");
+  const phaseList = byId("generationPhaseList");
+  if (!panel || !labelEl || !countEl || !fillEl || !phaseList) return;
+  const steps = state2.generation?.steps || [];
+  const show = Boolean(isActive || hasError || steps.some((step) => step.status === "done"));
+  panel.hidden = !show;
+  if (!show) return;
+  const drafted = Number(state2.generation?.draftedCount) || 0;
+  const target = Number(state2.generation?.slideTarget) || 0;
+  const running = steps.find((step) => step.status === "running");
+  const ratio = target > 0 ? Math.max(0, Math.min(1, drafted / target)) : running ? Math.max(0.08, steps.filter((step) => step.status === "done").length / Math.max(steps.length, 1)) : isActive ? 0.08 : 1;
+  labelEl.textContent = running?.label || (hasError ? translate("eventTurnFailed") : translate("processEventDone"));
+  countEl.textContent = target > 0 ? `${Math.min(drafted, target)} / ${target}` : drafted > 0 ? String(drafted) : "";
+  fillEl.style.width = `${Math.round(ratio * 100)}%`;
+  panel.classList.toggle("is-error", hasError);
+  panel.classList.toggle("is-active", isActive && !hasError);
+  phaseList.innerHTML = "";
+  for (const step of steps) {
+    const li = document.createElement("li");
+    li.className = `generation-phase is-${step.status || "pending"}`;
+    li.textContent = step.label || step.id;
+    phaseList.append(li);
+  }
 }
 function mergeTimeline(events, stream2) {
   const eventItems = events.map((e) => ({ ...e, source: "event" }));
@@ -9759,21 +9831,34 @@ function renderLiveIndicator(state2, merged) {
   return li;
 }
 function currentActivityLabel(state2, merged) {
+  const drafted = Number(state2.generation?.draftedCount) || 0;
+  const target = Number(state2.generation?.slideTarget) || 0;
+  const currentStep = (state2.generation?.steps || []).find((s) => s.status === "running");
+  if (currentStep?.id === "slides" && (drafted > 0 || target > 0)) {
+    return translate("generationWritingSlideProgress", {
+      done: drafted,
+      total: target || Math.max(drafted, 1)
+    });
+  }
   for (let i = merged.length - 1; i >= 0; i--) {
     const item = merged[i];
     if (item.source === "stream") {
       if (item.kind === "tool-start") {
+        const tool = String(item.toolName || "").toLowerCase();
+        const detail = truncateText(String(item.text || ""), 80);
+        if ((tool === "write" || tool === "edit") && detail) {
+          return `${friendlyStreamToolName(item.toolName)} ${detail}\u2026`;
+        }
         return `${friendlyStreamToolName(item.toolName)}\u2026`;
       }
       if (item.kind === "text") {
         return translate("processEventText");
       }
     }
-    if (item.source === "event" && item.title) {
+    if (item.source === "event" && item.title && item.kind !== "pulse") {
       return item.title;
     }
   }
-  const currentStep = (state2.generation?.steps || []).find((s) => s.status === "running");
   if (currentStep?.label) return `${currentStep.label}\u2026`;
   return translate("generationProgressPulse");
 }
@@ -9912,6 +9997,7 @@ function renderOutline2(state2, handlers2) {
 function renderThumbs(state2, handlers2) {
   const holder = byId("slideThumbs");
   if (!holder) return;
+  const previousScrollTop = holder.scrollTop;
   holder.innerHTML = "";
   if (!state2.slides.length) {
     const empty = document.createElement("div");
@@ -9956,7 +10042,9 @@ function renderThumbs(state2, handlers2) {
     button.addEventListener("click", () => handlers2.selectSlide(slide.id));
     holder.append(button);
   });
+  holder.scrollTop = previousScrollTop;
   requestAnimationFrame(() => {
+    holder.scrollTop = previousScrollTop;
     fitThumbPreviews();
     observeThumbPreviews();
   });
@@ -10413,7 +10501,7 @@ function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
   const textContainerSelector = "p,h1,h2,h3,h4,h5,h6,li";
   const manualBulletPattern = /^(\s*)([•●○▪‣·▸◆◇■□–—*-])\s+/u;
   const ambiguousBulletSymbols = /* @__PURE__ */ new Set(["-", "*", "\u2013", "\u2014"]);
-  function sourceIdOf3(element2) {
+  function sourceIdOf2(element2) {
     return element2?.dataset?.pptxSourceId || element2?.id || null;
   }
   function assignSourceIds() {
@@ -10461,7 +10549,7 @@ function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
     });
   }
   function derivedSourceId(element2, suffix) {
-    const base = sourceIdOf3(element2) || "pptx-source";
+    const base = sourceIdOf2(element2) || "pptx-source";
     let candidate = `${base}-${suffix}`;
     let sequence = 2;
     while (document2.querySelector(`[data-pptx-source-id="${candidate}"]`)) {
@@ -10471,7 +10559,7 @@ function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
     return candidate;
   }
   function addDiagnostic(severity, code, message, element2 = null) {
-    const sourceId = sourceIdOf3(element2);
+    const sourceId = sourceIdOf2(element2);
     const key = `${severity}:${code}:${sourceId || ""}`;
     if (seenDiagnostics.has(key)) return;
     seenDiagnostics.add(key);
@@ -10543,7 +10631,7 @@ function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
         });
       };
       copyOuterAttributes(current);
-      current.dataset.pptxSourceId = sourceIdOf3(outer);
+      current.dataset.pptxSourceId = sourceIdOf2(outer);
       [...outer.childNodes].forEach((node) => {
         if (node.nodeType === view.Node.ELEMENT_NODE && node.matches(textContainerSelector)) {
           if (current.textContent.trim() || current.children.length) fragments.push(current);
@@ -10622,7 +10710,7 @@ function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
       const block = document2.createElement("p");
       if (span.className) block.className = span.className;
       if (span.getAttribute("style")) block.setAttribute("style", span.getAttribute("style"));
-      block.dataset.pptxSourceId = sourceIdOf3(span);
+      block.dataset.pptxSourceId = sourceIdOf2(span);
       while (span.firstChild) block.appendChild(span.firstChild);
       span.replaceWith(block);
       addDiagnostic(
@@ -10683,7 +10771,7 @@ function sanitizeSlideDocumentRoot(doc = document, aggressive = false) {
               item.setAttribute(attribute.name, attribute.value);
             }
           });
-          item.dataset.pptxSourceId = sourceIdOf3(block);
+          item.dataset.pptxSourceId = sourceIdOf2(block);
           while (block.firstChild) item.appendChild(block.firstChild);
           removeManualBullet(item);
           list.appendChild(item);
@@ -11280,18 +11368,26 @@ function extractSlideDataFromDocument(doc = document) {
       h: el.offsetHeight
     };
   };
-  const parseBoxShadow = (boxShadow) => {
-    if (!boxShadow || boxShadow === "none") return null;
+  const splitBoxShadowLayers = (boxShadow) => {
+    const layers = [];
     let nesting = 0;
-    for (const character of boxShadow) {
+    let start = 0;
+    for (let index = 0; index < boxShadow.length; index += 1) {
+      const character = boxShadow[index];
       if (character === "(") nesting += 1;
       else if (character === ")") nesting = Math.max(0, nesting - 1);
-      else if (character === "," && nesting === 0) return null;
+      else if (character === "," && nesting === 0) {
+        layers.push(boxShadow.slice(start, index));
+        start = index + 1;
+      }
     }
-    const insetMatch = boxShadow.match(/inset/);
-    if (insetMatch) return null;
-    const colorMatch = boxShadow.match(/rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}/);
-    const withoutColor = boxShadow.replace(/rgba?\([^)]+\)/g, " ").replace(/#[0-9a-fA-F]{3,8}/g, " ");
+    layers.push(boxShadow.slice(start));
+    return layers.map((layer) => layer.trim()).filter(Boolean);
+  };
+  const parseBoxShadowLayer = (layer) => {
+    if (/\binset\b/i.test(layer)) return null;
+    const colorMatch = layer.match(/rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}/);
+    const withoutColor = layer.replace(/rgba?\([^)]+\)/g, " ").replace(/#[0-9a-fA-F]{3,8}/g, " ");
     const parts = withoutColor.match(/-?\d*\.?\d+(?:px|pt)?/g);
     if (!parts || parts.length < 2) return null;
     const offsetX = parseFloat(parts[0]);
@@ -11309,14 +11405,11 @@ function extractSlideDataFromDocument(doc = document) {
     if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) return null;
     const color = colorMatch ? rgbToHex2(colorMatch[0]) : "000000";
     if (!color) return null;
-    if (spread !== 0) {
-      if (offsetX === 0 && offsetY === 0 && blur === 0 && spread > 0) {
-        return {
-          mode: "ring",
-          ring: { spreadPx: spread, color, opacity }
-        };
-      }
-      return null;
+    if (spread > 0 && offsetX === 0 && offsetY === 0 && blur === 0) {
+      return {
+        mode: "ring",
+        ring: { spreadPx: spread, color, opacity }
+      };
     }
     let angle = 0;
     if (offsetX !== 0 || offsetY !== 0) {
@@ -11337,7 +11430,53 @@ function extractSlideDataFromDocument(doc = document) {
       }
     };
   };
+  const parseBoxShadow = (boxShadow) => {
+    if (!boxShadow || boxShadow === "none") return null;
+    for (const layer of splitBoxShadowLayers(boxShadow)) {
+      const parsed = parseBoxShadowLayer(layer);
+      if (parsed) return parsed;
+    }
+    return null;
+  };
   const outerShadowOf = (effect) => effect?.mode === "outer" ? effect.shadow : null;
+  const INLINE_FORMAT_TAGS = /* @__PURE__ */ new Set([
+    "SPAN",
+    "B",
+    "STRONG",
+    "I",
+    "EM",
+    "U",
+    "SMALL",
+    "LABEL",
+    "A",
+    "CODE",
+    "MARK",
+    "SUB",
+    "SUP"
+  ]);
+  const BLOCK_TEXT_WRAPPER_TAGS = /* @__PURE__ */ new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6"]);
+  const applyTextRunComputedStyle = (node, options, textTransform) => {
+    const computed = view.getComputedStyle(node);
+    const nextOptions = { ...options };
+    let nextTransform = textTransform;
+    const isBold = computed.fontWeight === "bold" || parseInt(computed.fontWeight, 10) >= 600;
+    if (isBold && !shouldSkipBold(computed.fontFamily)) nextOptions.bold = true;
+    if (computed.fontStyle === "italic") nextOptions.italic = true;
+    if (computed.textDecoration && computed.textDecoration.includes("underline")) {
+      nextOptions.underline = true;
+    }
+    if (computed.color && computed.color !== "rgb(0, 0, 0)") {
+      nextOptions.color = rgbToHex2(computed.color);
+      const transparency = extractAlpha(computed.color);
+      if (transparency !== null) nextOptions.transparency = transparency;
+    }
+    if (computed.fontSize) nextOptions.fontSize = pxToPoints(computed.fontSize);
+    if (computed.textTransform && computed.textTransform !== "none") {
+      const transformStr = computed.textTransform;
+      nextTransform = (text2) => applyTextTransform(text2, transformStr);
+    }
+    return { options: nextOptions, textTransform: nextTransform, computed };
+  };
   const parseInlineFormatting = (element2, baseOptions = {}, runs = [], baseTextTransform = (x) => x) => {
     let prevNodeIsText = false;
     element2.childNodes.forEach((node) => {
@@ -11352,34 +11491,24 @@ function extractSlideDataFromDocument(doc = document) {
           runs.push({ text: text2, options: { ...baseOptions } });
         }
       } else if (node.nodeType === view.Node.ELEMENT_NODE && node.textContent.trim()) {
-        const options = { ...baseOptions };
-        const computed = view.getComputedStyle(node);
-        if (["SPAN", "B", "STRONG", "I", "EM", "U", "SMALL", "LABEL", "A", "CODE", "MARK", "SUB", "SUP"].includes(node.tagName)) {
-          const isBold = computed.fontWeight === "bold" || parseInt(computed.fontWeight) >= 600;
-          if (isBold && !shouldSkipBold(computed.fontFamily)) options.bold = true;
-          if (computed.fontStyle === "italic") options.italic = true;
-          if (computed.textDecoration && computed.textDecoration.includes("underline")) options.underline = true;
-          if (computed.color && computed.color !== "rgb(0, 0, 0)") {
-            options.color = rgbToHex2(computed.color);
-            const transparency = extractAlpha(computed.color);
-            if (transparency !== null) options.transparency = transparency;
-          }
-          if (computed.fontSize) options.fontSize = pxToPoints(computed.fontSize);
-          if (computed.textTransform && computed.textTransform !== "none") {
-            const transformStr = computed.textTransform;
-            textTransform = (text2) => applyTextTransform(text2, transformStr);
-          }
-          if (computed.marginLeft && parseFloat(computed.marginLeft) > 0) {
-            addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-left.`, node);
-          }
-          if (computed.marginRight && parseFloat(computed.marginRight) > 0) {
-            addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-right.`, node);
-          }
-          if (computed.marginTop && parseFloat(computed.marginTop) > 0) {
-            addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-top.`, node);
-          }
-          if (computed.marginBottom && parseFloat(computed.marginBottom) > 0) {
-            addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-bottom.`, node);
+        if (INLINE_FORMAT_TAGS.has(node.tagName) || BLOCK_TEXT_WRAPPER_TAGS.has(node.tagName)) {
+          const styled = applyTextRunComputedStyle(node, baseOptions, textTransform);
+          const options = styled.options;
+          textTransform = styled.textTransform;
+          const computed = styled.computed;
+          if (INLINE_FORMAT_TAGS.has(node.tagName)) {
+            if (computed.marginLeft && parseFloat(computed.marginLeft) > 0) {
+              addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-left.`, node);
+            }
+            if (computed.marginRight && parseFloat(computed.marginRight) > 0) {
+              addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-right.`, node);
+            }
+            if (computed.marginTop && parseFloat(computed.marginTop) > 0) {
+              addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-top.`, node);
+            }
+            if (computed.marginBottom && parseFloat(computed.marginBottom) > 0) {
+              addDiagnostic("blocking", "inline_margin", `Inline element <${node.tagName.toLowerCase()}> has unsupported margin-bottom.`, node);
+            }
           }
           parseInlineFormatting(node, options, runs, textTransform);
         }
@@ -11661,6 +11790,13 @@ function extractSlideDataFromDocument(doc = document) {
     if (Number.isNaN(parsed)) return fontSize * 1.2;
     return pxToPoints(lh) || fontSize * 1.2;
   };
+  const resolveCharSpacing = (computed) => {
+    const raw = computed.letterSpacing;
+    if (!raw || raw === "normal") return void 0;
+    const px2 = parseFloat(raw);
+    if (!Number.isFinite(px2) || Math.abs(px2) < 0.01) return void 0;
+    return px2 * PT_PER_PX2;
+  };
   const emitTextElement = (el, type = el.tagName.toLowerCase(), exactFrame = false, rectOverride = null) => {
     const rect = rectOverride || rectFor(el);
     const text2 = el.textContent.replace(/\s+/g, " ").trim();
@@ -11697,6 +11833,8 @@ function extractSlideDataFromDocument(doc = document) {
       paraSpaceAfter: 0,
       margin: textInset
     };
+    const charSpacing = resolveCharSpacing(computed);
+    if (charSpacing !== void 0) baseStyle.charSpacing = charSpacing;
     const transparency = extractAlpha(computed.color);
     if (transparency !== null) baseStyle.transparency = transparency;
     if (rotation !== null) baseStyle.rotate = rotation;
@@ -12608,18 +12746,22 @@ function extractSlideDataFromDocument(doc = document) {
     if (el.tagName === "UL" || el.tagName === "OL") {
       const rect = rectFor(el);
       if (rect.width === 0 || rect.height === 0) return;
-      const liElements = Array.from(el.querySelectorAll("li"));
+      const liElements = Array.from(el.querySelectorAll(":scope > li"));
+      const listItemElements = liElements.length ? liElements : Array.from(el.querySelectorAll(":scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6"));
       const items = [];
       const ulComputed = view.getComputedStyle(el);
-      const ulPaddingLeftPt = pxToPoints(ulComputed.paddingLeft);
+      const ulPaddingLeftPt = (() => {
+        const value2 = pxToPoints(ulComputed.paddingLeft);
+        return Number.isFinite(value2) && value2 >= 0 ? value2 : 18;
+      })();
       const marginLeft = ulPaddingLeftPt * 0.5;
       const textIndent = ulPaddingLeftPt * 0.5;
-      const computed = view.getComputedStyle(liElements[0] || el);
+      const computed = view.getComputedStyle(listItemElements[0] || el);
       const textHex = rgbToHex2(computed.color);
       const bulletColor = resolveListBulletColor(el, liElements, textHex);
-      liElements.forEach((li, idx) => {
-        const isLast = idx === liElements.length - 1;
-        const runs = parseInlineFormatting(li, { breakLine: false });
+      listItemElements.forEach((itemEl, idx) => {
+        const isLast = idx === listItemElements.length - 1;
+        const runs = parseInlineFormatting(itemEl, { breakLine: false });
         if (runs.length > 0) {
           runs[0].text = runs[0].text.replace(/^[•\-\*▪▸]\s*/, "");
           runs[0].options.bullet = { indent: textIndent };
@@ -12641,9 +12783,18 @@ function extractSlideDataFromDocument(doc = document) {
         items.push(...runs);
       });
       const listFrame = expandTextFrame(el, rect, null);
-      const ulPadR = pxToInch(parseFloat(ulComputed.paddingRight) || 0);
-      const ulPadT = pxToInch(parseFloat(ulComputed.paddingTop) || 0);
-      const ulPadB = pxToInch(parseFloat(ulComputed.paddingBottom) || 0);
+      const inchPad = (value2) => {
+        const px2 = parseFloat(value2);
+        return Number.isFinite(px2) && px2 > 0 ? pxToInch(px2) : 0;
+      };
+      const ulPadR = inchPad(ulComputed.paddingRight);
+      const ulPadT = inchPad(ulComputed.paddingTop);
+      const ulPadB = inchPad(ulComputed.paddingBottom);
+      const listCharSpacing = resolveCharSpacing(computed);
+      if (!items.length) {
+        listItemElements.forEach((itemEl) => processed.add(itemEl));
+        return;
+      }
       pushElement({
         type: "list",
         items,
@@ -12657,16 +12808,21 @@ function extractSlideDataFromDocument(doc = document) {
           fontSize: pxToPoints(computed.fontSize) || 12,
           fontFace: computed.fontFamily.split(",")[0].replace(/['"]/g, "").trim() || "Arial",
           color: textHex,
-          bulletColor,
-          transparency: extractAlpha(computed.color),
+          ...bulletColor ? { bulletColor } : {},
+          ...extractAlpha(computed.color) != null ? { transparency: extractAlpha(computed.color) } : {},
           align: resolveTextAlign(computed),
           lineSpacing: resolveLineSpacing(computed),
           paraSpaceBefore: 0,
           paraSpaceAfter: pxToPoints(computed.marginBottom) || 0,
           // PptxGenJS margin array is [top, right, bottom, left].
-          margin: [ulPadT, ulPadR, ulPadB, marginLeft / 72]
+          margin: [ulPadT, ulPadR, ulPadB, marginLeft / 72],
+          ...listCharSpacing !== void 0 ? { charSpacing: listCharSpacing } : {}
         }
       }, el);
+      listItemElements.forEach((itemEl) => {
+        processed.add(itemEl);
+        itemEl.querySelectorAll("p, h1, h2, h3, h4, h5, h6").forEach((child) => processed.add(child));
+      });
       liElements.forEach((li) => processed.add(li));
       processed.add(el);
       return;
@@ -12820,6 +12976,7 @@ var TEXT_STYLE_FIELDS = /* @__PURE__ */ new Set([
   "lineSpacing",
   "paraSpaceBefore",
   "paraSpaceAfter",
+  "charSpacing",
   "margin",
   "rotate",
   "vert",
@@ -12835,7 +12992,8 @@ var TEXT_RUN_OPTION_FIELDS = /* @__PURE__ */ new Set([
   "underline",
   "breakLine",
   "bullet",
-  "transparency"
+  "transparency",
+  "charSpacing"
 ]);
 var BULLET_FIELDS = /* @__PURE__ */ new Set(["type", "indent"]);
 var LINE_STYLE_FIELDS = /* @__PURE__ */ new Set([
@@ -12906,11 +13064,11 @@ function hasValidMargin(value2) {
   return value2 === void 0 || isNonNegativeFinite(value2) || Array.isArray(value2) && value2.length === 4 && value2.every(isNonNegativeFinite);
 }
 function hasValidTextStyle(style) {
-  return hasOnlyFields(style, TEXT_STYLE_FIELDS) && (style.fontSize === void 0 || Number.isFinite(style.fontSize) && style.fontSize > 0) && (style.fontFace === void 0 || typeof style.fontFace === "string" && Boolean(style.fontFace.trim())) && isOptionalColor(style.color) && isOptionalColor(style.bulletColor) && ["bold", "italic"].every((field) => style[field] === void 0 || typeof style[field] === "boolean") && (style.underline === void 0 || typeof style.underline === "boolean" || typeof style.underline === "string") && (style.align === void 0 || TEXT_ALIGNS.has(style.align)) && (style.valign === void 0 || TEXT_VALIGNS.has(style.valign)) && ["lineSpacing", "paraSpaceBefore", "paraSpaceAfter"].every((field) => style[field] === void 0 || isNonNegativeFinite(style[field])) && hasValidMargin(style.margin) && (style.rotate === void 0 || Number.isFinite(style.rotate)) && (style.vert === void 0 || TEXT_VERTS.has(style.vert)) && (style.transparency === void 0 || style.transparency === null || isPercentage(style.transparency));
+  return hasOnlyFields(style, TEXT_STYLE_FIELDS) && (style.fontSize === void 0 || Number.isFinite(style.fontSize) && style.fontSize > 0) && (style.fontFace === void 0 || typeof style.fontFace === "string" && Boolean(style.fontFace.trim())) && isOptionalColor(style.color) && isOptionalColor(style.bulletColor) && ["bold", "italic"].every((field) => style[field] === void 0 || typeof style[field] === "boolean") && (style.underline === void 0 || typeof style.underline === "boolean" || typeof style.underline === "string") && (style.align === void 0 || TEXT_ALIGNS.has(style.align)) && (style.valign === void 0 || TEXT_VALIGNS.has(style.valign)) && ["lineSpacing", "paraSpaceBefore", "paraSpaceAfter"].every((field) => style[field] === void 0 || isNonNegativeFinite(style[field])) && (style.charSpacing === void 0 || Number.isFinite(style.charSpacing)) && hasValidMargin(style.margin) && (style.rotate === void 0 || Number.isFinite(style.rotate)) && (style.vert === void 0 || TEXT_VERTS.has(style.vert)) && (style.transparency === void 0 || style.transparency === null || isPercentage(style.transparency));
 }
 function hasValidTextRunOptions(options) {
   if (options === void 0) return true;
-  return hasOnlyFields(options, TEXT_RUN_OPTION_FIELDS) && (options.fontSize === void 0 || Number.isFinite(options.fontSize) && options.fontSize > 0) && (options.fontFace === void 0 || typeof options.fontFace === "string" && Boolean(options.fontFace.trim())) && isOptionalColor(options.color) && ["bold", "italic", "breakLine"].every((field) => options[field] === void 0 || typeof options[field] === "boolean") && (options.underline === void 0 || typeof options.underline === "boolean" || typeof options.underline === "string") && (options.transparency === void 0 || isPercentage(options.transparency)) && (options.bullet === void 0 || hasOnlyFields(options.bullet, BULLET_FIELDS) && (options.bullet.type === void 0 || options.bullet.type === "bullet") && (options.bullet.indent === void 0 || isNonNegativeFinite(options.bullet.indent)) && (options.bullet.type === "bullet" || options.bullet.indent !== void 0));
+  return hasOnlyFields(options, TEXT_RUN_OPTION_FIELDS) && (options.fontSize === void 0 || Number.isFinite(options.fontSize) && options.fontSize > 0) && (options.fontFace === void 0 || typeof options.fontFace === "string" && Boolean(options.fontFace.trim())) && isOptionalColor(options.color) && ["bold", "italic", "breakLine"].every((field) => options[field] === void 0 || typeof options[field] === "boolean") && (options.underline === void 0 || typeof options.underline === "boolean" || typeof options.underline === "string") && (options.transparency === void 0 || isPercentage(options.transparency)) && (options.charSpacing === void 0 || Number.isFinite(options.charSpacing)) && (options.bullet === void 0 || hasOnlyFields(options.bullet, BULLET_FIELDS) && (options.bullet.type === void 0 || options.bullet.type === "bullet") && (options.bullet.indent === void 0 || isNonNegativeFinite(options.bullet.indent)) && (options.bullet.type === "bullet" || options.bullet.indent !== void 0));
 }
 function hasValidTextValue(value2, allowEmpty = false) {
   if (!isTextValue(value2, allowEmpty)) return false;
@@ -14985,789 +15143,435 @@ function normalizeElementSlideToEditableScene(sourceSlide = {}, { slideNumber = 
   });
 }
 
-// src/preflight-slide-audit.js
-var VISIBLE_UNSUPPORTED_SELECTOR = [
-  "canvas",
-  "video",
-  "audio",
-  "iframe",
-  "object",
-  "embed",
-  "frame",
-  "frameset",
-  "portal",
-  "applet",
-  "input",
-  "button",
-  "select",
-  "textarea",
-  "progress",
-  "meter",
-  "dialog",
-  'link[rel~="stylesheet" i]'
-].join(",");
-function sourceIdOf2(element2, slideNumber) {
-  return element2?.getAttribute?.("data-pptx-source-id") || element2?.id || `slide-${slideNumber}`;
-}
-function fail2(slideNumber, element2, code, message) {
-  throw new EditableExportError({
-    slideNumber,
-    sourceId: sourceIdOf2(element2, slideNumber),
-    code,
-    message
-  });
-}
-function canonicalizeCssSyntax(value2) {
-  const input = String(value2 || "");
-  let output = "";
-  let quote = null;
-  for (let index = 0; index < input.length; ) {
-    const character = input[index];
-    if (quote) {
-      output += character;
-      index += 1;
-      if (character === "\\" && index < input.length) {
-        output += input[index];
-        index += 1;
-      } else if (character === quote) {
-        quote = null;
-      }
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      output += character;
-      index += 1;
-      continue;
-    }
-    if (character === "/" && input[index + 1] === "*") {
-      const end = input.indexOf("*/", index + 2);
-      index = end < 0 ? input.length : end + 2;
-      continue;
-    }
-    if (character !== "\\") {
-      output += character;
-      index += 1;
-      continue;
-    }
-    index += 1;
-    if (index >= input.length) break;
-    if (input[index] === "\n" || input[index] === "\r" || input[index] === "\f") {
-      if (input[index] === "\r" && input[index + 1] === "\n") index += 1;
-      index += 1;
-      continue;
-    }
-    const hex2 = input.slice(index).match(/^[0-9a-f]{1,6}/i)?.[0];
-    if (hex2) {
-      const codePoint = Number.parseInt(hex2, 16);
-      output += String.fromCodePoint(
-        codePoint === 0 || codePoint > 1114111 ? 65533 : codePoint
-      );
-      index += hex2.length;
-      if (/[\t\n\f\r ]/.test(input[index] || "")) index += 1;
-      continue;
-    }
-    output += input[index];
-    index += 1;
+// src/export-degrade.js
+var MAX_REPAIRS_PER_SLIDE = 48;
+function colorToHex2(value2, fallback = null) {
+  const raw = String(value2 || "").trim().toLowerCase();
+  if (!raw || raw === "transparent") return fallback;
+  const hex2 = raw.match(/^#([\da-f]{3}|[\da-f]{6})$/i)?.[1];
+  if (hex2) {
+    return (hex2.length === 3 ? hex2.split("").map((c) => c + c).join("") : hex2).toUpperCase();
   }
-  return output;
-}
-function cssValueHasUrlToken(value2) {
-  const css = canonicalizeCssSyntax(value2);
-  let quote = null;
-  for (let index = 0; index < css.length; ) {
-    const character = css[index];
-    if (quote) {
-      if (character === "\\") index += 2;
-      else {
-        if (character === quote) quote = null;
-        index += 1;
-      }
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      index += 1;
-      continue;
-    }
-    if (!/[a-z_-]/i.test(character)) {
-      index += 1;
-      continue;
-    }
-    const start = index;
-    while (index < css.length && /[a-z0-9_-]/i.test(css[index])) index += 1;
-    const identifier = css.slice(start, index).toLowerCase();
-    while (index < css.length && /\s/.test(css[index])) index += 1;
-    if (identifier === "url" && css[index] === "(") return true;
+  const rgb2 = raw.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i);
+  if (rgb2) {
+    const alpha = rgb2[4] == null ? 1 : rgb2[4].endsWith("%") ? Number.parseFloat(rgb2[4]) / 100 : Number(rgb2[4]);
+    if (Number.isFinite(alpha) && alpha <= 0.05) return fallback;
+    return rgb2.slice(1, 4).map((channel) => Math.round(Number(channel)).toString(16).padStart(2, "0")).join("").toUpperCase();
   }
-  return false;
+  return fallback;
 }
-function referencedCustomProperties(value2) {
-  const css = canonicalizeCssSyntax(value2);
-  const references = [];
-  let quote = null;
-  for (let index = 0; index < css.length; ) {
-    const character = css[index];
-    if (quote) {
-      if (character === "\\") index += 2;
-      else {
-        if (character === quote) quote = null;
-        index += 1;
-      }
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      index += 1;
-      continue;
-    }
-    const match = css.slice(index).match(/^var\s*\(\s*(--[a-z0-9_-]+)/i);
-    if (match) {
-      references.push(match[1]);
-      index += match[0].length;
-      continue;
-    }
-    index += 1;
-  }
-  return references;
-}
-function valueOrVariableHasUrl(value2, declarations, seen = /* @__PURE__ */ new Set()) {
-  if (cssValueHasUrlToken(value2)) return true;
-  return referencedCustomProperties(value2).some((property) => {
-    if (seen.has(property) || !declarations.has(property)) return false;
-    const nextSeen = new Set(seen);
-    nextSeen.add(property);
-    return valueOrVariableHasUrl(declarations.get(property), declarations, nextSeen);
-  });
-}
-function textShadowIsVisible(value2, declarations, seen = /* @__PURE__ */ new Set()) {
-  const normalized = canonicalizeCssSyntax(value2).trim().toLowerCase();
-  if (!normalized || normalized === "none") return false;
-  const references = referencedCustomProperties(value2);
-  if (!references.length) return true;
-  return references.some((property) => {
-    if (seen.has(property) || !declarations.has(property)) return false;
-    const nextSeen = new Set(seen);
-    nextSeen.add(property);
-    return textShadowIsVisible(declarations.get(property), declarations, nextSeen);
-  });
-}
-function styleDeclarations(style) {
-  const declarations = /* @__PURE__ */ new Map();
-  for (let index = 0; index < style.length; index += 1) {
-    const property = style[index].toLowerCase();
-    declarations.set(property, {
-      value: style.getPropertyValue(property),
-      important: style.getPropertyPriority(property) === "important"
-    });
-  }
-  return declarations;
-}
-function parsedDeclarations(doc, cssText) {
-  const probe = doc.createElement("div");
-  probe.style.cssText = canonicalizeCssSyntax(cssText);
-  return styleDeclarations(probe.style);
-}
-function compareSpecificity(left, right) {
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return left[index] - right[index];
-  }
-  return 0;
-}
-function applyCascadeDeclaration(target, property, declaration) {
-  const current = target.get(property);
-  const shouldReplace = !current || Number(declaration.important) > Number(current.important) || declaration.important === current.important && (compareSpecificity(declaration.specificity, current.specificity) > 0 || compareSpecificity(declaration.specificity, current.specificity) === 0 && declaration.sourceOrder >= current.sourceOrder);
-  if (shouldReplace) target.set(property, declaration);
-}
-function splitSelectorList(selectorText) {
-  const selectors = [];
-  let start = 0;
-  let quote = null;
-  let squareDepth = 0;
-  let roundDepth = 0;
-  for (let index = 0; index < selectorText.length; index += 1) {
-    const character = selectorText[index];
-    if (quote) {
-      if (character === "\\") index += 1;
-      else if (character === quote) quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") quote = character;
-    else if (character === "[") squareDepth += 1;
-    else if (character === "]") squareDepth = Math.max(0, squareDepth - 1);
-    else if (character === "(") roundDepth += 1;
-    else if (character === ")") roundDepth = Math.max(0, roundDepth - 1);
-    else if (character === "," && squareDepth === 0 && roundDepth === 0) {
-      selectors.push(selectorText.slice(start, index).trim());
-      start = index + 1;
-    }
-  }
-  selectors.push(selectorText.slice(start).trim());
-  return selectors.filter(Boolean);
-}
-function matchingParenthesis(value2, openingIndex) {
-  let depth = 1;
-  let quote = null;
-  for (let index = openingIndex + 1; index < value2.length; index += 1) {
-    const character = value2[index];
-    if (quote) {
-      if (character === "\\") index += 1;
-      else if (character === quote) quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") quote = character;
-    else if (character === "(") depth += 1;
-    else if (character === ")") {
-      depth -= 1;
-      if (depth === 0) return index;
-    }
-  }
-  return value2.length - 1;
-}
-function replaceCssUrlsForProjection(value2) {
-  const css = canonicalizeCssSyntax(value2);
-  let output = "";
-  let quote = null;
-  for (let index = 0; index < css.length; ) {
-    const character = css[index];
-    if (quote) {
-      output += character;
-      index += 1;
-      if (character === "\\" && index < css.length) {
-        output += css[index];
-        index += 1;
-      } else if (character === quote) quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      output += character;
-      index += 1;
-      continue;
-    }
-    if (!/[a-z_-]/i.test(character)) {
-      output += character;
-      index += 1;
-      continue;
-    }
-    const start = index;
-    while (index < css.length && /[a-z0-9_-]/i.test(css[index])) index += 1;
-    const identifier = css.slice(start, index);
-    let opening = index;
-    while (opening < css.length && /\s/.test(css[opening])) opening += 1;
-    if (identifier.toLowerCase() !== "url" || css[opening] !== "(") {
-      output += css.slice(start, index);
-      continue;
-    }
-    const closing = matchingParenthesis(css, opening);
-    output += 'url("#__pptx_paint_server_probe__")';
-    index = closing + 1;
-  }
-  return output;
-}
-function stripCssImports(value2) {
-  const css = String(value2 || "");
-  let output = "";
-  let quote = null;
-  for (let index = 0; index < css.length; ) {
-    const character = css[index];
-    if (quote) {
-      output += character;
-      index += 1;
-      if (character === "\\" && index < css.length) {
-        output += css[index];
-        index += 1;
-      } else if (character === quote) quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      output += character;
-      index += 1;
-      continue;
-    }
-    const importMatch = css.slice(index).match(/^@import\b/i);
-    if (!importMatch) {
-      output += character;
-      index += 1;
-      continue;
-    }
-    index += importMatch[0].length;
-    let parentheses = 0;
-    let importQuote = null;
-    while (index < css.length) {
-      const importCharacter = css[index];
-      if (importQuote) {
-        if (importCharacter === "\\") index += 2;
-        else {
-          if (importCharacter === importQuote) importQuote = null;
-          index += 1;
-        }
-      } else if (importCharacter === '"' || importCharacter === "'") {
-        importQuote = importCharacter;
-        index += 1;
-      } else if (importCharacter === "(") {
-        parentheses += 1;
-        index += 1;
-      } else if (importCharacter === ")") {
-        parentheses = Math.max(0, parentheses - 1);
-        index += 1;
-      } else if (importCharacter === ";" && parentheses === 0) {
-        index += 1;
-        break;
-      } else index += 1;
-    }
-  }
-  return output;
-}
-function maxSpecificity(selectors) {
-  return selectors.reduce((maximum, selector) => {
-    const specificity = selectorSpecificity(selector);
-    return compareSpecificity(specificity, maximum) > 0 ? specificity : maximum;
-  }, [0, 0, 0, 0]);
-}
-function selectorSpecificity(selector) {
-  const css = canonicalizeCssSyntax(selector);
-  const specificity = [0, 0, 0, 0];
-  let expectsType = true;
-  for (let index = 0; index < css.length; ) {
-    const character = css[index];
-    if (/\s/.test(character) || [">", "+", "~", ","].includes(character)) {
-      expectsType = true;
-      index += 1;
-      continue;
-    }
-    if (character === "#") {
-      specificity[1] += 1;
-      index += 1;
-      while (index < css.length && /[\w-]/.test(css[index])) index += 1;
-      expectsType = false;
-      continue;
-    }
-    if (character === ".") {
-      specificity[2] += 1;
-      index += 1;
-      while (index < css.length && /[\w-]/.test(css[index])) index += 1;
-      expectsType = false;
-      continue;
-    }
-    if (character === "[") {
-      specificity[2] += 1;
-      let quote = null;
-      index += 1;
-      while (index < css.length) {
-        if (quote) {
-          if (css[index] === "\\") index += 2;
-          else {
-            if (css[index] === quote) quote = null;
-            index += 1;
-          }
-        } else if (css[index] === '"' || css[index] === "'") {
-          quote = css[index];
-          index += 1;
-        } else if (css[index] === "]") {
-          index += 1;
-          break;
-        } else index += 1;
-      }
-      expectsType = false;
-      continue;
-    }
-    if (character === ":") {
-      const pseudoElement = css[index + 1] === ":";
-      index += pseudoElement ? 2 : 1;
-      const nameStart = index;
-      while (index < css.length && /[\w-]/.test(css[index])) index += 1;
-      const name = css.slice(nameStart, index).toLowerCase();
-      const legacyPseudoElement = ["before", "after", "first-line", "first-letter"].includes(name);
-      if (pseudoElement || legacyPseudoElement) specificity[3] += 1;
-      else if (!["where", "is", "not", "has"].includes(name)) specificity[2] += 1;
-      if (css[index] === "(") {
-        const closing = matchingParenthesis(css, index);
-        const argument = css.slice(index + 1, closing);
-        if (["is", "not", "has"].includes(name)) {
-          const nested = maxSpecificity(splitSelectorList(argument));
-          specificity[1] += nested[1];
-          specificity[2] += nested[2];
-          specificity[3] += nested[3];
-        } else if (["nth-child", "nth-last-child"].includes(name)) {
-          const ofMatch = argument.match(/\bof\b([\s\S]*)$/i);
-          if (ofMatch) {
-            const nested = maxSpecificity(splitSelectorList(ofMatch[1]));
-            specificity[1] += nested[1];
-            specificity[2] += nested[2];
-            specificity[3] += nested[3];
-          }
-        }
-        index = closing + 1;
-      }
-      expectsType = false;
-      continue;
-    }
-    if (character === "*") {
-      expectsType = false;
-      index += 1;
-      continue;
-    }
-    if (expectsType && /[a-z_-]/i.test(character)) {
-      specificity[3] += 1;
-      while (index < css.length && /[\w-]/.test(css[index])) index += 1;
-      expectsType = false;
-      continue;
-    }
-    index += 1;
-  }
-  return specificity;
-}
-function matchingSelectorSpecificity(element2, selectorText) {
-  const matchingSelectors = splitSelectorList(selectorText).filter((selector) => {
-    try {
-      return element2.matches(selector);
-    } catch {
-      return false;
-    }
-  });
-  return matchingSelectors.length ? maxSpecificity(matchingSelectors) : null;
-}
-function walkCssRules(rules, visit) {
-  for (const rule of rules || []) {
-    if (rule.selectorText && rule.style) visit(rule);
-    if (rule.cssRules) walkCssRules(rule.cssRules, visit);
-  }
-}
-function findCssOpeningBrace(css, start) {
-  let quote = null;
-  let parentheses = 0;
-  for (let index = start; index < css.length; index += 1) {
-    const character = css[index];
-    if (quote) {
-      if (character === "\\") index += 1;
-      else if (character === quote) quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") quote = character;
-    else if (character === "(") parentheses += 1;
-    else if (character === ")") parentheses = Math.max(0, parentheses - 1);
-    else if (character === "{" && parentheses === 0) return index;
-    else if (character === ";" && parentheses === 0) return -index - 2;
-  }
-  return -1;
-}
-function findCssClosingBrace(css, openingBrace) {
-  let quote = null;
-  let depth = 1;
-  for (let index = openingBrace + 1; index < css.length; index += 1) {
-    const character = css[index];
-    if (quote) {
-      if (character === "\\") index += 1;
-      else if (character === quote) quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") quote = character;
-    else if (character === "{") depth += 1;
-    else if (character === "}") {
-      depth -= 1;
-      if (depth === 0) return index;
-    }
-  }
-  return -1;
-}
-function walkCssTextRules(cssText, visit) {
-  const css = canonicalizeCssSyntax(cssText);
-  let cursor = 0;
-  while (cursor < css.length) {
-    while (cursor < css.length && /[\s;]/.test(css[cursor])) cursor += 1;
-    if (cursor >= css.length) break;
-    const openingResult = findCssOpeningBrace(css, cursor);
-    if (openingResult < 0) {
-      if (openingResult < -1) {
-        cursor = -openingResult - 1;
-        continue;
-      }
-      break;
-    }
-    const closingBrace = findCssClosingBrace(css, openingResult);
-    if (closingBrace < 0) break;
-    const prelude = css.slice(cursor, openingResult).trim();
-    const block = css.slice(openingResult + 1, closingBrace);
-    if (/^@(media|supports|layer|container|document)\b/i.test(prelude)) {
-      walkCssTextRules(block, visit);
-    } else if (!prelude.startsWith("@")) {
-      visit(prelude, block);
-    }
-    cursor = closingBrace + 1;
-  }
-}
-function collectStylesheetDeclarations(parsed) {
-  const byElement = /* @__PURE__ */ new Map();
-  let sourceOrder = 0;
-  for (const authoredStyle of parsed.querySelectorAll("style")) {
-    const cssDocument = parsed.implementation.createHTMLDocument("");
-    const style = cssDocument.createElement("style");
-    style.textContent = canonicalizeCssSyntax(authoredStyle.textContent || "");
-    cssDocument.head.appendChild(style);
-    const mergeRule = (selectorText, declarationsToMerge) => {
-      let targets;
-      try {
-        targets = parsed.querySelectorAll(selectorText);
-      } catch {
-        return;
-      }
-      for (const target of targets) {
-        const specificity = matchingSelectorSpecificity(target, selectorText);
-        if (!specificity) continue;
-        const declarations = byElement.get(target) || /* @__PURE__ */ new Map();
-        const entries = declarationsToMerge instanceof Map ? declarationsToMerge : styleDeclarations(declarationsToMerge);
-        for (const [property, declaration] of entries) {
-          applyCascadeDeclaration(declarations, property, {
-            ...declaration,
-            specificity,
-            sourceOrder
-          });
-        }
-        byElement.set(target, declarations);
-      }
-      sourceOrder += 1;
-    };
-    if (style.sheet?.cssRules) {
-      walkCssRules(style.sheet.cssRules, (rule) => mergeRule(rule.selectorText, rule.style));
-    } else {
-      walkCssTextRules(authoredStyle.textContent || "", (selectorText, declarationText) => {
-        mergeRule(selectorText, parsedDeclarations(parsed, declarationText));
-      });
-    }
-  }
-  for (const element2 of parsed.querySelectorAll("svg [fill], svg [stroke], svg[fill], svg[stroke]")) {
-    const declarations = byElement.get(element2) || /* @__PURE__ */ new Map();
-    for (const property of ["fill", "stroke"]) {
-      if (!element2.hasAttribute(property)) continue;
-      applyCascadeDeclaration(declarations, property, {
-        value: canonicalizeCssSyntax(element2.getAttribute(property)),
-        important: false,
-        specificity: [0, 0, 0, 0],
-        sourceOrder: -1
-      });
-    }
-    byElement.set(element2, declarations);
-  }
-  for (const element2 of parsed.querySelectorAll("[style]")) {
-    const declarations = byElement.get(element2) || /* @__PURE__ */ new Map();
-    for (const [property, declaration] of parsedDeclarations(
-      parsed,
-      element2.getAttribute("style") || ""
-    )) {
-      applyCascadeDeclaration(declarations, property, {
-        ...declaration,
-        specificity: [1, 0, 0, 0],
-        sourceOrder
-      });
-    }
-    byElement.set(element2, declarations);
-    sourceOrder += 1;
-  }
-  return byElement;
-}
-function declarationsWithInheritedCustomProperties(element2, declarationsByElement) {
-  const declarations = /* @__PURE__ */ new Map();
-  const ancestors = [];
-  let current = element2.parentElement;
-  while (current) {
-    ancestors.unshift(current);
-    current = current.parentElement;
-  }
-  for (const ancestor of ancestors) {
-    for (const [property, declaration] of declarationsByElement.get(ancestor) || []) {
-      if (property.startsWith("--") || ["fill", "stroke", "text-shadow"].includes(property)) {
-        declarations.set(property, declaration.value);
-      }
-    }
-  }
-  for (const [property, declaration] of declarationsByElement.get(element2) || []) {
-    declarations.set(property, declaration.value);
-  }
-  return declarations;
-}
-function auditAuthoredStyles(parsed, slideNumber) {
-  const declarationsByElement = collectStylesheetDeclarations(parsed);
-  for (const [element2] of declarationsByElement) {
-    const declarations = declarationsWithInheritedCustomProperties(
-      element2,
-      declarationsByElement
-    );
-    if (element2.closest?.("svg")) {
-      for (const property of ["fill", "stroke"]) {
-        const value2 = declarations.get(property);
-        if (value2 && valueOrVariableHasUrl(value2, declarations)) {
-          fail2(
-            slideNumber,
-            element2,
-            "svg_paint_server_unsupported",
-            "SVG paint-server fills and strokes cannot be represented as editable PowerPoint paint."
-          );
-        }
-      }
-    }
-    const textShadow = declarations.get("text-shadow");
-    if (textShadow && textShadowIsVisible(textShadow, declarations)) {
-      fail2(
-        slideNumber,
-        element2,
-        "text_shadow_unsupported",
-        "CSS text-shadow cannot be represented as editable PowerPoint text."
-      );
-    }
-  }
-}
-function makeMountedStyleProjection(parsed) {
-  const ownerDocument = globalThis.document;
-  if (!ownerDocument?.body || typeof globalThis.getComputedStyle !== "function") return null;
-  const host = ownerDocument.createElement("div");
-  host.setAttribute("aria-hidden", "true");
-  host.style.cssText = [
-    "position:fixed",
-    "left:-30000px",
-    "top:0",
-    "width:1280px",
-    "height:720px",
-    "overflow:hidden",
-    "opacity:0",
-    "pointer-events:none"
-  ].join(";");
-  const projectionRoot = host.attachShadow?.({ mode: "open" }) || host;
-  const indexedElements = [...parsed.querySelectorAll("*")];
-  indexedElements.forEach((element2, index) => {
-    element2.setAttribute("data-pptx-preflight-index", String(index));
-  });
-  for (const authoredStyle of parsed.querySelectorAll("style")) {
-    const style = ownerDocument.createElement("style");
-    style.textContent = stripCssImports(
-      replaceCssUrlsForProjection(authoredStyle.textContent || "")
-    );
-    projectionRoot.appendChild(style);
-  }
-  const controlStyle = ownerDocument.createElement("style");
-  controlStyle.textContent = [
-    '#pptx-cascade-control { fill:url("#__pptx_specificity_control__"); }',
-    '.pptx-cascade-control { fill:#fff;stroke:url("#__pptx_important_control__") !important; }',
-    "#pptx-cascade-control { stroke:#fff; }"
-  ].join("");
-  projectionRoot.appendChild(controlStyle);
-  const body = ownerDocument.importNode(parsed.body, true);
-  body.querySelectorAll("style,script").forEach((element2) => element2.remove());
-  for (const element2 of body.querySelectorAll("*")) {
-    if (element2.hasAttribute("style")) {
-      element2.setAttribute(
-        "style",
-        replaceCssUrlsForProjection(element2.getAttribute("style") || "")
-      );
-    }
-    for (const property of ["fill", "stroke"]) {
-      if (element2.hasAttribute(property)) {
-        element2.setAttribute(
-          property,
-          replaceCssUrlsForProjection(element2.getAttribute(property) || "")
-        );
-      }
-    }
-    for (const attribute of ["src", "srcset", "poster", "data"]) {
-      if (element2.hasAttribute(attribute)) element2.setAttribute(attribute, "data:,");
-    }
-    for (const attribute of ["href", "xlink:href"]) {
-      if (element2.hasAttribute(attribute)) {
-        element2.setAttribute(attribute, "#__pptx_preflight_resource__");
-      }
-    }
-    for (const attribute of [...element2.attributes]) {
-      if (attribute.name.toLowerCase().startsWith("on")) element2.removeAttribute(attribute.name);
-    }
-  }
-  projectionRoot.appendChild(body);
-  const controlSvg = ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
-  const control = ownerDocument.createElementNS("http://www.w3.org/2000/svg", "rect");
-  control.id = "pptx-cascade-control";
-  control.setAttribute("class", "pptx-cascade-control");
-  controlSvg.appendChild(control);
-  projectionRoot.appendChild(controlSvg);
-  ownerDocument.body.appendChild(host);
-  return {
-    host,
-    indexedElements,
-    projectedElement(element2) {
-      const index = element2.getAttribute("data-pptx-preflight-index");
-      return body.querySelector(`[data-pptx-preflight-index="${index}"]`);
-    },
-    supportsCascade() {
-      const computed = globalThis.getComputedStyle(control);
-      return cssValueHasUrlToken(computed.fill) && cssValueHasUrlToken(computed.stroke);
-    },
-    cleanup() {
-      host.remove();
-      indexedElements.forEach((element2) => {
-        element2.removeAttribute("data-pptx-preflight-index");
-      });
-    }
-  };
-}
-function auditMountedComputedStyles(parsed, slideNumber) {
-  let projection;
+function findElementBySourceId(doc, sourceId) {
+  if (!sourceId) return null;
+  const byDataId = [...doc.querySelectorAll("[data-pptx-source-id]")].find((element2) => element2.dataset.pptxSourceId === sourceId);
+  if (byDataId) return byDataId;
   try {
-    projection = makeMountedStyleProjection(parsed);
-    if (!projection || !projection.supportsCascade()) return false;
-    for (const element2 of projection.indexedElements) {
-      const projected = projection.projectedElement(element2);
-      if (!projected) continue;
-      const computed = globalThis.getComputedStyle(projected);
-      if (element2.closest?.("svg") && (cssValueHasUrlToken(computed.fill) || cssValueHasUrlToken(computed.stroke))) {
-        fail2(
-          slideNumber,
-          element2,
-          "svg_paint_server_unsupported",
-          "SVG paint-server fills and strokes cannot be represented as editable PowerPoint paint."
-        );
-      }
-      if (textShadowIsVisible(computed.textShadow, /* @__PURE__ */ new Map())) {
-        fail2(
-          slideNumber,
-          element2,
-          "text_shadow_unsupported",
-          "CSS text-shadow cannot be represented as editable PowerPoint text."
-        );
-      }
+    return doc.querySelector(`#${(globalThis.CSS?.escape || ((v) => v))(sourceId)}`);
+  } catch {
+    return null;
+  }
+}
+function scrubAuthoredStyle(element2, properties) {
+  const raw = element2?.dataset?.pptxAuthoredStyle;
+  if (!raw) return;
+  const next = raw.split(";").map((part) => part.trim()).filter(Boolean).filter((part) => !properties.some((property) => part.toLowerCase().startsWith(`${property}:`))).join("; ");
+  if (next) element2.dataset.pptxAuthoredStyle = next;
+  else delete element2.dataset.pptxAuthoredStyle;
+}
+function stripStyleProperty(element2, property, properties = [property], replacement = "none") {
+  element2.style?.setProperty?.(property, replacement, "important");
+  scrubAuthoredStyle(element2, properties);
+}
+function stripStyleProperties(element2, entries) {
+  entries.forEach(([property, replacement]) => {
+    element2.style?.setProperty?.(property, replacement ?? "none", "important");
+  });
+  scrubAuthoredStyle(element2, entries.map(([property]) => property));
+}
+function replaceWithRepairedClone(element2, mutate) {
+  const clone2 = element2.cloneNode(true);
+  mutate(clone2);
+  element2.replaceWith(clone2);
+  return clone2;
+}
+function record(code, sourceId, message) {
+  return { code, sourceId: sourceId || null, message };
+}
+function repairSvgPaintServer(element2) {
+  if (!element2) return false;
+  let applied = false;
+  for (const property of ["fill", "stroke"]) {
+    if (/url\s*\(/i.test(element2.getAttribute?.(property) || "")) {
+      element2.setAttribute(property, "#9AA3AF");
+      applied = true;
     }
-    return true;
-  } catch (error2) {
-    if (error2 instanceof EditableExportError) throw error2;
-    return false;
-  } finally {
-    projection?.cleanup();
+    if (/url\s*\(/i.test(element2.style?.getPropertyValue?.(property) || "")) {
+      element2.style.setProperty(property, "#9AA3AF", "important");
+      applied = true;
+    }
+  }
+  if (!applied) {
+    element2.removeAttribute("class");
+    ["fill", "stroke"].forEach((property) => {
+      element2.style?.setProperty?.(property, "#9AA3AF", "important");
+    });
+    applied = true;
+  }
+  return applied;
+}
+function removeMatching(element2, selector) {
+  const matches = element2?.matches?.(selector) ? [element2] : [...element2?.querySelectorAll?.(selector) || []];
+  matches.forEach((node) => node.remove());
+  return matches.length > 0;
+}
+function deleteGeneratedContentRules(doc) {
+  let removed = false;
+  doc.querySelectorAll("style").forEach((style) => {
+    const css = style.textContent || "";
+    if (!/::?(?:before|after)\b/i.test(css)) return;
+    const next = css.replace(/[^{}]+::?(?:before|after)\s*\{[^{}]*\}/gi, (block) => {
+      if (!/\bcontent\s*:\s*(?!none\b|normal\b|"''|"")([^;}]+)/i.test(block)) return block;
+      removed = true;
+      return "";
+    });
+    if (next !== css) style.textContent = next;
+  });
+  return removed;
+}
+function stripLeadingManualBullet(element2) {
+  const view = element2?.ownerDocument?.defaultView;
+  if (!element2 || !view) return false;
+  const walker = element2.ownerDocument.createTreeWalker(element2, view.NodeFilter.SHOW_TEXT);
+  const textNode2 = walker.nextNode();
+  if (!textNode2) return false;
+  const next = String(textNode2.textContent || "").replace(/^(\s*)[•●○▪‣·▸◆◇■□]\s*/u, "$1");
+  if (next === textNode2.textContent) return false;
+  textNode2.textContent = next;
+  return true;
+}
+function repairCanvasSize(doc, { widthPx, heightPx }) {
+  const body = doc.body;
+  if (!body) return false;
+  body.style?.setProperty?.("width", `${widthPx}px`, "important");
+  body.style?.setProperty?.("height", `${heightPx}px`, "important");
+  body.style?.setProperty?.("max-width", `${widthPx}px`, "important");
+  body.style?.setProperty?.("max-height", `${heightPx}px`, "important");
+  scrubAuthoredStyle(body, ["width", "height", "max-width", "max-height"]);
+  return true;
+}
+function applyExportDegradationRepair(doc, diagnostic, { slideNumber, widthPx, heightPx } = {}) {
+  const code = String(diagnostic?.code || "");
+  const sourceId = diagnostic?.sourceId || null;
+  const element2 = findElementBySourceId(doc, sourceId) || (sourceId && [`slide-${slideNumber}`, "slide-document"].includes(sourceId) ? doc.body : null);
+  switch (code) {
+    case "box_shadow_unsupported": {
+      if (!element2) return null;
+      replaceWithRepairedClone(element2, (clone2) => {
+        stripStyleProperty(clone2, "box-shadow", ["box-shadow"]);
+      });
+      return record("box_shadow_removed", sourceId, "Unsupported CSS box-shadow was removed.");
+    }
+    case "text_shadow_unsupported": {
+      if (!element2) return null;
+      replaceWithRepairedClone(element2, (clone2) => {
+        stripStyleProperty(clone2, "text-shadow", ["text-shadow"]);
+      });
+      return record("text_shadow_removed", sourceId, "Unsupported CSS text-shadow was removed.");
+    }
+    case "css_filter": {
+      if (!element2) return null;
+      replaceWithRepairedClone(element2, (clone2) => {
+        stripStyleProperty(clone2, "filter", ["filter", "-webkit-filter"]);
+      });
+      return record("css_filter_removed", sourceId, "CSS filter was removed.");
+    }
+    case "css_mask": {
+      if (!element2) return null;
+      replaceWithRepairedClone(element2, (clone2) => {
+        stripStyleProperties(clone2, [
+          ["mask"],
+          ["mask-image"],
+          ["-webkit-mask"],
+          ["-webkit-mask-image"]
+        ]);
+        clone2.removeAttribute?.("mask");
+      });
+      return record("css_mask_removed", sourceId, "CSS mask was removed.");
+    }
+    case "animation_unsupported": {
+      if (element2) {
+        replaceWithRepairedClone(element2, (clone2) => {
+          stripStyleProperties(clone2, [["animation"], ["animation-name"], ["transition"]]);
+        });
+      }
+      const scope = doc;
+      const removed = removeMatching(scope, "animate, animateMotion, animateTransform, set");
+      if (!element2 && !removed) return null;
+      return record("animation_removed", sourceId, "CSS/SVG animation was removed.");
+    }
+    case "inline_margin": {
+      if (!element2) return null;
+      replaceWithRepairedClone(element2, (clone2) => {
+        stripStyleProperties(clone2, [
+          ["margin", "0"],
+          ["margin-top", "0"],
+          ["margin-right", "0"],
+          ["margin-bottom", "0"],
+          ["margin-left", "0"]
+        ]);
+      });
+      return record("inline_margin_removed", sourceId, "Unsupported inline margin was ignored.");
+    }
+    case "background_image_unsupported":
+    case "merge_background_image": {
+      if (element2 && element2 !== doc.body) {
+        replaceWithRepairedClone(element2, (clone2) => {
+          stripStyleProperty(clone2, "background-image", ["background-image", "background"]);
+        });
+        return record("background_image_removed", sourceId, "CSS background image was removed (solid color kept).");
+      }
+      const target = element2 || doc.body;
+      if (!target) return null;
+      stripStyleProperty(target, "background-image", ["background-image", "background"]);
+      return record("background_image_removed", sourceId || "slide-document", "CSS background image was removed (solid color kept).");
+    }
+    case "external_resource": {
+      if (!element2) return null;
+      if (element2 === doc.body) {
+        stripStyleProperty(element2, "background-image", ["background-image", "background"]);
+        return record("background_image_removed", sourceId || "slide-document", "External background resource was removed.");
+      }
+      element2.remove();
+      return record("element_removed", sourceId, "An element referencing an external resource was removed.");
+    }
+    case "svg_paint_server_unsupported": {
+      if (!element2) return null;
+      let applied = false;
+      replaceWithRepairedClone(element2, (clone2) => {
+        applied = repairSvgPaintServer(clone2);
+      });
+      if (!applied) return null;
+      return record("svg_paint_server_removed", sourceId, "SVG paint-server fill/stroke was replaced with a solid color.");
+    }
+    case "svg_mask": {
+      const svg = element2?.closest?.("svg") || element2;
+      if (!svg) return null;
+      svg.querySelectorAll("mask").forEach((node) => node.remove());
+      (svg.matches?.("[mask]") ? [svg] : [...svg.querySelectorAll("[mask]")]).forEach((node) => node.removeAttribute("mask"));
+      return record("svg_feature_removed", sourceId, "SVG mask was removed.");
+    }
+    case "svg_filter_unsupported": {
+      const svg = element2?.closest?.("svg") || element2;
+      if (!svg) return null;
+      svg.querySelectorAll("filter, foreignObject, pattern, use, image").forEach((node) => node.remove());
+      (svg.matches?.("[filter]") ? [svg] : [...svg.querySelectorAll("[filter]")]).forEach((node) => node.removeAttribute("filter"));
+      return record("svg_feature_removed", sourceId, "Unsupported SVG filter/resource construct was removed.");
+    }
+    case "complex_svg_unsupported": {
+      const svg = element2?.closest?.("svg") || element2;
+      if (!svg) return null;
+      svg.querySelectorAll("filter, mask, foreignObject, use, pattern, textPath, clipPath, image").forEach((node) => node.remove());
+      return record("svg_feature_removed", sourceId, "Unsupported SVG feature was removed.");
+    }
+    case "svg_defs_geometry_unsupported": {
+      if (!element2) return null;
+      const defs = element2.closest?.("defs");
+      (defs || element2).remove();
+      return record("svg_feature_removed", sourceId, "SVG defs geometry was removed.");
+    }
+    case "svg_transform_unsupported":
+    case "svg_polygon_unsupported":
+    case "unmeasurable_placeholder": {
+      if (!element2) return null;
+      element2.remove();
+      return record("element_removed", sourceId, "An element that cannot be represented as editable geometry was removed.");
+    }
+    case "svg_round_rect_radius_unsupported": {
+      if (!element2) return null;
+      element2.removeAttribute("rx");
+      element2.removeAttribute("ry");
+      return record("svg_feature_removed", sourceId, "SVG rounded-rect radius was dropped to a plain rectangle.");
+    }
+    case "svg_path_fill_unsupported": {
+      if (!element2) return null;
+      const fill2 = element2.getAttribute("fill") || element2.style?.getPropertyValue?.("fill") || "#9AA3AF";
+      element2.setAttribute("fill", "none");
+      element2.setAttribute("stroke", /^#|^rgb/i.test(fill2) ? fill2 : "#9AA3AF");
+      if (!element2.getAttribute("stroke-width")) element2.setAttribute("stroke-width", "1.5");
+      return record("svg_path_outline", sourceId, "A filled SVG path was converted to an editable outline.");
+    }
+    case "generated_content": {
+      const removedRule = deleteGeneratedContentRules(doc);
+      if (element2 && !removedRule) element2.removeAttribute("class");
+      if (!removedRule && !element2) return null;
+      return record("generated_content_removed", sourceId, "Pseudo-element generated content was removed.");
+    }
+    case "nested_merge_container":
+    case "empty_merge_container": {
+      if (!element2) return null;
+      element2.removeAttribute("data-pptx-merge");
+      element2.querySelectorAll("[data-pptx-merge]").forEach((node) => node.removeAttribute("data-pptx-merge"));
+      return record("merge_container_unwrapped", sourceId, "A merge container was unwrapped into regular editable content.");
+    }
+    case "manual_bullet_unrepaired": {
+      if (!element2 || !stripLeadingManualBullet(element2)) return null;
+      return record("manual_bullet_removed", sourceId, "A manual bullet character was removed.");
+    }
+    case "canvas_size": {
+      if (!repairCanvasSize(doc, { widthPx, heightPx })) return null;
+      return record("canvas_size_adjusted", sourceId, "The slide canvas was normalized to the editable size.");
+    }
+    case "editable_scene_geometry_invalid":
+    case "editable_scene_payload_invalid":
+    case "editable_scene_node_type_unsupported":
+    case "editable_scene_source_id_invalid": {
+      if (!element2 || element2 === doc.body) return null;
+      element2.remove();
+      return record("element_removed", sourceId, "An element with an invalid editable payload was removed.");
+    }
+    default:
+      return null;
   }
 }
-function isActiveScript(script) {
-  const type = String(script.getAttribute("type") || "").trim().toLowerCase();
-  return !type || type === "module" || type.includes("javascript") || type.includes("ecmascript");
+function normalizeWithDegradation(normalizeFn, doc, dims, onDegrade) {
+  const { slideNumber } = dims;
+  const attempted = /* @__PURE__ */ new Set();
+  let lastError = null;
+  for (let repair = 0; repair < MAX_REPAIRS_PER_SLIDE; repair += 1) {
+    try {
+      return normalizeFn(doc, dims);
+    } catch (error2) {
+      if (!(error2 instanceof EditableExportError)) throw error2;
+      lastError = error2;
+      const diagnostic = error2.diagnostic || {};
+      const key = `${diagnostic.code}:${diagnostic.sourceId}`;
+      if (attempted.has(key)) break;
+      attempted.add(key);
+      const degradeRecord = applyExportDegradationRepair(doc, diagnostic, {
+        slideNumber,
+        widthPx: Math.round(dims.width * 96),
+        heightPx: Math.round(dims.height * 96)
+      });
+      if (!degradeRecord) break;
+      onDegrade?.({
+        severity: "degrade",
+        slideNumber,
+        sourceId: degradeRecord.sourceId,
+        code: degradeRecord.code,
+        message: degradeRecord.message
+      });
+    }
+  }
+  throw lastError;
 }
-function auditRawSlideForEditableExport(html, slideNumber) {
-  const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
-  const unsupported = parsed.querySelector(VISIBLE_UNSUPPORTED_SELECTOR);
-  if (unsupported) {
-    fail2(
-      slideNumber,
-      unsupported,
-      "unsupported_visible_html",
-      `Visible <${unsupported.localName}> content has no editable PowerPoint rewrite.`
-    );
+function simplifiedTextNodes(lines, slideNumber, height = 7.5) {
+  const nodes = [];
+  const [titleLine, ...bodyLines] = lines;
+  let cursorY = 1.1;
+  if (titleLine) {
+    nodes.push({
+      type: "text",
+      sourceId: `slide-${slideNumber}-degraded-title`,
+      x: 0.9,
+      y: cursorY,
+      w: 11.5,
+      h: 0.9,
+      text: titleLine,
+      paintOrder: 1,
+      subOrder: 0,
+      style: { fontSize: 28, bold: true, color: "1F2937" }
+    });
+    cursorY += 1.2;
   }
-  const activeScript = [...parsed.querySelectorAll("script")].find(isActiveScript);
-  if (activeScript) {
-    fail2(
-      slideNumber,
-      activeScript,
-      "active_content_unsupported",
-      "Active script content is not allowed in editable PowerPoint export."
-    );
+  const lineHeight = 0.62;
+  const maxBodyLines = Math.max(0, Math.min(9, Math.floor((height - cursorY - 0.3) / lineHeight)));
+  bodyLines.slice(0, maxBodyLines).forEach((line, index) => {
+    nodes.push({
+      type: "text",
+      sourceId: `slide-${slideNumber}-degraded-line-${index + 1}`,
+      x: 0.9,
+      y: cursorY,
+      w: 11.5,
+      h: 0.52,
+      text: line,
+      paintOrder: 2 + index,
+      subOrder: 0,
+      style: { fontSize: 15, color: "374151" }
+    });
+    cursorY += lineHeight;
+  });
+  return nodes;
+}
+function buildSimplifiedEditableScene({
+  doc = null,
+  slide = null,
+  slideNumber,
+  width,
+  height
+} = {}) {
+  let backgroundHex = "FFFFFF";
+  let lines = [];
+  try {
+    const body = doc?.body;
+    if (body) {
+      const view = doc.defaultView;
+      if (view?.getComputedStyle) {
+        backgroundHex = colorToHex2(view.getComputedStyle(body).backgroundColor, "FFFFFF") || "FFFFFF";
+      }
+      lines = [...body.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li")].map((element2) => String(element2.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+    }
+  } catch {
+    lines = [];
   }
-  if (!auditMountedComputedStyles(parsed, slideNumber)) {
-    auditAuthoredStyles(parsed, slideNumber);
+  if (!lines.length && slide) {
+    lines = [
+      String(slide.title || "").trim(),
+      ...(Array.isArray(slide.elements) ? slide.elements : []).flatMap((element2) => [element2?.text, ...Array.isArray(element2?.items) ? element2.items : []]).map((value2) => String(value2 || "").trim()).filter(Boolean)
+    ].filter(Boolean);
+  }
+  lines = [...new Set(lines)].map((line) => line.length > 120 ? `${line.slice(0, 117)}\u2026` : line).slice(0, 10);
+  const scene = {
+    slideNumber,
+    width,
+    height,
+    nodes: [
+      {
+        type: "shape",
+        shapeType: "rect",
+        sourceId: `slide-${slideNumber}-degraded-background`,
+        x: 0,
+        y: 0,
+        w: width,
+        h: height,
+        paintOrder: 0,
+        subOrder: 0,
+        style: { fill: backgroundHex, line: null }
+      },
+      ...simplifiedTextNodes(lines, slideNumber, height)
+    ]
+  };
+  try {
+    return validateEditableSlideScene(scene);
+  } catch {
+    return validateEditableSlideScene({
+      slideNumber,
+      width,
+      height,
+      nodes: [
+        scene.nodes[0],
+        {
+          type: "text",
+          sourceId: `slide-${slideNumber}-degraded-caption`,
+          x: 0.9,
+          y: 1.1,
+          w: 11.5,
+          h: 0.6,
+          text: `Slide ${slideNumber}`,
+          paintOrder: 1,
+          subOrder: 0,
+          style: { fontSize: 20, color: "1F2937" }
+        }
+      ]
+    });
   }
 }
 
@@ -15889,22 +15693,111 @@ async function loadHtmlInExportRoot(html) {
   await waitForExportPaint();
   return wrapExportDocument(root, body);
 }
-async function prepareHtmlSlide(html, slideNumber) {
+async function prepareHtmlSlide(html, slideNumber, options = {}) {
+  const { onDegrade } = options;
+  const dims = {
+    slideNumber,
+    width: EXPORT_VIEWPORT.width / 96,
+    height: EXPORT_VIEWPORT.height / 96
+  };
+  const fallbackScene = (doc, error2) => {
+    onDegrade?.({
+      severity: "degrade",
+      slideNumber,
+      sourceId: error2?.sourceId || error2?.diagnostic?.sourceId || `slide-${slideNumber}`,
+      code: "slide_simplified",
+      message: "The slide contained unconvertible content and was replaced with a simplified editable version."
+    });
+    if (!(error2 instanceof EditableExportError)) {
+      console.warn("[ppt-live] slide preparation fell back to a simplified scene", {
+        slideNumber,
+        error: String(error2?.message || error2)
+      });
+    }
+    if (doc) return buildSimplifiedEditableScene({ doc, ...dims });
+    return buildSimplifiedEditableScene({
+      doc: sanitizeSlideDocument(new DOMParser().parseFromString(String(html || ""), "text/html")),
+      ...dims
+    });
+  };
   let exportRoot = null;
   try {
-    auditRawSlideForEditableExport(html, slideNumber);
     const mountedDoc = await loadHtmlInExportRoot(html);
     exportRoot = mountedDoc._exportRoot;
-    sanitizeSlideDocumentRoot(mountedDoc);
+    const { diagnostics: sanitizeDiagnostics = [] } = sanitizeSlideDocumentRoot(mountedDoc);
     await waitForExportPaint();
-    extractSlideDataFromDocument(mountedDoc);
-    return normalizeDocumentToEditableScene(mountedDoc, {
+    (mountedDoc._pptxSecurityDiagnostics || []).forEach((diagnostic) => {
+      onDegrade?.({
+        severity: "degrade",
+        slideNumber,
+        sourceId: diagnostic.sourceId || "slide-document",
+        code: diagnostic.code || "active_content_removed",
+        message: diagnostic.message || "Unsafe active content was removed."
+      });
+    });
+    sanitizeDiagnostics.filter((diagnostic) => diagnostic?.severity === "repaired" && diagnostic?.code).forEach((diagnostic) => {
+      onDegrade?.({
+        severity: "degrade",
+        slideNumber,
+        sourceId: diagnostic.sourceId || "slide-document",
+        code: diagnostic.code,
+        message: diagnostic.message || "Slide content was repaired for editable export."
+      });
+    });
+    try {
+      return normalizeWithDegradation(
+        normalizeDocumentToEditableScene,
+        mountedDoc,
+        dims,
+        onDegrade
+      );
+    } catch (error2) {
+      return fallbackScene(mountedDoc, error2);
+    }
+  } catch (error2) {
+    return fallbackScene(null, error2);
+  } finally {
+    if (exportRoot) removeExportRoot(exportRoot);
+  }
+}
+function prepareElementModelSlide(slide, slideNumber, options = {}) {
+  const { onDegrade } = options;
+  const sourceElements = Array.isArray(slide?.elements) ? slide.elements : [];
+  const remaining = [...sourceElements];
+  const attempted = /* @__PURE__ */ new Set();
+  const fallbackScene = (error2) => {
+    onDegrade?.({
+      severity: "degrade",
+      slideNumber,
+      sourceId: error2?.sourceId || `slide-${slideNumber}`,
+      code: "slide_simplified",
+      message: "The slide contained unconvertible content and was replaced with a simplified editable version."
+    });
+    return buildSimplifiedEditableScene({
+      slide,
       slideNumber,
       width: EXPORT_VIEWPORT.width / 96,
       height: EXPORT_VIEWPORT.height / 96
     });
-  } finally {
-    if (exportRoot) removeExportRoot(exportRoot);
+  };
+  for (; ; ) {
+    try {
+      return normalizeElementSlideToEditableScene({ ...slide, elements: remaining }, { slideNumber });
+    } catch (error2) {
+      if (!(error2 instanceof EditableExportError)) return fallbackScene(error2);
+      const sourceId = String(error2.sourceId || "");
+      const index = remaining.findIndex((element2, elementIndex) => String(element2?.id || element2?.sourceId || `element-${elementIndex + 1}`) === sourceId);
+      if (index < 0 || attempted.has(sourceId)) return fallbackScene(error2);
+      attempted.add(sourceId);
+      remaining.splice(index, 1);
+      onDegrade?.({
+        severity: "degrade",
+        slideNumber,
+        sourceId,
+        code: "element_removed",
+        message: "An element that cannot be represented as an editable object was removed."
+      });
+    }
   }
 }
 async function prepareEditableSlides(slides, options = {}) {
@@ -15914,7 +15807,7 @@ async function prepareEditableSlides(slides, options = {}) {
       if (typeof options.onSlideProgress === "function") {
         options.onSlideProgress(index + 1, slide);
       }
-      scenes.push(slide?.html ? await prepareHtmlSlide(slide.html, index + 1) : normalizeElementSlideToEditableScene(slide, { slideNumber: index + 1 }));
+      scenes.push(slide?.html ? await prepareHtmlSlide(slide.html, index + 1, options) : prepareElementModelSlide(slide, index + 1, options));
     }
     return scenes;
   } catch (error2) {
@@ -36646,28 +36539,43 @@ var PptxGenJS = class {
 
 // src/pptx-html-build.js
 var import_jszip2 = __toESM(require_jszip_min(), 1);
-var SLIDE_W_IN = 13.333;
 var SLIDE_H_IN = 7.5;
 var OOXML_ROUND_RECT_ADJUSTMENTS = /* @__PURE__ */ Symbol("ppt-live-round-rect-adjustments");
-var WIDTH_SAFETY_IN = 0.15;
-function capTextBoxWidth(x, w) {
-  return Math.min(w, Math.max(0.15, SLIDE_W_IN - x - 0.02));
+var WIDTH_SAFETY_BASE_IN = 0.36;
+var WIDTH_SAFETY_REF_PT = 14;
+var WIDTH_SAFETY_MIN_IN = 0.28;
+var WIDTH_SAFETY_MAX_IN = 1.6;
+function textBoxWidthSafetyInches(fontSizePt) {
+  const size = Math.max(8, Number(fontSizePt) || WIDTH_SAFETY_REF_PT);
+  const scaled = WIDTH_SAFETY_BASE_IN * (size / WIDTH_SAFETY_REF_PT);
+  return Math.min(WIDTH_SAFETY_MAX_IN, Math.max(WIDTH_SAFETY_MIN_IN, scaled));
 }
-function safeTextBoxGeometry(origX, origW, align, isVerticalText) {
-  const safety = isVerticalText ? 0 : WIDTH_SAFETY_IN;
-  const rawW = origW + safety;
-  if (!safety || align === "left" || !align) {
-    return { x: origX, w: capTextBoxWidth(origX, rawW) };
+function resolveTextFontSizePt(el) {
+  const base = Number(el?.style?.fontSize) || WIDTH_SAFETY_REF_PT;
+  if (!Array.isArray(el?.text)) return base;
+  const runSizes = el.text.map((run) => Number(run?.options?.fontSize) || 0).filter((size) => size > 0);
+  return runSizes.length ? Math.max(base, ...runSizes) : base;
+}
+function textUsesBold(el) {
+  if (el?.style?.bold) return true;
+  if (!Array.isArray(el?.text)) return false;
+  return el.text.some((run) => run?.options?.bold);
+}
+function safeTextBoxGeometry(origX, origW, align, isVerticalText, fontSizePt, options = {}) {
+  if (isVerticalText) return { x: origX, w: Math.max(0.15, origW) };
+  let safety = textBoxWidthSafetyInches(fontSizePt);
+  if (options.bold) safety *= 1.12;
+  const w = Math.max(0.15, origW + safety);
+  if (align === "left" || !align) {
+    return { x: origX, w };
   }
   if (align === "right") {
-    const x = Math.max(0, origX - safety);
-    return { x, w: capTextBoxWidth(x, rawW) };
+    return { x: Math.max(0, origX - safety), w };
   }
   if (align === "center") {
-    const x = Math.max(0, origX - safety / 2);
-    return { x, w: capTextBoxWidth(x, rawW) };
+    return { x: Math.max(0, origX - safety / 2), w };
   }
-  return { x: origX, w: capTextBoxWidth(origX, rawW) };
+  return { x: origX, w };
 }
 function toImagePayload(src) {
   const raw = String(src || "").trim();
@@ -36867,7 +36775,15 @@ function addSceneNodes(slideData, targetSlide, pres) {
       }
     } else if (el.type === "text") {
       const isVerticalText = el.style.vert && el.style.vert !== "horz";
-      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.x, el.w, el.style.align, isVerticalText);
+      const fontSizePt = resolveTextFontSizePt(el);
+      const { x: boxX, w: boxW } = safeTextBoxGeometry(
+        el.x,
+        el.w,
+        el.style.align,
+        isVerticalText,
+        fontSizePt,
+        { bold: textUsesBold(el) }
+      );
       const textOptions = {
         x: boxX,
         y: el.y,
@@ -36897,6 +36813,9 @@ function addSceneNodes(slideData, targetSlide, pres) {
       if (el.style.vert) textOptions.vert = el.style.vert;
       if (el.style.transparency != null && el.style.transparency !== void 0) {
         textOptions.transparency = el.style.transparency;
+      }
+      if (Number.isFinite(el.style.charSpacing)) {
+        textOptions.charSpacing = el.style.charSpacing;
       }
       targetSlide.addText(pptxTextValue(el.text), textOptions);
     }
@@ -37018,14 +36937,42 @@ async function pptxToExportResult(pptx, deck) {
     base64: String(base64 || "").replace(/^data:.*;base64,/, "")
   };
 }
-async function exportEditablePptx(deck, scenes) {
+async function exportEditablePptx(deck, scenes, options = {}) {
   const prepared = Array.isArray(scenes) ? scenes : [];
   if (!prepared.length) throw new Error("No editable slide scenes to export");
   const pptx = createPptxDeck(deck);
   const slides = Array.isArray(deck?.slides) ? deck.slides : [];
   for (const [index, scene] of prepared.entries()) {
     const sourceSlide = slides[index] || {};
-    const result = await buildSlideFromScene(scene, pptx);
+    let result;
+    try {
+      result = await buildSlideFromScene(scene, pptx);
+    } catch (error2) {
+      options.onDegrade?.({
+        severity: "degrade",
+        slideNumber: scene?.slideNumber || index + 1,
+        sourceId: error2?.sourceId || error2?.diagnostic?.sourceId || `slide-${index + 1}`,
+        code: "slide_simplified",
+        message: "The slide could not be serialized and was replaced with a blank slide."
+      });
+      result = await buildSlideFromScene({
+        slideNumber: scene?.slideNumber || index + 1,
+        width: scene?.width || 13.333,
+        height: scene?.height || 7.5,
+        nodes: [{
+          type: "shape",
+          shapeType: "rect",
+          sourceId: `slide-${index + 1}-blank-background`,
+          x: 0,
+          y: 0,
+          w: scene?.width || 13.333,
+          h: scene?.height || 7.5,
+          paintOrder: 0,
+          subOrder: 0,
+          style: { fill: "FFFFFF", line: null }
+        }]
+      }, pptx);
+    }
     const notes = buildSpeakerNotes(sourceSlide);
     if (notes && result?.slide && typeof result.slide.addNotes === "function") {
       result.slide.addNotes(notes);
@@ -37221,31 +37168,42 @@ ${prompt}`;
 \u6837\u5F0F\u504F\u597D\uFF1A${styleLine}\u3002`;
   prompt += `
 
+## \u8282\u594F\uFF08\u5FC5\u987B\uFF0C\u5F71\u54CD\u7528\u6237\u7B49\u5F85\u65F6\u95F4\uFF09
+
+\u786C\u6027\u7981\u4EE4\uFF08\u8FDD\u53CD\u4F1A\u767D\u767D\u70E7\u6389\u6570\u5206\u949F\u6A21\u578B\u65F6\u95F4\uFF09\uFF1A
+
+1. Skill \u8FD4\u56DE\u540E**\u4E0B\u4E00\u8F6E\u5DE5\u5177\u8C03\u7528\u5FC5\u987B\u662F Write \`project.json\`**\uFF08\`status: "planning"\` + \u5B8C\u6574 \`outline\` / \`slide_order\`\uFF09\u3002\u7981\u6B62\u5148 Read seed \u7684 \`project.json\`\u3001\u7981\u6B62\u5148 Read style-presets\u3001\u7981\u6B62\u957F\u7BC7\u601D\u8003\u89C4\u5212\u3002
+2. Input JSON \u5DF2\u542B \`style.palette\` / \`style.stylePreset\` \u65F6\uFF1A**\u7981\u6B62** \`Read references/style-presets/*\`\uFF1B\u76F4\u63A5\u7528 palette + Skill \u8868\u91CC\u7684\u4E00\u53E5\u8BDD DNA\u3002
+3. **\u7981\u6B62**\u4E3A\u5BA1\u8BA1\u53CD\u590D Read / Grep / Glob \u5DF2\u5199\u9875\u9762\uFF1B\u6BCF\u9875\u4E00\u6B21 Write \u5199\u5BF9\u3002
+4. **\u6309\u9700\u7814\u7A76**\uFF1A\u4EC5\u5F53\u7528\u6237\u63D0\u4F9B URL\u3001\u660E\u786E\u8981\u6C42\u4E8B\u5B9E\u6838\u9A8C\uFF0C\u6216\u4E3B\u9898\u4F9D\u8D56\u5916\u90E8\u65F6\u6548\u6570\u636E\u65F6\u624D WebSearch / WebFetch\uFF1B\u5426\u5219\u8DF3\u8FC7\u3002
+5. \u5199\u9875\u8282\u594F\uFF1A\u6BCF\u8F6E\u5E76\u884C Write **2 \u9875** HTML\uFF08payload \u8FC7\u5927\u65F6\u624D\u964D\u5230 1 \u9875\uFF09\u3002\u6700\u540E\u4E00\u8F6E\u5199\u5B8C\u5269\u4F59\u9875\u65F6\uFF0C**\u540C\u8F6E**\u518D Write/Edit \`project.json\` \u628A \`status\` \u8BBE\u4E3A \`"complete"\` \u5E76\u7ED3\u675F\u2014\u2014\u4E0D\u8981\u5355\u72EC\u5F00\u4E00\u8F6E\u53EA\u505A Glob/LS/Edit\u3002
+6. \u8BE6\u7EC6\u8BBE\u8BA1\u89C4\u5219\u4EE5 Skill \u4E0E\u4E0B\u65B9 Authoring subset \u4E3A\u51C6\uFF1B\u4E0D\u8981\u52A0\u8F7D\u65E0\u5173 reference\uFF1B\u4E0D\u8981\u505A\u300C\u5148\u6253\u6837 2 \u9875\u518D\u6279\u91CF\u300D\u7684\u989D\u5916 showcase \u8F6E\u6B21\u3002
+
 ## \u751F\u6210\u6587\u4EF6\u534F\u8BAE
 
 - \u5F53\u524D agent \u5DE5\u4F5C\u533A\u6839\u76EE\u5F55\u5C31\u662F deck \u6839\u76EE\u5F55\uFF1B\u6240\u6709\u8DEF\u5F84\u5747\u76F8\u5BF9\u8BE5\u5DE5\u4F5C\u533A\u6839\u76EE\u5F55\u3002
 - \u5148\u5199\u5DE5\u4F5C\u533A\u6839\u76EE\u5F55\u4E0B\u7684 \`project.json\`\uFF0C\u518D\u5199\u5DE5\u4F5C\u533A\u6839\u76EE\u5F55\u4E0B\u7684 \`slides/slide-NN.html\`\u3002
 - \u53EA\u6709\u5728 \`slide_order\` \u5F15\u7528\u7684\u6BCF\u4E00\u9875\u90FD\u5DF2\u6709\u5B8C\u6574 HTML \u540E\uFF0C\u624D\u5C06 \`project.json\` \u7684 \`status\` \u8BBE\u4E3A \`"complete"\`\u3002
-- \u5B8C\u6210\u524D\u505A\u4E00\u6B21\u6709\u754C\u68C0\u67E5\uFF1A\u6838\u5BF9 \`outline[].slide_id\`\u3001\`slide_order\` \u548C\u5BF9\u5E94\u9875\u9762\u6587\u4EF6\uFF1B\u7F3A\u4EC0\u4E48\u53EA\u8865\u4EC0\u4E48\uFF0C\u68C0\u67E5\u540E\u7ACB\u5373\u7ED3\u675F\u3002
+- \u5B8C\u6210\u68C0\u67E5\u53EA\u5728\u6700\u540E\u4E00\u8F6E\u5DE5\u5177\u6279\u5185\u5B8C\u6210\uFF08\u5199\u5B8C\u6700\u540E\u4E00\u9875\u7684\u540C\u65F6\u6539 status\uFF09\uFF1B\u7F3A\u4EC0\u4E48\u53EA\u8865\u4EC0\u4E48\uFF0C\u7136\u540E\u7ACB\u5373\u7ED3\u675F\u3002
 
 ## \u7EA6\u675F
 
 - \u7528\u6237\u53EA\u80FD\u770B\u5230 PPT Live UI\uFF0C\u65E0\u6CD5\u56DE\u7B54\u63D0\u95EE\u3002\u5982\u6709\u6B67\u4E49\u81EA\u884C\u5224\u65AD\u6700\u4F18\u65B9\u6848\u5E76\u8BB0\u5F55\u5047\u8BBE\u3002
 - \u4E0D\u8981\u8C03\u7528 AskUserQuestion\u3001ControlHub\u3001GenerativeUI\u3001ComputerUse \u7B49\u4EA4\u4E92\u5DE5\u5177\u3002
-- \u7814\u7A76\u7528 WebSearch / WebFetch \u5373\u53EF\u3002
 
 ## Authoring subset\uFF08\u751F\u6210\u89C4\u5219\uFF09
 
 - **\u552F\u4E00\u5BFC\u51FA\u94FE\u8DEF**\uFF1Aeditable HTML \u2192 EditableSlideScene \u2192 OOXML\u3002\u6BCF\u9875\u4E25\u683C\u4E3A **1280px \xD7 720px**\u3002
 - \u53EA\u4F7F\u7528 solid color\uFF1B\u4E0D\u5F97\u751F\u6210 CSS gradient \u6216 \`background-image\`\u3002\u80CC\u666F\u3001border\u3001\u5706\u89D2\u53EA\u653E\u5728 \`div\` \u7B49\u51E0\u4F55\u5BB9\u5668\u3002
-- \`box-shadow\` \u53EA\u652F\u6301\u5355\u5C42 outer\u3001\u975E inset\u3001zero spread\uFF1B\u591A\u5C42\u3001inset\u3001blur+spread \u7B49\u4E0D\u652F\u6301\u5F62\u6001\u5FC5\u987B blocking\u3002\`text-shadow\` \u4EFB\u4F55\u975E \`none\` \u5F62\u6001\u5747\u5FC5\u987B blocking\u3002
+- \`box-shadow\` \u53EA\u652F\u6301\u5355\u5C42 outer\u3001\u975E inset\u3001zero spread \u7684\u539F\u751F\u6620\u5C04\uFF1B\u591A\u5C42 shadow \u53EA\u53D6\u9996\u4E2A\u53EF\u7528\u5C42\uFF0C\u8D1F spread \u6309 0 \u8FD1\u4F3C\uFF0Cinset \u7B49\u5176\u4F59\u4E0D\u652F\u6301\u5F62\u6001\u5BFC\u51FA\u65F6\u81EA\u52A8\u79FB\u9664\uFF0C\u4E0D\u5F97\u4F9D\u8D56\u3002\`text-shadow\` \u4EFB\u4F55\u975E \`none\` \u5F62\u6001\u5728\u5BFC\u51FA\u65F6\u4E00\u5F8B\u81EA\u52A8\u79FB\u9664\uFF0C\u4E0D\u5F97\u4F9D\u8D56\u5176\u5448\u73B0\u5C42\u6B21\u3002
 - HTML \u6587\u5B57\u53EA\u53EF\u653E\u5728 \`<p>\`\u3001\`<h1>\`\u2013\`<h6>\`\u3001\`<li>\` \u4E2D\uFF1B\`span\` \u53EA\u4F5C\u6587\u672C run\uFF0C\u4E0D\u5F97\u751F\u6210 \`div\` \u88F8\u6587\u5B57\u3002
-- \u7981\u6B62 CSS \`filter\`\u3001\`mask\`\u3001generated content\u3001animation\u3001\u5916\u90E8\u8D44\u6E90\u548C\u590D\u6742/filled SVG path\uFF1B\u7981\u6B62\u4EFB\u610F\u9876\u70B9/\u975E\u4E25\u683C\u5BF9\u79F0 polygon\uFF0C\u4EC5\u5141\u8BB8\u4E25\u683C\u5BF9\u79F0 triangle/diamond\u3002
+- \u7981\u6B62 CSS \`filter\`\u3001\`mask\`\u3001generated content\u3001animation\u3001\u5916\u90E8\u8D44\u6E90\u548C\u590D\u6742/filled SVG path\uFF1B\u7981\u6B62\u4EFB\u610F\u9876\u70B9/\u975E\u4E25\u683C\u5BF9\u79F0 polygon\uFF0C\u4EC5\u5141\u8BB8\u4E25\u683C\u5BF9\u79F0 triangle/diamond\u3002\u5BFC\u51FA\u7BA1\u7EBF\u4F1A\u81EA\u52A8\u5265\u79BB\u8FD9\u4E9B\u6784\u9020\uFF0C\u4F9D\u8D56\u5B83\u4EEC\u7B49\u4E8E\u4E22\u5931\u89C6\u89C9\u3002
 - \u7EBF\u4E0E\u66F2\u7EBF\u4F18\u5148\u76F4\u63A5\u751F\u6210 \`line\` \u6216 \`polyline\`\uFF1B\u786E\u6709\u5FC5\u8981\u65F6\u624D\u4F7F\u7528\u4E0B\u9762\u7684\u517C\u5BB9 path \u5B50\u96C6\u3002
 - Authoring \u6D41\u7A0B\u7BAD\u5934\u53EA\u7531 editable line + CSS border triangle\uFF0C\u6216 SVG line + strict symmetric triangle polygon \u6784\u6210\u3002
 - \u8868\u683C\u5FC5\u987B\u5199\u771F\u5B9E\u7684 \`<table>\` \u5E76\u5BFC\u51FA\u4E3A native \`a:tbl\`\uFF1B\u56FE\u8868\u3001\u6D41\u7A0B\u7BAD\u5934\u3001\u865A\u7EBF\u548C\u66F2\u7EBF\u5FC5\u987B\u4F7F\u7528\u652F\u6301\u7684\u53EF\u7F16\u8F91\u539F\u8BED\u3002
 - intentional \u56FE\u7247\u53EA\u5141\u8BB8\u5185\u8054 base64 PNG\u3001JPEG\u3001WebP\uFF0C\u4E14\u4E0D\u5F97\u627F\u8F7D\u6587\u5B57\u3001\u56FE\u8868\u6216\u51E0\u4F55\uFF1B\u7981\u6B62 GIF\uFF0C\u56E0\u4E3A\u65E0\u6CD5\u8BC1\u660E\u5176\u4E3A\u9759\u6001\u5185\u5BB9\u3002
-- \u7981\u6B62\u4EFB\u4F55\u6B63\u5411 rasterize\u3001screenshot \u6216 fallback \u5EFA\u8BAE\uFF1B\u65E0\u6CD5\u8868\u793A\u65F6\u505C\u6B62\u751F\u6210\u5E76\u62A5\u544A\u5177\u4F53\u5143\u7D20\u3002
+- \u7981\u6B62\u4EFB\u4F55\u6B63\u5411 rasterize\u3001screenshot \u6216 fallback \u5EFA\u8BAE\uFF1Bauthoring \u65F6\u65E0\u6CD5\u7528\u53D7\u652F\u6301\u539F\u8BED\u8868\u8FBE\u7684\u5185\u5BB9\u5FC5\u987B\u6539\u5199\u4E3A\u53D7\u652F\u6301\u5F62\u6001\u3002
+- \u5BFC\u51FA\u9636\u6BB5\u5BF9\u4E0D\u652F\u6301\u7684\u5185\u5BB9\u4F1A\u81EA\u52A8\u964D\u7EA7\uFF08\u5265\u79BB\u6837\u5F0F\u3001\u79FB\u9664\u5143\u7D20\u6216\u7B80\u5316\u6574\u9875\uFF09\u800C\u4E0D\u662F\u963B\u65AD\u5BFC\u51FA\uFF1B\u4E25\u683C\u9075\u5B88\u4E0A\u8FF0 subset \u662F\u4FDD\u8BC1\u5BFC\u51FA\u89C6\u89C9\u4E0D\u5931\u771F\u7684\u552F\u4E00\u65B9\u5F0F\u3002
 
 ## Converter legacy rewrite boundary\uFF08\u517C\u5BB9\u8FB9\u754C\uFF0C\u4E0D\u662F\u751F\u6210\u5EFA\u8BAE\uFF09
 
@@ -37320,7 +37278,8 @@ function installAgentBackend(app) {
         runId: options.idempotencyKey,
         sessionName: "PPT Live",
         sessionId: options.sessionId,
-        appDataWorkspace: options.appDataWorkspace
+        appDataWorkspace: options.appDataWorkspace,
+        model: options.model || void 0
       });
       if (!result?.sessionId || !result?.turnId) {
         throw new Error("PPT Live agent backend did not return sessionId/turnId");
@@ -37475,17 +37434,27 @@ function seedPersistenceError(code, phase, missingPaths) {
     missingPaths
   });
 }
+function shouldPersistSeedProjectJson(seed) {
+  const slideFiles = Array.isArray(seed?.slideFiles) ? seed.slideFiles : [];
+  if (slideFiles.length > 0) return true;
+  const outline = seed?.plan?.outline;
+  if (Array.isArray(outline) && outline.length > 0) return true;
+  if (String(seed?.plan?.status || "") === "complete") return true;
+  return false;
+}
 async function persistDeckProjectSeed(fs, projectDir, seed) {
   try {
     await fs.mkdir(`${projectDir}/slides`, { recursive: true });
   } catch {
     throw seedPersistenceError("seed_fs_mkdir_failed", "mkdir", ["slides"]);
   }
-  try {
-    await fs.writeFile(`${projectDir}/project.json`, `${JSON.stringify(seed.plan, null, 2)}
+  if (shouldPersistSeedProjectJson(seed)) {
+    try {
+      await fs.writeFile(`${projectDir}/project.json`, `${JSON.stringify(seed.plan, null, 2)}
 `);
-  } catch {
-    throw seedPersistenceError("seed_fs_write_failed", "project-write", ["project.json"]);
+    } catch {
+      throw seedPersistenceError("seed_fs_write_failed", "project-write", ["project.json"]);
+    }
   }
   for (const slideFile of seed.slideFiles || []) {
     try {
@@ -37505,19 +37474,150 @@ function buildDeckRunRequestInput(baseInput, {
     ...projectContractDiagnostic ? { projectContractDiagnostic } : {}
   };
 }
-function parseProjectJson(raw) {
-  try {
-    const plan = JSON.parse(raw);
-    if (!plan || Array.isArray(plan) || typeof plan !== "object") throw new Error("root must be an object");
-    return plan;
-  } catch (error2) {
-    throw contractError(
-      "invalid_project_json",
-      "`project.json` is not valid JSON.",
-      "\u4FEE\u590D `project.json` JSON\uFF0C\u4F7F\u6839\u503C\u4E3A\u5BF9\u8C61\uFF1B\u4E0D\u8981\u91CD\u5199\u5DF2\u6709\u9875\u9762\u3002\u4FEE\u590D\u540E\u7EE7\u7EED\u5B8C\u6210\u5951\u7EA6\u3002",
-      { cause: String(error2?.message || error2) }
-    );
+function stripJsonComments(text2) {
+  let output = "";
+  let quote = null;
+  for (let index = 0; index < text2.length; ) {
+    const character = text2[index];
+    if (quote) {
+      output += character;
+      if (character === "\\" && index + 1 < text2.length) {
+        output += text2[index + 1];
+        index += 2;
+        continue;
+      }
+      if (character === quote) quote = null;
+      index += 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      output += character;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && text2[index + 1] === "/") {
+      while (index < text2.length && text2[index] !== "\n") index += 1;
+      continue;
+    }
+    if (character === "/" && text2[index + 1] === "*") {
+      const end = text2.indexOf("*/", index + 2);
+      index = end < 0 ? text2.length : end + 2;
+      continue;
+    }
+    output += character;
+    index += 1;
   }
+  return output;
+}
+function stripTrailingJsonCommas(text2) {
+  let output = "";
+  let quote = null;
+  for (let index = 0; index < text2.length; index += 1) {
+    const character = text2[index];
+    if (quote) {
+      output += character;
+      if (character === "\\" && index + 1 < text2.length) {
+        output += text2[index + 1];
+        index += 1;
+      } else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      output += character;
+      continue;
+    }
+    if (character === ",") {
+      let lookahead = index + 1;
+      while (lookahead < text2.length && /\s/.test(text2[lookahead])) lookahead += 1;
+      if (text2[lookahead] === "}" || text2[lookahead] === "]") continue;
+    }
+    output += character;
+  }
+  return output;
+}
+function closeTruncatedJson(text2) {
+  let quote = null;
+  const stack = [];
+  for (let index = 0; index < text2.length; index += 1) {
+    const character = text2[index];
+    if (quote) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === "{" || character === "[") stack.push(character);
+    else if (character === "}" || character === "]") stack.pop();
+  }
+  if (!stack.length || stack[0] !== "{") return null;
+  let trimmed = text2.replace(/\s+$/, "");
+  if (quote) trimmed += quote;
+  for (; ; ) {
+    trimmed = trimmed.replace(/\s+$/, "");
+    if (/[,:]$/.test(trimmed)) {
+      trimmed = trimmed.slice(0, -1);
+      continue;
+    }
+    const bareKey = trimmed.match(/"[^"]*"$/);
+    if (bareKey && /[{,]\s*"[^"]*"$/.test(trimmed)) {
+      trimmed = trimmed.slice(0, trimmed.length - bareKey[0].length);
+      continue;
+    }
+    break;
+  }
+  const closers = stack.map((open) => open === "{" ? "}" : "]").reverse().join("");
+  return `${trimmed}${closers}`;
+}
+function parseJsonObjectCandidate(candidate) {
+  try {
+    const parsed = JSON.parse(candidate);
+    if (parsed && !Array.isArray(parsed) && typeof parsed === "object") return parsed;
+  } catch {
+  }
+  return null;
+}
+function parseJsonObjectTolerant(raw, { mode = "lenient" } = {}) {
+  const text2 = String(raw || "").replace(/^\uFEFF/, "").trim();
+  if (!text2) return null;
+  const candidates = [text2];
+  const fenceStart = text2.indexOf("{");
+  const fenceEnd = text2.lastIndexOf("}");
+  if (fenceStart > 0 || fenceEnd >= 0 && fenceEnd < text2.length - 1) {
+    if (fenceStart >= 0 && fenceEnd > fenceStart) candidates.push(text2.slice(fenceStart, fenceEnd + 1));
+  }
+  const bases = [...candidates];
+  for (const base of bases) {
+    const uncommented = stripJsonComments(base);
+    if (uncommented !== base) candidates.push(uncommented);
+    const withoutTrailing = stripTrailingJsonCommas(uncommented);
+    if (withoutTrailing !== uncommented) candidates.push(withoutTrailing);
+  }
+  for (const candidate of candidates) {
+    const parsed = parseJsonObjectCandidate(candidate);
+    if (parsed) return parsed;
+  }
+  if (mode !== "lenient") return null;
+  let fragment = stripTrailingJsonCommas(stripJsonComments(text2));
+  for (let attempt = 0; attempt < 32 && fragment; attempt += 1) {
+    const closed = closeTruncatedJson(fragment);
+    const parsed = closed ? parseJsonObjectCandidate(closed) : null;
+    if (parsed && Object.keys(parsed).length > 0) return parsed;
+    const cutAt = Math.max(fragment.lastIndexOf(","), fragment.lastIndexOf("},{"));
+    if (cutAt <= 0) break;
+    fragment = fragment.slice(0, cutAt);
+  }
+  return null;
+}
+function parseProjectJson(raw) {
+  const plan = parseJsonObjectTolerant(raw, { mode: "lenient" });
+  if (plan) return plan;
+  throw contractError(
+    "invalid_project_json",
+    "`project.json` is not valid JSON.",
+    "\u4FEE\u590D `project.json` JSON\uFF0C\u4F7F\u6839\u503C\u4E3A\u5BF9\u8C61\uFF1B\u4E0D\u8981\u91CD\u5199\u5DF2\u6709\u9875\u9762\u3002\u4FEE\u590D\u540E\u7EE7\u7EED\u5B8C\u6210\u5951\u7EA6\u3002"
+  );
 }
 async function readProjectPlanWithRetry(readFile, options = {}) {
   const { requireComplete = false } = options;
@@ -37525,12 +37625,8 @@ async function readProjectPlanWithRetry(readFile, options = {}) {
     ...options,
     accept: (raw) => {
       if (!raw.trim()) return false;
-      try {
-        const parsed = JSON.parse(raw);
-        return Boolean(parsed) && !Array.isArray(parsed) && typeof parsed === "object" && (!requireComplete || parsed.status === "complete");
-      } catch {
-        return false;
-      }
+      const parsed = parseJsonObjectTolerant(raw, { mode: "clean" });
+      return Boolean(parsed) && (!requireComplete || parsed.status === "complete");
     }
   });
   if (typeof result === "string") return parseProjectJson(result);
@@ -37631,7 +37727,40 @@ async function readCompleteSlideWithRetry(readFile, relPath, options) {
   });
   return typeof result === "string" ? result.trim() : null;
 }
+async function finalizeDeckProjectIfReady(readFile, writeFile, options = {}) {
+  if (typeof writeFile !== "function") return false;
+  let plan;
+  try {
+    plan = await readProjectPlanWithRetry(readFile, { ...options, requireComplete: false });
+  } catch {
+    return false;
+  }
+  if (!plan) return false;
+  if (plan.status === "complete") return true;
+  let slideOrder;
+  try {
+    slideOrder = validateCompletedPlan({ ...plan, status: "complete" });
+  } catch {
+    return false;
+  }
+  for (const slideId of slideOrder) {
+    const html = await readCompleteSlideWithRetry(readFile, `slides/${slideId}.html`, options);
+    if (!html) return false;
+  }
+  const nextPlan = { ...plan, status: "complete" };
+  try {
+    await writeFile("project.json", `${JSON.stringify(nextPlan, null, 2)}
+`);
+  } catch {
+    return false;
+  }
+  return true;
+}
 async function readDeckProjectContract(readFile, options = {}) {
+  const { writeFile } = options;
+  if (typeof writeFile === "function") {
+    await finalizeDeckProjectIfReady(readFile, writeFile, options);
+  }
   const plan = await readProjectPlanWithRetry(readFile, { ...options, requireComplete: true });
   const slideOrder = validateCompletedPlan(plan);
   const outlineById = new Map(plan.outline.map((item) => [String(item.slide_id), item]));
@@ -37674,7 +37803,27 @@ var DIAGNOSTIC_REASONS = {
     manual_bullet_list: "Manual bullets were rewritten as an editable list.",
     unreadable_document: "The slide document could not be read.",
     unmeasurable_canvas: "The slide canvas could not be measured.",
-    pptx_serialization: "The slide could not be serialized to PPTX."
+    pptx_serialization: "The slide could not be serialized to PPTX.",
+    box_shadow_removed: "An unsupported CSS box-shadow was removed.",
+    text_shadow_removed: "An unsupported CSS text-shadow was removed.",
+    css_filter_removed: "A CSS filter was removed.",
+    css_mask_removed: "A CSS mask was removed.",
+    animation_removed: "A CSS/SVG animation was removed.",
+    inline_margin_removed: "An unsupported inline margin was ignored.",
+    background_image_removed: "A CSS background image was removed (solid color kept).",
+    svg_paint_server_removed: "An SVG paint-server fill/stroke was replaced with a solid color.",
+    svg_feature_removed: "An unsupported SVG feature was removed.",
+    svg_path_outline: "A filled SVG path was converted to an editable outline.",
+    generated_content_removed: "Pseudo-element generated content was removed.",
+    merge_container_unwrapped: "A merge container was unwrapped into regular editable content.",
+    manual_bullet_removed: "A manual bullet character was removed.",
+    element_removed: "An element that cannot be represented as an editable object was removed.",
+    canvas_size_adjusted: "The slide canvas was normalized to the editable size.",
+    slide_simplified: "This slide contained unconvertible content and was replaced with a simplified editable version.",
+    duplicate_source_id_repaired: "A duplicate element id was reassigned.",
+    nested_paragraph_repaired: "A nested paragraph structure was split into ordered paragraphs.",
+    direct_text_wrapped: "Direct container text was wrapped in a semantic text block.",
+    decorated_inline_promoted: "Decorated inline text was promoted to shape plus text."
   },
   "zh-CN": {
     active_content_removed: "\u5DF2\u79FB\u9664\u4E0D\u5B89\u5168\u7684\u6D3B\u52A8\u5185\u5BB9\u3002",
@@ -37689,7 +37838,23 @@ var DIAGNOSTIC_REASONS = {
     manual_bullet_list: "\u624B\u5DE5\u9879\u76EE\u7B26\u53F7\u5DF2\u91CD\u5199\u4E3A\u53EF\u7F16\u8F91\u5217\u8868\u3002",
     unreadable_document: "\u65E0\u6CD5\u8BFB\u53D6\u5E7B\u706F\u7247\u6587\u6863\u3002",
     unmeasurable_canvas: "\u65E0\u6CD5\u6D4B\u91CF\u5E7B\u706F\u7247\u753B\u5E03\u3002",
-    pptx_serialization: "\u65E0\u6CD5\u5C06\u5E7B\u706F\u7247\u5E8F\u5217\u5316\u4E3A PPTX\u3002"
+    pptx_serialization: "\u65E0\u6CD5\u5C06\u5E7B\u706F\u7247\u5E8F\u5217\u5316\u4E3A PPTX\u3002",
+    box_shadow_removed: "\u4E0D\u652F\u6301\u7684 CSS box-shadow \u5DF2\u79FB\u9664\u3002",
+    text_shadow_removed: "\u4E0D\u652F\u6301\u7684 CSS text-shadow \u5DF2\u79FB\u9664\u3002",
+    css_filter_removed: "CSS filter \u5DF2\u79FB\u9664\u3002",
+    css_mask_removed: "CSS mask \u5DF2\u79FB\u9664\u3002",
+    animation_removed: "CSS/SVG \u52A8\u753B\u5DF2\u79FB\u9664\u3002",
+    inline_margin_removed: "\u4E0D\u652F\u6301\u7684\u5185\u8054\u5916\u8FB9\u8DDD\u5DF2\u5FFD\u7565\u3002",
+    background_image_removed: "CSS \u80CC\u666F\u56FE\u7247\u5DF2\u79FB\u9664\uFF08\u4FDD\u7559\u7EAF\u8272\uFF09\u3002",
+    svg_paint_server_removed: "SVG \u6E10\u53D8/\u56FE\u6848\u586B\u5145\u5DF2\u66FF\u6362\u4E3A\u7EAF\u8272\u3002",
+    svg_feature_removed: "\u4E0D\u652F\u6301\u7684 SVG \u7279\u6027\u5DF2\u79FB\u9664\u3002",
+    svg_path_outline: "\u586B\u5145 SVG \u8DEF\u5F84\u5DF2\u8F6C\u6362\u4E3A\u53EF\u7F16\u8F91\u8F6E\u5ED3\u3002",
+    generated_content_removed: "\u4F2A\u5143\u7D20\u751F\u6210\u5185\u5BB9\u5DF2\u79FB\u9664\u3002",
+    merge_container_unwrapped: "\u5408\u5E76\u5BB9\u5668\u5DF2\u5C55\u5F00\u4E3A\u666E\u901A\u53EF\u7F16\u8F91\u5185\u5BB9\u3002",
+    manual_bullet_removed: "\u624B\u5DE5\u9879\u76EE\u7B26\u53F7\u5B57\u7B26\u5DF2\u79FB\u9664\u3002",
+    element_removed: "\u65E0\u6CD5\u8868\u793A\u4E3A\u53EF\u7F16\u8F91\u5BF9\u8C61\u7684\u5143\u7D20\u5DF2\u79FB\u9664\u3002",
+    canvas_size_adjusted: "\u9875\u9762\u753B\u5E03\u5DF2\u5F52\u4E00\u5316\u4E3A\u53EF\u7F16\u8F91\u5C3A\u5BF8\u3002",
+    slide_simplified: "\u8BE5\u9875\u5305\u542B\u65E0\u6CD5\u8F6C\u6362\u7684\u5185\u5BB9\uFF0C\u5DF2\u66FF\u6362\u4E3A\u7B80\u5316\u53EF\u7F16\u8F91\u7248\u672C\u3002"
   }
 };
 var UNKNOWN_REASON = {
@@ -37703,10 +37868,11 @@ function sanitizeDiagnosticSourceId(value2) {
 function formatLocalizedExportDiagnostic(diagnostic = {}, locale = "en-US") {
   const resolvedLocale = locale === "zh-CN" ? locale : "en-US";
   const reason = DIAGNOSTIC_REASONS[resolvedLocale][diagnostic.code] || UNKNOWN_REASON[resolvedLocale];
+  const severity = ["blocking", "degrade"].includes(diagnostic.severity) ? diagnostic.severity : "rewrite";
   return {
     slideNumber: diagnostic.slideNumber,
     sourceId: sanitizeDiagnosticSourceId(diagnostic.sourceId),
-    severity: diagnostic.severity === "blocking" ? "blocking" : "rewrite",
+    severity,
     code: String(diagnostic.code || "unknown").replace(/[^a-z0-9_-]/gi, "").slice(0, 64),
     reason: reason.slice(0, 120)
   };
@@ -37714,15 +37880,15 @@ function formatLocalizedExportDiagnostic(diagnostic = {}, locale = "en-US") {
 function localizeExportDiagnosticLocations(locations = [], locale = "en-US") {
   return locations.map((location) => formatLocalizedExportDiagnostic(location, locale));
 }
-function summarizePptxExportDiagnostics(scenes = []) {
-  const counts = { rewritten: 0, blocking: 0 };
+function summarizePptxExportDiagnostics(scenes = [], degradations = []) {
+  const counts = { rewritten: 0, blocking: 0, degraded: 0 };
   const locations = [];
   const seen = /* @__PURE__ */ new Set();
   const add = (slideNumber, diagnostic) => {
     const location = {
       slideNumber,
       sourceId: diagnostic.sourceId || null,
-      severity: diagnostic.severity === "blocking" ? "blocking" : "rewrite",
+      severity: ["blocking", "degrade"].includes(diagnostic.severity) ? diagnostic.severity : "rewrite",
       code: diagnostic.code || diagnostic.rewrite || null
     };
     const key = `${location.slideNumber}:${location.sourceId}:${location.severity}:${location.code}`;
@@ -37742,10 +37908,18 @@ function summarizePptxExportDiagnostics(scenes = []) {
       });
     });
   });
+  (Array.isArray(degradations) ? degradations : []).forEach((degradation, index) => {
+    counts.degraded += 1;
+    add(degradation?.slideNumber || index + 1, {
+      sourceId: degradation?.sourceId,
+      severity: "degrade",
+      code: degradation?.code
+    });
+  });
   return {
     counts,
     locations,
-    hasWarnings: counts.rewritten > 0,
+    hasWarnings: counts.rewritten > 0 || counts.degraded > 0,
     hasBlocking: counts.blocking > 0
   };
 }
@@ -37875,7 +38049,11 @@ async function saveHistorySnapshot(reason = "autosave") {
 }
 function isRecoverableWorkingOnlyState(value2) {
   const slides = Array.isArray(value2?.slides) ? value2.slides : [];
-  return slides.length === 1 && !slides[0]?.html && String(slides[0]?.id || "").startsWith("agent-working-slide") && String(value2?.title || "") === translate("agentWorkingTitle") && !value2?.generation?.active;
+  const title = String(value2?.title || "");
+  if (value2?.generation?.active) return false;
+  if (title !== translate("agentWorkingTitle")) return false;
+  if (!slides.length) return true;
+  return slides.length === 1 && !slides[0]?.html && String(slides[0]?.id || "").startsWith("agent-working-slide");
 }
 function normalizeHistoryItem(item) {
   if (!item?.id || !item?.state) return null;
@@ -37967,11 +38145,16 @@ function setBusy(nextBusy, message) {
   if (message) setStatus(message);
 }
 function setGenerationStep(id, status, message) {
+  const targetIdx = GENERATION_PHASE_ORDER.indexOf(id);
   state.generation.current = id;
-  state.generation.steps = state.generation.steps.map((step) => ({
-    ...step,
-    status: step.id === id ? status : step.status
-  }));
+  state.generation.steps = state.generation.steps.map((step) => {
+    const stepIdx = GENERATION_PHASE_ORDER.indexOf(step.id);
+    if (step.id === id) return { ...step, status };
+    if (status === "running" && targetIdx >= 0 && stepIdx >= 0 && stepIdx < targetIdx && step.status !== "error") {
+      return { ...step, status: "done" };
+    }
+    return step;
+  });
   state.generation.active = status === "running" || state.generation.steps.some((step) => step.status === "running");
   renderGeneration(state);
   renderGenerationOverlay(state);
@@ -38292,7 +38475,15 @@ function readGenerationStyleFromPropertyPanel() {
   state = ensureState(state);
 }
 var PPT_BACKEND_MAX_ATTEMPTS = 2;
+var PPT_BACKEND_MAX_CONTRACT_ATTEMPTS = 4;
 var PPT_RETRY_DELAY_MS = 750;
+function isContractRecoverableError(error2) {
+  if (error2?.diagnostic?.continuationPrompt) return true;
+  return /did not produce a readable deck/i.test(String(error2?.message || ""));
+}
+function maxAttemptsFor(error2) {
+  return isContractRecoverableError(error2) ? PPT_BACKEND_MAX_CONTRACT_ATTEMPTS : PPT_BACKEND_MAX_ATTEMPTS;
+}
 function isRetryableBackendError(error2) {
   const raw = String(error2?.message || error2 || "");
   if (isStoppedBackendError(error2)) return false;
@@ -38395,18 +38586,30 @@ async function tryReadDeckPlanFile(project) {
     return null;
   }
 }
-async function tryReadDeckSlideFile(project, slideNumber) {
+function isCompleteSlideHtml2(raw) {
+  return /<\/html>\s*$/i.test(String(raw || "").trim());
+}
+function isPreviewableSlideHtml(raw) {
+  const text2 = String(raw || "").trim();
+  if (!text2) return false;
+  if (isCompleteSlideHtml2(text2)) return true;
+  return text2.length >= 240 && /<html[\s>]/i.test(text2) && /<body[\s>]/i.test(text2);
+}
+async function tryReadDeckSlideFile(project, slideNumber, options = {}) {
+  const requireComplete = options.requireComplete !== false;
   try {
     const raw = String(await readDeckProjectFile(project, deckSlideFileName(slideNumber)) || "").trim();
-    if (!raw || !/<\/html>\s*$/i.test(raw)) return null;
+    if (!raw) return null;
+    if (requireComplete ? !isCompleteSlideHtml2(raw) : !isPreviewableSlideHtml(raw)) return null;
     return raw;
   } catch {
     return null;
   }
 }
-async function tryReadDeckSlideFileWithRetry(project, slideNumber, maxAttempts = 6, delayMs = 120) {
+async function tryReadDeckSlideFileWithRetry(project, slideNumber, maxAttempts = 8, delayMs = 120, options = {}) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const html = await tryReadDeckSlideFile(project, slideNumber);
+    const requireComplete = options.requireComplete !== false && attempt <= Math.max(2, maxAttempts - 3);
+    const html = await tryReadDeckSlideFile(project, slideNumber, { requireComplete });
     if (html) return html;
     if (attempt < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -38414,9 +38617,22 @@ async function tryReadDeckSlideFileWithRetry(project, slideNumber, maxAttempts =
   }
   return null;
 }
+function matchSlideNumberFromPath(filePath) {
+  const normalized = String(filePath || "").trim().replace(/\\/g, "/");
+  if (!normalized) return 0;
+  const match = normalized.match(/(?:^|\/)slides\/slide-(\d{1,2})\.html$/i) || normalized.match(/(?:^|\/)slide-(\d{1,2})\.html$/i);
+  if (!match) return 0;
+  const slideNumber = parseInt(match[1], 10);
+  return Number.isFinite(slideNumber) && slideNumber > 0 ? slideNumber : 0;
+}
 async function readDeckFromProjectFiles(project) {
+  const host = runtime();
+  const writeFile = typeof host.fs?.writeFile === "function" ? async (relPath, content) => {
+    await host.fs.writeFile(`${project.dir}/${relPath}`, content);
+  } : void 0;
   const result = await readDeckProjectContract(
-    (relPath) => readDeckProjectFile(project, relPath)
+    (relPath) => readDeckProjectFile(project, relPath),
+    writeFile ? { writeFile } : {}
   );
   const { plan } = result;
   const slides = result.slides.map((slide) => ({
@@ -38515,11 +38731,15 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
   const progressTracker = createGenerationProgressTracker();
   const activity = { lastEventAt: Date.now() };
   try {
+    const preferredModel = normalizePreferredModel(
+      options.model || state.preferredModel || DEFAULT_PREFERRED_MODEL
+    );
     const result = await host.backend.call("ppt.generate", requestInput, {
       entityId: "deck",
       idempotencyKey: `ppt-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sessionId: options.sessionId || void 0,
-      appDataWorkspace: options.appDataWorkspace || void 0
+      appDataWorkspace: options.appDataWorkspace || void 0,
+      model: preferredModel
     });
     sessionId = result?.sessionId || null;
     turnId = result?.turnId || result?.actionRunId || null;
@@ -38599,7 +38819,8 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
               text: paramSummary
             });
           } else if (eventType === "Completed" && rawToolName) {
-            const resultSummary = summarizeToolResult(rawToolName, toolEvent.result || {});
+            const donePath = resolveToolEventFilePath(toolEvent, toolTrace);
+            const resultSummary = summarizeToolResult(rawToolName, toolEvent.result || {}, donePath);
             if (resultSummary) {
               pushAgentStreamEntry({
                 kind: "tool-done",
@@ -38628,15 +38849,19 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
             hooks.onToolPhase?.("completed");
             if (toolName === "skill") {
               progressTracker.note(translate("eventToolSkillReady"), "", "phase");
+              hooks.onToolPhase?.("skill-ready");
             } else if (toolName === "websearch" || toolName === "webfetch") {
               hooks.onToolPhase?.("research");
             }
-            if ((toolName === "write" || toolName === "edit") && typeof hooks.onSlideFileWritten === "function") {
+            if (toolName === "write" || toolName === "edit" || toolName === "apply_patch" || toolName === "strreplace" || toolName === "search_replace") {
               const filePath = resolveToolEventFilePath(toolEvent, toolTrace);
-              const slideMatch = filePath.match(/slides\/slide-(\d{2})\.html/i);
-              if (slideMatch) {
-                const slideNumber = parseInt(slideMatch[1], 10);
-                if (Number.isFinite(slideNumber) && slideNumber > 0) {
+              if (/project\.json$/i.test(filePath) && typeof hooks.onPlanFileWritten === "function") {
+                void Promise.resolve(hooks.onPlanFileWritten()).catch(() => {
+                });
+              }
+              if (typeof hooks.onSlideFileWritten === "function") {
+                const slideNumber = matchSlideNumberFromPath(filePath);
+                if (slideNumber > 0) {
                   void Promise.resolve(hooks.onSlideFileWritten(slideNumber)).catch(() => {
                   });
                 }
@@ -38698,10 +38923,29 @@ async function executeBackendTurn(requestInput, hooks = {}, options = {}) {
       const heartbeat = setInterval(() => {
         if (settled) return;
         const now = Date.now();
-        if (now - progressTracker.lastProgressLogAt < 12e3) return;
+        if (now - progressTracker.lastProgressLogAt < 3e3) return;
+        const drafted = Number(state.generation?.draftedCount) || 0;
+        const target = Number(state.generation?.slideTarget) || 0;
         const current = (state.generation?.steps || []).find((step) => step.status === "running");
-        progressTracker.note(current?.label ? `${current.label}\u2026` : translate("generationProgressPulse"), current?.detail || "", "pulse", 0);
-      }, 12e3);
+        let title = translate("generationProgressPulse");
+        let detail = "";
+        if (current?.id === "slides" && (drafted > 0 || target > 0)) {
+          title = translate("generationWritingSlideProgress", {
+            done: drafted,
+            total: target || Math.max(drafted, 1)
+          });
+        } else if (current?.id === "outline") {
+          title = translate("generationWritingClaims");
+        } else if (current?.id === "skill") {
+          title = translate("generationLoadingSkill");
+        } else if (current?.id === "verify") {
+          title = translate("generationVerifyingDeck");
+        } else if (current?.label) {
+          title = `${current.label}\u2026`;
+          detail = current.detail || "";
+        }
+        progressTracker.note(title, detail, "pulse", 0);
+      }, 3e3);
       cleanup.push(() => clearInterval(heartbeat));
     });
     const expectJson = options.resultKind !== "text";
@@ -38752,7 +38996,7 @@ async function runCoworkDeckGeneration(operation, instruction) {
   const runEpoch = deckEpoch;
   setBusy(true, translate("working"));
   resetGeneration();
-  setGenerationStep("brief", "running", translate("generationReadingBrief"));
+  setGenerationStep("skill", "running", translate("generationLoadingSkill"));
   addGenerationEvent({ title: translate("processEventStarted"), detail: translate("processEventWaiting"), kind: "start" });
   prepareAgentGenerationSurface(operation, instruction);
   let completed = false;
@@ -38782,17 +39026,132 @@ async function runCoworkDeckGeneration(operation, instruction) {
   }, lastProgressLogAt: 0 };
   const progressiveSlides = /* @__PURE__ */ new Map();
   let progressivePlan = null;
+  let progressivePublishChain = Promise.resolve();
+  let progressivePollTimer = null;
+  const announcedSlideReady = /* @__PURE__ */ new Set();
+  const applyProgressivePlan = (plan) => {
+    if (!plan) return null;
+    progressivePlan = plan;
+    const titles = planOutlineTitles(plan);
+    const total = titles.length || (Array.isArray(plan.outline) ? plan.outline.length : 0) || (Array.isArray(plan.slide_order) ? plan.slide_order.length : 0);
+    if (total > 0) state.generation.slideTarget = total;
+    const planTitle = resolveDeckTitle({ plan, state, instruction });
+    if (!isEphemeralDeckTitle(planTitle)) state.title = planTitle;
+    if (titles.length) state.outline = titles;
+    return { titles, total };
+  };
+  const publishProgressiveDeck = (focusSlideNumber = 0) => {
+    if (!progressiveSlides.size) return;
+    const plan = progressivePlan || {};
+    const total = Number(state.generation.slideTarget) || (Array.isArray(plan.outline) ? plan.outline.length : 0) || progressiveSlides.size;
+    const knownSlides = [...progressiveSlides.entries()].sort((a, b) => a[0] - b[0]).map(([number, slideHtml2]) => ({
+      id: `ppt-live-slide-${number}`,
+      slideNumber: number,
+      title: typeof plan?.outline?.[number - 1] === "string" ? plan.outline[number - 1] : plan?.outline?.[number - 1]?.title || `${translate("newSlideTitle")} ${number}`,
+      html: slideHtml2
+    }));
+    const deckTitle = resolveDeckTitle({
+      plan,
+      state,
+      instruction,
+      slides: knownSlides
+    });
+    const activeNumber = focusSlideNumber > 0 ? focusSlideNumber : knownSlides[knownSlides.length - 1]?.slideNumber;
+    applyDeckPayload({
+      title: deckTitle,
+      language: plan?.language || "",
+      outline: planOutlineTitles(plan || {}),
+      researchReport: plan?.researchReport || null,
+      design: plan?.design || {},
+      slides: knownSlides
+    }, {
+      instruction,
+      activeSlideId: activeNumber ? `ppt-live-slide-${activeNumber}` : ""
+    });
+    state.selectedElementId = "";
+    state.generation.draftedCount = progressiveSlides.size;
+    if (activeNumber > 0) {
+      setGenerationStep("slides", "running", translate("generationRenderingSlide", {
+        slide: activeNumber,
+        total
+      }));
+      if (!announcedSlideReady.has(activeNumber)) {
+        announcedSlideReady.add(activeNumber);
+        addGenerationEvent({
+          title: translate("generationSlideReady", {
+            slide: activeNumber,
+            total
+          }),
+          detail: "",
+          kind: "slide"
+        });
+      }
+    }
+    rerender();
+  };
+  const ingestProgressiveSlide = (slideNumber, html) => {
+    if (!(slideNumber > 0) || !html) return false;
+    const previous = progressiveSlides.get(slideNumber);
+    if (previous === html) return false;
+    progressiveSlides.set(slideNumber, html);
+    return true;
+  };
+  const refreshProgressiveSlide = async (slideNumber) => {
+    if (!project || !(slideNumber > 0) || isDeckEpochStale(runEpoch)) return false;
+    const html = await tryReadDeckSlideFileWithRetry(project, slideNumber);
+    if (!html) {
+      runtime().log?.debug?.("PPT Live progressive slide read missed", { slideNumber });
+      return false;
+    }
+    const planOutlineLen = Array.isArray(progressivePlan?.outline) ? progressivePlan.outline.length : 0;
+    if (!progressivePlan || slideNumber > planOutlineLen) {
+      applyProgressivePlan(await tryReadDeckPlanFile(project));
+    }
+    if (!ingestProgressiveSlide(slideNumber, html)) return false;
+    publishProgressiveDeck(slideNumber);
+    return true;
+  };
+  const scanProgressiveSlides = async () => {
+    if (!project || isDeckEpochStale(runEpoch)) return;
+    if (!progressivePlan) {
+      applyProgressivePlan(await tryReadDeckPlanFile(project));
+    }
+    const total = Number(state.generation.slideTarget) || (Array.isArray(progressivePlan?.outline) ? progressivePlan.outline.length : 0) || (Array.isArray(progressivePlan?.slide_order) ? progressivePlan.slide_order.length : 0) || 0;
+    if (!(total > 0)) return;
+    let newest = 0;
+    let changed = false;
+    for (let slideNumber = 1; slideNumber <= total; slideNumber += 1) {
+      const existing = progressiveSlides.get(slideNumber);
+      if (existing && isCompleteSlideHtml2(existing)) continue;
+      const html = await tryReadDeckSlideFile(project, slideNumber, {
+        requireComplete: Boolean(existing)
+      });
+      if (!html) continue;
+      if (ingestProgressiveSlide(slideNumber, html)) {
+        changed = true;
+        newest = slideNumber;
+      }
+    }
+    if (changed) publishProgressiveDeck(newest);
+  };
+  const enqueueProgressive = (work) => {
+    progressivePublishChain = progressivePublishChain.then(work).catch((error2) => {
+      runtime().log?.warn?.("PPT Live progressive preview failed", { error: String(error2) });
+    });
+    return progressivePublishChain;
+  };
   try {
     let lastError = null;
-    for (let attempt = 1; attempt <= PPT_BACKEND_MAX_ATTEMPTS; attempt += 1) {
+    let maxAttempts = PPT_BACKEND_MAX_ATTEMPTS;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         if (attempt > 1) {
           addGenerationEvent({
-            title: translate("generationRetryAttempt", { attempt, max: PPT_BACKEND_MAX_ATTEMPTS }),
+            title: translate("generationRetryAttempt", { attempt, max: maxAttempts }),
             detail: backendErrorDetail(lastError),
             kind: "start"
           });
-          setStatus(translate("generationRetrying", { attempt, max: PPT_BACKEND_MAX_ATTEMPTS }));
+          setStatus(translate("generationRetrying", { attempt, max: maxAttempts }));
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs(lastError, attempt)));
         }
         const requestInput = buildDeckRunRequestInput(
@@ -38807,75 +39166,49 @@ async function runCoworkDeckGeneration(operation, instruction) {
           requestInput.currentSlideIndex = getActiveIndex(state);
           requestInput.currentDeck = buildCurrentDeckSnapshot(instruction);
         }
+        if (project && !progressivePollTimer) {
+          progressivePollTimer = setInterval(() => {
+            void enqueueProgressive(() => scanProgressiveSlides());
+          }, 900);
+        }
         const { sessionId } = await executeBackendTurn(requestInput, {
           onToolPhase: (kind) => {
             if (kind === "detected") {
-              setGenerationStep("brief", "running", translate("generationReadingBrief"));
-            } else if (kind === "completed") {
-              setGenerationStep("brief", "done");
+              setGenerationStep("skill", "running", translate("generationLoadingSkill"));
+            } else if (kind === "skill-ready") {
+              setGenerationStep("outline", "running", translate("generationWritingClaims"));
             } else if (kind === "research") {
-              setGenerationStep("proof", "running", translate("generationChoosingProof"));
+              setGenerationStep("outline", "running", translate("generationResearching"));
+              addGenerationEvent({ title: translate("generationResearching"), detail: "", kind: "phase" });
             }
           },
           onTextProgress: (buffer) => noteTextStreamProgress(buffer, progressShim, lastStreamPhase),
+          onPlanFileWritten: project ? async () => {
+            const plan = await tryReadDeckPlanFile(project);
+            const applied = applyProgressivePlan(plan);
+            if (!applied?.total) return;
+            setGenerationStep(
+              "slides",
+              "running",
+              translate("generationOutlineReady", { count: applied.total })
+            );
+            addGenerationEvent({
+              title: translate("generationOutlineReady", { count: applied.total }),
+              detail: applied.titles.slice(0, 4).join(" \xB7 "),
+              kind: "phase"
+            });
+            if (!progressiveSlides.size && !state.slides?.some((slide) => slide?.html)) {
+              state.slides = [];
+              state.activeSlideId = "";
+            }
+            rerender();
+            void enqueueProgressive(() => scanProgressiveSlides());
+          } : void 0,
           // Progressive preview: when the agent writes a slide file during the
           // turn, read it from disk and show it immediately so the user sees
           // pages appearing one by one instead of all at once at the end.
           onSlideFileWritten: project ? async (slideNumber) => {
-            const html = await tryReadDeckSlideFileWithRetry(project, slideNumber);
-            if (!html) return;
-            progressiveSlides.set(slideNumber, html);
-            const planOutlineLen = Array.isArray(progressivePlan?.outline) ? progressivePlan.outline.length : 0;
-            if (!progressivePlan || slideNumber > planOutlineLen) {
-              const fresh = await tryReadDeckPlanFile(project);
-              if (fresh) {
-                progressivePlan = fresh;
-                const planTitle = resolveDeckTitle({ plan: fresh, state, instruction });
-                if (!isEphemeralDeckTitle(planTitle)) {
-                  state.title = planTitle;
-                }
-              }
-            }
-            const plan = progressivePlan || {};
-            const knownSlides = [...progressiveSlides.entries()].sort((a, b) => a[0] - b[0]).map(([number, slideHtml2]) => ({
-              id: `ppt-live-slide-${number}`,
-              slideNumber: number,
-              title: typeof plan?.outline?.[number - 1] === "string" ? plan.outline[number - 1] : plan?.outline?.[number - 1]?.title || `${translate("newSlideTitle")} ${number}`,
-              html: slideHtml2
-            }));
-            const deckTitle = resolveDeckTitle({
-              plan,
-              state,
-              instruction,
-              slides: knownSlides
-            });
-            setGenerationStep("design", "running", translate("generationSlideReady", {
-              slide: slideNumber,
-              total: knownSlides.length
-            }));
-            setStatus(translate("generationRenderingSlide", {
-              slide: slideNumber,
-              total: plan?.outline?.length || knownSlides.length
-            }));
-            addGenerationEvent({
-              title: translate("generationSlideReady", {
-                slide: slideNumber,
-                total: plan?.outline?.length || knownSlides.length
-              }),
-              detail: "",
-              kind: "slide"
-            });
-            applyDeckPayload({
-              title: deckTitle,
-              language: plan?.language || "",
-              outline: planOutlineTitles(plan || {}),
-              researchReport: plan?.researchReport || null,
-              design: plan?.design || {},
-              slides: knownSlides
-            }, { instruction });
-            state.activeSlideId = `ppt-live-slide-${slideNumber}`;
-            state.selectedElementId = "";
-            rerender();
+            await enqueueProgressive(() => refreshProgressiveSlide(slideNumber));
           } : void 0
         }, {
           sessionId: retrySession?.id || void 0,
@@ -38889,18 +39222,17 @@ async function runCoworkDeckGeneration(operation, instruction) {
           runId: retrySession?.project?.runId || "",
           skillKey: PPT_DESIGN_SKILL_KEY
         };
+        state.preferredModel = normalizePreferredModel(state.preferredModel);
         addGenerationEvent({ title: translate("generationParsingDeck"), detail: "", kind: "parsing" });
-        setStatus(translate("generationParsingDeck"));
-        setGenerationStep("design", "running", translate("generationDesigningLayouts"));
+        setGenerationStep("verify", "running", translate("generationVerifyingDeck"));
+        await progressivePublishChain.catch(() => {
+        });
         const payload = project ? await readDeckFromProjectFiles(project) : null;
         if (!payload) throw new Error("PPT Live agent did not produce a readable deck");
         applyDeckPayload(payload, { instruction });
         await saveHistorySnapshot(`agent:${operation}`);
         addGenerationEvent({ title: translate("processEventDone"), detail: "", kind: "done" });
-        setGenerationStep("spine", "done");
-        setGenerationStep("proof", "done");
-        setGenerationStep("design", "done");
-        setGenerationStep("compile", "done", translate("generationCompiled"));
+        setGenerationStep("verify", "done", translate("generationCompiled"));
         finishGenerationUi(translate("deckReady"));
         completed = true;
         rerender();
@@ -38911,16 +39243,21 @@ async function runCoworkDeckGeneration(operation, instruction) {
         if (error2?.diagnostic) projectContractDiagnostic = error2.diagnostic;
         if (isUnknownSessionBackendError(error2)) retrySession.id = null;
         else if (error2?.pptLiveSessionId) retrySession.id = error2.pptLiveSessionId;
-        if (!isRetryableBackendError(error2) || attempt >= PPT_BACKEND_MAX_ATTEMPTS) throw error2;
+        maxAttempts = Math.max(maxAttempts, maxAttemptsFor(error2));
+        if (!isRetryableBackendError(error2) || attempt >= maxAttempts) throw error2;
         runtime().log?.warn?.("PPT Live cowork generation attempt failed, retrying", {
           attempt,
-          maxAttempts: PPT_BACKEND_MAX_ATTEMPTS,
+          maxAttempts,
           continueInSession: Boolean(retrySession.id),
           error: String(error2)
         });
       }
     }
   } finally {
+    if (progressivePollTimer) {
+      clearInterval(progressivePollTimer);
+      progressivePollTimer = null;
+    }
     const ownsEpoch = !isDeckEpochStale(runEpoch);
     if (ownsEpoch) {
       if (state.generation.active && !completed) state.generation.active = false;
@@ -38935,6 +39272,12 @@ function prepareAgentGenerationSurface(operation, instruction) {
   addGenerationEvent({ title: translate("generationAgentWorking"), detail: compactText(instruction || ""), kind: "start" });
   if (operation === "auto" && (isDefaultDraft() || isStarterDeck2())) {
     state.title = translate("agentWorkingTitle");
+    state.slides = [];
+    state.outline = [];
+    state.activeSlideId = "";
+    state.selectedElementId = "";
+    rerender();
+    return;
   }
   rerender();
 }
@@ -39045,7 +39388,7 @@ function summarizeToolParams(toolName, params = {}) {
   const firstVal = Object.values(p).find((val2) => typeof val2 === "string" && val2.trim());
   return compactText(String(firstVal || ""), 160);
 }
-function summarizeToolResult(toolName, result = {}) {
+function summarizeToolResult(toolName, result = {}, filePath = "") {
   const name = String(toolName || "").toLowerCase();
   const r = result && typeof result === "object" ? result : {};
   if (name === "websearch") {
@@ -39058,11 +39401,16 @@ function summarizeToolResult(toolName, result = {}) {
   }
   if (name === "read") {
     const lines = Number(r.lineCount || (Array.isArray(r.lines) ? r.lines.length : 0));
+    const path = shortFilePath(filePath || String(r.file_path || r.path || ""));
+    if (path && lines) return `${path} \xB7 ${lines} \u884C`;
+    if (path) return path;
     return lines ? `${lines} \u884C` : "";
   }
-  if (name === "write" || name === "edit") return "";
+  if (name === "write" || name === "edit") {
+    return shortFilePath(filePath || String(r.file_path || r.path || "")) || "\u2713";
+  }
   if (name === "grep" || name === "glob") return "";
-  if (name === "skill") return "";
+  if (name === "skill") return translate("eventToolSkillReady");
   if (name === "task") return compactText(String(r.result || r.message || ""), 160);
   return "";
 }
@@ -39096,17 +39444,25 @@ function describeToolEvent(event, options = {}) {
   return null;
 }
 function resolveToolEventFilePath(toolEvent, toolTrace = []) {
+  const pickPath = (value2) => {
+    if (!value2 || typeof value2 !== "object") return "";
+    return String(
+      value2.file_path || value2.filePath || value2.path || value2.target_file || value2.targetFile || ""
+    ).trim();
+  };
   const params = toolEvent?.params && typeof toolEvent.params === "object" ? toolEvent.params : {};
-  const directPath = String(params.file_path || params.path || "").trim();
+  const directPath = pickPath(params);
   if (directPath) return directPath;
   const result = toolEvent?.result && typeof toolEvent.result === "object" ? toolEvent.result : {};
-  const resultPath = String(result.file_path || result.path || "").trim();
+  const resultPath = pickPath(result);
   if (resultPath) return resultPath;
   const toolId = String(toolEvent?.tool_id || toolEvent?.toolId || "").trim();
-  if (!toolId) return "";
+  if (!toolId) {
+    const started2 = [...toolTrace].reverse().find((entry) => entry.eventType === "Started" && pickPath(entry.params));
+    return pickPath(started2?.params);
+  }
   const started = [...toolTrace].reverse().find((entry) => entry.eventType === "Started" && String(entry.toolId || entry.tool_id || "") === toolId);
-  const startedParams = started?.params && typeof started.params === "object" ? started.params : {};
-  return String(startedParams.file_path || startedParams.path || "").trim();
+  return pickPath(started?.params);
 }
 function normalizeToolEvent(toolEvent) {
   if (toolEvent.event_type || toolEvent.eventType || toolEvent.tool_name || toolEvent.toolName) return toolEvent;
@@ -39195,6 +39551,7 @@ function applyDeckPayload(payload, options = {}) {
     instruction: options.instruction || "",
     slides: payload?.slides || []
   });
+  const preferredActiveId = String(options.activeSlideId || "").trim();
   const htmlSlides = normalizeHtmlSlides(payload);
   if (htmlSlides.length) {
     state.title = resolvedTitle;
@@ -39203,7 +39560,7 @@ function applyDeckPayload(payload, options = {}) {
       slides: htmlSlides
     }));
     state.outline = state.slides.map((slide) => slide.title);
-    state.activeSlideId = state.slides[0]?.id || "";
+    state.activeSlideId = preferredActiveId && state.slides.some((slide) => slide.id === preferredActiveId) ? preferredActiveId : state.slides[0]?.id || "";
     state.selectedElementId = "";
   } else if (!Array.isArray(payload?.slides) || payload.slides.length === 0) {
     throw new Error("PPT Live deck payload has no slides");
@@ -39217,7 +39574,7 @@ function applyDeckPayload(payload, options = {}) {
       slides: payload.slides
     }));
     state.outline = state.slides.map((slide) => slide.title);
-    state.activeSlideId = state.slides[0]?.id || "";
+    state.activeSlideId = preferredActiveId && state.slides.some((slide) => slide.id === preferredActiveId) ? preferredActiveId : state.slides[0]?.id || "";
     state.selectedElementId = state.slides[0]?.elements[0]?.id || "";
   }
   if (Array.isArray(payload.outline) && payload.outline.length) {
@@ -39661,13 +40018,14 @@ function formatExportDiagnostics(summary) {
   if (!summary?.hasWarnings && !summary?.hasBlocking) return "";
   const countLabels = [
     ["rewritten", "exportDiagnosticsRepaired"],
+    ["degraded", "exportDiagnosticsDegraded"],
     ["blocking", "exportDiagnosticsBlocking"]
   ].filter(([countKey]) => summary.counts?.[countKey] > 0).map(([countKey, labelKey]) => translate(labelKey, { count: summary.counts[countKey] }));
   const locations = localizeExportDiagnosticLocations(summary.locations || [], getLocale()).filter((location) => location.sourceId).slice(0, 3).map((location) => translate("exportDiagnosticsLocation", {
     slide: location.slideNumber,
     source: location.sourceId,
     phase: translate(
-      location.severity === "blocking" ? "exportDiagnosticsPhaseBlocking" : "exportDiagnosticsPhaseRepair"
+      location.severity === "blocking" ? "exportDiagnosticsPhaseBlocking" : location.severity === "degrade" ? "exportDiagnosticsPhaseDegraded" : "exportDiagnosticsPhaseRepair"
     ),
     reason: location.reason
   }));
@@ -39739,11 +40097,15 @@ async function executeExport(format) {
   let result;
   const deckPayload = clone(state);
   if (format === "pptx") {
+    const exportDegradations = [];
     const scenes = await prepareEditableSlides(slides, {
-      onSlideProgress: (pageNumber) => setExportRenderProgress(pageNumber - 1, slides.length, "pptx")
+      onSlideProgress: (pageNumber) => setExportRenderProgress(pageNumber - 1, slides.length, "pptx"),
+      onDegrade: (record2) => exportDegradations.push(record2)
     });
-    result = await exportEditablePptx(deckPayload, scenes);
-    result.exportSummary = summarizePptxExportDiagnostics(scenes);
+    result = await exportEditablePptx(deckPayload, scenes, {
+      onDegrade: (record2) => exportDegradations.push(record2)
+    });
+    result.exportSummary = summarizePptxExportDiagnostics(scenes, exportDegradations);
   } else if (format === "pdf") {
     const pages = await renderSlidesInHostWebView(slides, "pdf");
     result = await exportPdfFromBase64Pages(deckPayload, pages.map((page) => page.base64));
@@ -40073,16 +40435,11 @@ function setCanvasZoom(zoom) {
   const stage = document.querySelector(".canvas-stage");
   if (stage) stage.style.transform = currentZoom === 1 ? "" : `scale(${currentZoom})`;
   const zoomValue = $("zoomValue");
-  const statusZoomValue = $("statusZoomValue");
-  const pct2 = Math.round(currentZoom * 100) + "%";
-  if (zoomValue) zoomValue.textContent = pct2;
-  if (statusZoomValue) statusZoomValue.textContent = pct2;
+  if (zoomValue) zoomValue.textContent = `${Math.round(currentZoom * 100)}%`;
 }
 function bindCanvasZoom() {
   $("zoomIn")?.addEventListener("click", () => setCanvasZoom(currentZoom + ZOOM_STEP));
   $("zoomOut")?.addEventListener("click", () => setCanvasZoom(currentZoom - ZOOM_STEP));
-  $("statusZoomIn")?.addEventListener("click", () => setCanvasZoom(currentZoom + ZOOM_STEP));
-  $("statusZoomOut")?.addEventListener("click", () => setCanvasZoom(currentZoom - ZOOM_STEP));
   document.querySelector(".canvas-area")?.addEventListener("wheel", (e) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
@@ -40221,6 +40578,23 @@ function bindPropertyPanels() {
         setDensitySliderUi(densityToIndex(preset.density || "standard"));
       }
       refreshFlatSelect(stylePresetSelect);
+    });
+  }
+  const modelSelect = $("modelSelect");
+  if (modelSelect) {
+    enhanceFlatSelect(modelSelect);
+    modelSelect.addEventListener("change", () => {
+      const selected = normalizePreferredModel(modelSelect.value);
+      if (selected === state.preferredModel) return;
+      state.preferredModel = selected;
+      if (state.agentSession?.id) {
+        state.agentSession = {
+          ...state.agentSession,
+          id: ""
+        };
+      }
+      refreshFlatSelect(modelSelect);
+      void persist(true);
     });
   }
 }
@@ -40380,10 +40754,16 @@ async function confirmExportFromModal() {
     const { filename, exportSummary } = await executeExport(format);
     const savedMessage = translate("exportSavedTo", { path: filename });
     const diagnosticMessage = formatExportDiagnostics(exportSummary);
-    const completedMessage = diagnosticMessage ? `${savedMessage} ${diagnosticMessage}` : savedMessage;
+    if (diagnosticMessage) {
+      runtime().log?.info?.(`PPT Live ${format} export completed with visual adjustments`, {
+        filename,
+        summary: diagnosticMessage,
+        counts: exportSummary?.counts || null
+      });
+    }
     $("exportOverlay")?.classList.remove("is-exporting");
-    setExportModalFeedback("success", completedMessage);
-    setExportStatus(completedMessage);
+    setExportModalFeedback("success", savedMessage);
+    setExportStatus(savedMessage);
     revealDownloadFolder();
     await new Promise((resolve) => setTimeout(resolve, 1600));
     closeExportModal();
@@ -40503,10 +40883,58 @@ function renderStylePresetOptions() {
   if (stylePresetSelect.selectedIndex < 0) stylePresetSelect.value = DEFAULT_STYLE_PRESET;
   refreshFlatSelect(stylePresetSelect);
 }
+function appendModelOption(select, value2, label) {
+  const option = document.createElement("option");
+  option.value = value2;
+  option.textContent = label;
+  select.append(option);
+}
+function modelOptionLabel(model) {
+  const modelName = String(model?.modelName || model?.model_name || "").trim();
+  if (modelName) return modelName;
+  const configName = String(model?.name || "").trim();
+  if (configName) return configName;
+  return String(model?.id || "").trim();
+}
+function renderModelOptions(models = []) {
+  const modelSelect = $("modelSelect");
+  if (!modelSelect) return;
+  const selected = normalizePreferredModel(state.preferredModel);
+  modelSelect.textContent = "";
+  appendModelOption(modelSelect, "auto", translate("modelOptionAuto"));
+  appendModelOption(modelSelect, "primary", translate("modelOptionPrimary"));
+  appendModelOption(modelSelect, "fast", translate("modelOptionFast"));
+  for (const model of Array.isArray(models) ? models : []) {
+    const id = String(model?.id || "").trim();
+    if (!id || id === "auto" || id === "primary" || id === "fast") continue;
+    appendModelOption(modelSelect, id, modelOptionLabel(model));
+  }
+  if (![...modelSelect.options].some((option) => option.value === selected)) {
+    appendModelOption(modelSelect, selected, selected);
+  }
+  modelSelect.value = selected;
+  if (modelSelect.selectedIndex < 0) modelSelect.value = DEFAULT_PREFERRED_MODEL;
+  state.preferredModel = normalizePreferredModel(modelSelect.value);
+  refreshFlatSelect(modelSelect);
+}
+async function loadModelOptions() {
+  renderModelOptions([]);
+  const getModels = runtime()?.ai?.getModels;
+  if (typeof getModels !== "function") return;
+  try {
+    const models = await getModels();
+    renderModelOptions(models);
+  } catch (error2) {
+    runtime().log?.warn?.("PPT Live failed to list AI models", { error: String(error2) });
+    renderModelOptions([]);
+  }
+}
 function syncLocale() {
   state.generation = normalizeGeneration(state.generation);
   applyI18n();
   renderStylePresetOptions();
+  renderModelOptions([]);
+  void loadModelOptions();
   const pill = $("aiStatusPill");
   if (pill) pill.textContent = busy ? translate("statusPillBusy") : translate("statusPillReady");
   rerender();
@@ -40518,6 +40946,7 @@ async function init() {
     await recoverFromRestart();
     syncLocale();
     syncStylePanelFromState(state);
+    await loadModelOptions();
     await persist(true);
   } catch (error2) {
     runtime().log?.error?.("PPT Live init failed", { error: String(error2) });

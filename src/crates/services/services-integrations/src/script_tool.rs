@@ -754,7 +754,7 @@ fn port_error_kind(kind: Option<&str>) -> PortErrorKind {
 }
 
 pub struct NodeScriptToolRuntime {
-    executable: Option<PathBuf>,
+    executable: RwLock<Option<PathBuf>>,
     workers: RwLock<HashMap<String, Arc<NodeWorker>>>,
     load_gate: Mutex<()>,
 }
@@ -768,10 +768,30 @@ impl Default for NodeScriptToolRuntime {
 impl NodeScriptToolRuntime {
     pub fn discover() -> Self {
         Self {
-            executable: which::which("node").ok(),
+            executable: RwLock::new(which::which("node").ok()),
             workers: RwLock::new(HashMap::new()),
             load_gate: Mutex::new(()),
         }
+    }
+
+    async fn remember_discovered_executable(&self, discovered: Option<PathBuf>) -> Option<PathBuf> {
+        if let Some(executable) = self.executable.read().await.clone() {
+            return Some(executable);
+        }
+        let discovered = discovered?;
+        let mut executable = self.executable.write().await;
+        if executable.is_none() {
+            *executable = Some(discovered);
+        }
+        executable.clone()
+    }
+
+    async fn resolve_executable(&self) -> Option<PathBuf> {
+        if let Some(executable) = self.executable.read().await.clone() {
+            return Some(executable);
+        }
+        self.remember_discovered_executable(which::which("node").ok())
+            .await
     }
 
     async fn evict_worker(&self, target_id: &str, worker: &Arc<NodeWorker>) {
@@ -790,14 +810,13 @@ impl NodeScriptToolRuntime {
 #[async_trait]
 impl ScriptToolRuntime for NodeScriptToolRuntime {
     async fn availability(&self) -> ScriptToolRuntimeAvailability {
-        match &self.executable {
+        match self.resolve_executable().await {
             Some(executable) => ScriptToolRuntimeAvailability::Available {
                 executable: executable.to_string_lossy().into_owned(),
                 version: "not checked".to_string(),
             },
             None => ScriptToolRuntimeAvailability::Unavailable {
-                reason: "BitFun could not find Node.js for external tools; install or repair Node.js, then restart BitFun"
-                    .to_string(),
+                reason: "BitFun could not find Node.js for external tools".to_string(),
             },
         }
     }
@@ -840,7 +859,7 @@ impl ScriptToolRuntime for NodeScriptToolRuntime {
 
     async fn load(&self, request: ScriptToolLoadRequest) -> PortResult<ScriptToolLoadResponse> {
         let _guard = self.load_gate.lock().await;
-        let executable = self.executable.as_ref().ok_or_else(|| {
+        let executable = self.resolve_executable().await.ok_or_else(|| {
             PortError::new(PortErrorKind::NotAvailable, "Node.js is not available")
         })?;
         if request.target_id.is_empty()
@@ -855,7 +874,7 @@ impl ScriptToolRuntime for NodeScriptToolRuntime {
         if let Some(previous) = self.workers.write().await.remove(&request.target_id) {
             previous.dispose(&request.target_id).await?;
         }
-        let worker = NodeWorker::spawn(executable, &request.working_directory).await?;
+        let worker = NodeWorker::spawn(&executable, &request.working_directory).await?;
         let payload = serde_json::to_value(&request).map_err(|error| {
             PortError::new(
                 PortErrorKind::InvalidRequest,
@@ -973,5 +992,30 @@ impl ScriptToolRuntime for NodeScriptToolRuntime {
             return Ok(());
         };
         worker.dispose(target_id).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NodeScriptToolRuntime;
+    use std::path::PathBuf;
+    use tokio::sync::{Mutex, RwLock};
+
+    #[tokio::test]
+    async fn missing_node_path_can_recover_without_replacing_the_runtime() {
+        let runtime = NodeScriptToolRuntime {
+            executable: RwLock::new(None),
+            workers: RwLock::new(Default::default()),
+            load_gate: Mutex::new(()),
+        };
+        let discovered = PathBuf::from("C:/Program Files/nodejs/node.exe");
+
+        assert_eq!(
+            runtime
+                .remember_discovered_executable(Some(discovered.clone()))
+                .await,
+            Some(discovered.clone())
+        );
+        assert_eq!(*runtime.executable.read().await, Some(discovered));
     }
 }

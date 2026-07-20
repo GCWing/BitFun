@@ -10,6 +10,8 @@
 #   2. Install binary to ~/.local/bin/bitfun-cli (override with BITFUN_CLI_BIN_DIR)
 #   3. Idempotently append a PATH block to ~/.bashrc and ~/.zshrc
 #   4. Source the matching rc for the current shell when interactive
+#   5. Restart the account daemon's auto-start service when installed, so
+#      upgrades take effect (a running daemon keeps the old binary otherwise)
 #
 # Supported hosts: Linux/macOS on amd64 (x86_64) and arm64 (aarch64).
 #
@@ -165,6 +167,52 @@ maybe_source_shellrc() {
   esac
 }
 
+# A running daemon keeps executing the previous binary (old inode) until it is
+# restarted; `systemctl enable --now` does NOT restart an already-active
+# service either. Restart the installed auto-start service so upgrades take
+# effect. Best-effort: skips cleanly when nothing is installed.
+restart_daemon_for_upgrade() {
+  local os unit_name agent_label config_home plist uid
+  os="$(uname -s)"
+  unit_name="bitfun-cli-daemon.service"
+  agent_label="com.bitfun.cli.daemon"
+
+  case "$os" in
+    Linux)
+      config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+      if [ -f "$config_home/systemd/user/$unit_name" ]; then
+        if command -v systemctl >/dev/null 2>&1 && systemctl --user try-restart "$unit_name" 2>/dev/null; then
+          echo "Restarted $unit_name to pick up the new binary."
+        else
+          echo "Note: daemon service installed but could not be restarted from this shell."
+          echo "Run: systemctl --user restart $unit_name"
+        fi
+        return 0
+      fi
+      ;;
+    Darwin)
+      plist="$HOME/Library/LaunchAgents/${agent_label}.plist"
+      if [ -f "$plist" ]; then
+        uid="$(id -u)"
+        if launchctl kickstart -k "gui/${uid}/${agent_label}" 2>/dev/null; then
+          echo "Restarted LaunchAgent ${agent_label} to pick up the new binary."
+        else
+          echo "Note: daemon LaunchAgent installed but could not be restarted."
+          echo "Run: launchctl kickstart -k gui/${uid}/${agent_label}"
+        fi
+        return 0
+      fi
+      ;;
+  esac
+
+  # No auto-start service installed — warn only when a manually supervised
+  # daemon is still running the old binary.
+  if "${BIN_DIR}/bitfun-cli" daemon status 2>/dev/null | grep -q "daemon process: running"; then
+    echo "Note: a running daemon was detected (not service-managed); restart it"
+    echo "so it picks up the new binary."
+  fi
+}
+
 usage() {
   cat <<'EOF'
 BitFun CLI install script
@@ -215,7 +263,7 @@ require_cargo
 mkdir -p "$BIN_DIR"
 
 echo ""
-echo "[1/3] Building bitfun-cli (release)..."
+echo "[1/4] Building bitfun-cli (release)..."
 cd "$REPO_ROOT"
 # Build from workspace root so path deps resolve.
 cargo build -p bitfun-cli --release
@@ -228,13 +276,13 @@ if [ ! -x "$BUILT_BIN" ]; then
 fi
 
 echo ""
-echo "[2/3] Installing binary..."
+echo "[2/4] Installing binary..."
 install -m 755 "$BUILT_BIN" "${BIN_DIR}/bitfun-cli"
 echo "Installed: ${BIN_DIR}/bitfun-cli"
 "${BIN_DIR}/bitfun-cli" --version 2>/dev/null || "${BIN_DIR}/bitfun-cli" -V 2>/dev/null || true
 
 echo ""
-echo "[3/3] Configuring shell PATH..."
+echo "[3/4] Configuring shell PATH..."
 if [ "${BITFUN_CLI_SKIP_SHELLRC:-0}" = "1" ]; then
   echo "Skipped shell rc edits (BITFUN_CLI_SKIP_SHELLRC=1)."
   case ":${PATH}:" in
@@ -246,6 +294,10 @@ else
   upsert_shellrc_path "${HOME}/.zshrc" "$BIN_DIR"
   maybe_source_shellrc "$BIN_DIR"
 fi
+
+echo ""
+echo "[4/4] Restarting account daemon (if installed)..."
+restart_daemon_for_upgrade
 
 echo ""
 echo "=== Install complete ==="

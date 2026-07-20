@@ -66,8 +66,16 @@
     "item": {
       "user": "用戶級",
       "project": "項目級",
+      "localUser": "此裝置 · 用戶級",
+      "remoteProject": "遠端工作區 · 項目級",
       "deleteTooltip": "刪除",
-      "pathLabel": "路徑:"
+      "pathLabel": "路徑:",
+      "sourceLabel": "來源:",
+      "shadowed": "已覆蓋",
+      "shadowedTooltip": "{{source}} 中的同名技能通常具有更高優先順序。",
+      "shadowedLabel": "更高優先順序來源:",
+      "shadowedDetail": "{{source}} 中的同名技能",
+      "unknownSource": "其他來源"
     }
   },
   "deleteModal": {

@@ -9,9 +9,9 @@ and embedded hosts.
   routes, and memory/disk web asset stores belong here.
 - Standalone host binding, environment configuration, static-file fallback,
   process lifecycle, and administrative CLI parsing/output remain in the app.
-- The existing embedded host still binds TCP, installs its static fallback,
-  and manages its task lifecycle in assembly as a compatibility path. That is
-  follow-up ownership debt, not part of this reusable service.
+- The Desktop embedded host binds TCP, installs its static fallback, and owns
+  its task lifecycle in `src/apps/desktop`; assembly controls only product
+  start/stop sequencing through a narrow host port.
 - Hosts supply the version reported by the shared health and info routes.
 - Keep the relay runtime zero-knowledge: it persists encrypted payloads,
   derived hashes, and wrapped keys. Operator provisioning may generate a master

@@ -9,10 +9,11 @@
 //! `stop_all()` to shut everything down.
 
 pub mod bot;
-pub mod embedded_relay;
+pub mod embedded_relay_host;
 pub mod lan;
 pub mod ngrok;
 pub mod remote_server;
+pub mod settings_sync;
 
 pub mod device {
     pub use bitfun_services_integrations::remote_connect::device::*;
@@ -60,10 +61,11 @@ pub use remote_server::RemoteServer;
 
 use anyhow::Result;
 use bitfun_services_integrations::remote_connect::upload_mobile_web_to_relay;
+use embedded_relay_host::EmbeddedRelayHost;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 /// Supported connection methods.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,7 +146,8 @@ pub struct RemoteConnectService {
     remote_server: Arc<RwLock<Option<RemoteServer>>>,
     active_method: Arc<RwLock<Option<ConnectionMethod>>>,
     ngrok_tunnel: Arc<RwLock<Option<ngrok::NgrokTunnel>>>,
-    embedded_relay: Arc<RwLock<Option<embedded_relay::EmbeddedRelayHandle>>>,
+    embedded_relay_host: Arc<dyn EmbeddedRelayHost>,
+    relay_lifecycle: Mutex<()>,
     // Bot handles live independently of relay connections
     bot_telegram_handle: Arc<RwLock<Option<BotHandle>>>,
     bot_feishu_handle: Arc<RwLock<Option<BotHandle>>>,
@@ -179,7 +182,10 @@ type DelegatedIdentityFn = Arc<
 >;
 
 impl RemoteConnectService {
-    pub fn new(config: RemoteConnectConfig) -> Result<Self> {
+    pub fn new(
+        config: RemoteConnectConfig,
+        embedded_relay_host: Arc<dyn EmbeddedRelayHost>,
+    ) -> Result<Self> {
         let device_identity = DeviceIdentity::from_current_machine()?;
         let pairing = PairingProtocol::new(device_identity.clone());
 
@@ -191,7 +197,8 @@ impl RemoteConnectService {
             remote_server: Arc::new(RwLock::new(None)),
             active_method: Arc::new(RwLock::new(None)),
             ngrok_tunnel: Arc::new(RwLock::new(None)),
-            embedded_relay: Arc::new(RwLock::new(None)),
+            embedded_relay_host,
+            relay_lifecycle: Mutex::new(()),
             bot_telegram_handle: Arc::new(RwLock::new(None)),
             bot_feishu_handle: Arc::new(RwLock::new(None)),
             bot_weixin_handle: Arc::new(RwLock::new(None)),
@@ -374,16 +381,19 @@ impl RemoteConnectService {
             _ => {}
         }
 
-        // Relay methods: clean up previous relay (but leave bots alone)
-        self.stop_relay().await;
+        let _lifecycle = self.relay_lifecycle.lock().await;
 
+        // Relay methods: clean up previous relay (but leave bots alone)
+        self.stop_relay_inner().await;
+
+        let result: Result<ConnectionResult> = async {
         let static_dir = self.config.mobile_web_dir.as_deref();
 
         let relay_url = match &method {
             ConnectionMethod::Lan { ip } => {
-                let handle =
-                    embedded_relay::start_embedded_relay(self.config.lan_port, static_dir).await?;
-                *self.embedded_relay.write().await = Some(handle);
+                self.embedded_relay_host
+                    .start(self.config.lan_port, self.config.mobile_web_dir.clone())
+                    .await?;
                 let url_result = match ip {
                     Some(ip) => lan::build_lan_relay_url_with_ip(self.config.lan_port, ip),
                     None => lan::build_lan_relay_url(self.config.lan_port),
@@ -391,26 +401,18 @@ impl RemoteConnectService {
                 match url_result {
                     Ok(url) => url,
                     Err(e) => {
-                        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-                            relay.stop();
-                        }
-                        *self.embedded_relay.write().await = None;
                         return Err(e);
                     }
                 }
             }
             ConnectionMethod::Ngrok => {
-                let handle =
-                    embedded_relay::start_embedded_relay(self.config.lan_port, static_dir).await?;
-                *self.embedded_relay.write().await = Some(handle);
+                self.embedded_relay_host
+                    .start(self.config.lan_port, self.config.mobile_web_dir.clone())
+                    .await?;
 
                 let tunnel = match ngrok::start_ngrok_tunnel(self.config.lan_port).await {
                     Ok(tunnel) => tunnel,
                     Err(e) => {
-                        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-                            relay.stop();
-                        }
-                        *self.embedded_relay.write().await = None;
                         return Err(e);
                     }
                 };
@@ -773,6 +775,13 @@ impl RemoteConnectService {
             bot_link: None,
             pairing_state: state,
         })
+        }
+        .await;
+
+        if result.is_err() {
+            self.stop_relay_inner().await;
+        }
+        result
     }
 
     async fn start_bot_connection(&self, method: &ConnectionMethod) -> Result<ConnectionResult> {
@@ -1093,6 +1102,11 @@ impl RemoteConnectService {
     /// Stop relay connections (LAN / ngrok / BitFun Server / Custom Server).
     /// Bot connections are left running.
     pub async fn stop_relay(&self) {
+        let _lifecycle = self.relay_lifecycle.lock().await;
+        self.stop_relay_inner().await;
+    }
+
+    async fn stop_relay_inner(&self) {
         if let Some(ref client) = *self.relay_client.read().await {
             client.disconnect().await;
         }
@@ -1105,10 +1119,7 @@ impl RemoteConnectService {
         }
         *self.ngrok_tunnel.write().await = None;
 
-        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-            relay.stop();
-        }
-        *self.embedded_relay.write().await = None;
+        self.embedded_relay_host.stop().await;
 
         self.pairing.write().await.reset().await;
         *self.trusted_mobile_identity.write().await = None;
@@ -1209,12 +1220,20 @@ impl RemoteConnectService {
         )
     }
 
+    /// Start account device routing. Returns `(event_rx, authenticated_device_id)`.
+    ///
+    /// `AuthOk` is consumed here (not forwarded) so callers must use the returned
+    /// `authenticated_device_id` — and this method adopts it into the persisted
+    /// local `DeviceIdentity` before returning.
     pub async fn start_device_connection(
         &self,
         relay_url: &str,
         token: &str,
         device_name: &str,
-    ) -> Result<tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>> {
+    ) -> Result<(
+        tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>,
+        String,
+    )> {
         // Disconnect previous device connection if any.
         self.stop_device_connection().await;
 
@@ -1237,13 +1256,18 @@ impl RemoteConnectService {
         // The relay client may emit other events first (e.g. `Connected`),
         // so we loop until we see AuthOk/AuthError or time out.
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
-        let mut got_auth = false;
+        let mut authenticated_device_id: Option<String> = None;
         let mut auth_error: Option<String> = None;
-        while !got_auth && auth_error.is_none() {
+        while authenticated_device_id.is_none() && auth_error.is_none() {
             match tokio::time::timeout_at(deadline, event_rx.recv()).await {
                 Ok(Some(relay_client::RelayEvent::AuthOk { user_id, device_id })) => {
                     log::info!("Device connection auth ok: user={user_id} device={device_id}");
-                    got_auth = true;
+                    // AuthOk is consumed here and never forwarded. Adopt immediately
+                    // so getDeviceInfo / 本机 marking match the token-bound device.
+                    if let Err(e) = DeviceIdentity::adopt_account_device_id(&device_id) {
+                        log::warn!("Failed to adopt AuthOk device_id: {e}");
+                    }
+                    authenticated_device_id = Some(device_id);
                 }
                 Ok(Some(relay_client::RelayEvent::AuthError { message })) => {
                     auth_error = Some(message);
@@ -1265,6 +1289,8 @@ impl RemoteConnectService {
         if let Some(msg) = auth_error {
             anyhow::bail!("relay auth error: {msg}");
         }
+        let authenticated_device_id = authenticated_device_id
+            .ok_or_else(|| anyhow::anyhow!("relay auth completed without device_id"))?;
 
         let online_arc = self.online_devices.clone();
         let device_client_arc = self.device_relay_client.clone();
@@ -1287,7 +1313,7 @@ impl RemoteConnectService {
         });
 
         *device_client_arc.write().await = Some(client);
-        Ok(forward_rx)
+        Ok((forward_rx, authenticated_device_id))
     }
 
     /// Disconnect the account-authenticated device-routing connection.

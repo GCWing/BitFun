@@ -96,6 +96,9 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'model',
           'temperature',
           'token',
+          'session title',
+          'auto title',
+          'subagent',
         ],
       },
       {
@@ -135,7 +138,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         descriptionKey: 'configCenter.tabDescriptions.sessionPersonalization',
         keywords: [
           'session',
-          'title',
           'companion',
           'agent',
           'pixel',

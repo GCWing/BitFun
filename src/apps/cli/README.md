@@ -91,6 +91,30 @@ bitfun-cli daemon run         # foreground mode (used by the service manager; al
 - Logging out (`/logout`) signals the daemon to shut down so the device goes offline immediately;
   a daemon whose token is rejected by the relay exits on its own instead of staying "online" with
   a doomed token.
+- Logs land in `~/.config/bitfun/cli-logs/<session-timestamp>/app.log` (the daemon starts a new
+  session directory per process start).
+
+### Account settings sync
+
+Both the interactive CLI and the daemon continuously sync account settings (model configs,
+default model, agent preferences, ...) with the account cloud:
+
+- Local changes (TUI model picker / model forms, `bitfun-cli models set-default`, or a peer
+  controller's `set_config`) upload after a ~5s debounce, deduped by content hash.
+- Cloud changes from other devices are pulled right after process start, then every ~30s, and
+  applied to the running process (AI client cache invalidated, config reloaded).
+- While a desktop controller is attached (Peer Device Mode), the host fans out
+  `account://settings-applied` after applying or uploading settings, so the controller's
+  model list / settings UI refreshes without reconnecting.
+- The sync cursor persists at `~/.bitfun/account_sync/<user>.settings.json`, so restarts do not
+  re-apply unchanged settings.
+
+### Upgrading
+
+Re-run `bash src/apps/cli/install.sh`. It installs the new binary and restarts the daemon's
+auto-start service when one is installed (a running daemon otherwise keeps executing the old
+binary). If you supervise the daemon yourself (`daemon run` under tmux/nohup/a custom unit),
+restart it manually after upgrading.
 
 ## One-click install (Linux / macOS, amd64 + arm64)
 

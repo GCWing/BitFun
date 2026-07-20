@@ -34,6 +34,7 @@ import {
   MCPServerInfo,
 } from '../../api/service-api/MCPAPI';
 import { systemAPI } from '../../api/service-api/SystemAPI';
+import ExternalMcpOverview from './ExternalMcpOverview';
 import './McpToolsConfig.scss';
 
 const log = createLogger('McpToolsConfig');
@@ -1095,6 +1096,8 @@ const McpToolsConfig: React.FC = () => {
       <ConfigPageHeader title={tPage('title')} subtitle={tPage('subtitle')} />
 
       <ConfigPageContent>
+        <ExternalMcpOverview />
+
         {/* MCP section */}
         <ConfigPageSection
           title={tMcp('section.serverList.title')}

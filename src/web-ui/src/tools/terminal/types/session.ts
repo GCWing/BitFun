@@ -19,6 +19,8 @@ export interface CreateSessionRequest {
   name?: string;
   shellType?: ShellType | string;
   workingDirectory?: string;
+  /** Open a remote PTY on this SSH connection without a registered workspace. */
+  connectionId?: string;
   env?: Record<string, string>;
   cols?: number;
   rows?: number;

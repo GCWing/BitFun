@@ -72,10 +72,10 @@ impl ConfigProvider for AIConfigProvider {
                     warnings.push(format!("Model '{}' has empty API key", model.name));
                 }
                 if let Some(context_window) = model.context_window {
-                    if context_window == 0 {
+                    if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
                         return Err(BitFunError::validation(format!(
-                            "Model '{}' context_window must be greater than 0",
-                            model.name
+                            "Model '{}' context_window must be at least {}",
+                            model.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS
                         )));
                     }
                 }
@@ -157,6 +157,32 @@ impl ConfigProvider for AIConfigProvider {
             }
             _ => Ok(config),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn rejects_a_model_context_window_smaller_than_32k() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            name: "Test model".to_string(),
+            provider: "openai".to_string(),
+            context_window: Some(MIN_MODEL_CONTEXT_WINDOW_TOKENS - 1),
+            ..AIModelConfig::default()
+        });
+        let value = serde_json::to_value(config).expect("AI config should serialize");
+
+        let error = AIConfigProvider
+            .validate_config(&value)
+            .await
+            .expect_err("small context windows must be rejected");
+
+        assert!(error
+            .to_string()
+            .contains("context_window must be at least 32000"));
     }
 }
 

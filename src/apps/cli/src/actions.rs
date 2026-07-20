@@ -64,10 +64,8 @@ pub(crate) enum ActionHandler {
     Sessions,
     Skills,
     ReloadSkills,
-    Subagents,
     McpServers,
-    ExternalTools,
-    ExternalAgents,
+    Tools,
     AcpHelp,
     Init,
     History,
@@ -192,11 +190,11 @@ static ACTION_SPECS: &[ActionSpec] = &[
     },
     ActionSpec {
         id: "switch_agent",
-        name: "Switch agent",
+        name: "Agents",
         aliases: &["/agents"],
-        description: "Switch agent mode",
+        description: "Switch modes and manage agents",
         contexts: BOTH,
-        availability: ActionAvailability::Idle,
+        availability: ActionAvailability::Always,
         handler: ActionHandler::OpenAgentSelector,
         default_bindings: &[],
         fallback_bindings: &[],
@@ -341,21 +339,6 @@ static ACTION_SPECS: &[ActionSpec] = &[
         slash_on_startup: false,
     },
     ActionSpec {
-        id: "subagents",
-        name: "Subagents",
-        aliases: &["/subagents"],
-        description: "List and configure subagents",
-        contexts: BOTH,
-        availability: ActionAvailability::Always,
-        handler: ActionHandler::Subagents,
-        default_bindings: &[],
-        fallback_bindings: &[],
-        shortcut_field: None,
-        palette: palette("Prompt", false),
-        shortcut_label: None,
-        slash_on_startup: true,
-    },
-    ActionSpec {
         id: "mcp_servers",
         name: "MCP servers",
         aliases: &["/mcps"],
@@ -371,32 +354,17 @@ static ACTION_SPECS: &[ActionSpec] = &[
         slash_on_startup: true,
     },
     ActionSpec {
-        id: "external_tools",
-        name: "External tools",
-        aliases: &["/external-tools"],
-        description: "Review compatible tools from external AI applications",
+        id: "tools",
+        name: "Tools",
+        aliases: &["/tools"],
+        description: "View tool sources and manage external tools",
         contexts: CHAT,
         availability: ActionAvailability::Always,
-        handler: ActionHandler::ExternalTools,
+        handler: ActionHandler::Tools,
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
-        palette: palette("Extensions", false),
-        shortcut_label: None,
-        slash_on_startup: false,
-    },
-    ActionSpec {
-        id: "external_agents",
-        name: "External agents",
-        aliases: &["/external-agents"],
-        description: "Review compatible agents from external AI applications",
-        contexts: CHAT,
-        availability: ActionAvailability::Always,
-        handler: ActionHandler::ExternalAgents,
-        default_bindings: &[],
-        fallback_bindings: &[],
-        shortcut_field: None,
-        palette: palette("Extensions", false),
+        palette: palette("Tools", false),
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -833,6 +801,40 @@ pub(crate) fn action_for_alias(alias: &str, context: ActionContext) -> Option<&'
                 .iter()
                 .any(|candidate| candidate.eq_ignore_ascii_case(alias))
     })
+}
+
+/// Stable behavior version used when a built-in slash action participates in a
+/// persisted external-command conflict. Update an override only when that
+/// action's user-visible behavior changes in a way that requires reconfirmation.
+pub(crate) fn action_conflict_behavior_version(action_id: &str) -> &'static str {
+    match action_id {
+        "switch_agent" => "agents-management-v1",
+        _ => env!("CARGO_PKG_VERSION"),
+    }
+}
+
+pub(crate) fn removed_management_command_hint(
+    alias: &str,
+    context: ActionContext,
+) -> Option<&'static str> {
+    match (alias.to_ascii_lowercase().as_str(), context) {
+        ("/subagents", _) => Some(
+            "/subagents was removed. Open Agents from the command palette and choose Subagents.",
+        ),
+        ("/external-tools", ActionContext::Chat) => Some(
+            "/external-tools was removed. Open Tools from the command palette; external sources are shown in that view.",
+        ),
+        ("/external-agents", ActionContext::Chat) => Some(
+            "/external-agents was removed. Open Agents from the command palette and choose External AI applications.",
+        ),
+        ("/external-tools", ActionContext::Startup) => Some(
+            "/external-tools was removed. Start a session, then open Tools from the command palette.",
+        ),
+        ("/external-agents", ActionContext::Startup) => Some(
+            "/external-agents was removed. Start a session, then open Agents from the command palette and choose External AI applications.",
+        ),
+        _ => None,
+    }
 }
 
 pub(crate) fn slash_actions(state: ActionState) -> Vec<ActionProjection> {
@@ -1677,6 +1679,29 @@ mod tests {
     }
 
     #[test]
+    fn extension_management_uses_capability_entries_instead_of_external_commands() {
+        let tools = action_for_alias("/tools", ActionContext::Chat).unwrap();
+        assert_eq!(tools.handler, ActionHandler::Tools);
+        let agents = action_for_alias("/agents", ActionContext::Chat).unwrap();
+        assert_eq!(agents.handler, ActionHandler::OpenAgentSelector);
+        assert_eq!(agents.description, "Switch modes and manage agents");
+        assert!(agents.available(ActionState::chat(true, false)));
+        assert!(action_for_alias("/subagents", ActionContext::Chat).is_none());
+        assert!(action_for_alias("/external-tools", ActionContext::Chat).is_none());
+        assert!(action_for_alias("/external-agents", ActionContext::Chat).is_none());
+        assert!(
+            removed_management_command_hint("/subagents", ActionContext::Chat)
+                .unwrap()
+                .contains("choose Subagents")
+        );
+        assert!(
+            removed_management_command_hint("/external-tools", ActionContext::Startup)
+                .unwrap()
+                .contains("Start a session")
+        );
+    }
+
+    #[test]
     fn no_config_uses_current_real_dispatch_defaults() {
         let keymap = ResolvedKeymap::new(&ShortcutsConfig::default());
 
@@ -1919,10 +1944,12 @@ mod tests {
 
     #[test]
     fn action_availability_is_enforced_at_the_dispatch_boundary() {
-        let switch_agent = action_by_id("switch_agent", ActionContext::Chat).unwrap();
+        let agents = action_by_id("switch_agent", ActionContext::Chat).unwrap();
+        let cycle_agent = action_by_id("cycle_agent", ActionContext::Chat).unwrap();
         let exit = action_by_id("exit", ActionContext::Chat).unwrap();
 
-        assert!(!switch_agent.available(ActionState::chat(true, false)));
+        assert!(agents.available(ActionState::chat(true, false)));
+        assert!(!cycle_agent.available(ActionState::chat(true, false)));
         assert!(exit.available(ActionState::chat(true, false)));
     }
 

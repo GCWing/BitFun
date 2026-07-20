@@ -534,6 +534,14 @@ export async function updateSessionMetadata(
     await sessionAPI.saveSessionMetadata(
       metadata,
       workspacePath,
+      [
+        'sessionName',
+        'tags',
+        'todos',
+        'unreadCompletion',
+        'needsUserAttention',
+        'titleMetadata',
+      ],
       session.remoteConnectionId,
       session.remoteSshHost
     );

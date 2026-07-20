@@ -1,18 +1,13 @@
 {
   "personalizationPage": {
     "title": "Personalization",
-    "subtitle": "Auto session title and Agent companion"
+    "subtitle": "Personalize your BitFun"
   },
   "permissionsPage": {
     "title": "Permission management",
     "subtitle": "Accelerated workspace search, tool execution, tool definition loading, Computer use, browser control, and debug mode"
   },
   "features": {
-    "sessionTitle": {
-      "title": "Auto Session Title",
-      "subtitle": "AI automatically generates concise titles for new conversations",
-      "warning": "Session title will use first 20 characters of user message"
-    },
     "agentCompanion": {
       "title": "Agent companion",
       "subtitle": "Control where the BitFun companion appears.",
@@ -101,17 +96,8 @@
     "createLauncherDesc": "Create a browser shortcut with the debug port enabled.",
     "tabs": "tabs"
   },
-  "model": {
-    "label": "Model",
-    "primary": "Primary Model",
-    "fast": "Fast Model"
-  },
   "common": {
     "enable": "Enable"
-  },
-  "models": {
-    "empty": "No available models. Please add models in \"Models\" first.",
-    "updateSuccess": "{{agentName}} will use {{modelName}}"
   },
   "loading": {
     "text": "Loading configuration..."

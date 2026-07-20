@@ -140,6 +140,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
         feature_groups: CORE_AGENT_FEATURE_GROUPS,
         tool_names: &[
             "Task",
+            "AgentWait",
             "LaunchReviewAgent",
             "Skill",
             "AskUserQuestion",
@@ -360,6 +361,7 @@ mod tests {
                 "ExecControl",
                 "GetTime",
                 "Task",
+                "AgentWait",
                 "LaunchReviewAgent",
                 "Skill",
                 "AskUserQuestion",

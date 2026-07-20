@@ -9,11 +9,11 @@ use async_trait::async_trait;
 use bitfun_external_sources::{ExternalToolCoordinator, ExternalToolCoordinatorSnapshot};
 use bitfun_product_domains::external_sources::{
     external_tool_approval_key, external_tool_conflict_key, external_tool_decision_key,
-    ExternalSourceAssetKind, ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity,
-    ExternalSourceScope, ExternalToolActivationState, ExternalToolApprovalRequest,
-    ExternalToolCatalogEntry, ExternalToolConflict, ExternalToolConflictCandidate,
-    ExternalToolConflictCandidateKind, ExternalToolDefinition, ExternalToolStaticStatus,
-    PreparedExternalToolTarget, SourceQualifiedToolTargetId,
+    EcosystemId, ExternalSourceAssetKind, ExternalSourceDiagnostic,
+    ExternalSourceDiagnosticSeverity, ExternalSourceScope, ExternalToolActivationState,
+    ExternalToolApprovalRequest, ExternalToolCatalogEntry, ExternalToolConflict,
+    ExternalToolConflictCandidate, ExternalToolConflictCandidateKind, ExternalToolDefinition,
+    ExternalToolStaticStatus, PreparedExternalToolTarget, SourceQualifiedToolTargetId,
 };
 use bitfun_runtime_ports::{
     PortErrorKind, ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,
@@ -37,9 +37,115 @@ pub(super) struct ExternalToolProductState {
 }
 
 pub(super) struct ExternalToolDecisions<'a> {
+    pub active_ecosystems: &'a BTreeSet<EcosystemId>,
     pub approved_targets: &'a BTreeSet<String>,
     pub declined_decisions_by_approval: &'a BTreeMap<String, String>,
     pub conflict_choices: &'a BTreeMap<String, String>,
+}
+
+/// Builds the catalog visible from a Host that may discover external files but
+/// is not allowed to load code or mutate runtime routes. This intentionally
+/// does not consult the tool registry or the script runtime.
+pub(super) fn project_external_tools_read_only(
+    execution_domain_id: &str,
+    snapshot: &ExternalToolCoordinatorSnapshot,
+    decisions: ExternalToolDecisions<'_>,
+) -> ExternalToolProductState {
+    let source_by_key = snapshot
+        .sources
+        .iter()
+        .map(|source| (source.record.key.clone(), source.record.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut target_groups =
+        BTreeMap::<SourceQualifiedToolTargetId, Vec<ExternalToolDefinition>>::new();
+    for tool in &snapshot.tools {
+        target_groups
+            .entry(tool.id.target.clone())
+            .or_default()
+            .push(tool.clone());
+    }
+    let mut state = ExternalToolProductState::default();
+    for (target_id, definitions) in target_groups {
+        let first = &definitions[0];
+        let approval_key = external_tool_approval_key(
+            execution_domain_id,
+            &target_id,
+            first.runtime_kind,
+            first.capabilities.iter().copied(),
+        );
+        let decision_key = external_tool_decision_key(&approval_key, &first.content_version);
+        let source = source_by_key.get(&target_id.source);
+        let ecosystem_active =
+            source.is_some_and(|source| decisions.active_ecosystems.contains(&source.ecosystem_id));
+        let unsupported_reason = definitions
+            .iter()
+            .find_map(|tool| match &tool.static_status {
+                ExternalToolStaticStatus::Ready => None,
+                ExternalToolStaticStatus::Unsupported { reason }
+                | ExternalToolStaticStatus::Invalid { reason } => Some(reason.clone()),
+                _ => Some("tool uses a static format not supported by this version".to_string()),
+            });
+        let activation = if let Some(reason) = unsupported_reason {
+            ExternalToolActivationState::Unsupported { reason }
+        } else if !ecosystem_active {
+            ExternalToolActivationState::Disabled
+        } else if decisions.approved_targets.contains(&approval_key) {
+            ExternalToolActivationState::RuntimeUnavailable {
+                reason: "This Host exposes discovery only; use Desktop or an authenticated Peer Host to run external tools".to_string(),
+            }
+        } else if decisions
+            .declined_decisions_by_approval
+            .get(&approval_key)
+            .is_some_and(|declined| declined == &decision_key)
+        {
+            ExternalToolActivationState::Disabled
+        } else {
+            state.approval_requests.push(ExternalToolApprovalRequest {
+                approval_key: approval_key.clone(),
+                decision_key: decision_key.clone(),
+                target_id: target_id.clone(),
+                source_display_name: source
+                    .map(|source| source.display_name.clone())
+                    .unwrap_or_else(|| "External tools".to_string()),
+                source_scope: source
+                    .map(|source| source.scope)
+                    .unwrap_or(ExternalSourceScope::WorkspaceLocal),
+                source_location: source
+                    .map(|source| source.location.clone())
+                    .unwrap_or_else(|| first.module_path.clone()),
+                working_directory: first.working_directory.clone(),
+                runtime_kind: first.runtime_kind,
+                capabilities: first.capabilities.clone(),
+                content_version: first.content_version.clone(),
+                tool_names: definitions.iter().map(|tool| tool.name.clone()).collect(),
+            });
+            ExternalToolActivationState::ApprovalRequired
+        };
+        state.tools.extend(
+            definitions
+                .into_iter()
+                .map(|definition| ExternalToolCatalogEntry {
+                    definition,
+                    approval_key: approval_key.clone(),
+                    decision_key: decision_key.clone(),
+                    activation: activation.clone(),
+                }),
+        );
+    }
+    state.tools.sort_by(|left, right| {
+        left.definition.name.cmp(&right.definition.name).then(
+            left.definition
+                .id
+                .stable_key()
+                .cmp(&right.definition.id.stable_key()),
+        )
+    });
+    state.approval_requests.sort_by(|left, right| {
+        left.target_id
+            .stable_key()
+            .cmp(&right.target_id.stable_key())
+    });
+    state
 }
 
 pub(super) const UNRESOLVED_TOOL_CONFLICT_CHOICE: &str = "__bitfun_unresolved__";
@@ -48,6 +154,7 @@ pub(super) const TOOL_CONFLICT_RESELECTION_REQUIRED: &str = "__bitfun_reselectio
 #[derive(Clone)]
 struct LoadedExternalTool {
     descriptor: ScriptToolDescriptor,
+    ecosystem_id: String,
     provider_id: String,
     runtime_target_id: String,
     load_generation: u64,
@@ -112,8 +219,10 @@ impl Tool for LoadedExternalTool {
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         if !crate::external_sources::external_tool_invocation_is_authorized(
+            &self.ecosystem_id,
             &self.approval_key,
             &self.source_preference_key,
+            &self.workspace_key,
         )
         .await
         .map_err(BitFunError::tool)?
@@ -951,6 +1060,7 @@ impl ExternalToolRuntimeManager {
     async fn ensure_loaded(
         &self,
         workspace_key: &str,
+        ecosystem_id: &str,
         provider_id: &str,
         approval_key: &str,
         source_preference_key: &str,
@@ -1009,6 +1119,7 @@ impl ExternalToolRuntimeManager {
             .map(|descriptor| {
                 Arc::new(LoadedExternalTool {
                     descriptor,
+                    ecosystem_id: ecosystem_id.to_string(),
                     provider_id: provider_id.to_string(),
                     runtime_target_id: runtime_target_id.clone(),
                     load_generation,
@@ -1225,7 +1336,11 @@ pub(super) async fn reconcile_external_tools(
         let statically_ready = definitions
             .iter()
             .all(|tool| matches!(&tool.static_status, ExternalToolStaticStatus::Ready));
-        let can_load = statically_ready
+        let ecosystem_active = source_by_key
+            .get(&target_id.source)
+            .is_some_and(|source| decisions.active_ecosystems.contains(&source.ecosystem_id));
+        let can_load = ecosystem_active
+            && statically_ready
             && matches!(
                 &runtime_availability,
                 ScriptToolRuntimeAvailability::Available { .. }
@@ -1284,6 +1399,9 @@ pub(super) async fn reconcile_external_tools(
             first.capabilities.iter().copied(),
         );
         let decision_key = external_tool_decision_key(&approval_key, &first.content_version);
+        let ecosystem_active = source_by_key
+            .get(&target_id.source)
+            .is_some_and(|source| decisions.active_ecosystems.contains(&source.ecosystem_id));
         let unsupported_reason = definitions
             .iter()
             .find_map(|tool| match &tool.static_status {
@@ -1294,6 +1412,8 @@ pub(super) async fn reconcile_external_tools(
             });
         let base_activation = if let Some(reason) = unsupported_reason {
             Some(ExternalToolActivationState::Unsupported { reason })
+        } else if !ecosystem_active {
+            Some(ExternalToolActivationState::Disabled)
         } else if let ScriptToolRuntimeAvailability::Unavailable { reason } = &runtime_availability
         {
             Some(ExternalToolActivationState::RuntimeUnavailable {
@@ -1342,8 +1462,10 @@ pub(super) async fn reconcile_external_tools(
             {
                 if let Some(source) = source_by_key.get(&target_id.source) {
                     if crate::external_sources::external_tool_invocation_is_authorized(
+                        source.ecosystem_id.as_str(),
                         &approval_key,
                         &source.preference_key(),
+                        &workspace_key,
                     )
                     .await
                     .unwrap_or(false)
@@ -1394,8 +1516,10 @@ pub(super) async fn reconcile_external_tools(
         };
         let source_preference_key = source_record.preference_key();
         match crate::external_sources::external_tool_invocation_is_authorized(
+            source_record.ecosystem_id.as_str(),
             &approval_key,
             &source_preference_key,
+            &workspace_key,
         )
         .await
         {
@@ -1502,8 +1626,10 @@ pub(super) async fn reconcile_external_tools(
             Ok(prepared) => {
                 let authorization_failure =
                     match crate::external_sources::external_tool_invocation_is_authorized(
+                        source_record.ecosystem_id.as_str(),
                         &approval_key,
                         &source_preference_key,
+                        &workspace_key,
                     )
                     .await
                     {
@@ -1542,6 +1668,7 @@ pub(super) async fn reconcile_external_tools(
                 match runtime_manager()
                     .ensure_loaded(
                         &workspace_key,
+                        source_record.ecosystem_id.as_str(),
                         target_id.source.provider_id.as_str(),
                         &approval_key,
                         &source_preference_key,
@@ -1551,8 +1678,10 @@ pub(super) async fn reconcile_external_tools(
                 {
                     Ok(loaded) => {
                         match crate::external_sources::external_tool_invocation_is_authorized(
+                            source_record.ecosystem_id.as_str(),
                             &approval_key,
                             &source_preference_key,
+                            &workspace_key,
                         )
                         .await
                         {
@@ -1886,7 +2015,7 @@ async fn local_candidate(tool: &Arc<dyn Tool>) -> ExternalToolConflictCandidate 
     }
 }
 
-fn workspace_route_key(workspace_root: Option<&Path>) -> String {
+pub(crate) fn workspace_route_key(workspace_root: Option<&Path>) -> String {
     workspace_root
         .map(|path| {
             dunce::canonicalize(path)
@@ -2208,6 +2337,7 @@ mod tests {
                 description: "test".to_string(),
                 input_schema: serde_json::json!({"type": "object"}),
             },
+            ecosystem_id: "test".to_string(),
             provider_id: "test-provider".to_string(),
             runtime_target_id: runtime_target_id.to_string(),
             load_generation: 7,
@@ -2249,6 +2379,7 @@ mod tests {
                 description: "replacement".to_string(),
                 input_schema: serde_json::json!({"type": "object"}),
             },
+            ecosystem_id: "test".to_string(),
             provider_id: "test-provider".to_string(),
             runtime_target_id: runtime_target_id.to_string(),
             load_generation: 8,
@@ -2286,6 +2417,7 @@ mod tests {
                 description: "test".to_string(),
                 input_schema: serde_json::json!({"type": "object"}),
             },
+            ecosystem_id: "test".to_string(),
             provider_id: "test-provider".to_string(),
             runtime_target_id: "target".to_string(),
             load_generation: 8,
@@ -2335,6 +2467,7 @@ mod tests {
                 description: "external".to_string(),
                 input_schema: serde_json::json!({"type": "object"}),
             },
+            ecosystem_id: "test".to_string(),
             provider_id: "test-provider".to_string(),
             runtime_target_id: "not-loaded".to_string(),
             load_generation: 9,

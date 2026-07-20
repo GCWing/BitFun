@@ -7,6 +7,49 @@
       "description": "统一管理 MCP 服务状态与 JSON 配置。"
     }
   },
+  "external": {
+    "title": "外部 MCP 服务器",
+    "description": "从兼容生态发现的 MCP 服务器。信任与冲突统一在外部扩展中管理。",
+    "manage": "管理外部扩展",
+    "retry": "重试加载外部 MCP",
+    "loading": "正在检查外部 MCP 来源...",
+    "unavailable": "当前主机无法读取外部 MCP 来源。",
+    "empty": "未发现外部 MCP 服务器。",
+    "unknown": "未知",
+    "scope": {
+      "userGlobal": "用户",
+      "project": "项目",
+      "remoteUser": "远程用户",
+      "remoteProject": "远程项目"
+    },
+    "status": {
+      "checking": "检查中",
+      "stale": "使用上次有效配置",
+      "degraded": "来源异常",
+      "readOnly": "只读",
+      "approvalRequired": "需要确认",
+      "starting": "启动中",
+      "active": "已启用",
+      "declined": "已拒绝",
+      "conflict": "有冲突",
+      "covered": "已覆盖",
+      "sourceDisabled": "来源已关闭",
+      "configurationChanged": "配置已变更",
+      "unsupported": "不支持",
+      "runtimeUnavailable": "不可用",
+      "removed": "已移除"
+    },
+    "details": {
+      "source": "来源",
+      "scope": "范围",
+      "location": "配置位置",
+      "transport": "传输方式"
+    },
+    "transport": {
+      "localStdio": "本地进程",
+      "streamableHttp": "Streamable HTTP"
+    }
+  },
   "tabs": {
     "servers": "服务器",
     "add": "添加服务器"

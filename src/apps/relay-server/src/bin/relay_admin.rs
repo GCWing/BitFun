@@ -6,10 +6,16 @@
 //!   relay-admin list-users  --db <path>
 //!   relay-admin delete-user --db <path> --username <name>
 //!   relay-admin reset-password --db <path> --username <name> [--password <pw>]
+//!   relay-admin import-user --db <path> [--file <account.json>]
 //!
 //! If `--password` is omitted the tool prompts interactively (hidden input).
 //! The plaintext password is never stored — only Argon2id-derived hashes and
 //! AES-256-GCM wrapped master keys are written to the database.
+//!
+//! `import-user` inserts an account provisioned elsewhere (JSON from --file or
+//! stdin). The plaintext password never transits the server: the producer
+//! (e.g. a BitFun client self-deploying its relay) only sends derived
+//! artifacts — salts, the Argon2id password hash, and the wrapped master key.
 
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
@@ -56,6 +62,13 @@ enum Command {
         username: String,
         #[arg(long)]
         new_username: String,
+    },
+    /// Import an account provisioned elsewhere (JSON from --file or stdin).
+    /// The JSON carries only derived artifacts, never the plaintext password.
+    ImportUser {
+        /// Path to the provisioned account JSON; omit to read from stdin.
+        #[arg(long)]
+        file: Option<String>,
     },
 }
 
@@ -104,6 +117,27 @@ async fn main() -> Result<()> {
         } => {
             bitfun_relay_service::admin::rename_user(&pool, &username, &new_username).await?;
             println!("Renamed: {username} → {new_username}");
+        }
+        Command::ImportUser { file } => {
+            let json = match file {
+                Some(path) => std::fs::read_to_string(&path)
+                    .map_err(|e| anyhow!("read import file '{path}': {e}"))?,
+                None => {
+                    use std::io::Read;
+                    let mut buf = String::new();
+                    std::io::stdin()
+                        .read_to_string(&mut buf)
+                        .map_err(|e| anyhow!("read import JSON from stdin: {e}"))?;
+                    buf
+                }
+            };
+            let import: bitfun_relay_service::admin::ImportableAccount =
+                serde_json::from_str(&json).map_err(|e| anyhow!("parse import JSON: {e}"))?;
+            let user_id = bitfun_relay_service::admin::import_user(&pool, &import).await?;
+            println!(
+                "Imported account: username='{}' user_id={user_id}",
+                import.username
+            );
         }
     }
 

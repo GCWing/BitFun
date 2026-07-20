@@ -1,3 +1,7 @@
+fn mode_change_blocks_typed_submission(pending_for_current_session: bool, input: &str) -> bool {
+    pending_for_current_session && !input.trim().starts_with('/')
+}
+
 impl ChatMode {
     /// Handle command palette action
     fn handle_palette_action(
@@ -32,27 +36,29 @@ impl ChatMode {
             chat_view.set_status(Some(format!("Unknown action: {action_id}")));
             return Ok(None);
         };
-        if let Some(collision) = self.native_command_collision_for_action(action.id) {
-            self.remember_native_command_choice(
-                &collision,
-                &collision.native_candidate_id,
-                chat_view,
-                rt_handle,
-            );
-        } else if let Some(reconfirmation) = builtin_command_reconfirmation(
-            action.id,
-            action.name,
-            &self.external_conflict_preferences(),
-        )
-        .filter(|reconfirmation| !reconfirmation.confirmed)
-        {
-            self.remember_command_choice(
-                &reconfirmation.conflict_key,
-                &reconfirmation.candidate_id,
-                vec![reconfirmation.candidate_id.clone()],
-                chat_view,
-                rt_handle,
-            );
+        if !action_opens_extension_management(action) {
+            if let Some(collision) = self.native_command_collision_for_action(action.id) {
+                self.remember_native_command_choice(
+                    &collision,
+                    &collision.native_candidate_id,
+                    chat_view,
+                    rt_handle,
+                );
+            } else if let Some(reconfirmation) = builtin_command_reconfirmation(
+                action.id,
+                action.name,
+                &self.external_conflict_preferences(),
+            )
+            .filter(|reconfirmation| !reconfirmation.confirmed)
+            {
+                self.remember_command_choice(
+                    &reconfirmation.conflict_key,
+                    &reconfirmation.candidate_id,
+                    vec![reconfirmation.candidate_id.clone()],
+                    chat_view,
+                    rt_handle,
+                );
+            }
         }
         self.dispatch_action(
             action,
@@ -89,6 +95,9 @@ impl ChatMode {
         }
         let builtin_alias = format!("/{command_name}");
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
+        let nonmutating_management_subcommand = builtin_action.is_some_and(|action| {
+            action_opens_extension_management(action) && !arguments.trim().is_empty()
+        });
         let mut external = self.external_command_projection(command_name);
         let authoritative_preferences = tokio::task::block_in_place(|| {
             rt_handle
@@ -123,7 +132,7 @@ impl ChatMode {
                     chat_view,
                     rt_handle,
                 );
-            } else if qualifier == CommandQualifier::Builtin {
+            } else if qualifier == CommandQualifier::Builtin && !nonmutating_management_subcommand {
                 self.remember_native_command_choice(
                     &collision,
                     &collision.native_candidate_id,
@@ -131,7 +140,7 @@ impl ChatMode {
                     rt_handle,
                 );
             }
-        } else if qualifier == CommandQualifier::Builtin {
+        } else if qualifier == CommandQualifier::Builtin && !nonmutating_management_subcommand {
             if let Some(reconfirmation) = builtin_reconfirmation
                 .as_ref()
                 .filter(|reconfirmation| !reconfirmation.confirmed)
@@ -161,7 +170,7 @@ impl ChatMode {
                 .is_some_and(|reconfirmation| !reconfirmation.confirmed);
         let unresolved_candidates = self.external_conflict_projections(command_name);
         let can_route_external_tool_review = builtin_action
-            .is_some_and(|action| action.handler == ActionHandler::ExternalTools)
+            .is_some_and(|action| action.handler == ActionHandler::Tools)
             && qualifier != CommandQualifier::External
             && (qualifier == CommandQualifier::Builtin
                 || (external.is_none()
@@ -172,7 +181,8 @@ impl ChatMode {
             return Ok(None);
         }
         let can_route_external_agent_review = builtin_action
-            .is_some_and(|action| action.handler == ActionHandler::ExternalAgents)
+            .is_some_and(|action| action.handler == ActionHandler::OpenAgentSelector)
+            && !arguments.trim().is_empty()
             && qualifier != CommandQualifier::External
             && (qualifier == CommandQualifier::Builtin
                 || (external.is_none()
@@ -246,10 +256,15 @@ impl ChatMode {
             ) {
                 Ok(result) => Ok(result),
                 Err(error) if error.to_string().contains("command not found") => {
-                    chat_state.add_system_message(format!(
-                        "Unknown command: {}\nUse /help or type / to see available commands",
-                        parts[0]
-                    ));
+                    let message = removed_management_command_hint(parts[0], ActionContext::Chat)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| {
+                            format!(
+                                "Unknown command: {}\nUse /help or type / to see available commands",
+                                parts[0]
+                            )
+                        });
+                    chat_state.add_system_message(message);
                     Ok(None)
                 }
                 Err(error) => Err(error),
@@ -380,15 +395,26 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        let expected_preference_revision = self
+            .external_source_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.preference_revision)
+            .unwrap_or(0);
         let persisted = tokio::task::block_in_place(|| {
             rt_handle.block_on(remember_external_source_conflict_choice(
                 conflict_key,
                 candidate_id,
                 participants.clone(),
+                expected_preference_revision,
             ))
         });
         match persisted {
-            Ok(preferences) => self.replace_external_conflict_preferences(preferences.into()),
+            Ok((choices, lineage, candidates, preference_revision)) => {
+                self.replace_external_conflict_preferences((choices, lineage, candidates).into());
+                if let Some(snapshot) = &mut self.external_source_snapshot {
+                    snapshot.preference_revision = preference_revision;
+                }
+            }
             Err(error) => {
                 tracing::warn!(
                     "Failed to persist external command conflict choice: {}",
@@ -422,11 +448,17 @@ impl ChatMode {
         }
         if let Some(provider_conflict_key) = &projection.provider_conflict_key {
             let workspace = self.agent.workspace_path_buf();
+            let expected_preference_revision = self
+                .external_source_snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.preference_revision)
+                .unwrap_or(0);
             let snapshot = tokio::task::block_in_place(|| {
                 rt_handle.block_on(set_external_prompt_command_conflict_choice(
                     Some(&workspace),
                     provider_conflict_key,
                     &projection.candidate_id,
+                    expected_preference_revision,
                 ))
             });
             let snapshot = match snapshot {
@@ -439,6 +471,7 @@ impl ChatMode {
                     return Ok(None);
                 }
             };
+            self.external_source_snapshot = Some(snapshot);
             if let Some(collision) = &projection.native_collision {
                 self.remember_native_command_choice(
                     collision,
@@ -447,7 +480,6 @@ impl ChatMode {
                     rt_handle,
                 );
             }
-            self.external_source_snapshot = Some(snapshot);
             let Some(active) = self.external_command_projection(&projection.command_name) else {
                 chat_state.add_system_message(format!(
                     "Selected external command /{} is no longer available; refresh and choose again.",
@@ -591,17 +623,11 @@ impl ChatMode {
             ActionHandler::ReloadSkills => {
                 self.reload_skills_from_disk(chat_view, chat_state, rt_handle);
             }
-            ActionHandler::Subagents => {
-                self.show_subagent_selector(chat_view, chat_state, rt_handle);
-            }
             ActionHandler::McpServers => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);
             }
-            ActionHandler::ExternalTools => {
+            ActionHandler::Tools => {
                 self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
-            }
-            ActionHandler::ExternalAgents => {
-                self.handle_external_agent_review("", chat_view, chat_state, rt_handle);
             }
             ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun-cli"));
@@ -711,8 +737,19 @@ impl ChatMode {
             return self.handle_action_id(&action_id, chat_view, chat_state, rt_handle);
         }
 
+        let trimmed = chat_view.input_text().trim();
+        let pending_for_current_session = self
+            .pending_mode_change
+            .as_ref()
+            .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
+        if mode_change_blocks_typed_submission(pending_for_current_session, trimmed) {
+            chat_view.set_status(Some(
+                "Waiting for the agent mode change to finish before sending.".to_string(),
+            ));
+            return Ok(None);
+        }
+
         if chat_state.is_processing {
-            let trimmed = chat_view.input_text().trim();
             if trimmed.starts_with('/') {
                 if let Some(input) = chat_view.send_input() {
                     return self.handle_command(&input, chat_view, chat_state, rt_handle);
@@ -754,4 +791,11 @@ impl ChatMode {
             chat_view.insert_paste(&text);
         }
     }
+}
+
+fn action_opens_extension_management(action: &ActionSpec) -> bool {
+    matches!(
+        action.handler,
+        ActionHandler::Tools | ActionHandler::OpenAgentSelector
+    )
 }
