@@ -118,7 +118,6 @@ pub(crate) async fn send_stream(
 
     execute_sse_request(
         "OpenAI Streaming API",
-        "openai",
         &url,
         &request_body,
         max_tries,

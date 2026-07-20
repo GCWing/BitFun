@@ -136,7 +136,6 @@ pub(crate) async fn send_stream(
 
     execute_sse_request(
         "Responses API",
-        "responses",
         &url,
         &request_body,
         max_tries,

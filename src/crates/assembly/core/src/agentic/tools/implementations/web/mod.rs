@@ -7,35 +7,9 @@ mod search;
 pub use fetch::WebFetchTool;
 pub use search::WebSearchTool;
 
-const BLOCKED_GITHUB_DOMAIN_SUFFIXES: &[&str] = &[
-    "github.com",
-    "githubusercontent.com",
-    "githubassets.com",
-    "git.io",
-    // Sourcegraph can proxy GitHub repository files and history under URLs
-    // such as sourcegraph.com/github.com/<owner>/<repo>/... . In evaluation
-    // builds that is equivalent to fetching GitHub directly.
-    "sourcegraph.com",
-];
-
-pub(crate) fn is_blocked_github_url(url: &reqwest::Url) -> bool {
-    let Some(host) = url.host_str() else {
-        return false;
-    };
-
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    BLOCKED_GITHUB_DOMAIN_SUFFIXES.iter().any(|domain| {
-        host == *domain
-            || host
-                .strip_suffix(domain)
-                .is_some_and(|prefix| prefix.ends_with('.'))
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::fetch::WebFetchTool;
-    use super::is_blocked_github_url;
     use super::readable::{
         extract_html_title, extract_markdown_with_text_fallback, html_to_text, is_html,
         looks_noisy, normalize_requested_format, RequestedFormat,
@@ -46,34 +20,6 @@ mod tests {
     use std::io::ErrorKind;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
-
-    #[test]
-    fn evaluation_build_blocks_github_domains_only() {
-        for url in [
-            "https://github.com/org/repo",
-            "https://api.github.com/repos/org/repo",
-            "https://raw.githubusercontent.com/org/repo/main/file.rs",
-            "https://objects.githubusercontent.com/object",
-            "https://github.githubassets.com/assets/app.js",
-            "https://git.io/short-link",
-            "https://sourcegraph.com/github.com/org/repo/-/raw/src/lib.rs",
-        ] {
-            assert!(is_blocked_github_url(
-                &reqwest::Url::parse(url).expect("valid URL")
-            ));
-        }
-
-        for url in [
-            "https://gitlab.com/org/repo",
-            "https://notgithub.com/org/repo",
-            "https://github.com.example.com/org/repo",
-            "https://api.openai.com/v1/responses",
-        ] {
-            assert!(!is_blocked_github_url(
-                &reqwest::Url::parse(url).expect("valid URL")
-            ));
-        }
-    }
 
     fn empty_context() -> ToolUseContext {
         ToolUseContext {
@@ -156,21 +102,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn webfetch_rejects_github_domains_before_sending_a_request() {
+    async fn webfetch_accepts_normal_code_hosting_urls() {
         let tool = WebFetchTool::new();
 
         for url in [
-            "https://github.com/org/repo",
-            "https://api.github.com/repos/org/repo",
-            "https://raw.githubusercontent.com/org/repo/main/file.rs",
-            "https://sourcegraph.com/github.com/org/repo/-/raw/file.rs",
+            "https://github.com/owner/repo",
+            "https://raw.githubusercontent.com/owner/repo/main/README.md",
+            "https://sourcegraph.com/github.com/owner/repo",
         ] {
             let validation = tool.validate_input(&json!({ "url": url }), None).await;
-            assert!(!validation.result, "{url} should be blocked");
-            assert!(validation
-                .message
-                .as_deref()
-                .is_some_and(|message| message.contains("cannot query GitHub")));
+            assert!(validation.result, "should allow: {url}");
         }
     }
 
@@ -280,40 +221,23 @@ Second paragraph.
     }
 
     #[test]
-    fn websearch_filters_github_results() {
+    fn websearch_preserves_code_hosting_results() {
         let tool = WebSearchTool::new();
         let text = r#"Title: GitHub result
-URL: https://github.com/org/repo/pull/1
-Text: This must not reach the agent.
+URL: https://github.com/owner/repo/pull/1
+Text: Matching pull request.
 
-Title: Sourcegraph GitHub proxy
-URL: https://sourcegraph.com/github.com/org/repo/-/blob/src/lib.rs
-Text: This proxy result must not reach the agent either.
-
-Title: Allowed result
-URL: https://docs.example.com/guide
-Text: This result remains available.
+Title: Sourcegraph result
+URL: https://sourcegraph.com/github.com/owner/repo/-/blob/src/lib.rs
+Text: Matching source file.
 "#;
 
         let out = tool.results(text);
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0]["url"], "https://docs.example.com/guide");
-    }
-
-    #[test]
-    fn websearch_explains_policy_when_all_results_are_blocked() {
-        let tool = WebSearchTool::new();
-        let text = r#"Title: GitHub result
-URL: https://github.com/org/repo/pull/1
-Text: This must not reach the agent.
-"#;
-
-        let out = tool.results(text);
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0]["title"], "Evaluation web policy");
-        assert_eq!(out[0]["url"], "");
-        assert!(out[0]["snippet"]
-            .as_str()
-            .is_some_and(|message| message.contains("Do not use WebSearch or WebFetch")));
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0]["url"], "https://github.com/owner/repo/pull/1");
+        assert_eq!(
+            out[1]["url"],
+            "https://sourcegraph.com/github.com/owner/repo/-/blob/src/lib.rs"
+        );
     }
 }

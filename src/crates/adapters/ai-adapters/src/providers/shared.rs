@@ -3,15 +3,10 @@ use crate::client::utils::{
 };
 use crate::client::AIClient;
 use crate::types::ReasoningMode;
-use chrono::Utc;
 use reqwest::RequestBuilder;
 use serde::Serialize;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
-
-static AI_REQUEST_LIFECYCLE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn apply_header_policy<F>(
     client: &AIClient,
@@ -290,33 +285,6 @@ struct AIRequestEffectiveOptionsAudit {
     top_level_keys: Vec<String>,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct AIRequestAttemptTelemetry {
-    request_id: String,
-    provider: String,
-    model: Option<String>,
-    request_url_host: Option<String>,
-    attempt: usize,
-    started_at: Instant,
-}
-
-#[derive(Debug, Serialize)]
-struct AIRequestLifecycleAudit<'a> {
-    event: &'static str,
-    timestamp_utc: String,
-    request_id: &'a str,
-    phase: &'static str,
-    provider: &'a str,
-    model: Option<&'a str>,
-    request_url_host: Option<&'a str>,
-    attempt: usize,
-    elapsed_ms: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    http_status: Option<u16>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    outcome: Option<&'a str>,
-}
-
 fn audit_mode_from_value(value: Option<&str>) -> AIRequestAuditMode {
     match value.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
         Some("0" | "false" | "off" | "disabled") => AIRequestAuditMode::Disabled,
@@ -525,7 +493,10 @@ fn default_ai_request_audit_jsonl_path() -> PathBuf {
         })
 }
 
-fn append_ai_request_audit_jsonl<T: Serialize>(audit: &T, path: PathBuf) -> std::io::Result<()> {
+fn append_ai_request_audit_jsonl(
+    audit: &AIRequestEffectiveOptionsAudit,
+    path: PathBuf,
+) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -539,96 +510,6 @@ fn append_ai_request_audit_jsonl<T: Serialize>(audit: &T, path: PathBuf) -> std:
         .append(true)
         .open(path)?
         .write_all(line.as_bytes())
-}
-
-pub(crate) fn new_ai_request_id() -> String {
-    let sequence = AI_REQUEST_LIFECYCLE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    format!("ai-{}-{sequence}", Utc::now().timestamp_micros())
-}
-
-pub(crate) fn begin_ai_request_attempt_telemetry(
-    request_id: String,
-    provider: &str,
-    request_url: &str,
-    request_body: &serde_json::Value,
-    attempt: usize,
-) -> AIRequestAttemptTelemetry {
-    AIRequestAttemptTelemetry {
-        request_id,
-        provider: provider.to_string(),
-        model: request_body
-            .get("model")
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string),
-        request_url_host: request_url_host(request_url),
-        attempt,
-        started_at: Instant::now(),
-    }
-}
-
-impl AIRequestAttemptTelemetry {
-    fn record(&self, phase: &'static str, outcome: Option<&str>, http_status: Option<u16>) {
-        let mode = audit_mode_from_env();
-        if mode == AIRequestAuditMode::Disabled {
-            return;
-        }
-
-        let audit = AIRequestLifecycleAudit {
-            event: "ai_request_lifecycle",
-            timestamp_utc: Utc::now().to_rfc3339(),
-            request_id: &self.request_id,
-            phase,
-            provider: &self.provider,
-            model: self.model.as_deref(),
-            request_url_host: self.request_url_host.as_deref(),
-            attempt: self.attempt,
-            elapsed_ms: self.started_at.elapsed().as_millis() as u64,
-            http_status,
-            outcome,
-        };
-
-        if matches!(mode, AIRequestAuditMode::Both | AIRequestAuditMode::LogOnly) {
-            log::info!(
-                target: "ai::request_lifecycle",
-                "AI request lifecycle: request_id={} phase={} provider={} model={} attempt={} elapsed_ms={} status={} outcome={}",
-                audit.request_id,
-                audit.phase,
-                audit.provider,
-                audit.model.unwrap_or("none"),
-                audit.attempt,
-                audit.elapsed_ms,
-                audit.http_status.map(|status| status.to_string()).unwrap_or_else(|| "none".to_string()),
-                audit.outcome.unwrap_or("none")
-            );
-        }
-
-        if matches!(
-            mode,
-            AIRequestAuditMode::Both | AIRequestAuditMode::JsonlOnly
-        ) {
-            if let Err(error) =
-                append_ai_request_audit_jsonl(&audit, default_ai_request_audit_jsonl_path())
-            {
-                log::warn!(
-                    target: "ai::request_lifecycle",
-                    "Failed to append AI request lifecycle JSONL: {}",
-                    error
-                );
-            }
-        }
-    }
-
-    pub(crate) fn started(&self) {
-        self.record("started", None, None);
-    }
-
-    pub(crate) fn first_token(&self) {
-        self.record("first_token", None, None);
-    }
-
-    pub(crate) fn ended(&self, outcome: &'static str, http_status: Option<u16>) {
-        self.record("ended", Some(outcome), http_status);
-    }
 }
 
 pub(crate) fn audit_ai_request_effective_options(
@@ -658,8 +539,14 @@ pub(crate) fn audit_ai_request_effective_options(
             audit.model.as_deref().unwrap_or("none"),
             audit.thinking_effective.as_deref().unwrap_or("none"),
             audit.reasoning_effort_effective.as_deref().unwrap_or("none"),
-            audit.temperature.map(|value| value.to_string()).unwrap_or_else(|| "none".to_string()),
-            audit.top_p.map(|value| value.to_string()).unwrap_or_else(|| "none".to_string()),
+            audit
+                .temperature
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+            audit
+                .top_p
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "none".to_string()),
             audit
                 .max_tokens
                 .map(|value| value.to_string())

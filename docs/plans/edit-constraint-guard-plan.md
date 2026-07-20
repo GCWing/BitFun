@@ -1,203 +1,109 @@
 # Edit Constraint Guard（编辑约束守卫）设计
 
-## 背景与目标
+## 目标
 
-SWE-bench Pro 全量 731 复核（`bitfun-swebenchpro-full-20260712-final-5efa6c83`）发现：730/731
-的题面里带有强约束"don't have to modify the testing logic / already taken care of all
-changes to test files"，其中 **102 个 trial 最终 patch 仍然改了测试文件**（48 个因此失败，
-54 个侥幸通过）。
+当用户明确要求“不修改某些文件、目录或文件类型”时，产品应在文件真正写入前执行该约束，并向
+agent 返回可解释的拒绝原因。约束属于用户会话状态，必须在恢复、fork 和回滚后保持一致。
 
-对其中一个失败案例（`instance_future-architect__vuls__57XPJjQ`）做完整 trace 回溯后确认了
-一个此前未被发现的机制：
+该能力是通用产品行为，不承担评测环境隔离职责。
 
-1. verifier 在跑测试前会执行 `git checkout <gold_commit> -- <test files>`，把 agent 对测试
-   文件的改动**整体覆盖**——agent 改没改测试文件，跟最终判分**没有直接因果关系**。
-2. 真正的败因始终是 agent 自己的**源码实现**跟 gold 测试期望的契约（函数签名、返回值个数、
-   字段名）对不上——这是已有结论"契约簇=信息不可得"的一部分，不是独立问题。
-3. 但"agent 改了不该改的测试文件"这个行为本身，是一个很干净的**行为标记**：它标出了
-   "agent 已经在本地跑测试时撞到了矛盾信号（测试跑不过），但选择篡改测试文件让本地看起来
-   通过，而不是把这个矛盾当成'我的实现可能不对，该重新想想'的提示"。agent 自己的推理轨迹
-   里也明确写出了这种挣扎（"the user says not to modify tests. This is a contradiction"）。
+## 边界
 
-目标：把题面/用户输入里"不要做 X"类强约束，从纯文本指令变成运行时可拦截的机制——在
-Edit/Write/Delete **真正落盘之前**拦下命中约束的改动，用结构化反馈把 agent 推回"重新审视
-自己实现"的路径，而不是任其用篡改被保护文件的方式绕过矛盾信号。这是通用产品行为（真实用户
-自己说"别碰 X"的场景同样适用），不是评测专用逻辑。
+产品内负责：
 
-## 2026-07-16 验证版修订
+- 从每条新的用户指令中抽取“哪些文件不可修改”的约束；
+- 将约束持久化为会话状态，并支持显式追加和撤销；
+- 在直接文件工具、显式 shell 文件写入和递归删除前执行确定性检查；
+- 记录抽取、决策和成功文件操作，便于诊断误判与遗漏。
 
-102-case 首轮验证暴露出抽取失败静默折叠为空约束、`force` 被模型直接绕过、远程新文件与递归
-删除覆盖不完整、约束无法随 session 恢复，以及缺少可归因 telemetry 等问题。验证版按以下规则
-覆盖本文后续的 v1 设计细节：
+产品内不负责：
 
-- 明确的“不修改测试”措辞先由确定性规则建立 `TestFiles` 约束，模型抽取只做补充；
-- 抽取结果区分 `extracted`、`no_constraints`、`failed`，失败原因与原始响应摘要持久化；
-- constraints 与抽取证据写入 session metadata，恢复和 fork 后继续生效；
-- active constraints 不是只增不减：fast 会同时返回 `additions` 与显式 `revocations`；撤销必须引用
-  本轮提供给模型的精确 constraint id，解析失败、含糊表达和不存在的 id 均保持原约束；
-- fast 的运行/解析状态、输入 active ids、原始 additions/revocations、有效与无效撤销 id、失败原因及
-  响应摘要分别持久化，便于独立评估模型能力而不被确定性测试约束兜底掩盖；
-- Edit/Write/Delete 的每次 guard decision，以及成功落盘的直接文件工具调用，写入 session JSONL；
-- `force` 不再向模型暴露，旧调用即使传入也会拒绝并记录；
-- 新建文件和远程文件同样受约束，递归删除检查所有非符号链接后代；
-- **不增加最终 patch gate**：不会在提交时拦截、删除或恢复 patch。最终 patch 只与 mutation
-  telemetry 离线关联；没有对应事件的文件标为 `unattributed`，用于检验 guard 自身是否完整。
+- 屏蔽 WebFetch、WebSearch、GitHub、Sourcegraph 或任意代码托管域名；
+- 禁用 Git 网络、远端引用、commit hash 或历史读取；
+- 根据 benchmark、job 名称、环境变量或分支切换工具能力；
+- 最终 patch 过滤、基准泄漏判定或评分。
 
-## 核心机制
+网络出口、仓库历史净化和评测审计属于评测管道。产品工具保持普通用户预期的 Web 与 Git
+能力，guard 代码不得出现 benchmark 名称或站点黑名单。
 
-### 1. 约束抽取（会话级，一次性，LLM）
+## 模块与职责
 
-新组件，会话首次调用 Edit/Write/Delete 时懒加载触发（非编辑类会话零成本），用 fast 模型对
-首条用户消息做结构化抽取，结果缓存进 session state，全程复用不重跑：
+| 模块 | 职责 |
+|---|---|
+| `edit_constraint_guard.rs` | 对外兼容入口；抽取编排、确定性决策、递归删除检查、telemetry |
+| `edit_constraint_guard/model.rs` | 可序列化约束、抽取记录、会话状态合并与回滚 |
+| `edit_constraint_guard/shell_targets.rs` | 从常见 shell 命令中识别显式文件变更目标 |
+| `session_manager.rs` | 状态持久化、恢复、fork 继承与按存活 turn 回滚 |
+| 文件与 shell 工具的 `validate_input` | 在执行前调用 guard；不复制约束策略 |
 
-```rust
-#[derive(Deserialize)]
-struct ExtractedConstraint {
-    /// 原话摘要，人类可读，塞进拒绝提示里给 agent 看
-    description: String,
-    matcher: ConstraintMatcher,
-}
+`edit_constraint_guard.rs` 保留既有 public re-export，避免状态类型的存储路径因内部拆分而
+改变。模型、解析器和执行编排之间只传递结构化约束或路径列表。
 
-#[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum ConstraintMatcher {
-    /// 复用 test_selection_gate.rs 的 Lang::is_test_file()，不重新定义"什么算测试文件"
-    TestFiles,
-    /// 路径含指定子串
-    PathContains { substrings: Vec<String> },
-    /// 路径在指定目录下
-    PathUnderDir { dirs: Vec<String> },
-    /// 指定扩展名
-    Extension { exts: Vec<String> },
-    /// 识别到约束但套不进以上任何原语——不强制执行，只记录，为后续扩展词表积累证据
-    Unmatched,
-}
-```
+## 状态模型
 
-**为什么是受限词表而不是自由 glob/正则**：LLM 直接生成路径匹配字符串风险高（语法错误、
-匹配范围过宽/过窄、难以低成本校验）。改成从 5 个固定分类里选，解析失败直接整体丢弃，不会
-出现"LLM 生成了个非法正则"这类故障模式。`TestFiles` 是一等公民——因为这是当前唯一被
-102 个真实案例验证过的模式，直接复用现成判定函数，保证与 gate 对"测试文件"的定义一致。
+每条约束包含稳定 id、人类可读描述、来源、操作范围和一个受限 matcher：
 
-**抽取契约**：要求模型严格按 `{"constraints": [...]}` 结构返回，空约束返回
-`{"constraints": []}`。解析失败按 SWE-Atlas rubric judge 同款套路重试几次；最终仍失败
-→ **fail open**（本会话不启用约束检查，不能因为抽取失败反而挡住正常编辑）。
+- `test_files`：常见测试文件与测试目录约定；
+- `path_contains`：路径包含明确字面值；
+- `path_under_dir`：路径位于明确目录下；
+- `extension`：文件扩展名匹配；
+- `unmatched`：只记录，不执行。
 
-### 2. 执行阶段：pre-call hook，确定性匹配，零 LLM 调用
+操作范围为 `all` 或 `delete_only`。自由正则和自由 glob 不进入持久化契约，避免模型生成
+不可预测的匹配规则。
 
-**关键决策（已用真实数据验证过）**：pre-tool-hook 本身**不**每次调用 LLM。实测过"每次
-Edit/Write/Delete 都过一遍 LLM 语义判断"的真实成本（deepseek-v4-flash 生产端点，3 次
-真实请求）：单次判断延迟均值 1.01s，单 task 平均 8.47 次 Edit/Write/Delete 调用（p90=18，
-max=25），换算下来单 task 增加约 8.5 秒等待、约 1440 token——这个成本本身不算离谱，但
-**目前挖出来的全部 102 个案例，无一例外靠"文件名匹配测试文件命名规则"这个确定性判断就能
-100% 命中**，没有任何真实证据证明语义判断能抓住路径匹配漏判的情况。按"不过度宣称收益"的
-原则，pre-tool-hook 走确定性匹配，零延迟：
+状态同时保存：
 
-```rust
-impl ConstraintMatcher {
-    fn matches(&self, file_path: &str) -> bool {
-        match self {
-            ConstraintMatcher::TestFiles => Lang::from_path(file_path)
-                .is_some_and(|l| l.is_test_file(file_path)),
-            ConstraintMatcher::PathContains { substrings } => substrings.iter().any(|s| file_path.contains(s)),
-            ConstraintMatcher::PathUnderDir { dirs } => dirs.iter().any(|d| file_path.starts_with(d) || file_path.contains(&format!("/{d}/"))),
-            ConstraintMatcher::Extension { exts } => exts.iter().any(|e| file_path.ends_with(e)),
-            ConstraintMatcher::Unmatched => false,
-        }
-    }
-}
-```
+- 每次抽取的输入摘要、状态、耗时、模型输出摘要和失败原因；
+- 生效、撤销及无法匹配的撤销 id；
+- agent 创建文件的路径和创建它的 dialog turn。
 
-**拦截位置**：不在 `file_edit_tool.rs`/`file_write_tool.rs`/`delete_file_tool.rs` 三处各写
-一遍。当前 hook 体系只有 post-call（`post_call_hooks.rs`），且 `RuntimeHookErrorPolicy` 已
-预留 `DenyTool` 变体但没有 pre-call kind 在用它——这次补齐这个真空，新增对称的 pre-call
-hook 注册点，在 `execution_engine.rs` 里工具真正落到 `validate_input()`/`execute()` 之前
-的统一分发路径上跑一遍已注册 hook。三个工具实现代码不用感知这个机制的存在，以后再加别的
-pre-call 约束（"别碰 lockfile"之类）也走同一注册点，不用重新改工具本身。
+回滚只重放仍然存活 turn 的抽取与文件来源记录；旧格式中缺少 turn id 的来源记录不授予豁免。
 
-### 3. 拒绝反馈设计：拦截 + 纠偏，不是单纯 block
+## 生命周期
 
-命中约束时，走跟 `validate_input()` 已有的错误反馈通道一致的路径，把这次 Edit 的
-`tool_result` 变成结构化的矛盾信号，而不是直接静默拒绝：
+1. execution engine 对每个不同的用户 turn 处理一次约束抽取。
+2. 明确的测试文件禁改措辞先由确定性规则兜底；fast 模型补充其他 matcher，并返回显式撤销。
+3. 抽取结果写入 session metadata。抽取失败单独记录，执行阶段 fail open。
+4. 文件工具在 `validate_input` 中调用统一检查；shell 工具先将可静态识别的写入目标解析为路径。
+5. 命中约束时返回 403 和结构化 `edit_constraint_guard` 元数据，不执行写入。
+6. 成功的直接文件工具操作写入 session-scoped JSONL，用于产品诊断。
 
-```
-This file (`report/util_test.go`) matches a constraint stated in the task:
-"<抽取到的 description>". This edit was not applied.
+撤销只接受当前 active constraint id，且只有真实用户提交的 turn 可以授权撤销。含糊表达、
+未知 id 或模型解析失败都不会放宽既有约束。
 
-Editing a file you were told not to touch usually means your own implementation
-doesn't match what's expected — not that the test is wrong. Reconsider your
-source-code approach instead of adjusting this file.
+## 执行规则
 
-If you're certain this file must change for a legitimate reason unrelated to
-making your own code compile, explain why before retrying with `force: true`.
-```
+- matcher 执行是确定性的，不在每次工具调用时请求模型。
+- `force` 不是模型可用的逃生口；旧调用携带 `force` 时拒绝并记录。
+- “不要修改测试”允许新建 agent 自己的测试辅助文件，也允许后续修改或删除该辅助文件。
+- `delete_only` 约束不因 agent-created provenance 放宽。
+- 递归删除先检查目标和所有非符号链接后代；存在生效约束时，无法完成检查则 fail closed。
+- shell 解析只拦截能够明确解析出的目标。动态计算的路径不假装已被覆盖，依靠成功操作与最终
+  patch 的外部关联暴露缺口。
 
-保留 `force: true` 逃生舱口（约束不总是绝对指令，可能存在合理例外），但要求 agent 显式
-声明理由——防止悄悄绕过，理由落轨迹方便后续审计"是真有理由还是纯粹硬闯"。
+## 关键不变量
 
-### 4. 只拦"改已存在文件"，不拦新建
+- 无 active constraint 时，guard 不改变普通编辑、Web 或 Git 行为。
+- 同一 dialog turn 和消息 hash 不重复抽取。
+- 未知撤销 id 永远不删除约束。
+- session restore 与 fork 后的 active constraints 与父会话一致。
+- rollback 后不能保留来自已删除 turn 的约束或 agent-created 豁免。
+- 拒绝发生在写入前，递归删除不会出现部分删除后才发现受保护文件。
+- telemetry 失败不能导致普通工具操作失败。
 
-复用 `test_selection_gate.rs` 已有的 baseline/edited_files 追踪逻辑，区分"这一轮之前就
-存在的文件"vs"这一轮新建的"——只拦前者。像 SWE-Atlas 的 Test Writing 任务类型本来就要求
-新建测试文件，不能连这种正当场景也拦。
+## 验证策略
 
-### 5. 子代理继承约束，不重复抽取
+最小测试集覆盖：
 
-约束绑定在"这次任务"上，不是绑定在具体 agent 实例上。`GeneralPurpose` 等有 Edit 权限的
-子代理被 Task 工具 fork 出来时，从 `fork_agent` 那条 spawn 路径继承父会话已抽取的约束
-列表，不重新调用 LLM 抽取一遍（省成本，也避免父子判断不一致）。
+- matcher 规则和 operation scope；
+- 确定性抽取、模型解析失败、合法与非法撤销；
+- 新建测试辅助文件、已有测试文件和 delete-only 的差异；
+- shell 重定向、`tee`、`cp`、`mv`、`rm`、in-place `sed/perl`、Python、Node 与 Git
+  pathspec；
+- 递归删除、符号链接、远程工作区检查失败；
+- session 持久化、fork、回滚和旧 schema 兼容；
+- 普通 Web/Git 命令不被评测策略拦截。
 
-## 明确不做（防过度工程）
-
-- **不做 pre-tool-hook 的语义/LLM 判断**——已用真实数据验证当前证据下没必要，见 §2
-- **不做自由格式 glob/正则抽取**——受限词表，解析失败直接整体丢弃
-- **不重新发明"什么是测试文件"**——复用 `test_selection_gate.rs` 的 `Lang::is_test_file()`
-- **不做硬死路**——`force: true` 逃生舱口保留，只是要求显式声明理由
-- **不代 agent 猜测正确实现**——机制只负责拦截+提醒重新思考，不负责生成正确答案（那部分
-  依然受限于"契约是否可得"这个更底层的问题，本机制解决不了）
-
-## 改动面
-
-| 位置 | 内容 | 规模 |
-|---|---|---|
-| `execution/agent-runtime/src/pre_call_hooks.rs`（新） | `PreCallHookKind`、`PreToolCallHookExecutor` trait、与现有 `RuntimeHookRegistry`/`DenyTool` 对接 | ~120 行 |
-| `agentic/execution/edit_constraint_guard.rs`（新） | 约束抽取（LLM 调用编排）+ `ConstraintMatcher` + session state | ~250 行 |
-| `agentic/execution/execution_engine.rs` | 工具分发前跑 pre-call hook | ~40 行 |
-| `agentic/fork_agent/mod.rs` | 子代理继承父会话约束列表 | ~20 行 |
-| 单测 | 抽取 schema 解析（含 fail-open 路径）+ matcher 规则表驱动 + 新建文件豁免 + 逃生舱口 | ~200 行 |
-
-目标分支为 `yuyiqing/dev`/`upstream/main` 主线（真实产品行为），不是 `evals-on-release`——
-这个跟 test-selection-gate 不同：gate 只在评测线验证过就没合入主线，这次设计的场景（用户
-自己说"别碰 X"）对真实用户同样成立，应该走正常产品分支流程。
-
-## 验证计划
-
-验证集直接用这次挖出来的 **102 个真实案例**，不新造：
-
-- **目标组 48**：题面有强约束、agent 最终仍改了测试文件、且判分失败的全部 trial
-- **回归锚点 54**：题面有强约束、agent 改了测试文件、但仍然判分通过的全部 trial——
-  **一个都不能因为这次改动从过变成不过**，误伤了就是设计的硬伤
-
-步骤：
-1. 单测 + 本地 smoke（抽取 schema 解析、matcher 各分支、fail-open 路径、force 逃生舱口）
-2. 重编二进制（记 commit），拿 102-case 集重跑
-3. 核心指标不是"拦截触发了几次"，是**拦截之后 agent 有没有真的改对源码、reward 有没有从
-   0 翻到 1**——如果拦住之后 agent 只是卡住/超时/换个方式继续糊弄，说明拒绝文案还得迭代，
-   不代表机制本身没用（吸取 gate 那轮"机制生效但看不到分数收益"的教训，不能只报"触发率"
-   就宣称成功）
-4. 54 个回归锚点必须 54/54 不掉；48 个目标组的翻盘数 + 归因质量（人工抽查几个确认是不是
-   真的"重新想清楚了"而不是碰巧蒙对）一起作为最终判断依据
-5. 无效或误伤 → revert 单个 commit
-
-## 风险
-
-- **抽取误判（Tier 2 LLM 语义理解偏差）**：把"别改测试格式"误判成"别碰测试文件"这类——
-  靠 fail-open（抽取失败/低置信度直接不启用）兜底，且当前只有 `test_files` 这一种
-  matcher 有真实证据支撑，其余分类先允许存在但不必急于扩大使用
-- **逃生舱口被滥用**：agent 学会无脑加 `force: true` + 敷衍理由绕过——理由落轨迹，验证阶段
-  抽查滥用率，必要时加"理由需引用具体技术原因"的格式约束
-- **修不了真正的根因**：48 个目标里有多少能翻盘，取决于"重新想清楚"这条路走不走得通——
-  部分案例的契约信息本身就不可得（比如要不要砍掉一个死代码 `err` 返回值），这种机制拦住了
-  篡改测试的行为，但不代表 agent 就能凭空猜对正确答案，翻盘率可能有上限
-- **token/延迟成本**：抽取阶段一次性 LLM 调用（会话首次编辑时），执行阶段零成本——总体
-  成本可控，已用真实数据验证（见 §2）
+Rust 变更至少运行该 crate 的 focused tests 和 `cargo check --workspace`。行为边界变化必须先
+更新本文，再改实现；大提交的说明应记录动机、边界、失败策略和验证结果。
