@@ -47,6 +47,16 @@ describe('modelConfigs', () => {
     })).toBe('settings/ai-model:providers.zhipu.name');
   });
 
+  it('allocates readable model config IDs with collision and selector handling', async () => {
+    const { allocateModelConfigId } = await import('./modelConfigs');
+
+    expect(allocateModelConfigId('gpt-5-mini', [])).toBe('gpt-5-mini');
+    expect(allocateModelConfigId('gpt-5-mini', ['gpt-5-mini'])).toBe('gpt-5-mini-2');
+    expect(allocateModelConfigId('gpt-5-mini', ['gpt-5-mini', 'gpt-5-mini-2'])).toBe('gpt-5-mini-3');
+    expect(allocateModelConfigId('primary', [])).toBe('primary-2');
+    expect(allocateModelConfigId('AUTO', [])).toBe('AUTO-2');
+  });
+
   it('loads ai.models only when the model manager is actually used', async () => {
     configManagerMock.getConfig.mockResolvedValueOnce([
       {

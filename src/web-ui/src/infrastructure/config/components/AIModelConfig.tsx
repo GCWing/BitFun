@@ -10,7 +10,7 @@ import {
 } from '../types';
 import { configManager } from '../services/ConfigManager';
 import { getCapabilitiesByCategory, resolveModelCategory } from '../services/modelCategory';
-import { PROVIDER_TEMPLATES, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
+import { allocateModelConfigId, PROVIDER_TEMPLATES, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
 import { DEFAULT_REASONING_MODE, getEffectiveReasoningMode, supportsAnthropicAdaptive, supportsAnthropicReasoning, supportsAnthropicThinkingBudget, supportsDeepSeekReasoningEffort, supportsResponsesReasoning } from '../utils/reasoning';
 import { aiApi, systemAPI } from '@/infrastructure/api';
 import type { DiscoveredCliCredential } from '@/infrastructure/api/service-api/AIApi';
@@ -1133,9 +1133,19 @@ const AIModelConfig: React.FC = () => {
       const providerGroupModelIds = isProviderGroupEdit
         ? editingProviderModelIds
         : new Set<string>();
-      const configsToSave: AIModelConfigType[] = draftsToSave.map((draft, index) => {
+      const allocatedConfigIds = new Set(
+        aiModels
+          .map(model => model.id?.trim())
+          .filter((id): id is string => Boolean(id))
+      );
+      const configsToSave: AIModelConfigType[] = draftsToSave.map((draft) => {
+        const id = editingConfig.id
+          || draft.configId
+          || allocateModelConfigId(draft.modelName, allocatedConfigIds);
+        allocatedConfigIds.add(id);
+
         return {
-          id: editingConfig.id || draft.configId || `model_${Date.now()}_${index}`,
+          id,
           name: providerName,
           base_url: baseUrl,
           request_url: resolveRequestUrl(
