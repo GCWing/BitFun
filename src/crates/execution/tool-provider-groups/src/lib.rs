@@ -133,6 +133,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "WriteStdin",
             "ExecControl",
             "GetTime",
+            "ListModels",
         ],
     },
     ToolProviderGroupPlan {
@@ -360,6 +361,7 @@ mod tests {
                 "WriteStdin",
                 "ExecControl",
                 "GetTime",
+                "ListModels",
                 "Task",
                 "AgentWait",
                 "LaunchReviewAgent",

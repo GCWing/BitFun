@@ -48,7 +48,7 @@ const BUILTIN_TOOL_GROUPS: BuiltinToolGroupDefinition[] = [
   {
     id: 'builtin:delegation',
     labelKey: 'agentsOverview.toolGroups.delegation',
-    toolNames: ['Task', 'AgentWait', 'Skill'],
+    toolNames: ['Task', 'ListModels', 'AgentWait', 'Skill'],
   },
   {
     id: 'builtin:web',

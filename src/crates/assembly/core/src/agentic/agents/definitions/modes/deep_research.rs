@@ -21,6 +21,7 @@ impl DeepResearchMode {
         Self {
             default_tools: vec![
                 "Task".to_string(),
+                "ListModels".to_string(),
                 "AgentWait".to_string(),
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
@@ -97,6 +98,7 @@ mod tests {
             tools.contains(&"Task".to_string()),
             "Task tool required for parallel sub-agent orchestration"
         );
+        assert!(tools.contains(&"ListModels".to_string()));
         assert!(tools.contains(&"WebSearch".to_string()));
         assert!(tools.contains(&"WebFetch".to_string()));
         assert!(tools.contains(&"Write".to_string()));
