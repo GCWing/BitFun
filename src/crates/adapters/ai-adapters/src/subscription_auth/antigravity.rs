@@ -10,11 +10,9 @@ use super::{jwt, oauth_server, pkce, pkce::Pkce, ResolvedCredential, StartedLogi
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
-use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
 const CLIENT_ID: &str = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
-const REDIRECT_URI: &str = "http://localhost:51121/oauth-callback";
 const CALLBACK_PATH: &str = "/oauth-callback";
 const CALLBACK_PORT: u16 = 51121;
 const AUTHORIZE_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -27,6 +25,10 @@ const GOOG_API_CLIENT: &str = "google-cloud-sdk vscode_cloudshelleditor/0.1";
 const DEFAULT_MODEL: &str = "gemini-3-pro-high";
 const REFRESH_LEEWAY_MS: i64 = 5 * 60 * 1000;
 const STORE_KEY: &str = "antigravity";
+
+fn redirect_uri() -> String {
+    oauth_server::loopback_redirect_uri(CALLBACK_PORT, CALLBACK_PATH)
+}
 
 const SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/cloud-platform",
@@ -73,12 +75,12 @@ struct TokenResponse {
     expires_in: Option<i64>,
 }
 
-fn build_authorize_url(pkce: &Pkce, state: &str) -> String {
+fn build_authorize_url(pkce: &Pkce, state: &str, redirect_uri: &str) -> String {
     let scope = SCOPES.join(" ");
     let params = [
         ("response_type", "code"),
         ("client_id", CLIENT_ID),
-        ("redirect_uri", REDIRECT_URI),
+        ("redirect_uri", redirect_uri),
         ("scope", scope.as_str()),
         ("code_challenge", pkce.challenge.as_str()),
         ("code_challenge_method", "S256"),
@@ -101,13 +103,13 @@ fn http_client() -> Result<reqwest::Client> {
         .context("build antigravity http client")
 }
 
-async fn exchange_code(code: &str, verifier: &str) -> Result<TokenResponse> {
+async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<TokenResponse> {
     let client = http_client()?;
     let secret = client_secret();
     let params = [
         ("grant_type", "authorization_code"),
         ("code", code),
-        ("redirect_uri", REDIRECT_URI),
+        ("redirect_uri", redirect_uri),
         ("client_id", CLIENT_ID),
         ("client_secret", secret.as_str()),
         ("code_verifier", verifier),
@@ -212,12 +214,9 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
 pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = pkce::random_state();
-    let authorization_url = build_authorize_url(&pkce, &state);
-    let listener = TcpListener::bind(("127.0.0.1", CALLBACK_PORT))
-        .await
-        .with_context(|| {
-            format!("bind antigravity callback server on 127.0.0.1:{CALLBACK_PORT}")
-        })?;
+    let redirect_uri = redirect_uri();
+    let authorization_url = build_authorize_url(&pkce, &state, &redirect_uri);
+    let listener = oauth_server::bind_loopback(CALLBACK_PORT).await?;
     let verifier = pkce.verifier.clone();
 
     let runner = async move {
@@ -230,7 +229,7 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
                     .get("code")
                     .cloned()
                     .ok_or_else(|| anyhow!("antigravity callback missing code"))?;
-                let tokens = exchange_code(&code, &verifier).await?;
+                let tokens = exchange_code(&code, &verifier, &redirect_uri).await?;
                 persist_tokens(tokens).await
             } => result,
         }

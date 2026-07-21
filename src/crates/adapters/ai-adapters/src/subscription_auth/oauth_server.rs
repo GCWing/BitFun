@@ -5,10 +5,38 @@
 //! string, validates the `state`, serves an HTML result page, and returns the
 //! query parameters.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+
+/// Loopback host used in both the OAuth `redirect_uri` and the TCP bind.
+///
+/// Prefer `127.0.0.1` over `localhost` so the browser and the listener always
+/// agree on IPv4. On macOS, `localhost` often resolves to `::1`, which would
+/// miss a listener bound only to `127.0.0.1` (and vice versa).
+pub(crate) const LOOPBACK_HOST: &str = "127.0.0.1";
+
+/// Builds `http://127.0.0.1:{port}{path}` for authorize/token exchange.
+pub(crate) fn loopback_redirect_uri(port: u16, path: &str) -> String {
+    let path = if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{path}")
+    };
+    format!("http://{LOOPBACK_HOST}:{port}{path}")
+}
+
+/// Binds the OAuth callback listener on [`LOOPBACK_HOST`].
+pub(crate) async fn bind_loopback(port: u16) -> Result<TcpListener> {
+    TcpListener::bind((LOOPBACK_HOST, port))
+        .await
+        .with_context(|| {
+            format!(
+                "bind OAuth callback on {LOOPBACK_HOST}:{port} (is another app using this port?)"
+            )
+        })
+}
 
 /// Accepts loopback connections until the OAuth redirect arrives on
 /// `callback_path`, then returns its query parameters.
@@ -145,13 +173,29 @@ fn escape_html(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::escape_html;
+    use super::{escape_html, loopback_redirect_uri, LOOPBACK_HOST};
 
     #[test]
     fn escapes_html_injection() {
         assert_eq!(
             escape_html("<script>alert(\"x\")</script>&'"),
             "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;&#39;"
+        );
+    }
+
+    #[test]
+    fn loopback_redirect_uri_uses_ipv4_literal() {
+        assert_eq!(
+            loopback_redirect_uri(1455, "/auth/callback"),
+            format!("http://{LOOPBACK_HOST}:1455/auth/callback")
+        );
+        assert_eq!(
+            loopback_redirect_uri(51121, "oauth-callback"),
+            format!("http://{LOOPBACK_HOST}:51121/oauth-callback")
+        );
+        assert!(
+            !loopback_redirect_uri(1455, "/auth/callback").contains("localhost"),
+            "must not use localhost (macOS often resolves it to ::1)"
         );
     }
 }

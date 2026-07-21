@@ -61,6 +61,7 @@
     "logoutSuccess": "Signed out",
     "logoutFailed": "Sign-out failed: {{error}}",
     "userCodeHint": "Enter this code in the browser: {{code}}",
+    "openUrlManually": "Could not open the browser automatically. Open this URL manually: {{url}}",
     "expiresAt": "Token valid until {{time}}",
     "tokenValid": "Token ready",
     "notSignedIn": "Not signed in",

@@ -61,6 +61,7 @@
     "logoutSuccess": "已退出登录",
     "logoutFailed": "退出登录失败：{{error}}",
     "userCodeHint": "请在浏览器中输入验证码：{{code}}",
+    "openUrlManually": "无法自动打开浏览器，请手动访问：{{url}}",
     "expiresAt": "Token 有效期至 {{time}}",
     "tokenValid": "Token 已就绪",
     "notSignedIn": "未登录",

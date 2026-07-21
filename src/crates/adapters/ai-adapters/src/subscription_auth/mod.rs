@@ -263,6 +263,14 @@ pub async fn start_login(provider: SubscriptionProvider) -> Result<LoginStartRes
     }?;
 
     let authorization_url = started.authorization_url.clone();
+    // Desktop opener rejects relative URLs ("Not allowed to open url /...").
+    // Every provider must return an absolute http(s) authorization URL.
+    if !(authorization_url.starts_with("https://") || authorization_url.starts_with("http://")) {
+        cancel.cancel();
+        return Err(anyhow!(
+            "subscription login returned a non-absolute authorization URL: {authorization_url}"
+        ));
+    }
     let user_code = started.user_code.clone();
     let instructions = started.instructions.clone();
     let generation = next_generation();

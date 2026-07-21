@@ -9,13 +9,11 @@ use super::{jwt, oauth_server, pkce::Pkce, ResolvedCredential, StartedLogin};
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
-use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const ISSUER: &str = "https://auth.openai.com";
-const REDIRECT_URI: &str = "http://localhost:1455/auth/callback";
 const CALLBACK_PATH: &str = "/auth/callback";
 const CALLBACK_PORT: u16 = 1455;
 const SCOPE: &str = "openid profile email offline_access";
@@ -24,6 +22,10 @@ const CHATGPT_REQUEST_URL: &str = "https://chatgpt.com/backend-api/codex/respons
 const DEFAULT_MODEL: &str = "gpt-5-codex";
 const REFRESH_LEEWAY_MS: i64 = 5 * 60 * 1000;
 const STORE_KEY: &str = "codex";
+
+fn redirect_uri() -> String {
+    oauth_server::loopback_redirect_uri(CALLBACK_PORT, CALLBACK_PATH)
+}
 
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
@@ -37,11 +39,11 @@ struct TokenResponse {
     expires_in: Option<i64>,
 }
 
-fn build_authorize_url(pkce: &Pkce, state: &str) -> String {
+fn build_authorize_url(pkce: &Pkce, state: &str, redirect_uri: &str) -> String {
     let params = [
         ("response_type", "code"),
         ("client_id", CLIENT_ID),
-        ("redirect_uri", REDIRECT_URI),
+        ("redirect_uri", redirect_uri),
         ("scope", SCOPE),
         ("code_challenge", pkce.challenge.as_str()),
         ("code_challenge_method", "S256"),
@@ -65,12 +67,12 @@ fn http_client() -> Result<reqwest::Client> {
         .context("build codex http client")
 }
 
-async fn exchange_code(code: &str, verifier: &str) -> Result<TokenResponse> {
+async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<TokenResponse> {
     let client = http_client()?;
     let params = [
         ("grant_type", "authorization_code"),
         ("code", code),
-        ("redirect_uri", REDIRECT_URI),
+        ("redirect_uri", redirect_uri),
         ("client_id", CLIENT_ID),
         ("code_verifier", verifier),
     ];
@@ -168,10 +170,9 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
 pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = super::pkce::random_state();
-    let authorization_url = build_authorize_url(&pkce, &state);
-    let listener = TcpListener::bind(("127.0.0.1", CALLBACK_PORT))
-        .await
-        .with_context(|| format!("bind codex callback server on 127.0.0.1:{CALLBACK_PORT}"))?;
+    let redirect_uri = redirect_uri();
+    let authorization_url = build_authorize_url(&pkce, &state, &redirect_uri);
+    let listener = oauth_server::bind_loopback(CALLBACK_PORT).await?;
     let verifier = pkce.verifier.clone();
 
     let runner = async move {
@@ -184,7 +185,7 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
                     .get("code")
                     .cloned()
                     .ok_or_else(|| anyhow!("codex callback missing code"))?;
-                let tokens = exchange_code(&code, &verifier).await?;
+                let tokens = exchange_code(&code, &verifier, &redirect_uri).await?;
                 persist_tokens(tokens).await
             } => result,
         }

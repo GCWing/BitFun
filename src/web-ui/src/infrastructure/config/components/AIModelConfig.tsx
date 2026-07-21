@@ -982,7 +982,21 @@ const AIModelConfig: React.FC = () => {
     try {
       const started = await aiApi.startSubscriptionLogin(provider);
       if (started.authorization_url) {
-        await systemAPI.openExternal(started.authorization_url);
+        try {
+          await systemAPI.openExternal(started.authorization_url);
+        } catch (openError) {
+          // Keep polling: the backend login session is already running. Surface
+          // the URL so the user can open it manually (relative URLs / opener
+          // policy failures must not abort an otherwise valid login).
+          log.warn('Failed to open subscription authorization URL', {
+            provider,
+            url: started.authorization_url,
+            error: String(openError),
+          });
+          notification.info(
+            t('subscriptionAuth.openUrlManually', { url: started.authorization_url }),
+          );
+        }
       }
       if (started.user_code) {
         notification.info(t('subscriptionAuth.userCodeHint', { code: started.user_code }));
