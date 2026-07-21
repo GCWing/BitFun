@@ -3,7 +3,7 @@
  * Used to render Markdown-formatted text
  */
 
-import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, Component, type ReactNode } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Component, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -797,6 +797,11 @@ export const Markdown = React.memo<MarkdownProps>(({
 }) => {
   const { isLight } = useTheme();
   const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
+  // Keep streaming flag out of `components` memo deps so flipping streaming
+  // mode does not rebuild the entire ReactMarkdown component map (that remount
+  // looked like the chat pane refreshed when a turn finished).
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
   
   const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
   
@@ -1067,11 +1072,13 @@ export const Markdown = React.memo<MarkdownProps>(({
         );
       }
       
+      const streaming = isStreamingRef.current;
+
       if (language.toLowerCase().startsWith('mermaid')) {
         return (
           <MermaidBlock
             code={code}
-            isStreaming={isStreaming}
+            isStreaming={streaming}
           />
         );
       }
@@ -1097,23 +1104,12 @@ export const Markdown = React.memo<MarkdownProps>(({
             <CopyButton code={code} />
           </div>
           <div className="code-block-body">
-          {isStreaming ? (
-            // While the text is still streaming, skip the heavy Prism
-            // tokenization on every tick (it re-highlights the entire
-            // code each frame, which is the main source of code-block
-            // jitter in the chat). Render a lightweight, line-numbered
-            // <pre> that matches Prism's `showLineNumbers` layout so the
-            // gutter width and line indentation stay visually stable
-            // across the eventual fallback -> Prism swap when streaming
-            // completes.
-            <CodeBlockFallback
-              code={code}
-              language={normalizedLang}
-              bodyStyle={codeBodyStyle}
-              codeTagStyle={codeTagStyle}
-              gutterColor={gutterColor}
-            />
-          ) : (
+            {/*
+              Always mount AsyncPrismSyntaxHighlighter. While streaming,
+              preferFallback keeps the lightweight line-numbered pre so we do
+              not remount Fallback ↔ Prism when the turn finishes (that remount
+              flashed the chat pane).
+            */}
             <AsyncPrismSyntaxHighlighter
               language={normalizedLang}
               style={syntaxTheme}
@@ -1127,6 +1123,7 @@ export const Markdown = React.memo<MarkdownProps>(({
                 userSelect: 'none',
                 minWidth: '3em'
               }}
+              preferFallback={streaming}
               fallback={CodeBlockFallback}
               fallbackProps={{
                 code,
@@ -1139,7 +1136,6 @@ export const Markdown = React.memo<MarkdownProps>(({
             >
               {code}
             </AsyncPrismSyntaxHighlighter>
-          )}
           </div>
         </div>
       );
@@ -1387,7 +1383,6 @@ export const Markdown = React.memo<MarkdownProps>(({
     basePath,
     remoteConnectionId,
     expandDetailsByDefault,
-    isStreaming,
     markdownContent,
     handleFileViewRequest,
     handleRevealInExplorer,

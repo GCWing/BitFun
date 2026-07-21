@@ -361,6 +361,7 @@ impl ExternalMcpCoordinator {
                     let suppressed = self.suppressed_sources.contains(&source.preference_key());
                     sources.push(ExternalSourceCatalogEntry {
                         stable_key: source.preference_key(),
+                        presentation_group_id: None,
                         record: source.clone(),
                         lifecycle: source_lifecycle(source.health, suppressed, failed),
                     });

@@ -58,7 +58,7 @@ pnpm run desktop:dev               # full hot-reload: Vite HMR + Rust auto-rebui
 pnpm run desktop:preview:debug     # reuse pre-built binary + Vite HMR; no Rust auto-rebuild
 pnpm run dev:web                   # browser-only frontend
 pnpm run cli:dev                   # CLI runtime
-pnpm run cli:install               # build release + install bitfun-cli to ~/.local/bin (bashrc/zshrc PATH)
+pnpm run cli:install               # build release + install bitfun (Windows/macOS/Linux; deprecated bitfun-cli included)
 
 # Check
 pnpm run fmt:rs                     # format only changed / staged Rust files

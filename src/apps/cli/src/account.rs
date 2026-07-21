@@ -208,7 +208,7 @@ pub(crate) async fn login_with_credentials(
         " Device routing is handled by the running CLI daemon.".to_string()
     } else {
         match spawn_device_routing(relay_url, &device_name).await {
-            Ok(()) => " Device routing connected (Peer Host ready). Tip: `bitfun-cli daemon install` keeps this device reachable after exit or reboot.".to_string(),
+            Ok(()) => " Device routing connected (Peer Host ready). Tip: `bitfun daemon install` keeps this device reachable after exit or reboot.".to_string(),
             Err(e) => format!(" (Warning: device routing failed: {e})"),
         }
     };

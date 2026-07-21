@@ -557,6 +557,7 @@ impl ExternalSourceCoordinator {
                 }
                 sources.push(ExternalSourceCatalogEntry {
                     stable_key,
+                    presentation_group_id: None,
                     record: record.clone(),
                     lifecycle,
                 });
@@ -612,6 +613,7 @@ impl ExternalSourceCoordinator {
         sources.extend(self.removed_sources.iter().map(|(stable_key, record)| {
             ExternalSourceCatalogEntry {
                 stable_key: stable_key.clone(),
+                presentation_group_id: None,
                 record: record.clone(),
                 lifecycle: ExternalSourceLifecycleState::Removed,
             }

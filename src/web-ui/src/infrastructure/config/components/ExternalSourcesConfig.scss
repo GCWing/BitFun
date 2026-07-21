@@ -288,6 +288,93 @@
     overflow-wrap: anywhere;
   }
 
+  &__source-scopes {
+    display: inline;
+  }
+
+  &__source-members {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--size-gap-1);
+    flex-wrap: wrap;
+    max-width: 420px;
+  }
+
+  &__source-member {
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--size-gap-2);
+    min-height: 32px;
+    padding: 4px 7px 4px 9px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--size-radius-sm);
+    background: var(--color-bg-tertiary);
+    cursor: pointer;
+
+    &:focus-within {
+      border-color: var(--color-accent-500);
+    }
+
+    .bitfun-switch__wrapper {
+      margin-top: 0;
+    }
+
+    .bitfun-switch__content {
+      min-width: 0;
+      gap: 0;
+      text-align: left;
+    }
+
+    .bitfun-switch__label {
+      font-size: 12px;
+      line-height: 15px;
+    }
+
+    .bitfun-switch__description {
+      font-size: 10px;
+      line-height: 13px;
+    }
+  }
+
+  &__source-description,
+  &__source-origin,
+  &__source-counts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  &__source-description {
+    gap: var(--size-gap-2);
+    min-width: 0;
+  }
+
+  &__source-origin {
+    gap: var(--size-gap-1);
+    min-width: 0;
+  }
+
+  &__source-counts {
+    gap: var(--size-gap-1);
+  }
+
+  &__source-count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 0 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--size-radius-sm);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+
   &__state {
     color: var(--color-text-secondary);
     font-size: 11px;
@@ -381,6 +468,22 @@
   }
 
   @container external-sources (max-width: 720px) {
+    &__source-group.bitfun-config-page-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--size-gap-2);
+      align-items: stretch;
+    }
+
+    &__source-group .bitfun-config-page-row__control {
+      justify-content: flex-start;
+    }
+
+    &__source-members {
+      width: 100%;
+      max-width: none;
+      justify-content: flex-start;
+    }
+
     &__ecosystem-card,
     &__capability-row {
       align-items: stretch;

@@ -182,7 +182,7 @@ the `/relay` suffix to match the official server format
 
 **CLI**
 
-1. Run `bitfun-cli`, open `/login`.
+1. Run `bitfun`, open `/login`.
 2. Fill **Auth Server**, **Username**, **Password**, then Login.
 3. After login, the CLI can act as a **Peer Host** for same-account Desktops.
 

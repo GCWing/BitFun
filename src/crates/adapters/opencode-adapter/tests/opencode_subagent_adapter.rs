@@ -123,6 +123,41 @@ fn global_and_project_agent_fields_deep_merge_with_ordered_provenance() {
 }
 
 #[test]
+fn suppressed_agent_source_remains_discoverable_for_reenable() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "review": {
+              "description": "Review agent",
+              "prompt": "Review the change",
+              "mode": "subagent"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let provider = provider(&temp, &workspace);
+    let initial = discover(&provider, workspace.clone(), BTreeSet::new());
+    let source_key = initial.sources[0].key.clone();
+    fs::write(temp.path().join("user/opencode.json"), "{ invalid").unwrap();
+    let suppressed = discover(
+        &provider,
+        workspace,
+        [source_key.clone()].into_iter().collect(),
+    );
+
+    assert!(suppressed.definitions.is_empty());
+    assert_eq!(suppressed.sources.len(), 1);
+    assert_eq!(suppressed.sources[0].key, source_key);
+}
+
+#[test]
 fn safe_subset_is_fail_closed_and_default_tools_are_explicit() {
     let temp = TempDir::new().unwrap();
     let workspace = temp.path().join("workspace");

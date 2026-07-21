@@ -107,6 +107,7 @@ fn append_provider_group_tools(tools: &mut Vec<String>, provider_id: &'static st
 pub fn shared_coding_mode_tools() -> Vec<String> {
     let mut tools = vec![
         "Task".to_string(),
+        "ListModels".to_string(),
         "AgentWait".to_string(),
         "Read".to_string(),
         "view_image".to_string(),
@@ -291,6 +292,7 @@ mod tests {
     fn shared_coding_mode_tools_include_plan_and_debug_specific_tools() {
         let tools = shared_coding_mode_tools();
 
+        assert!(tools.contains(&"ListModels".to_string()));
         assert!(tools.contains(&"CreatePlan".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));

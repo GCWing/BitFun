@@ -58,6 +58,7 @@ struct BackgroundTaskStartRequest<'a> {
     model_binding_policy: SessionModelBindingPolicy,
     effective_workspace_path: Option<String>,
     model_id: Option<String>,
+    inherit_parent_model: bool,
     subagent_context: Option<HashMap<String, String>>,
     prepared_prompt: String,
     timeout_seconds: Option<u64>,
@@ -178,6 +179,7 @@ impl TaskTool {
         let context_mode = invocation.context_mode;
         let target_session_id = invocation.target_session_id.clone();
         let model_id = invocation.model_id.clone();
+        let inherit_parent_model = invocation.inherit_parent_model;
         let mut timeout_seconds = invocation.timeout_seconds;
         let run_in_background = invocation.run_in_background;
         let is_retry = invocation.is_retry;
@@ -585,6 +587,7 @@ impl TaskTool {
                 model_binding_policy,
                 effective_workspace_path,
                 model_id,
+                inherit_parent_model,
                 subagent_context,
                 prepared_prompt,
                 timeout_seconds,
@@ -607,6 +610,7 @@ impl TaskTool {
             model_binding_policy,
             effective_workspace_path,
             model_id,
+            inherit_parent_model,
             subagent_context,
             prepared_prompt,
             timeout_seconds,
@@ -643,6 +647,7 @@ impl TaskTool {
             model_binding_policy,
             effective_workspace_path,
             model_id,
+            inherit_parent_model,
             subagent_context,
             prepared_prompt,
             timeout_seconds,
@@ -668,6 +673,7 @@ impl TaskTool {
                     model_binding_policy,
                     workspace_path: effective_workspace_path,
                     model_id,
+                    inherit_parent_model,
                     subagent_parent_info: parent_info,
                     context: subagent_context.unwrap_or_default(),
                     delegation_policy: context.delegation_policy().spawn_child(),
@@ -705,6 +711,7 @@ impl TaskTool {
         model_binding_policy: SessionModelBindingPolicy,
         effective_workspace_path: Option<String>,
         model_id: Option<String>,
+        inherit_parent_model: bool,
         subagent_context: Option<HashMap<String, String>>,
         prepared_prompt: String,
         timeout_seconds: Option<u64>,
@@ -736,7 +743,7 @@ impl TaskTool {
             };
             let subagent_execution_started_at = Instant::now();
             debug!(
-                "TaskTool awaiting subagent result: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, context_mode={}, delegate_target={}, timeout_seconds={:?}, workspace_path={:?}, model_id={:?}",
+                "TaskTool awaiting subagent result: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, context_mode={}, delegate_target={}, timeout_seconds={:?}, workspace_path={:?}, model_id={:?}, inherit_parent_model={}",
                 session_id,
                 dialog_turn_id,
                 tool_call_id,
@@ -744,7 +751,8 @@ impl TaskTool {
                 delegate_target_label,
                 timeout_seconds,
                 effective_workspace_path,
-                model_id
+                model_id,
+                inherit_parent_model
             );
             let execution_result = coordinator
                 .execute_subagent(
@@ -758,6 +766,7 @@ impl TaskTool {
                         model_binding_policy,
                         workspace_path: effective_workspace_path.clone(),
                         model_id: model_id.clone(),
+                        inherit_parent_model,
                         subagent_parent_info: parent_info,
                         context: subagent_context.clone().unwrap_or_default(),
                         delegation_policy: context.delegation_policy().spawn_child(),

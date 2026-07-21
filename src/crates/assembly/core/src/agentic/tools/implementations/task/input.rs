@@ -72,6 +72,7 @@ pub(super) struct TaskInvocation {
     pub(super) target_session_id: Option<String>,
     pub(super) subagent_type: Option<String>,
     pub(super) model_id: Option<String>,
+    pub(super) inherit_parent_model: bool,
     pub(super) timeout_seconds: Option<u64>,
     pub(super) run_in_background: bool,
     pub(super) is_retry: bool,
@@ -104,6 +105,8 @@ impl TaskTool {
                 }
             }
 
+            let (model_id, inherit_parent_model) = Self::optional_model_id(input)?;
+
             return Ok(TaskInvocation {
                 action: TaskAction::Spawn,
                 description: Self::string_field(input, "description", "DeepReview Task calls")?,
@@ -111,7 +114,8 @@ impl TaskTool {
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Self::string_field(input, "subagent_type", "DeepReview Task calls")?,
-                model_id: Self::optional_trimmed_string(input, "model_id")?,
+                model_id,
+                inherit_parent_model,
                 timeout_seconds: Self::optional_timeout_seconds(input)?,
                 run_in_background: false,
                 is_retry: input.get("retry").and_then(Value::as_bool).unwrap_or(false),
@@ -169,6 +173,8 @@ impl TaskTool {
                     }
                 }
 
+                let (model_id, inherit_parent_model) = Self::optional_model_id(input)?;
+
                 Ok(TaskInvocation {
                     action,
                     description,
@@ -176,7 +182,8 @@ impl TaskTool {
                     context_mode,
                     target_session_id: None,
                     subagent_type: Self::optional_trimmed_string(input, "subagent_type")?,
-                    model_id: Self::optional_trimmed_string(input, "model_id")?,
+                    model_id,
+                    inherit_parent_model,
                     timeout_seconds: None,
                     run_in_background,
                     is_retry: false,
@@ -200,6 +207,8 @@ impl TaskTool {
                     action,
                 )?;
 
+                let (model_id, inherit_parent_model) = Self::optional_model_id(input)?;
+
                 Ok(TaskInvocation {
                     action,
                     description,
@@ -207,7 +216,8 @@ impl TaskTool {
                     context_mode: SubagentContextMode::Fresh,
                     target_session_id,
                     subagent_type: None,
-                    model_id: Self::optional_trimmed_string(input, "model_id")?,
+                    model_id,
+                    inherit_parent_model,
                     timeout_seconds: None,
                     run_in_background,
                     is_retry: false,
@@ -240,6 +250,7 @@ impl TaskTool {
                     target_session_id,
                     subagent_type: None,
                     model_id: None,
+                    inherit_parent_model: false,
                     timeout_seconds: None,
                     run_in_background: false,
                     is_retry: false,
@@ -320,6 +331,13 @@ impl TaskTool {
                 let value = value.trim();
                 Ok((!value.is_empty()).then(|| value.to_string()))
             }
+        }
+    }
+
+    fn optional_model_id(input: &Value) -> BitFunResult<(Option<String>, bool)> {
+        match Self::optional_trimmed_string(input, "model_id")? {
+            Some(model_id) if model_id == "inherit" => Ok((None, true)),
+            model_id => Ok((model_id, false)),
         }
     }
 

@@ -654,10 +654,17 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('splits completed large model rounds into stable virtual chunks', () => {
+  it('splits completed large non-tail model rounds into stable virtual chunks', () => {
     const largeRound = makeRound({
       id: 'large-round',
       items: makeTextItems(25, 'large-text'),
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+    });
+    const trailingRound = makeRound({
+      id: 'tail-round',
+      items: makeTextItems(2, 'tail-text'),
       isStreaming: false,
       isComplete: true,
       status: 'completed',
@@ -672,6 +679,65 @@ describe('sessionToVirtualItems explore grouping', () => {
           content: 'Summarize a large trace',
           timestamp: 900,
         },
+        modelRounds: [largeRound, trailingRound],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+    const modelItems = items.filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+    const largeChunks = modelItems.filter(item => item.sourceRoundId === 'large-round' || item.data.id.startsWith('large-round'));
+
+    expect(largeChunks.map(item => item.segmentIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(largeChunks.map(item => item.segmentCount)).toEqual([7, 7, 7, 7, 7, 7, 7]);
+    expect(largeChunks.map(item => item.sourceRoundId)).toEqual([
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+    ]);
+    expect(largeChunks.map(item => item.data.id)).toEqual([
+      'large-round:segment:0',
+      'large-round:segment:1',
+      'large-round:segment:2',
+      'large-round:segment:3',
+      'large-round:segment:4',
+      'large-round:segment:5',
+      'large-round:segment:6',
+    ]);
+    expect(largeChunks.map(item => item.data.items.length)).toEqual([4, 4, 4, 4, 4, 4, 1]);
+    expect(largeChunks.every(item => item.isLastRound === false)).toBe(true);
+    expect(largeChunks[0].data.items[0]?.id).toBe('large-text-1');
+    expect(largeChunks[6].data.items[0]?.id).toBe('large-text-25');
+    expect(modelItems[modelItems.length - 1]).toMatchObject({
+      data: { id: 'tail-round' },
+      isLastRound: true,
+      segmentId: undefined,
+    });
+  });
+
+  it('does not split the turn-tail large round (avoids completion remount flash)', () => {
+    const largeRound = makeRound({
+      id: 'large-tail-round',
+      items: makeTextItems(25, 'large-tail-text'),
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+    });
+    const session = makeSession({
+      sessionId: 'large-tail-round-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'large-tail-round-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Summarize a large trace',
+          timestamp: 900,
+        },
         modelRounds: [largeRound],
         status: 'completed',
         startTime: 900,
@@ -681,40 +747,13 @@ describe('sessionToVirtualItems explore grouping', () => {
     const items = sessionToVirtualItems(session);
     const modelItems = items.filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
 
-    expect(items.map(item => item.type)).toEqual([
-      'user-message',
-      'model-round',
-      'model-round',
-      'model-round',
-      'model-round',
-      'model-round',
-      'model-round',
-      'model-round',
-    ]);
-    expect(modelItems.map(item => item.segmentIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
-    expect(modelItems.map(item => item.segmentCount)).toEqual([7, 7, 7, 7, 7, 7, 7]);
-    expect(modelItems.map(item => item.sourceRoundId)).toEqual([
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-      'large-round',
-    ]);
-    expect(modelItems.map(item => item.data.id)).toEqual([
-      'large-round:segment:0',
-      'large-round:segment:1',
-      'large-round:segment:2',
-      'large-round:segment:3',
-      'large-round:segment:4',
-      'large-round:segment:5',
-      'large-round:segment:6',
-    ]);
-    expect(modelItems.map(item => item.data.items.length)).toEqual([4, 4, 4, 4, 4, 4, 1]);
-    expect(modelItems.map(item => item.isLastRound)).toEqual([false, false, false, false, false, false, true]);
-    expect(modelItems[0].data.items[0]?.id).toBe('large-text-1');
-    expect(modelItems[6].data.items[0]?.id).toBe('large-text-25');
+    expect(modelItems).toHaveLength(1);
+    expect(modelItems[0]).toMatchObject({
+      data: { id: 'large-tail-round' },
+      isLastRound: true,
+      segmentId: undefined,
+    });
+    expect(modelItems[0].data.items).toHaveLength(25);
   });
 
   it('does not split active or streaming large model rounds', () => {

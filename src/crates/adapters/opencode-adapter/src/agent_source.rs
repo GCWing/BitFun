@@ -243,7 +243,21 @@ impl ExternalSubagentSourceProvider for OpenCodeSubagentProvider {
 
         for layer in self.discover_layers(&input.context)? {
             let source_key = source_key(&layer);
-            if input.suppressed_sources.contains(&source_key) {
+            let suppressed = input.suppressed_sources.contains(&source_key);
+            if suppressed {
+                sources.push(ExternalSourceRecord {
+                    key: source_key,
+                    ecosystem_id: EcosystemId::new(ECOSYSTEM_ID)
+                        .expect("static OpenCode ecosystem id must be valid"),
+                    display_name: layer.display_name.clone(),
+                    source_kind: layer.source_kind().to_string(),
+                    scope: layer.scope,
+                    location: layer.path.to_string_lossy().to_string(),
+                    execution_domain_id: input.context.execution_domain_id.clone(),
+                    health: ExternalSourceHealth::Available,
+                    content_version: digest([layer.path.to_string_lossy().as_ref()]),
+                    diagnostics: Vec::new(),
+                });
                 continue;
             }
             let parsed = parse_layer(&layer)?;

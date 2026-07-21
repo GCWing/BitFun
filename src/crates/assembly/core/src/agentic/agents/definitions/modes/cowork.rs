@@ -31,6 +31,7 @@ impl CoworkMode {
                 "AskUserQuestion".to_string(),
                 "TodoWrite".to_string(),
                 "Task".to_string(),
+                "ListModels".to_string(),
                 "AgentWait".to_string(),
                 "Skill".to_string(),
                 // Discovery + editing
@@ -109,5 +110,6 @@ mod tests {
     fn cowork_mode_includes_init_miniapp_in_default_tools() {
         let tools = CoworkMode::new().default_tools();
         assert!(tools.contains(&"InitMiniApp".to_string()));
+        assert!(tools.contains(&"ListModels".to_string()));
     }
 }

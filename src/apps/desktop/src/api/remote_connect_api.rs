@@ -393,6 +393,13 @@ async fn register_delegated_identity_providers() {
                 })
             })
             .await;
+
+        // Account-mode mobile pairing: QR prefill + password verification.
+        register_account_pairing_context(service).await;
+
+        // Login/restore may switch accounts; drop any prior URL-bound mobile
+        // identity so the next pair can bind to the current account user id.
+        service.clear_trusted_mobile_identity().await;
     }
 
     // Global provider for IM bots.
@@ -416,6 +423,51 @@ async fn register_delegated_identity_providers() {
             }
         })
     });
+}
+
+/// Wire QR account prefill + verify-only password check for mobile pairing.
+async fn register_account_pairing_context(service: &RemoteConnectService) {
+    // Always enable account mode when logged in; username prefill is best-effort.
+    let username = load_credential_hint()
+        .map(|hint| hint.username)
+        .unwrap_or_default();
+    service.set_account_pairing_username(Some(username)).await;
+
+    let session_arc = get_account_session().clone();
+    let relay_url_arc = get_account_relay_url().clone();
+    service
+        .set_account_pairing_verifier(move |username, password| {
+            let session_arc = session_arc.clone();
+            let relay_url_arc = relay_url_arc.clone();
+            async move {
+                let session = session_arc
+                    .read()
+                    .await
+                    .clone()
+                    .ok_or_else(|| "Desktop is not logged into a BitFun account".to_string())?;
+                let relay_url = relay_url_arc
+                    .read()
+                    .await
+                    .clone()
+                    .ok_or_else(|| "Desktop is not logged into a BitFun account".to_string())?;
+                AccountClient::new()
+                    .verify_password_for_master_key(
+                        &relay_url,
+                        &username,
+                        &password,
+                        &session.master_key,
+                    )
+                    .await
+                    .map_err(|e| {
+                        // Keep the real cause in desktop logs (network vs bad
+                        // credentials); the mobile only gets the unified message.
+                        log::warn!("Account pairing verification failed: {e}");
+                        "Invalid username or password".to_string()
+                    })?;
+                Ok(session.user_id)
+            }
+        })
+        .await;
 }
 
 pub fn init_on_startup() {
@@ -982,6 +1034,13 @@ pub async fn remote_connect_start(
     let holder = get_service_holder();
     let guard = holder.read().await;
     let service = guard.as_ref().ok_or("service not initialized")?;
+    // Refresh account pairing context so a newly logged-in session is reflected
+    // in the QR (`auth=account&user=...`) before the room is created.
+    if get_account_session().read().await.is_some() {
+        register_account_pairing_context(service).await;
+    } else {
+        service.clear_account_pairing_context().await;
+    }
     service
         .start(method)
         .await
@@ -1343,6 +1402,8 @@ pub async fn account_logout() -> Result<(), String> {
     // Disconnect device routing before clearing the session.
     if let Some(service) = get_service_holder().read().await.as_ref() {
         service.stop_device_connection().await;
+        service.clear_account_pairing_context().await;
+        service.clear_trusted_mobile_identity().await;
     }
     // Revoke the token on the relay (best-effort — don't block on failure)
     if let Ok((session, relay_url)) = read_account_context().await {

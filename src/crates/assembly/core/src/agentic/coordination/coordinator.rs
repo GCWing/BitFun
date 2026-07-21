@@ -254,6 +254,9 @@ pub(crate) struct SubagentExecutionRequest {
     pub(crate) model_binding_policy: SessionModelBindingPolicy,
     pub(crate) workspace_path: Option<String>,
     pub(crate) model_id: Option<String>,
+    /// Explicitly select the current parent session's model instead of a
+    /// configured subagent default.
+    pub(crate) inherit_parent_model: bool,
     pub(crate) subagent_parent_info: SubagentParentInfo,
     pub(crate) context: HashMap<String, String>,
     /// Execution policy for the child subagent session being launched.
@@ -6416,11 +6419,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     async fn resolve_fresh_subagent_model_id(
         &self,
         explicit_model_id: Option<&str>,
+        inherit_parent_model: bool,
         agent_type: &str,
         workspace_path: &str,
         parent_session_id: &str,
     ) -> BitFunResult<String> {
         let defaults = Self::agent_model_defaults().await;
+        if inherit_parent_model {
+            return normalize_model_selection(
+                &self.parent_model_selection(parent_session_id, &defaults)?,
+            )
+            .await;
+        }
         let registry = get_agent_registry();
         let configured_selection = registry
             .get_explicit_subagent_model_selection(agent_type, Some(Path::new(workspace_path)))
@@ -6459,6 +6469,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .map(str::trim)
             .filter(|model_id| !model_id.is_empty())
             .map(str::to_string);
+        let inherit_parent_model = request.inherit_parent_model;
+        if inherit_parent_model && model_id.is_some() {
+            return Err(BitFunError::Validation(
+                "A subagent model request cannot specify both a model ID and parent inheritance"
+                    .to_string(),
+            ));
+        }
         let created_by = Some(format!(
             "session-{}",
             request.subagent_parent_info.session_id
@@ -6492,8 +6509,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             background_allow_review_follow_up,
                         )
                         .await?;
-                    if let Some(model_id) = model_id.as_deref() {
-                        let model_id = normalize_model_selection(model_id).await?;
+                    let requested_model_id = if inherit_parent_model {
+                        let defaults = Self::agent_model_defaults().await;
+                        Some(
+                            normalize_model_selection(
+                                &self.parent_model_selection(&parent_session_id, &defaults)?,
+                            )
+                            .await?,
+                        )
+                    } else if let Some(model_id) = model_id.as_deref() {
+                        Some(normalize_model_selection(model_id).await?)
+                    } else {
+                        None
+                    };
+                    if let Some(model_id) = requested_model_id {
                         let session_id = session.session_id.clone();
                         self.session_manager
                             .update_session_model_id(&session_id, &model_id)
@@ -6560,7 +6589,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     request.model_binding_policy,
                     SessionModelBindingPolicy::ApprovedImmutable
                 ) {
-                    if model_id.is_some() {
+                    if model_id.is_some() || inherit_parent_model {
                         return Err(BitFunError::Validation(
                             "An approved immutable subagent model cannot be overridden".to_string(),
                         ));
@@ -6577,6 +6606,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 } else {
                     self.resolve_fresh_subagent_model_id(
                         model_id.as_deref(),
+                        inherit_parent_model,
                         &agent_type,
                         &workspace_path,
                         &request.subagent_parent_info.session_id,
@@ -6649,8 +6679,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .await?;
                 }
                 let defaults = Self::agent_model_defaults().await;
-                let parent_model_id = if model_id.is_none()
-                    && matches!(&defaults.subagents.fork, SubagentModelSelection::Inherit)
+                let parent_model_id = if inherit_parent_model
+                    || (model_id.is_none()
+                        && matches!(&defaults.subagents.fork, SubagentModelSelection::Inherit))
                 {
                     Some(
                         trimmed_model_id(snapshot.session_model_id.as_deref())
@@ -6665,11 +6696,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 } else {
                     None
                 };
-                let model_selection = resolve_subagent_model_selection(
-                    model_id.as_deref(),
-                    &defaults.subagents.fork,
-                    parent_model_id.as_deref(),
-                )?;
+                let model_selection = if inherit_parent_model {
+                    parent_model_id.ok_or_else(|| {
+                        BitFunError::Validation(
+                            "Fork parent session has no model selection".to_string(),
+                        )
+                    })?
+                } else {
+                    resolve_subagent_model_selection(
+                        model_id.as_deref(),
+                        &defaults.subagents.fork,
+                        parent_model_id.as_deref(),
+                    )?
+                };
                 let resolved_model_id = normalize_model_selection(&model_selection).await?;
                 let mut session_config = snapshot.build_child_session_config(None);
                 session_config.model_id = Some(resolved_model_id);
@@ -9237,6 +9276,7 @@ mod tests {
             model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
             model_id: None,
+            inherit_parent_model: false,
             subagent_parent_info: SubagentParentInfo {
                 session_id: "parent-session".to_string(),
                 dialog_turn_id: "parent-turn".to_string(),
@@ -9289,6 +9329,7 @@ mod tests {
             model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: None,
+            inherit_parent_model: false,
             subagent_parent_info: SubagentParentInfo {
                 session_id: "parent-session".to_string(),
                 dialog_turn_id: "parent-turn".to_string(),
@@ -9383,6 +9424,7 @@ mod tests {
             model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: Some("fast".to_string()),
+            inherit_parent_model: false,
             subagent_parent_info: SubagentParentInfo {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
@@ -9457,6 +9499,7 @@ mod tests {
             model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: None,
+            inherit_parent_model: false,
             subagent_parent_info: SubagentParentInfo {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
@@ -9570,6 +9613,7 @@ mod tests {
             model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: None,
+            inherit_parent_model: false,
             subagent_parent_info: SubagentParentInfo {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
@@ -10309,7 +10353,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reused_subagent_send_input_updates_requested_model() {
+    async fn fresh_subagent_request_can_explicitly_inherit_parent_model() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-fresh-subagent-inherit-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        struct TempWorkspaceGuard(std::path::PathBuf);
+        impl Drop for TempWorkspaceGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("primary".to_string()),
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+
+        let model_id = coordinator
+            .resolve_fresh_subagent_model_id(
+                None,
+                true,
+                "Explore",
+                workspace_path
+                    .to_str()
+                    .expect("workspace path should be UTF-8"),
+                &parent_session.session_id,
+            )
+            .await
+            .expect("fresh subagent request should inherit the parent model");
+
+        assert_eq!(model_id, "primary");
+    }
+
+    #[tokio::test]
+    async fn reused_subagent_send_input_updates_requested_and_inherited_model() {
         let (coordinator, session_manager) = test_coordinator();
         let workspace_path = std::env::temp_dir().join(format!(
             "bitfun-reused-subagent-model-test-{}",
@@ -10324,6 +10412,19 @@ mod tests {
         }
         let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
 
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("primary".to_string()),
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+
         let subagent_session = coordinator
             .create_hidden_agent_session(
                 None,
@@ -10334,7 +10435,7 @@ mod tests {
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                     ..Default::default()
                 },
-                Some("session-parent-session".to_string()),
+                Some(format!("session-{}", parent_session.session_id)),
                 SessionKind::Subagent,
             )
             .await
@@ -10350,8 +10451,9 @@ mod tests {
             model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: Some("fast".to_string()),
+            inherit_parent_model: false,
             subagent_parent_info: SubagentParentInfo {
-                session_id: "parent-session".to_string(),
+                session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
                 tool_call_id: "task-tool".to_string(),
             },
@@ -10375,6 +10477,43 @@ mod tests {
                 .as_deref(),
             Some("fast")
         );
+
+        let inherit_request = SubagentExecutionRequest {
+            task_description: "Continue with the parent model".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: Some(subagent_session.session_id.clone()),
+            subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
+            workspace_path: None,
+            model_id: None,
+            inherit_parent_model: true,
+            subagent_parent_info: SubagentParentInfo {
+                session_id: parent_session.session_id.clone(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
+        };
+
+        let prepared = coordinator
+            .prepare_subagent_execution_request(inherit_request)
+            .await
+            .expect("send_input request should inherit the parent model");
+
+        assert_eq!(prepared.session_config.model_id.as_deref(), Some("primary"));
+        assert_eq!(
+            session_manager
+                .get_session(&subagent_session.session_id)
+                .expect("subagent session should remain available")
+                .config
+                .model_id
+                .as_deref(),
+            Some("primary")
+        );
     }
 
     #[tokio::test]
@@ -10396,7 +10535,7 @@ mod tests {
                 "Parent".to_string(),
                 "agentic".to_string(),
                 SessionConfig {
-                    model_id: Some("parent-model".to_string()),
+                    model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                     ..Default::default()
                 },
@@ -10420,6 +10559,7 @@ mod tests {
             model_binding_policy: SessionModelBindingPolicy::Mutable,
             workspace_path: None,
             model_id: Some("fast".to_string()),
+            inherit_parent_model: false,
             subagent_parent_info: SubagentParentInfo {
                 session_id: parent_session.session_id.clone(),
                 dialog_turn_id: "parent-turn".to_string(),
@@ -10449,6 +10589,34 @@ mod tests {
                 .as_deref(),
             Some("fast")
         );
+
+        let inherit_request = SubagentExecutionRequest {
+            task_description: "Fork with the parent model".to_string(),
+            context_mode: SubagentContextMode::Fork,
+            target_session_id: None,
+            subagent_type: None,
+            logical_subagent_type: None,
+            continuation_policy: SessionContinuationPolicy::Reusable,
+            model_binding_policy: SessionModelBindingPolicy::Mutable,
+            workspace_path: None,
+            model_id: None,
+            inherit_parent_model: true,
+            subagent_parent_info: SubagentParentInfo {
+                session_id: parent_session.session_id.clone(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+            external_generation_lease: None,
+        };
+
+        let prepared = coordinator
+            .prepare_subagent_execution_request(inherit_request)
+            .await
+            .expect("fork request should inherit the parent model");
+
+        assert_eq!(prepared.session_config.model_id.as_deref(), Some("primary"));
     }
 
     #[tokio::test]
