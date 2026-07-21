@@ -194,7 +194,13 @@ export function useMiniAppBridge(
           return;
         }
         if (method === 'dialog.open') {
-          reply(await workspaceAPI.open_oh_file_dialog());
+          // Forward the MiniApp's own picker options (directory/multiple/filters/title,
+          // matching app.dialog.open in api-reference.md) instead of dropping them.
+          reply(
+            await workspaceAPI.open_oh_file_dialog(
+              (params ?? {}) as Parameters<typeof workspaceAPI.open_oh_file_dialog>[0],
+            ),
+          );
           return;
         }
         if (method === 'dialog.save') {

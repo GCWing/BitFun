@@ -71,13 +71,13 @@ const LspConfig: React.FC = () => {
 
   const handleInstallPlugin = async () => {
     try {
-      const selected = await workspaceAPI.open_oh_file_dialog();
-      if (!selected) return;
+      const selected = await workspaceAPI.open_oh_file_dialog({ directory: false });
+      if (typeof selected !== 'string') return;
 
       setIsInstalling(true);
       setInstallMessage(null);
       await lspService.initialize();
-      const pluginId = await lspService.installPlugin(selected as string);
+      const pluginId = await lspService.installPlugin(selected);
       setInstallMessage({ type: 'success', text: t('messages.installSuccess', { pluginId }) });
       setTimeout(() => setInstallMessage(null), 3000);
     } catch (error) {

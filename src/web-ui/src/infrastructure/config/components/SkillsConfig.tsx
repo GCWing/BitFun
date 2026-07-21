@@ -186,8 +186,8 @@ const SkillsConfig: React.FC = () => {
 
   const handleBrowse = async () => {
     try {
-      const selected = await workspaceAPI.open_oh_file_dialog();
-      if (selected) setFormPath(selected as string);
+      const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
+      if (typeof selected === 'string') setFormPath(selected);
     } catch (err) {
       log.error('Failed to open file dialog', err);
     }

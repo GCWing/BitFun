@@ -58,7 +58,7 @@ export default class EntryAbility extends RustAbility {
       hilog.info(DOMAIN_NUMBER, TAG, 'get permissions error: ' + error);
     });
     RustModule.registerArktsFunction('open_dialog_file', async (err: Error, arg: string): Promise<string> => {
-      let res = await CommonUtils.open_file_dialog();
+      let res = await CommonUtils.open_file_dialog(arg);
       return res;
     });
     RustModule.registerArktsFunction('handle_min_window', async (err: Error, arg: string): Promise<string> => {

@@ -22,6 +22,27 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('WorkspaceAPI');
 
+/**
+ * File-type filter for `open_oh_file_dialog`. `extensions` are dot-less
+ * (e.g. `['png', 'jpg']`); the OHOS bridge adds the leading dot. Multiple
+ * filter groups flatten into a single suffix list on HarmonyOS.
+ */
+export interface OhDialogFilter {
+  name: string;
+  extensions: string[];
+}
+
+/**
+ * Options for the HarmonyOS file/folder picker. A subset of
+ * `@tauri-apps/plugin-dialog` `OpenDialogOptions`.
+ */
+export interface OhOpenDialogOptions {
+  title?: string;
+  multiple?: boolean;
+  directory?: boolean;
+  filters?: OhDialogFilter[];
+}
+
 const FILE_SEARCH_PROGRESS_EVENT = 'file-search://progress';
 const FILE_SEARCH_COMPLETE_EVENT = 'file-search://complete';
 const FILE_SEARCH_ERROR_EVENT = 'file-search://error';
@@ -965,11 +986,45 @@ export class WorkspaceAPI {
     }
   }
 
-  async open_oh_file_dialog(): Promise<string> {
+  /**
+   * Open the HarmonyOS file/folder picker.
+   *
+   * Options mirror a subset of `@tauri-apps/plugin-dialog` `OpenDialogOptions`:
+   * - `directory: true`  → folder-only picker (single string back)
+   * - `directory: false` → file-only picker (single string back when single-select)
+   * - `directory` unset   → MIXED picker (legacy default; files + folders)
+   * - `multiple: true`   → multi-select (string[] back)
+   * - `filters`          → file-type filter; all groups flatten into one list
+   *
+   * Return shape: `string | null` when single-select, `string[] | null` when
+   * `multiple: true`, or `null` when the user cancels. The underlying ArkTS↔Rust
+   * bridge only carries a single string, so multi-select comes back as a JSON
+   * array string that this wrapper decodes.
+   */
+  async open_oh_file_dialog(
+    opts: OhOpenDialogOptions = {},
+  ): Promise<string | string[] | null> {
     try {
-      return await api.invoke("open_oh_file_dialog")
+      const raw = await api.invoke<string>('open_oh_file_dialog', {
+        options: JSON.stringify(opts),
+      });
+      if (raw === null || raw === undefined || raw === '' || raw === 'null') {
+        return null;
+      }
+      // Multi-select: Rust returns a JSON array string like ["a","b"].
+      if (raw.startsWith('[')) {
+        try {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            return (arr as unknown[]).map((p) => String(p));
+          }
+        } catch {
+          // fall through and treat as a single (oddly-named) path
+        }
+      }
+      return raw; // single path
     } catch (error) {
-      throw createTauriCommandError('open_oh_file_dialog', error)
+      throw createTauriCommandError('open_oh_file_dialog', error, { options: opts });
     }
   }
 
