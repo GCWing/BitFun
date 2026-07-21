@@ -908,8 +908,8 @@ function BasicsEnvVarsSection() {
 
   const handleImportFile = useCallback(async () => {
     try {
-      const filePath = await workspaceAPI.open_oh_file_dialog();
-      if (!filePath) return;
+      const filePath = await workspaceAPI.open_oh_file_dialog({ directory: false });
+      if (typeof filePath !== 'string') return;
       const text = await workspaceAPI.readFileContent(filePath);
       const { parsed, skipped } = parseEnvText(text);
       const parsedCount = Object.keys(parsed).length;

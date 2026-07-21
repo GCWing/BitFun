@@ -169,8 +169,8 @@ const MiniAppGalleryView: React.FC = () => {
 
   const handleAddFromFolder = async () => {
     try {
-      const path = await workspaceAPI.open_oh_file_dialog();
-      if (!path) return;
+      const path = await workspaceAPI.open_oh_file_dialog({ directory: true });
+      if (typeof path !== 'string') return;
 
       setLoading(true);
       const app = await miniAppAPI.importFromPath(path, workspacePath || undefined);

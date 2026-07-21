@@ -49,7 +49,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   // Open directory picker dialog
   const handleSelectParentPath = useCallback(async () => {
     try {
-      const selected = await workspaceAPI.open_oh_file_dialog();
+      const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
 
       if (selected && typeof selected === 'string') {
         setParentPath(selected);

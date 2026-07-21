@@ -252,7 +252,7 @@ const MainNav: React.FC<MainNavProps> = ({
 
   const handleOpenProject = useCallback(async () => {
     try {
-      const selected = await workspaceAPI.open_oh_file_dialog();
+      const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
       if(selected && typeof selected === 'string'){
         await workspaceManager.openWorkspace(selected);
       }

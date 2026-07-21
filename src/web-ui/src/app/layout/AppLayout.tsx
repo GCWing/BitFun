@@ -224,9 +224,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }>>([]);
   const handleOpenProject = useCallback(async () => {
     try {
-      const selected = await workspaceAPI.open_oh_file_dialog();
+      const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
 
-      if (selected) {
+      if (typeof selected === 'string') {
         await openWorkspace(selected);
       }
     } catch (error) {
@@ -269,8 +269,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         const { listen } = await import('@tauri-apps/api/event');
         unlistenFns.push(await listen('bitfun_menu_open_project', async () => {
           try {
-            const selected = await workspaceAPI.open_oh_file_dialog();
-            if (selected) await openWorkspace(selected);
+            const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
+            if (typeof selected === 'string') await openWorkspace(selected);
           } catch {}
         }));
         unlistenFns.push(await listen('bitfun_menu_new_project', () => handleNewProject()));

@@ -316,7 +316,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
       setError(t('ssh.remote.transferNeedsDesktop'));
       return;
     }
-    const selected = await workspaceAPI.open_oh_file_dialog();
+    const selected = await workspaceAPI.open_oh_file_dialog({ multiple: true });
     if (selected === null) return;
     const paths = Array.isArray(selected) ? selected : [selected];
     if (paths.length === 0) return;

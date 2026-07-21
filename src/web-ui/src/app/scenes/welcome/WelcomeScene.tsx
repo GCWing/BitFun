@@ -56,7 +56,7 @@ const WelcomeScene: React.FC = () => {
   const handleOpenFolder = useCallback(async () => {
     try {
       setIsSelecting(true);
-      const selected = await workspaceAPI.open_oh_file_dialog();
+      const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
       if (selected && typeof selected === 'string') {
         await openWorkspace(selected);
         openScene('session' as SceneTabId);

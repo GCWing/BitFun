@@ -162,7 +162,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
       setWorkspaceDropdownOpen(false);
       setIsSelectingWorkspace(true);
 
-      const selected = await workspaceAPI.open_oh_file_dialog();
+      const selected = await workspaceAPI.open_oh_file_dialog({ directory: true });
       if (selected && typeof selected === 'string') await openWorkspace(selected);
     } catch (err) {
       log.warn('Failed to open workspace folder', err);
