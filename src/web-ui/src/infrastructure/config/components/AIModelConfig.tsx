@@ -2752,7 +2752,15 @@ const AIModelConfig: React.FC = () => {
                 <ConfigPageRow
                   key={account.provider}
                   label={account.display_label}
-                  description={descriptionParts.join(' · ')}
+                  description={descriptionParts.map((part) => (
+                    <span
+                      key={part}
+                      className="bitfun-ai-model-config__cli-description-line"
+                    >
+                      {part}
+                    </span>
+                  ))}
+                  className="bitfun-ai-model-config__cli-account"
                   align="center"
                 >
                   <div className="bitfun-ai-model-config__cli-actions">

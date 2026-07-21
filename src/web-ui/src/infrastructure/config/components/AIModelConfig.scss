@@ -2044,6 +2044,14 @@
     }
   }
 
+  &__cli-account {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  &__cli-description-line {
+    display: block;
+  }
+
   &__cli-actions {
     display: inline-flex;
     align-items: center;
@@ -2056,7 +2064,21 @@
       flex-shrink: 0;
     }
   }
+
+  @container config-panel (max-width: 760px) {
+    &__cli-account {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: flex-start;
+
+      .bitfun-config-page-row__control {
+        justify-content: flex-start;
+      }
+    }
+
+    &__cli-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+  }
 }
-
-
 
