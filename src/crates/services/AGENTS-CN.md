@@ -11,6 +11,7 @@
 | `services-core` | 不包含产品组装决策的本地 service primitive，包括 LSP plugin registry、session storage、metadata store CRUD/index rebuild、metadata 构造/计数/索引/字段 mutation、lineage 规则和 JSON file IO | [AGENTS.md](services-core/AGENTS.md) |
 | `services-integrations` | MCP、git、remote、file watch、MiniApp runtime、产品领域 port 具体实现，以及平台无关的 Remote Connect primitives | [AGENTS.md](services-integrations/AGENTS.md) |
 | `relay-service` | standalone 与 embedded 宿主共享的 Remote Connect relay 状态、存储及 HTTP/WebSocket 路由 | [AGENTS.md](relay-service/AGENTS.md) |
+| `page-function-runtime` | BitFun Pages 嵌入式 JS Page Function runtime（rquickjs） | [AGENTS.md](page-function-runtime/AGENTS.md) |
 | `terminal` | PTY、shell integration 与 terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## 放置规则
