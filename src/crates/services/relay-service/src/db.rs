@@ -456,13 +456,39 @@ impl DeviceRow {
         Ok(rows)
     }
 
-    pub async fn delete(pool: &DbPool, device_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM devices WHERE device_id = ?")
+    /// Delete a device owned by `user_id` and revoke all of its auth tokens.
+    ///
+    /// Tokens must be removed before the device because `auth_tokens.device_id`
+    /// references `devices.device_id`. Keep both operations in one transaction
+    /// so a partial deletion cannot leave the account in an inconsistent state.
+    pub async fn delete_for_user(pool: &DbPool, user_id: &str, device_id: &str) -> Result<bool> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin device deletion: {e}"))?;
+
+        sqlx::query(
+            "DELETE FROM auth_tokens WHERE device_id IN (\
+               SELECT device_id FROM devices WHERE device_id = ? AND user_id = ?\
+             )",
+        )
+        .bind(device_id)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("revoke device tokens: {e}"))?;
+
+        let result = sqlx::query("DELETE FROM devices WHERE device_id = ? AND user_id = ?")
             .bind(device_id)
-            .execute(pool)
+            .bind(user_id)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete device: {e}"))?;
-        Ok(())
+
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit device deletion: {e}"))?;
+        Ok(result.rows_affected() > 0)
     }
 }
 

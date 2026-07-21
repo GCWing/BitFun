@@ -207,15 +207,23 @@ async fn delete_device(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Remove from DB.
-    let _ = crate::db::DeviceRow::delete(db, &target_device_id)
+    // Revoke the target's auth tokens before removing its device row. The DB
+    // helper also scopes the deletion to this account and performs both writes
+    // atomically so a guessed device id cannot affect another account.
+    let deleted = crate::db::DeviceRow::delete_for_user(db, &user_id, &target_device_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Revoke any auth tokens belonging to the removed device.
-    let _ = crate::db::AuthToken::revoke_by_device(db, &target_device_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|error| {
+            tracing::error!(
+                user_id = %user_id,
+                target_device_id = %target_device_id,
+                %error,
+                "Failed to delete account device"
+            );
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if !deleted {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     // Disconnect active WS session if any.
     state
@@ -224,4 +232,124 @@ async fn delete_device(
 
     tracing::info!("Device {target_device_id} removed from account {user_id}");
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{connect, AuthToken, DbPool, DeviceRow, UserRow};
+    use crate::relay::RoomManager;
+    use crate::MemoryAssetStore;
+    use axum::body::Body;
+    use axum::http::Request;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    struct TestContext {
+        app: axum::Router,
+        db: Arc<DbPool>,
+        owner_token: String,
+        target_token: String,
+        other_token: String,
+    }
+
+    async fn setup_app() -> TestContext {
+        let db = Arc::new(connect(":memory:").await.unwrap());
+        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        UserRow::create(&db, "other", "bob", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "owner-device", "owner", "Owner", None)
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "target-device", "owner", "Target", None)
+            .await
+            .unwrap();
+        DeviceRow::upsert(&db, "other-device", "other", "Other", None)
+            .await
+            .unwrap();
+
+        let owner_token = AuthToken::create(&db, "owner", "owner-device")
+            .await
+            .unwrap()
+            .token;
+        let target_token = AuthToken::create(&db, "owner", "target-device")
+            .await
+            .unwrap()
+            .token;
+        let other_token = AuthToken::create(&db, "other", "other-device")
+            .await
+            .unwrap()
+            .token;
+        let app = crate::build_relay_router(
+            RoomManager::new(),
+            Arc::new(MemoryAssetStore::new()),
+            std::time::Instant::now(),
+            Some(db.clone()),
+            "test",
+        );
+
+        TestContext {
+            app,
+            db,
+            owner_token,
+            target_token,
+            other_token,
+        }
+    }
+
+    async fn delete(app: &axum::Router, token: &str, device_id: &str) -> StatusCode {
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/api/devices/{device_id}"))
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+    }
+
+    #[tokio::test]
+    async fn deleting_owned_device_revokes_token_before_device_row() {
+        let ctx = setup_app().await;
+
+        let status = delete(&ctx.app, &ctx.owner_token, "target-device").await;
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(AuthToken::find(&ctx.db, &ctx.target_token)
+            .await
+            .unwrap()
+            .is_none());
+        let devices = DeviceRow::list_by_user(&ctx.db, "owner").await.unwrap();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].device_id, "owner-device");
+    }
+
+    #[tokio::test]
+    async fn deleting_own_or_another_accounts_device_is_rejected() {
+        let ctx = setup_app().await;
+
+        assert_eq!(
+            delete(&ctx.app, &ctx.owner_token, "owner-device").await,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            delete(&ctx.app, &ctx.owner_token, "other-device").await,
+            StatusCode::NOT_FOUND
+        );
+        assert!(AuthToken::find(&ctx.db, &ctx.owner_token)
+            .await
+            .unwrap()
+            .is_some());
+        assert!(AuthToken::find(&ctx.db, &ctx.other_token)
+            .await
+            .unwrap()
+            .is_some());
+    }
 }
