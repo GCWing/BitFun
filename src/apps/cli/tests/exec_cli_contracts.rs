@@ -1,10 +1,16 @@
+mod support;
+
 use std::process::{Command, Output};
+use support::{
+    command_output_with_timeout, CliTestEnvironment, MockOpenAiServer, STREAM_COMPLETED_MARKER,
+    STREAM_START_MARKER,
+};
 
 fn run_cli(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_bitfun-cli"))
+    Command::new(env!("CARGO_BIN_EXE_bitfun"))
         .args(args)
         .output()
-        .expect("run bitfun-cli")
+        .expect("run bitfun")
 }
 
 fn stdout(output: &Output) -> String {
@@ -13,6 +19,60 @@ fn stdout(output: &Output) -> String {
 
 fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+fn jsonl_events(output: &str) -> Vec<serde_json::Value> {
+    output
+        .lines()
+        .map(|line| {
+            serde_json::from_str::<serde_json::Value>(line)
+                .unwrap_or_else(|error| panic!("invalid JSONL line {line:?}: {error}"))
+        })
+        .collect()
+}
+
+fn is_terminal_event(value: &serde_json::Value) -> bool {
+    matches!(
+        value["event"]["type"].as_str(),
+        Some("DialogTurnCompleted" | "DialogTurnCancelled" | "DialogTurnFailed" | "SystemError")
+    )
+}
+
+#[test]
+fn command_timeout_helper_returns_within_its_failure_budget() {
+    #[cfg(windows)]
+    let mut command = {
+        let mut command = Command::new("powershell.exe");
+        command.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 30"]);
+        command
+    };
+    #[cfg(not(windows))]
+    let mut command = {
+        let mut command = Command::new("sh");
+        command.args(["-c", "exec sleep 30"]);
+        command
+    };
+    let started = std::time::Instant::now();
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        command_output_with_timeout(&mut command, std::time::Duration::from_millis(50))
+    }));
+
+    let panic = result.expect_err("sleeping process must exceed the deadline");
+    let panic_message = panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .unwrap_or("non-string panic payload");
+    assert!(
+        panic_message.contains("CLI process exceeded"),
+        "unexpected timeout helper panic: {panic_message}"
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(8),
+        "timeout helper exceeded its bounded cleanup budget: {:?}",
+        started.elapsed()
+    );
 }
 
 #[test]
@@ -152,5 +212,320 @@ fn stream_json_rejects_stdout_patch_before_starting_runtime() {
         stderr(&output).contains("requires an explicit file path"),
         "{}",
         stderr(&output)
+    );
+}
+
+#[test]
+fn stream_json_patch_write_failure_emits_error_without_success_terminal() {
+    let server = MockOpenAiServer::immediate();
+    let environment = CliTestEnvironment::new();
+    environment.initialize_git_repository();
+    environment.configure_mock_model(server.base_url());
+    let output_target = environment.workspace().to_string_lossy().into_owned();
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "exercise patch settlement",
+        "--output-format",
+        "stream-json",
+        "--output-patch",
+        &output_target,
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
+
+    let stdout = stdout(&output);
+    assert!(!output.status.success(), "{stdout}");
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert!(
+        stderr(&output)
+            .lines()
+            .any(|line| line.starts_with("BITFUN_EXIT: patch_write_failed:")),
+        "missing stable patch failure diagnostic: {}",
+        stderr(&output)
+    );
+    assert!(!stdout.trim().is_empty(), "missing stream-json events");
+    let events = jsonl_events(&stdout);
+    let completed_marker_index = events
+        .iter()
+        .position(|value| {
+            value["event"]["type"] == "TextChunk"
+                && value["event"]["text"]
+                    .as_str()
+                    .is_some_and(|text| text.contains(STREAM_COMPLETED_MARKER))
+        })
+        .unwrap_or_else(|| {
+            panic!("model stream did not complete before patch settlement: {stdout}")
+        });
+    let patch_error_index = events
+        .iter()
+        .position(|value| {
+            value["event"]["type"] == "SystemError"
+                && value["event"]["error"]
+                    .as_str()
+                    .is_some_and(|error| error.contains("Failed to save requested patch"))
+        })
+        .unwrap_or_else(|| {
+            panic!("patch failure did not emit a structured system error: {stdout}")
+        });
+    assert!(
+        completed_marker_index < patch_error_index,
+        "patch failure was emitted before model stream completion: {stdout}"
+    );
+    assert!(
+        events
+            .iter()
+            .all(|value| value["event"]["type"] != "DialogTurnCompleted"),
+        "successful terminal event leaked before patch settlement: {stdout}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|value| is_terminal_event(value))
+            .count(),
+        1,
+        "patch failure must emit exactly one terminal envelope: {stdout}"
+    );
+    let terminal_event = events.last().expect("stream-json terminal event");
+    assert_eq!(terminal_event["event"]["type"], "SystemError", "{stdout}");
+    assert_eq!(terminal_event["event"]["recoverable"], false, "{stdout}");
+    assert!(
+        terminal_event["event"]["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("Failed to save requested patch")),
+        "unexpected terminal patch failure: {stdout}"
+    );
+}
+
+#[test]
+fn stream_json_patch_success_emits_one_success_terminal() {
+    let server = MockOpenAiServer::immediate();
+    let environment = CliTestEnvironment::new();
+    environment.initialize_git_repository();
+    environment.configure_mock_model(server.base_url());
+    let output_patch = environment
+        .workspace()
+        .parent()
+        .expect("workspace parent")
+        .join("result.patch");
+    let output_target = output_patch.to_string_lossy().into_owned();
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "exercise successful patch settlement",
+        "--output-format",
+        "stream-json",
+        "--output-patch",
+        &output_target,
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
+
+    let stdout = stdout(&output);
+    assert!(output.status.success(), "{}\n{stdout}", stderr(&output));
+    assert_eq!(
+        std::fs::read_to_string(&output_patch).expect("read generated patch"),
+        "",
+        "clean workspace must produce an explicit empty patch"
+    );
+    let events = jsonl_events(&stdout);
+    assert!(
+        events.iter().any(|value| {
+            value["event"]["type"] == "TextChunk"
+                && value["event"]["text"]
+                    .as_str()
+                    .is_some_and(|text| text.contains(STREAM_COMPLETED_MARKER))
+        }),
+        "model stream did not complete: {stdout}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|value| is_terminal_event(value))
+            .count(),
+        1,
+        "success must emit exactly one terminal envelope: {stdout}"
+    );
+    let final_event = events.last().expect("stream-json success terminal event");
+    assert_eq!(
+        final_event["event"]["type"], "DialogTurnCompleted",
+        "success terminal must be the final envelope: {stdout}"
+    );
+}
+
+#[test]
+fn stream_json_provider_http_403_emits_one_error_terminal() {
+    let server = MockOpenAiServer::http_403("provider authorization denied");
+    let environment = CliTestEnvironment::new();
+    environment.configure_mock_model(server.base_url());
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "exercise provider failure contract",
+        "--output-format",
+        "stream-json",
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
+    server.assert_chat_completion_requests(1);
+
+    let stdout = stdout(&output);
+    assert!(!output.status.success(), "{stdout}");
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert!(
+        stderr(&output)
+            .lines()
+            .any(|line| line.starts_with("BITFUN_EXIT: dialog_turn_failed:")),
+        "missing stable provider failure diagnostic: {}",
+        stderr(&output)
+    );
+    let events = jsonl_events(&stdout);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|value| is_terminal_event(value))
+            .count(),
+        1,
+        "provider failure must emit exactly one terminal envelope: {stdout}"
+    );
+    assert_eq!(
+        events.last().expect("provider failure terminal event")["event"]["type"],
+        "DialogTurnFailed",
+        "provider failure terminal must be last: {stdout}"
+    );
+    let terminal_error = events.last().expect("provider failure terminal event")["event"]["error"]
+        .as_str()
+        .expect("provider failure error text");
+    assert!(
+        terminal_error.contains("provider authorization denied"),
+        "provider failure reason was lost: {stdout}"
+    );
+    assert!(
+        stderr(&output).contains("provider authorization denied"),
+        "provider failure diagnostic lost its reason: {}",
+        stderr(&output)
+    );
+    assert!(
+        events.iter().all(|value| {
+            !(value["event"]["type"] == "DialogTurnCompleted" && value["event"]["success"] == true)
+        }),
+        "provider failure emitted a successful completion: {stdout}"
+    );
+}
+
+#[test]
+fn stream_json_provider_and_patch_failures_publish_one_final_classification() {
+    let server = MockOpenAiServer::http_403("provider authorization denied");
+    let environment = CliTestEnvironment::new();
+    environment.initialize_git_repository();
+    environment.configure_mock_model(server.base_url());
+    let output_target = environment.workspace().to_string_lossy().into_owned();
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "exercise combined provider and patch failure",
+        "--output-format",
+        "stream-json",
+        "--output-patch",
+        &output_target,
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
+    server.assert_chat_completion_requests(1);
+
+    let stdout = stdout(&output);
+    let stderr = stderr(&output);
+    assert_eq!(output.status.code(), Some(1), "{stderr}\n{stdout}");
+    let exit_diagnostics = stderr
+        .lines()
+        .filter(|line| line.starts_with("BITFUN_EXIT:"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        exit_diagnostics.len(),
+        1,
+        "combined failure must have one stable classifier: {stderr}"
+    );
+    assert!(
+        exit_diagnostics[0].starts_with("BITFUN_EXIT: patch_write_failed:"),
+        "patch delivery failure must be the final classifier: {stderr}"
+    );
+
+    let events = jsonl_events(&stdout);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|value| is_terminal_event(value))
+            .count(),
+        1,
+        "combined failure must publish exactly one terminal: {stdout}"
+    );
+    let terminal = events.last().expect("combined failure terminal");
+    assert_eq!(terminal["event"]["type"], "SystemError", "{stdout}");
+    let error = terminal["event"]["error"]
+        .as_str()
+        .expect("combined failure error text");
+    assert!(error.contains("provider authorization denied"), "{stdout}");
+    assert!(error.contains("Failed to save requested patch"), "{stdout}");
+}
+
+#[test]
+fn stream_json_disconnect_then_permanent_retry_failure_emits_one_error_terminal() {
+    let server = MockOpenAiServer::disconnect_then_http_403();
+    let environment = CliTestEnvironment::new();
+    environment.configure_mock_model(server.base_url());
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "exercise interrupted provider stream",
+        "--output-format",
+        "stream-json",
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
+    server.assert_chat_completion_requests(2);
+
+    let stdout = stdout(&output);
+    assert!(!output.status.success(), "{stdout}");
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    let events = jsonl_events(&stdout);
+    let stream_marker_index = events
+        .iter()
+        .position(|value| {
+            value["event"]["type"] == "TextChunk"
+                && value["event"]["text"]
+                    .as_str()
+                    .is_some_and(|text| text.contains(STREAM_START_MARKER))
+        })
+        .expect("interrupted provider stream marker");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|value| is_terminal_event(value))
+            .count(),
+        1,
+        "provider disconnect must emit exactly one terminal envelope: {stdout}"
+    );
+    assert_eq!(
+        events.last().expect("provider disconnect terminal event")["event"]["type"],
+        "DialogTurnFailed",
+        "provider disconnect terminal must be last: {stdout}"
+    );
+    assert!(
+        stream_marker_index < events.len() - 1,
+        "provider stream must start before its retry failure: {stdout}"
+    );
+    let terminal_error = events.last().expect("provider disconnect terminal event")["event"]
+        ["error"]
+        .as_str()
+        .expect("provider disconnect error text");
+    assert!(
+        terminal_error.contains("provider stream remained unavailable"),
+        "provider retry failure reason was lost: {stdout}"
+    );
+    assert!(
+        stderr(&output).contains("provider stream remained unavailable"),
+        "provider retry diagnostic lost its reason: {}",
+        stderr(&output)
+    );
+    assert!(
+        events.iter().all(|value| {
+            !(value["event"]["type"] == "DialogTurnCompleted" && value["event"]["success"] == true)
+        }),
+        "provider disconnect emitted a successful completion: {stdout}"
     );
 }

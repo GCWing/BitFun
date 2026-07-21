@@ -164,9 +164,8 @@ impl ChatMode {
                 KeyCode::Up => chat_view.agent_selector_up(),
                 KeyCode::Down => chat_view.agent_selector_down(),
                 KeyCode::Enter => {
-                    if let Some(selected) = chat_view.agent_selector_confirm() {
-                        chat_view.hide_agent_selector();
-                        self.apply_agent_selection(&selected, chat_state);
+                    if let Some(action) = chat_view.agent_selector_confirm() {
+                        self.handle_agent_selector_action(action, chat_view, chat_state, rt_handle);
                     }
                 }
                 // Note: Esc is handled globally for navigation back
@@ -227,7 +226,14 @@ impl ChatMode {
                 KeyCode::Down => chat_view.mcp_selector_down(),
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if let Some(selected) = chat_view.mcp_selector_confirm() {
-                        self.toggle_mcp_server(&selected.id, chat_view);
+                        if selected.requires_external_confirmation()
+                            && !chat_view.mcp_selector_is_confirm_external(&selected.id)
+                        {
+                            chat_view.mcp_selector_start_confirm_external(selected.id.clone());
+                        } else {
+                            chat_view.mcp_selector_cancel_confirm_external();
+                            self.activate_mcp_item(selected, chat_view, chat_state);
+                        }
                     }
                 }
                 KeyCode::Char('a') => {
@@ -237,6 +243,13 @@ impl ChatMode {
                 }
                 KeyCode::Char('d') => {
                     if let Some(selected) = chat_view.mcp_selector_confirm() {
+                        if selected.is_external() {
+                            chat_state.add_system_message(
+                                "External MCP settings are read-only in BitFun. Disable the server here or edit it in the source application."
+                                    .to_string(),
+                            );
+                            return Ok(None);
+                        }
                         // First press: enter confirm-delete mode
                         // Second press: actually delete (handled by confirm_delete state)
                         if chat_view.mcp_selector_is_confirm_delete(&selected.id) {
@@ -247,13 +260,24 @@ impl ChatMode {
                     }
                 }
                 KeyCode::Char('e') => {
-                    chat_view.hide_mcp_selector();
-                    self.open_mcp_config(chat_state);
+                    if chat_view
+                        .mcp_selector_confirm()
+                        .is_some_and(|selected| selected.is_external())
+                    {
+                        chat_state.add_system_message(
+                            "External MCP settings are read-only in BitFun. Edit them in the source application."
+                                .to_string(),
+                        );
+                    } else {
+                        chat_view.hide_mcp_selector();
+                        self.open_mcp_config(chat_state);
+                    }
                 }
                 // Note: Esc is handled globally for navigation back
                 _ => {
                     // Any other key cancels the confirm-delete state
                     chat_view.mcp_selector_cancel_confirm_delete();
+                    chat_view.mcp_selector_cancel_confirm_external();
                 }
             }
             return Ok(None);
@@ -370,6 +394,9 @@ impl ChatMode {
         } = context;
         match reason {
             ChatExitReason::SwitchSession(new_session_id) => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    pending.exit_warning_shown = false;
+                }
                 match this.switch_to_session(
                     &new_session_id,
                     session_id,
@@ -385,6 +412,9 @@ impl ChatMode {
                 }
             }
             ChatExitReason::NewSession => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    pending.exit_warning_shown = false;
+                }
                 match this.create_new_session(session_id, chat_state, chat_view, rt_handle) {
                     Ok(()) => tracing::info!("Created new session: {}", session_id),
                     Err(e) => {
@@ -394,9 +424,19 @@ impl ChatMode {
                     }
                 }
             }
-            other => {
+            ChatExitReason::Quit => {
+                if let Some(pending) = this.pending_mode_change.as_mut() {
+                    if !pending.exit_warning_shown {
+                        pending.exit_warning_shown = true;
+                        chat_view.set_status(Some(
+                            "Exit requested. Waiting for the agent mode change to finish; exit again to leave now. This mode change may not be saved, and the next restore will use the last successfully persisted mode."
+                                .to_string(),
+                        ));
+                        return;
+                    }
+                }
                 *should_quit = true;
-                *exit_reason = other;
+                *exit_reason = ChatExitReason::Quit;
             }
         }
     }
@@ -445,6 +485,14 @@ impl ChatMode {
                             .handle_provider_selection(selection, context.chat_view);
                     }
                 } else if context.chat_view.handle_mouse_event(&mouse) {
+                    if let Some(action) = context.chat_view.take_pending_agent_action() {
+                        context.this.handle_agent_selector_action(
+                            action,
+                            context.chat_view,
+                            context.chat_state,
+                            context.rt_handle,
+                        );
+                    }
                     if let Some(action) = context.chat_view.take_pending_skill_action() {
                         context.this.handle_skill_selector_action(
                             action,
@@ -537,10 +585,10 @@ impl ChatMode {
                         .this
                         .preview_theme_selection(&theme, context.chat_view);
                 }
-                if let Some(server_id) = context.chat_view.take_pending_mcp_toggle() {
+                if let Some(item) = context.chat_view.take_pending_mcp_toggle() {
                     context
                         .this
-                        .toggle_mcp_server(&server_id, context.chat_view);
+                        .activate_mcp_item(item, context.chat_view, context.chat_state);
                 }
                 outcome.request_redraw = true;
             }

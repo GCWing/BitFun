@@ -22,6 +22,7 @@ pub use bitfun_agent_runtime::custom_agent::{
     default_custom_agent_user_context_policy, CustomAgentKind, CustomAgentLevel,
 };
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
+pub(crate) use definitions::external::ExternalProvidedSubagent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
@@ -43,6 +44,7 @@ pub use prompt_builder::{
     UserContextPolicy, UserContextSection,
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
+pub(crate) use registry::external_subagent_runtime_key;
 pub use registry::types::{
     subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentSource, AgentToolPolicy,
     CustomSubagentConfig, SubAgentSource, SubagentListScope, SubagentQueryContext,
@@ -51,7 +53,11 @@ pub use registry::types::{
 pub use registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
-pub use registry::{get_agent_registry, AgentRegistry, CustomAgentDetail, CustomSubagentDetail};
+pub use registry::{
+    get_agent_registry, AgentRegistry, CustomAgentDetail, CustomSubagentDetail,
+    ExternalSubagentGenerationLease, ExternalSubagentInvocationBinding,
+    ExternalSubagentModelBinding, ExternalSubagentRegistration, ExternalSubagentRoute,
+};
 use std::any::Any;
 
 // Include embedded prompts generated at compile time
@@ -101,6 +107,8 @@ fn append_provider_group_tools(tools: &mut Vec<String>, provider_id: &'static st
 pub fn shared_coding_mode_tools() -> Vec<String> {
     let mut tools = vec![
         "Task".to_string(),
+        "ListModels".to_string(),
+        "AgentWait".to_string(),
         "Read".to_string(),
         "view_image".to_string(),
         "analyze_image".to_string(),
@@ -126,6 +134,8 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
+        "PageDeploy".to_string(),
+        "PagePublish".to_string(),
     ];
     append_provider_group_tools(&mut tools, "core.canvas");
     tools
@@ -284,6 +294,7 @@ mod tests {
     fn shared_coding_mode_tools_include_plan_and_debug_specific_tools() {
         let tools = shared_coding_mode_tools();
 
+        assert!(tools.contains(&"ListModels".to_string()));
         assert!(tools.contains(&"CreatePlan".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));

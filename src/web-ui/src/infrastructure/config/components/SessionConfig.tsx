@@ -36,7 +36,6 @@ import {
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import type {
-  AIModelConfig,
   DebugModeConfig,
   LanguageDebugTemplate,
   PermissionRule,
@@ -48,7 +47,6 @@ import {
   ALL_LANGUAGES,
   DEFAULT_LANGUAGE_TEMPLATES,
 } from '../types';
-import { ModelSelectionRadio } from './ModelSelectionRadio';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
 import { ChatInputPixelPet } from '@/flow_chat/components/ChatInputPixelPet';
 import { ask, open } from '@tauri-apps/plugin-dialog';
@@ -59,8 +57,6 @@ import './DebugConfig.scss';
 const log = createLogger('SessionSettingsPanels');
 
 const IS_TAURI_DESKTOP = typeof window !== 'undefined' && '__TAURI__' in window;
-
-const AGENT_SESSION_TITLE = 'session-title-func-agent';
 
 type ComputerUseStatusPayload = {
   computerUseEnabled: boolean;
@@ -116,8 +112,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [companionPetImporting, setCompanionPetImporting] = useState(false);
   const [companionPetDeletingPath, setCompanionPetDeletingPath] = useState<string | null>(null);
   const [companionPetListExpanded, setCompanionPetListExpanded] = useState(false);
-  const [models, setModels] = useState<AIModelConfig[]>([]);
-  const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [enableDeferredToolLoading, setEnableDeferredToolLoading] = useState(true);
   const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
   const [executionTimeout, setExecutionTimeout] = useState('');
@@ -223,8 +217,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     try {
       const [
         loadedSettings,
-        allModels,
-        funcAgentModelsData,
         deferredToolLoadingEnabled,
         loadedSubagentMaxConcurrency,
         execTimeout,
@@ -236,8 +228,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         loadedCompanionPets,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
-        configManager.getConfig<AIModelConfig[]>('ai.models') || [],
-        configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
         configManager.getConfig<boolean>('ai.enable_deferred_tool_loading'),
         configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
@@ -251,8 +241,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
       setSettings(loadedSettings);
       setCompanionPets(loadedCompanionPets);
-      setModels(allModels as AIModelConfig[]);
-      setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setEnableDeferredToolLoading(deferredToolLoadingEnabled ?? true);
       setSubagentMaxConcurrency(loadedSubagentMaxConcurrency != null
         ? loadedSubagentMaxConcurrency
@@ -497,37 +485,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       spritesheetMimeType: pet.spritesheetMimeType,
     });
     setCompanionPetListExpanded(false);
-  };
-
-  const getModelName = useCallback((modelId: string | null | undefined): string | undefined => {
-    if (!modelId) return undefined;
-    return models.find(m => m.id === modelId)?.name;
-  }, [models]);
-
-  const handleAgentModelChange = async (agentKey: string, featureTitleKey: string, modelId: string) => {
-    try {
-      const current = await configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {};
-      const updated = { ...current, [agentKey]: modelId };
-      await configManager.setConfig('ai.func_agent_models', updated);
-      setFuncAgentModels(updated);
-
-      let modelDesc = '';
-      if (modelId === 'primary') {
-        modelDesc = t('model.primary');
-      } else if (modelId === 'fast') {
-        modelDesc = t('model.fast');
-      } else {
-        modelDesc = getModelName(modelId) || modelId || '';
-      }
-
-      notificationService.success(
-        t('models.updateSuccess', { agentName: t(featureTitleKey), modelName: modelDesc }),
-        { duration: 2000 }
-      );
-    } catch (error) {
-      log.error('Failed to update agent model', { agentKey, modelId, error });
-      notificationService.error(t('messages.updateFailed'), { duration: 3000 });
-    }
   };
 
   const handleDeferredToolLoadingChange = async (checked: boolean) => {
@@ -856,8 +813,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
   // ── Derived values ───────────────────────────────────────────────────────
 
-  const enabledModels = models.filter((m: AIModelConfig) => m.enabled);
-  const sessionTitleModelId = funcAgentModels[AGENT_SESSION_TITLE] || 'fast';
   const templateEntries = getTemplateEntries();
   const computerUseAccessLabel = computerUseStatusLoading
     ? t('loading.text')
@@ -900,38 +855,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
         {variant === 'personalization' ? (
           <>
-
-        {/* ── Auto session title ─────────────────────────────────── */}
-        <ConfigPageSection
-          title={t('features.sessionTitle.title')}
-          description={t('features.sessionTitle.subtitle')}
-        >
-          <ConfigPageRow label={t('common.enable')} align="center">
-            <div className="bitfun-func-agent-config__row-control">
-              <Switch
-                checked={settings.enable_session_title_generation}
-                onChange={(e) => updateSetting('enable_session_title_generation', e.target.checked)}
-                size="small"
-              />
-            </div>
-          </ConfigPageRow>
-          <ConfigPageRow
-            className="bitfun-func-agent-config__model-row"
-            label={t('model.label')}
-            description={enabledModels.length === 0 ? t('models.empty') : undefined}
-            align="center"
-          >
-            <div className="bitfun-func-agent-config__row-control bitfun-func-agent-config__row-control--model">
-              <ModelSelectionRadio
-                value={sessionTitleModelId}
-                models={enabledModels}
-                onChange={(modelId) => handleAgentModelChange(AGENT_SESSION_TITLE, 'features.sessionTitle.title', modelId)}
-                layout="horizontal"
-                size="small"
-              />
-            </div>
-          </ConfigPageRow>
-        </ConfigPageSection>
 
         {/* ── Agent companion (collapsed input) ─────────────────── */}
         <ConfigPageSection

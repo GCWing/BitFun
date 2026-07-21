@@ -89,6 +89,7 @@ async fn load_mcp_resources(
     refresh: bool,
 ) -> Result<Vec<MCPResource>, String> {
     let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, server_id).await?;
     let mut resources = manager.get_cached_resources(server_id).await;
 
     if refresh || resources.is_empty() {
@@ -108,6 +109,7 @@ async fn load_mcp_prompts(
     refresh: bool,
 ) -> Result<Vec<MCPPrompt>, String> {
     let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, server_id).await?;
     let mut prompts = manager.get_cached_prompts(server_id).await;
 
     if refresh || prompts.is_empty() {
@@ -119,6 +121,17 @@ async fn load_mcp_prompts(
     }
 
     Ok(prompts)
+}
+
+async fn ensure_unscoped_host_mcp_access(
+    manager: &bitfun_core::service::mcp::MCPServerManager,
+    server_id: &str,
+) -> Result<(), String> {
+    manager
+        .server_available_for_context(server_id, None, false)
+        .await
+        .then_some(())
+        .ok_or_else(|| "MCP server is unavailable in this product surface".to_string())
 }
 
 #[tauri::command]
@@ -198,7 +211,8 @@ pub async fn get_mcp_servers(state: State<'_, AppState>) -> Result<Vec<MCPServer
         } else {
             false
         };
-        let oauth_enabled = matches!(config.server_type, MCPServerType::Remote);
+        let oauth_enabled =
+            matches!(config.server_type, MCPServerType::Remote) && config.remote_oauth_enabled();
         let oauth_auth_configured = if oauth_enabled {
             has_stored_oauth_credentials(&config.id)
                 .await
@@ -337,8 +351,9 @@ pub async fn read_mcp_resource(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    let connection = mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    let connection = manager
         .get_connection(&request.server_id)
         .await
         .ok_or_else(|| format!("MCP server not connected: {}", request.server_id))?;
@@ -372,8 +387,9 @@ pub async fn get_mcp_prompt(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    let connection = mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    let connection = manager
         .get_connection(&request.server_id)
         .await
         .ok_or_else(|| format!("MCP server not connected: {}", request.server_id))?;
@@ -391,8 +407,9 @@ pub async fn start_mcp_server(state: State<'_, AppState>, server_id: String) -> 
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &server_id).await?;
+    manager
         .start_server(&server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -407,8 +424,9 @@ pub async fn stop_mcp_server(state: State<'_, AppState>, server_id: String) -> R
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &server_id).await?;
+    manager
         .stop_server(&server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -426,8 +444,9 @@ pub async fn restart_mcp_server(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &server_id).await?;
+    manager
         .restart_server(&server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -445,8 +464,9 @@ pub async fn get_mcp_server_status(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    let status = mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &server_id).await?;
+    let status = manager
         .get_server_status(&server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -590,8 +610,9 @@ pub async fn fetch_mcp_app_resource(
         return Err("Resource URI must use ui:// scheme".to_string());
     }
 
-    let connection = mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    let connection = manager
         .get_connection(&request.server_id)
         .await
         .ok_or_else(|| format!("MCP server not connected: {}", request.server_id))?;
@@ -731,8 +752,9 @@ pub async fn send_mcp_app_message(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    let connection = mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    let connection = manager
         .get_connection(&request.server_id)
         .await
         .ok_or_else(|| format!("MCP server not connected: {}", request.server_id))?;
@@ -836,8 +858,9 @@ pub async fn update_mcp_remote_auth(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    manager
         .reauthenticate_remote_server(&request.server_id, &request.authorization_value)
         .await
         .map_err(|e| e.to_string())?;
@@ -855,8 +878,9 @@ pub async fn clear_mcp_remote_auth(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    manager
         .clear_remote_server_auth(&request.server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -874,8 +898,9 @@ pub async fn delete_mcp_server(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    manager
         .remove_server(&request.server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -893,8 +918,9 @@ pub async fn start_mcp_remote_oauth(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    manager
         .start_remote_oauth_authorization(&request.server_id)
         .await
         .map_err(|e| e.to_string())
@@ -910,10 +936,9 @@ pub async fn get_mcp_remote_oauth_session(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    Ok(mcp_service
-        .server_manager()
-        .get_remote_oauth_session(&request.server_id)
-        .await)
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    Ok(manager.get_remote_oauth_session(&request.server_id).await)
 }
 
 #[tauri::command]
@@ -926,8 +951,9 @@ pub async fn cancel_mcp_remote_oauth(
         .as_ref()
         .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
+    let manager = mcp_service.server_manager();
+    ensure_unscoped_host_mcp_access(&manager, &request.server_id).await?;
+    manager
         .cancel_remote_oauth_authorization(&request.server_id)
         .await
         .map_err(|e| e.to_string())

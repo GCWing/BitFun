@@ -5,11 +5,26 @@
    * No bottom margin — the inter-round gap is covered by the same line-height rhythm
    * as inter-item gaps inside a round, so flow text → tool / tool → thinking / cross-
    * round transitions all read as one continuous, evenly-spaced text column.
+   *
+   * Enter animation must NOT live on the base selector alone: rounds toggle
+   * `--streaming` → `--complete` when the typewriter finishes, and re-applying
+   * `animation: fadeIn` would replay opacity 0→1 (looks like the whole chat
+   * refreshed). Play fadeIn only for freshly mounted complete rounds via
+   * `--enter`; streaming/complete modifiers keep animation off.
    */
   margin-bottom: 0;
   padding: 0 var(--flowchat-content-inline-pad);
-  animation: fadeIn 0.4s ease;
   position: relative;
+  opacity: 1;
+
+  /*
+   * Freshly mounted history/complete rounds may opt into `--enter`.
+   * Rounds that began as `--streaming` omit `--enter`, so flipping to
+   * `--complete` later cannot replay fadeIn.
+   */
+  &--enter {
+    animation: fadeIn 0.4s ease;
+  }
 
   // Streaming state
   &--streaming {
@@ -24,7 +39,7 @@
     }
   }
 
-  // Complete state
+  // Complete state — keep opacity stable; do not attach an animation here.
   &--complete {
     opacity: 1;
   }
@@ -50,6 +65,12 @@
   gap: var(--flowchat-inline-gap);
   padding: var(--flowchat-inline-gap) 0;
   margin-top: var(--flowchat-inline-gap);
+
+  // Reserve layout while typewriter catch-up finishes; reveal without resize.
+  &--pending {
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
 
 .model-round-item__meta {

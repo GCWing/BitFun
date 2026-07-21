@@ -1,5 +1,6 @@
 //! Tool implementation module
 
+pub mod agent_wait_tool;
 pub mod analyze_image_tool;
 pub mod ask_user_question_tool;
 pub mod bash_tool;
@@ -26,9 +27,12 @@ pub mod get_time_tool;
 pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
+pub mod list_models_tool;
 pub mod ls_tool;
 pub mod mcp_tools;
 pub mod miniapp_init_tool;
+pub mod page_deploy_tool;
+pub mod page_publish_tool;
 pub mod playbook_tool;
 pub mod review_platform_tool;
 pub mod session_control_tool;
@@ -46,6 +50,7 @@ pub mod web;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
+pub use agent_wait_tool::AgentWaitTool;
 pub use analyze_image_tool::AnalyzeImageTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
@@ -67,11 +72,14 @@ pub use get_time_tool::GetTimeTool;
 pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
+pub use list_models_tool::ListModelsTool;
 pub use ls_tool::LSTool;
 pub use mcp_tools::{
     GetMCPPromptTool, ListMCPPromptsTool, ListMCPResourcesTool, ReadMCPResourceTool,
 };
 pub use miniapp_init_tool::InitMiniAppTool;
+pub use page_deploy_tool::PageDeployTool;
+pub use page_publish_tool::PagePublishTool;
 pub use playbook_tool::PlaybookTool;
 pub use review_platform_tool::ReviewPlatformTool;
 pub use session_control_tool::SessionControlTool;

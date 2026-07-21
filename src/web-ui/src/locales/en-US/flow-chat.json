@@ -76,7 +76,7 @@
     "loadingTitle": "Loading saved session",
     "loadingDescription": "Preparing the conversation history.",
     "failedTitle": "Session history did not load",
-    "failedDescription": "Retry loading the saved conversation.",
+    "failedDescription": "Retry loading the saved conversation. If it was imported from another device, check your account and connection first.",
     "preparingOlderHistory": "Preparing older history...",
     "olderHistoryNotReady": "Older history is not ready yet.",
     "remoteSessionMissing": "The backend session data was not found. If you just reconnected an SSH remote workspace, close and reopen the remote project, or create a new session and try again.",
@@ -1385,6 +1385,28 @@
       "labelAppId": "app_id",
       "labelPath": "path",
       "nameLabel": "App: {{name}}"
+    },
+    "pageDeploy": {
+      "title": "Deploy Page",
+      "deployingShort": "…",
+      "untitled": "(unnamed)",
+      "deployFailed": "Could not deploy BitFun Page version",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "openProduction": "Open production URL"
+    },
+    "pagePublish": {
+      "title": "Publish Page",
+      "publishingShort": "…",
+      "untitled": "(unnamed)",
+      "publishFailed": "Could not publish BitFun Page",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "labelPreview": "preview_url_path",
+      "openProduction": "Open production URL",
+      "openPreview": "Open preview URL"
     },
     "terminal": {
       "executeCommand": "Execute command:",

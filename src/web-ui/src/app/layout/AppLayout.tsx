@@ -34,6 +34,7 @@ import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
 import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
+import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
 import './AppLayout.scss';
 
 type TransitionDirection = 'entering' | 'returning' | null;
@@ -335,7 +336,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             currentWorkspace.workspaceKind === WorkspaceKind.Assistant
               ? 'Claw'
               : explicitPreferredMode || 'agentic';
-          sessionId = await flowChatManager.createChatSession({}, initialSessionMode);
+          sessionId = await flowChatManager.createChatSession(
+            flowChatSessionConfigForWorkspace(currentWorkspace),
+            initialSessionMode,
+          );
           if (cancelled) {
             return;
           }
@@ -585,19 +589,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   // Create FlowChat session (toolbar / floating UI). detail.mode: 'cowork' → Cowork, else code (agentic).
   const handleCreateFlowChatSession = React.useCallback(async (mode?: 'code' | 'cowork') => {
     try {
+      if (!currentWorkspace?.rootPath) {
+        log.warn('Cannot create FlowChat session without an active workspace');
+        return;
+      }
       const flowChatManager = FlowChatManager.getInstance();
       const setMode = useSessionModeStore.getState().setMode;
+      const sessionConfig = flowChatSessionConfigForWorkspace(currentWorkspace);
       if (mode === 'cowork') {
         setMode('cowork');
-        await flowChatManager.createChatSession({}, 'Cowork');
+        await flowChatManager.createChatSession(sessionConfig, 'Cowork');
       } else {
         setMode('code');
-        await flowChatManager.createChatSession({}, 'agentic');
+        await flowChatManager.createChatSession(sessionConfig, 'agentic');
       }
     } catch (error) {
       log.error('Failed to create FlowChat session', error);
     }
-  }, []);
+  }, [currentWorkspace]);
 
   React.useEffect(() => {
     const handler = (e: Event) => {

@@ -81,6 +81,7 @@ export async function persistReviewActionState(state: ReviewActionBarState): Pro
     await sessionAPI.saveSessionMetadata(
       metadata,
       session.workspacePath,
+      ['reviewActionState'],
       session.remoteConnectionId,
       session.remoteSshHost
     );
@@ -100,7 +101,8 @@ export async function clearPersistedReviewState(sessionId: string, workspacePath
 
     await sessionAPI.saveSessionMetadata(
       metadata,
-      workspacePath
+      workspacePath,
+      ['reviewActionState']
     );
   } catch (error) {
     log.warn('Failed to clear persisted review action state', { sessionId, error });

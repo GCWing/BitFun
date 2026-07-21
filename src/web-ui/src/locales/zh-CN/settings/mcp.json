@@ -1,10 +1,57 @@
 {
   "title": "MCP",
   "subtitle": "管理 MCP 服务器连接",
+  "subtitleReadOnly": "查看 MCP 连接",
   "section": {
     "serverList": {
       "title": "MCP 服务列表",
-      "description": "统一管理 MCP 服务状态与 JSON 配置。"
+      "description": "MCP 服务与 JSON 配置",
+      "desktopUnavailable": "请在桌面端管理 BitFun MCP。",
+      "remoteUnavailable": "远程连接时暂不支持管理 BitFun MCP。",
+      "loadFailed": "无法加载 MCP 服务。"
+    }
+  },
+  "external": {
+    "title": "外部 MCP 服务器",
+    "description": "来自其他 AI 应用",
+    "manage": "管理外部扩展",
+    "retry": "重试加载外部 MCP",
+    "loading": "正在检查外部 MCP 来源...",
+    "unavailable": "外部 MCP 暂不可用。",
+    "empty": "未发现外部 MCP。",
+    "unknown": "未知",
+    "scope": {
+      "userGlobal": "全局",
+      "project": "项目",
+      "remoteUser": "远程全局",
+      "remoteProject": "远程项目"
+    },
+    "status": {
+      "checking": "检查中",
+      "stale": "使用上次有效配置",
+      "degraded": "来源异常",
+      "readOnly": "只读",
+      "approvalRequired": "需要确认",
+      "starting": "启动中",
+      "active": "已启用",
+      "declined": "已拒绝",
+      "conflict": "有冲突",
+      "covered": "已覆盖",
+      "sourceDisabled": "来源已关闭",
+      "configurationChanged": "配置已变更",
+      "unsupported": "不支持",
+      "runtimeUnavailable": "不可用",
+      "removed": "已移除"
+    },
+    "details": {
+      "source": "来源",
+      "scope": "范围",
+      "location": "配置位置",
+      "transport": "传输方式"
+    },
+    "transport": {
+      "localStdio": "本地进程",
+      "streamableHttp": "Streamable HTTP"
     }
   },
   "tabs": {
@@ -137,6 +184,7 @@
   },
   "jsonEditor": {
     "title": "MCP JSON 配置",
+    "loadFailed": "无法加载 MCP 配置。",
     "hint1": "使用标准 Cursor 格式的 MCP 配置。配置将自动保存到用户目录下的 app.json 文件中。",
     "hint2": "格式说明：可以省略 type 字段。提供 \"command\" 时按 stdio（本地进程）解析；提供 \"url\" 时按 sse（远程服务）解析。也可显式设置 type=\"stdio\"/\"sse\" 以保持兼容。",
     "lintLocation": "（第 {{line}} 行，第 {{column}} 列）",

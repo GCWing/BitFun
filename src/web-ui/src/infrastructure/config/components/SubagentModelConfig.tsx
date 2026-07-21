@@ -92,7 +92,9 @@ export const SubagentModelConfig: React.FC = () => {
     }
   }, [notifyError, t]);
 
-  const openSubagentCustomization = useCallback(() => {
+  const openSubagentCustomization = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
     openScene('agents');
   }, [openScene]);
 
@@ -117,6 +119,7 @@ export const SubagentModelConfig: React.FC = () => {
           </IconButton>
         </span>
       )}
+      description={t('subagentModels.default.description')}
       align="center"
     >
       <Select

@@ -3069,6 +3069,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
+    const scroller = scrollerElementRef.current;
+    const distanceFromBottomBefore = scroller
+      ? Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
+      : 0;
+    const wasNearBottom = distanceFromBottomBefore <= 80;
+
     // Streaming just ended. If collapse compensation remains (e.g. because the
     // transition stale timer hasn't fired yet, or consumption was blocked during
     // the last streaming frames), drain it now so the footer doesn't retain
@@ -3085,6 +3091,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       };
       updateBottomReservationState(next);
       applyFooterCompensationNow(next);
+      // Footer height shrank: if we were following the bottom, re-pin in the
+      // same turn to avoid a one-frame whole-pane jump that looks like a flash.
+      if (scroller && wasNearBottom) {
+        scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      }
     }
 
     // Clear any lingering collapse intent so auto-follow and compensation
@@ -3111,14 +3122,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     clearPinReservationForUserNavigation();
     requestAnimationFrame(() => {
-      const scroller = scrollerElementRef.current;
-      if (!scroller) {
+      const liveScroller = scrollerElementRef.current;
+      if (!liveScroller) {
         return;
       }
-      scroller.scrollTo({
-        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-        behavior: 'auto',
-      });
+      const maxScrollTop = Math.max(0, liveScroller.scrollHeight - liveScroller.clientHeight);
+      // Avoid a no-op scrollTo that still forces a layout pass / visual hitch.
+      if (Math.abs(liveScroller.scrollTop - maxScrollTop) > 1) {
+        liveScroller.scrollTop = maxScrollTop;
+      }
       staticInitialHistoryUserLeftBottomRef.current = false;
     });
   }, [applyFooterCompensationNow, clearPinReservationForUserNavigation, isStreamingOutput, updateBottomReservationState]);

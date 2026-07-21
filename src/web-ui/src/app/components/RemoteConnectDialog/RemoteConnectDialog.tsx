@@ -1,16 +1,22 @@
 /**
- * Remote Connect dialog with two independent groups:
+ * Remote Connect dialog with three groups:
  *   - Network (LAN / Ngrok / BitFun Server / Custom Server) – mutually exclusive
  *   - IM Bot (Telegram / Feishu / WeChat) – mutually exclusive
- * Both groups can be active simultaneously.
+ *   - Account / My Devices (login, cloud sync, peer device control)
+ * Network and Bot require an open workspace and can be active simultaneously;
+ * the Account group works without a workspace.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
-import { Modal, Badge, Input, Select } from '@/component-library';
+import { Modal, Badge, Input, Select, Tooltip } from '@/component-library';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
+import { AccountPanel } from './AccountPanel';
 import {
   remoteConnectAPI,
   type ConnectionResult,
@@ -24,11 +30,13 @@ import {
   getRemoteConnectDisclaimerAgreed,
   setRemoteConnectDisclaimerAgreed,
 } from './remoteConnectDisclaimerStorage';
+import { RelayDeployWizard } from '@/features/relay-deploy';
+import type { RelayDeployResult } from '@/features/relay-deploy';
 import './RemoteConnectDialog.scss';
 
 // ── Types ────────────────────────────────────────────────────────────
 
-type ActiveGroup = 'network' | 'bot';
+type ActiveGroup = 'network' | 'bot' | 'account';
 type NetworkTab = 'lan' | 'ngrok' | 'bitfun_server' | 'custom_server';
 type BotTab = 'telegram' | 'feishu' | 'weixin';
 
@@ -63,7 +71,6 @@ const BOT_TABS: { id: BotTab; label: string }[] = [
 ];
 
 const NGROK_SETUP_URL = 'https://dashboard.ngrok.com/get-started/setup';
-const RELAY_SERVER_README_URL = 'https://github.com/GCWing/BitFun/blob/main/src/apps/relay-server/README.md';
 const FEISHU_SETUP_GUIDE_URLS = {
   'zh-CN': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.zh-CN.md',
   'en-US': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.md',
@@ -100,15 +107,26 @@ const botInfoToBotTab = (info: string | null | undefined): BotTab | null => {
 interface RemoteConnectDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Group to show when no active connection is detected (e.g. the menu opens
+   * the account group after a token expiry). Active relay/bot connections
+   * still take precedence and switch to their own group.
+   */
+  initialGroup?: ActiveGroup;
 }
 
 export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   isOpen,
   onClose,
+  initialGroup,
 }) => {
   const { t, currentLanguage } = useI18n('common');
+  const { hasWorkspace } = useCurrentWorkspace();
+  const { loggedIn: accountLoggedIn } = useAccountLoginState();
 
-  const [activeGroup, setActiveGroup] = useState<ActiveGroup>('network');
+  const [activeGroup, setActiveGroup] = useState<ActiveGroup>(
+    initialGroup ?? (hasWorkspace ? 'network' : 'account'),
+  );
   const [networkTab, setNetworkTab] = useState<NetworkTab>(NETWORK_TABS[0].id);
   const [botTab, setBotTab] = useState<BotTab>(BOT_TABS[0].id);
 
@@ -125,6 +143,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
   const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
+  const [showRelayDeploy, setShowRelayDeploy] = useState(false);
 
   const [qrCopied, setQrCopied] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
@@ -273,6 +292,25 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       cancelled = true;
     };
   }, [isOpen]);
+
+  // Keep the Self-Hosted server URL in sync with account login state. The
+  // backend already persists the mirrored value; this refreshes the input
+  // while the dialog is open (fill on login, clear on logout).
+  useEffect(() => {
+    const unlisten = api.listen<{ logged_in: boolean; relay_url?: string }>(
+      'account://login-state',
+      (payload) => {
+        if (payload?.logged_in && payload.relay_url) {
+          setCustomUrl(payload.relay_url);
+        } else if (payload && !payload.logged_in) {
+          setCustomUrl('');
+        }
+      },
+    );
+    return () => {
+      unlisten();
+    };
+  }, []);
 
   useEffect(() => {
     formSnapshotRef.current = {
@@ -506,8 +544,17 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     void systemAPI.openExternal(NGROK_SETUP_URL);
   }, []);
 
-  const handleOpenRelayReadme = useCallback(() => {
-    void systemAPI.openExternal(RELAY_SERVER_README_URL);
+  /** Self-Hosted tab entry: open the in-app wizard, never an external README. */
+  const handleOpenRelayDeploy = useCallback(() => {
+    setShowRelayDeploy(true);
+  }, []);
+
+  const handleRelayDeployRegistered = useCallback((result: RelayDeployResult) => {
+    setShowRelayDeploy(false);
+    setCustomUrl(result.relayUrl);
+    setNetworkTab('custom_server');
+    setActiveGroup('network');
+    setError(null);
   }, []);
 
   const handleOpenFeishuGuide = useCallback(() => {
@@ -688,8 +735,8 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     className="bitfun-remote-connect__description-link"
                     role="link"
                     tabIndex={0}
-                    onClick={handleOpenRelayReadme}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenRelayReadme(); }}
+                    onClick={handleOpenRelayDeploy}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenRelayDeploy(); }}
                   >
                     {t('remoteConnect.desc_custom_server_link')}
                   </span>
@@ -967,29 +1014,50 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         <div className="bitfun-remote-connect">
           {/* ── Group tabs ── */}
           <div className="bitfun-remote-connect__groups">
-            <button
-              type="button"
-              className={`bitfun-remote-connect__group-btn${activeGroup === 'network' ? ' is-active' : ''}`}
-              onClick={() => { setActiveGroup('network'); setConnectionResult(null); setError(null); }}
-              disabled={isBotConnecting}
+            <Tooltip
+              content={t('header.remoteConnectRequiresWorkspace')}
+              placement="bottom"
+              disabled={hasWorkspace}
             >
-              {t('remoteConnect.groupNetwork')}
-              {isRelayConnected && <span className="bitfun-remote-connect__dot" />}
-            </button>
+              <button
+                type="button"
+                className={`bitfun-remote-connect__group-btn${activeGroup === 'network' ? ' is-active' : ''}`}
+                onClick={() => { setActiveGroup('network'); setConnectionResult(null); setError(null); }}
+                disabled={isBotConnecting || !hasWorkspace}
+              >
+                {t('remoteConnect.groupNetwork')}
+                {isRelayConnected && <span className="bitfun-remote-connect__dot" />}
+              </button>
+            </Tooltip>
+            <span className="bitfun-remote-connect__group-divider" />
+            <Tooltip
+              content={t('header.remoteConnectRequiresWorkspace')}
+              placement="bottom"
+              disabled={hasWorkspace}
+            >
+              <button
+                type="button"
+                className={`bitfun-remote-connect__group-btn${activeGroup === 'bot' ? ' is-active' : ''}`}
+                onClick={() => { setActiveGroup('bot'); setConnectionResult(null); setError(null); }}
+                disabled={isNetworkConnecting || !hasWorkspace}
+              >
+                {t('remoteConnect.groupBot')}
+                {isBotConnected && <span className="bitfun-remote-connect__dot" />}
+              </button>
+            </Tooltip>
             <span className="bitfun-remote-connect__group-divider" />
             <button
               type="button"
-              className={`bitfun-remote-connect__group-btn${activeGroup === 'bot' ? ' is-active' : ''}`}
-              onClick={() => { setActiveGroup('bot'); setConnectionResult(null); setError(null); }}
-              disabled={isNetworkConnecting}
+              className={`bitfun-remote-connect__group-btn${activeGroup === 'account' ? ' is-active' : ''}`}
+              onClick={() => { setActiveGroup('account'); setError(null); }}
             >
-              {t('remoteConnect.groupBot')}
-              {isBotConnected && <span className="bitfun-remote-connect__dot" />}
+              {t('remoteConnect.groupAccount')}
+              {accountLoggedIn && <span className="bitfun-remote-connect__dot" />}
             </button>
           </div>
 
           {/* ── Sub-tabs ── */}
-          {activeGroup === 'network' ? (
+          {activeGroup === 'account' ? null : activeGroup === 'network' ? (
             <div className="bitfun-remote-connect__subtabs">
               {NETWORK_TABS.map((tab, i) => (
                 <React.Fragment key={tab.id}>
@@ -1030,7 +1098,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           )}
 
           {/* ── Content ── */}
-          {activeGroup === 'network' ? renderNetworkContent() : renderBotContent()}
+          {activeGroup === 'account' ? (
+            <AccountPanel onCloseDialog={onClose} />
+          ) : activeGroup === 'network' ? (
+            renderNetworkContent()
+          ) : (
+            renderBotContent()
+          )}
         </div>
       </Modal>
 
@@ -1048,6 +1122,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           onAgree={hasAgreedDisclaimer ? undefined : handleAgreeDisclaimer}
         />
       </Modal>
+
+      {showRelayDeploy && (
+        <RelayDeployWizard
+          isOpen={showRelayDeploy}
+          onClose={() => setShowRelayDeploy(false)}
+          onRegistered={handleRelayDeployRegistered}
+        />
+      )}
     </>
   );
 };

@@ -20,7 +20,7 @@ fn parse_external_tool_review_action(
     };
     if command.eq_ignore_ascii_case("refresh") {
         if parts.next().is_some() {
-            return Err("usage: /external-tools refresh".to_string());
+            return Err("usage: /builtin:tools refresh".to_string());
         }
         return Ok(ExternalToolReviewAction::Refresh);
     }
@@ -32,16 +32,16 @@ fn parse_external_tool_review_action(
     // so a changed target fails closed instead of reusing the same number for
     // a different tool after a watcher refresh.
     let snapshot = reviewed_snapshot.or(current_snapshot).ok_or_else(|| {
-        "tool discovery has not completed; run /external-tools refresh".to_string()
+        "BitFun has not finished checking external tools; run /builtin:tools refresh".to_string()
     })?;
     if command.eq_ignore_ascii_case("enable") || command.eq_ignore_ascii_case("disable") {
-        let index = parse_positive_index(parts.next(), "target number")?;
+        let index = parse_positive_index(parts.next(), "tool number")?;
         if parts.next().is_some() {
-            return Err(format!("usage: /external-tools {command} <target-number>"));
+            return Err(format!("usage: /builtin:tools {command} <tool-number>"));
         }
         let targets = external_tool_target_summaries(snapshot);
         let target = targets.get(index).ok_or_else(|| {
-            "that target is no longer available; reopen /external-tools".to_string()
+            "that tool is no longer available; run /builtin:tools refresh".to_string()
         })?;
         let approved = command.eq_ignore_ascii_case("enable");
         let allowed = if approved {
@@ -51,7 +51,7 @@ fn parse_external_tool_review_action(
         };
         if !allowed {
             return Err(format!(
-                "target {} is {}; reopen /external-tools for its next step",
+                "tool {} is {}; run /builtin:tools refresh for its next step",
                 index + 1,
                 external_tool_activation_label(target.activation())
             ));
@@ -65,29 +65,35 @@ fn parse_external_tool_review_action(
     }
     if command.eq_ignore_ascii_case("choose") {
         let conflict_index = parse_positive_index(parts.next(), "conflict number")?;
-        let candidate_index = parse_positive_index(parts.next(), "candidate number")?;
+        let candidate_index = parse_positive_index(parts.next(), "choice number")?;
         if parts.next().is_some() {
             return Err(
-                "usage: /external-tools choose <conflict-number> <candidate-number>".to_string(),
+                "usage: /builtin:tools choose <conflict-number> <choice-number>".to_string(),
             );
         }
         let conflict = snapshot
             .tool_conflicts
             .iter()
             .filter(|conflict| conflict.selected_candidate_id.is_none())
+            .chain(
+                snapshot
+                    .tool_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_some()),
+            )
             .nth(conflict_index)
             .ok_or_else(|| {
-                "that conflict is no longer available; reopen /external-tools".to_string()
+                "that conflict is no longer available; run /builtin:tools refresh".to_string()
             })?;
         let candidate = conflict.candidates.get(candidate_index).ok_or_else(|| {
-            "that candidate is no longer available; reopen /external-tools".to_string()
+            "that choice is no longer available; run /builtin:tools refresh".to_string()
         })?;
         return Ok(ExternalToolReviewAction::Choose {
             conflict_key: conflict.conflict_key.clone(),
             candidate_id: candidate.candidate_id.clone(),
         });
     }
-    Err("usage: /external-tools [refresh | enable <number> | disable <number> | choose <conflict-number> <candidate-number>]".to_string())
+    Err("usage: /builtin:tools [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]".to_string())
 }
 
 fn external_tool_mutation_result_label(
@@ -110,33 +116,32 @@ fn external_tool_mutation_result_label(
                 .map(|tool| &tool.activation)
                 .collect::<Vec<_>>();
             if activations.is_empty() {
-                "External tool approval saved; reopen /external-tools to review the changed target"
+                "External tool confirmation saved; run /builtin:tools refresh to review the changed tool"
                     .to_string()
             } else if activations
                 .iter()
                 .any(|state| matches!(state, ExternalToolActivationState::LoadFailed { .. }))
             {
-                "External tool approved, but loading failed".to_string()
+                "External tool enabled, but loading failed".to_string()
             } else if activations.iter().any(|state| {
                 matches!(
                     state,
                     ExternalToolActivationState::RuntimeUnavailable { .. }
                 )
             }) {
-                "External tool approved, but its runtime is unavailable".to_string()
+                "External tool enabled, but its run environment is unavailable".to_string()
             } else if activations
                 .iter()
                 .any(|state| matches!(state, ExternalToolActivationState::Conflict))
             {
-                "External tool approved; choose a provider before every export is available"
-                    .to_string()
+                "External tool enabled; choose a source before every tool is available".to_string()
             } else if activations
                 .iter()
                 .all(|state| matches!(state, ExternalToolActivationState::Active))
             {
                 "External tool enabled".to_string()
             } else {
-                "External tool approval saved; reopen /external-tools to review its current state"
+                "External tool confirmation saved; run /builtin:tools refresh to review its current state"
                     .to_string()
             }
         }
@@ -153,7 +158,7 @@ fn external_tool_mutation_result_label(
             if disabled {
                 "External tool disabled".to_string()
             } else {
-                "External tool decision saved; reopen /external-tools to review the changed target"
+                "External tool choice saved; run /builtin:tools refresh to review the changed tool"
                     .to_string()
             }
         }
@@ -166,9 +171,9 @@ fn external_tool_mutation_result_label(
                     && conflict.selected_candidate_id.as_deref() == Some(candidate_id.as_str())
             });
             if selected {
-                "External tool provider selected".to_string()
+                "External tool source selected".to_string()
             } else {
-                "External tool candidates changed; reopen /external-tools before choosing"
+                "External tool choices changed; run /builtin:tools refresh before choosing"
                     .to_string()
             }
         }
@@ -176,7 +181,6 @@ fn external_tool_mutation_result_label(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 struct BuiltinCommandReconfirmation {
     conflict_key: String,
     candidate_id: String,
@@ -226,7 +230,10 @@ fn builtin_command_reconfirmation(
     let conflict_key = native_command_conflict_key(
         "local-user",
         command_name,
-        [(candidate_id.as_str(), env!("CARGO_PKG_VERSION"))],
+        [(
+            candidate_id.as_str(),
+            action_conflict_behavior_version(action_id),
+        )],
     );
     let confirmed = preferences.choices.get(&conflict_key) == Some(&candidate_id);
     Some(BuiltinCommandReconfirmation {
@@ -323,7 +330,6 @@ fn command_route(
     }
 }
 
-
 impl ChatMode {
     fn external_conflict_preferences(&self) -> ExternalSourceConflictPreferences {
         ExternalSourceConflictPreferences {
@@ -376,7 +382,7 @@ impl ChatMode {
             None
         } else {
             Some(format!(
-                "External tools need attention: {approvals} approvals, {conflicts} name conflicts, {diagnostics} diagnostics - run /external-tools"
+                "Tools from external AI applications need attention: {approvals} approvals, {conflicts} name conflicts, {diagnostics} diagnostics - run /builtin:tools refresh"
             ))
         }
     }
@@ -416,6 +422,11 @@ impl ChatMode {
         }
 
         let workspace = self.workspace_path_for_sync(chat_state);
+        let expected_preference_revision = self
+            .external_source_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.preference_revision)
+            .unwrap_or(0);
         let pending_status = match &action {
             ExternalToolReviewAction::Refresh => "Refreshing external tools",
             ExternalToolReviewAction::Decide { approved: true, .. } => "Enabling external tool",
@@ -442,6 +453,7 @@ impl ChatMode {
                         approval_key,
                         decision_key,
                         *approved,
+                        expected_preference_revision,
                     )
                     .await
                 }
@@ -449,12 +461,17 @@ impl ChatMode {
                     conflict_key,
                     candidate_id,
                 } => {
-                    set_external_tool_conflict_choice(Some(&workspace), conflict_key, candidate_id)
-                        .await
+                    set_external_tool_conflict_choice(
+                        Some(&workspace),
+                        conflict_key,
+                        candidate_id,
+                        expected_preference_revision,
+                    )
+                    .await
                 }
                 ExternalToolReviewAction::Show => unreachable!(),
             }
-            .map_err(|error| error.to_string());
+            .map_err(sanitize_external_source_operation_error);
             let _ = sender.send(ExternalToolMutationResult {
                 action: task_action,
                 result,
@@ -477,7 +494,7 @@ impl ChatMode {
             Some(Err(MpscTryRecvError::Disconnected)) => {
                 self.external_tool_mutation_rx = None;
                 chat_view.set_status(Some(
-                    "External tool update stopped before returning a result; reopen /external-tools and retry."
+                    "External tool update stopped before returning a result; run /builtin:tools refresh and retry."
                         .to_string(),
                 ));
                 return true;
@@ -508,18 +525,221 @@ impl ChatMode {
                     chat_view.set_status(Some(result_label));
                 } else {
                     chat_view.set_status(Some(format!(
-                        "{result_label}; {approvals} approvals and {conflicts} conflicts remain - run /external-tools"
+                        "{result_label}; {approvals} approvals and {conflicts} conflicts remain - run /builtin:tools refresh"
                     )));
                 }
             }
             Err(error) => {
-                tracing::warn!("External tool review action failed: {}", error);
-                chat_view.set_status(Some(format!(
-                    "External tool choice was not applied: {error}. Reopen /external-tools to review current results."
-                )));
+                tracing::warn!(
+                    error_code = error.code.as_str(),
+                    correlation_id = error.correlation_id.as_deref().unwrap_or("none"),
+                    "External tool review action failed"
+                );
+                chat_view.set_status(Some(external_operation_error_status("tools", &error)));
             }
         }
         true
     }
 
+    fn take_external_agent_notice(
+        &mut self,
+        snapshot: &ExternalSourceCatalogSnapshot,
+    ) -> Option<String> {
+        let attention = external_agent_attention(self.external_source_snapshot.as_ref(), snapshot);
+        let next_key = attention.key.clone();
+        if next_key == self.external_agent_notice_key {
+            return None;
+        }
+        self.external_agent_notice_key = next_key;
+        if attention.confirmations
+            + attention.conflicts
+            + attention.unavailable
+            + attention.diagnostics
+            == 0
+        {
+            None
+        } else {
+            let mut details = Vec::new();
+            if attention.confirmations > 0 {
+                details.push(format!("{} confirmations", attention.confirmations));
+            }
+            if attention.conflicts > 0 {
+                details.push(format!("{} name conflicts", attention.conflicts));
+            }
+            if attention.unavailable > 0 {
+                details.push(format!(
+                    "{} enabled agents unavailable",
+                    attention.unavailable
+                ));
+            }
+            if attention.diagnostics > 0 {
+                details.push(format!("{} issues", attention.diagnostics));
+            }
+            Some(format!(
+                "Agents from external AI applications need attention: {} - run /builtin:agents refresh",
+                details.join(", ")
+            ))
+        }
+    }
+
+    fn handle_external_agent_review(
+        &mut self,
+        arguments: &str,
+        chat_view: &mut ChatView,
+        chat_state: &ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let action = match parse_external_agent_review_action(
+            arguments,
+            self.external_source_snapshot.as_ref(),
+            self.external_agent_review_snapshot.as_ref(),
+        ) {
+            Ok(action) => action,
+            Err(error) => {
+                chat_view.set_status(Some(error));
+                return;
+            }
+        };
+        if matches!(action, ExternalAgentReviewAction::Show) {
+            self.external_agent_review_snapshot = self.external_source_snapshot.clone();
+            chat_view.show_info_popup(external_agent_review_text(
+                self.external_agent_review_snapshot.as_ref(),
+            ));
+            return;
+        }
+        if self.external_agent_mutation_rx.is_some() {
+            chat_view.set_status(Some(
+                "An external agent update is already running; input and cancellation remain available."
+                    .to_string(),
+            ));
+            return;
+        }
+
+        let workspace = self.workspace_path_for_sync(chat_state);
+        let pending_status = match &action {
+            ExternalAgentReviewAction::Refresh => "Refreshing external agents",
+            ExternalAgentReviewAction::Decide { approved: true, .. } => "Enabling external agent",
+            ExternalAgentReviewAction::Decide {
+                approved: false, ..
+            } => "Disabling external agent",
+            ExternalAgentReviewAction::Choose { .. } => "Selecting agent source",
+            ExternalAgentReviewAction::Show => unreachable!(),
+        };
+        let task_action = action.clone();
+        let (sender, receiver) = mpsc::channel();
+        rt_handle.spawn(async move {
+            let result = match &task_action {
+                ExternalAgentReviewAction::Refresh => {
+                    external_source_snapshot(Some(&workspace), true).await
+                }
+                ExternalAgentReviewAction::Decide {
+                    candidate_id,
+                    decision_key,
+                    approved,
+                    expected_subagent_generation,
+                    expected_preference_revision,
+                } => {
+                    set_external_subagent_activation(
+                        Some(&workspace),
+                        candidate_id,
+                        *approved,
+                        *expected_subagent_generation,
+                        *expected_preference_revision,
+                        decision_key,
+                    )
+                    .await
+                }
+                ExternalAgentReviewAction::Choose {
+                    conflict_key,
+                    candidate_id,
+                    approve_external,
+                    expected_subagent_generation,
+                    expected_preference_revision,
+                } => {
+                    choose_external_subagent_conflict(
+                        Some(&workspace),
+                        conflict_key,
+                        candidate_id,
+                        *approve_external,
+                        *expected_subagent_generation,
+                        *expected_preference_revision,
+                    )
+                    .await
+                }
+                ExternalAgentReviewAction::Show => unreachable!(),
+            }
+            .map_err(sanitize_external_source_operation_error);
+            let _ = sender.send(ExternalAgentMutationResult {
+                action: task_action,
+                result,
+            });
+        });
+        self.external_agent_mutation_rx = Some(receiver);
+        chat_view.set_status(Some(format!(
+            "{pending_status}; you can continue typing or cancel other UI work"
+        )));
+    }
+
+    fn poll_external_agent_mutation(&mut self, chat_view: &mut ChatView) -> bool {
+        let outcome = match self
+            .external_agent_mutation_rx
+            .as_ref()
+            .map(Receiver::try_recv)
+        {
+            Some(Ok(outcome)) => outcome,
+            Some(Err(MpscTryRecvError::Empty)) | None => return false,
+            Some(Err(MpscTryRecvError::Disconnected)) => {
+                self.external_agent_mutation_rx = None;
+                chat_view.set_status(Some(
+                    "External agent update stopped before returning a result; run /builtin:agents refresh."
+                        .to_string(),
+                ));
+                return true;
+            }
+        };
+        self.external_agent_mutation_rx = None;
+        match outcome.result {
+            Ok(snapshot) => {
+                if external_agent_result_is_stale(self.external_source_snapshot.as_ref(), &snapshot)
+                {
+                    chat_view.set_status(Some(
+                        "External agent update completed; newer agent results are already displayed."
+                            .to_string(),
+                    ));
+                    return true;
+                }
+                let snapshot = merge_external_agent_mutation_snapshot(
+                    self.external_source_snapshot.as_ref(),
+                    snapshot,
+                );
+                self.update_external_source_view(chat_view, &snapshot);
+                self.external_agent_notice_key =
+                    external_agent_pending_notice_key(Some(&snapshot), &snapshot);
+                let confirmations = snapshot.pending_subagent_approvals.len();
+                let conflicts = snapshot
+                    .subagent_conflicts
+                    .iter()
+                    .filter(|conflict| conflict.selected_candidate_id.is_none())
+                    .count();
+                let result_label = external_agent_mutation_result_label(&outcome.action, &snapshot);
+                self.external_source_snapshot = Some(snapshot);
+                if confirmations + conflicts == 0 {
+                    chat_view.set_status(Some(result_label));
+                } else {
+                    chat_view.set_status(Some(format!(
+                        "{result_label}; {confirmations} confirmations and {conflicts} conflicts remain - run /builtin:agents refresh"
+                    )));
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error_code = error.code.as_str(),
+                    correlation_id = error.correlation_id.as_deref().unwrap_or("none"),
+                    "External agent review action failed"
+                );
+                chat_view.set_status(Some(external_operation_error_status("agents", &error)));
+            }
+        }
+        true
+    }
 }

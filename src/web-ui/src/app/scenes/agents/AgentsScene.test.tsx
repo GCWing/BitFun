@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { useAgentsStore } from './agentsStore';
+import { isLocallyManageableSubagent } from './agentVisibility';
+
+const useAgentsListMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -20,11 +23,40 @@ vi.mock('./components/CreateAgentPage', () => ({
 }));
 
 vi.mock('./components/AgentCard', () => ({
-  default: () => <div />,
+  default: ({
+    agent,
+    onOpenDetails,
+  }: {
+    agent: { name: string };
+    onOpenDetails: (agent: unknown) => void;
+  }) => (
+    <button type="button" onClick={() => onOpenDetails(agent)}>{agent.name}</button>
+  ),
 }));
 
 vi.mock('./components/CoreAgentCard', () => ({
   default: () => <div />,
+}));
+
+vi.mock('./components/useUserToolGroups', () => ({
+  useUserToolGroups: () => ({
+    groups: [],
+    loading: false,
+    saveGroups: vi.fn(),
+  }),
+}));
+
+vi.mock('./components/useUserSkillGroups', () => ({
+  useUserSkillGroups: () => ({
+    groups: [],
+    loading: false,
+    saveGroups: vi.fn(),
+  }),
+}));
+
+vi.mock('./components/SkillGroupPicker', () => ({
+  SkillGroupPicker: () => <div data-testid="agent-detail-skill-groups">skill picker</div>,
+  SkillGroupSummary: () => <div data-testid="agent-detail-skill-summary">skill summary</div>,
 }));
 
 vi.mock('@/component-library', () => ({
@@ -36,6 +68,7 @@ vi.mock('@/component-library', () => ({
     <button type="button" onClick={onClick}>{children}</button>
   ),
   Search: () => <input readOnly />,
+  Select: () => <div />,
   Switch: () => <input type="checkbox" readOnly />,
   confirmDanger: vi.fn(async () => false),
 }));
@@ -53,13 +86,17 @@ vi.mock('@/app/components', () => ({
 }));
 
 vi.mock('./hooks/useAgentsList', () => ({
-  useAgentsList: () => ({
+  useAgentsList: () => useAgentsListMock(),
+}));
+
+function mockAgentsList(overrides: Record<string, unknown> = {}) {
+  useAgentsListMock.mockReturnValue({
     allAgents: [],
     filteredAgents: [],
     loading: false,
     availableTools: [],
     getModeProfile: () => null,
-    getModeSkills: () => [],
+    getAgentSkills: () => [],
     getModeManageableSubagents: () => [],
     counts: { builtin: 0, user: 0, project: 0, mode: 0, subagent: 0 },
     loadAgents: vi.fn(),
@@ -69,8 +106,10 @@ vi.mock('./hooks/useAgentsList', () => ({
     handleSetSkills: vi.fn(),
     handleResetSkills: vi.fn(),
     handleSetSubagentEnabled: vi.fn(),
-  }),
-}));
+    handleSetSubagentModel: vi.fn(),
+    ...overrides,
+  });
+}
 
 vi.mock('@/app/hooks/useGallerySceneAutoRefresh', () => ({
   useGallerySceneAutoRefresh: vi.fn(),
@@ -78,6 +117,13 @@ vi.mock('@/app/hooks/useGallerySceneAutoRefresh', () => ({
 
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   useCurrentWorkspace: () => ({ workspacePath: 'D:/workspace/project' }),
+}));
+
+vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
+  configManager: {
+    getConfig: vi.fn(async () => false),
+    onConfigChange: vi.fn(() => () => {}),
+  },
 }));
 
 vi.mock('@/shared/notification-system', () => ({
@@ -109,6 +155,14 @@ try {
 
 const describeWithJsdom = JSDOMCtor ? describe : describe.skip;
 
+describe('agent editability', () => {
+  it('keeps external subagents visible but outside local mutations', () => {
+    expect(isLocallyManageableSubagent({ source: 'external' })).toBe(false);
+    expect(isLocallyManageableSubagent({ subagentSource: 'external', source: 'user' })).toBe(false);
+    expect(isLocallyManageableSubagent({ source: 'builtin' })).toBe(true);
+  });
+});
+
 describeWithJsdom('AgentsScene', () => {
   let dom: { window: Window & typeof globalThis };
   let container: HTMLDivElement;
@@ -139,6 +193,7 @@ describeWithJsdom('AgentsScene', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
     useAgentsStore.getState().openHome();
+    mockAgentsList();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -175,5 +230,57 @@ describeWithJsdom('AgentsScene', () => {
     expect(stylesheet).toContain('width: 100%;');
     expect(stylesheet).toContain('flex: 1 1 auto;');
     expect(stylesheet).toContain('min-width: 0;');
+  });
+
+  it('shows skill grouping and editing for a custom subagent with the Skill tool', async () => {
+    const subagent = {
+      key: 'user::skill-worker',
+      id: 'skill-worker',
+      name: 'Skill worker',
+      description: 'Uses specialized workflows.',
+      isReadonly: false,
+      isReview: false,
+      toolCount: 1,
+      defaultTools: ['Skill'],
+      defaultEnabled: true,
+      effectiveEnabled: true,
+      source: 'user',
+      agentKind: 'subagent' as const,
+      capabilities: [],
+    };
+    mockAgentsList({
+      allAgents: [subagent],
+      filteredAgents: [subagent],
+      getAgentSkills: (agentId: string) => agentId === subagent.id
+        ? [{ key: 'user::custom::workflow', effectiveEnabled: true }]
+        : [],
+    });
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent === subagent.name)
+        ?.click();
+    });
+
+    const skillsTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+      .find((tab) => tab.textContent?.includes('agentsOverview.skills'));
+    expect(skillsTab).toBeTruthy();
+
+    await act(async () => {
+      skillsTab?.click();
+    });
+    expect(container.querySelector('[data-testid="agent-detail-skill-summary"]')).toBeTruthy();
+
+    const manageButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === 'manage');
+    expect(manageButton).toBeTruthy();
+    await act(async () => {
+      manageButton?.click();
+    });
+    expect(container.querySelector('[data-testid="agent-detail-skill-groups"]')).toBeTruthy();
   });
 });

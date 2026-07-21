@@ -91,7 +91,18 @@ describe('SessionsSection layout styles', () => {
     expect(reviewBadgeBlock).toContain('font-weight: 600;');
     expect(backgroundSubagentBadgeBlock).toContain('flex: 0 0 auto;');
     expect(backgroundSubagentBadgeBlock).toContain('display: inline-grid;');
+    expect(backgroundSubagentBadgeBlock).toContain('place-items: center;');
+    expect(backgroundSubagentBadgeBlock).toContain('line-height: 0;');
     expect(backgroundSubagentBadgeBlock).toContain('width: 16px;');
     expect(backgroundSubagentBadgeBlock).toContain('height: 16px;');
+
+    const backgroundSubagentIconBlock = extractInlineItemBlock(stylesheet, 'background-subagent-icon');
+    expect(backgroundSubagentIconBlock).toContain('place-self: center;');
+    expect(backgroundSubagentIconBlock).toContain('display: block;');
+    expect(backgroundSubagentIconBlock).toContain('transform-origin: center center;');
+    expect(backgroundSubagentIconBlock).toContain('--bitfun-subagent-bot-optical-y: -1px;');
+    expect(stylesheet).toContain(
+      'transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(1);',
+    );
   });
 });

@@ -165,6 +165,7 @@ export function runManifestParserSelfTest({
   for (const manifestPath of [
     'src/apps/desktop/Cargo.toml',
     'src/apps/cli/Cargo.toml',
+    'src/apps/server/Cargo.toml',
     'src/crates/interfaces/acp/Cargo.toml',
   ]) {
     if (!productCoreRulePaths.has(manifestPath)) {
@@ -195,15 +196,21 @@ export function runManifestParserSelfTest({
     },
     {
       manifestPath: 'src/apps/server/Cargo.toml',
-      text: '[dependencies]\naxum = { workspace = true }',
+      text:
+        '[dependencies]\nbitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }',
     },
     {
       manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
       text: '[dependencies."bitfun-core"]\npath = "../../assembly/core"\ndefault-features = false\nfeatures = ["product-full"]',
     },
   ]);
-  if (discoveredProductCoreManifests.join(',') !== 'src/apps/desktop/Cargo.toml,src/crates/interfaces/acp/Cargo.toml') {
-    throw new Error('product core dependency scanner must discover only manifests that depend on bitfun-core');
+  if (
+    discoveredProductCoreManifests.join(',') !==
+    'src/apps/desktop/Cargo.toml,src/apps/server/Cargo.toml,src/crates/interfaces/acp/Cargo.toml'
+  ) {
+    throw new Error(
+      'product core dependency scanner must discover only manifests that depend on bitfun-core',
+    );
   }
   const ownerFeatureRulePaths = new Set(
     ownerCrateFeatureAssemblyRules.map((rule) => rule.manifestPath),
@@ -618,6 +625,7 @@ export function runManifestParserSelfTest({
   );
   const coreFullyMigratedDeps = new Set([
     'aes',
+    'bitfun-relay-service',
     'hostname',
     'htmd',
     'legible',
@@ -635,7 +643,7 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-service']) {
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
@@ -854,6 +862,12 @@ export function runManifestParserSelfTest({
   const opencodeAdapterPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/adapters/opencode-adapter/src/lib.rs',
   );
+  const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
+  );
+  const externalSourcePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_sources.rs',
+  );
   const managedPluginActivationPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/assembly/core/src/plugin_runtime.rs',
   );
@@ -907,6 +921,17 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('public API parser must collect top-level items and re-exports without impl methods');
   }
+  const parsedExternalSubagentIds = collectTopLevelRustPublicSymbols(`
+    external_subagent_id!(ExternalSubagentLocalId, "local");
+    external_subagent_id!(
+      ExternalSubagentBehaviorVersion,
+      "behavior"
+    );
+    pub struct SecretText(String);
+  `);
+  if (parsedExternalSubagentIds.join(',') !== 'ExternalSubagentLocalId,ExternalSubagentBehaviorVersion,SecretText') {
+    throw new Error('public API parser must collect external subagent id macro exports');
+  }
   const pluginPublicApiSymbols = (pluginPublicApiRule?.allowedSymbolEntries || []).map(
     (entry) => entry.symbol,
   );
@@ -955,10 +980,10 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory, command provider, and standalone-tool provider surfaces',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, tool, subagent, and MCP providers',
     );
   }
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
@@ -972,6 +997,47 @@ export function runManifestParserSelfTest({
     }
     if (entry.wireImpact !== false) {
       throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
+    }
+  }
+  if (!externalSubagentPublicApiRule) {
+    throw new Error('external subagent contracts must have an independent public API budget rule');
+  }
+  if (!publicApiContractSlices.includes('external-source-subagent-contract')) {
+    throw new Error('external subagent contracts must have an independent contract slice');
+  }
+  if (!publicApiContractSlices.includes('external-source-mcp-contract')) {
+    throw new Error('external MCP contracts must have an independent contract slice');
+  }
+  for (const requiredSymbol of [
+    'ExternalMcpServerDefinition',
+    'ExternalMcpSourceProvider',
+    'PreparedExternalMcpServer',
+    'external_mcp_approval_key',
+    'external_mcp_conflict_key',
+  ]) {
+    if (!externalSourcePublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-mcp-contract'
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external MCP public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
+    }
+  }
+  for (const requiredSymbol of [
+    'ExternalSubagentDefinition',
+    'ExternalSubagentSourceProvider',
+    'ExternalSubagentSummary',
+    'external_subagent_approval_key',
+    'external_subagent_conflict_key',
+  ]) {
+    if (!externalSubagentPublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-subagent-contract'
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external subagent public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
     }
   }
   if (
@@ -3267,7 +3333,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/tests.rs',
       contracts: [
-        'background_subagent_start_acknowledgement_uses_session_id_only',
+        'background_subagent_start_acknowledgement_exposes_agent_wait_task_id',
         '<background_task',
       ],
     },

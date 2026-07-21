@@ -260,6 +260,7 @@ export function useMiniAppBridge(
                 enableTools: params.enableTools as boolean | undefined,
                 sessionId: params.sessionId as string | undefined,
                 appDataWorkspace: params.appDataWorkspace as string | undefined,
+                model: typeof params.model === 'string' ? params.model : undefined,
               },
             );
             agentSessionIdsRef.current.add(result.sessionId);

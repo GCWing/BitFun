@@ -62,6 +62,7 @@ fn register_prompt_order_test_subagent(
             SubAgentSource::Builtin => crate::agentic::agents::AgentSource::Builtin,
             SubAgentSource::Project => crate::agentic::agents::AgentSource::Project,
             SubAgentSource::User => crate::agentic::agents::AgentSource::User,
+            SubAgentSource::External => crate::agentic::agents::AgentSource::External,
         },
         Some(source),
         custom_config,
@@ -128,22 +129,25 @@ fn task_schema_accepts_optional_model_id() {
 }
 
 #[test]
-fn task_schema_exposes_explicit_review_follow_up_control() {
-    let schema = TaskTool::new().input_schema();
-    let follow_up = &schema["properties"]["allow_review_follow_up"];
+fn task_model_id_inherit_requests_parent_model_inheritance() {
+    let invocation = TaskTool::parse_invocation(
+        &json!({
+            "action": "spawn",
+            "description": "Inspect parser",
+            "prompt": "Inspect the parser flow.",
+            "subagent_type": "Explore",
+            "model_id": "inherit"
+        }),
+        false,
+    )
+    .expect("inherit should be accepted as a Task model selection");
 
-    assert_eq!(follow_up["type"], "boolean");
-    let description = follow_up["description"]
-        .as_str()
-        .expect("allow_review_follow_up description should be a string");
-    assert!(description.contains("explicitly"));
-    assert!(description.contains("review"));
-    assert!(description.contains("run_in_background=true"));
-    assert!(schema["properties"].get("detach_from_parent").is_none());
+    assert_eq!(invocation.model_id, None);
+    assert!(invocation.inherit_parent_model);
 }
 
 #[tokio::test]
-async fn validate_input_rejects_review_background_without_explicit_follow_up_permission() {
+async fn validate_input_accepts_review_background_for_agent_wait() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
@@ -157,72 +161,7 @@ async fn validate_input_rejects_review_background_without_explicit_follow_up_per
         )
         .await;
 
-    assert!(!validation.result);
-    let message = validation
-        .message
-        .as_deref()
-        .expect("validation should explain how review delivery works");
-    assert!(message.contains("one final review"));
-    assert!(message.contains("allow_review_follow_up=true"));
-}
-
-#[tokio::test]
-async fn validate_input_accepts_explicit_review_follow_up() {
-    let validation = TaskTool::new()
-        .validate_input(
-            &json!({
-                "action": "spawn",
-                "description": "Review later",
-                "prompt": "Review the current diff",
-                "subagent_type": "CodeReview",
-                "run_in_background": true,
-                "allow_review_follow_up": true
-            }),
-            None,
-        )
-        .await;
-
     assert!(validation.result, "{:?}", validation.message);
-}
-
-#[tokio::test]
-async fn validate_input_rejects_review_follow_up_without_background_execution() {
-    let validation = TaskTool::new()
-        .validate_input(
-            &json!({
-                "action": "spawn",
-                "description": "Review changes",
-                "prompt": "Review the current diff",
-                "subagent_type": "CodeReview",
-                "allow_review_follow_up": true
-            }),
-            None,
-        )
-        .await;
-
-    assert!(!validation.result);
-    assert!(validation.message.as_deref().is_some_and(|message| {
-        message.contains("allow_review_follow_up=true requires run_in_background=true")
-    }));
-}
-
-#[test]
-fn parse_input_preserves_review_follow_up_for_send_input() {
-    let invocation = TaskTool::parse_invocation(
-        &json!({
-            "action": "send_input",
-            "description": "Continue review later",
-            "prompt": "Continue the review and report when finished",
-            "session_id": "review-session-1",
-            "run_in_background": true,
-            "allow_review_follow_up": true
-        }),
-        false,
-    )
-    .expect("review follow-up send_input should parse");
-
-    assert!(invocation.run_in_background);
-    assert!(invocation.allow_review_follow_up);
 }
 
 #[tokio::test]
@@ -241,26 +180,6 @@ async fn validate_input_preserves_non_review_background_tasks() {
         .await;
 
     assert!(validation.result, "{:?}", validation.message);
-}
-
-#[tokio::test]
-async fn validate_input_rejects_review_follow_up_for_cancel() {
-    let validation = TaskTool::new()
-        .validate_input(
-            &json!({
-                "action": "cancel",
-                "session_id": "subagent-session-1",
-                "allow_review_follow_up": true
-            }),
-            None,
-        )
-        .await;
-
-    assert!(!validation.result);
-    assert!(validation
-        .message
-        .as_deref()
-        .is_some_and(|message| message.contains("allow_review_follow_up is not allowed")));
 }
 
 #[test]
@@ -377,16 +296,18 @@ async fn managed_review_agent_requires_an_exact_packet_id() {
 }
 
 #[test]
-fn background_subagent_start_acknowledgement_uses_session_id_only() {
-    let message = TaskTool::background_subagent_started_assistant_message("subagent-session-123");
+fn background_subagent_start_acknowledgement_exposes_agent_wait_task_id() {
+    let message = TaskTool::background_subagent_started_assistant_message(
+        "subagent-session-123",
+        "bg-subagent-123",
+    );
 
     assert!(message.starts_with("Background subagent started successfully."));
     assert!(message.contains("session_id: \"subagent-session-123\""));
-    assert!(message.contains("Avoid polling for status updates."));
+    assert!(message.contains("background_task_id: \"bg-subagent-123\""));
+    assert!(message.contains("Use AgentWait"));
     assert!(!message.contains("GeneralPurpose"));
     assert!(!message.contains("<background_task"));
-    assert!(!message.contains("bg-subagent-123"));
-    assert!(!message.contains("background_task_id="));
 }
 
 #[tokio::test]

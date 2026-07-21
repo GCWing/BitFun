@@ -12,7 +12,7 @@ const EMPTY_SNAPSHOT: ExplorerSnapshot = {
   loadingPaths: new Set(),
   options: {
     enablePathCompression: true,
-    showHiddenFiles: false,
+    showHiddenFiles: true,
     sortBy: 'name',
     sortOrder: 'asc',
     excludePatterns: [],

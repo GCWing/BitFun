@@ -18,24 +18,28 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
+use bitfun_agent_runtime::sdk::{
+    AgentLocalCommandTurnRecordRequest, AgentSessionUsageRequest, SessionUsageReport,
+};
 use bitfun_events::AgenticEvent;
 use resize::ResizeRedrawState;
 
 use crate::actions::{
-    action_by_id, action_for_alias, slash_actions, ActionContext, ActionHandler, ActionSpec,
+    action_by_id, action_conflict_behavior_version, action_for_alias,
+    removed_management_command_hint, slash_actions, ActionContext, ActionHandler, ActionSpec,
     ActionState, ResolvedKeymap,
 };
-use crate::agent::{core_adapter::CoreAgentAdapter, Agent};
+use crate::agent::runtime_client::CliAgentRuntimeClient;
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
 use crate::runtime::CliRuntimeContext;
-use crate::ui::agent_selector::AgentItem;
+use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
 use crate::ui::chat::{ChatView, MouseGestureOutcome};
 use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
 use crate::ui::command_palette::PaletteAction;
 use crate::ui::login_form::LoginFormAction;
 use crate::ui::mcp_add_dialog::McpAddAction;
-use crate::ui::mcp_selector::McpItem;
+use crate::ui::mcp_selector::{McpItem, McpItemAction};
 use crate::ui::model_config_form::{ModelFormAction, ModelFormResult};
 use crate::ui::model_selector::ModelItem;
 use crate::ui::permission::PermissionAction;
@@ -62,18 +66,19 @@ use bitfun_core::agentic::tools::implementations::skills::{
     ModeSkillInfo, SkillInfo,
 };
 use bitfun_core::external_sources::{
-    expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
-    prompt_command_conflict_key, remember_external_source_conflict_choice,
-    set_external_prompt_command_conflict_choice, set_external_tool_conflict_choice,
-    set_external_tool_target_decision, subscribe_external_source_updates,
-    ExternalSourceCatalogSnapshot, ExternalSourceDiagnosticSeverity, ExternalToolActivationState,
-    ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolRuntimeKind,
-    PromptCommandAvailability,
+    choose_external_subagent_conflict, expand_external_prompt_command,
+    external_source_conflict_choices, external_source_snapshot, prompt_command_conflict_key,
+    remember_external_source_conflict_choice, sanitize_external_source_operation_error,
+    set_external_prompt_command_conflict_choice, set_external_subagent_activation,
+    set_external_tool_conflict_choice, set_external_tool_target_decision,
+    subscribe_external_source_updates, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
+    ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+    ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
+    ExternalSubagentCompatibilityState, ExternalToolActivationState, ExternalToolCapability,
+    ExternalToolCatalogEntry, ExternalToolRuntimeKind, PromptCommandAvailability,
 };
 use bitfun_core::service::config::GlobalConfigManager;
-use bitfun_core::service::session_usage::{
-    render_usage_report_markdown, SessionUsageReportRequest,
-};
+use bitfun_core::service::session_usage::render_usage_report_markdown;
 
 /// Spinner/UI redraw interval while a turn is processing.
 const SPINNER_REDRAW_INTERVAL_MS: u64 = 100;
@@ -118,6 +123,7 @@ pub(crate) enum ChatExitReason {
 /// Pending MCP operation (deferred to allow a render frame for loading state)
 enum PendingMcpOp {
     Toggle(String),
+    External(McpItem),
     Add { name: String, config_json: String },
     Delete(String),
 }
@@ -135,7 +141,23 @@ enum PendingMcpTask {
         server_id: String,
         handle: tokio::task::JoinHandle<bitfun_core::util::errors::BitFunResult<()>>,
     },
+    External {
+        item_id: String,
+        item_name: String,
+        handle: tokio::task::JoinHandle<std::result::Result<ExternalSourceCatalogSnapshot, String>>,
+    },
 }
+
+struct PendingModeChange {
+    session_id: String,
+    mode_id: String,
+    started_at: Instant,
+    slow_notice_shown: bool,
+    exit_warning_shown: bool,
+    handle: tokio::task::JoinHandle<anyhow::Result<()>>,
+}
+
+const MODE_CHANGE_SLOW_NOTICE: Duration = Duration::from_secs(15);
 
 #[derive(Default)]
 struct NonKeyEventOutcome {
@@ -159,7 +181,7 @@ pub(crate) struct ChatMode {
     /// Current agent type (e.g. "agentic", "plan", "debug")
     agent_type: String,
     workspace: Option<String>,
-    agent: Arc<CoreAgentAdapter>,
+    agent: Arc<CliAgentRuntimeClient>,
     runtime: Arc<CliRuntimeContext>,
     /// User-level default resolved from shared config for this TUI run.
     auto_approve_ask_default: bool,
@@ -173,6 +195,9 @@ pub(crate) struct ChatMode {
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
     pending_mcp_tasks: Vec<PendingMcpTask>,
+    /// One durable mode update in flight. The event loop remains responsive
+    /// while the runtime owner writes session metadata.
+    pending_mode_change: Option<PendingModeChange>,
     external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_source_conflict_choices: BTreeMap<String, String>,
     external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
@@ -180,6 +205,9 @@ pub(crate) struct ChatMode {
     external_tool_notice_key: Option<String>,
     external_tool_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_tool_mutation_rx: Option<Receiver<ExternalToolMutationResult>>,
+    external_agent_notice_key: Option<String>,
+    external_agent_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
+    external_agent_mutation_rx: Option<Receiver<ExternalAgentMutationResult>>,
 }
 
 /// Map agent_type to a display name for status messages
@@ -197,7 +225,7 @@ impl ChatMode {
         workspace: Option<String>,
         runtime: Arc<CliRuntimeContext>,
     ) -> Self {
-        let agent = Arc::new(CoreAgentAdapter::new(
+        let agent = Arc::new(CliAgentRuntimeClient::new(
             runtime.as_ref(),
             workspace.clone().map(PathBuf::from),
         ));
@@ -216,6 +244,7 @@ impl ChatMode {
             initial_prompt: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
+            pending_mode_change: None,
             external_source_snapshot: None,
             external_source_conflict_choices: BTreeMap::new(),
             external_source_conflict_lineage_current_keys: BTreeMap::new(),
@@ -223,6 +252,9 @@ impl ChatMode {
             external_tool_notice_key: None,
             external_tool_review_snapshot: None,
             external_tool_mutation_rx: None,
+            external_agent_notice_key: None,
+            external_agent_review_snapshot: None,
+            external_agent_mutation_rx: None,
         }
     }
 

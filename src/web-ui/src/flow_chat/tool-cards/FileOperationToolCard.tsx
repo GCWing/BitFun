@@ -43,6 +43,8 @@ import { diffLines } from 'diff';
 import { createLogger } from '@/shared/utils/logger';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { useTypewriter } from '../hooks/useTypewriter';
+import { useReportTypewriterReveal } from '../hooks/TypewriterRevealGate';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
 import { useGitState } from '@/tools/git/hooks/useGitState';
@@ -231,6 +233,42 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const oldStringContent = getOldString();
   const newStringContent = getNewString();
   const contentPreview = getContent();
+
+  const isWriteContentAnimating =
+    toolItem.toolName === 'Write'
+    && Boolean(isParamsStreaming)
+    && status !== 'completed'
+    && status !== 'error'
+    && status !== 'cancelled'
+    && status !== 'rejected';
+  const isEditContentAnimating =
+    toolItem.toolName === 'Edit'
+    && Boolean(isParamsStreaming)
+    && status !== 'completed'
+    && status !== 'error'
+    && status !== 'cancelled'
+    && status !== 'rejected';
+
+  const writeTypewriter = useTypewriter(
+    toolItem.toolName === 'Write' ? contentPreview : '',
+    isWriteContentAnimating,
+  );
+  const editTypewriter = useTypewriter(
+    toolItem.toolName === 'Edit' ? newStringContent : '',
+    isEditContentAnimating,
+  );
+  useReportTypewriterReveal(`${toolId ?? 'file-op'}:write`, writeTypewriter.isRevealing);
+  useReportTypewriterReveal(`${toolId ?? 'file-op'}:edit`, editTypewriter.isRevealing);
+
+  const writeDisplayContent = (isWriteContentAnimating || writeTypewriter.isRevealing)
+    ? writeTypewriter.displayText
+    : contentPreview;
+  const editDisplayContent = (isEditContentAnimating || editTypewriter.isRevealing)
+    ? editTypewriter.displayText
+    : newStringContent;
+  const writeVisuallyStreaming = isWriteContentAnimating || writeTypewriter.isRevealing;
+  const editVisuallyStreaming = isEditContentAnimating || editTypewriter.isRevealing;
+
   const writeContentCharCount = toolItem.toolName === 'Write' ? contentPreview.length : 0;
   const writeContentStatusText = useMemo(() => {
     if (toolItem.toolName !== 'Write' || writeContentCharCount <= 0) return null;
@@ -448,19 +486,31 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     previousStatusRef.current === status;
   const previewVariant = useMemo(() => {
     if (toolItem.toolName === 'Edit') {
-      if (status !== 'completed' && newStringContent) {
+      // Keep streaming-code until typewriter drains so completion does not snap
+      // the remaining characters into the diff view.
+      if ((status !== 'completed' || editTypewriter.isRevealing) && newStringContent) {
         return 'streaming-code';
       }
-      if (status === 'completed' && !isParamsStreaming && (oldStringContent || newStringContent)) {
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !editTypewriter.isRevealing
+        && (oldStringContent || newStringContent)
+      ) {
         return 'completed-diff';
       }
     }
 
     if (toolItem.toolName === 'Write') {
-      if (status !== 'completed' && contentPreview) {
+      if ((status !== 'completed' || writeTypewriter.isRevealing) && contentPreview) {
         return 'streaming-code';
       }
-      if (status === 'completed' && !isParamsStreaming && contentPreview) {
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !writeTypewriter.isRevealing
+        && contentPreview
+      ) {
         return 'completed-diff';
       }
     }
@@ -468,11 +518,13 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     return 'none';
   }, [
     contentPreview,
+    editTypewriter.isRevealing,
     isParamsStreaming,
     newStringContent,
     oldStringContent,
     status,
     toolItem.toolName,
+    writeTypewriter.isRevealing,
   ]);
 
   useLayoutEffect(() => {
@@ -832,14 +884,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       : FILE_OPERATION_STREAMING_MAX_HEIGHT;
 
     if (toolItem.toolName === 'Edit') {
-      if (status !== 'completed' && newStringContent) {
+      if ((status !== 'completed' || editTypewriter.isRevealing) && newStringContent) {
         return (
           <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
               <CodePreview
-                content={newStringContent}
+                content={editDisplayContent}
                 filePath={currentFilePath}
-                isStreaming={isParamsStreaming}
+                isStreaming={editVisuallyStreaming}
                 showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
                 autoScrollToBottom={false}
@@ -850,7 +902,12 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         );
       }
       
-      if (status === 'completed' && !isParamsStreaming && (oldStringContent || newStringContent)) {
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !editTypewriter.isRevealing
+        && (oldStringContent || newStringContent)
+      ) {
         return (
           <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
@@ -871,14 +928,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
 
     if (toolItem.toolName === 'Write') {
-      if (status !== 'completed' && contentPreview) {
+      if ((status !== 'completed' || writeTypewriter.isRevealing) && contentPreview) {
         return (
           <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
               <CodePreview
-                content={contentPreview}
+                content={writeDisplayContent}
                 filePath={currentFilePath}
-                isStreaming={isParamsStreaming}
+                isStreaming={writeVisuallyStreaming}
                 showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
                 autoScrollToBottom={false}
@@ -889,7 +946,12 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         );
       }
       
-      if (status === 'completed' && !isParamsStreaming && contentPreview) {
+      if (
+        status === 'completed'
+        && !isParamsStreaming
+        && !writeTypewriter.isRevealing
+        && contentPreview
+      ) {
         return (
           <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">

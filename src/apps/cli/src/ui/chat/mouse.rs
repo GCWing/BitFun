@@ -19,6 +19,10 @@ impl ChatView {
         self.pending_skill_action.take()
     }
 
+    pub(crate) fn take_pending_agent_action(&mut self) -> Option<AgentSelectorAction> {
+        self.pending_agent_action.take()
+    }
+
     pub(crate) fn take_pending_subagent_action(&mut self) -> Option<SubagentSelectorAction> {
         self.pending_subagent_action.take()
     }
@@ -35,7 +39,9 @@ impl ChatView {
             return true;
         }
         if self.agent_selector.captures_mouse(mouse) {
-            self.agent_selector.handle_mouse_event(mouse);
+            if let Some(action) = self.agent_selector.handle_mouse_event(mouse) {
+                self.pending_agent_action = Some(action);
+            }
             return true;
         }
         if self.session_selector.captures_mouse(mouse) {
@@ -57,7 +63,7 @@ impl ChatView {
         if self.mcp_selector.captures_mouse(mouse) {
             let action = self.mcp_selector.handle_mouse_event(mouse);
             if let McpAction::Toggle(item) = action {
-                self.pending_mcp_toggle = Some(item.id.clone());
+                self.pending_mcp_toggle = Some(item);
             }
             return true;
         }

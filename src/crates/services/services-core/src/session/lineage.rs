@@ -42,6 +42,13 @@ pub struct SessionBranchResult {
     pub agent_type: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchSessionLineage {
+    pub base_session_name: String,
+    /// Positive ordinal allocated in the base session-title namespace.
+    pub ordinal: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct BranchSessionMetadataFacts<'a> {
     pub source_metadata: &'a SessionMetadata,
@@ -52,7 +59,55 @@ pub struct BranchSessionMetadataFacts<'a> {
     pub source_turn_id: &'a str,
     pub source_turn_index: usize,
     pub branched_turns: &'a [DialogTurnData],
+    pub branch_lineage: &'a BranchSessionLineage,
     pub now_ms: u64,
+}
+
+/// Resolves the title namespace and the next compact branch title.
+///
+/// A title matching the inherited `base title (N)` keeps that title namespace,
+/// even when a user changed `N`; any other renamed title becomes a new base.
+/// The next ordinal is allocated from matching titles across the workspace, not
+/// from the fork root, so nested forks do not accumulate suffixes.
+pub fn resolve_branch_session_lineage(
+    source_metadata: &SessionMetadata,
+    source_session_name: &str,
+    metadata_list: &[SessionMetadata],
+) -> BranchSessionLineage {
+    let source_session_name = source_session_name.trim();
+    let base_session_name = fork_base_session_name(source_metadata)
+        .filter(|base_session_name| {
+            branch_session_name_ordinal(source_session_name, base_session_name).is_some()
+        })
+        .unwrap_or_else(|| source_session_name.to_string());
+
+    let max_ordinal = std::iter::once(source_session_name)
+        .chain(
+            metadata_list
+                .iter()
+                .map(|metadata| metadata.session_name.as_str()),
+        )
+        .filter_map(|session_name| branch_session_name_ordinal(session_name, &base_session_name))
+        .max()
+        .unwrap_or_default();
+
+    BranchSessionLineage {
+        base_session_name,
+        ordinal: max_ordinal.saturating_add(1),
+    }
+}
+
+pub fn format_branch_session_name(base_session_name: &str, ordinal: usize) -> String {
+    format!("{base_session_name} ({ordinal})")
+}
+
+fn branch_session_name_ordinal(session_name: &str, base_session_name: &str) -> Option<usize> {
+    let suffix = session_name
+        .trim()
+        .strip_prefix(base_session_name)?
+        .strip_prefix(" (")?
+        .strip_suffix(')')?;
+    suffix.parse::<usize>().ok().filter(|value| *value > 0)
 }
 
 pub fn apply_session_lineage(metadata: &mut SessionMetadata, relationship: SessionRelationship) {
@@ -216,6 +271,7 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
         facts.source_session_id,
         facts.source_turn_id,
         facts.source_turn_index,
+        facts.branch_lineage,
     );
     metadata.relationship = None;
     metadata.todos = None;
@@ -258,6 +314,7 @@ fn build_branch_custom_metadata(
     source_session_id: &str,
     source_turn_id: &str,
     source_turn_index: usize,
+    branch_lineage: &BranchSessionLineage,
 ) -> Option<JsonValue> {
     let mut base = match strip_child_session_metadata(source_metadata) {
         Some(JsonValue::Object(map)) => map,
@@ -270,10 +327,26 @@ fn build_branch_custom_metadata(
             "sessionId": source_session_id,
             "turnId": source_turn_id,
             "turnIndex": source_turn_index + 1,
+            "baseTitle": branch_lineage.base_session_name,
         }),
     );
 
     Some(JsonValue::Object(base))
+}
+
+fn fork_base_session_name(metadata: &SessionMetadata) -> Option<String> {
+    metadata
+        .custom_metadata
+        .as_ref()?
+        .get("forkOrigin")?
+        .get("baseTitle")?
+        .as_str()
+        .and_then(normalize_nonempty)
+}
+
+fn normalize_nonempty(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_string())
 }
 
 #[cfg(test)]
@@ -413,6 +486,7 @@ mod tests {
                 parent_turn_index: Some(2),
                 parent_tool_call_id: None,
                 subagent_type: None,
+                continuation_policy: None,
             },
         );
 
@@ -443,6 +517,7 @@ mod tests {
             parent_turn_index: Some(2),
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: None,
         });
 
         let mut grandchild = metadata("grandchild");
@@ -492,12 +567,17 @@ mod tests {
             parent_turn_index: Some(1),
             parent_tool_call_id: None,
             subagent_type: None,
+            continuation_policy: None,
         });
         source.todos = Some(json!([{ "id": "todo" }]));
         source.deep_review_run_manifest = Some(json!({ "run": "manifest" }));
         source.unread_completion = Some("completed".to_string());
         source.needs_user_attention = Some("ask_user".to_string());
         let turns = vec![turn("target", "turn-1", 0), turn("target", "turn-2", 1)];
+        let branch_lineage = BranchSessionLineage {
+            base_session_name: "Source".to_string(),
+            ordinal: 1,
+        };
 
         let branched = build_branched_session_metadata(BranchSessionMetadataFacts {
             source_metadata: &source,
@@ -508,6 +588,7 @@ mod tests {
             source_turn_id: "turn-2",
             source_turn_index: 1,
             branched_turns: &turns,
+            branch_lineage: &branch_lineage,
             now_ms: 42,
         });
 
@@ -538,8 +619,82 @@ mod tests {
             json!({
                 "sessionId": "source",
                 "turnId": "turn-2",
-                "turnIndex": 2
+                "turnIndex": 2,
+                "baseTitle": "Source"
             })
+        );
+    }
+
+    #[test]
+    fn branch_lineage_uses_the_inherited_title_namespace_for_renamed_suffixes() {
+        let mut root = metadata("root");
+        root.session_name = "Title".to_string();
+
+        let mut first_branch = metadata("first-branch");
+        first_branch.session_name = "Title (2)".to_string();
+        first_branch.custom_metadata = Some(json!({
+            "forkOrigin": {
+                "sessionId": "root",
+                "turnId": "turn-0",
+                "turnIndex": 1,
+                "baseTitle": "Title"
+            }
+        }));
+
+        let nested_lineage = resolve_branch_session_lineage(
+            &first_branch,
+            &first_branch.session_name,
+            &[root.clone(), first_branch.clone()],
+        );
+        assert_eq!(nested_lineage.base_session_name, "Title");
+        assert_eq!(nested_lineage.ordinal, 3);
+        assert_eq!(
+            format_branch_session_name(&nested_lineage.base_session_name, nested_lineage.ordinal),
+            "Title (3)"
+        );
+
+        let mut second_branch = metadata("second-branch");
+        second_branch.session_name = "Title (3)".to_string();
+        second_branch.custom_metadata = Some(json!({
+            "forkOrigin": {
+                "sessionId": "first-branch",
+                "turnId": "turn-0",
+                "turnIndex": 1,
+                "baseTitle": "Title"
+            }
+        }));
+
+        let sibling_lineage = resolve_branch_session_lineage(
+            &root,
+            &root.session_name,
+            &[root.clone(), first_branch, second_branch],
+        );
+        assert_eq!(sibling_lineage.base_session_name, "Title");
+        assert_eq!(sibling_lineage.ordinal, 4);
+    }
+
+    #[test]
+    fn branch_lineage_treats_an_unrelated_suffix_as_a_new_title_base() {
+        let mut root = metadata("root");
+        root.session_name = "Title".to_string();
+        let mut branch = metadata("branch");
+        branch.session_name = "Another title (2)".to_string();
+        branch.custom_metadata = Some(json!({
+            "forkOrigin": {
+                "sessionId": "root",
+                "turnId": "turn-0",
+                "turnIndex": 1,
+                "baseTitle": "Title"
+            }
+        }));
+
+        let lineage =
+            resolve_branch_session_lineage(&branch, &branch.session_name, &[root, branch.clone()]);
+        assert_eq!(lineage.base_session_name, "Another title (2)");
+        assert_eq!(lineage.ordinal, 1);
+        assert_eq!(
+            format_branch_session_name(&lineage.base_session_name, lineage.ordinal),
+            "Another title (2) (1)"
         );
     }
 }

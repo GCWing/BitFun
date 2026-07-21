@@ -12,6 +12,7 @@
     "title": "Subagent Models",
     "default": {
       "label": "Default Subagent Model",
+      "description": "Default model used by subagents when none is set individually",
       "configureTooltip": "Sets the default model for subagents. Open Customize > Agents to configure each subagent separately",
       "updateFailed": "Failed to update the default Subagent model"
     },
@@ -22,6 +23,26 @@
       "auto": "Automatic selection"
     },
     "loadFailed": "Failed to load Subagent model settings"
+  },
+  "sessionTitle": {
+    "title": "Auto Session Title",
+    "subtitle": "AI automatically generates concise titles for new conversations",
+    "enable": "Enable",
+    "loadFailed": "Failed to load session title settings",
+    "model": {
+      "label": "Model",
+      "primary": "Primary Model",
+      "fast": "Fast Model"
+    },
+    "models": {
+      "empty": "No available models. Please add models in \"Models\" first.",
+      "updateSuccess": "{{agentName}} will use {{modelName}}"
+    },
+    "messages": {
+      "saveSuccess": "Settings saved",
+      "saveFailed": "Save failed",
+      "updateFailed": "Update failed"
+    }
   },
   "cliAuth": {
     "sectionTitle": "Local CLI accounts",
@@ -287,6 +308,7 @@
     "fillModelName": "Please fill in model name",
     "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
     "invalidBaseUrlScheme": "API URL must start with http:// or https://",
+    "contextWindowTooSmall": "Context window must be at least 32K tokens",
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
     "loadFailed": "Failed to load AI configuration",

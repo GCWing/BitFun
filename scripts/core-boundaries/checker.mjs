@@ -919,7 +919,7 @@ function collectRustUseReexportSymbols(usePath) {
 }
 
 function collectTopLevelRustPublicSymbols(text) {
-  const symbols = [];
+  const symbols = Array.from(text.matchAll(/\bexternal_subagent_id!\(\s*([A-Za-z_][A-Za-z0-9_]*)/g), (match) => match[1]);
   let braceDepth = 0;
   let pendingUsePath = null;
   for (const line of text.split(/\r?\n/)) {

@@ -8,7 +8,7 @@ use tracing::info;
 
 mod config;
 
-use bitfun_relay_service::{build_relay_router, DiskAssetStore, RoomManager, WebAssetStore};
+use bitfun_relay_service::{DiskAssetStore, RoomManager, WebAssetStore};
 use config::RelayConfig;
 
 #[tokio::main]
@@ -53,12 +53,14 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    let mut app = build_relay_router(
+    let page_data_dir = std::path::PathBuf::from(&cfg.room_web_dir).join("page-data");
+    let mut app = bitfun_relay_service::build_relay_router_with_page_data(
         room_manager,
         asset_store,
         start_time,
         db,
         env!("CARGO_PKG_VERSION"),
+        Some(page_data_dir),
     );
 
     if let Some(static_dir) = &cfg.static_dir {

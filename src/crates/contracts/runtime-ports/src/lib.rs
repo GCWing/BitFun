@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+mod local_workspace_snapshot;
 #[cfg(feature = "permission")]
 mod permission;
 mod plugin;
@@ -26,6 +27,10 @@ pub use bitfun_product_domains::tool_permissions::{
     PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
     ToolPermissionConfig,
+};
+pub use local_workspace_snapshot::{
+    LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
+    LocalWorkspaceSnapshotTurnRequest,
 };
 #[cfg(feature = "permission")]
 pub use permission::{
@@ -64,6 +69,7 @@ pub enum PortErrorKind {
     PermissionDenied,
     Cancelled,
     Timeout,
+    CleanupRequired,
     Backend,
 }
 
@@ -962,9 +968,13 @@ pub struct AgentSessionCreateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
@@ -994,6 +1004,12 @@ pub struct AgentSessionSummary {
     pub session_id: String,
     pub session_name: String,
     pub agent_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_user_dialog_agent_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_submitted_agent_type: Option<String>,
     #[serde(default)]
     pub turn_count: usize,
     pub created_at_ms: u64,
@@ -1013,9 +1029,129 @@ pub struct AgentSessionDeleteRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentSessionRenameRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    pub session_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionArchiveRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+/// Sets the persisted archive state without exposing product-specific archive UI.
+///
+/// This is separate from [`AgentSessionArchiveRequest`] so existing archive-only
+/// consumers keep their current request shape and behavior.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionArchiveStateRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    pub archived: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+/// Records one completed local command result in user-visible session history.
+///
+/// This request intentionally cannot select another turn kind or opt the turn
+/// into model context. It is not a generic transcript-writing contract.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLocalCommandTurnRecordRequest {
+    pub session_id: String,
+    pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSessionModelUpdateRequest {
     pub session_id: String,
     pub model_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionModeUpdateRequest {
+    pub session_id: String,
+    pub mode_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionForkRequest {
+    pub workspace_path: String,
+    pub source_session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+/// Forks a session at an explicitly selected persisted turn.
+///
+/// This is additive to [`AgentSessionForkRequest`] so existing Rust SDK
+/// consumers keep the source-compatible latest-turn request shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionForkAtTurnRequest {
+    pub workspace_path: String,
+    pub source_session_id: String,
+    pub source_turn_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionForkResult {
+    pub session_id: String,
+    pub session_name: String,
+    pub agent_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionUsageRequest {
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_hidden_subagents: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnSettlementRequest {
+    pub session_id: String,
+    pub turn_id: String,
+    pub wait_timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1494,6 +1630,10 @@ pub struct ThreadGoalToolResponse {
 pub struct AgentThreadGoalGetRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1673,6 +1813,42 @@ pub trait AgentSessionManagementPort: Send + Sync {
 
     async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()>;
 
+    async fn rename_session(&self, request: AgentSessionRenameRequest) -> PortResult<()> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "session rename is not supported by this provider",
+        ))
+    }
+
+    async fn archive_session(&self, request: AgentSessionArchiveRequest) -> PortResult<()> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "session archive is not supported by this provider",
+        ))
+    }
+
+    async fn set_session_archived(
+        &self,
+        request: AgentSessionArchiveStateRequest,
+    ) -> PortResult<()> {
+        if request.archived {
+            return self
+                .archive_session(AgentSessionArchiveRequest {
+                    workspace_path: request.workspace_path,
+                    session_id: request.session_id,
+                    remote_connection_id: request.remote_connection_id,
+                    remote_ssh_host: request.remote_ssh_host,
+                })
+                .await;
+        }
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "session unarchive is not supported by this provider",
+        ))
+    }
+
     async fn resolve_session_workspace_binding(
         &self,
         request: AgentSessionWorkspaceRequest,
@@ -1680,8 +1856,54 @@ pub trait AgentSessionManagementPort: Send + Sync {
 }
 
 #[async_trait::async_trait]
+pub trait AgentLocalCommandTurnPort: Send + Sync {
+    async fn record_completed_local_command_turn(
+        &self,
+        request: AgentLocalCommandTurnRecordRequest,
+    ) -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
 pub trait AgentSessionModelPort: Send + Sync {
     async fn update_session_model(&self, request: AgentSessionModelUpdateRequest)
+        -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionModePort: Send + Sync {
+    async fn update_session_mode(&self, request: AgentSessionModeUpdateRequest) -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionForkPort: Send + Sync {
+    async fn fork_session(
+        &self,
+        request: AgentSessionForkRequest,
+    ) -> PortResult<AgentSessionForkResult>;
+
+    async fn fork_session_at_turn(
+        &self,
+        request: AgentSessionForkAtTurnRequest,
+    ) -> PortResult<AgentSessionForkResult> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "exact-turn session fork is not supported by this provider",
+        ))
+    }
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionUsagePort: Send + Sync {
+    async fn generate_session_usage(
+        &self,
+        request: AgentSessionUsageRequest,
+    ) -> PortResult<bitfun_core_types::SessionUsageReport>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentTurnSettlementPort: Send + Sync {
+    async fn wait_for_turn_settlement(&self, request: AgentTurnSettlementRequest)
         -> PortResult<()>;
 }
 
@@ -1966,6 +2188,108 @@ impl SubagentContextMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct ArchiveOnlySessionProvider {
+        archived_requests: Mutex<Vec<AgentSessionArchiveRequest>>,
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSessionManagementPort for ArchiveOnlySessionProvider {
+        async fn list_sessions(
+            &self,
+            _request: AgentSessionListRequest,
+        ) -> PortResult<Vec<AgentSessionSummary>> {
+            Ok(Vec::new())
+        }
+
+        async fn delete_session(&self, _request: AgentSessionDeleteRequest) -> PortResult<()> {
+            Ok(())
+        }
+
+        async fn archive_session(&self, request: AgentSessionArchiveRequest) -> PortResult<()> {
+            self.archived_requests.lock().unwrap().push(request);
+            Ok(())
+        }
+
+        async fn resolve_session_workspace_binding(
+            &self,
+            _request: AgentSessionWorkspaceRequest,
+        ) -> PortResult<Option<AgentSessionWorkspaceBinding>> {
+            Ok(None)
+        }
+    }
+
+    struct LatestTurnForkOnlyProvider;
+
+    #[async_trait::async_trait]
+    impl AgentSessionForkPort for LatestTurnForkOnlyProvider {
+        async fn fork_session(
+            &self,
+            request: AgentSessionForkRequest,
+        ) -> PortResult<AgentSessionForkResult> {
+            Ok(AgentSessionForkResult {
+                session_id: format!("{}-fork", request.source_session_id),
+                session_name: "Fork".to_string(),
+                agent_type: "agentic".to_string(),
+            })
+        }
+    }
+
+    fn archive_state_request(archived: bool) -> AgentSessionArchiveStateRequest {
+        AgentSessionArchiveStateRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            archived,
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        }
+    }
+
+    #[tokio::test]
+    async fn archive_state_default_preserves_archive_only_provider_compatibility() {
+        let provider = ArchiveOnlySessionProvider::default();
+
+        AgentSessionManagementPort::set_session_archived(&provider, archive_state_request(true))
+            .await
+            .expect("archive=true should delegate to the legacy provider");
+        let requests = provider.archived_requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].workspace_path, "/workspace/project");
+        assert_eq!(requests[0].session_id, "session_1");
+        assert_eq!(requests[0].remote_connection_id.as_deref(), Some("conn-1"));
+        assert_eq!(requests[0].remote_ssh_host.as_deref(), Some("host-1"));
+        drop(requests);
+
+        let error = AgentSessionManagementPort::set_session_archived(
+            &provider,
+            archive_state_request(false),
+        )
+        .await
+        .expect_err("legacy providers must reject unarchive by default");
+        assert_eq!(error.kind, PortErrorKind::NotAvailable);
+        assert_eq!(provider.archived_requests.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn exact_turn_fork_default_preserves_latest_turn_only_provider_compatibility() {
+        let provider = LatestTurnForkOnlyProvider;
+        let error = AgentSessionForkPort::fork_session_at_turn(
+            &provider,
+            AgentSessionForkAtTurnRequest {
+                workspace_path: "/workspace/project".to_string(),
+                source_session_id: "session_1".to_string(),
+                source_turn_id: "turn_1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .expect_err("legacy providers must reject exact-turn fork by default");
+
+        assert_eq!(error.kind, PortErrorKind::NotAvailable);
+    }
 
     #[test]
     fn agent_session_create_request_keeps_rust_literal_compatible() {
@@ -1973,14 +2297,18 @@ mod tests {
             session_name: "Generated session".to_string(),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            workspace_id: Some("workspace-1".to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,
+            model_id: Some("provider/model".to_string()),
             metadata: serde_json::Map::new(),
         };
 
         let json = serde_json::to_value(request).expect("serialize create request");
 
         assert!(json.get("sessionId").is_none());
+        assert_eq!(json["workspaceId"], "workspace-1");
+        assert_eq!(json["modelId"], "provider/model");
     }
 
     #[test]
@@ -1994,6 +2322,8 @@ mod tests {
 
         let json = serde_json::to_value(request).expect("serialize create request");
         assert!(json.get("sessionId").is_none());
+        assert!(json.get("workspaceId").is_none());
+        assert!(json.get("modelId").is_none());
     }
 
     #[test]
@@ -2593,6 +2923,8 @@ mod tests {
         let get_request = AgentThreadGoalGetRequest {
             session_id: "session_1".to_string(),
             workspace_path: "/workspace/project".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
         let create_request = AgentThreadGoalCreateRequest {
             session_id: "session_1".to_string(),
@@ -2613,6 +2945,8 @@ mod tests {
 
         assert_eq!(get_json["sessionId"], "session_1");
         assert_eq!(get_json["workspacePath"], "/workspace/project");
+        assert_eq!(get_json["remoteConnectionId"], "conn-1");
+        assert_eq!(get_json["remoteSshHost"], "host-1");
         assert_eq!(create_json["objective"], "Ship the refactor");
         assert_eq!(create_json["tokenBudget"], 1000);
         assert_eq!(update_json["status"], "complete");
@@ -2651,6 +2985,9 @@ mod tests {
             session_id: "session_1".to_string(),
             session_name: "Main".to_string(),
             agent_type: "agentic".to_string(),
+            model_id: Some("provider/model".to_string()),
+            last_user_dialog_agent_type: Some("plan".to_string()),
+            last_submitted_agent_type: Some("agentic".to_string()),
             turn_count: 3,
             created_at_ms: 1000,
             last_active_at_ms: 2000,
@@ -2661,9 +2998,46 @@ mod tests {
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
         };
+        let rename_request = AgentSessionRenameRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            session_name: "Renamed".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
+        let archive_request = AgentSessionArchiveRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
+        let archive_state_request = AgentSessionArchiveStateRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+            archived: false,
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
+        let fork_request = AgentSessionForkRequest {
+            workspace_path: "/workspace/project".to_string(),
+            source_session_id: "session_1".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        let fork_at_turn_request = AgentSessionForkAtTurnRequest {
+            workspace_path: "/workspace/project".to_string(),
+            source_session_id: "session_1".to_string(),
+            source_turn_id: "turn_2".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
         let model_request = AgentSessionModelUpdateRequest {
             session_id: "session_1".to_string(),
             model_id: "provider/model".to_string(),
+        };
+        let mode_request = AgentSessionModeUpdateRequest {
+            session_id: "session_1".to_string(),
+            mode_id: "agentic".to_string(),
         };
         let workspace_request = AgentSessionWorkspaceRequest {
             session_id: "session_1".to_string(),
@@ -2678,7 +3052,16 @@ mod tests {
         let list_json = serde_json::to_value(list_request).expect("serialize list request");
         let summary_json = serde_json::to_value(summary).expect("serialize summary");
         let delete_json = serde_json::to_value(delete_request).expect("serialize delete request");
+        let rename_json = serde_json::to_value(rename_request).expect("serialize rename request");
+        let archive_json =
+            serde_json::to_value(archive_request).expect("serialize archive request");
+        let archive_state_json =
+            serde_json::to_value(archive_state_request).expect("serialize archive-state request");
+        let fork_json = serde_json::to_value(fork_request).expect("serialize fork request");
+        let fork_at_turn_json =
+            serde_json::to_value(fork_at_turn_request).expect("serialize exact-turn fork request");
         let model_json = serde_json::to_value(model_request).expect("serialize model request");
+        let mode_json = serde_json::to_value(mode_request).expect("serialize mode request");
         let workspace_json =
             serde_json::to_value(workspace_request).expect("serialize workspace request");
         let binding_json =
@@ -2686,6 +3069,9 @@ mod tests {
 
         assert_eq!(list_json["workspacePath"], "/workspace/project");
         assert_eq!(list_json["remoteConnectionId"], "conn-1");
+        assert_eq!(summary_json["modelId"], "provider/model");
+        assert_eq!(summary_json["lastUserDialogAgentType"], "plan");
+        assert_eq!(summary_json["lastSubmittedAgentType"], "agentic");
         assert_eq!(list_json["remoteSshHost"], "host-1");
         assert_eq!(summary_json["sessionId"], "session_1");
         assert_eq!(summary_json["turnCount"], 3);
@@ -2694,13 +3080,45 @@ mod tests {
         assert_eq!(delete_json["sessionId"], "session_1");
         assert_eq!(delete_json["remoteConnectionId"], "conn-1");
         assert_eq!(delete_json["remoteSshHost"], "host-1");
+        assert_eq!(rename_json["sessionName"], "Renamed");
+        assert_eq!(rename_json["remoteConnectionId"], "conn-1");
+        assert_eq!(archive_json["sessionId"], "session_1");
+        assert_eq!(archive_json["remoteSshHost"], "host-1");
+        assert_eq!(archive_state_json["archived"], false);
+        assert!(fork_json.get("sourceTurnId").is_none());
+        assert_eq!(fork_at_turn_json["sourceTurnId"], "turn_2");
         assert_eq!(model_json["sessionId"], "session_1");
         assert_eq!(model_json["modelId"], "provider/model");
+        assert_eq!(mode_json["sessionId"], "session_1");
+        assert_eq!(mode_json["modeId"], "agentic");
         assert_eq!(workspace_json["sessionId"], "session_1");
         assert_eq!(binding_json["workspaceId"], "workspace_1");
         assert_eq!(binding_json["workspacePath"], "/workspace/project");
         assert_eq!(binding_json["remoteConnectionId"], "conn-1");
         assert_eq!(binding_json["remoteSshHost"], "host-1");
+    }
+
+    #[test]
+    fn local_command_turn_contract_has_fixed_narrow_shape() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert("kind".to_string(), serde_json::json!("usage_report"));
+        let request = AgentLocalCommandTurnRecordRequest {
+            session_id: "session_1".to_string(),
+            content: "Usage report".to_string(),
+            turn_id: Some("turn_1".to_string()),
+            timestamp_ms: Some(1000),
+            metadata,
+        };
+
+        let json = serde_json::to_value(request).expect("serialize local command turn");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["content"], "Usage report");
+        assert_eq!(json["turnId"], "turn_1");
+        assert_eq!(json["timestampMs"], 1000);
+        assert_eq!(json["metadata"]["kind"], "usage_report");
+        assert!(json.get("turnKind").is_none());
+        assert!(json.get("modelVisible").is_none());
     }
 
     #[test]

@@ -101,21 +101,28 @@
     }
   },
   "suite": {
-    "title": "Built-in Skill Suites",
-    "subtitle": "Pick a mode to manage built-in skill groups. Group actions apply immediately, while individual skill edits can be saved per group.",
+    "title": "Skill Suites",
+    "subtitle": "Pick a mode to manage skill visibility. Group actions apply immediately, while individual skill edits can be saved per group.",
     "modeLabel": "Mode",
     "refreshTooltip": "Refresh current mode",
     "refreshAction": "Refresh",
-    "loading": "Loading built-in skill suites...",
-    "empty": "No built-in skills are available.",
+    "loading": "Loading skill suites...",
+    "empty": "No skills are available.",
     "groups": {
       "office": "Office",
       "computerUse": "Computer Use",
       "meta": "Meta",
       "miniapp": "MiniApp",
+      "canvas": "Canvas",
       "gstack": "gstack",
       "other": "Other"
     },
+    "sections": {
+      "myGroups": "My groups",
+      "builtin": "Built-in groups",
+      "otherSkills": "Other skills"
+    },
+    "manageGroups": "Manage Skill groups",
     "modes": {
       "agentic": "agentic",
       "cowork": "Cowork",
@@ -147,6 +154,13 @@
       "enabled": "Visible",
       "disabled": "Hidden",
       "partial": "Partial"
+    },
+    "skillState": {
+      "enabled": "Enabled for this mode",
+      "disabled": "Disabled for this mode",
+      "pending": "Unsaved",
+      "covered": "Covered · {{source}}",
+      "coveredDetail": "Enabled, but this mode uses the same-name skill from {{source}}."
     },
     "groupCount": "{{total}} skills",
     "messages": {
@@ -185,6 +199,10 @@
   "list": {
     "loading": "Loading...",
     "errorPrefix": "Failed to load: ",
+    "loadFailed": "Could not load skills",
+    "retry": "Retry",
+    "desktopUnavailable": "Manage skills in Desktop.",
+    "remoteUnavailable": "Skill management is unavailable during a remote connection.",
     "empty": {
       "noMatch": "No matching skills found",
       "noSkills": "No skills configured yet"
@@ -192,17 +210,21 @@
     "item": {
       "user": "User",
       "project": "Project",
+      "localUser": "This device · User",
+      "remoteProject": "Remote workspace · Project",
       "builtin": "Built-in",
       "userInstalled": "Installed",
       "detail": "Details",
       "deleteTooltip": "Delete",
       "pathLabel": "Path:",
+      "sourceLabel": "Source:",
       "openPathInExplorer": "Open this folder in file explorer",
       "revealPathUnavailableRemote": "Remote workspace paths cannot be opened in the local file manager",
-      "shadowed": "Duplicate",
-      "shadowedTooltip": "This skill is shadowed by a higher-priority skill with the same name and will not be used.",
-      "shadowedLabel": "Shadowed by:",
-      "shadowedDetail": "Skill key {{key}}"
+      "shadowed": "Covered",
+      "shadowedTooltip": "The same-name skill from {{source}} normally has higher priority.",
+      "shadowedLabel": "Higher-priority source:",
+      "shadowedDetail": "The same-name skill from {{source}}",
+      "unknownSource": "another source"
     }
   },
   "deleteModal": {

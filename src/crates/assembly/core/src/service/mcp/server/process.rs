@@ -33,6 +33,39 @@ impl MCPServerProcess {
         Ok(())
     }
 
+    pub async fn start_in_directory(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+    ) -> BitFunResult<()> {
+        self.inner
+            .start_in_directory(command, args, env, working_directory)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn start_with_environment_policy(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+        inherit_parent_environment: bool,
+    ) -> BitFunResult<()> {
+        self.inner
+            .start_with_environment_policy(
+                command,
+                args,
+                env,
+                working_directory,
+                inherit_parent_environment,
+            )
+            .await?;
+        Ok(())
+    }
+
     pub async fn start_remote(&mut self, config: &MCPServerConfig) -> BitFunResult<()> {
         let data_dir = try_get_path_manager_arc()?.user_data_dir();
         self.inner.start_remote(data_dir, config).await?;
@@ -51,6 +84,39 @@ impl MCPServerProcess {
         env: &std::collections::HashMap<String, String>,
     ) -> BitFunResult<()> {
         self.inner.restart(command, args, env).await?;
+        Ok(())
+    }
+
+    pub async fn restart_in_directory(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+    ) -> BitFunResult<()> {
+        self.inner
+            .restart_in_directory(command, args, env, working_directory)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn restart_with_environment_policy(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+        inherit_parent_environment: bool,
+    ) -> BitFunResult<()> {
+        self.inner
+            .restart_with_environment_policy(
+                command,
+                args,
+                env,
+                working_directory,
+                inherit_parent_environment,
+            )
+            .await?;
         Ok(())
     }
 

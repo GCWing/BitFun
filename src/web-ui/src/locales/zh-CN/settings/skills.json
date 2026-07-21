@@ -66,8 +66,16 @@
     "item": {
       "user": "用户级",
       "project": "项目级",
+      "localUser": "此设备 · 用户级",
+      "remoteProject": "远程工作区 · 项目级",
       "deleteTooltip": "删除",
-      "pathLabel": "路径:"
+      "pathLabel": "路径:",
+      "sourceLabel": "来源:",
+      "shadowed": "已覆盖",
+      "shadowedTooltip": "{{source}} 中的同名技能通常具有更高优先级。",
+      "shadowedLabel": "更高优先级来源:",
+      "shadowedDetail": "{{source}} 中的同名技能",
+      "unknownSource": "其他来源"
     }
   },
   "deleteModal": {

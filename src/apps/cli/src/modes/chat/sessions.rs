@@ -11,33 +11,34 @@ impl ChatMode {
         let agent = self.agent.clone();
         let sid = new_session_id.to_string();
 
-        let (new_state, restored_agent_type) = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let (session_summary, effective_workspace_path) =
-                    agent.restore_session_in_current_workspace(&sid).await?;
-                let restored_agent_type = session_summary.agent_type.clone();
-                let effective_workspace =
-                    Some(effective_workspace_path.to_string_lossy().to_string());
+        let (new_state, restored_agent_type, migration_notice) =
+            tokio::task::block_in_place(|| {
+                rt_handle.block_on(async {
+                    let (session_summary, effective_workspace_path, migration_notice) =
+                        agent.restore_session_in_current_workspace(&sid).await?;
+                    let restored_agent_type = session_summary.agent_type.clone();
+                    let effective_workspace =
+                        Some(effective_workspace_path.to_string_lossy().to_string());
 
-                // Load historical messages through the runtime transcript contract.
-                let transcript = agent.get_transcript(&sid).await.unwrap_or_else(|_| {
-                    bitfun_agent_runtime::sdk::SessionTranscript {
-                        session_id: sid.clone(),
-                        messages: Vec::new(),
-                    }
-                });
+                    // Load historical messages through the runtime transcript contract.
+                    let transcript = agent.get_transcript(&sid).await.unwrap_or_else(|_| {
+                        bitfun_agent_runtime::sdk::SessionTranscript {
+                            session_id: sid.clone(),
+                            messages: Vec::new(),
+                        }
+                    });
 
-                let state = ChatState::from_session_transcript(
-                    sid.clone(),
-                    session_summary.session_name,
-                    restored_agent_type.clone(),
-                    effective_workspace,
-                    &transcript,
-                );
+                    let state = ChatState::from_session_transcript(
+                        sid.clone(),
+                        session_summary.session_name,
+                        restored_agent_type.clone(),
+                        effective_workspace,
+                        &transcript,
+                    );
 
-                Ok::<_, anyhow::Error>((state, restored_agent_type))
-            })
-        })?;
+                    Ok::<_, anyhow::Error>((state, restored_agent_type, migration_notice))
+                })
+            })?;
 
         // Update session state
         *session_id = new_session_id.to_string();
@@ -51,6 +52,10 @@ impl ChatMode {
 
         // Reload model name
         self.load_current_model_name(chat_state, rt_handle);
+
+        if let Some(notice) = migration_notice {
+            chat_state.add_system_message(notice.user_message());
+        }
 
         // Reset view state
         chat_view.scroll_to_bottom();
@@ -110,6 +115,16 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if self
+            .pending_mode_change
+            .as_ref()
+            .is_some_and(|pending| pending.session_id == chat_state.core_session_id)
+        {
+            chat_view.set_status(Some(
+                "Waiting for the agent mode change to finish before sending.".to_string(),
+            ));
+            return;
+        }
         if chat_state.is_processing {
             chat_state.add_system_message("Already processing, please wait.".to_string());
             return;

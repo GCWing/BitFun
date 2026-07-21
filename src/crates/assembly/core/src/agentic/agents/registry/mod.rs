@@ -2,6 +2,7 @@ mod availability;
 mod builtin;
 pub(super) mod catalog;
 mod custom;
+mod external;
 mod query;
 mod resolution;
 mod support;
@@ -19,6 +20,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::sync::{Arc, OnceLock};
+
+pub(crate) use external::external_subagent_runtime_key;
+pub use external::{
+    ExternalSubagentGenerationLease, ExternalSubagentInvocationBinding,
+    ExternalSubagentModelBinding, ExternalSubagentRegistration, ExternalSubagentRoute,
+};
 
 /// Full file-backed custom agent definition for editing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +55,7 @@ pub struct AgentRegistry {
     /// workspace root -> (project subagent id -> agent_entry)
     project_subagents: RwLock<HashMap<PathBuf, HashMap<String, AgentEntry>>>,
     user_custom_agents_loaded: RwLock<bool>,
+    external_subagents: Arc<external::ExternalSubagentRegistryState>,
 }
 
 impl Default for AgentRegistry {
@@ -106,6 +114,9 @@ impl AgentRegistry {
         agent_type: &str,
         workspace_root: Option<&Path>,
     ) -> Option<AgentEntry> {
+        if let Some(entry) = self.external_subagents.find_generation_entry(agent_type) {
+            return Some(entry);
+        }
         if let Some(entry) = self.read_agents().get(agent_type).cloned() {
             return Some(entry);
         }
@@ -128,7 +139,8 @@ impl AgentRegistry {
 
     /// Check if an agent exists
     pub fn check_agent_exists(&self, agent_type: &str) -> bool {
-        self.read_agents().contains_key(agent_type)
+        self.external_subagents.has_generation(agent_type)
+            || self.read_agents().contains_key(agent_type)
             || self
                 .read_project_subagents()
                 .values()

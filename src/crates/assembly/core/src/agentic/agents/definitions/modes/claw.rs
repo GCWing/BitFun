@@ -17,6 +17,8 @@ impl ClawMode {
         Self {
             default_tools: vec![
                 "Task".to_string(),
+                "ListModels".to_string(),
+                "AgentWait".to_string(),
                 "Read".to_string(),
                 "view_image".to_string(),
                 "analyze_image".to_string(),
@@ -41,6 +43,8 @@ impl ClawMode {
                 // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
+                "PageDeploy".to_string(),
+                "PagePublish".to_string(),
             ],
         }
     }
@@ -94,6 +98,7 @@ mod tests {
     fn claw_mode_includes_init_miniapp_in_default_tools() {
         let tools = ClawMode::new().default_tools();
         assert!(tools.contains(&"InitMiniApp".to_string()));
+        assert!(tools.contains(&"ListModels".to_string()));
     }
 
     #[test]

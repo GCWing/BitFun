@@ -7778,7 +7778,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/background.rs',
     reason:
-      'core Task background acknowledgement must remain assistant-visible and not expose internal background task ids',
+      'core Task background acknowledgement must remain assistant-visible and expose the task id needed for explicit result collection',
     patterns: [
       {
         regex: /Background subagent started successfully/,
@@ -7792,7 +7792,7 @@ export const requiredContentRules = [
       'core Task tests must preserve background acknowledgement shape',
     patterns: [
       {
-        regex: /\bbackground_subagent_start_acknowledgement_uses_session_id_only\b/,
+        regex: /\bbackground_subagent_start_acknowledgement_exposes_agent_wait_task_id\b/,
         message: 'missing background task start acknowledgement regression',
       },
       {

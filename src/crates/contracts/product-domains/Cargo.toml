@@ -33,7 +33,7 @@ default = []
 plugin-source = ["hex", "sha2"]
 miniapp = ["dirs", "sha2", "which"]
 function-agents = ["log"]
-external-sources = []
+external-sources = ["hex", "sha2"]
 product-full = ["plugin-source", "miniapp", "function-agents", "external-sources"]
 
 [dev-dependencies]

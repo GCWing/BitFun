@@ -1,9 +1,9 @@
 use bitfun_product_domains::external_sources::{
-    ExternalSourceCatalogEntry, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState, ExternalSourceProviderError,
-    ExternalToolDefinition, ExternalToolProviderIdentity, ExternalToolProviderSnapshot,
-    ExternalToolSourceProvider, ExternalWatchRoot, PreparedExternalToolTarget, ProviderId,
-    SourceQualifiedToolTargetId,
+    EcosystemId, ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceContext,
+    ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState,
+    ExternalSourceProviderError, ExternalToolDefinition, ExternalToolProviderIdentity,
+    ExternalToolProviderSnapshot, ExternalToolSourceProvider, ExternalWatchRoot,
+    PreparedExternalToolTarget, ProviderId, SourceQualifiedToolTargetId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -28,6 +28,7 @@ pub struct ExternalToolCoordinatorSnapshot {
 
 pub struct ExternalToolDiscoveryRequest {
     provider_id: ProviderId,
+    ecosystem_id: EcosystemId,
     provider: Arc<dyn ExternalToolSourceProvider>,
     context: ExternalSourceContext,
 }
@@ -35,6 +36,22 @@ pub struct ExternalToolDiscoveryRequest {
 impl ExternalToolDiscoveryRequest {
     pub fn provider_id(&self) -> &ProviderId {
         &self.provider_id
+    }
+
+    pub fn ecosystem_id(&self) -> &EcosystemId {
+        &self.ecosystem_id
+    }
+
+    pub fn disabled(self) -> ExternalToolDiscoveryResult {
+        ExternalToolDiscoveryResult {
+            provider_id: self.provider_id,
+            candidate: Ok(ExternalToolProviderSnapshot {
+                provider: self.provider.identity(),
+                sources: Vec::new(),
+                tools: Vec::new(),
+                diagnostics: Vec::new(),
+            }),
+        }
     }
 
     pub fn execute(self) -> ExternalToolDiscoveryResult {
@@ -137,6 +154,7 @@ impl ExternalToolCoordinator {
             .iter()
             .map(|generation| ExternalToolDiscoveryRequest {
                 provider_id: generation.identity.provider_id.clone(),
+                ecosystem_id: generation.identity.ecosystem_id.clone(),
                 provider: generation.provider.clone(),
                 context: self.context.clone(),
             })
@@ -182,6 +200,13 @@ impl ExternalToolCoordinator {
 
     pub fn snapshot(&self) -> ExternalToolCoordinatorSnapshot {
         self.snapshot.clone()
+    }
+
+    pub fn ecosystem_for_provider(&self, provider_id: &ProviderId) -> Option<EcosystemId> {
+        self.providers
+            .iter()
+            .find(|provider| &provider.identity.provider_id == provider_id)
+            .map(|provider| provider.identity.ecosystem_id.clone())
     }
 
     pub fn set_source_enabled(&mut self, stable_key: &str, enabled: bool) -> Result<(), String> {
@@ -271,6 +296,28 @@ impl ExternalToolCoordinator {
             .collect()
     }
 
+    pub fn watch_roots_for_ecosystems(
+        &self,
+        ecosystems: &BTreeSet<EcosystemId>,
+    ) -> Vec<ExternalWatchRoot> {
+        let mut roots = BTreeMap::new();
+        for provider in &self.providers {
+            if !ecosystems.contains(&provider.identity.ecosystem_id) {
+                continue;
+            }
+            for root in provider.provider.watch_roots(&self.context) {
+                roots
+                    .entry(root.path)
+                    .and_modify(|recursive| *recursive |= root.recursive)
+                    .or_insert(root.recursive);
+            }
+        }
+        roots
+            .into_iter()
+            .map(|(path, recursive)| ExternalWatchRoot { path, recursive })
+            .collect()
+    }
+
     fn rebuild_snapshot(&mut self) -> ExternalToolCoordinatorSnapshot {
         self.generation = self.generation.saturating_add(1);
         let mut sources = Vec::new();
@@ -283,6 +330,7 @@ impl ExternalToolCoordinator {
                     let suppressed = self.suppressed_sources.contains(&source.preference_key());
                     sources.push(ExternalSourceCatalogEntry {
                         stable_key: source.preference_key(),
+                        presentation_group_id: None,
                         record: source.clone(),
                         lifecycle: if suppressed {
                             ExternalSourceLifecycleState::Suppressed
@@ -311,6 +359,7 @@ impl ExternalToolCoordinator {
                     } else {
                         ExternalSourceDiagnosticSeverity::Error
                     },
+                    asset_kind: ExternalSourceAssetKind::Tool,
                     code: error.code.clone(),
                     message: error.message.clone(),
                     source: None,

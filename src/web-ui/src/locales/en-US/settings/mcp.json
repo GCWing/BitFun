@@ -1,10 +1,57 @@
 {
   "title": "MCP",
   "subtitle": "Manage MCP server connections",
+  "subtitleReadOnly": "View MCP connections",
   "section": {
     "serverList": {
       "title": "MCP Server List",
-      "description": "Manage MCP server status and JSON configuration."
+      "description": "MCP servers and JSON configuration",
+      "desktopUnavailable": "Manage BitFun MCP in Desktop.",
+      "remoteUnavailable": "BitFun MCP management is unavailable during a remote connection.",
+      "loadFailed": "MCP servers could not be loaded."
+    }
+  },
+  "external": {
+    "title": "External MCP servers",
+    "description": "From other AI applications",
+    "manage": "Manage external integrations",
+    "retry": "Retry external MCP sources",
+    "loading": "Checking external MCP sources...",
+    "unavailable": "External MCP is temporarily unavailable.",
+    "empty": "No external MCP found.",
+    "unknown": "Unknown",
+    "scope": {
+      "userGlobal": "Global",
+      "project": "Project",
+      "remoteUser": "Remote global",
+      "remoteProject": "Remote project"
+    },
+    "status": {
+      "checking": "Checking",
+      "stale": "Last valid",
+      "degraded": "Source issue",
+      "readOnly": "Read-only",
+      "approvalRequired": "Approval required",
+      "starting": "Starting",
+      "active": "Active",
+      "declined": "Declined",
+      "conflict": "Conflict",
+      "covered": "Covered",
+      "sourceDisabled": "Source disabled",
+      "configurationChanged": "Changed",
+      "unsupported": "Unsupported",
+      "runtimeUnavailable": "Unavailable",
+      "removed": "Removed"
+    },
+    "details": {
+      "source": "Source",
+      "scope": "Scope",
+      "location": "Configuration",
+      "transport": "Transport"
+    },
+    "transport": {
+      "localStdio": "Local process",
+      "streamableHttp": "Streamable HTTP"
     }
   },
   "tabs": {
@@ -137,6 +184,7 @@
   },
   "jsonEditor": {
     "title": "MCP JSON Config",
+    "loadFailed": "MCP configuration could not be loaded.",
     "hint1": "Use standard Cursor format for MCP configuration. Config will be saved to app.json in user directory.",
     "hint2": "Format: the \"type\" field is optional. If you provide \"command\" it will be parsed as stdio (local process); if you provide \"url\" it will be parsed as sse (remote service). You can also set type=\"stdio\"/\"sse\" explicitly for compatibility.",
     "lintLocation": " (line {{line}}, col {{column}})",

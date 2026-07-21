@@ -2,6 +2,7 @@
 
 mod config;
 mod dialog;
+mod external_sources;
 mod filesystem;
 mod git;
 mod permission;
@@ -38,6 +39,18 @@ pub(crate) async fn dispatch(
         "set_config" => config::set_config(args).await,
         "get_agent_profile_config" => config::get_agent_profile_config(args).await,
         "get_agent_profile_configs" => config::get_agent_profile_configs().await,
+        "get_external_source_snapshot"
+        | "set_external_source_enabled_command"
+        | "set_external_source_conflict_choice_command"
+        | "set_external_tool_target_decision_command"
+        | "set_external_tool_conflict_choice_command"
+        | "set_external_subagent_activation_command"
+        | "choose_external_subagent_conflict_command"
+        | "set_external_mcp_server_decision_command"
+        | "choose_external_mcp_conflict_command"
+        | "update_external_integration_policy_command" => {
+            external_sources::dispatch(command, args, state).await
+        }
 
         // Filesystem
         "get_directory_children" | "list_files" => {

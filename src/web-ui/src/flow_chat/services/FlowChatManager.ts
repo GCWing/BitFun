@@ -322,7 +322,10 @@ export class FlowChatManager {
       return hasHistoricalSessions;
     } catch (error) {
       log.error('Initialization failed', error);
-      return false;
+      // Must not return false: callers treat false as "no history → create
+      // session", which in Peer Device Mode can create on the peer with a
+      // stale controller workspace path.
+      throw error;
     }
   }
 
@@ -383,6 +386,9 @@ export class FlowChatManager {
     this.cleanupEventListeners();
     this.initializationRequests.clear();
     this.latestInitializationRequestKey = null;
+    // Drop controller-local path so createChatSession cannot reuse a stale
+    // Windows/Mac path against the peer host after the surface switch.
+    this.context.currentWorkspacePath = null;
     const removedSessionIds = this.context.flowChatStore.clearAllSessionsForPeerSwitch();
     removedSessionIds.forEach(sessionId => {
       stateMachineManager.delete(sessionId);

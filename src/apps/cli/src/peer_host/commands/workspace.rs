@@ -58,13 +58,12 @@ pub(crate) async fn open_workspace(state: &PeerHostState, args: &Value) -> Resul
         .map_err(|e| format!("Failed to open workspace: {e}"))?;
 
     // Best-effort snapshot init for agent tools (mirrors server bootstrap).
-    if let Err(e) = bitfun_core::service::snapshot::initialize_snapshot_manager_for_workspace(
-        info.root_path.clone(),
-        None,
-    )
-    .await
+    if let Err(error) = state
+        .local_workspace_snapshot
+        .prepare_local_workspace(info.root_path.clone())
+        .await
     {
-        tracing::warn!("Failed to initialize snapshot system: {e}");
+        tracing::warn!("Failed to initialize snapshot system: {}", error.message);
     }
 
     Ok(workspace_info_to_json(&info))

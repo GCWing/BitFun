@@ -5,15 +5,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 
-use bitfun_core::agentic::core::{Session, SessionConfig};
+use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, AgentSessionRestoreResult};
+use bitfun_core::agentic::core::Session;
 use bitfun_core::agentic::get_agent_registry;
-use bitfun_core::service::session::SessionStatus;
 use bitfun_runtime_ports::{
-    AgentSessionDeleteRequest, AgentSessionModelUpdateRequest, SessionStoragePathRequest,
+    AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentThreadGoalGetRequest,
+    SessionStoragePathRequest,
 };
 
 use crate::peer_host::args::{get_string, optional_bool, optional_string, request_value};
 use crate::peer_host::state::PeerHostState;
+
+use super::snapshot::{local_snapshot_session_stats, require_local_snapshot_workspace};
 
 fn session_storage_request(request: &Value) -> Result<SessionStoragePathRequest, String> {
     let workspace_path = get_string(request, "workspacePath")?;
@@ -62,6 +66,21 @@ fn session_to_json(session: Session, turn_count: usize) -> Value {
         "state": format!("{:?}", session.state),
         "turnCount": turn_count,
         "createdAt": system_time_to_unix_secs(session.created_at),
+    })
+}
+
+fn restored_session_to_json(restored: AgentSessionRestoreResult) -> Value {
+    let session = restored.session;
+    json!({
+        "sessionId": session.session_id,
+        "sessionName": session.session_name,
+        "agentType": session.agent_type,
+        "modelName": session.model_id,
+        "lastUserDialogAgentType": session.last_user_dialog_agent_type,
+        "lastSubmittedAgentType": session.last_submitted_agent_type,
+        "state": format!("{:?}", restored.state),
+        "turnCount": session.turn_count,
+        "createdAt": session.created_at_ms / 1000,
     })
 }
 
@@ -204,14 +223,19 @@ pub(crate) async fn restore_session(state: &PeerHostState, args: &Value) -> Resu
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let session = state
-        .compatibility
-        .restore_session_for_workspace(storage_request, &session_id, include_internal)
+    let restored = state
+        .agent_runtime
+        .restore_session(AgentSessionRestoreRequest {
+            workspace_path: storage_request.workspace_path.to_string_lossy().to_string(),
+            session_id,
+            include_internal,
+            remote_connection_id: storage_request.remote_connection_id,
+            remote_ssh_host: storage_request.remote_ssh_host,
+        })
         .await
-        .map_err(|e| format!("Failed to restore session: {e}"))?;
+        .map_err(|error| format!("Failed to restore session: {}", error.into_message()))?;
 
-    let turn_count = session.dialog_turn_ids.len();
-    Ok(session_to_json(session, turn_count))
+    Ok(restored_session_to_json(restored))
 }
 
 pub(crate) async fn create_session(state: &PeerHostState, args: &Value) -> Result<Value, String> {
@@ -237,20 +261,26 @@ pub(crate) async fn create_session(state: &PeerHostState, args: &Value) -> Resul
         .filter(|s| !s.is_empty())
         .or_else(|| optional_string(request, "modelName"));
 
-    let config = SessionConfig {
-        workspace_path: Some(workspace_path.clone()),
+    let create_request = AgentSessionCreateRequest {
+        session_name,
+        agent_type,
+        workspace_path: Some(workspace_path),
         workspace_id,
         remote_connection_id,
         remote_ssh_host,
         model_id,
-        ..Default::default()
+        metadata: serde_json::Map::new(),
     };
-
-    let session = state
-        .compatibility
-        .create_session_with_workspace(session_id, session_name, agent_type, config, workspace_path)
-        .await
-        .map_err(|e| format!("Failed to create session: {e}"))?;
+    let session = match session_id {
+        Some(session_id) => {
+            state
+                .agent_runtime
+                .create_session_with_id(session_id, create_request)
+                .await
+        }
+        None => state.agent_runtime.create_session(create_request).await,
+    }
+    .map_err(|error| format!("Failed to create session: {}", error.into_message()))?;
 
     Ok(json!({
         "sessionId": session.session_id,
@@ -279,39 +309,38 @@ pub(crate) async fn delete_session(state: &PeerHostState, args: &Value) -> Resul
 pub(crate) async fn rename_session(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let workspace_path = resolved_session_storage_path(state, request).await?;
+    let storage_request = session_storage_request(request)?;
     let title = get_string(request, "sessionName")
         .or_else(|_| get_string(request, "title"))
         .or_else(|_| get_string(request, "name"))?;
     state
-        .compatibility
-        .update_session_title_for_storage_path(&workspace_path, &session_id, &title)
+        .agent_runtime
+        .rename_session(AgentSessionRenameRequest {
+            workspace_path: storage_request.workspace_path.to_string_lossy().to_string(),
+            session_id,
+            session_name: title,
+            remote_connection_id: storage_request.remote_connection_id,
+            remote_ssh_host: storage_request.remote_ssh_host,
+        })
         .await
-        .map_err(|e| format!("Failed to rename session: {e}"))?;
+        .map_err(|error| format!("Failed to rename session: {}", error.into_message()))?;
     Ok(Value::Null)
 }
 
 pub(crate) async fn archive_session(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let workspace_path = resolved_session_storage_path(state, request).await?;
-    let _mutation = state
-        .compatibility
-        .begin_persisted_session_mutation(&workspace_path, &session_id)
-        .await
-        .map_err(|error| format!("Failed to lock session archive: {error}"))?;
-    let mut metadata = state
-        .compatibility
-        .load_persisted_session_metadata(&workspace_path, &session_id)
-        .await
-        .map_err(|e| format!("Failed to load session metadata: {e}"))?
-        .ok_or_else(|| "Session not found".to_string())?;
-    metadata.status = SessionStatus::Archived;
+    let storage_request = session_storage_request(request)?;
     state
-        .compatibility
-        .save_persisted_session_metadata(&workspace_path, &metadata)
+        .agent_runtime
+        .archive_session(AgentSessionArchiveRequest {
+            workspace_path: storage_request.workspace_path.to_string_lossy().to_string(),
+            session_id,
+            remote_connection_id: storage_request.remote_connection_id,
+            remote_ssh_host: storage_request.remote_ssh_host,
+        })
         .await
-        .map_err(|e| format!("Failed to archive session: {e}"))?;
+        .map_err(|error| format!("Failed to archive session: {}", error.into_message()))?;
     Ok(Value::Null)
 }
 
@@ -341,16 +370,28 @@ pub(crate) async fn get_session_thread_goal(
 ) -> Result<Value, String> {
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
-    let workspace_path = if optional_string(request, "workspacePath").is_some() {
-        resolved_session_storage_path(state, request).await?
+    let storage_request = if optional_string(request, "workspacePath").is_some() {
+        session_storage_request(request)?
     } else {
-        PathBuf::from(".")
+        SessionStoragePathRequest {
+            workspace_path: PathBuf::from("."),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        }
     };
     let goal = state
-        .compatibility
-        .get_thread_goal(&session_id, workspace_path.as_path())
+        .agent_runtime
+        .get_thread_goal(AgentThreadGoalGetRequest {
+            session_id,
+            workspace_path: storage_request
+                .workspace_path
+                .to_string_lossy()
+                .into_owned(),
+            remote_connection_id: storage_request.remote_connection_id,
+            remote_ssh_host: storage_request.remote_ssh_host,
+        })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| error.into_message())?;
     Ok(json!({ "goal": goal }))
 }
 
@@ -432,23 +473,27 @@ pub(crate) async fn get_session_stats(
     let request = request_value(args);
     let session_id = get_string(request, "sessionId")?;
     let workspace_path = get_string(request, "workspacePath")?;
-    let workspace = PathBuf::from(&workspace_path);
+    bitfun_agent_runtime::session_control::validate_session_id(&session_id)
+        .map_err(session_stats_validation_error)?;
+    require_local_snapshot_workspace(request, &workspace_path).await?;
 
-    if let Some(stats) = state
-        .compatibility
-        .get_session_snapshot_stats(&workspace, &session_id)
-        .await
-        .map_err(|e| format!("Failed to get session stats: {e}"))?
-    {
-        return Ok(stats);
-    }
+    let stats = local_snapshot_session_stats(
+        state.local_workspace_snapshot.as_ref(),
+        PathBuf::from(&workspace_path),
+        session_id,
+    )
+    .await?;
 
     Ok(json!({
-        "session_id": session_id,
-        "total_files": 0,
-        "total_turns": 0,
-        "total_changes": 0
+        "session_id": stats.session_id,
+        "total_files": stats.total_files,
+        "total_turns": stats.total_turns,
+        "total_changes": stats.total_changes
     }))
+}
+
+fn session_stats_validation_error(error: impl std::fmt::Display) -> String {
+    format!("Failed to get session stats: Validation error: {error}")
 }
 
 pub(crate) async fn save_session_turn(
@@ -484,4 +529,47 @@ pub(crate) async fn save_session_turn(
         .await
         .map_err(|e| format!("Failed to save session turn: {e}"))?;
     Ok(Value::Null)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{restored_session_to_json, session_stats_validation_error};
+    use bitfun_agent_runtime::sdk::{AgentSessionRestoreResult, AgentSessionSummary, SessionState};
+
+    #[test]
+    fn basic_restore_keeps_peer_host_session_shape() {
+        let value = restored_session_to_json(AgentSessionRestoreResult {
+            session: AgentSessionSummary {
+                session_id: "session_1".to_string(),
+                session_name: "Main".to_string(),
+                agent_type: "agentic".to_string(),
+                model_id: Some("provider/model".to_string()),
+                last_user_dialog_agent_type: Some("plan".to_string()),
+                last_submitted_agent_type: Some("agentic".to_string()),
+                turn_count: 3,
+                created_at_ms: 12_345,
+                last_active_at_ms: 20_000,
+            },
+            state: SessionState::Idle,
+        });
+
+        assert_eq!(value["sessionId"], "session_1");
+        assert_eq!(value["sessionName"], "Main");
+        assert_eq!(value["agentType"], "agentic");
+        assert_eq!(value["modelName"], "provider/model");
+        assert_eq!(value["lastUserDialogAgentType"], "plan");
+        assert_eq!(value["lastSubmittedAgentType"], "agentic");
+        assert_eq!(value["state"], "Idle");
+        assert_eq!(value["turnCount"], 3);
+        assert_eq!(value["createdAt"], 12);
+        assert!(value.get("lastActiveAt").is_none());
+    }
+
+    #[test]
+    fn session_stats_validation_keeps_compatibility_error_category() {
+        assert_eq!(
+            session_stats_validation_error("session_id cannot contain path separators"),
+            "Failed to get session stats: Validation error: session_id cannot contain path separators"
+        );
+    }
 }

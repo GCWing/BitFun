@@ -127,6 +127,9 @@ impl AgentRegistry {
                 AgentSource::Project => {
                     project_entries.entry(id).or_insert(entry);
                 }
+                AgentSource::External => {
+                    debug_assert!(false, "file-backed discovery cannot create external agents");
+                }
             }
         }
 
@@ -853,6 +856,10 @@ impl AgentRegistry {
                 .await?;
                 Ok(())
             }
+            Some(SubAgentSource::External) => Err(BitFunError::agent(format!(
+                "External subagent '{}' is read-only; manage it in External AI Apps",
+                agent_id
+            ))),
             None => Err(BitFunError::agent(format!(
                 "Agent '{}' has no subagent source",
                 agent_id

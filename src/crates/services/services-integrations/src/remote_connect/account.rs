@@ -183,6 +183,17 @@ pub struct AccountClient {
     http: reqwest::Client,
 }
 
+/// Check whether an account/relay error message indicates an invalid or
+/// expired account token (relay auth failure). Shared by Desktop, CLI, and
+/// the settings sync engine so they all react to the same relay wording.
+pub fn error_indicates_expired_token(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("http 401")
+        || lower.contains("unauthorized")
+        || lower.contains("invalid or expired token")
+        || lower.contains("relay auth error")
+}
+
 impl Default for AccountClient {
     fn default() -> Self {
         Self::new()
@@ -230,17 +241,14 @@ impl AccountClient {
         }
     }
 
-    /// Log in to an existing account. Fetches the KDF challenge, derives the KEK
-    /// locally, unwraps the master key (GCM failure ⇒ wrong password), then
-    /// verifies the password hash with the relay to obtain a token.
-    pub async fn login(
+    /// Fetch the login challenge and unwrap the master key locally.
+    /// Does not call `/api/auth/login` and does not mint a token.
+    async fn unwrap_master_key_for_credentials(
         &self,
         relay_url: &str,
         username: &str,
         password: &str,
-        device: &DeviceIdentity,
-    ) -> Result<AccountSession> {
-        // 1. Challenge: fetch salts + wrapped master key.
+    ) -> Result<([u8; MASTER_KEY_LEN], ChallengeResponse)> {
         let challenge_req = serde_json::json!({ "username": username });
         let resp = self
             .http
@@ -256,19 +264,56 @@ impl AccountClient {
         let salt = BASE64
             .decode(&challenge.salt)
             .map_err(|e| anyhow!("b64 decode salt: {e}"))?;
+        let params: KdfParams = serde_json::from_str(&challenge.argon2_params)
+            .map_err(|e| anyhow!("parse argon2_params: {e}"))?;
+
+        // GCM tag failure means the password is wrong.
+        let kek = derive_kek(password, &salt, &params)?;
+        let master_key = unwrap_master_key(&kek, &challenge.wrapped_master_key)
+            .map_err(|_| anyhow!("invalid username or password"))?;
+        Ok((master_key, challenge))
+    }
+
+    /// Verify username/password against an existing session without minting a
+    /// new relay token. Uses the same challenge + KEK unwrap path as `login`.
+    /// Succeeds only when the unwrapped master key matches `expected_master_key`.
+    pub async fn verify_password_for_master_key(
+        &self,
+        relay_url: &str,
+        username: &str,
+        password: &str,
+        expected_master_key: &[u8; MASTER_KEY_LEN],
+    ) -> Result<()> {
+        let (master_key, _) = self
+            .unwrap_master_key_for_credentials(relay_url, username, password)
+            .await?;
+        if master_key != *expected_master_key {
+            return Err(anyhow!("invalid username or password"));
+        }
+        Ok(())
+    }
+
+    /// Log in to an existing account. Fetches the KDF challenge, derives the KEK
+    /// locally, unwraps the master key (GCM failure ⇒ wrong password), then
+    /// verifies the password hash with the relay to obtain a token.
+    pub async fn login(
+        &self,
+        relay_url: &str,
+        username: &str,
+        password: &str,
+        device: &DeviceIdentity,
+    ) -> Result<AccountSession> {
+        let (master_key, challenge) = self
+            .unwrap_master_key_for_credentials(relay_url, username, password)
+            .await?;
+
         let kdf_salt = BASE64
             .decode(&challenge.kdf_salt)
             .map_err(|e| anyhow!("b64 decode kdf_salt: {e}"))?;
         let params: KdfParams = serde_json::from_str(&challenge.argon2_params)
             .map_err(|e| anyhow!("parse argon2_params: {e}"))?;
 
-        // 2. Derive KEK and unwrap the master key. A failure here means the
-        //    password is wrong (the GCM tag won't verify).
-        let kek = derive_kek(password, &salt, &params)?;
-        let master_key = unwrap_master_key(&kek, &challenge.wrapped_master_key)
-            .map_err(|_| anyhow!("invalid username or password"))?;
-
-        // 3. Derive the server-verifiable hash and submit it.
+        // Derive the server-verifiable hash and submit it.
         let password_hash = derive_password_hash(password, &kdf_salt, &params)?;
         let login_req = serde_json::json!({
             "username": username,
@@ -477,17 +522,20 @@ impl AccountClient {
     }
 
     /// Upload an encrypted settings blob (keyed by the user, not per-device).
+    /// Returns the version sent with the upload so callers can record a sync
+    /// cursor that matches what the relay actually stored.
     pub async fn upload_settings(
         &self,
         relay_url: &str,
         session: &AccountSession,
         plaintext: &str,
-    ) -> Result<()> {
+    ) -> Result<i64> {
         let (data, nonce) = Self::seal(session, plaintext)?;
+        let version = chrono::Utc::now().timestamp_millis();
         let body = serde_json::json!({
             "encrypted_data": data,
             "nonce": nonce,
-            "version": chrono::Utc::now().timestamp_millis(),
+            "version": version,
         });
         let resp = self
             .http
@@ -499,7 +547,7 @@ impl AccountClient {
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
-        Ok(())
+        Ok(version)
     }
 
     /// Fetch and decrypt the settings blob. Returns `None` if no settings exist.

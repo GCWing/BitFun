@@ -46,6 +46,8 @@ import { WriteStdinToolCard } from './WriteStdinToolCard';
 import { ExecControlToolCard } from './ExecControlToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
+import { PageDeployDisplay } from './PageDeployToolDisplay';
+import { PagePublishDisplay } from './PagePublishToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
 import { CanvasToolCard } from './CanvasToolCard';
 import { ReviewSessionSummaryCard } from './ReviewSessionSummaryCard';
@@ -115,6 +117,10 @@ export const TOOL_CARD_COMPONENTS = {
 
   // MiniApp tool
   'InitMiniApp': InitMiniAppDisplay,
+
+  // BitFun Page (session-only publish)
+  'PageDeploy': PageDeployDisplay,
+  'PagePublish': PagePublishDisplay,
 
   // Generative widget tool
   'GenerativeUI': GenerativeWidgetToolCard,

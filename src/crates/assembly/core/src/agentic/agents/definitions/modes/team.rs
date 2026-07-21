@@ -22,6 +22,8 @@ impl TeamMode {
             default_tools: vec![
                 "Skill".to_string(),
                 "Task".to_string(),
+                "ListModels".to_string(),
+                "AgentWait".to_string(),
                 "Read".to_string(),
                 "view_image".to_string(),
                 "analyze_image".to_string(),
@@ -94,5 +96,6 @@ mod tests {
         assert_eq!(agent.prompt_template_name(None), "team_mode");
         assert!(!agent.is_readonly());
         assert!(agent.default_tools().contains(&"Skill".to_string()));
+        assert!(agent.default_tools().contains(&"ListModels".to_string()));
     }
 }

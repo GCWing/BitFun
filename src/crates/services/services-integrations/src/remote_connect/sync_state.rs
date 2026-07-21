@@ -3,6 +3,11 @@
 //! Persists per-user state under `~/.bitfun/account_sync/` so incremental
 //! `?since=` pulls and upload dedupe survive app restarts. Not secret —
 //! hashes are of plaintext session bundles; cursors are relay version ints.
+//!
+//! Session sync state (`<user>.json`) and the settings sync cursor
+//! (`<user>.settings.json`) live in separate files on purpose: the session
+//! backup loop and the settings sync engine are independent writers, so a
+//! shared read-modify-write file could drop one writer's update.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,6 +27,18 @@ pub struct AccountSyncState {
     pub uploaded_hashes: HashMap<String, String>,
 }
 
+/// Settings sync progress for one account: the cloud settings blob version
+/// this device last uploaded or applied, plus the content hash of that blob.
+/// Lets the periodic pull skip unchanged blobs across restarts and the push
+/// path skip unchanged content.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SettingsCursor {
+    #[serde(default)]
+    pub version: i64,
+    #[serde(default)]
+    pub hash: String,
+}
+
 /// SHA-256 hex digest of session bundle plaintext (stable skip key).
 pub fn content_hash(plaintext: &str) -> String {
     let digest = Sha256::digest(plaintext.as_bytes());
@@ -33,8 +50,8 @@ fn sync_dir() -> Result<PathBuf> {
     Ok(home.join(".bitfun").join("account_sync"))
 }
 
-fn sync_state_path(user_id: &str) -> Result<PathBuf> {
-    let safe: String = user_id
+fn safe_user_id(user_id: &str) -> String {
+    user_id
         .chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
@@ -43,8 +60,15 @@ fn sync_state_path(user_id: &str) -> Result<PathBuf> {
                 '_'
             }
         })
-        .collect();
-    Ok(sync_dir()?.join(format!("{safe}.json")))
+        .collect()
+}
+
+fn sync_state_path(user_id: &str) -> Result<PathBuf> {
+    Ok(sync_dir()?.join(format!("{}.json", safe_user_id(user_id))))
+}
+
+fn settings_cursor_path(user_id: &str) -> Result<PathBuf> {
+    Ok(sync_dir()?.join(format!("{}.settings.json", safe_user_id(user_id))))
 }
 
 /// Load sync state for `user_id`, or a default empty state if missing/corrupt.
@@ -65,6 +89,30 @@ pub fn save(user_id: &str, state: &AccountSyncState) -> Result<()> {
     std::fs::create_dir_all(&dir)?;
     let path = sync_state_path(user_id)?;
     let raw = serde_json::to_string_pretty(state)?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, raw)?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
+/// Load the settings cursor for `user_id`, defaulting when missing/corrupt.
+pub fn load_settings_cursor(user_id: &str) -> SettingsCursor {
+    let path = match settings_cursor_path(user_id) {
+        Ok(p) => p,
+        Err(_) => return SettingsCursor::default(),
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(raw) => serde_json::from_str(&raw).unwrap_or_default(),
+        Err(_) => SettingsCursor::default(),
+    }
+}
+
+/// Persist the settings cursor for `user_id`.
+pub fn save_settings_cursor(user_id: &str, cursor: &SettingsCursor) -> Result<()> {
+    let dir = sync_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    let path = settings_cursor_path(user_id)?;
+    let raw = serde_json::to_string_pretty(cursor)?;
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, raw)?;
     std::fs::rename(&tmp, &path)?;
@@ -93,5 +141,37 @@ impl AccountSyncState {
             }
         }
         self.last_session_since = max_v;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_state_deserializes() {
+        let legacy = r#"{"last_session_since":7,"uploaded_hashes":{"s1":"abc"}}"#;
+        let state: AccountSyncState = serde_json::from_str(legacy).unwrap();
+        assert_eq!(state.last_session_since, 7);
+        assert_eq!(state.uploaded_hash("s1"), Some("abc"));
+    }
+
+    #[test]
+    fn settings_cursor_round_trips() {
+        let cursor = SettingsCursor {
+            version: 42,
+            hash: "deadbeef".to_string(),
+        };
+        let raw = serde_json::to_string(&cursor).unwrap();
+        let back: SettingsCursor = serde_json::from_str(&raw).unwrap();
+        assert_eq!(back.version, 42);
+        assert_eq!(back.hash, "deadbeef");
+    }
+
+    #[test]
+    fn settings_cursor_defaults_when_missing_fields() {
+        let cursor: SettingsCursor = serde_json::from_str("{}").unwrap();
+        assert_eq!(cursor.version, 0);
+        assert!(cursor.hash.is_empty());
     }
 }

@@ -20,8 +20,9 @@ import { HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { isRemoteWorkspace } from '@/shared/types';
 
-export type FilterLevel = 'all' | 'builtin' | 'user' | 'project';
+export type FilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
 export type FilterType = 'all' | 'mode' | 'subagent';
 
 export interface ToolInfo {
@@ -162,13 +163,13 @@ export function useAgentsList({
   t,
 }: UseAgentsListOptions) {
   const notification = useNotification();
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspace, workspacePath } = useCurrentWorkspace();
   const [allAgents, setAllAgents] = useState<AgentWithCapabilities[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
   const [configuredModels, setConfiguredModels] = useState<AIModelConfig[]>([]);
   const [modeProfiles, setModeProfiles] = useState<Record<string, ModeProfileEntry>>({});
-  const [modeSkills, setModeSkills] = useState<Record<string, ModeSkillInfo[]>>({});
+  const [agentSkills, setAgentSkills] = useState<Record<string, ModeSkillInfo[]>>({});
   const [modeConfigs, setModeConfigs] = useState<Record<string, AgentProfileConfigItem>>({});
   const [modeManageableSubagents, setModeManageableSubagents] = useState<Record<string, SubagentInfo[]>>({});
   const [hiddenAgentIds, setHiddenAgentIds] = useState<ReadonlySet<string>>(
@@ -206,11 +207,23 @@ export function useAgentsList({
       const profileMap = buildProfileMap(modes);
       const profileEntries = Object.values(profileMap);
 
+      const skillTargets = [
+        ...profileEntries.map((profile) => ({
+          cacheKey: profile.profileId,
+          agentId: profile.representativeModeId,
+        })),
+        ...subagents
+          .filter((subagent) => subagent.defaultTools.includes('Skill'))
+          .map((subagent) => ({
+            cacheKey: subagent.id,
+            agentId: subagent.id,
+          })),
+      ];
       const skillEntries = await Promise.all(
-        profileEntries.map(async (profile) => [
-          profile.profileId,
+        skillTargets.map(async ({ cacheKey, agentId }) => [
+          cacheKey,
           await configAPI.getModeSkillConfigs({
-            modeId: profile.representativeModeId,
+            modeId: agentId,
             workspacePath: workspacePath || undefined,
           }).catch(() => []),
         ] as const),
@@ -279,7 +292,7 @@ export function useAgentsList({
       setAvailableTools(tools);
       setConfiguredModels(models);
       setModeProfiles(profileMap);
-      setModeSkills(Object.fromEntries(skillEntries));
+      setAgentSkills(Object.fromEntries(skillEntries));
       setModeConfigs(buildModeConfigsByProfile(modes, configs as Record<string, AgentProfileConfigItem>));
       setModeManageableSubagents(manageableSubagentsByProfile);
       setHiddenAgentIds(new Set([
@@ -346,10 +359,10 @@ export function useAgentsList({
     };
   }, [allAgents, modeConfigs]);
 
-  const getModeSkills = useCallback((agentId: string): ModeSkillInfo[] => {
+  const getAgentSkills = useCallback((agentId: string): ModeSkillInfo[] => {
     const profile = getModeProfile(agentId);
-    return profile ? (modeSkills[profile.profileId] ?? []) : [];
-  }, [getModeProfile, modeSkills]);
+    return agentSkills[profile?.profileId ?? agentId] ?? [];
+  }, [agentSkills, getModeProfile]);
 
   const getModeManageableSubagents = useCallback((agentId: string): SubagentInfo[] => {
     const profile = getModeProfile(agentId);
@@ -395,7 +408,7 @@ export function useAgentsList({
       });
       const modes = await agentAPI.getAvailableModes().catch(() => []);
       setModeConfigs(buildModeConfigsByProfile(modes, updated as Record<string, AgentProfileConfigItem>));
-      setModeSkills((prev) => ({ ...prev, [profile.profileId]: updatedSkills }));
+      setAgentSkills((prev) => ({ ...prev, [profile.profileId]: updatedSkills }));
       notification.success(t('agentsOverview.toolsResetSuccess'));
 
       try {
@@ -411,20 +424,21 @@ export function useAgentsList({
 
   const handleSetSkills = useCallback(async (agentId: string, enabledSkillKeys: string[]) => {
     const profile = getModeProfile(agentId);
-    if (!profile) return;
+    const cacheKey = profile?.profileId ?? agentId;
+    const targetAgentId = profile?.representativeModeId ?? agentId;
 
     try {
       await configAPI.replaceModeSkillSelection({
-        modeId: profile.representativeModeId,
+        modeId: targetAgentId,
         enabledSkillKeys,
         workspacePath: workspacePath || undefined,
       });
 
       const updatedSkills = await configAPI.getModeSkillConfigs({
-        modeId: profile.representativeModeId,
+        modeId: targetAgentId,
         workspacePath: workspacePath || undefined,
       });
-      setModeSkills((prev) => ({ ...prev, [profile.profileId]: updatedSkills }));
+      setAgentSkills((prev) => ({ ...prev, [cacheKey]: updatedSkills }));
 
       try {
         const { globalEventBus } = await import('@/infrastructure/event-bus');
@@ -439,19 +453,20 @@ export function useAgentsList({
 
   const handleResetSkills = useCallback(async (agentId: string) => {
     const profile = getModeProfile(agentId);
-    if (!profile) return;
+    const cacheKey = profile?.profileId ?? agentId;
+    const targetAgentId = profile?.representativeModeId ?? agentId;
 
     try {
       await configAPI.resetModeSkillSelection({
-        modeId: profile.representativeModeId,
+        modeId: targetAgentId,
         workspacePath: workspacePath || undefined,
       });
 
       const updatedSkills = await configAPI.getModeSkillConfigs({
-        modeId: profile.representativeModeId,
+        modeId: targetAgentId,
         workspacePath: workspacePath || undefined,
       });
-      setModeSkills((prev) => ({ ...prev, [profile.profileId]: updatedSkills }));
+      setAgentSkills((prev) => ({ ...prev, [cacheKey]: updatedSkills }));
 
       try {
         const { globalEventBus } = await import('@/infrastructure/event-bus');
@@ -559,18 +574,21 @@ export function useAgentsList({
     builtin: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'builtin').length,
     user: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'user').length,
     project: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'project').length,
+    external: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'external').length,
     mode: overviewAgents.filter((agent) => agent.agentKind === 'mode').length,
     subagent: overviewAgents.filter((agent) => agent.agentKind === 'subagent').length,
   }), [overviewAgents]);
 
   return {
+    workspacePath,
+    workspaceIsRemote: isRemoteWorkspace(workspace),
     allAgents,
     filteredAgents,
     loading,
     availableTools,
     configuredModels,
     getModeProfile,
-    getModeSkills,
+    getAgentSkills,
     getModeManageableSubagents,
     counts,
     hiddenAgentIds,

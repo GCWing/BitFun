@@ -1519,8 +1519,15 @@ pub async fn miniapp_ai_list_models(
             .map(|model| MiniAppAiModelDescriptor {
                 id: model.id.clone(),
                 name: model.name.clone(),
+                model_name: model.model_name.clone(),
                 provider: model.provider.clone(),
                 enabled: model.enabled,
+                supports_text_chat: model.capabilities.iter().any(|capability| {
+                    matches!(
+                        capability,
+                        bitfun_core::service::config::types::ModelCapability::TextChat
+                    )
+                }),
             }),
         ai_perms.allowed_models.as_deref().unwrap_or(&[]),
         &primary_id,

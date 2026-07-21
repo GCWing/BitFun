@@ -468,9 +468,29 @@
     font-size: 11px;
     color: var(--color-text-secondary);
     white-space: nowrap;
-    max-width: 180px;
+    max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
+
+    &.is-covered {
+      border-color: color-mix(in srgb, var(--color-warning) 32%, var(--border-subtle));
+      color: var(--color-text-muted);
+    }
+  }
+
+  &__chip-state,
+  &__token-state {
+    flex-shrink: 0;
+    margin-left: $size-gap-1;
+    font-family: $font-family-sans;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-muted);
+  }
+
+  &__chip.is-covered &__chip-state,
+  &__token.is-covered &__token-state {
+    color: var(--color-warning);
   }
 
   // ── Editable token grid ──────────────────────────────────────────────────
@@ -478,6 +498,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: $size-gap-1;
+  }
+
+  &__tooltip-trigger {
+    display: inline-flex;
+    max-width: 100%;
   }
 
   &__token {
@@ -509,6 +534,28 @@
       &:hover {
         border-color: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
         background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+      }
+    }
+
+    &.is-covered {
+      border-color: color-mix(in srgb, var(--color-warning) 32%, var(--border-subtle));
+      background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+      color: var(--color-text-muted);
+    }
+
+    &.is-readonly,
+    &:disabled {
+      cursor: default;
+      opacity: 0.72;
+
+      &:hover:not(.is-on) {
+        border-color: transparent;
+        color: var(--color-text-muted);
+      }
+
+      &.is-on:hover {
+        border-color: var(--color-accent-400);
+        background: var(--color-accent-100);
       }
     }
   }

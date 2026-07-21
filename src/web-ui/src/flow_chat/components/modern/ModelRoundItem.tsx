@@ -15,6 +15,11 @@ import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
+import {
+  TypewriterRevealGateProvider,
+  useCreateTypewriterRevealGate,
+} from '../../hooks/TypewriterRevealGate';
+import { getModelRoundItemClassName } from './modelRoundItemClassName';
 import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
@@ -245,6 +250,11 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const { t } = useTranslation('flow-chat');
     const { formatDate, formatNumber } = useI18n('flow-chat');
     const { sessionId } = useFlowChatContext();
+    const typewriterRevealGate = useCreateTypewriterRevealGate();
+    // Capture mount-time streaming state once: history rounds may fade in,
+    // but a round that started as streaming must never replay fadeIn when it
+    // later flips to complete (that looked like a full chat refresh).
+    const [shouldPlayEnterAnimation] = useState(() => !round.isStreaming);
     const [copied, setCopied] = useState(false);
     const [showRetryHistory, setShowRetryHistory] = useState(false);
     const [showRoundHistory, setShowRoundHistory] = useState(false);
@@ -594,21 +604,30 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       formatNumber,
       t,
     }), [completedAt, effectiveDurationMs, formatDate, formatNumber, round.status, t, turnTokenUsage]);
-    const shouldRenderFooter = isTurnComplete &&
+    // Wait for typewriter catch-up before revealing footer controls. Reserve
+    // footer layout as soon as the model round completes so the eventual
+    // reveal does not resize the list (that resize flashed the chat pane).
+    const isVisuallyStreaming = round.isStreaming || typewriterRevealGate.isAnyRevealing;
+    const shouldReserveFooter = isTurnComplete &&
       isLastRound &&
       !round.isStreaming &&
       (hasContent || usageMetaItems.length > 0);
+    const shouldRevealFooter = shouldReserveFooter && !typewriterRevealGate.isAnyRevealing;
     
     return (
+      <TypewriterRevealGateProvider value={typewriterRevealGate}>
       <div 
-        className={`model-round-item model-round-item--${round.isStreaming ? 'streaming' : 'complete'}`}
+        className={getModelRoundItemClassName({
+          isVisuallyStreaming,
+          shouldPlayEnterAnimation,
+        })}
         data-testid="chat-assistant-message"
         data-turn-id={turnId}
         data-round-id={round.id}
         data-status={round.status}
         data-model-config-id={round.modelConfigId || ''}
         data-effective-model-name={round.effectiveModelName || ''}
-        data-streaming={round.isStreaming ? 'true' : 'false'}
+        data-streaming={isVisuallyStreaming ? 'true' : 'false'}
       >
         {renderTraceEnabled && renderTraceStartedAtMs !== null && allGroupSummary && visibleGroupSummary && (
           <ModelRoundRenderTrace
@@ -760,8 +779,11 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
 
-        {shouldRenderFooter && (
-          <div className="model-round-item__footer">
+        {shouldReserveFooter && (
+          <div
+            className={`model-round-item__footer${shouldRevealFooter ? '' : ' model-round-item__footer--pending'}`}
+            aria-hidden={!shouldRevealFooter}
+          >
             {usageMetaItems.length > 0 && (
               <div
                 className="model-round-item__meta"
@@ -783,6 +805,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 ref={copyButtonRef}
                 className={`model-round-item__action-btn model-round-item__copy-btn ${copied ? 'copied' : ''}`}
                 onClick={handleCopy}
+                tabIndex={shouldRevealFooter ? 0 : -1}
+                disabled={!shouldRevealFooter}
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
               </button>
@@ -792,6 +816,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
       </div>
+      </TypewriterRevealGateProvider>
     );
   },
   (prev, next) => {

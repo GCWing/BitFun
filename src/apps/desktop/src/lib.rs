@@ -4,6 +4,7 @@
 pub mod api;
 pub mod computer_use;
 pub mod crash_diagnostics;
+mod embedded_relay_host;
 pub mod logging;
 pub mod macos_menubar;
 pub mod runtime;
@@ -386,14 +387,20 @@ pub async fn run() {
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
     let step_started = Instant::now();
-    let desktop_runtime =
-        match runtime::DesktopRuntimeContext::build(coordinator.clone(), scheduler.clone()) {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
-                return;
-            }
-        };
+    let desktop_runtime = match runtime::DesktopRuntimeContext::build(
+        coordinator.clone(),
+        scheduler.clone(),
+        app_state.token_usage_service.clone(),
+        app_state.workspace_service.clone(),
+        app_state.ssh_manager.clone(),
+        app_state.acp_client_service.clone(),
+    ) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            log::error!("Failed to initialize Desktop Agent Runtime: {}", error);
+            return;
+        }
+    };
     startup_timings.record_elapsed("initialize_desktop_agent_runtime", step_started);
     startup_trace.record_elapsed_step(
         "native_pre_tauri",
@@ -937,10 +944,15 @@ pub async fn run() {
             api::editor_ai_api::editor_ai_stream,
             api::editor_ai_api::editor_ai_cancel,
             get_external_source_snapshot,
+            update_external_integration_policy_command,
             set_external_source_enabled_command,
             set_external_source_conflict_choice_command,
             set_external_tool_target_decision_command,
             set_external_tool_conflict_choice_command,
+            set_external_subagent_activation_command,
+            choose_external_subagent_conflict_command,
+            set_external_mcp_server_decision_command,
+            choose_external_mcp_conflict_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
             get_readonly_tools_info,
@@ -1306,6 +1318,7 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
             // Account API
             api::remote_connect_api::account_login,
+            api::remote_connect_api::account_finalize_login,
             api::remote_connect_api::account_status,
             api::remote_connect_api::account_logout,
             api::remote_connect_api::account_connect_devices,
@@ -1328,6 +1341,15 @@ pub async fn run() {
             api::remote_connect_api::account_delete_device,
             api::remote_connect_api::account_device_rpc,
             api::remote_connect_api::account_delegate_to_paired,
+            // BitFun Page API
+            api::pages_api::page_publish,
+            api::pages_api::page_save_version,
+            api::pages_api::page_list,
+            api::pages_api::page_list_versions,
+            api::pages_api::page_deploy,
+            api::pages_api::page_delete_version,
+            api::pages_api::page_update,
+            api::pages_api::page_unpublish,
             api::peer_host_invoke::peer_host_invoke_complete,
             api::peer_host_invoke::peer_control_attach,
             api::peer_host_invoke::peer_control_detach,
@@ -1429,6 +1451,14 @@ pub async fn run() {
             api::ssh_api::remote_close_workspace,
             api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
+            // Relay self-deploy API
+            api::relay_deploy_api::relay_deploy_preflight,
+            api::relay_deploy_api::relay_deploy_install_docker,
+            api::relay_deploy_api::relay_deploy_start,
+            api::relay_deploy_api::relay_deploy_poll,
+            api::relay_deploy_api::relay_deploy_cancel,
+            api::relay_deploy_api::relay_deploy_register,
+            api::relay_deploy_api::relay_deploy_verify,
             // Announcement / feature-demo / tips API
             api::announcement_api::get_pending_announcements,
             api::announcement_api::mark_announcement_seen,

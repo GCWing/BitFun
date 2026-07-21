@@ -70,6 +70,7 @@ fn custom_mode_defaults_generate_id_and_default_policy() {
         parsed.definition.tools,
         default_custom_agent_tools(CustomAgentKind::Mode)
     );
+    assert!(parsed.definition.tools.contains(&"ListModels".to_string()));
     assert_eq!(parsed.definition.readonly, DEFAULT_CUSTOM_MODE_READONLY);
     assert_eq!(parsed.definition.model, DEFAULT_CUSTOM_MODE_MODEL);
     assert_eq!(

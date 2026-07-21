@@ -37,7 +37,7 @@ export const CAPABILITY_COLORS: Record<CapabilityCategory, string> = CAPABILITY_
 
 export type AgentsScenePage = 'home' | 'createAgent';
 export type AgentEditorMode = 'create' | 'edit';
-export type AgentFilterLevel = 'all' | 'builtin' | 'user' | 'project';
+export type AgentFilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
 export type AgentFilterType = 'all' | 'mode' | 'subagent';
 
 interface AgentsStoreState {

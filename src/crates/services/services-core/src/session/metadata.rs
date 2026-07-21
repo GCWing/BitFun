@@ -126,6 +126,9 @@ fn build_session_relationship(
         .as_ref()
         .and_then(|value| value.subagent_type.clone())
         .or_else(|| legacy_custom_metadata_string(existing_custom_metadata, "subagentType"));
+    let continuation_policy = existing_relationship
+        .as_ref()
+        .and_then(|value| value.continuation_policy);
 
     if kind.is_none()
         && parent_session_id.is_none()
@@ -134,6 +137,7 @@ fn build_session_relationship(
         && parent_turn_index.is_none()
         && parent_tool_call_id.is_none()
         && subagent_type.is_none()
+        && continuation_policy.is_none()
     {
         return None;
     }
@@ -146,6 +150,7 @@ fn build_session_relationship(
         parent_turn_index,
         parent_tool_call_id,
         subagent_type,
+        continuation_policy,
     })
 }
 
@@ -156,7 +161,7 @@ fn legacy_custom_metadata_string(value: Option<&Value>, key: &str) -> Option<Str
         .map(str::to_string)
 }
 
-fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
+pub fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
     let assistant_text_count: usize = turn
         .model_rounds
         .iter()
@@ -362,6 +367,7 @@ fn fill_workspace_path_if_missing(metadata: &mut SessionMetadata, workspace_path
 mod tests {
     use super::*;
     use crate::session::{SessionRelationship, SessionRelationshipKind};
+    use bitfun_core_types::SessionContinuationPolicy;
     use serde_json::json;
 
     fn metadata() -> SessionMetadata {
@@ -421,6 +427,7 @@ mod tests {
             parent_turn_index: Some(3),
             parent_tool_call_id: Some("tool".to_string()),
             subagent_type: Some("ReviewSecurity".to_string()),
+            continuation_policy: Some(SessionContinuationPolicy::FreshOnly),
         };
 
         set_session_relationship(&mut metadata, relationship.clone());
@@ -535,6 +542,7 @@ mod tests {
                 parent_turn_index: Some(2),
                 parent_tool_call_id: Some("tool-1".to_string()),
                 subagent_type: Some("review".to_string()),
+                continuation_policy: None,
             })
         );
     }

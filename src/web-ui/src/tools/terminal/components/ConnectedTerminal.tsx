@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { AlertCircle, RefreshCw, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
-import Terminal, { TerminalRef } from './Terminal';
+import Terminal, { TerminalRef, type TerminalOptions } from './Terminal';
 import { useTerminal } from '../hooks/useTerminal';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
 import {
@@ -45,6 +45,8 @@ export interface ConnectedTerminalProps {
   autoFocus?: boolean;
   showToolbar?: boolean;
   showStatusBar?: boolean;
+  /** Optional xterm options (e.g. smaller font in embedded dialogs). */
+  options?: TerminalOptions;
   /** Optional session data; fetched when omitted. */
   session?: SessionResponse;
   onClose?: () => void;
@@ -59,6 +61,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
   autoFocus = true,
   showToolbar = false,
   showStatusBar = false,
+  options,
   session: initialSession,
   onClose,
   onTitleChange,
@@ -516,6 +519,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
         terminalId={terminalId}
         sessionId={sessionId}
         autoFocus={autoFocus}
+        options={options}
         onData={handleData}
         onResize={handleResize}
         onTitleChange={handleTitleChange}

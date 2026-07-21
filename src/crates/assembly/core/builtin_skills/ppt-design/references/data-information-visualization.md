@@ -163,33 +163,52 @@
 
 ## 6. 可编辑 PPTX 实现（技术约束）
 
-默认 960×540pt 可编辑路径遵守 `editable-pptx.md`：
+默认 **1280×720px** 可编辑路径严格遵守 `editable-pptx.md`，唯一链路是 **editable HTML → EditableSlideScene → OOXML**。
 
-- 条形、柱形、进度、堆叠条：用纯色 `div` 表达长度；标签放在独立 `<p>` 中。
-- 点图、散点：用小尺寸圆形 `div` 定位；关键点旁直接放标签。
-- 折线/斜率：用 1–2pt 高的纯色 `div` 配 `transform: rotate(...)` 连接点；线段太多时改柱状图或表格。
-- 目标线、坐标轴、连接线：用细 `div` 或 border；不要用 CSS gradient。
-- 100% 构成：相邻纯色 `div` 的分段条导出更稳；`conic-gradient` 环形图不适用于默认可编辑路径。
-- 热力矩阵：每个单元格使用离散的 3–5 档纯色，不依赖连续渐变。
-- 复杂地图、桑基图、密集网络、复杂 SVG：不适合默认可编辑路径。改为简化结构、表格/条形图，或明确只用于 1920 HTML 演讲版。
-- 所有图表文字仍遵守「div 不直接写文字」；背景、边框放在 `div`，文本放在 `<p>/<h*>`。
+### Authoring subset（生成规则）
+
+- 每页严格为 **1280px × 720px**。只使用 solid color；不得生成 CSS gradient 或 `background-image`。
+- HTML 文字只可放在 `<p>`、`<h1>`–`<h6>`、`<li>` 中；`span` 只作文本 run，不得生成 `div` 裸文字。
+- `box-shadow` 只支持单层 outer、非 inset、zero spread 的原生映射；多层 shadow 只取首个可用层，负 spread 按 0 近似，inset 等其余不支持形态导出时自动移除，不得依赖。`text-shadow` 任何非 `none` 形态在导出时一律自动移除，不得依赖其呈现层次。
+- 图表、流程箭头、虚线和曲线必须使用支持的可编辑原语；线与曲线优先直接生成 `line` 或 `polyline`。
+- 条形、柱形、进度、堆叠条使用纯色 shape；点图使用 ellipse；目标线、坐标轴和连接线使用 line。
+- Authoring 流程箭头只由 editable line + CSS border triangle，或 SVG line + strict symmetric triangle polygon 构成。
+- 热力矩阵和精确数据表必须写真实的 `<table>`，导出为 native `a:tbl`。
+- intentional 图片只允许内联 base64 PNG、JPEG、WebP，且不得承载文字、图表或几何；禁止 GIF，因为无法证明其为静态内容。
+- 禁止 CSS `filter`、`mask`、generated content、animation、复杂/filled SVG path 与外部资源；禁止任意顶点/非严格对称 polygon，仅允许严格对称 triangle/diamond。
+- 禁止任何正向 rasterize、screenshot 或 fallback 建议；复杂视觉必须重构为 shape、line、table 与独立文本，无法表示时报告具体限制。
+
+### Converter legacy rewrite boundary（兼容边界，不是生成建议）
+
+- 本边界只用于兼容既有输入，不是生成许可；authoring agent 仍必须遵守上面的更严格 subset。
+- SVG `text` 是 converter 支持的 SVG 原语；`div` 裸文字仅属 repair 兼容，authoring 不应生成。
+- path 仅支持 `M/L/H/V/C/S/Q/T/Z`，必须 `fill:none`；`Z` 可以闭合 path，但拒绝 `A` 和任何 path/ancestor `transform`。
+- `C/S/Q/T` 曲线被采样为多段 editable line，不是 PowerPoint curve；authoring 优先 `line`/`polyline`，确需 path 时才使用上述子集。
+- SVG polygon 只识别严格对称的 triangle 和 diamond；任意顶点或非严格对称 polygon 都会被拒绝。
+- legacy CSS 仅兼容受限 `linear-gradient`：角度接受 `deg`、`turn`、`rad`、`grad` 与方向关键字；位置只接受 percentage stop，缺省 stop 均匀分配。
+- converter 拒绝 `radial-gradient`、px/em stop、double-position stop、color hint、不支持颜色和非法 alpha；合法 gradient 被采样为 editable solid strips，这不是生成建议。
+- legacy 单层 hard ring `box-shadow`（`0 0 0 Npx`、非 inset、blur=0）会被重写为同心可编辑 shape；authoring 仍应优先 zero-spread outer shadow，不得依赖 ring rewrite。
+
+<!-- End editable contract -->
+
+- CSS 三角、基础 SVG 与受限 path 可以由 converter 重写，但这不扩张 authoring subset。
+- 100% 构成使用相邻纯色 shape；禁止 `conic-gradient`、任意顶点/非严格对称 polygon 和 filled SVG path，仅严格对称 triangle/diamond 可进入 polygon rewrite。
+- 所有图表标签与数值保持独立 HTML 文本对象；背景、边框放在 `div`，文本放在 `<p>/<h*>/<li>`。
 - **布局纪律（防止塌陷与重叠，硬约束）**：
   - **不要用垂直方向的 `flex:1` 去拉伸连接线/竖线**。当容器高度不确定（嵌套 `flex:1`、或父容器无明确高度）时，`flex:1` 的竖线会塌陷为 0 高度，导致时间线、连接线消失、内容堆叠。连接线一律用**固定 `height` 的 div**（如 `height:12px`）。
   - **不要用绝对定位画多象限/多区域布局**。绝对定位元素若只设 `top` 不设 `height`（或只设 `left` 不设 `width`）会无限撑开，与相邻绝对定位元素重叠。多区域等分一律用 **CSS grid**（`grid-template-columns`/`grid-template-rows`），高度由 grid 自动均分，绝不塌陷。
   - **水平等宽列用 `flex:1` 是安全的**（横向 `display:flex` + 子项 `flex:1` 等分宽度），本纪律只针对垂直拉伸。
 
-纯 HTML 演讲版可以使用 SVG path、clip-path 和渐变，但仍需保证图形真实表达数据，不把视觉效果当作证据。
-
 ### 6.1 架构图 / 流程图 / 系统图的可编辑实现
 
-技术方案、工程分析、项目架构、系统设计这类内容，架构图和流程图几乎是不可或缺的表达。它们在可编辑 PPTX 路径下完全可以用纯 HTML/CSS 实现——关键是**把节点、连接线、标签都拆成独立的 div/p 元素**，不用 SVG path、不用 background-image。
+技术方案、工程分析、项目架构、系统设计这类内容，架构图和流程图几乎是不可或缺的表达。它们必须拆成独立的 shape、line 和文本对象，不用 filled/complex SVG path、不用 `background-image`。
 
 **通用构建积木**：
-- **节点框**：`<div style="border:1.5px solid #主色; padding:6px 10px;">` + 内部 `<p>` 写节点名。
-- **连接线（水平/垂直）**：`<div style="width:宽度; height:1.5px; background:#主色;">`（水平）或 `height:高度; width:1.5px;`（垂直）。
-- **箭头**：CSS 三角形 `<div style="width:0; height:0; border-left:5px solid #主色; border-top:4px solid transparent; border-bottom:4px solid transparent;">`（右箭头）；其它方向调整 border 边。
+- **节点框**：纯色 `<div style="border:1.5px solid #主色; padding:6px 10px;">` + 内部 `<p>` 写节点名。
+- **连接线（水平/垂直/虚线/曲线）**：优先直接使用可映射 `line`/`polyline`；必要曲线才使用兼容 path 子集并由 converter 采样成多段 line。
+- **箭头**：只用 editable line + CSS border triangle，或 SVG line + strict symmetric triangle polygon；不依赖未实现的 arrow producer。
 - **分组容器（泳道/层）**：`<div style="border:1px solid #e2e8f0; background:#f8fafc; padding:10px;">`，内部用 flex 或 grid 排子节点。
-- **所有文字放 `<p>`/`<span>`**，背景/边框放 `div`。
+- **所有文字放 `<p>`/`<h*>`/`<li>`**，`span` 仅作为文本 run；背景/边框放 `div`。
 
 **① 分层架构图（系统组成：分层结构）**
 ```html

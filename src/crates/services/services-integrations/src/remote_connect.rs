@@ -15,6 +15,7 @@ pub mod encryption;
 mod lan;
 mod mobile_web_upload;
 mod ngrok;
+mod page_upload;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
@@ -47,6 +48,13 @@ use log::info;
 pub use mobile_web_upload::upload_mobile_web_to_relay;
 pub use ngrok::{
     cleanup_all_ngrok, detect_running_ngrok, is_ngrok_available, start_ngrok_tunnel, NgrokTunnel,
+};
+pub use page_upload::{
+    delete_page_version_on_relay, deploy_page_version_on_relay, join_relay_url,
+    list_page_versions_from_relay, list_pages_from_relay, publish_page_content_on_relay,
+    publish_page_to_relay, save_page_version_from_inline_files, save_page_version_to_relay,
+    unpublish_page_from_relay, update_page_on_relay, PageContentPublishResult, PageInfo,
+    PagePublishResult, PageSaveVersionResult, PageVersionInfo,
 };
 pub use pairing::{PairingChallenge, PairingProtocol, PairingResponse, PairingState, QrPayload};
 pub use qr_generator::QrGenerator;
@@ -100,8 +108,10 @@ pub fn build_remote_session_create_request(
         session_name: session_name.into(),
         agent_type: agent_type.into(),
         workspace_path: workspace_path.map(Into::into),
+        workspace_id: None,
         remote_connection_id: workspace_identity.remote_connection_id,
         remote_ssh_host: workspace_identity.remote_ssh_host,
+        model_id: None,
         metadata,
     }
 }

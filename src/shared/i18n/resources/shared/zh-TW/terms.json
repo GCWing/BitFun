@@ -8,8 +8,7 @@
     "codeAgent": "程式碼助手",
     "deepReview": "嚴格審查",
     "settings": "設定",
-    "workspace": "工作區",
-    "accountLogin": "帳號登入"
+    "workspace": "工作區"
   },
   "modes": {
     "agentic": "代理模式",

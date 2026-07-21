@@ -38,12 +38,16 @@ export class RelayHttpClient {
    * Pair with the desktop via two HTTP round-trips:
    * 1. POST /pair with our public key → receive encrypted challenge
    * 2. POST /command with encrypted challenge_echo → receive initial_sync
+   *
+   * When the desktop is logged into a BitFun account, pass `password` so the
+   * desktop can verify credentials (same challenge+unwrap path as desktop login).
    */
   async pair(
     desktopPubKeyB64: string,
     identity: {
       userId: string;
       mobileInstallId: string;
+      password?: string;
     },
   ): Promise<any> {
     this.keyPair = await generateKeyPair();
@@ -54,6 +58,7 @@ export class RelayHttpClient {
     const deviceName = this.getMobileDeviceName();
     const userId = identity.userId.trim();
     const mobileInstallId = identity.mobileInstallId.trim();
+    const password = identity.password?.trim() || undefined;
 
     // Step 1: POST /pair → encrypted challenge
     const pairResp = await fetch(
@@ -82,16 +87,19 @@ export class RelayHttpClient {
     const challenge = JSON.parse(challengeJson);
 
     // Step 2: POST /command with challenge_echo → initial_sync
-    const challengeResponse = JSON.stringify({
+    const challengeResponse: Record<string, string> = {
       challenge_echo: challenge.challenge,
       device_id: deviceId,
       device_name: deviceName,
       mobile_install_id: mobileInstallId,
       user_id: userId,
-    });
+    };
+    if (password) {
+      challengeResponse.password = password;
+    }
     const { data: encData, nonce: encNonce } = await encrypt(
       this.sharedKey,
-      challengeResponse,
+      JSON.stringify(challengeResponse),
     );
 
     const cmdResp = await fetch(
@@ -129,8 +137,11 @@ export class RelayHttpClient {
    * not logged into an account (or delegation failed). Never throws for the
    * not-logged-in case.
    */
-  async requestDelegatedIdentity(): Promise<boolean> {
-    if (this.hasDelegatedIdentity) return true;
+  async requestDelegatedIdentity(options?: { force?: boolean }): Promise<boolean> {
+    if (!options?.force && this.hasDelegatedIdentity) return true;
+    if (options?.force) {
+      this.clearDelegatedIdentity();
+    }
     const resp = await this.sendCommand<{
       resp: string;
       token?: string;
@@ -150,6 +161,12 @@ export class RelayHttpClient {
       return true;
     }
     return false;
+  }
+
+  /** Drop cached delegated credentials so the next request can refresh them. */
+  clearDelegatedIdentity(): void {
+    this.delegatedToken = null;
+    this.delegatedMasterKey = null;
   }
 
   /**
@@ -197,59 +214,109 @@ export class RelayHttpClient {
   }
 
   /**
+   * Refresh delegated identity from the paired desktop after a 401, then
+   * retry the caller once.
+   */
+  private async refreshDelegatedIdentityAfterUnauthorized(): Promise<boolean> {
+    this.clearDelegatedIdentity();
+    try {
+      return await this.requestDelegatedIdentity({ force: true });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * List all same-account devices via the relay HTTP API.
    * Requires a delegated identity (token + master_key from the paired desktop).
+   * On HTTP 401, refreshes identity from the paired desktop and retries once.
    */
   async listDevices(): Promise<Array<{ device_id: string; device_name: string; online: boolean }>> {
-    if (!this.delegatedToken) throw new Error('No delegated identity');
-    const resp = await fetch(`${this.relayUrl}/api/devices`, {
-      headers: { 'Authorization': `Bearer ${this.delegatedToken}` },
+    return this.withDelegatedAuthRetry(async () => {
+      if (!this.delegatedToken) throw new Error('No delegated identity');
+      const resp = await fetch(`${this.relayUrl}/api/devices`, {
+        headers: { 'Authorization': `Bearer ${this.delegatedToken}` },
+      });
+      if (!resp.ok) {
+        const err = new Error(`List devices failed: HTTP ${resp.status}`) as Error & {
+          status?: number;
+        };
+        err.status = resp.status;
+        throw err;
+      }
+      return resp.json();
     });
-    if (!resp.ok) throw new Error(`List devices failed: HTTP ${resp.status}`);
-    return resp.json();
   }
 
   /**
    * Send a RemoteCommand to a target device via the relay HTTP RPC endpoint.
    * The command is encrypted with the delegated master_key (same key the
    * desktop uses, shared via the room channel at pairing time).
+   * On HTTP 401, refreshes identity from the paired desktop and retries once.
    */
   async sendDeviceRpc<T = any>(targetDeviceId: string, command: object): Promise<T> {
-    if (!this.delegatedToken || !this.delegatedMasterKey) {
-      throw new Error('No delegated identity');
-    }
+    return this.withDelegatedAuthRetry(async () => {
+      if (!this.delegatedToken || !this.delegatedMasterKey) {
+        throw new Error('No delegated identity');
+      }
 
-    // Encrypt the command with the master_key
-    const plaintext = JSON.stringify(command);
-    const { data: encData, nonce: encNonce } = await encrypt(
-      this.delegatedMasterKey,
-      plaintext,
-    );
+      const plaintext = JSON.stringify(command);
+      const { data: encData, nonce: encNonce } = await encrypt(
+        this.delegatedMasterKey,
+        plaintext,
+      );
 
-    const resp = await fetch(
-      `${this.relayUrl}/api/devices/${targetDeviceId}/rpc`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.delegatedToken}`,
+      const resp = await fetch(
+        `${this.relayUrl}/api/devices/${targetDeviceId}/rpc`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.delegatedToken}`,
+          },
+          body: JSON.stringify({ encrypted_data: encData, nonce: encNonce }),
         },
-        body: JSON.stringify({ encrypted_data: encData, nonce: encNonce }),
-      },
-    );
+      );
 
-    if (!resp.ok) throw new Error(`Device RPC failed: HTTP ${resp.status}`);
-    const data = await resp.json();
-    const decrypted = await decrypt(
-      this.delegatedMasterKey,
-      data.encrypted_data,
-      data.nonce,
-    );
-    const parsed = JSON.parse(decrypted);
-    if (parsed?.resp === 'error') {
-      throw new Error(parsed.message || 'Remote error');
+      if (!resp.ok) {
+        const err = new Error(`Device RPC failed: HTTP ${resp.status}`) as Error & {
+          status?: number;
+        };
+        err.status = resp.status;
+        throw err;
+      }
+      const data = await resp.json();
+      const decrypted = await decrypt(
+        this.delegatedMasterKey,
+        data.encrypted_data,
+        data.nonce,
+      );
+      const parsed = JSON.parse(decrypted);
+      if (parsed?.resp === 'error') {
+        throw new Error(parsed.message || 'Remote error');
+      }
+      return parsed as T;
+    });
+  }
+
+  private async withDelegatedAuthRetry<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (e: unknown) {
+      const status = (e as { status?: number })?.status;
+      const message = String((e as { message?: string })?.message || e);
+      const unauthorized =
+        status === 401
+        || message.includes('HTTP 401')
+        || message.includes('Unauthorized');
+      if (!unauthorized) throw e;
+
+      const refreshed = await this.refreshDelegatedIdentityAfterUnauthorized();
+      if (!refreshed) {
+        throw new Error('No delegated identity');
+      }
+      return operation();
     }
-    return parsed as T;
   }
 
   private getMobileDeviceName(): string {

@@ -76,7 +76,7 @@
     "loadingTitle": "正在加载历史会话",
     "loadingDescription": "正在准备该会话的历史内容。",
     "failedTitle": "历史会话加载失败",
-    "failedDescription": "可以重新加载已保存的会话内容。",
+    "failedDescription": "可以重新加载已保存的会话内容；若会话来自其他设备，请先检查账号登录与网络连接。",
     "preparingOlderHistory": "正在准备更早的历史记录...",
     "olderHistoryNotReady": "更早的历史记录暂未准备好。",
     "remoteSessionMissing": "在后端找不到该会话数据。若刚重新连接过 SSH 远程工作区，请关闭并重新打开该远程项目，或新建会话后再试。",
@@ -1385,6 +1385,28 @@
       "labelAppId": "app_id",
       "labelPath": "path",
       "nameLabel": "应用：{{name}}"
+    },
+    "pageDeploy": {
+      "title": "部署页面",
+      "deployingShort": "…",
+      "untitled": "（未命名）",
+      "deployFailed": "无法部署 BitFun Page 版本",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "openProduction": "打开生产链接"
+    },
+    "pagePublish": {
+      "title": "发布页面",
+      "publishingShort": "…",
+      "untitled": "（未命名）",
+      "publishFailed": "无法发布 BitFun Page",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "labelPreview": "preview_url_path",
+      "openProduction": "打开生产链接",
+      "openPreview": "打开预览链接"
     },
     "terminal": {
       "executeCommand": "执行命令:",

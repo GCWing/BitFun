@@ -123,6 +123,7 @@ impl ChatMode {
             chat_view.set_status(Some(format!("Model added: {}", result.name)));
             chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
             tracing::info!("Added new AI model: {} ({})", model_id, result.model_name);
+            crate::account_sync::notify_local_settings_changed();
         } else {
             chat_view.set_status(Some("Failed to add model".to_string()));
         }
@@ -252,6 +253,7 @@ impl ChatMode {
             chat_view.set_status(Some(format!("Model updated: {}", result.name)));
             chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
             tracing::info!("Updated AI model: {}", model_id);
+            crate::account_sync::notify_local_settings_changed();
         } else {
             chat_view.set_status(Some("Failed to update model".to_string()));
         }

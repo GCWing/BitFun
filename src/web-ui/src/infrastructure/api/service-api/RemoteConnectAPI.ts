@@ -297,6 +297,20 @@ class RemoteConnectAPIService {
     }
   }
 
+  /**
+   * Persist an in-memory login after the user accepts the cloud/local settings
+   * choice. Without this, a process kill during the choice dialog must not
+   * restore a logged-in session.
+   */
+  async accountFinalizeLogin(): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_finalize_login');
+    } catch (e) {
+      log.error('accountFinalizeLogin failed', e);
+      throw e;
+    }
+  }
+
   async accountStatus(): Promise<AccountStatus> {
     try {
       return await this.adapter.request<AccountStatus>('account_status');
@@ -463,7 +477,7 @@ class RemoteConnectAPIService {
     }
   }
 
-  /** Lazy-load a session's turns from the relay on first open. */
+  /** Complete or resume a relay-imported session's lazy turn import. */
   async accountFetchSessionTurns(sessionId: string, workspacePath: string): Promise<boolean> {
     try {
       return await this.adapter.request<boolean>('account_fetch_session_turns', {
@@ -471,8 +485,8 @@ class RemoteConnectAPIService {
         workspacePath,
       });
     } catch (e) {
-      log.warn('accountFetchSessionTurns failed', e);
-      return false;
+      log.error('accountFetchSessionTurns failed', e);
+      throw e;
     }
   }
 

@@ -44,6 +44,8 @@ import {
 import type { LineRange } from '@/component-library';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
+import { createLogger } from '@/shared/utils/logger';
 import { parsePullRequestUrl } from '@/shared/utils/pullRequestLinks';
 import { createBackgroundCommandOutputTab, createReviewPlatformPullRequestDetailTab } from '@/shared/utils/tabUtils';
 import { isAcpFlowSession } from '../../utils/acpSession';
@@ -77,6 +79,8 @@ import './ModernFlowChatContainer.scss';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
 import { pendingPermissionToolCallIdsForSession } from './permissionRequestRouting';
 import { usePermissionRequests } from './usePermissionRequests';
+
+const log = createLogger('ModernFlowChatContainer');
 
 interface ModernFlowChatContainerProps {
   className?: string;
@@ -267,7 +271,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const [historyInitialContentReadyKey, setHistoryInitialContentReadyKey] = useState<string | null>(null);
   const [historyInitialContentPostPaintKey, setHistoryInitialContentPostPaintKey] = useState<string | null>(null);
-  const { workspacePath } = useWorkspaceContext();
+  const { workspacePath, activeWorkspace } = useWorkspaceContext();
   const allowUserMessageRollback = !isAcpFlowSession(activeSession);
   const historyState = activeSession?.historyState;
   const hasRestoredTurnsPendingVirtualItems =
@@ -1405,9 +1409,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       void (async () => {
         try {
           useSessionModeStore.getState().setMode('code');
-          await FlowChatManager.getInstance().createChatSession({}, 'agentic');
-        } catch {
-          /* ignore */
+          await FlowChatManager.getInstance().createChatSession(
+            flowChatSessionConfigForCurrentWorkspace(activeWorkspace),
+            'agentic',
+          );
+        } catch (error) {
+          log.error('Failed to create session from shortcut', { error });
         }
       })();
     },

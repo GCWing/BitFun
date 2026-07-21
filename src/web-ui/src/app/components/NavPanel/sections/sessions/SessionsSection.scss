@@ -287,6 +287,8 @@
     position: relative;
     display: inline-grid;
     place-items: center;
+    justify-items: center;
+    align-items: center;
     width: 16px;
     height: 16px;
     padding: 0;
@@ -295,13 +297,26 @@
     background: color-mix(in srgb, var(--color-success) 12%, var(--element-bg-soft));
     color: color-mix(in srgb, var(--color-success) 76%, var(--color-text-primary));
     overflow: hidden;
+    // Kill the inline strut so the 16x16 circle stays optically centered against the title.
+    line-height: 0;
+    vertical-align: middle;
   }
 
   &__inline-item-background-subagent-icon {
     grid-area: 1 / 1;
+    place-self: center;
+    display: block;
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+    transform-origin: center center;
     transition: opacity $motion-fast $easing-standard, transform $motion-fast $easing-standard;
 
     &.is-bot {
+      // Lucide Bot head mass sits below the viewBox center (thin antenna above).
+      // Nudge up so the glyph reads centered inside the circular badge.
+      --bitfun-subagent-bot-optical-y: -1px;
+      transform: translateY(var(--bitfun-subagent-bot-optical-y));
       animation: bitfun-nav-background-subagent-bot-cycle 3.6s ease-in-out infinite;
     }
 
@@ -712,13 +727,13 @@
   62%,
   100% {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(1);
   }
 
   70%,
   88% {
     opacity: 0;
-    transform: scale(0.82);
+    transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(0.82);
   }
 }
 
@@ -762,6 +777,7 @@
 
     &.is-bot {
       opacity: 1;
+      transform: translateY(var(--bitfun-subagent-bot-optical-y));
     }
 
     &.is-loader {

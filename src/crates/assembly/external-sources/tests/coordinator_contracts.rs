@@ -128,6 +128,36 @@ impl PromptCommandSourceProvider for FakeProvider {
 }
 
 #[test]
+fn assembly_can_disable_one_ecosystem_without_clearing_other_provider_generations() {
+    let first = FakeProvider::new("first", "ecosystem.first", "project", 10);
+    let second = FakeProvider::new("second", "ecosystem.second", "project", 20);
+    let mut coordinator =
+        ExternalSourceCoordinator::new(context(), vec![Arc::new(first), Arc::new(second)])
+            .expect("construct coordinator");
+
+    let results = coordinator
+        .discovery_requests()
+        .into_iter()
+        .map(|request| {
+            if request.ecosystem_id().as_str() == "ecosystem.second" {
+                request.disabled()
+            } else {
+                request.execute()
+            }
+        })
+        .collect();
+    let snapshot = coordinator.apply_discovery_results(results);
+
+    assert_eq!(snapshot.sources.len(), 1);
+    assert_eq!(
+        snapshot.sources[0].record.ecosystem_id.as_str(),
+        "ecosystem.first"
+    );
+    assert_eq!(snapshot.commands.len(), 1);
+    assert_eq!(snapshot.commands[0].definition.name, "review");
+}
+
+#[test]
 fn provider_failure_isolated_and_successful_deletion_withdraws_only_its_generation() {
     let first = FakeProvider::new("first", "ecosystem.first", "project", 10);
     let first_state = first.state_handle();

@@ -28,7 +28,7 @@ impl TaskTool {
             "model_id".to_string(),
             json!({
                 "type": "string",
-                "description": "Optional model ID for action='spawn' and action='send_input'. Set it only when the user specifies a particular model."
+                "description": "Optional model ID for action='spawn' and action='send_input'. Can be 'inherit', 'primary', 'fast', or a configured model ID."
             }),
         );
         properties
@@ -68,13 +68,6 @@ impl TaskTool {
             json!({
                 "type": "boolean",
                 "description": "Optional for action='spawn' and action='send_input'. Defaults to false."
-            }),
-        );
-        properties.insert(
-            "allow_review_follow_up".to_string(),
-            json!({
-                "type": "boolean",
-                "description": "Optional for action='spawn' and action='send_input'. Use with run_in_background=true only when the user explicitly asked not to wait for a review result. This permits delivery in a later follow-up and does not change normal cancellation behavior."
             }),
         );
         json!({
@@ -117,9 +110,14 @@ The two modes are mutually exclusive: do not provide `subagent_type` when `fork_
 
 `run_in_background` usage:
 - false: Wait for the agent to finish and return its result to you.
-- true: Run the agent in the background without blocking you. When the subagent finishes, its result will be delivered to you in a follow-up message. You can process remaining work before receiving the result.
-- Review subagents are completion dependencies by default. Launch multiple review Task calls in one assistant message to run them concurrently, and wait for their results so you can merge one final review.
-- If the user explicitly asks not to wait for a review result, set both `run_in_background=true` and `allow_review_follow_up=true`. This permits the result to arrive in a later follow-up; it does not change normal cancellation behavior. Never use it merely to improve parallelism.
+- true: Run the agent in the background without blocking you. The response includes a `background_task_id`; use AgentWait when you need one or more background results. Completed background tasks never automatically create a follow-up turn.
+- When an unfinished answer depends on background work, call AgentWait before ending the current turn. If the result is no longer needed, finish normally without waiting.
+
+`model_id` usage:
+- Set it only when the user requests a particular model.
+- Omit it to use the subagent's configured model, which may differ from your model.
+- Special values: `inherit` explicitly uses the same model as yours; `primary` and `fast` use the user's configured model slots.
+- For a configured model, call ListModels first and use its returned `model_id`.
 
 Usage notes:
 - Include a short description of what the agent will do for this round (for `spawn` and `send_input`).
@@ -133,7 +131,6 @@ Usage notes:
 Examples (assume "example-reviewer" is present in the agent listing):
 <examples>
 - Start a new specialized subagent: `{ "action": "spawn", "description": "Inspect parser flow", "subagent_type": "example-reviewer", "prompt": "Inspect the parser flow in src/parser.rs and report risks, key functions, and any missing tests." }`
-- Allow a review follow-up only when the user asked not to wait: `{ "action": "spawn", "description": "Review parser later", "subagent_type": "example-reviewer", "prompt": "Review the parser and report findings when finished.", "run_in_background": true, "allow_review_follow_up": true }`
 - Start by forking the current context: `{ "action": "spawn", "description": "Check migration impact", "fork_context": true, "prompt": "Using the current context, check whether the migration affects config loading. Stay read-only and report the answer with file references." }`
 - Continue an existing subagent with a specific model: `{ "action": "send_input", "description": "Continue parser review", "session_id": "subagent-session-123", "model_id": "fast", "prompt": "Continue from your prior parser review and focus on the error recovery paths." }`
 - Cancel a background subagent: `{ "action": "cancel", "session_id": "subagent-session-123" }`

@@ -108,22 +108,15 @@ impl Default for FileTreeOptions {
     fn default() -> Self {
         Self {
             max_depth: Some(50),
-            include_hidden: false,
+            include_hidden: true,
             include_git_info: false,
             include_mime_types: false,
             skip_patterns: vec![
-                "node_modules".to_string(),
-                "target".to_string(),
                 ".git".to_string(),
-                "dist".to_string(),
-                "build".to_string(),
-                ".next".to_string(),
-                ".nuxt".to_string(),
-                ".cache".to_string(),
-                "coverage".to_string(),
-                "__pycache__".to_string(),
-                ".vscode".to_string(),
-                ".idea".to_string(),
+                ".svn".to_string(),
+                ".hg".to_string(),
+                ".DS_Store".to_string(),
+                "Thumbs.db".to_string(),
             ],
             max_file_size_mb: Some(100),
             follow_symlinks: false,
@@ -776,8 +769,7 @@ impl FileTreeService {
     }
 
     fn should_skip_file(&self, file_name: &str) -> bool {
-        // Skip hidden files and directories (unless explicitly included)
-        // But .gitignore and .bitfun are always shown
+        // Skip hidden files and directories unless explicitly included.
         if !self.options.include_hidden
             && file_name.starts_with('.')
             && file_name != ".gitignore"
@@ -1595,6 +1587,30 @@ pub enum SearchMatchType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_tree_visibility_matches_vscode_baseline() {
+        let service = FileTreeService::default();
+
+        for name in [".git", ".svn", ".hg", ".DS_Store", "Thumbs.db"] {
+            assert!(service.should_skip_file(name), "{name} should be excluded");
+        }
+
+        for name in [
+            ".env",
+            ".github",
+            ".vscode",
+            "node_modules",
+            "target",
+            "dist",
+            "build",
+        ] {
+            assert!(
+                !service.should_skip_file(name),
+                "{name} should be visible by default"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn content_search_preserves_matching_lines_and_preview_ranges() {

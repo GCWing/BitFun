@@ -17,7 +17,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: cli-package-${{ github.event.release.tag_name || inputs.tag_name || github.sha }}
@@ -87,19 +87,18 @@ jobs:
           - os: macos-15
             name: macos-arm64
             target: aarch64-apple-darwin
-            can_smoke_test: true
           - os: macos-15-intel
             name: macos-x64
             target: x86_64-apple-darwin
-            can_smoke_test: true
           - os: ubuntu-latest
             name: linux-x64
             target: x86_64-unknown-linux-gnu
-            can_smoke_test: true
           - os: ubuntu-24.04-arm
             name: linux-arm64
             target: aarch64-unknown-linux-gnu
-            can_smoke_test: true
+          - os: windows-latest
+            name: windows-x64
+            target: x86_64-pc-windows-msvc
 
     steps:
       - name: Checkout
@@ -132,7 +131,8 @@ jobs:
           shared-key: "cli-v1-${{ matrix.platform.name }}"
           cache-bin: false
 
-      - name: Build bitfun-cli
+      - name: Build CLI (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
@@ -140,16 +140,30 @@ jobs:
             --target ${{ matrix.platform.target }} \
             -p bitfun-cli
 
-      - name: Smoke test (--version)
-        if: matrix.platform.can_smoke_test == true
-        shell: bash
-        run: |
-          set -euo pipefail
-          BIN="target/${{ matrix.platform.target }}/release/bitfun-cli"
-          "$BIN" --version
-          "$BIN" --help > /dev/null
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: cargo build --release --target ${{ matrix.platform.target }} -p bitfun-cli
 
-      - name: Stage tarball
+      - name: Test installer (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.target }}
+        run: bash scripts/cli/test-install-unix.sh "${{ matrix.platform.target }}"
+
+      - name: Test installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.platform.target }}
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: ./scripts/cli/test-install-windows.ps1 -Target $env:CARGO_BUILD_TARGET
+
+      - name: Package and smoke test (Unix)
+        if: runner.os != 'Windows'
         id: stage
         shell: bash
         env:
@@ -157,58 +171,17 @@ jobs:
           TARGET: ${{ matrix.platform.target }}
         run: |
           set -euo pipefail
+          bash scripts/cli/package-unix.sh "$VERSION" "$TARGET"
 
-          STAGE_DIR="$(pwd)/dist-cli/bitfun-cli-${VERSION}-${TARGET}"
-          mkdir -p "$STAGE_DIR"
-
-          cp "target/${TARGET}/release/bitfun-cli" "$STAGE_DIR/"
-          cp LICENSE "$STAGE_DIR/" || true
-          cp README.md "$STAGE_DIR/" || true
-
-          # Optional: bundle prompts and themes shipped alongside the CLI source
-          if [[ -d "src/apps/cli/themes" ]]; then
-            cp -R "src/apps/cli/themes" "$STAGE_DIR/themes"
-          fi
-          if [[ -d "src/apps/cli/prompts" ]]; then
-            cp -R "src/apps/cli/prompts" "$STAGE_DIR/prompts"
-          fi
-
-          ARCHIVE="bitfun-cli-${VERSION}-${TARGET}.tar.gz"
-          tar -C "$(dirname "$STAGE_DIR")" -czf "$ARCHIVE" "$(basename "$STAGE_DIR")"
-
-          # SHA256 (portable: shasum on macOS, sha256sum on Linux)
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
-          else
-            shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
-          fi
-
-          echo "archive=$ARCHIVE"            >> "$GITHUB_OUTPUT"
-          echo "checksum=${ARCHIVE}.sha256"  >> "$GITHUB_OUTPUT"
-
-      - name: Smoke test packaged archive
-        shell: bash
+      - name: Package and smoke test (Windows)
+        if: runner.os == 'Windows'
+        id: stage-windows
+        shell: pwsh
         env:
-          ARCHIVE: ${{ steps.stage.outputs.archive }}
-          CHECKSUM: ${{ steps.stage.outputs.checksum }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ matrix.platform.target }}
         run: |
-          set -euo pipefail
-
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum -c "$CHECKSUM"
-          else
-            shasum -a 256 -c "$CHECKSUM"
-          fi
-
-          EXTRACT_DIR="$(mktemp -d)"
-          trap 'rm -rf "$EXTRACT_DIR"' EXIT
-          tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
-
-          shopt -s nullglob
-          BIN_CANDIDATES=("$EXTRACT_DIR"/*/bitfun-cli)
-          [[ "${#BIN_CANDIDATES[@]}" -eq 1 ]]
-          "${BIN_CANDIDATES[0]}" --version
-          "${BIN_CANDIDATES[0]}" --help > /dev/null
+          ./scripts/cli/package-windows.ps1 -Version $env:VERSION -Target $env:TARGET
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
@@ -216,8 +189,8 @@ jobs:
           name: bitfun-cli-${{ needs.prepare.outputs.release_tag }}-${{ matrix.platform.name }}
           if-no-files-found: error
           path: |
-            ${{ steps.stage.outputs.archive }}
-            ${{ steps.stage.outputs.checksum }}
+            ${{ steps.stage.outputs.archive || steps.stage-windows.outputs.archive }}
+            ${{ steps.stage.outputs.checksum || steps.stage-windows.outputs.checksum }}
 
   # ── Aggregate and upload to GitHub Release ─────────────────────────
   upload-release-assets:
@@ -225,6 +198,8 @@ jobs:
     needs: [prepare, build]
     if: needs.prepare.outputs.upload_to_release == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Download CLI artifacts
@@ -243,16 +218,14 @@ jobs:
         working-directory: cli-release-assets
         run: |
           set -euo pipefail
-          # Sort for reproducibility; only the tarballs go into the combined file
-          (
-            for f in $(ls bitfun-cli-*.tar.gz | sort); do
-              if command -v sha256sum >/dev/null 2>&1; then
-                sha256sum "$f"
-              else
-                shasum -a 256 "$f"
-              fi
-            done
-          ) > SHA256SUMS
+          # Sort for reproducibility; include Unix tarballs and the Windows zip.
+          mapfile -t archives < <(
+            find . -maxdepth 1 -type f \
+              \( -name 'bitfun-cli-*.tar.gz' -o -name 'bitfun-cli-*.zip' \) \
+              -printf '%f\n' | sort
+          )
+          [[ "${#archives[@]}" -gt 0 ]]
+          sha256sum "${archives[@]}" > SHA256SUMS
 
           echo "---- SHA256SUMS ----"
           cat SHA256SUMS
@@ -264,28 +237,43 @@ jobs:
           files: |
             cli-release-assets/bitfun-cli-*.tar.gz
             cli-release-assets/bitfun-cli-*.tar.gz.sha256
+            cli-release-assets/bitfun-cli-*.zip
+            cli-release-assets/bitfun-cli-*.zip.sha256
             cli-release-assets/SHA256SUMS
           fail_on_unmatched_files: true
 
-      # Tell GCWing/homebrew-tap to bump the bitfun-cli formula now that
-      # the tarballs are live on the release.  Safe no-op if the secret
-      # has not been configured (e.g. on forks or before the tap exists).
-      - name: Notify homebrew-tap
+      # This post-publication dispatch only proves that GitHub accepted the
+      # notification. The external tap owns formula rollout and readback.
+      - name: Notify homebrew-tap (post-publication)
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_DISPATCH_TOKEN }}
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          OFFICIAL_REPOSITORY: ${{ github.repository == 'GCWing/BitFun' }}
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${GH_TOKEN}" ]]; then
-            echo "HOMEBREW_TAP_DISPATCH_TOKEN not set; skipping tap dispatch."
+            if [[ "${OFFICIAL_REPOSITORY}" == "true" ]]; then
+              echo "::error::HOMEBREW_TAP_DISPATCH_TOKEN is required for the official post-publication notification."
+              exit 1
+            fi
+            echo "HOMEBREW_TAP_DISPATCH_TOKEN not set on fork; skipping tap dispatch."
             exit 0
           fi
 
           echo "Dispatching bitfun-release-published for ${RELEASE_TAG} to GCWing/homebrew-tap"
+          PAYLOAD="$(jq -cn --arg tag_name "${RELEASE_TAG}" '{
+            event_type: "bitfun-release-published",
+            client_payload: {
+              tag_name: $tag_name,
+              primary_binary: "bitfun",
+              deprecated_binary: "bitfun-cli",
+              deprecated: true
+            }
+          }')"
           curl -fsSL -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/GCWing/homebrew-tap/dispatches \
-            -d "{\"event_type\":\"bitfun-release-published\",\"client_payload\":{\"tag_name\":\"${RELEASE_TAG}\"}}"
+            -d "$PAYLOAD"

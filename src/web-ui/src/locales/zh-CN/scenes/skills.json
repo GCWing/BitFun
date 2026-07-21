@@ -101,21 +101,28 @@
     }
   },
   "suite": {
-    "title": "内置技能套件",
-    "subtitle": "选择一个模式后，可一键控制各组内置技能的可见性；也可逐个调整技能后按组保存。",
+    "title": "技能套件",
+    "subtitle": "选择一个模式后，可一键控制各组 Skill 的可见性；也可逐个调整 Skill 后按组保存。",
     "modeLabel": "模式",
     "refreshTooltip": "刷新当前模式",
     "refreshAction": "刷新",
-    "loading": "正在加载内置技能套件...",
-    "empty": "当前没有可用的内置技能。",
+    "loading": "正在加载技能套件...",
+    "empty": "当前没有可用的 Skill。",
     "groups": {
       "office": "Office",
       "computerUse": "Computer Use",
       "meta": "Meta",
       "miniapp": "MiniApp",
+      "canvas": "画布",
       "gstack": "gstack",
       "other": "其他"
     },
+    "sections": {
+      "myGroups": "我的分组",
+      "builtin": "内置分组",
+      "otherSkills": "其他 Skill"
+    },
+    "manageGroups": "管理 Skill 分组",
     "modes": {
       "agentic": "agentic",
       "cowork": "Cowork",
@@ -147,6 +154,13 @@
       "enabled": "可见",
       "disabled": "隐藏",
       "partial": "部分"
+    },
+    "skillState": {
+      "enabled": "已为此模式启用",
+      "disabled": "已为此模式禁用",
+      "pending": "未保存",
+      "covered": "已覆盖 · {{source}}",
+      "coveredDetail": "已启用，但此模式会使用 {{source}} 中的同名技能。"
     },
     "groupCount": "{{total}} 个",
     "messages": {
@@ -185,6 +199,10 @@
   "list": {
     "loading": "加载中...",
     "errorPrefix": "加载失败: ",
+    "loadFailed": "技能加载失败",
+    "retry": "重试",
+    "desktopUnavailable": "请在桌面端管理技能。",
+    "remoteUnavailable": "远程连接时暂不支持管理技能。",
     "empty": {
       "noMatch": "没有找到匹配的技能",
       "noSkills": "还没有配置任何技能"
@@ -192,17 +210,21 @@
     "item": {
       "user": "用户级",
       "project": "项目级",
+      "localUser": "此设备 · 用户级",
+      "remoteProject": "远程工作区 · 项目级",
       "builtin": "内置",
       "userInstalled": "已安装",
       "detail": "详情",
       "deleteTooltip": "删除",
       "pathLabel": "路径:",
+      "sourceLabel": "来源:",
       "openPathInExplorer": "在资源管理器中打开此文件夹",
       "revealPathUnavailableRemote": "远程工作区无法在本地资源管理器中打开路径",
-      "shadowed": "重复",
-      "shadowedTooltip": "该技能被更高优先级的同名技能覆盖，不会生效。",
-      "shadowedLabel": "被覆盖自:",
-      "shadowedDetail": "技能 key {{key}}"
+      "shadowed": "已覆盖",
+      "shadowedTooltip": "{{source}} 中的同名技能通常具有更高优先级。",
+      "shadowedLabel": "更高优先级来源:",
+      "shadowedDetail": "{{source}} 中的同名技能",
+      "unknownSource": "其他来源"
     }
   },
   "deleteModal": {

@@ -4,7 +4,7 @@
 
 **能力覆盖**：
 - **HTML 演示版（默认必做）** → 每页独立 HTML + `deck_index.html` 聚合，浏览器全屏翻页
-- **可编辑 PPTX** → HTML 从第一行遵守 `editable-pptx.md` 四条 + 960×540pt
+- **可编辑 PPTX（PPT Live 默认）** → 每页严格 1280px × 720px，并从第一行遵守 `editable-pptx.md` 的 editable-only authoring contract
 - **高保真演讲版** → 1920×1080px，视觉自由；与可编辑 pptx 不可混为同一套 HTML
 
 > **HTML 是源。** 先做好 `slides/*.html`（+ 可选聚合 `index.html`），再谈文件格式。每页可单独打开验证；改内容只改 HTML。
@@ -26,25 +26,25 @@
    │
    ├── 还要 PDF（打印 / 发群 / 存档）     → HTML 写法自由（1920 演讲版即可）
    │
-   └── 还要可编辑 PPTX（同事要改文字）    → 从第一行就按 4 条硬约束 + 960×540pt
-                                              牺牲渐变 / web component / 复杂 SVG
+   └── 还要可编辑 PPTX（同事要改文字）    → 从第一行就按 1280×720 editable-only 契约
+                                              只使用可映射的 text / shape / line / table / intentional image
 ```
 
 ### 需求确认（动手前一句）
 
 > 我会先做可在浏览器里翻页的 HTML 幻灯片。请确认：**同事是否要在 PowerPoint 里改文字？**
 > - **否**（演讲/存档为主）→ 可用 1920 版，视觉自由
-> - **是** → 全程 960×540pt + 四条硬约束，牺牲渐变 / web component / 复杂 SVG
+> - **是** → 全程 1280px × 720px + editable-only authoring contract
 
 ### 为什么「要 PPTX 就得从头走 4 条硬约束」
 
-PPTX 可编辑的前提是 `html2pptx.cjs` 能把 DOM 逐元素翻译为 PowerPoint 对象。它需要 **4 条硬约束**：
+PPTX 可编辑的前提是 PPT Live 把 DOM 规范化为 `EditableSlideScene`，再序列化为 OOXML。唯一链路是 **editable HTML → EditableSlideScene → OOXML**，没有视觉保底或降级成功路径：
 
-1. body 固定 960pt × 540pt（匹配 `LAYOUT_WIDE`，13.333″ × 7.5″，不是 1920×1080px）
+1. body 固定 1280px × 720px（匹配 `LAYOUT_WIDE`，13.333″ × 7.5″）
 2. 所有文字包在 `<p>`/`<h1>`-`<h6>` 里（禁止 div 直接放文字，禁止用 `<span>` 承载主文字）
 3. `<p>`/`<h*>` 自身不能有 background/border/shadow（放外层 div）
 4. `<div>` 不能用 `background-image`（用 `<img>` 标签）
-5. 不用 CSS gradient、不用 web component、不用复杂 SVG 装饰
+5. authoring 只使用 solid color 与受支持的 SVG/CSS 原语；无法表示时停止生成并报告具体元素
 
 **本 skill 默认的 HTML 视觉自由度高**——大量 span、嵌套 flex、复杂 SVG、web component（如 `<deck-stage>`）、CSS 渐变——**几乎没有一条能天然过 html2pptx 的约束**（实测视觉驱动的 HTML 直接上 html2pptx，pass 率 < 30%）。
 
@@ -53,7 +53,7 @@ PPTX 可编辑的前提是 `html2pptx.cjs` 能把 DOM 逐元素翻译为 PowerPo
 | 路径 | 做法 | 结果 | 代价 |
 |------|------|------|------|
 | ❌ **先自由写 HTML，事后补救 PPTX** | 单文件 deck-stage + 大量 SVG/span 装饰 | 要可编辑 PPTX 只剩两条路：<br>A. 手写 pptxgenjs 几百行 hardcode 坐标<br>B. 重写 17 页 HTML 成 Path A 格式 | 2-3 小时返工，且手写版**维护成本永续**（HTML 改一个字，PPTX 要再人肉同步） |
-| ✅ **从第一步按 Path A 约束写** | 每页独立 HTML + 4 条硬约束 + 960×540pt | 可转可编辑 PPTX，也能浏览器演讲 | 多花几分钟把文字包进 `<p>`，零返工 |
+| ✅ **从第一步按 editable-only 约束写** | 每页独立 1280×720 HTML + 完整 authoring contract | 可转可编辑 PPTX，也能浏览器演讲 | 多花几分钟使用可映射原语，零返工 |
 
 ### 混合交付怎么办
 
@@ -61,15 +61,9 @@ PPTX 可编辑的前提是 `html2pptx.cjs` 能把 DOM 逐元素翻译为 PowerPo
 
 用户说「我要 PPTX **和** 动画 / web component」——**这是真矛盾**。告诉用户：要可编辑 PPTX 就得牺牲这些视觉能力。让他做取舍，不要偷偷做手写 pptxgenjs 方案（会变成永续维护债）。
 
-### 事后才知道要 PPTX 怎么办（紧急补救）
+### 事后才知道要 PPTX 怎么办
 
-极个别情况：HTML 已经写好了才发现要 PPTX。推荐走 **fallback 流程**（完整说明见 `references/editable-pptx.md` 末尾「Fallback：已有视觉稿但用户坚持要 editable PPTX」）：
-
-1. **首选：保留 1920 演讲 HTML**（视觉完整）—— 若对方只需看/讲、不改字，不必重做 960pt 版
-2. **次选：以视觉稿为蓝本，重写一版 960pt editable HTML** —— 保留色彩/布局/文案，牺牲渐变、web component、复杂 SVG
-3. **不推荐：手写 pptxgenjs 重建**——位置、字体、对齐都要手调，维护成本高，且后续 HTML 改一个字都得再人肉同步一次
-
-永远把选择告诉用户，让他决定。**永远不要第一反应就开始手写 pptxgenjs**——那是最后的兜底手段。
+若既有 HTML 不符合 editable-only contract，必须以原稿为内容与视觉参考，重写为 1280×720 的受支持 text、shape、line、table 与 intentional image 组合。任何元素无法无损映射时，停止导出并报告页码与源元素；禁止截图、栅格化、静默丢失或标记为降级成功。
 
 ---
 
@@ -542,20 +536,22 @@ Deck 需要 **intentional variety**：
 ## 可编辑 PPTX：HTML 硬性约束
 
 要在 PowerPoint 里改字时，HTML 须满足下列约束（详见 `references/editable-pptx.md`）：
+- 每页严格为 **1280px × 720px**，唯一导出链路为 **editable HTML → EditableSlideScene → OOXML**
 - 所有文字必须在 `<p>`/`<h1>`-`<h6>`/`<ul>`/`<ol>` 里（禁止裸文本 div）
 - `<p>`/`<h*>` 标签自身不能有 background/border/shadow（放外层 div）
 - 不用 `::before`/`::after` 插入装饰文字（伪元素提不出来）
 - inline 元素（span/em/strong）不能有 margin
-- 不用 CSS gradient（不可渲染）
+- authoring 不生成 CSS gradient；兼容重写能力不构成生成许可
 - div 不用 `background-image`（用 `<img>`）
+- 无法表示时停止生成并报告具体元素；禁止截图、栅格化或成功丢失
 
 脚本已内置**自动预处理器**——把 "叶子 div 里的裸文本" 自动包成 `<p>`（保留 class）。这解决了最常见的违规（裸文本）。但其他违规（p 上有 border、span 上有 margin 等）仍需 HTML 源头合规。
 
 **字体回落 caveat**：
 - 测量环境与 PowerPoint/Keynote 本机字体可能不一致 → **溢出或错位**，导出后要肉眼过
-- 建议目标机器装好 HTML 里用的字体，或 fallback 到 `system-ui`
+- 建议目标机器装好 HTML 里用的字体，或明确回退到 `system-ui`
 
-**视觉优先 + 要可改字 pptx** → 不可兼得；保留 1920 演讲 HTML，另做简化版或接受 PPTX 会丢视觉效果。
+**视觉优先 + 要可改字 pptx** → 若视觉超出 editable subset，必须重构为受支持原语或阻止导出，不能接受成功产物丢失视觉效果。
 
 ### 从一开始就让 HTML 对导出友好
 
@@ -582,7 +578,7 @@ Deck 需要 **intentional variety**：
 | 场景 | 推荐 |
 |------|------|
 | 给主办方/档案存档 | **1920 演讲 HTML** 或浏览器打印稿 |
-| 发给协作者改字 | **960pt + 四条约束**（可编辑 pptx 管线） |
+| 发给协作者改字 | **1280×720 editable-only contract**（可编辑 pptx 管线） |
 | 现场演讲、不改内容 | **1920 演讲 HTML** + 聚合翻页 |
 | HTML 是首选呈现媒介 | 直接浏览器播放 |
 

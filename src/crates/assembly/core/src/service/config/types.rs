@@ -6,6 +6,7 @@ use crate::util::errors::*;
 use async_trait::async_trait;
 use bitfun_runtime_ports::{PermissionRule, ToolPermissionConfig};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 fn deserialize_agent_profiles<'de, D>(
@@ -123,10 +124,80 @@ pub struct AppConfig {
     /// the frontend owns the versioned format (StoredKeybindingsV1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keybindings: Option<serde_json::Value>,
+    /// Global, user-defined groups used to organize Agent tool pickers.
+    #[serde(default, skip_serializing_if = "UserToolGroupsConfig::is_empty")]
+    pub user_tool_groups: UserToolGroupsConfig,
+    /// Global, user-defined groups used to organize Skill pickers.
+    #[serde(default, skip_serializing_if = "UserSkillGroupsConfig::is_empty")]
+    pub user_skill_groups: UserSkillGroupsConfig,
     /// What happens when the window close button is clicked on Windows / Linux.
     /// Allowed values: "quit" | "minimize_to_tray" | "ask".
     #[serde(default = "default_close_button_behavior")]
     pub close_button_behavior: String,
+}
+
+/// Versioned user preference for grouping selectable Agent tools in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserToolGroupsConfig {
+    pub version: u32,
+    pub groups: Vec<UserToolGroup>,
+}
+
+impl UserToolGroupsConfig {
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+}
+
+impl Default for UserToolGroupsConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            groups: Vec::new(),
+        }
+    }
+}
+
+/// A user-defined group of canonical tool names.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserToolGroup {
+    pub id: String,
+    pub name: String,
+    pub tool_names: Vec<String>,
+}
+
+/// Versioned user preference for grouping selectable Skills in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSkillGroupsConfig {
+    pub version: u32,
+    pub groups: Vec<UserSkillGroup>,
+}
+
+impl UserSkillGroupsConfig {
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+}
+
+impl Default for UserSkillGroupsConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            groups: Vec::new(),
+        }
+    }
+}
+
+/// A user-defined group of stable Skill keys.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSkillGroup {
+    pub id: String,
+    pub name: String,
+    pub skill_keys: Vec<String>,
 }
 
 /// App logging configuration.
@@ -1142,6 +1213,30 @@ pub enum AgentSubagentOverrideState {
 pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
 pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
+pub const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 128_128;
+pub const MIN_MODEL_CONTEXT_WINDOW_TOKENS: u32 = 32_000;
+pub const MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT: u32 = 40;
+const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS: [u32; 5] = [8_000, 16_000, 24_000, 32_000, 64_000];
+
+/// Chooses the largest supported output tier that does not exceed one quarter
+/// of the model context window.
+pub fn automatic_max_output_tokens(context_window: u32) -> u32 {
+    let quarter_context = context_window / 4;
+    AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS
+        .iter()
+        .rev()
+        .copied()
+        .find(|tier| *tier <= quarter_context)
+        .unwrap_or(quarter_context)
+}
+
+/// A configured output cap may use up to 40% of the model context window.
+pub fn is_valid_configured_max_output_tokens(context_window: u32, max_tokens: u32) -> bool {
+    max_tokens > 0
+        && u64::from(max_tokens) * 100
+            <= u64::from(context_window) * u64::from(MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, from = "AIModelConfigCompat")]
 pub struct AIModelConfig {
@@ -1159,7 +1254,8 @@ pub struct AIModelConfig {
     pub api_key: String,
     /// Context window size (total token limit for input + output).
     pub context_window: Option<u32>,
-    /// Max output tokens (request parameter limiting model output length).
+    /// Optional advanced override for the request output limit. When absent,
+    /// BitFun derives a tiered limit from the context window at runtime.
     pub max_tokens: Option<u32>,
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
@@ -1228,6 +1324,44 @@ pub struct AIModelConfig {
     /// time and inject the resolved Bearer token / extra headers.
     #[serde(default)]
     pub auth: AuthConfig,
+}
+
+/// Stable identity of the runtime-affecting parts of a concrete model config.
+///
+/// Credentials are deliberately excluded: rotating a secret must not require
+/// the user to approve the same provider/model again. Endpoint, provider,
+/// model, request options, and authentication source remain part of the
+/// identity so an approved binding cannot silently drift to different runtime
+/// behavior while retaining the same config id.
+pub fn model_runtime_binding_fingerprint(model: &AIModelConfig) -> String {
+    let mut value = serde_json::to_value(model).unwrap_or(serde_json::Value::Null);
+    if let serde_json::Value::Object(fields) = &mut value {
+        fields.remove("api_key");
+    }
+
+    fn canonicalize(value: serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(fields) => {
+                let mut entries = fields.into_iter().collect::<Vec<_>>();
+                entries.sort_by(|left, right| left.0.cmp(&right.0));
+                serde_json::Value::Object(
+                    entries
+                        .into_iter()
+                        .map(|(key, value)| (key, canonicalize(value)))
+                        .collect(),
+                )
+            }
+            serde_json::Value::Array(values) => {
+                serde_json::Value::Array(values.into_iter().map(canonicalize).collect())
+            }
+            value => value,
+        }
+    }
+
+    let canonical = serde_json::to_vec(&canonicalize(value)).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(canonical);
+    hex::encode(hasher.finalize())
 }
 
 /// Where to obtain the runtime auth material for an `AIModelConfig`.
@@ -1452,6 +1586,8 @@ impl Default for AppConfig {
             flow_chat: AppFlowChatConfig::default(),
             ai_experience: AIExperienceConfig::default(),
             keybindings: None,
+            user_tool_groups: UserToolGroupsConfig::default(),
+            user_skill_groups: UserSkillGroupsConfig::default(),
             close_button_behavior: default_close_button_behavior(),
         }
     }
@@ -1843,7 +1979,7 @@ mod tests {
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
         AgentProfileView, AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy,
         ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
-        SubagentModelSelection,
+        SubagentModelSelection, UserSkillGroupsConfig, UserToolGroupsConfig,
     };
     use bitfun_runtime_ports::ToolPermissionConfig;
 
@@ -1885,6 +2021,88 @@ mod tests {
             .expect("legacy config should deserialize with permission defaults");
 
         assert_eq!(config.tool_permissions, ToolPermissionConfig::default());
+    }
+
+    #[test]
+    fn user_tool_groups_default_to_version_one_without_persisted_groups() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(config.app.user_tool_groups, UserToolGroupsConfig::default());
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("user_tool_groups").is_none());
+    }
+
+    #[test]
+    fn user_tool_groups_preserve_the_versioned_ui_shape() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "user_tool_groups": {
+                    "version": 1,
+                    "groups": [{
+                        "id": "daily-code",
+                        "name": "Daily code changes",
+                        "toolNames": ["Read", "Edit"]
+                    }]
+                }
+            }
+        }))
+        .expect("user tool groups should deserialize");
+
+        assert_eq!(
+            config.app.user_tool_groups.groups[0].tool_names,
+            vec!["Read".to_string(), "Edit".to_string()]
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["user_tool_groups"]["groups"][0]["toolNames"],
+            serde_json::json!(["Read", "Edit"])
+        );
+    }
+
+    #[test]
+    fn user_skill_groups_default_to_version_one_without_persisted_groups() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy global config should deserialize");
+        assert_eq!(
+            config.app.user_skill_groups,
+            UserSkillGroupsConfig::default()
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("user_skill_groups").is_none());
+    }
+
+    #[test]
+    fn user_skill_groups_preserve_the_versioned_ui_shape() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "user_skill_groups": {
+                    "version": 1,
+                    "groups": [{
+                        "id": "daily-coding",
+                        "name": "Daily coding",
+                        "skillKeys": ["builtin::find-skills", "user::review"]
+                    }]
+                }
+            }
+        }))
+        .expect("user skill groups should deserialize");
+
+        assert_eq!(
+            config.app.user_skill_groups.groups[0].skill_keys,
+            vec![
+                "builtin::find-skills".to_string(),
+                "user::review".to_string()
+            ]
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["user_skill_groups"]["groups"][0]["skillKeys"],
+            serde_json::json!(["builtin::find-skills", "user::review"])
+        );
     }
 
     #[test]

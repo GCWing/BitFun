@@ -12,11 +12,59 @@ use tokio::sync::RwLock;
 
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::get_global_config_service;
+use bitfun_core::service::remote_connect::settings_sync;
 use bitfun_core::service::remote_connect::{sync_state, AccountClient};
 
 use crate::account::read_account_context;
 
 const UPLOAD_CONCURRENCY_CHUNK: usize = 5;
+
+/// Start the continuous settings sync loop (debounced push + 30s pull).
+/// Started once per process (interactive TUI and daemon); every cycle
+/// silently skips while logged out and converges as soon as an account
+/// session exists. Peer Mode controllers are notified via DeviceEvent when
+/// this host's effective settings change.
+pub(crate) fn start_settings_sync_loop() {
+    let hooks = settings_sync::SettingsSyncHooks {
+        account_context: Some(Arc::new(|| {
+            Box::pin(async { read_account_context().await })
+        })),
+        on_settings_applied: Some(Arc::new(|| {
+            crate::peer_host::notify_controllers_settings_changed();
+        })),
+        on_settings_pushed: Some(Arc::new(|| {
+            crate::peer_host::notify_controllers_settings_changed();
+        })),
+        on_token_expired: Some(Arc::new(|| crate::account::mark_token_expired())),
+        ..Default::default()
+    };
+    settings_sync::start_settings_sync_engine(hooks);
+}
+
+/// Notify the sync loop that local settings changed (TUI edits, peer
+/// `set_config`). Upload is debounced and content-hash deduped.
+pub(crate) fn notify_local_settings_changed() {
+    settings_sync::notify_settings_changed();
+}
+
+/// Best-effort one-shot settings push for short-lived management commands
+/// (e.g. `bitfun models set-default`) where the sync loop never starts.
+/// Silently no-ops when logged out; failures are logged, not fatal.
+pub(crate) async fn push_settings_after_local_change() {
+    // Management commands never restore the persisted account session into
+    // memory — do it on demand so the push can authenticate.
+    if read_account_context().await.is_err() {
+        crate::account::try_restore_session().await;
+    }
+    let Ok((account, relay_url)) = read_account_context().await else {
+        return;
+    };
+    match settings_sync::push_settings_now(&account, &relay_url).await {
+        Ok(true) => tracing::info!("Settings pushed to account cloud"),
+        Ok(false) => {}
+        Err(e) => tracing::warn!("Settings push failed: {e}"),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SyncStatus {
@@ -184,8 +232,7 @@ pub(crate) async fn run_auto_sync(
             .map_err(|e| anyhow!("export config: {e}"))?;
         let config_json =
             serde_json::to_string(&exported).map_err(|e| anyhow!("serialize config: {e}"))?;
-        client
-            .upload_settings(&relay_url, &acct_session, &config_json)
+        settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json)
             .await
             .map_err(|e| anyhow!("upload settings: {e}"))?;
         emit_progress("settings_done", 15, None, None, None).await;
@@ -198,25 +245,11 @@ pub(crate) async fn run_auto_sync(
             .map_err(|e| anyhow!("fetch settings: {e}"))?;
         if let Some(blob) = cloud {
             emit_progress("applying_settings", 10, None, None, None).await;
-            let config_value: serde_json::Value = serde_json::from_str(&blob.plaintext)
-                .map_err(|e| anyhow!("parse cloud config: {e}"))?;
-            let inner_config = config_value.get("config").cloned().unwrap_or(config_value);
-            let config_service = get_global_config_service()
+            // Explicit user choice ("use cloud") — always apply, even when the
+            // cursor says this device already has this version.
+            settings_sync::apply_settings_blob(&acct_session, &blob, true)
                 .await
-                .map_err(|e| anyhow!("config service: {e}"))?;
-            let import_result = config_service
-                .import_config_data(inner_config)
-                .await
-                .map_err(|e| anyhow!("import cloud config: {e}"))?;
-            if !import_result.success {
-                return Err(anyhow!(
-                    "import cloud config failed: {}",
-                    import_result.errors.join("; ")
-                ));
-            }
-            if let Err(e) = config_service.reload().await {
-                tracing::warn!("reload after cloud config import failed: {e}");
-            }
+                .map_err(|e| anyhow!("apply cloud config: {e}"))?;
             emit_progress("settings_done", 15, None, None, None).await;
             true
         } else {

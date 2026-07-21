@@ -14,6 +14,7 @@ members = [
     "src/crates/services/services-core",
     "src/crates/services/services-integrations",
     "src/crates/services/relay-service",
+    "src/crates/services/page-function-runtime",
     "src/crates/services/terminal",
     "src/crates/assembly/product-capabilities",
     "src/crates/contracts/product-domains",
@@ -164,6 +165,7 @@ which = "8.0"
 similar = "2.5"
 urlencoding = "2.1"
 oxc = { version = "0.138.0", default-features = false, features = ["ast_visit", "codegen", "semantic", "transformer"] }
+rquickjs = { version = "0.9", default-features = false, features = ["classes", "properties", "macro"] }
 
 # Tauri (desktop only)
 tauri = { version = "2.11", features = ["unstable", "macos-private-api", "tray-icon"] }

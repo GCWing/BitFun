@@ -19,6 +19,15 @@ use super::remote_connect_api::{account_app_handle, current_device_id_for_peer};
 const DEFAULT_INVOKE_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Commands that must never run on a peer on behalf of a controller.
+///
+/// Keep aligned with:
+/// - FE deny list in `src/web-ui/.../adapters/peer-device-adapter.ts`
+/// - CLI deny list in `src/apps/cli/src/peer_host/deny.rs`
+/// - invariants in `src/web-ui/src/infrastructure/peer-device/README.md`
+///
+/// Account identity + cloud session/turn APIs stay on the controller. Peer
+/// history is restored via HostInvoke (`restore_session_view`), not by
+/// forwarding `account_fetch_session_turns` to the peer host.
 static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // Window / tray / process chrome
     "show_main_window",
@@ -33,6 +42,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "install_update",
     // Account identity / peer mode control (stay on controller)
     "account_login",
+    "account_finalize_login",
     "account_logout",
     "account_status",
     "account_get_credential_hint",
@@ -80,6 +90,14 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // This-machine computer-use / OS permission prompts
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    // One-click relay deploy SSHes from the controller to a user host
+    "relay_deploy_preflight",
+    "relay_deploy_install_docker",
+    "relay_deploy_start",
+    "relay_deploy_poll",
+    "relay_deploy_cancel",
+    "relay_deploy_register",
+    "relay_deploy_verify",
 ];
 
 static PENDING: OnceLock<Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeResult>>>> =

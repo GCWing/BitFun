@@ -1,9 +1,7 @@
 use crate::agentic::agents::{
     get_agent_registry, AgentInfo, SubagentListScope, SubagentQueryContext,
 };
-use crate::agentic::coordination::{
-    get_global_coordinator, validate_background_subagent_delivery, SubagentExecutionRequest,
-};
+use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
 use crate::agentic::deep_review::task_adapter::{
     self as deep_review_task_adapter, DeepReviewLaunchBatchInfo,
     DeepReviewProviderQueueWaitOutcome, DeepReviewQueueWaitOutcome, DeepReviewQueueWaitSkipReason,
@@ -100,6 +98,7 @@ impl TaskTool {
                 workspace_root,
                 list_scope: SubagentListScope::TaskVisible,
                 include_disabled: false,
+                external_sources_supported: context.is_none_or(|ctx| !ctx.is_remote()),
             })
             .await
     }

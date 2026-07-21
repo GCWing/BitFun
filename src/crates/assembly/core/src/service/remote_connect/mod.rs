@@ -9,10 +9,11 @@
 //! `stop_all()` to shut everything down.
 
 pub mod bot;
-pub mod embedded_relay;
+pub mod embedded_relay_host;
 pub mod lan;
 pub mod ngrok;
 pub mod remote_server;
+pub mod settings_sync;
 
 pub mod device {
     pub use bitfun_services_integrations::remote_connect::device::*;
@@ -60,10 +61,11 @@ pub use remote_server::RemoteServer;
 
 use anyhow::Result;
 use bitfun_services_integrations::remote_connect::upload_mobile_web_to_relay;
+use embedded_relay_host::EmbeddedRelayHost;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 /// Supported connection methods.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,7 +146,8 @@ pub struct RemoteConnectService {
     remote_server: Arc<RwLock<Option<RemoteServer>>>,
     active_method: Arc<RwLock<Option<ConnectionMethod>>>,
     ngrok_tunnel: Arc<RwLock<Option<ngrok::NgrokTunnel>>>,
-    embedded_relay: Arc<RwLock<Option<embedded_relay::EmbeddedRelayHandle>>>,
+    embedded_relay_host: Arc<dyn EmbeddedRelayHost>,
+    relay_lifecycle: Mutex<()>,
     // Bot handles live independently of relay connections
     bot_telegram_handle: Arc<RwLock<Option<BotHandle>>>,
     bot_feishu_handle: Arc<RwLock<Option<BotHandle>>>,
@@ -168,6 +171,11 @@ pub struct RemoteConnectService {
     /// login. Resolved on demand when a paired client sends
     /// `get_delegated_identity` over the room channel.
     delegated_identity_fn: Arc<RwLock<Option<DelegatedIdentityFn>>>,
+    /// Non-secret username embedded in the QR when the desktop is logged in.
+    account_pairing_username: Arc<RwLock<Option<String>>>,
+    /// When set, pairing requires BitFun account username+password and the
+    /// verifier returns the canonical account `user_id` on success.
+    account_pairing_verifier: Arc<RwLock<Option<AccountPairingVerifierFn>>>,
 }
 
 /// Provider returning `(token, master_key, relay_url)` for the paired client.
@@ -178,8 +186,23 @@ type DelegatedIdentityFn = Arc<
         + Sync,
 >;
 
+/// Verifies mobile-submitted account credentials. Returns the canonical
+/// account `user_id` when the credentials match the logged-in desktop account.
+type AccountPairingVerifierFn = Arc<
+    dyn Fn(
+            String,
+            String,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<String, String>> + Send + Sync>,
+        > + Send
+        + Sync,
+>;
+
 impl RemoteConnectService {
-    pub fn new(config: RemoteConnectConfig) -> Result<Self> {
+    pub fn new(
+        config: RemoteConnectConfig,
+        embedded_relay_host: Arc<dyn EmbeddedRelayHost>,
+    ) -> Result<Self> {
         let device_identity = DeviceIdentity::from_current_machine()?;
         let pairing = PairingProtocol::new(device_identity.clone());
 
@@ -191,7 +214,8 @@ impl RemoteConnectService {
             remote_server: Arc::new(RwLock::new(None)),
             active_method: Arc::new(RwLock::new(None)),
             ngrok_tunnel: Arc::new(RwLock::new(None)),
-            embedded_relay: Arc::new(RwLock::new(None)),
+            embedded_relay_host,
+            relay_lifecycle: Mutex::new(()),
             bot_telegram_handle: Arc::new(RwLock::new(None)),
             bot_feishu_handle: Arc::new(RwLock::new(None)),
             bot_weixin_handle: Arc::new(RwLock::new(None)),
@@ -203,6 +227,8 @@ impl RemoteConnectService {
             device_relay_client: Arc::new(RwLock::new(None)),
             online_devices: Arc::new(RwLock::new(Vec::new())),
             delegated_identity_fn: Arc::new(RwLock::new(None)),
+            account_pairing_username: Arc::new(RwLock::new(None)),
+            account_pairing_verifier: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -219,26 +245,53 @@ impl RemoteConnectService {
         *self.delegated_identity_fn.write().await = Some(Arc::new(move || Box::pin(f())));
     }
 
+    /// Enable account-password pairing in the QR.
+    /// `None` disables account mode; `Some(username)` enables it (username may
+    /// be empty when only `auth=account` should be advertised without prefill).
+    pub async fn set_account_pairing_username(&self, username: Option<String>) {
+        *self.account_pairing_username.write().await = username.map(|u| u.trim().to_string());
+    }
+
+    /// Register account password verification for mobile pairing.
+    pub async fn set_account_pairing_verifier<F, Fut>(&self, f: F)
+    where
+        F: Fn(String, String) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<String, String>> + Send + Sync + 'static,
+    {
+        *self.account_pairing_verifier.write().await = Some(Arc::new(move |username, password| {
+            Box::pin(f(username, password))
+        }));
+    }
+
+    /// Clear account pairing context (username + verifier) on logout.
+    pub async fn clear_account_pairing_context(&self) {
+        *self.account_pairing_username.write().await = None;
+        *self.account_pairing_verifier.write().await = None;
+    }
+
+    /// Drop the URL-bound mobile identity. Call when the desktop account
+    /// changes so a later pair can bind to the new account user id.
+    pub async fn clear_trusted_mobile_identity(&self) {
+        *self.trusted_mobile_identity.write().await = None;
+    }
+
     pub fn device_identity(&self) -> &DeviceIdentity {
         &self.device_identity
     }
 
     async fn validate_mobile_identity(
         trusted_mobile_identity: &Arc<RwLock<Option<TrustedMobileIdentity>>>,
-        response: &pairing::PairingResponse,
+        mobile_install_id: &str,
+        user_id: &str,
     ) -> std::result::Result<TrustedMobileIdentity, String> {
-        let mobile_install_id = response
-            .mobile_install_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| "Missing mobile installation ID".to_string())?;
-        let user_id = response
-            .user_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| "Missing user ID".to_string())?;
+        let mobile_install_id = mobile_install_id.trim();
+        let user_id = user_id.trim();
+        if mobile_install_id.is_empty() {
+            return Err("Missing mobile installation ID".to_string());
+        }
+        if user_id.is_empty() {
+            return Err("Missing user ID".to_string());
+        }
 
         let submitted = TrustedMobileIdentity {
             mobile_install_id: mobile_install_id.to_string(),
@@ -259,6 +312,53 @@ impl RemoteConnectService {
             ),
             _ => Ok(submitted),
         }
+    }
+
+    /// When the desktop is logged in, require and verify account credentials.
+    /// Returns the canonical account `user_id` to bind as the trusted identity.
+    async fn resolve_pairing_user_id(
+        account_pairing_verifier: &Arc<RwLock<Option<AccountPairingVerifierFn>>>,
+        response: &pairing::PairingResponse,
+    ) -> std::result::Result<String, String> {
+        let verifier = account_pairing_verifier.read().await.clone();
+        let Some(verify) = verifier else {
+            // The mobile submitted account credentials (QR advertised
+            // auth=account) but the desktop logged out after generating the
+            // code. Never downgrade to password-less pairing.
+            if response
+                .password
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty())
+            {
+                return Err(
+                    "Desktop signed out of the BitFun account; sign in again and refresh the QR code"
+                        .to_string(),
+                );
+            }
+            let user_id = response
+                .user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "Missing user ID".to_string())?;
+            return Ok(user_id.to_string());
+        };
+
+        let username = response
+            .user_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "Missing username".to_string())?;
+        let password = response
+            .password
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "Missing password".to_string())?;
+
+        verify(username.to_string(), password.to_string()).await
     }
 
     async fn persist_mobile_identity(
@@ -374,16 +474,19 @@ impl RemoteConnectService {
             _ => {}
         }
 
-        // Relay methods: clean up previous relay (but leave bots alone)
-        self.stop_relay().await;
+        let _lifecycle = self.relay_lifecycle.lock().await;
 
+        // Relay methods: clean up previous relay (but leave bots alone)
+        self.stop_relay_inner().await;
+
+        let result: Result<ConnectionResult> = async {
         let static_dir = self.config.mobile_web_dir.as_deref();
 
         let relay_url = match &method {
             ConnectionMethod::Lan { ip } => {
-                let handle =
-                    embedded_relay::start_embedded_relay(self.config.lan_port, static_dir).await?;
-                *self.embedded_relay.write().await = Some(handle);
+                self.embedded_relay_host
+                    .start(self.config.lan_port, self.config.mobile_web_dir.clone())
+                    .await?;
                 let url_result = match ip {
                     Some(ip) => lan::build_lan_relay_url_with_ip(self.config.lan_port, ip),
                     None => lan::build_lan_relay_url(self.config.lan_port),
@@ -391,26 +494,18 @@ impl RemoteConnectService {
                 match url_result {
                     Ok(url) => url,
                     Err(e) => {
-                        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-                            relay.stop();
-                        }
-                        *self.embedded_relay.write().await = None;
                         return Err(e);
                     }
                 }
             }
             ConnectionMethod::Ngrok => {
-                let handle =
-                    embedded_relay::start_embedded_relay(self.config.lan_port, static_dir).await?;
-                *self.embedded_relay.write().await = Some(handle);
+                self.embedded_relay_host
+                    .start(self.config.lan_port, self.config.mobile_web_dir.clone())
+                    .await?;
 
                 let tunnel = match ngrok::start_ngrok_tunnel(self.config.lan_port).await {
                     Ok(tunnel) => tunnel,
                     Err(e) => {
-                        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-                            relay.stop();
-                        }
-                        *self.embedded_relay.write().await = None;
                         return Err(e);
                     }
                 };
@@ -537,7 +632,13 @@ impl RemoteConnectService {
         };
 
         let client_language = crate::service::config::get_app_language_code().await;
-        let qr_url = QrGenerator::build_url(&qr_payload, &web_app_url, &client_language);
+        let account_username = self.account_pairing_username.read().await.clone();
+        let qr_url = QrGenerator::build_url(
+            &qr_payload,
+            &web_app_url,
+            &client_language,
+            account_username.as_deref(),
+        );
         let qr_svg = QrGenerator::generate_svg_from_url(&qr_url)?;
         let qr_data = QrGenerator::generate_png_base64_from_url(&qr_url)?;
 
@@ -549,6 +650,7 @@ impl RemoteConnectService {
         let server_arc = self.remote_server.clone();
         let trusted_mobile_identity_arc = self.trusted_mobile_identity.clone();
         let delegated_identity_fn_arc = self.delegated_identity_fn.clone();
+        let account_pairing_verifier_arc = self.account_pairing_verifier.clone();
         let local_device_id = self.device_identity.device_id.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
@@ -650,10 +752,34 @@ impl RemoteConnectService {
                                 if let Ok(response) =
                                     serde_json::from_str::<pairing::PairingResponse>(&json)
                                 {
+                                    let canonical_user_id = match RemoteConnectService::resolve_pairing_user_id(
+                                        &account_pairing_verifier_arc,
+                                        &response,
+                                    )
+                                    .await
+                                    {
+                                        Ok(user_id) => user_id,
+                                        Err(message) => {
+                                            drop(p);
+                                            RemoteConnectService::send_pairing_error_response(
+                                                &relay_arc,
+                                                &correlation_id,
+                                                &shared_secret,
+                                                message,
+                                            )
+                                            .await;
+                                            continue;
+                                        }
+                                    };
+                                    let mobile_install_id = response
+                                        .mobile_install_id
+                                        .clone()
+                                        .unwrap_or_default();
                                     let submitted_identity =
                                         match RemoteConnectService::validate_mobile_identity(
                                             &trusted_mobile_identity_arc,
-                                            &response,
+                                            &mobile_install_id,
+                                            &canonical_user_id,
                                         )
                                         .await
                                         {
@@ -773,6 +899,13 @@ impl RemoteConnectService {
             bot_link: None,
             pairing_state: state,
         })
+        }
+        .await;
+
+        if result.is_err() {
+            self.stop_relay_inner().await;
+        }
+        result
     }
 
     async fn start_bot_connection(&self, method: &ConnectionMethod) -> Result<ConnectionResult> {
@@ -1093,6 +1226,11 @@ impl RemoteConnectService {
     /// Stop relay connections (LAN / ngrok / BitFun Server / Custom Server).
     /// Bot connections are left running.
     pub async fn stop_relay(&self) {
+        let _lifecycle = self.relay_lifecycle.lock().await;
+        self.stop_relay_inner().await;
+    }
+
+    async fn stop_relay_inner(&self) {
         if let Some(ref client) = *self.relay_client.read().await {
             client.disconnect().await;
         }
@@ -1105,10 +1243,7 @@ impl RemoteConnectService {
         }
         *self.ngrok_tunnel.write().await = None;
 
-        if let Some(ref mut relay) = *self.embedded_relay.write().await {
-            relay.stop();
-        }
-        *self.embedded_relay.write().await = None;
+        self.embedded_relay_host.stop().await;
 
         self.pairing.write().await.reset().await;
         *self.trusted_mobile_identity.write().await = None;
@@ -1209,12 +1344,20 @@ impl RemoteConnectService {
         )
     }
 
+    /// Start account device routing. Returns `(event_rx, authenticated_device_id)`.
+    ///
+    /// `AuthOk` is consumed here (not forwarded) so callers must use the returned
+    /// `authenticated_device_id` — and this method adopts it into the persisted
+    /// local `DeviceIdentity` before returning.
     pub async fn start_device_connection(
         &self,
         relay_url: &str,
         token: &str,
         device_name: &str,
-    ) -> Result<tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>> {
+    ) -> Result<(
+        tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>,
+        String,
+    )> {
         // Disconnect previous device connection if any.
         self.stop_device_connection().await;
 
@@ -1237,13 +1380,18 @@ impl RemoteConnectService {
         // The relay client may emit other events first (e.g. `Connected`),
         // so we loop until we see AuthOk/AuthError or time out.
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
-        let mut got_auth = false;
+        let mut authenticated_device_id: Option<String> = None;
         let mut auth_error: Option<String> = None;
-        while !got_auth && auth_error.is_none() {
+        while authenticated_device_id.is_none() && auth_error.is_none() {
             match tokio::time::timeout_at(deadline, event_rx.recv()).await {
                 Ok(Some(relay_client::RelayEvent::AuthOk { user_id, device_id })) => {
                     log::info!("Device connection auth ok: user={user_id} device={device_id}");
-                    got_auth = true;
+                    // AuthOk is consumed here and never forwarded. Adopt immediately
+                    // so getDeviceInfo / 本机 marking match the token-bound device.
+                    if let Err(e) = DeviceIdentity::adopt_account_device_id(&device_id) {
+                        log::warn!("Failed to adopt AuthOk device_id: {e}");
+                    }
+                    authenticated_device_id = Some(device_id);
                 }
                 Ok(Some(relay_client::RelayEvent::AuthError { message })) => {
                     auth_error = Some(message);
@@ -1265,6 +1413,8 @@ impl RemoteConnectService {
         if let Some(msg) = auth_error {
             anyhow::bail!("relay auth error: {msg}");
         }
+        let authenticated_device_id = authenticated_device_id
+            .ok_or_else(|| anyhow::anyhow!("relay auth completed without device_id"))?;
 
         let online_arc = self.online_devices.clone();
         let device_client_arc = self.device_relay_client.clone();
@@ -1287,7 +1437,7 @@ impl RemoteConnectService {
         });
 
         *device_client_arc.write().await = Some(client);
-        Ok(forward_rx)
+        Ok((forward_rx, authenticated_device_id))
     }
 
     /// Disconnect the account-authenticated device-routing connection.
@@ -1340,5 +1490,114 @@ impl RemoteConnectService {
     /// Get the pairing shared secret (for encrypting delegate identity).
     pub async fn pairing_shared_secret(&self) -> Option<[u8; 32]> {
         self.pairing.read().await.shared_secret().copied()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pairing_response(user_id: Option<&str>, password: Option<&str>) -> pairing::PairingResponse {
+        pairing::PairingResponse {
+            challenge_echo: "echo".to_string(),
+            device_id: "mobile-1".to_string(),
+            device_name: "Phone".to_string(),
+            mobile_install_id: Some("install-1".to_string()),
+            user_id: user_id.map(str::to_string),
+            password: password.map(str::to_string),
+        }
+    }
+
+    fn no_verifier() -> Arc<RwLock<Option<AccountPairingVerifierFn>>> {
+        Arc::new(RwLock::new(None))
+    }
+
+    fn verifier_returning(
+        canonical_user_id: &'static str,
+    ) -> Arc<RwLock<Option<AccountPairingVerifierFn>>> {
+        Arc::new(RwLock::new(Some(
+            Arc::new(move |_username: String, _password: String| {
+                Box::pin(async move { Ok(canonical_user_id.to_string()) })
+                    as std::pin::Pin<
+                        Box<dyn std::future::Future<Output = Result<String, String>> + Send + Sync>,
+                    >
+            }) as AccountPairingVerifierFn,
+        )))
+    }
+
+    #[tokio::test]
+    async fn account_mode_requires_password() {
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &verifier_returning("user-123"),
+            &pairing_response(Some("alice"), None),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "Missing password");
+    }
+
+    #[tokio::test]
+    async fn account_mode_requires_username() {
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &verifier_returning("user-123"),
+            &pairing_response(None, Some("secret")),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "Missing username");
+    }
+
+    #[tokio::test]
+    async fn account_credentials_are_never_downgraded_when_verifier_is_gone() {
+        // QR advertised auth=account, but the desktop signed out before the
+        // scan finished: reject instead of falling back to password-less pairing.
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &no_verifier(),
+            &pairing_response(Some("alice"), Some("secret")),
+        )
+        .await;
+        assert!(result.unwrap_err().contains("signed out"));
+    }
+
+    #[tokio::test]
+    async fn legacy_mode_without_verifier_uses_plain_user_id() {
+        let result = RemoteConnectService::resolve_pairing_user_id(
+            &no_verifier(),
+            &pairing_response(Some("local-user"), None),
+        )
+        .await;
+        assert_eq!(result.unwrap(), "local-user");
+    }
+
+    #[tokio::test]
+    async fn verifier_result_binds_canonical_user_id() {
+        let canonical = RemoteConnectService::resolve_pairing_user_id(
+            &verifier_returning("canonical-user-123"),
+            &pairing_response(Some("alice"), Some("secret")),
+        )
+        .await
+        .expect("verification should succeed");
+        assert_eq!(canonical, "canonical-user-123");
+
+        let trusted = Arc::new(RwLock::new(None));
+        let identity =
+            RemoteConnectService::validate_mobile_identity(&trusted, "install-1", &canonical)
+                .await
+                .expect("first pairing binds the identity");
+        assert_eq!(identity.user_id, "canonical-user-123");
+        RemoteConnectService::persist_mobile_identity(&trusted, identity).await;
+
+        // Reconnect with the same canonical id still matches.
+        assert!(
+            RemoteConnectService::validate_mobile_identity(&trusted, "install-1", &canonical)
+                .await
+                .is_ok()
+        );
+        // A different account user id is rejected against the bound identity.
+        assert!(RemoteConnectService::validate_mobile_identity(
+            &trusted,
+            "install-1",
+            "other-user"
+        )
+        .await
+        .is_err());
     }
 }

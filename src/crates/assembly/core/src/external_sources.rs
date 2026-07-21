@@ -3,36 +3,73 @@
 //! Concrete ecosystem providers are selected only in this assembly module. The
 //! catalog and product surfaces remain provider- and ecosystem-neutral.
 
+pub use bitfun_product_domains::external_integration_policy::{
+    EffectiveExternalIntegrationPolicy, ExternalIntegrationAccess, ExternalIntegrationMode,
+    ExternalIntegrationPolicyMutation, ExternalIntegrationPolicyOperation,
+    ExternalIntegrationPolicyScope, ExternalIntegrationPolicySnapshot,
+    ExternalIntegrationPolicyStatus,
+};
 pub use bitfun_product_domains::external_sources::{
-    prompt_command_conflict_key, ExpandedPromptCommand, ExternalSourceCatalogEntry,
-    ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity,
-    ExternalSourceLifecycleState, ExternalToolActivationState, ExternalToolApprovalRequest,
-    ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolConflict,
-    ExternalToolRuntimeKind, PromptCommandAvailability, PromptCommandCatalogEntry,
-    PromptCommandDefinition, SourceKey,
+    prompt_command_conflict_key, EcosystemId, ExpandedPromptCommand,
+    ExternalIntegrationCapabilityId, ExternalMcpActivationState, ExternalMcpApprovalRequest,
+    ExternalMcpCatalogEntry, ExternalMcpConflict, ExternalMcpTransportKind,
+    ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot,
+    ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceHostCapabilities,
+    ExternalSourceLifecycleState, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceOperationResult, ExternalSourcePublicSnapshot, ExternalToolActivationState,
+    ExternalToolApprovalRequest, ExternalToolCapability, ExternalToolCatalogEntry,
+    ExternalToolConflict, ExternalToolConflictCandidateKind, ExternalToolRuntimeKind,
+    PromptCommandAvailability, PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
+};
+pub use bitfun_product_domains::external_subagents::{
+    ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
+    ExternalSubagentConflictCandidate, ExternalSubagentSummary,
 };
 
+use crate::external_mcp::{
+    reconcile_external_mcp_catalog, BitFunExternalMcpRuntime, ExternalMcpDecision,
+    ExternalMcpDecisions, ExternalMcpProductState, ExternalMcpRuntimePort,
+    ExternalMcpRuntimeStatus, NativeMcpCandidate,
+};
+use crate::external_subagents::{
+    project_external_subagents_read_only, reconcile_external_subagents, ExternalSubagentDecisions,
+    ExternalSubagentProductState, DISABLED_SUBAGENT_CONFLICT_CHOICE,
+};
 use crate::external_tools::{
     begin_external_tool_workspace_recovery, external_tool_workspace_requires_recovery,
-    merge_tool_state, reconcile_external_tools, release_external_tool_workspace,
-    reset_external_tool_workspace_recovery_budget, ExternalToolDecisions, ExternalToolProductState,
+    merge_tool_state, project_external_tools_read_only, reconcile_external_tools,
+    release_external_tool_workspace, reset_external_tool_workspace_recovery_budget,
+    workspace_route_key, ExternalToolDecisions, ExternalToolProductState,
     TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
+use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 use bitfun_external_sources::{
+    ExternalMcpCoordinator, ExternalMcpDiscoveryRequest, ExternalMcpDiscoveryResult,
     ExternalSourceCoordinator, ExternalSourceDiscoveryRequest, ExternalSourceDiscoveryResult,
+    ExternalSubagentCoordinator, ExternalSubagentDiscoveryRequest, ExternalSubagentDiscoveryResult,
     ExternalToolCoordinator, ExternalToolDiscoveryRequest, ExternalToolDiscoveryResult,
 };
-use bitfun_opencode_adapter::{OpenCodeCommandProvider, OpenCodeToolProvider};
-use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalSourceContext, ExternalToolSourceProvider,
-    PromptCommandSourceProvider,
+use bitfun_opencode_adapter::{
+    OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSubagentProvider, OpenCodeToolProvider,
 };
+use bitfun_product_domains::external_integration_policy::{
+    external_integration_policy_snapshot, incompatible_external_integration_policy_snapshot,
+    ExternalIntegrationCapabilityDescriptor, ExternalIntegrationEcosystemDescriptor,
+    ExternalIntegrationPolicyDocument, ExternalIntegrationPolicySettings,
+    EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR,
+};
+use bitfun_product_domains::external_sources::{
+    ExecutionDomainId, ExternalMcpSourceProvider, ExternalSourceContext, ExternalSourceScope,
+    ExternalToolSourceProvider, PromptCommandSourceProvider,
+};
+use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_services_core::json_store::JsonFileStore;
 use bitfun_services_integrations::file_watch::{FileWatchService, FileWatcherConfig};
 use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future::{join_all, BoxFuture, Shared};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -42,10 +79,173 @@ use tokio::sync::broadcast;
 
 const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";
+const SUBAGENT_CONFLICT_RESELECTION_REQUIRED: &str = "__bitfun_reselection_required__";
+const OPENCODE_ECOSYSTEM_ID: &str = "opencode";
+pub const EXTERNAL_CAPABILITY_COMMAND: &str = "command";
+pub const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
+pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
+pub const EXTERNAL_CAPABILITY_MCP: &str = "mcp";
+const EXTERNAL_ADAPTER_CONTRACT_MAJOR: u32 = 1;
+
+fn external_capability_descriptor(
+    capability_id: &str,
+    recommended_access: ExternalIntegrationAccess,
+    safety_ceiling: ExternalIntegrationAccess,
+) -> ExternalIntegrationCapabilityDescriptor {
+    ExternalIntegrationCapabilityDescriptor {
+        capability_id: ExternalIntegrationCapabilityId::new(capability_id)
+            .expect("built-in external integration capability id is valid"),
+        recommended_access,
+        safety_ceiling,
+    }
+}
+
+/// Internal SDK-ready registration seam. Adapters only contribute discovery
+/// providers and metadata; execution remains owned by BitFun policy/runtime.
+#[derive(Clone)]
+struct ExternalEcosystemRegistration {
+    descriptor: ExternalIntegrationEcosystemDescriptor,
+    contract_major: u32,
+    upstream_format_revision: &'static str,
+    command_provider: Option<Arc<dyn PromptCommandSourceProvider>>,
+    tool_provider: Option<Arc<dyn ExternalToolSourceProvider>>,
+    subagent_provider: Option<Arc<dyn ExternalSubagentSourceProvider>>,
+    mcp_provider: Option<Arc<dyn ExternalMcpSourceProvider>>,
+}
+
+impl ExternalEcosystemRegistration {
+    fn validate(&self) -> Result<(), String> {
+        if self.contract_major != EXTERNAL_ADAPTER_CONTRACT_MAJOR {
+            return Err(format!(
+                "adapter contract major {} is not supported",
+                self.contract_major
+            ));
+        }
+        let ecosystem_id = &self.descriptor.ecosystem_id;
+        let capabilities = self
+            .descriptor
+            .capabilities
+            .iter()
+            .map(|capability| capability.capability_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let providers = [
+            (
+                EXTERNAL_CAPABILITY_COMMAND,
+                self.command_provider
+                    .as_ref()
+                    .map(|provider| provider.identity().ecosystem_id),
+            ),
+            (
+                EXTERNAL_CAPABILITY_TOOL,
+                self.tool_provider
+                    .as_ref()
+                    .map(|provider| provider.identity().ecosystem_id),
+            ),
+            (
+                EXTERNAL_CAPABILITY_SUBAGENT,
+                self.subagent_provider
+                    .as_ref()
+                    .map(|provider| provider.identity().ecosystem_id),
+            ),
+            (
+                EXTERNAL_CAPABILITY_MCP,
+                self.mcp_provider
+                    .as_ref()
+                    .map(|provider| provider.identity().ecosystem_id),
+            ),
+        ];
+        for (capability_id, provider_ecosystem) in providers {
+            if capabilities.contains(capability_id) != provider_ecosystem.is_some() {
+                return Err(format!(
+                    "capability '{capability_id}' and provider registration do not match"
+                ));
+            }
+            if provider_ecosystem
+                .as_ref()
+                .is_some_and(|provider_ecosystem| provider_ecosystem != ecosystem_id)
+            {
+                return Err(format!(
+                    "capability '{capability_id}' provider belongs to a different ecosystem"
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration> {
+    vec![ExternalEcosystemRegistration {
+        descriptor: ExternalIntegrationEcosystemDescriptor {
+            ecosystem_id: EcosystemId::new(OPENCODE_ECOSYSTEM_ID)
+                .expect("OpenCode ecosystem id is valid"),
+            display_name: "OpenCode".to_string(),
+            adapter_revision: "1".to_string(),
+            capabilities: vec![
+                external_capability_descriptor(
+                    EXTERNAL_CAPABILITY_COMMAND,
+                    ExternalIntegrationAccess::Auto,
+                    ExternalIntegrationAccess::Auto,
+                ),
+                external_capability_descriptor(
+                    EXTERNAL_CAPABILITY_TOOL,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                ),
+                external_capability_descriptor(
+                    EXTERNAL_CAPABILITY_SUBAGENT,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                ),
+                external_capability_descriptor(
+                    EXTERNAL_CAPABILITY_MCP,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                ),
+            ],
+        },
+        contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+        upstream_format_revision: "opencode-config-v1",
+        command_provider: Some(Arc::new(OpenCodeCommandProvider::default())),
+        tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
+        subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
+        mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
+    }]
+}
+
+fn default_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystemDescriptor> {
+    default_external_integration_registry()
+        .into_iter()
+        .filter(|registration| {
+            let compatible = registration.validate();
+            if let Err(error) = &compatible {
+                log::warn!(
+                    "External ecosystem adapter skipped ecosystem={} contract_major={} host_contract_major={} upstream_format={} reason={}",
+                    safe_external_log_token(registration.descriptor.ecosystem_id.as_str()),
+                    registration.contract_major,
+                    EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+                    safe_external_log_token(registration.upstream_format_revision),
+                    safe_external_log_token(error),
+                );
+            }
+            compatible.is_ok()
+        })
+        .map(|registration| registration.descriptor)
+        .collect()
+}
+/// Kept stable so existing approval fingerprints remain valid. Product hosts
+/// resolve this identity once; capability owners never hard-code it.
+const LEGACY_LOCAL_EXECUTION_DOMAIN_ID: &str = "local-user";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct ExternalSourcesConfig {
+    #[serde(default)]
+    integration_policy: StoredExternalIntegrationPolicy,
+    /// Bounded recovery history for a policy document written by an
+    /// incompatible host. This remains persistence-only and is never projected
+    /// through public Host APIs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    integration_policy_backups: Vec<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     suppressed_source_keys: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -60,6 +260,107 @@ struct ExternalSourcesConfig {
     declined_tool_decisions: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     tool_conflict_choices: BTreeMap<String, String>,
+    #[serde(default)]
+    preference_revision: u64,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    approved_subagent_envelopes: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    declined_subagent_decisions: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    subagent_conflict_choices: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    subagent_conflict_lineage_current_keys: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    mcp_server_decisions: BTreeMap<String, ExternalMcpDecision>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    mcp_conflict_choices: BTreeMap<String, String>,
+    /// Preserves fields written by a newer preferences schema.
+    #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
+    extensions: BTreeMap<String, serde_json::Value>,
+}
+
+/// Persistence-only version gate. Unknown major versions remain opaque until
+/// the user explicitly backs them up and resets; this prevents current structs
+/// from partially decoding a future policy shape before compatibility is known.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StoredExternalIntegrationPolicy {
+    Known(ExternalIntegrationPolicyDocument),
+    Unknown {
+        schema_major: u32,
+        raw: serde_json::Value,
+    },
+}
+
+impl StoredExternalIntegrationPolicy {
+    fn schema_major(&self) -> u32 {
+        match self {
+            Self::Known(document) => document.schema_major,
+            Self::Unknown { schema_major, .. } => *schema_major,
+        }
+    }
+
+    fn known(&self) -> Option<&ExternalIntegrationPolicyDocument> {
+        match self {
+            Self::Known(document) => Some(document),
+            Self::Unknown { .. } => None,
+        }
+    }
+
+    fn known_mut(&mut self) -> Option<&mut ExternalIntegrationPolicyDocument> {
+        match self {
+            Self::Known(document) => Some(document),
+            Self::Unknown { .. } => None,
+        }
+    }
+
+    fn raw_value(&self) -> serde_json::Value {
+        match self {
+            Self::Known(document) => serde_json::to_value(document).unwrap_or_else(|_| {
+                serde_json::json!({
+                    "schemaMajor": EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR,
+                    "userDefaults": { "enabled": false }
+                })
+            }),
+            Self::Unknown { raw, .. } => raw.clone(),
+        }
+    }
+}
+
+impl Default for StoredExternalIntegrationPolicy {
+    fn default() -> Self {
+        Self::Known(ExternalIntegrationPolicyDocument::default())
+    }
+}
+
+impl Serialize for StoredExternalIntegrationPolicy {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.raw_value().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for StoredExternalIntegrationPolicy {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+
+        let raw = serde_json::Value::deserialize(deserializer)?;
+        let schema_major = raw
+            .get("schemaMajor")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .unwrap_or(EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR);
+        if schema_major != EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR {
+            return Ok(Self::Unknown { schema_major, raw });
+        }
+        serde_json::from_value(raw)
+            .map(Self::Known)
+            .map_err(D::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +404,8 @@ impl ExternalSourcePreferenceStore {
 
 type SharedDiscoveryTask = Shared<BoxFuture<'static, ExternalSourceDiscoveryResult>>;
 type SharedToolDiscoveryTask = Shared<BoxFuture<'static, ExternalToolDiscoveryResult>>;
+type SharedSubagentDiscoveryTask = Shared<BoxFuture<'static, ExternalSubagentDiscoveryResult>>;
+type SharedMcpDiscoveryTask = Shared<BoxFuture<'static, ExternalMcpDiscoveryResult>>;
 
 struct InFlightDiscovery {
     task: SharedDiscoveryTask,
@@ -114,6 +417,16 @@ struct InFlightToolDiscovery {
     wake_scheduled: bool,
 }
 
+struct InFlightSubagentDiscovery {
+    task: SharedSubagentDiscoveryTask,
+    wake_scheduled: bool,
+}
+
+struct InFlightMcpDiscovery {
+    task: SharedMcpDiscoveryTask,
+    wake_scheduled: bool,
+}
+
 #[derive(Clone, Copy)]
 enum WorkerRecoveryPolicy {
     Preserve,
@@ -121,10 +434,206 @@ enum WorkerRecoveryPolicy {
     ResetAndAttempt,
 }
 
+fn config_update_refreshes_external_model_bindings(event: &ConfigUpdateEvent) -> bool {
+    matches!(event, ConfigUpdateEvent::ModelConfigurationUpdated)
+}
+
+fn host_execution_domain_id() -> Result<ExecutionDomainId, String> {
+    ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID).map_err(|error| error.to_string())
+}
+
+fn workspace_policy_key(workspace_root: Option<&Path>) -> Option<String> {
+    let route = workspace_route_key(workspace_root);
+    workspace_policy_key_from_route(&route)
+}
+
+fn workspace_policy_key_from_route(route: &str) -> Option<String> {
+    if route == "<global>" {
+        return None;
+    }
+    let normalized = route.replace('\\', "/");
+    #[cfg(windows)]
+    let normalized = normalized.to_ascii_lowercase();
+    let mut hasher = Sha256::new();
+    hasher.update(normalized.as_bytes());
+    Some(format!(
+        "workspace:{}",
+        hex::encode(&hasher.finalize()[..16])
+    ))
+}
+
+fn integration_policy_snapshot(
+    preferences: &ExternalSourcesConfig,
+    workspace_root: Option<&Path>,
+) -> Result<ExternalIntegrationPolicySnapshot, String> {
+    let ecosystems = default_external_integration_ecosystems();
+    match preferences.integration_policy.known() {
+        Some(document) => external_integration_policy_snapshot(
+            document,
+            workspace_policy_key(workspace_root).as_deref(),
+            ecosystems,
+        ),
+        None => incompatible_external_integration_policy_snapshot(
+            preferences.integration_policy.schema_major(),
+            ecosystems,
+        ),
+    }
+    .map_err(|error| format!("policy_unavailable: {error}"))
+}
+
+fn integration_access(
+    policy: &ExternalIntegrationPolicySnapshot,
+    ecosystem_id: &str,
+    capability_id: &str,
+) -> ExternalIntegrationAccess {
+    let Some(ecosystem) = policy
+        .effective
+        .ecosystems
+        .iter()
+        .find_map(|(id, policy)| (id.as_str() == ecosystem_id).then_some(policy))
+    else {
+        return ExternalIntegrationAccess::Disabled;
+    };
+    ecosystem
+        .capabilities
+        .iter()
+        .find_map(|(id, access)| (id.as_str() == capability_id).then_some(access.clone()))
+        .unwrap_or(ExternalIntegrationAccess::Disabled)
+}
+
+fn integration_capability_is_discoverable(
+    policy: &ExternalIntegrationPolicySnapshot,
+    ecosystem_id: &str,
+    capability_id: &str,
+) -> bool {
+    !matches!(
+        integration_access(policy, ecosystem_id, capability_id),
+        ExternalIntegrationAccess::Disabled | ExternalIntegrationAccess::Unknown(_)
+    )
+}
+
+fn integration_capability_is_active(
+    policy: &ExternalIntegrationPolicySnapshot,
+    ecosystem_id: &str,
+    capability_id: &str,
+) -> bool {
+    matches!(
+        integration_access(policy, ecosystem_id, capability_id),
+        ExternalIntegrationAccess::Auto | ExternalIntegrationAccess::AskBeforeUse
+    )
+}
+
+fn ecosystems_with_discoverable_capability(
+    policy: &ExternalIntegrationPolicySnapshot,
+    capability_id: &str,
+) -> BTreeSet<EcosystemId> {
+    policy
+        .registered_ecosystems
+        .iter()
+        .filter(|descriptor| {
+            integration_capability_is_discoverable(
+                policy,
+                descriptor.ecosystem_id.as_str(),
+                capability_id,
+            )
+        })
+        .map(|descriptor| descriptor.ecosystem_id.clone())
+        .collect()
+}
+
+fn ecosystems_with_active_capability(
+    policy: &ExternalIntegrationPolicySnapshot,
+    capability_id: &str,
+) -> BTreeSet<EcosystemId> {
+    policy
+        .registered_ecosystems
+        .iter()
+        .filter(|descriptor| {
+            integration_capability_is_active(
+                policy,
+                descriptor.ecosystem_id.as_str(),
+                capability_id,
+            )
+        })
+        .map(|descriptor| descriptor.ecosystem_id.clone())
+        .collect()
+}
+
+fn source_ecosystem_id(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    source_key: &SourceKey,
+) -> Result<EcosystemId, String> {
+    snapshot
+        .sources
+        .iter()
+        .find(|source| source.record.key == *source_key)
+        .map(|source| source.record.ecosystem_id.clone())
+        .ok_or_else(|| {
+            encoded_operation_error(
+                ExternalSourceOperationErrorCode::NotFound,
+                format!(
+                    "External source '{}' is no longer available",
+                    source_key.stable_key()
+                ),
+                false,
+            )
+        })
+}
+
+fn ensure_source_capability_active(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    source_key: &SourceKey,
+    capability_id: &str,
+) -> Result<(), String> {
+    let ecosystem_id = source_ecosystem_id(snapshot, source_key)?;
+    integration_capability_is_active(
+        &snapshot.integration_policy,
+        ecosystem_id.as_str(),
+        capability_id,
+    )
+    .then_some(())
+    .ok_or_else(|| encoded_operation_error(
+        ExternalSourceOperationErrorCode::PolicyLimited,
+        format!(
+            "External capability '{capability_id}' is not enabled for ecosystem '{}' in this workspace",
+            ecosystem_id.as_str()
+        ),
+        false,
+    ))
+}
+
+fn ensure_source_set_capability_active(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    source_keys: &[SourceKey],
+    capability_id: &str,
+) -> Result<(), String> {
+    if source_keys.is_empty() {
+        return Err(encoded_operation_error(
+            ExternalSourceOperationErrorCode::NotFound,
+            "External source provenance is missing",
+            false,
+        ));
+    }
+    for source_key in source_keys {
+        ensure_source_capability_active(snapshot, source_key, capability_id)?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExternalSourceServiceProfile {
+    LocalExecution,
+    ReadOnlyProjection,
+}
+
 struct WorkspaceExternalSourceService {
+    profile: ExternalSourceServiceProfile,
     workspace_root: Option<PathBuf>,
+    execution_domain_id: ExecutionDomainId,
     coordinator: Arc<StdMutex<ExternalSourceCoordinator>>,
     tool_coordinator: Arc<StdMutex<ExternalToolCoordinator>>,
+    subagent_coordinator: Arc<StdMutex<ExternalSubagentCoordinator>>,
+    mcp_coordinator: Arc<StdMutex<ExternalMcpCoordinator>>,
     snapshot: StdMutex<ExternalSourceCatalogSnapshot>,
     updates: broadcast::Sender<ExternalSourceCatalogSnapshot>,
     watch_states: tokio::sync::Mutex<BTreeMap<(PathBuf, bool), bool>>,
@@ -136,11 +645,20 @@ struct WorkspaceExternalSourceService {
     tool_discovery_tasks: tokio::sync::Mutex<
         BTreeMap<bitfun_product_domains::external_sources::ProviderId, InFlightToolDiscovery>,
     >,
+    subagent_discovery_tasks: tokio::sync::Mutex<
+        BTreeMap<bitfun_product_domains::external_sources::ProviderId, InFlightSubagentDiscovery>,
+    >,
+    mcp_discovery_tasks: tokio::sync::Mutex<
+        BTreeMap<bitfun_product_domains::external_sources::ProviderId, InFlightMcpDiscovery>,
+    >,
+    mcp_runtime: Arc<dyn ExternalMcpRuntimePort>,
+    active_mcp_runtime_ids: tokio::sync::Mutex<BTreeSet<String>>,
     initial_refresh_completed: AtomicBool,
     background_refresh_scheduled: AtomicBool,
     initial_refresh_gate: tokio::sync::Mutex<()>,
     keepalive_started: AtomicBool,
     last_access_epoch_seconds: AtomicU64,
+    subagent_expiry_schedule: AtomicU64,
     watcher: Arc<FileWatchService>,
     #[cfg(test)]
     tool_decision_gate_waiting: tokio::sync::Notify,
@@ -149,18 +667,50 @@ struct WorkspaceExternalSourceService {
 }
 
 impl WorkspaceExternalSourceService {
-    async fn create(workspace_root: Option<PathBuf>) -> Result<Arc<Self>, String> {
+    async fn create(
+        workspace_root: Option<PathBuf>,
+        profile: ExternalSourceServiceProfile,
+    ) -> Result<Arc<Self>, String> {
+        let execution_domain_id = host_execution_domain_id()?;
         let context = ExternalSourceContext {
             workspace_root: workspace_root.clone(),
-            execution_domain_id: ExecutionDomainId::new("local-user")
-                .map_err(|error| error.to_string())?,
+            execution_domain_id: execution_domain_id.clone(),
         };
-        let providers: Vec<Arc<dyn PromptCommandSourceProvider>> =
-            vec![Arc::new(OpenCodeCommandProvider::default())];
+        let registrations = default_external_integration_registry()
+            .into_iter()
+            .filter_map(|registration| match registration.validate() {
+                Ok(()) => Some(registration),
+                Err(error) => {
+                    log::warn!(
+                        "External ecosystem registration rejected ecosystem={} reason={}",
+                        safe_external_log_token(registration.descriptor.ecosystem_id.as_str()),
+                        safe_external_log_token(&error),
+                    );
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let providers: Vec<Arc<dyn PromptCommandSourceProvider>> = registrations
+            .iter()
+            .filter_map(|registration| registration.command_provider.as_ref().map(Arc::clone))
+            .collect();
         let mut coordinator = ExternalSourceCoordinator::new(context.clone(), providers)?;
-        let tool_providers: Vec<Arc<dyn ExternalToolSourceProvider>> =
-            vec![Arc::new(OpenCodeToolProvider::default())];
-        let mut tool_coordinator = ExternalToolCoordinator::new(context, tool_providers)?;
+        let tool_providers: Vec<Arc<dyn ExternalToolSourceProvider>> = registrations
+            .iter()
+            .filter_map(|registration| registration.tool_provider.as_ref().map(Arc::clone))
+            .collect();
+        let mut tool_coordinator = ExternalToolCoordinator::new(context.clone(), tool_providers)?;
+        let subagent_providers: Vec<Arc<dyn ExternalSubagentSourceProvider>> = registrations
+            .iter()
+            .filter_map(|registration| registration.subagent_provider.as_ref().map(Arc::clone))
+            .collect();
+        let mut subagent_coordinator =
+            ExternalSubagentCoordinator::new(context.clone(), subagent_providers)?;
+        let mcp_providers: Vec<Arc<dyn ExternalMcpSourceProvider>> = registrations
+            .iter()
+            .filter_map(|registration| registration.mcp_provider.as_ref().map(Arc::clone))
+            .collect();
+        let mut mcp_coordinator = ExternalMcpCoordinator::new(context, mcp_providers)?;
         let preferences = read_external_sources_config().await?;
         let suppressed_sources = preferences
             .suppressed_source_keys
@@ -168,22 +718,32 @@ impl WorkspaceExternalSourceService {
             .cloned()
             .collect::<BTreeSet<_>>();
         coordinator.replace_suppressed_sources(suppressed_sources.clone());
-        tool_coordinator.replace_suppressed_sources(suppressed_sources);
+        tool_coordinator.replace_suppressed_sources(suppressed_sources.clone());
+        subagent_coordinator.replace_suppressed_sources(suppressed_sources.clone());
+        mcp_coordinator.replace_suppressed_sources(suppressed_sources);
         coordinator.replace_conflict_choices(preferences.conflict_choices.clone());
         coordinator.replace_conflict_lineage_current_keys(
             preferences.conflict_lineage_current_keys.clone(),
         );
         coordinator.replace_conflicted_candidate_ids(preferences.conflicted_candidate_ids.clone());
-        let initial_snapshot = merge_tool_state(
+        let mut initial_snapshot = merge_tool_state(
             coordinator.snapshot(),
             &tool_coordinator.snapshot(),
             ExternalToolProductState::default(),
         );
+        initial_snapshot.subagent_generation = subagent_coordinator.snapshot().generation;
+        initial_snapshot.preference_revision = preferences.preference_revision;
+        initial_snapshot.integration_policy =
+            integration_policy_snapshot(&preferences, workspace_root.as_deref())?;
         let (updates, _) = broadcast::channel(32);
         let service = Arc::new(Self {
+            profile,
             workspace_root,
+            execution_domain_id,
             coordinator: Arc::new(StdMutex::new(coordinator)),
             tool_coordinator: Arc::new(StdMutex::new(tool_coordinator)),
+            subagent_coordinator: Arc::new(StdMutex::new(subagent_coordinator)),
+            mcp_coordinator: Arc::new(StdMutex::new(mcp_coordinator)),
             snapshot: StdMutex::new(initial_snapshot),
             updates,
             watch_states: tokio::sync::Mutex::new(BTreeMap::new()),
@@ -191,11 +751,16 @@ impl WorkspaceExternalSourceService {
             product_rebuild_gate: tokio::sync::Mutex::new(()),
             discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             tool_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            subagent_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_runtime: Arc::new(BitFunExternalMcpRuntime),
+            active_mcp_runtime_ids: tokio::sync::Mutex::new(BTreeSet::new()),
             initial_refresh_completed: AtomicBool::new(false),
             background_refresh_scheduled: AtomicBool::new(false),
             initial_refresh_gate: tokio::sync::Mutex::new(()),
             keepalive_started: AtomicBool::new(false),
             last_access_epoch_seconds: AtomicU64::new(epoch_seconds()),
+            subagent_expiry_schedule: AtomicU64::new(0),
             watcher: Arc::new(FileWatchService::new(FileWatcherConfig::default())),
             #[cfg(test)]
             tool_decision_gate_waiting: tokio::sync::Notify::new(),
@@ -203,6 +768,9 @@ impl WorkspaceExternalSourceService {
             tool_decision_gate_acquired: tokio::sync::Notify::new(),
         });
         service.start_watching().await;
+        if profile == ExternalSourceServiceProfile::LocalExecution {
+            service.start_model_config_watching();
+        }
         Ok(service)
     }
 
@@ -235,30 +803,101 @@ impl WorkspaceExternalSourceService {
         // source active.
         sync_service_preferences(self).await?;
         let _refresh_guard = self.refresh_gate.lock().await;
-        if matches!(recovery_policy, WorkerRecoveryPolicy::ResetAndAttempt) {
+        let preferences = read_external_sources_config().await?;
+        let policy = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())?;
+        if self.profile == ExternalSourceServiceProfile::LocalExecution
+            && matches!(recovery_policy, WorkerRecoveryPolicy::ResetAndAttempt)
+        {
             reset_external_tool_workspace_recovery_budget(self.workspace_root.as_deref()).await;
         }
-        let recovery_targets = if matches!(
-            recovery_policy,
-            WorkerRecoveryPolicy::PendingOnce | WorkerRecoveryPolicy::ResetAndAttempt
-        ) {
+        let recovery_targets = if self.profile == ExternalSourceServiceProfile::LocalExecution
+            && matches!(
+                recovery_policy,
+                WorkerRecoveryPolicy::PendingOnce | WorkerRecoveryPolicy::ResetAndAttempt
+            ) {
             begin_external_tool_workspace_recovery(self.workspace_root.as_deref()).await
         } else {
             BTreeSet::new()
         };
-        let requests = lock_coordinator(&self.coordinator).discovery_requests();
+        let mut requests = Vec::new();
+        let mut disabled_command_results = Vec::new();
+        for request in lock_coordinator(&self.coordinator).discovery_requests() {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_COMMAND,
+            ) {
+                requests.push(request);
+            } else {
+                disabled_command_results.push(request.disabled());
+            }
+        }
         let scheduled = self.prepare_discovery_tasks(requests).await;
-        let tool_requests = lock_tool_coordinator(&self.tool_coordinator).discovery_requests();
+        let mut tool_requests = Vec::new();
+        let mut disabled_tool_results = Vec::new();
+        for request in lock_tool_coordinator(&self.tool_coordinator).discovery_requests() {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_TOOL,
+            ) {
+                tool_requests.push(request);
+            } else {
+                disabled_tool_results.push(request.disabled());
+            }
+        }
         let tool_scheduled = self.prepare_tool_discovery_tasks(tool_requests).await;
-        let (polled, tool_polled) = tokio::join!(
+        let mut subagent_requests = Vec::new();
+        let mut disabled_subagent_results = Vec::new();
+        for request in lock_subagent_coordinator(&self.subagent_coordinator).discovery_requests() {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_SUBAGENT,
+            ) {
+                subagent_requests.push(request);
+            } else {
+                disabled_subagent_results.push(request.disabled());
+            }
+        }
+        let subagent_scheduled = self
+            .prepare_subagent_discovery_tasks(subagent_requests)
+            .await;
+        let mut mcp_requests = Vec::new();
+        let mut disabled_mcp_results = Vec::new();
+        for request in lock_mcp_coordinator(&self.mcp_coordinator).discovery_requests() {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_MCP,
+            ) {
+                mcp_requests.push(request);
+            } else {
+                disabled_mcp_results.push(request.disabled());
+            }
+        }
+        let mcp_scheduled = self.prepare_mcp_discovery_tasks(mcp_requests).await;
+        let (polled, tool_polled, subagent_polled, mcp_polled) = tokio::join!(
             poll_discovery_tasks(scheduled, PROVIDER_DISCOVERY_TIMEOUT),
             poll_tool_discovery_tasks(tool_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
+            poll_subagent_discovery_tasks(subagent_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
+            poll_mcp_discovery_tasks(mcp_scheduled, PROVIDER_DISCOVERY_TIMEOUT),
         );
-        let results = self.finish_discovery_poll(polled).await;
-        let tool_results = self.finish_tool_discovery_poll(tool_polled).await;
+        let mut results = self.finish_discovery_poll(polled).await;
+        results.append(&mut disabled_command_results);
+        let mut tool_results = self.finish_tool_discovery_poll(tool_polled).await;
+        tool_results.append(&mut disabled_tool_results);
+        let mut subagent_results = self.finish_subagent_discovery_poll(subagent_polled).await;
+        subagent_results.append(&mut disabled_subagent_results);
+        let mut mcp_results = self.finish_mcp_discovery_poll(mcp_polled).await;
+        mcp_results.append(&mut disabled_mcp_results);
         let command_snapshot = lock_coordinator(&self.coordinator).apply_discovery_results(results);
         lock_tool_coordinator(&self.tool_coordinator).apply_discovery_results(tool_results);
-        self.ensure_watch_roots().await;
+        let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator)
+            .apply_discovery_results(subagent_results);
+        lock_mcp_coordinator(&self.mcp_coordinator).apply_discovery_results(mcp_results);
+        self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
+        self.ensure_watch_roots(&policy).await;
         let snapshot = self
             .rebuild_product_snapshot_with_worker_recovery(command_snapshot, &recovery_targets)
             .await;
@@ -311,12 +950,37 @@ impl WorkspaceExternalSourceService {
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
         let _rebuild_guard = self.product_rebuild_gate.lock().await;
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
-        let preferences = read_external_sources_config().await?;
+        let mut preferences = read_external_sources_config().await?;
+        let mut policy = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())?;
+        if self.profile == ExternalSourceServiceProfile::ReadOnlyProjection {
+            return self
+                .rebuild_read_only_projection(command_snapshot, preferences, policy)
+                .await;
+        }
+        let command_discoverable =
+            !ecosystems_with_discoverable_capability(&policy, EXTERNAL_CAPABILITY_COMMAND)
+                .is_empty();
+        let command_active_ecosystems =
+            ecosystems_with_active_capability(&policy, EXTERNAL_CAPABILITY_COMMAND);
+        let tool_discoverable =
+            !ecosystems_with_discoverable_capability(&policy, EXTERNAL_CAPABILITY_TOOL).is_empty();
+        let tool_active_ecosystems =
+            ecosystems_with_active_capability(&policy, EXTERNAL_CAPABILITY_TOOL);
+        let subagent_discoverable =
+            !ecosystems_with_discoverable_capability(&policy, EXTERNAL_CAPABILITY_SUBAGENT)
+                .is_empty();
+        let subagent_active_ecosystems =
+            ecosystems_with_active_capability(&policy, EXTERNAL_CAPABILITY_SUBAGENT);
+        let mcp_discoverable =
+            !ecosystems_with_discoverable_capability(&policy, EXTERNAL_CAPABILITY_MCP).is_empty();
+        let mcp_active_ecosystems =
+            ecosystems_with_active_capability(&policy, EXTERNAL_CAPABILITY_MCP);
         let mut state = reconcile_external_tools(
             self.workspace_root.as_deref(),
-            "local-user",
+            self.execution_domain_id.as_str(),
             &self.tool_coordinator,
             ExternalToolDecisions {
+                active_ecosystems: &tool_active_ecosystems,
                 approved_targets: &preferences.approved_tool_targets,
                 declined_decisions_by_approval: &preferences.declined_tool_decisions,
                 conflict_choices: &preferences.tool_conflict_choices,
@@ -327,6 +991,7 @@ impl WorkspaceExternalSourceService {
         if let Err(error) = persist_observed_tool_conflicts(&state.conflicts).await {
             state.diagnostics.push(ExternalSourceDiagnostic {
                 severity: bitfun_product_domains::external_sources::ExternalSourceDiagnosticSeverity::Warning,
+                asset_kind: bitfun_product_domains::external_sources::ExternalSourceAssetKind::Tool,
                 code: "external_tool.conflict_history_write_failed".to_string(),
                 message: format!(
                     "Could not persist external tool conflict history; the current catalog remains fail-closed: {error}"
@@ -336,12 +1001,449 @@ impl WorkspaceExternalSourceService {
         }
         let tool_snapshot = lock_tool_coordinator(&self.tool_coordinator).snapshot();
         let mut snapshot = merge_tool_state(command_snapshot, &tool_snapshot, state);
+        let mcp_snapshot = lock_mcp_coordinator(&self.mcp_coordinator).snapshot();
+        let mcp_workspace_key = workspace_route_key(self.workspace_root.as_deref());
+        let native_mcp_candidates = if !mcp_active_ecosystems.is_empty() {
+            load_native_mcp_candidates().await
+        } else {
+            Ok(Vec::new())
+        };
+        let mut mcp_state = match native_mcp_candidates {
+            Ok(native_candidates) => reconcile_external_mcp_catalog(
+                self.execution_domain_id.as_str(),
+                &mcp_workspace_key,
+                &mcp_snapshot,
+                &native_candidates,
+                ExternalMcpDecisions {
+                    active_ecosystems: &mcp_active_ecosystems,
+                    server_decisions: &preferences.mcp_server_decisions,
+                    conflict_choices: &preferences.mcp_conflict_choices,
+                },
+            ),
+            Err(error) => {
+                let mut state = reconcile_external_mcp_catalog(
+                    self.execution_domain_id.as_str(),
+                    &mcp_workspace_key,
+                    &mcp_snapshot,
+                    &[],
+                    ExternalMcpDecisions {
+                        active_ecosystems: &mcp_active_ecosystems,
+                        server_decisions: &preferences.mcp_server_decisions,
+                        conflict_choices: &preferences.mcp_conflict_choices,
+                    },
+                );
+                for entry in &mut state.entries {
+                    entry.runtime_id = None;
+                    entry.activation_state = ExternalMcpActivationState::RuntimeUnavailable {
+                        reason: error.clone(),
+                    };
+                }
+                state.active.clear();
+                state
+            }
+        };
+        self.reconcile_mcp_runtime(&mut mcp_state).await;
+        merge_mcp_state(&mut snapshot, &mcp_snapshot, mcp_state);
+        let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator).snapshot();
+        let mut subagent_state = reconcile_external_subagents(
+            self.workspace_root.as_deref(),
+            self.execution_domain_id.as_str(),
+            &subagent_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: &subagent_active_ecosystems,
+                approved_envelopes: &preferences.approved_subagent_envelopes,
+                declined_decisions: &preferences.declined_subagent_decisions,
+                conflict_choices: &preferences.subagent_conflict_choices,
+                conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+            },
+        )
+        .await;
+        {
+            match persist_observed_subagent_conflicts(
+                &subagent_state.observed_conflict_lineage_current_keys,
+            )
+            .await
+            {
+                Ok((_history_changed, authoritative)) => {
+                    let decisions_changed = authoritative.preference_revision
+                        != preferences.preference_revision
+                        || authoritative.approved_subagent_envelopes
+                            != preferences.approved_subagent_envelopes
+                        || authoritative.declined_subagent_decisions
+                            != preferences.declined_subagent_decisions
+                        || authoritative.subagent_conflict_choices
+                            != preferences.subagent_conflict_choices
+                        || authoritative.subagent_conflict_lineage_current_keys
+                            != preferences.subagent_conflict_lineage_current_keys;
+                    preferences = authoritative;
+                    if decisions_changed {
+                        subagent_state = reconcile_external_subagents(
+                            self.workspace_root.as_deref(),
+                            self.execution_domain_id.as_str(),
+                            &subagent_snapshot,
+                            ExternalSubagentDecisions {
+                                active_ecosystems: &subagent_active_ecosystems,
+                                approved_envelopes: &preferences.approved_subagent_envelopes,
+                                declined_decisions: &preferences.declined_subagent_decisions,
+                                conflict_choices: &preferences.subagent_conflict_choices,
+                                conflict_lineage_current_keys: &preferences
+                                    .subagent_conflict_lineage_current_keys,
+                            },
+                        )
+                        .await;
+                    }
+                }
+                Err(error) => {
+                    snapshot.diagnostics.push(ExternalSourceDiagnostic::warning(
+                    "external_subagent.conflict_history_write_failed",
+                    format!(
+                        "Could not persist external subagent conflict history; routes remain unavailable: {error}"
+                    ),
+                    None,
+                ).with_asset_kind(ExternalSourceAssetKind::Subagent));
+                }
+            }
+        }
+        merge_subagent_state(
+            &mut snapshot,
+            &subagent_snapshot,
+            &subagent_state,
+            preferences.preference_revision,
+        );
+        if let Some(workspace_root) = self.workspace_root.as_deref() {
+            crate::agentic::agents::get_agent_registry().install_external_subagent_routes(
+                workspace_root,
+                subagent_state.registrations,
+                subagent_state.routes,
+            );
+        }
+        let source_ecosystems = snapshot
+            .sources
+            .iter()
+            .map(|source| {
+                (
+                    source.record.key.clone(),
+                    source.record.ecosystem_id.clone(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let restricted = PromptCommandAvailability::Restricted {
+            reason: "External command execution is disabled by integration policy".to_string(),
+            required_capabilities: vec![EXTERNAL_CAPABILITY_COMMAND.to_string()],
+        };
+        for command in &mut snapshot.commands {
+            if !source_ecosystems
+                .get(&command.definition.id.source)
+                .is_some_and(|ecosystem| command_active_ecosystems.contains(ecosystem))
+            {
+                command.definition.availability = restricted.clone();
+            }
+        }
+        for conflict in &mut snapshot.command_conflicts {
+            for candidate in &mut conflict.candidates {
+                if !command_active_ecosystems.contains(&candidate.ecosystem_id) {
+                    candidate.availability = restricted.clone();
+                    if conflict.selected_candidate_id.as_deref()
+                        == Some(candidate.candidate_id.as_str())
+                    {
+                        conflict.selected_candidate_id = None;
+                    }
+                }
+            }
+        }
+        if !tool_discoverable {
+            snapshot.tools.clear();
+            snapshot.tool_approval_requests.clear();
+            snapshot.tool_conflicts.clear();
+        }
+        if !subagent_discoverable {
+            snapshot.subagents.clear();
+            snapshot.subagent_conflicts.clear();
+            snapshot.pending_subagent_approvals.clear();
+        }
+        if !mcp_discoverable {
+            snapshot.mcp_servers.clear();
+            snapshot.mcp_approval_requests.clear();
+            snapshot.mcp_conflicts.clear();
+        }
+        if !command_discoverable
+            && !tool_discoverable
+            && !subagent_discoverable
+            && !mcp_discoverable
+        {
+            snapshot.sources.clear();
+            snapshot.diagnostics.clear();
+        }
+        policy = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())?;
+        snapshot.integration_policy = policy;
+        assign_external_source_presentation_groups(&mut snapshot);
+        sanitize_external_snapshot_locations(&mut snapshot, self.workspace_root.as_deref());
         let mut current = lock_snapshot(&self.snapshot);
+        let mcp_changed = snapshot.mcp_servers != current.mcp_servers
+            || snapshot.mcp_conflicts != current.mcp_conflicts
+            || snapshot.mcp_approval_requests != current.mcp_approval_requests;
+        snapshot.mcp_generation = if mcp_changed {
+            snapshot
+                .mcp_generation
+                .max(current.mcp_generation.saturating_add(1))
+        } else {
+            snapshot.mcp_generation.max(current.mcp_generation)
+        };
+        let subagent_changed = snapshot.subagents != current.subagents
+            || snapshot.subagent_conflicts != current.subagent_conflicts
+            || snapshot.pending_subagent_approvals != current.pending_subagent_approvals
+            || snapshot.preference_revision != current.preference_revision;
+        snapshot.subagent_generation = if subagent_changed {
+            snapshot
+                .subagent_generation
+                .max(current.subagent_generation.saturating_add(1))
+        } else {
+            snapshot
+                .subagent_generation
+                .max(current.subagent_generation)
+        };
         snapshot.generation = snapshot
             .generation
             .max(current.generation.saturating_add(1));
         *current = snapshot.clone();
         Ok(snapshot)
+    }
+
+    async fn rebuild_read_only_projection(
+        &self,
+        command_snapshot: ExternalSourceCatalogSnapshot,
+        preferences: ExternalSourcesConfig,
+        policy: ExternalIntegrationPolicySnapshot,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let tool_active_ecosystems =
+            ecosystems_with_active_capability(&policy, EXTERNAL_CAPABILITY_TOOL);
+        let subagent_active_ecosystems =
+            ecosystems_with_active_capability(&policy, EXTERNAL_CAPABILITY_SUBAGENT);
+        let mcp_active_ecosystems =
+            ecosystems_with_active_capability(&policy, EXTERNAL_CAPABILITY_MCP);
+
+        let tool_snapshot = lock_tool_coordinator(&self.tool_coordinator).snapshot();
+        let tool_state = project_external_tools_read_only(
+            self.execution_domain_id.as_str(),
+            &tool_snapshot,
+            ExternalToolDecisions {
+                active_ecosystems: &tool_active_ecosystems,
+                approved_targets: &preferences.approved_tool_targets,
+                declined_decisions_by_approval: &preferences.declined_tool_decisions,
+                conflict_choices: &preferences.tool_conflict_choices,
+            },
+        );
+        let mut snapshot = merge_tool_state(command_snapshot, &tool_snapshot, tool_state);
+
+        let mcp_snapshot = lock_mcp_coordinator(&self.mcp_coordinator).snapshot();
+        let mcp_workspace_key = workspace_route_key(self.workspace_root.as_deref());
+        let mut mcp_state = reconcile_external_mcp_catalog(
+            self.execution_domain_id.as_str(),
+            &mcp_workspace_key,
+            &mcp_snapshot,
+            &[],
+            ExternalMcpDecisions {
+                active_ecosystems: &mcp_active_ecosystems,
+                server_decisions: &preferences.mcp_server_decisions,
+                conflict_choices: &preferences.mcp_conflict_choices,
+            },
+        );
+        mcp_state.active.clear();
+        mcp_state.suppressed_native_server_ids.clear();
+        for entry in &mut mcp_state.entries {
+            entry.runtime_id = None;
+            if matches!(
+                entry.activation_state,
+                ExternalMcpActivationState::Active | ExternalMcpActivationState::Starting
+            ) {
+                entry.activation_state = ExternalMcpActivationState::RuntimeUnavailable {
+                    reason: "This Host exposes discovery only; use Desktop or an authenticated Peer Host to run external MCP servers".to_string(),
+                };
+            }
+        }
+        merge_mcp_state(&mut snapshot, &mcp_snapshot, mcp_state);
+
+        let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator).snapshot();
+        let subagent_state = project_external_subagents_read_only(
+            self.workspace_root.as_deref(),
+            self.execution_domain_id.as_str(),
+            &subagent_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: &subagent_active_ecosystems,
+                approved_envelopes: &preferences.approved_subagent_envelopes,
+                declined_decisions: &preferences.declined_subagent_decisions,
+                conflict_choices: &preferences.subagent_conflict_choices,
+                conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+            },
+        );
+        merge_subagent_state(
+            &mut snapshot,
+            &subagent_snapshot,
+            &subagent_state,
+            preferences.preference_revision,
+        );
+
+        let restricted = PromptCommandAvailability::Restricted {
+            reason: "This Host exposes discovery only; run external commands from Desktop or an authenticated Peer Host".to_string(),
+            required_capabilities: vec![EXTERNAL_CAPABILITY_COMMAND.to_string()],
+        };
+        for command in &mut snapshot.commands {
+            command.definition.availability = restricted.clone();
+        }
+        for conflict in &mut snapshot.command_conflicts {
+            conflict.selected_candidate_id = None;
+            for candidate in &mut conflict.candidates {
+                candidate.availability = restricted.clone();
+            }
+        }
+        snapshot.integration_policy = policy;
+        assign_external_source_presentation_groups(&mut snapshot);
+        sanitize_external_snapshot_locations(&mut snapshot, self.workspace_root.as_deref());
+        let mut current = lock_snapshot(&self.snapshot);
+        let mcp_changed = snapshot.mcp_servers != current.mcp_servers
+            || snapshot.mcp_conflicts != current.mcp_conflicts
+            || snapshot.mcp_approval_requests != current.mcp_approval_requests;
+        snapshot.mcp_generation = if mcp_changed {
+            snapshot
+                .mcp_generation
+                .max(current.mcp_generation.saturating_add(1))
+        } else {
+            snapshot.mcp_generation.max(current.mcp_generation)
+        };
+        let subagent_changed = snapshot.subagents != current.subagents
+            || snapshot.subagent_conflicts != current.subagent_conflicts
+            || snapshot.pending_subagent_approvals != current.pending_subagent_approvals
+            || snapshot.preference_revision != current.preference_revision;
+        snapshot.subagent_generation = if subagent_changed {
+            snapshot
+                .subagent_generation
+                .max(current.subagent_generation.saturating_add(1))
+        } else {
+            snapshot
+                .subagent_generation
+                .max(current.subagent_generation)
+        };
+        snapshot.generation = snapshot
+            .generation
+            .max(current.generation.saturating_add(1));
+        *current = snapshot.clone();
+        Ok(snapshot)
+    }
+
+    async fn reconcile_mcp_runtime(&self, state: &mut ExternalMcpProductState) {
+        let desired = state
+            .active
+            .iter()
+            .map(|candidate| (candidate.runtime_id.clone(), candidate.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let desired_ids = desired.keys().cloned().collect::<BTreeSet<_>>();
+        let mut managed = self.active_mcp_runtime_ids.lock().await.clone();
+        let workspace_key = workspace_route_key(self.workspace_root.as_deref());
+        if let Err(reason) = self
+            .mcp_runtime
+            .replace_workspace_route(
+                &workspace_key,
+                desired_ids.clone(),
+                state.suppressed_native_server_ids.clone(),
+            )
+            .await
+        {
+            state.diagnostics.push(
+                ExternalSourceDiagnostic::warning("external_mcp.route_update_failed", reason, None)
+                    .with_asset_kind(ExternalSourceAssetKind::Mcp),
+            );
+        }
+        let managed_statuses = join_all(
+            desired
+                .values()
+                .filter(|candidate| managed.contains(&candidate.runtime_id))
+                .map(|candidate| async {
+                    (
+                        candidate.runtime_id.clone(),
+                        self.mcp_runtime.status(&candidate.runtime_id).await,
+                    )
+                }),
+        )
+        .await
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
+
+        for runtime_id in managed
+            .difference(&desired_ids)
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            match self.mcp_runtime.retire(&runtime_id).await {
+                Ok(()) => {
+                    managed.remove(&runtime_id);
+                }
+                Err(reason) => state.diagnostics.push(
+                    ExternalSourceDiagnostic::warning(
+                        "external_mcp.retirement_failed",
+                        reason,
+                        None,
+                    )
+                    .with_asset_kind(ExternalSourceAssetKind::Mcp),
+                ),
+            }
+        }
+
+        for candidate in desired.values() {
+            if managed.contains(&candidate.runtime_id) {
+                let status = managed_statuses
+                    .get(&candidate.runtime_id)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        Err("The external MCP server status is unavailable".to_string())
+                    });
+                // Keep failed registrations managed until the user disables
+                // them. Re-installing from a status error would turn a
+                // persistent startup failure into an unbounded retry loop.
+                apply_external_mcp_runtime_status(state, candidate, status);
+                continue;
+            }
+
+            let coordinator = Arc::clone(&self.mcp_coordinator);
+            let server_id = candidate.definition.id.clone();
+            let behavior_version = candidate.definition.behavior_version.clone();
+            let prepared = tokio::task::spawn_blocking(move || {
+                lock_mcp_coordinator(&coordinator)
+                    .prepare_server_guarded(&server_id, &behavior_version)
+            })
+            .await
+            .map_err(|_| "The external MCP configuration could not be prepared".to_string())
+            .and_then(|result| result.map_err(|error| error.message));
+
+            let activation = match prepared {
+                Ok(prepared) => {
+                    self.mcp_runtime
+                        .install(candidate, prepared, &workspace_key)
+                        .await
+                }
+                Err(reason) => Err(reason),
+            };
+            match activation {
+                Ok(()) => {
+                    managed.insert(candidate.runtime_id.clone());
+                    apply_external_mcp_runtime_status(
+                        state,
+                        candidate,
+                        self.mcp_runtime.status(&candidate.runtime_id).await,
+                    );
+                }
+                Err(reason) => {
+                    // A process may have reached a failed-but-registered state.
+                    // Track it so later source changes retire it safely instead
+                    // of attempting duplicate installs on every refresh.
+                    if self.mcp_runtime.status(&candidate.runtime_id).await.is_ok() {
+                        managed.insert(candidate.runtime_id.clone());
+                    }
+                    mark_external_mcp_runtime_unavailable(state, candidate, reason);
+                }
+            }
+        }
+
+        *self.active_mcp_runtime_ids.lock().await = managed;
     }
 
     async fn prepare_discovery_tasks(
@@ -502,6 +1604,166 @@ impl WorkspaceExternalSourceService {
         results
     }
 
+    async fn prepare_subagent_discovery_tasks(
+        &self,
+        requests: Vec<ExternalSubagentDiscoveryRequest>,
+    ) -> Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedSubagentDiscoveryTask,
+        bool,
+    )> {
+        let mut tasks = self.subagent_discovery_tasks.lock().await;
+        requests
+            .into_iter()
+            .map(|request| {
+                let provider_id = request.provider_id().clone();
+                if let Some(in_flight) = tasks.get(&provider_id) {
+                    return (provider_id, in_flight.task.clone(), false);
+                }
+                let task = spawn_subagent_discovery_task(request);
+                tasks.insert(
+                    provider_id.clone(),
+                    InFlightSubagentDiscovery {
+                        task: task.clone(),
+                        wake_scheduled: false,
+                    },
+                );
+                (provider_id, task, true)
+            })
+            .collect()
+    }
+
+    async fn finish_subagent_discovery_poll(
+        self: &Arc<Self>,
+        polled: Vec<SubagentDiscoveryPoll>,
+    ) -> Vec<ExternalSubagentDiscoveryResult> {
+        let mut results = Vec::with_capacity(polled.len());
+        let mut wake_tasks = Vec::new();
+        let mut tasks = self.subagent_discovery_tasks.lock().await;
+        for poll in polled {
+            match poll {
+                SubagentDiscoveryPoll::Complete(result) => {
+                    tasks.remove(&result.provider_id().clone());
+                    results.push(result);
+                }
+                SubagentDiscoveryPoll::InFlight(provider_id) => {
+                    results.push(subagent_discovery_failure(
+                        provider_id,
+                        "external_subagent.discovery_in_progress",
+                        "subagent provider discovery is still running; using its last valid version",
+                    ));
+                }
+                SubagentDiscoveryPoll::TimedOut(provider_id) => {
+                    if let Some(in_flight) = tasks.get_mut(&provider_id) {
+                        if !in_flight.wake_scheduled {
+                            in_flight.wake_scheduled = true;
+                            wake_tasks.push((provider_id.clone(), in_flight.task.clone()));
+                        }
+                    }
+                    results.push(subagent_discovery_failure(
+                        provider_id,
+                        "external_subagent.discovery_timeout",
+                        "subagent provider discovery exceeded the 5 second deadline",
+                    ));
+                }
+            }
+        }
+        drop(tasks);
+        for (provider_id, task) in wake_tasks {
+            let weak = Arc::downgrade(self);
+            tokio::spawn(async move {
+                let result = task.await;
+                let Some(service) = weak.upgrade() else {
+                    return;
+                };
+                service
+                    .complete_deferred_subagent_discovery(provider_id, result)
+                    .await;
+            });
+        }
+        results
+    }
+
+    async fn prepare_mcp_discovery_tasks(
+        &self,
+        requests: Vec<ExternalMcpDiscoveryRequest>,
+    ) -> Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedMcpDiscoveryTask,
+        bool,
+    )> {
+        let mut tasks = self.mcp_discovery_tasks.lock().await;
+        requests
+            .into_iter()
+            .map(|request| {
+                let provider_id = request.provider_id().clone();
+                if let Some(in_flight) = tasks.get(&provider_id) {
+                    return (provider_id, in_flight.task.clone(), false);
+                }
+                let task = spawn_mcp_discovery_task(request);
+                tasks.insert(
+                    provider_id.clone(),
+                    InFlightMcpDiscovery {
+                        task: task.clone(),
+                        wake_scheduled: false,
+                    },
+                );
+                (provider_id, task, true)
+            })
+            .collect()
+    }
+
+    async fn finish_mcp_discovery_poll(
+        self: &Arc<Self>,
+        polled: Vec<McpDiscoveryPoll>,
+    ) -> Vec<ExternalMcpDiscoveryResult> {
+        let mut results = Vec::with_capacity(polled.len());
+        let mut wake_tasks = Vec::new();
+        let mut tasks = self.mcp_discovery_tasks.lock().await;
+        for poll in polled {
+            match poll {
+                McpDiscoveryPoll::Complete(result) => {
+                    tasks.remove(&result.provider_id().clone());
+                    results.push(result);
+                }
+                McpDiscoveryPoll::InFlight(provider_id) => {
+                    results.push(mcp_discovery_failure(
+                        provider_id,
+                        "external_mcp.discovery_in_progress",
+                        "MCP provider discovery is still running; using its last valid version",
+                    ));
+                }
+                McpDiscoveryPoll::TimedOut(provider_id) => {
+                    if let Some(in_flight) = tasks.get_mut(&provider_id) {
+                        if !in_flight.wake_scheduled {
+                            in_flight.wake_scheduled = true;
+                            wake_tasks.push((provider_id.clone(), in_flight.task.clone()));
+                        }
+                    }
+                    results.push(mcp_discovery_failure(
+                        provider_id,
+                        "external_mcp.discovery_timeout",
+                        "MCP provider discovery exceeded the 5 second deadline",
+                    ));
+                }
+            }
+        }
+        drop(tasks);
+        for (provider_id, task) in wake_tasks {
+            let weak = Arc::downgrade(self);
+            tokio::spawn(async move {
+                let result = task.await;
+                let Some(service) = weak.upgrade() else {
+                    return;
+                };
+                service
+                    .complete_deferred_mcp_discovery(provider_id, result)
+                    .await;
+            });
+        }
+        results
+    }
+
     async fn complete_deferred_discovery(
         &self,
         provider_id: bitfun_product_domains::external_sources::ProviderId,
@@ -517,8 +1779,26 @@ impl WorkspaceExternalSourceService {
         {
             return;
         }
+        let Ok(preferences) = read_external_sources_config().await else {
+            return;
+        };
+        let Ok(policy) = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())
+        else {
+            return;
+        };
+        let ecosystem_id = lock_coordinator(&self.coordinator).ecosystem_for_provider(&provider_id);
+        if ecosystem_id.is_none_or(|ecosystem_id| {
+            !integration_capability_is_discoverable(
+                &policy,
+                ecosystem_id.as_str(),
+                EXTERNAL_CAPABILITY_COMMAND,
+            )
+        }) {
+            self.ensure_watch_roots(&policy).await;
+            return;
+        }
         let command_snapshot = lock_coordinator(&self.coordinator).apply_discovery_result(result);
-        self.ensure_watch_roots().await;
+        self.ensure_watch_roots(&policy).await;
         if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
             let _ = self.updates.send(snapshot);
         }
@@ -539,12 +1819,146 @@ impl WorkspaceExternalSourceService {
         {
             return;
         }
+        let Ok(preferences) = read_external_sources_config().await else {
+            return;
+        };
+        let Ok(policy) = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())
+        else {
+            return;
+        };
+        let ecosystem_id =
+            lock_tool_coordinator(&self.tool_coordinator).ecosystem_for_provider(&provider_id);
+        if ecosystem_id.is_none_or(|ecosystem_id| {
+            !integration_capability_is_discoverable(
+                &policy,
+                ecosystem_id.as_str(),
+                EXTERNAL_CAPABILITY_TOOL,
+            )
+        }) {
+            self.ensure_watch_roots(&policy).await;
+            return;
+        }
         lock_tool_coordinator(&self.tool_coordinator).apply_discovery_result(result);
-        self.ensure_watch_roots().await;
+        self.ensure_watch_roots(&policy).await;
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
         if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
             let _ = self.updates.send(snapshot);
         }
+    }
+
+    async fn complete_deferred_subagent_discovery(
+        self: &Arc<Self>,
+        provider_id: bitfun_product_domains::external_sources::ProviderId,
+        result: ExternalSubagentDiscoveryResult,
+    ) {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        if self
+            .subagent_discovery_tasks
+            .lock()
+            .await
+            .remove(&provider_id)
+            .is_none()
+        {
+            return;
+        }
+        let Ok(preferences) = read_external_sources_config().await else {
+            return;
+        };
+        let Ok(policy) = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())
+        else {
+            return;
+        };
+        let ecosystem_id = lock_subagent_coordinator(&self.subagent_coordinator)
+            .ecosystem_for_provider(&provider_id);
+        if ecosystem_id.is_none_or(|ecosystem_id| {
+            !integration_capability_is_discoverable(
+                &policy,
+                ecosystem_id.as_str(),
+                EXTERNAL_CAPABILITY_SUBAGENT,
+            )
+        }) {
+            self.ensure_watch_roots(&policy).await;
+            return;
+        }
+        let subagent_snapshot =
+            lock_subagent_coordinator(&self.subagent_coordinator).apply_discovery_result(result);
+        self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
+        self.ensure_watch_roots(&policy).await;
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
+            let _ = self.updates.send(snapshot);
+        }
+    }
+
+    async fn complete_deferred_mcp_discovery(
+        &self,
+        provider_id: bitfun_product_domains::external_sources::ProviderId,
+        result: ExternalMcpDiscoveryResult,
+    ) {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        if self
+            .mcp_discovery_tasks
+            .lock()
+            .await
+            .remove(&provider_id)
+            .is_none()
+        {
+            return;
+        }
+        let Ok(preferences) = read_external_sources_config().await else {
+            return;
+        };
+        let Ok(policy) = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())
+        else {
+            return;
+        };
+        let ecosystem_id =
+            lock_mcp_coordinator(&self.mcp_coordinator).ecosystem_for_provider(&provider_id);
+        if ecosystem_id.is_none_or(|ecosystem_id| {
+            !integration_capability_is_discoverable(
+                &policy,
+                ecosystem_id.as_str(),
+                EXTERNAL_CAPABILITY_MCP,
+            )
+        }) {
+            self.ensure_watch_roots(&policy).await;
+            return;
+        }
+        lock_mcp_coordinator(&self.mcp_coordinator).apply_discovery_result(result);
+        self.ensure_watch_roots(&policy).await;
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
+            let _ = self.updates.send(snapshot);
+        }
+    }
+
+    fn schedule_subagent_last_valid_expiry(
+        self: &Arc<Self>,
+        snapshot: &bitfun_external_sources::ExternalSubagentCoordinatorSnapshot,
+    ) {
+        let schedule = self
+            .subagent_expiry_schedule
+            .fetch_add(1, Ordering::AcqRel)
+            .saturating_add(1);
+        let Some(deadline) = snapshot.next_refresh_deadline else {
+            return;
+        };
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)).await;
+            let Some(service) = weak.upgrade() else {
+                return;
+            };
+            if service.subagent_expiry_schedule.load(Ordering::Acquire) != schedule {
+                return;
+            }
+            let _refresh_guard = service.refresh_gate.lock().await;
+            lock_subagent_coordinator(&service.subagent_coordinator).expire_last_valid();
+            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
+                let _ = service.updates.send(snapshot);
+            }
+        });
     }
 
     fn ensure_background_refresh(self: &Arc<Self>) {
@@ -562,7 +1976,11 @@ impl WorkspaceExternalSourceService {
                 return;
             };
             if let Err(error) = service.ensure_initial_refresh().await {
-                log::warn!("Initial external source refresh failed: {}", error);
+                log::warn!(
+                    "Initial external source refresh failed scope={} error_category={}",
+                    external_log_scope(service.workspace_root.as_deref()),
+                    external_log_error_category(&error),
+                );
             }
             service
                 .background_refresh_scheduled
@@ -607,15 +2025,44 @@ impl WorkspaceExternalSourceService {
                     continue;
                 }
                 let key = service.workspace_root.clone();
-                if let Some(entry) = workspace_services().get(&key) {
+                let services = workspace_services_for_profile(service.profile);
+                if let Some(entry) = services.get(&key) {
                     let should_remove = entry
                         .value()
                         .upgrade()
                         .is_some_and(|cached| Arc::ptr_eq(&cached, &service));
                     drop(entry);
                     if should_remove {
-                        workspace_services().remove(&key);
-                        release_external_tool_workspace(key.as_deref()).await;
+                        if service.profile == ExternalSourceServiceProfile::LocalExecution {
+                            let runtime_ids =
+                                std::mem::take(&mut *service.active_mcp_runtime_ids.lock().await);
+                            let workspace_key = workspace_route_key(key.as_deref());
+                            let _ = service
+                                .mcp_runtime
+                                .replace_workspace_route(
+                                    &workspace_key,
+                                    BTreeSet::new(),
+                                    BTreeSet::new(),
+                                )
+                                .await;
+                            for runtime_id in runtime_ids {
+                                if let Err(error) = service.mcp_runtime.retire(&runtime_id).await {
+                                    log::warn!(
+                                        "Could not retire idle external MCP runtime runtime_id={} error_category={}",
+                                        safe_external_log_token(&runtime_id),
+                                        external_log_error_category(&error.to_string()),
+                                    );
+                                }
+                            }
+                        }
+                        services.remove(&key);
+                        if service.profile == ExternalSourceServiceProfile::LocalExecution {
+                            release_external_tool_workspace(key.as_deref()).await;
+                            if let Some(workspace_root) = key.as_deref() {
+                                crate::agentic::agents::get_agent_registry()
+                                    .release_external_subagent_workspace(workspace_root);
+                            }
+                        }
                     }
                 }
                 break;
@@ -628,10 +2075,17 @@ impl WorkspaceExternalSourceService {
     }
 
     async fn set_source_enabled(
-        &self,
+        self: &Arc<Self>,
         stable_key: &str,
         enabled: bool,
+        expected_preference_revision: u64,
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let refresh_guard = self.refresh_gate.lock().await;
+        if self.snapshot().preference_revision != expected_preference_revision {
+            return Err(stale_operation_error(
+                "External source preferences changed; refresh before retrying",
+            ));
+        }
         let (previous_commands, command_known) = {
             let mut coordinator = lock_coordinator(&self.coordinator);
             let previous = coordinator.suppressed_sources().clone();
@@ -644,31 +2098,102 @@ impl WorkspaceExternalSourceService {
             let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
             (previous, known)
         };
-        if !command_known && !tool_known {
-            return Err(format!("unknown external source: {stable_key}"));
-        }
-        let authoritative = match persist_source_enabled_change(stable_key, enabled).await {
-            Ok(authoritative) => authoritative,
-            Err(error) => {
-                lock_coordinator(&self.coordinator).replace_suppressed_sources(previous_commands);
-                lock_tool_coordinator(&self.tool_coordinator)
-                    .replace_suppressed_sources(previous_tools);
-                return Err(error);
-            }
+        let (previous_subagents, subagent_known) = {
+            let mut coordinator = lock_subagent_coordinator(&self.subagent_coordinator);
+            let previous = coordinator.suppressed_sources().clone();
+            let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
+            (previous, known)
         };
+        let (previous_mcps, mcp_known) = {
+            let mut coordinator = lock_mcp_coordinator(&self.mcp_coordinator);
+            let previous = coordinator.suppressed_sources().clone();
+            let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
+            (previous, known)
+        };
+        if !command_known && !tool_known && !subagent_known && !mcp_known {
+            return Err(missing_candidate_error(format!(
+                "External source '{stable_key}' is no longer available"
+            )));
+        }
+        let authoritative =
+            match persist_source_enabled_change(stable_key, enabled, expected_preference_revision)
+                .await
+            {
+                Ok(authoritative) => authoritative,
+                Err(error) => {
+                    lock_coordinator(&self.coordinator)
+                        .replace_suppressed_sources(previous_commands);
+                    lock_tool_coordinator(&self.tool_coordinator)
+                        .replace_suppressed_sources(previous_tools);
+                    lock_subagent_coordinator(&self.subagent_coordinator)
+                        .replace_suppressed_sources(previous_subagents);
+                    lock_mcp_coordinator(&self.mcp_coordinator)
+                        .replace_suppressed_sources(previous_mcps);
+                    return Err(error);
+                }
+            };
         lock_coordinator(&self.coordinator).replace_suppressed_sources(authoritative.clone());
         lock_tool_coordinator(&self.tool_coordinator)
             .replace_suppressed_sources(authoritative.clone());
-        propagate_suppressed_sources(&authoritative);
-        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
-        self.rebuild_product_snapshot(command_snapshot).await
+        lock_subagent_coordinator(&self.subagent_coordinator)
+            .replace_suppressed_sources(authoritative.clone());
+        lock_mcp_coordinator(&self.mcp_coordinator)
+            .replace_suppressed_sources(authoritative.clone());
+        propagate_suppressed_sources(&authoritative, self);
+        // Refresh acquires the same gate. Release the mutation critical section
+        // after the preference and in-memory coordinators agree, then refresh
+        // from the authoritative store to avoid self-deadlocking the request.
+        drop(refresh_guard);
+        self.refresh_preserving_worker_recovery().await
+    }
+
+    async fn update_integration_policy(
+        self: &Arc<Self>,
+        mutation: ExternalIntegrationPolicyMutation,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let preferences =
+            persist_integration_policy_mutation(self.workspace_root.as_deref(), mutation).await?;
+        propagate_integration_policy_preferences(&preferences, self);
+        self.refresh_preserving_worker_recovery().await
     }
 
     async fn set_conflict_choice(
         &self,
         conflict_key: &str,
         candidate_id: &str,
+        expected_preference_revision: u64,
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let product_snapshot = self.snapshot();
+        if product_snapshot.preference_revision != expected_preference_revision {
+            return Err(stale_operation_error(
+                "External command preferences changed; refresh before retrying",
+            ));
+        }
+        let selected_candidate = product_snapshot
+            .command_conflicts
+            .iter()
+            .find(|conflict| conflict.conflict_key == conflict_key)
+            .and_then(|conflict| {
+                conflict
+                    .candidates
+                    .iter()
+                    .find(|candidate| candidate.candidate_id == candidate_id)
+            })
+            .ok_or_else(|| {
+                missing_candidate_error(format!(
+                    "External source conflict '{conflict_key}' is no longer available"
+                ))
+            })?;
+        if !integration_capability_is_active(
+            &product_snapshot.integration_policy,
+            selected_candidate.ecosystem_id.as_str(),
+            EXTERNAL_CAPABILITY_COMMAND,
+        ) {
+            return Err(policy_limited_error(
+                "The selected external command ecosystem is not enabled for this workspace",
+            ));
+        }
         let (previous_choices, previous_lineage_keys, previous_conflicted_ids, participants) = {
             let mut coordinator = lock_coordinator(&self.coordinator);
             let participants = coordinator
@@ -683,7 +2208,11 @@ impl WorkspaceExternalSourceService {
                         .map(|candidate| candidate.candidate_id)
                         .collect::<Vec<_>>()
                 })
-                .ok_or_else(|| format!("unknown external source conflict: {conflict_key}"))?;
+                .ok_or_else(|| {
+                    missing_candidate_error(format!(
+                        "External source conflict '{conflict_key}' is no longer available"
+                    ))
+                })?;
             let previous_choices = coordinator.conflict_choices().clone();
             let previous_lineage_keys = coordinator.conflict_lineage_current_keys().clone();
             let previous_conflicted_ids = coordinator.conflicted_candidate_ids().clone();
@@ -703,17 +2232,23 @@ impl WorkspaceExternalSourceService {
                 coordinator.conflicted_candidate_ids().clone(),
             )
         };
-        let authoritative =
-            match persist_conflict_choice(conflict_key, candidate_id, participants).await {
-                Ok(authoritative) => authoritative,
-                Err(error) => {
-                    let mut coordinator = lock_coordinator(&self.coordinator);
-                    coordinator.replace_conflict_choices(previous_choices);
-                    coordinator.replace_conflict_lineage_current_keys(previous_lineage_keys);
-                    coordinator.replace_conflicted_candidate_ids(previous_conflicted_ids);
-                    return Err(error);
-                }
-            };
+        let authoritative = match persist_conflict_choice(
+            conflict_key,
+            candidate_id,
+            participants,
+            expected_preference_revision,
+        )
+        .await
+        {
+            Ok(authoritative) => authoritative,
+            Err(error) => {
+                let mut coordinator = lock_coordinator(&self.coordinator);
+                coordinator.replace_conflict_choices(previous_choices);
+                coordinator.replace_conflict_lineage_current_keys(previous_lineage_keys);
+                coordinator.replace_conflicted_candidate_ids(previous_conflicted_ids);
+                return Err(error);
+            }
+        };
         if authoritative.conflict_choices != updated_choices
             || authoritative.conflict_lineage_current_keys != updated_lineage_keys
             || authoritative.conflicted_candidate_ids != updated_conflicted_ids
@@ -730,6 +2265,7 @@ impl WorkspaceExternalSourceService {
         approval_key: &str,
         decision_key: &str,
         approved: bool,
+        expected_preference_revision: u64,
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
         // Keep preview validation, preference persistence and the resulting
         // product rebuild in the same ordering domain as watcher refreshes.
@@ -741,18 +2277,41 @@ impl WorkspaceExternalSourceService {
         #[cfg(test)]
         self.tool_decision_gate_acquired.notify_one();
         let snapshot = self.snapshot();
-        let known = snapshot.tool_approval_requests.iter().any(|request| {
-            request.approval_key == approval_key && request.decision_key == decision_key
-        }) || snapshot
-            .tools
+        if snapshot.preference_revision != expected_preference_revision {
+            return Err(stale_operation_error(
+                "External tool preferences changed; refresh before retrying",
+            ));
+        }
+        let source_key = snapshot
+            .tool_approval_requests
             .iter()
-            .any(|tool| tool.approval_key == approval_key && tool.decision_key == decision_key);
-        if !known {
-            return Err("external tool decision is stale or unknown".to_string());
+            .find(|request| {
+                request.approval_key == approval_key && request.decision_key == decision_key
+            })
+            .map(|request| request.target_id.source.clone())
+            .or_else(|| {
+                snapshot
+                    .tools
+                    .iter()
+                    .find(|tool| {
+                        tool.approval_key == approval_key && tool.decision_key == decision_key
+                    })
+                    .map(|tool| tool.definition.id.target.source.clone())
+            })
+            .ok_or_else(|| {
+                missing_candidate_error("External tool decision is stale or no longer available")
+            })?;
+        if approved {
+            ensure_source_capability_active(&snapshot, &source_key, EXTERNAL_CAPABILITY_TOOL)?;
         }
         validate_conflict_preference(approval_key, decision_key)?;
-        let preferences =
-            persist_tool_target_decision(approval_key, decision_key, approved).await?;
+        let preferences = persist_tool_target_decision(
+            approval_key,
+            decision_key,
+            approved,
+            expected_preference_revision,
+        )
+        .await?;
         propagate_tool_preferences(&preferences);
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
         self.rebuild_product_snapshot(command_snapshot).await
@@ -762,20 +2321,280 @@ impl WorkspaceExternalSourceService {
         &self,
         conflict_key: &str,
         candidate_id: &str,
+        expected_preference_revision: u64,
     ) -> Result<ExternalSourceCatalogSnapshot, String> {
-        let known = self.snapshot().tool_conflicts.iter().any(|conflict| {
-            conflict.conflict_key == conflict_key
-                && conflict
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.preference_revision != expected_preference_revision {
+            return Err(stale_operation_error(
+                "External tool preferences changed; refresh before retrying",
+            ));
+        }
+        let candidate = snapshot
+            .tool_conflicts
+            .iter()
+            .find(|conflict| conflict.conflict_key == conflict_key)
+            .and_then(|conflict| {
+                conflict
                     .candidates
                     .iter()
-                    .any(|candidate| candidate.candidate_id == candidate_id)
-        });
-        if !known {
-            return Err("external tool conflict choice is stale or unknown".to_string());
+                    .find(|candidate| candidate.candidate_id == candidate_id)
+            })
+            .ok_or_else(|| {
+                missing_candidate_error(
+                    "External tool conflict choice is stale or no longer available",
+                )
+            })?;
+        if matches!(candidate.kind, ExternalToolConflictCandidateKind::External) {
+            let source_key = candidate.source.as_ref().ok_or_else(|| {
+                missing_candidate_error("External tool conflict source is missing")
+            })?;
+            ensure_source_capability_active(&snapshot, source_key, EXTERNAL_CAPABILITY_TOOL)?;
         }
         validate_conflict_preference(conflict_key, candidate_id)?;
-        let preferences = persist_tool_conflict_choice(conflict_key, candidate_id).await?;
+        let preferences =
+            persist_tool_conflict_choice(conflict_key, candidate_id, expected_preference_revision)
+                .await?;
         propagate_tool_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn set_mcp_server_decision(
+        &self,
+        candidate_id: &str,
+        decision_key: &str,
+        approved: bool,
+        expected_mcp_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.mcp_generation != expected_mcp_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(stale_operation_error(
+                "External MCP catalog changed; refresh before retrying",
+            ));
+        }
+        let entry = snapshot
+            .mcp_servers
+            .iter()
+            .find(|entry| entry.candidate_id == candidate_id && entry.decision_key == decision_key)
+            .ok_or_else(|| {
+                missing_candidate_error("External MCP candidate is no longer available")
+            })?;
+        if approved {
+            ensure_source_capability_active(
+                &snapshot,
+                &entry.definition.id.source,
+                EXTERNAL_CAPABILITY_MCP,
+            )?;
+        }
+        if !external_mcp_decision_allowed(&entry.activation_state, approved) {
+            return Err(unavailable_operation_error(
+                "External MCP candidate cannot be changed in its current state",
+            ));
+        }
+        validate_mcp_decision_value(candidate_id, "candidate id")?;
+        validate_mcp_decision_value(decision_key, "decision key")?;
+        let preferences =
+            persist_mcp_server_decision(decision_key, approved, expected_preference_revision)
+                .await?;
+        propagate_mcp_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn choose_mcp_conflict(
+        &self,
+        conflict_key: &str,
+        candidate_id: &str,
+        approve_external: bool,
+        expected_mcp_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.mcp_generation != expected_mcp_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(stale_operation_error(
+                "External MCP catalog changed; refresh before retrying",
+            ));
+        }
+        let conflict = snapshot
+            .mcp_conflicts
+            .iter()
+            .find(|conflict| conflict.conflict_key == conflict_key)
+            .ok_or_else(|| {
+                conflict_operation_error("External MCP conflict is stale or no longer available")
+            })?;
+        let candidate = conflict
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_id == candidate_id && candidate.available)
+            .ok_or_else(|| {
+                missing_candidate_error("External MCP conflict candidate is unavailable")
+            })?;
+        let external_decision = if candidate.external {
+            let source_key = candidate.source.as_ref().ok_or_else(|| {
+                missing_candidate_error("External MCP conflict source is missing")
+            })?;
+            ensure_source_capability_active(&snapshot, source_key, EXTERNAL_CAPABILITY_MCP)?;
+            if !approve_external {
+                return Err(policy_limited_error(
+                    "Selecting an external MCP server requires approval of its current behavior",
+                ));
+            }
+            let entry = snapshot
+                .mcp_servers
+                .iter()
+                .find(|entry| entry.candidate_id == candidate_id)
+                .ok_or_else(|| {
+                    missing_candidate_error("External MCP candidate is no longer available")
+                })?;
+            Some(entry.decision_key.as_str())
+        } else {
+            None
+        };
+        validate_mcp_decision_value(conflict_key, "conflict key")?;
+        validate_mcp_decision_value(candidate_id, "candidate id")?;
+        let preferences = persist_mcp_conflict_choice(
+            conflict_key,
+            candidate_id,
+            external_decision,
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_mcp_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn set_subagent_activation(
+        &self,
+        candidate_id: &str,
+        approved: bool,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+        decision_key: &str,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.subagent_generation != expected_subagent_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(stale_operation_error(
+                "External subagent catalog changed; refresh before retrying",
+            ));
+        }
+        let summary = snapshot
+            .subagents
+            .iter()
+            .find(|summary| {
+                summary.candidate_id == candidate_id && summary.decision_key == decision_key
+            })
+            .ok_or_else(|| {
+                missing_candidate_error("External subagent candidate is no longer available")
+            })?;
+        if approved {
+            ensure_source_set_capability_active(
+                &snapshot,
+                &summary.source_keys,
+                EXTERNAL_CAPABILITY_SUBAGENT,
+            )?;
+        }
+        if matches!(
+            summary.activation_state,
+            ExternalSubagentActivationState::Blocked
+                | ExternalSubagentActivationState::Unavailable
+                | ExternalSubagentActivationState::Conflict
+        ) {
+            return Err(unavailable_operation_error(
+                "External subagent cannot be activated in its current state",
+            ));
+        }
+        validate_subagent_decision_value(candidate_id, "candidate id")?;
+        validate_subagent_decision_value(decision_key, "decision key")?;
+        let preferences =
+            persist_subagent_activation(decision_key, approved, expected_preference_revision)
+                .await?;
+        propagate_subagent_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
+    async fn choose_subagent_conflict(
+        &self,
+        conflict_key: &str,
+        candidate_id: &str,
+        approve_external: bool,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        if snapshot.subagent_generation != expected_subagent_generation
+            || snapshot.preference_revision != expected_preference_revision
+        {
+            return Err(stale_operation_error(
+                "External subagent catalog changed; refresh before retrying",
+            ));
+        }
+        let conflict = snapshot
+            .subagent_conflicts
+            .iter()
+            .find(|conflict| conflict.conflict_key == conflict_key)
+            .ok_or_else(|| {
+                conflict_operation_error(
+                    "External subagent conflict is stale or no longer available",
+                )
+            })?;
+        let external = if candidate_id == DISABLED_SUBAGENT_CONFLICT_CHOICE {
+            false
+        } else {
+            conflict
+                .candidates
+                .iter()
+                .find(|candidate| candidate.candidate_id == candidate_id)
+                .map(|candidate| candidate.external)
+                .ok_or_else(|| {
+                    missing_candidate_error("Conflict candidate is no longer available")
+                })?
+        };
+        let approval_key = if external {
+            let summary = snapshot
+                .subagents
+                .iter()
+                .find(|summary| summary.candidate_id == candidate_id)
+                .ok_or_else(|| {
+                    missing_candidate_error("External subagent candidate is no longer available")
+                })?;
+            ensure_source_set_capability_active(
+                &snapshot,
+                &summary.source_keys,
+                EXTERNAL_CAPABILITY_SUBAGENT,
+            )?;
+            if !approve_external {
+                return Err(policy_limited_error(
+                    "Selecting an external subagent requires approval of its current capability envelope",
+                ));
+            }
+            Some(summary.decision_key.clone())
+        } else {
+            None
+        };
+        validate_subagent_decision_value(conflict_key, "conflict key")?;
+        validate_subagent_decision_value(candidate_id, "candidate id")?;
+        let preferences = persist_subagent_conflict_choice(
+            conflict_key,
+            candidate_id,
+            approval_key.as_deref(),
+            expected_preference_revision,
+        )
+        .await?;
+        propagate_subagent_preferences(&preferences);
         let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
         self.rebuild_product_snapshot(command_snapshot).await
     }
@@ -789,7 +2608,16 @@ impl WorkspaceExternalSourceService {
     ) -> Result<ExpandedPromptCommand, String> {
         // Explicit invocation refreshes first, so a stable deletion cannot be
         // bypassed by an old menu projection.
-        self.refresh_preserving_worker_recovery().await?;
+        let snapshot = self.refresh_preserving_worker_recovery().await?;
+        let source_key = snapshot
+            .commands
+            .iter()
+            .find(|entry| entry.definition.name.eq_ignore_ascii_case(name))
+            .map(|entry| entry.definition.id.source.clone())
+            .ok_or_else(|| {
+                missing_candidate_error(format!("External prompt command '{name}' was not found"))
+            })?;
+        ensure_source_capability_active(&snapshot, &source_key, EXTERNAL_CAPABILITY_COMMAND)?;
         let coordinator = Arc::clone(&self.coordinator);
         let name = name.to_string();
         let arguments = arguments.to_string();
@@ -810,11 +2638,12 @@ impl WorkspaceExternalSourceService {
     }
 
     async fn start_watching(self: &Arc<Self>) {
-        let watch_roots = self.watch_roots();
+        let policy = self.snapshot().integration_policy;
+        let watch_roots = self.watch_roots(&policy);
         if watch_roots.is_empty() {
             return;
         }
-        self.ensure_watch_roots().await;
+        self.ensure_watch_roots(&policy).await;
         let mut receiver = self.watcher.subscribe();
         let weak: Weak<Self> = Arc::downgrade(self);
         tokio::spawn(async move {
@@ -833,7 +2662,8 @@ impl WorkspaceExternalSourceService {
                 let Some(service) = weak.upgrade() else {
                     break;
                 };
-                let watch_roots = service.watch_roots();
+                let policy = service.snapshot().integration_policy;
+                let watch_roots = service.watch_roots(&policy);
                 let relevant = events.iter().any(|event| {
                     let path = Path::new(&event.path);
                     watch_roots.iter().any(|root| path.starts_with(&root.path))
@@ -843,23 +2673,75 @@ impl WorkspaceExternalSourceService {
                 }
                 if let Err(error) = service.refresh().await {
                     log::warn!(
-                        "External source background refresh failed for '{}': {}",
-                        service
-                            .workspace_root
-                            .as_deref()
-                            .map(|path| path.display().to_string())
-                            .unwrap_or_else(|| "user-global".to_string()),
-                        error
+                        "External source background refresh failed scope={} error_category={}",
+                        external_log_scope(service.workspace_root.as_deref()),
+                        external_log_error_category(&error),
                     );
                 }
             }
         });
     }
 
-    async fn ensure_watch_roots(&self) {
-        let watch_roots = self.watch_roots();
+    fn start_model_config_watching(self: &Arc<Self>) {
+        let Some(mut receiver) = subscribe_config_updates() else {
+            return;
+        };
+        let weak = Arc::downgrade(self);
+        tokio::spawn(async move {
+            loop {
+                let should_refresh = match receiver.recv().await {
+                    Ok(event) => config_update_refreshes_external_model_bindings(&event),
+                    Err(broadcast::error::RecvError::Lagged(_)) => true,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                };
+                if !should_refresh {
+                    continue;
+                }
+                let Some(service) = weak.upgrade() else {
+                    break;
+                };
+                let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+                match service.rebuild_product_snapshot(command_snapshot).await {
+                    Ok(snapshot) => {
+                        let _ = service.updates.send(snapshot);
+                    }
+                    Err(error) => log::warn!(
+                        "External source model-binding refresh failed scope={} error_category={}",
+                        external_log_scope(service.workspace_root.as_deref()),
+                        external_log_error_category(&error),
+                    ),
+                }
+            }
+        });
+    }
+
+    async fn ensure_watch_roots(&self, policy: &ExternalIntegrationPolicySnapshot) {
+        let watch_roots = self.watch_roots(policy);
         let watcher = Arc::clone(&self.watcher);
         let mut states = self.watch_states.lock().await;
+        let desired = watch_roots
+            .iter()
+            .map(|root| (root.path.clone(), root.recursive))
+            .collect::<BTreeSet<_>>();
+        let obsolete = states
+            .keys()
+            .filter(|key| !desired.contains(*key))
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in obsolete {
+            if states.get(&key).copied().unwrap_or(false) {
+                let path = key.0.to_string_lossy().to_string();
+                if let Err(error) = watcher.unwatch_path(&path).await {
+                    log::warn!(
+                        "Failed to stop watching external source root scope={} recursive={} error_category={}",
+                        external_log_scope(self.workspace_root.as_deref()),
+                        key.1,
+                        external_log_error_category(&error.to_string()),
+                    );
+                }
+            }
+            states.remove(&key);
+        }
         for root in watch_roots {
             let key = (root.path.clone(), root.recursive);
             let exists = root.path.exists();
@@ -882,19 +2764,46 @@ impl WorkspaceExternalSourceService {
                 }
                 Err(error) => {
                     states.insert(key, false);
-                    log::warn!("Failed to watch external source root '{}': {}", path, error);
+                    log::warn!(
+                        "Failed to watch external source root scope={} recursive={} error_category={}",
+                        external_log_scope(self.workspace_root.as_deref()),
+                        root.recursive,
+                        external_log_error_category(&error.to_string()),
+                    );
                 }
             }
         }
     }
 
-    fn watch_roots(&self) -> Vec<bitfun_product_domains::external_sources::ExternalWatchRoot> {
+    fn watch_roots(
+        &self,
+        policy: &ExternalIntegrationPolicySnapshot,
+    ) -> Vec<bitfun_product_domains::external_sources::ExternalWatchRoot> {
         let mut roots = BTreeMap::new();
-        for root in lock_coordinator(&self.coordinator)
-            .watch_roots()
-            .into_iter()
-            .chain(lock_tool_coordinator(&self.tool_coordinator).watch_roots())
-        {
+        let mut provider_roots = Vec::new();
+        let command_ecosystems =
+            ecosystems_with_discoverable_capability(policy, EXTERNAL_CAPABILITY_COMMAND);
+        provider_roots.extend(
+            lock_coordinator(&self.coordinator).watch_roots_for_ecosystems(&command_ecosystems),
+        );
+        let tool_ecosystems =
+            ecosystems_with_discoverable_capability(policy, EXTERNAL_CAPABILITY_TOOL);
+        provider_roots.extend(
+            lock_tool_coordinator(&self.tool_coordinator)
+                .watch_roots_for_ecosystems(&tool_ecosystems),
+        );
+        let subagent_ecosystems =
+            ecosystems_with_discoverable_capability(policy, EXTERNAL_CAPABILITY_SUBAGENT);
+        provider_roots.extend(
+            lock_subagent_coordinator(&self.subagent_coordinator)
+                .watch_roots_for_ecosystems(&subagent_ecosystems),
+        );
+        let mcp_ecosystems =
+            ecosystems_with_discoverable_capability(policy, EXTERNAL_CAPABILITY_MCP);
+        provider_roots.extend(
+            lock_mcp_coordinator(&self.mcp_coordinator).watch_roots_for_ecosystems(&mcp_ecosystems),
+        );
+        for root in provider_roots {
             roots
                 .entry(root.path)
                 .and_modify(|recursive| *recursive |= root.recursive)
@@ -925,6 +2834,18 @@ enum DiscoveryPoll {
 
 enum ToolDiscoveryPoll {
     Complete(ExternalToolDiscoveryResult),
+    InFlight(bitfun_product_domains::external_sources::ProviderId),
+    TimedOut(bitfun_product_domains::external_sources::ProviderId),
+}
+
+enum SubagentDiscoveryPoll {
+    Complete(ExternalSubagentDiscoveryResult),
+    InFlight(bitfun_product_domains::external_sources::ProviderId),
+    TimedOut(bitfun_product_domains::external_sources::ProviderId),
+}
+
+enum McpDiscoveryPoll {
+    Complete(ExternalMcpDiscoveryResult),
     InFlight(bitfun_product_domains::external_sources::ProviderId),
     TimedOut(bitfun_product_domains::external_sources::ProviderId),
 }
@@ -983,6 +2904,60 @@ async fn poll_tool_discovery_tasks(
     .await
 }
 
+async fn poll_subagent_discovery_tasks(
+    scheduled: Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedSubagentDiscoveryTask,
+        bool,
+    )>,
+    timeout: std::time::Duration,
+) -> Vec<SubagentDiscoveryPoll> {
+    join_all(
+        scheduled
+            .into_iter()
+            .map(|(provider_id, task, is_new)| async move {
+                if !is_new {
+                    return match task.clone().now_or_never() {
+                        Some(result) => SubagentDiscoveryPoll::Complete(result),
+                        None => SubagentDiscoveryPoll::InFlight(provider_id),
+                    };
+                }
+                match tokio::time::timeout(timeout, task).await {
+                    Ok(result) => SubagentDiscoveryPoll::Complete(result),
+                    Err(_) => SubagentDiscoveryPoll::TimedOut(provider_id),
+                }
+            }),
+    )
+    .await
+}
+
+async fn poll_mcp_discovery_tasks(
+    scheduled: Vec<(
+        bitfun_product_domains::external_sources::ProviderId,
+        SharedMcpDiscoveryTask,
+        bool,
+    )>,
+    timeout: std::time::Duration,
+) -> Vec<McpDiscoveryPoll> {
+    join_all(
+        scheduled
+            .into_iter()
+            .map(|(provider_id, task, is_new)| async move {
+                if !is_new {
+                    return match task.clone().now_or_never() {
+                        Some(result) => McpDiscoveryPoll::Complete(result),
+                        None => McpDiscoveryPoll::InFlight(provider_id),
+                    };
+                }
+                match tokio::time::timeout(timeout, task).await {
+                    Ok(result) => McpDiscoveryPoll::Complete(result),
+                    Err(_) => McpDiscoveryPoll::TimedOut(provider_id),
+                }
+            }),
+    )
+    .await
+}
+
 fn spawn_discovery_task(request: ExternalSourceDiscoveryRequest) -> SharedDiscoveryTask {
     let provider_id = request.provider_id().clone();
     async move {
@@ -1008,6 +2983,40 @@ fn spawn_tool_discovery_task(request: ExternalToolDiscoveryRequest) -> SharedToo
                 provider_id,
                 "external_tool.discovery_task_failed",
                 &format!("tool provider discovery task failed: {error}"),
+            ),
+        }
+    }
+    .boxed()
+    .shared()
+}
+
+fn spawn_subagent_discovery_task(
+    request: ExternalSubagentDiscoveryRequest,
+) -> SharedSubagentDiscoveryTask {
+    let provider_id = request.provider_id().clone();
+    async move {
+        match tokio::task::spawn_blocking(move || request.execute()).await {
+            Ok(result) => result,
+            Err(error) => subagent_discovery_failure(
+                provider_id,
+                "external_subagent.discovery_task_failed",
+                &format!("subagent provider discovery task failed: {error}"),
+            ),
+        }
+    }
+    .boxed()
+    .shared()
+}
+
+fn spawn_mcp_discovery_task(request: ExternalMcpDiscoveryRequest) -> SharedMcpDiscoveryTask {
+    let provider_id = request.provider_id().clone();
+    async move {
+        match tokio::task::spawn_blocking(move || request.execute()).await {
+            Ok(result) => result,
+            Err(error) => mcp_discovery_failure(
+                provider_id,
+                "external_mcp.discovery_task_failed",
+                &format!("MCP provider discovery task failed: {error}"),
             ),
         }
     }
@@ -1041,6 +3050,32 @@ fn tool_discovery_failure(
     )
 }
 
+fn subagent_discovery_failure(
+    provider_id: bitfun_product_domains::external_sources::ProviderId,
+    code: &str,
+    message: &str,
+) -> ExternalSubagentDiscoveryResult {
+    ExternalSubagentDiscoveryResult::failed(
+        provider_id,
+        bitfun_product_domains::external_sources::ExternalSourceProviderError::new(
+            code, message, true,
+        ),
+    )
+}
+
+fn mcp_discovery_failure(
+    provider_id: bitfun_product_domains::external_sources::ProviderId,
+    code: &str,
+    message: &str,
+) -> ExternalMcpDiscoveryResult {
+    ExternalMcpDiscoveryResult::failed(
+        provider_id,
+        bitfun_product_domains::external_sources::ExternalSourceProviderError::new(
+            code, message, true,
+        ),
+    )
+}
+
 fn lock_coordinator(
     coordinator: &StdMutex<ExternalSourceCoordinator>,
 ) -> MutexGuard<'_, ExternalSourceCoordinator> {
@@ -1062,6 +3097,24 @@ fn lock_tool_coordinator(
     }
 }
 
+fn lock_subagent_coordinator(
+    coordinator: &StdMutex<ExternalSubagentCoordinator>,
+) -> MutexGuard<'_, ExternalSubagentCoordinator> {
+    match coordinator.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn lock_mcp_coordinator(
+    coordinator: &StdMutex<ExternalMcpCoordinator>,
+) -> MutexGuard<'_, ExternalMcpCoordinator> {
+    match coordinator.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
 fn lock_snapshot(
     snapshot: &StdMutex<ExternalSourceCatalogSnapshot>,
 ) -> MutexGuard<'_, ExternalSourceCatalogSnapshot> {
@@ -1074,11 +3127,28 @@ fn lock_snapshot(
 static WORKSPACE_SERVICES: OnceLock<
     DashMap<Option<PathBuf>, Weak<WorkspaceExternalSourceService>>,
 > = OnceLock::new();
+static READ_ONLY_WORKSPACE_SERVICES: OnceLock<
+    DashMap<Option<PathBuf>, Weak<WorkspaceExternalSourceService>>,
+> = OnceLock::new();
 static TOOL_REGISTRY_CHANGE_EPOCH: AtomicU64 = AtomicU64::new(0);
 static TOOL_REGISTRY_REBUILD_SCHEDULED: AtomicBool = AtomicBool::new(false);
 
 fn workspace_services() -> &'static DashMap<Option<PathBuf>, Weak<WorkspaceExternalSourceService>> {
     WORKSPACE_SERVICES.get_or_init(DashMap::new)
+}
+
+fn read_only_workspace_services(
+) -> &'static DashMap<Option<PathBuf>, Weak<WorkspaceExternalSourceService>> {
+    READ_ONLY_WORKSPACE_SERVICES.get_or_init(DashMap::new)
+}
+
+fn workspace_services_for_profile(
+    profile: ExternalSourceServiceProfile,
+) -> &'static DashMap<Option<PathBuf>, Weak<WorkspaceExternalSourceService>> {
+    match profile {
+        ExternalSourceServiceProfile::LocalExecution => workspace_services(),
+        ExternalSourceServiceProfile::ReadOnlyProjection => read_only_workspace_services(),
+    }
 }
 
 fn workspace_service_gate() -> &'static tokio::sync::Mutex<()> {
@@ -1098,15 +3168,435 @@ fn normalize_workspace_root(workspace_root: Option<&Path>) -> Result<Option<Path
     ))
 }
 
+fn relative_display_path(location: &str, root: &Path) -> Option<String> {
+    let normalized_location = location.replace('\\', "/");
+    let normalized_root = root.to_string_lossy().replace('\\', "/");
+    let root = normalized_root.trim_end_matches('/');
+    let prefix = normalized_location.get(..root.len())?;
+    let relative = normalized_location.get(root.len()..)?;
+    (prefix.eq_ignore_ascii_case(root) && relative.starts_with('/'))
+        .then(|| relative.trim_start_matches('/').to_string())
+        .or_else(|| (prefix.eq_ignore_ascii_case(root) && relative.is_empty()).then(String::new))
+}
+
+pub(super) fn safe_external_source_location(
+    scope: ExternalSourceScope,
+    location: &str,
+    workspace_root: Option<&Path>,
+) -> String {
+    let normalized = location.replace('\\', "/");
+    let components = normalized
+        .split('/')
+        .filter(|component| {
+            !component.is_empty()
+                && *component != "."
+                && *component != ".."
+                && !component.ends_with(':')
+        })
+        .collect::<Vec<_>>();
+    let generic_tail = || {
+        components
+            .iter()
+            .position(|component| *component == ".config")
+            .map(|index| components[index..].join("/"))
+            .unwrap_or_else(|| components[components.len().saturating_sub(3)..].join("/"))
+    };
+
+    match scope {
+        ExternalSourceScope::Project | ExternalSourceScope::WorkspaceLocal => {
+            let relative = workspace_root
+                .and_then(|root| relative_display_path(&normalized, root))
+                .unwrap_or_else(generic_tail);
+            format!("<workspace>/{}", relative.trim_start_matches('/'))
+        }
+        ExternalSourceScope::UserGlobal => {
+            let relative = dirs::home_dir()
+                .as_deref()
+                .and_then(|home| relative_display_path(&normalized, home))
+                .unwrap_or_else(generic_tail);
+            format!("~/{}", relative.trim_start_matches('/'))
+        }
+        ExternalSourceScope::RemoteUser | ExternalSourceScope::RemoteProject => {
+            format!("<remote>/{}", generic_tail().trim_start_matches('/'))
+        }
+        _ => format!(
+            "<external-source>/{}",
+            generic_tail().trim_start_matches('/')
+        ),
+    }
+}
+
+fn assign_external_source_presentation_groups(snapshot: &mut ExternalSourceCatalogSnapshot) {
+    let mut groups = BTreeMap::<(String, String, String), Vec<usize>>::new();
+    for (index, source) in snapshot.sources.iter().enumerate() {
+        let normalized_location = source
+            .record
+            .location
+            .trim()
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .to_string();
+        let location_key = if normalized_location.is_empty() {
+            format!("<source:{}>", source.stable_key)
+        } else {
+            normalized_location
+        };
+        groups
+            .entry((
+                source.record.ecosystem_id.as_str().to_string(),
+                source.record.execution_domain_id.as_str().to_string(),
+                location_key,
+            ))
+            .or_default()
+            .push(index);
+    }
+
+    for indices in groups.into_values() {
+        let mut stable_keys = indices
+            .iter()
+            .map(|index| snapshot.sources[*index].stable_key.as_str())
+            .collect::<Vec<_>>();
+        stable_keys.sort_unstable();
+        let group_id = format!(
+            "external-source:{}",
+            serde_json::to_string(&stable_keys).unwrap_or_default()
+        );
+        for index in indices {
+            snapshot.sources[index].presentation_group_id = Some(group_id.clone());
+        }
+    }
+}
+
+fn sanitize_external_snapshot_locations(
+    snapshot: &mut ExternalSourceCatalogSnapshot,
+    workspace_root: Option<&Path>,
+) {
+    let source_scopes = snapshot
+        .sources
+        .iter()
+        .map(|source| (source.record.key.clone(), source.record.scope))
+        .collect::<BTreeMap<_, _>>();
+    let mut replacements = Vec::new();
+    let mut remember_location = |scope: ExternalSourceScope, location: &str| {
+        if location.is_empty() {
+            return;
+        }
+        let safe = safe_external_source_location(scope, location, workspace_root);
+        let safe_prefix = format!("{}/", safe.trim_end_matches('/'));
+        for raw in [
+            location.to_string(),
+            location.replace('\\', "/"),
+            location.replace('/', "\\"),
+        ] {
+            for (raw, safe) in [
+                (format!("{raw}/"), safe_prefix.clone()),
+                (format!("{raw}\\"), safe_prefix.clone()),
+                (raw, safe.clone()),
+            ] {
+                if raw != safe && !replacements.iter().any(|(known, _)| known == &raw) {
+                    replacements.push((raw, safe));
+                }
+            }
+        }
+    };
+    for source in &snapshot.sources {
+        remember_location(source.record.scope, &source.record.location);
+    }
+    for conflict in &snapshot.command_conflicts {
+        for candidate in &conflict.candidates {
+            remember_location(candidate.source_scope, &candidate.source_location);
+        }
+    }
+    for request in &snapshot.tool_approval_requests {
+        remember_location(request.source_scope, &request.source_location);
+        remember_location(request.source_scope, &request.working_directory);
+    }
+    for tool in &snapshot.tools {
+        let scope = source_scopes
+            .get(&tool.definition.id.target.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        remember_location(scope, &tool.definition.module_path);
+        remember_location(scope, &tool.definition.working_directory);
+    }
+    for conflict in &snapshot.tool_conflicts {
+        for candidate in &conflict.candidates {
+            let Some(location) = candidate.source_location.as_deref() else {
+                continue;
+            };
+            let scope = candidate
+                .source
+                .as_ref()
+                .and_then(|source| source_scopes.get(source))
+                .copied()
+                .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+            remember_location(scope, location);
+        }
+    }
+    for server in &snapshot.mcp_servers {
+        let Some(directory) = server.definition.working_directory.as_deref() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&server.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        remember_location(scope, directory);
+    }
+    for request in &snapshot.mcp_approval_requests {
+        let Some(directory) = request.definition.working_directory.as_deref() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&request.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        remember_location(scope, directory);
+    }
+    drop(remember_location);
+    replacements.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
+    let sanitize_message = |message: &mut String| {
+        for (raw, safe) in &replacements {
+            if message.contains(raw) {
+                *message = message.replace(raw, safe);
+            }
+        }
+    };
+    for diagnostic in &mut snapshot.diagnostics {
+        sanitize_message(&mut diagnostic.message);
+    }
+    for source in &mut snapshot.sources {
+        for diagnostic in &mut source.record.diagnostics {
+            sanitize_message(&mut diagnostic.message);
+        }
+    }
+
+    for source in &mut snapshot.sources {
+        source.record.location = safe_external_source_location(
+            source.record.scope,
+            &source.record.location,
+            workspace_root,
+        );
+    }
+    for conflict in &mut snapshot.command_conflicts {
+        for candidate in &mut conflict.candidates {
+            candidate.source_location = safe_external_source_location(
+                candidate.source_scope,
+                &candidate.source_location,
+                workspace_root,
+            );
+        }
+    }
+    for request in &mut snapshot.tool_approval_requests {
+        request.source_location = safe_external_source_location(
+            request.source_scope,
+            &request.source_location,
+            workspace_root,
+        );
+        request.working_directory = safe_external_source_location(
+            request.source_scope,
+            &request.working_directory,
+            workspace_root,
+        );
+    }
+    for tool in &mut snapshot.tools {
+        let scope = source_scopes
+            .get(&tool.definition.id.target.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        tool.definition.module_path =
+            safe_external_source_location(scope, &tool.definition.module_path, workspace_root);
+        tool.definition.working_directory = safe_external_source_location(
+            scope,
+            &tool.definition.working_directory,
+            workspace_root,
+        );
+    }
+    for conflict in &mut snapshot.tool_conflicts {
+        for candidate in &mut conflict.candidates {
+            let Some(location) = candidate.source_location.as_mut() else {
+                continue;
+            };
+            let scope = candidate
+                .source
+                .as_ref()
+                .and_then(|source| source_scopes.get(source))
+                .copied()
+                .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+            *location = safe_external_source_location(scope, location, workspace_root);
+        }
+    }
+    for server in &mut snapshot.mcp_servers {
+        let Some(directory) = server.definition.working_directory.as_mut() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&server.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        *directory = safe_external_source_location(scope, directory, workspace_root);
+    }
+    for request in &mut snapshot.mcp_approval_requests {
+        let Some(directory) = request.definition.working_directory.as_mut() else {
+            continue;
+        };
+        let scope = source_scopes
+            .get(&request.definition.id.source)
+            .copied()
+            .unwrap_or(ExternalSourceScope::WorkspaceLocal);
+        *directory = safe_external_source_location(scope, directory, workspace_root);
+    }
+}
+
+async fn load_native_mcp_candidates() -> Result<Vec<NativeMcpCandidate>, String> {
+    let service = crate::service::mcp::get_global_mcp_service()
+        .ok_or_else(|| "MCP service is not initialized".to_string())?;
+    let configs = service
+        .config_service()
+        .load_all_configs()
+        .await
+        .map_err(|error| format!("Could not read BitFun MCP configuration: {error}"))?;
+    let mut candidates = Vec::with_capacity(configs.len());
+    for config in configs {
+        let encoded = serde_json::to_vec(&config)
+            .map_err(|error| format!("Could not fingerprint BitFun MCP configuration: {error}"))?;
+        let mut behavior_hasher = Sha256::new();
+        behavior_hasher.update(&encoded);
+        let behavior_version = format!("sha256:{}", hex::encode(behavior_hasher.finalize()));
+        let candidate_id = native_mcp_candidate_id(&config.id);
+        candidates.push(NativeMcpCandidate {
+            candidate_id,
+            server_id: config.id,
+            display_name: format!("BitFun: {}", config.name),
+            name: config.name,
+            behavior_version,
+            enabled: config.enabled,
+        });
+    }
+    candidates.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then(left.server_id.cmp(&right.server_id))
+    });
+    Ok(candidates)
+}
+
+/// Stable product identifier for a BitFun-owned MCP configuration. Surfaces
+/// use this only to correlate native list rows with conflict candidates; the
+/// underlying configuration id remains private to the MCP owner.
+pub fn native_mcp_candidate_id(server_id: &str) -> String {
+    let mut id_hasher = Sha256::new();
+    id_hasher.update(server_id.as_bytes());
+    format!("native_mcp:{}", &hex::encode(id_hasher.finalize())[..24])
+}
+
+fn apply_external_mcp_runtime_status(
+    state: &mut ExternalMcpProductState,
+    candidate: &crate::external_mcp::ActiveExternalMcpCandidate,
+    status: Result<ExternalMcpRuntimeStatus, String>,
+) {
+    match status {
+        Ok(ExternalMcpRuntimeStatus::Active) => {}
+        Ok(ExternalMcpRuntimeStatus::Loading) => {
+            if let Some(entry) = state
+                .entries
+                .iter_mut()
+                .find(|entry| entry.candidate_id == candidate.definition.candidate_id())
+            {
+                entry.activation_state = ExternalMcpActivationState::Starting;
+            }
+        }
+        Ok(ExternalMcpRuntimeStatus::Unavailable(reason)) | Err(reason) => {
+            mark_external_mcp_runtime_unavailable(state, candidate, reason);
+        }
+    }
+}
+
+fn mark_external_mcp_runtime_unavailable(
+    state: &mut ExternalMcpProductState,
+    candidate: &crate::external_mcp::ActiveExternalMcpCandidate,
+    reason: String,
+) {
+    if let Some(entry) = state
+        .entries
+        .iter_mut()
+        .find(|entry| entry.candidate_id == candidate.definition.candidate_id())
+    {
+        entry.activation_state = ExternalMcpActivationState::RuntimeUnavailable {
+            reason: reason.clone(),
+        };
+    }
+    state.diagnostics.push(
+        ExternalSourceDiagnostic::warning(
+            "external_mcp.runtime_unavailable",
+            reason,
+            Some(candidate.definition.id.source.clone()),
+        )
+        .with_asset_kind(ExternalSourceAssetKind::Mcp),
+    );
+}
+
+fn merge_mcp_state(
+    snapshot: &mut ExternalSourceCatalogSnapshot,
+    coordinator_snapshot: &bitfun_external_sources::ExternalMcpCoordinatorSnapshot,
+    state: ExternalMcpProductState,
+) {
+    let known_sources = snapshot
+        .sources
+        .iter()
+        .map(|source| source.stable_key.clone())
+        .collect::<BTreeSet<_>>();
+    snapshot.sources.extend(
+        coordinator_snapshot
+            .sources
+            .iter()
+            .filter(|source| !known_sources.contains(&source.stable_key))
+            .cloned(),
+    );
+    snapshot.sources.sort_by(|left, right| {
+        left.record
+            .ecosystem_id
+            .cmp(&right.record.ecosystem_id)
+            .then(left.stable_key.cmp(&right.stable_key))
+    });
+    snapshot
+        .diagnostics
+        .extend(coordinator_snapshot.diagnostics.clone());
+    snapshot.diagnostics.extend(state.diagnostics.clone());
+    snapshot.discovery_pending |= coordinator_snapshot.discovery_pending;
+    snapshot.mcp_generation = coordinator_snapshot.generation;
+    snapshot.mcp_servers = state.entries;
+    snapshot.mcp_approval_requests = state.approval_requests;
+    snapshot.mcp_conflicts = state.conflicts;
+}
+
 async fn service_for(
     workspace_root: Option<&Path>,
+) -> Result<Arc<WorkspaceExternalSourceService>, String> {
+    service_for_profile(workspace_root, ExternalSourceServiceProfile::LocalExecution).await
+}
+
+async fn read_only_service_for(
+    workspace_root: Option<&Path>,
+) -> Result<Arc<WorkspaceExternalSourceService>, String> {
+    service_for_profile(
+        workspace_root,
+        ExternalSourceServiceProfile::ReadOnlyProjection,
+    )
+    .await
+}
+
+async fn service_for_profile(
+    workspace_root: Option<&Path>,
+    profile: ExternalSourceServiceProfile,
 ) -> Result<Arc<WorkspaceExternalSourceService>, String> {
     let workspace_root = normalize_workspace_root(workspace_root)?;
     // Serialize cache acquisition with idle retirement. Without this lease
     // gate, a caller could upgrade the weak entry after the retirement count
     // check and have its newly acquired routes removed underneath it.
     let _service_gate = workspace_service_gate().lock().await;
-    if let Some(service) = workspace_services()
+    let services = workspace_services_for_profile(profile);
+    if let Some(service) = services
         .get(&workspace_root)
         .and_then(|service| service.value().upgrade())
     {
@@ -1114,8 +3604,8 @@ async fn service_for(
         sync_service_preferences(&service).await?;
         return Ok(service);
     }
-    let created = WorkspaceExternalSourceService::create(workspace_root.clone()).await?;
-    let service = match workspace_services().entry(workspace_root) {
+    let created = WorkspaceExternalSourceService::create(workspace_root.clone(), profile).await?;
+    let service = match services.entry(workspace_root) {
         Entry::Occupied(mut entry) => match entry.get().upgrade() {
             Some(existing) => existing,
             None => {
@@ -1146,23 +3636,40 @@ async fn read_external_sources_config() -> Result<ExternalSourcesConfig, String>
 }
 
 pub(crate) async fn external_tool_invocation_is_authorized(
+    ecosystem_id: &str,
     approval_key: &str,
     source_key: &str,
+    workspace_route: &str,
 ) -> Result<bool, String> {
     let preferences = read_external_sources_config().await?;
     Ok(external_tool_invocation_is_authorized_by(
         &preferences,
+        ecosystem_id,
         approval_key,
         source_key,
+        workspace_route,
     ))
 }
 
 fn external_tool_invocation_is_authorized_by(
     preferences: &ExternalSourcesConfig,
+    ecosystem_id: &str,
     approval_key: &str,
     source_preference_key: &str,
+    workspace_route: &str,
 ) -> bool {
-    preferences.approved_tool_targets.contains(approval_key)
+    let policy = preferences.integration_policy.known().map(|document| {
+        external_integration_policy_snapshot(
+            document,
+            workspace_policy_key_from_route(workspace_route).as_deref(),
+            default_external_integration_ecosystems(),
+        )
+    });
+    policy.is_some_and(|policy| {
+        policy.is_ok_and(|policy| {
+            integration_capability_is_active(&policy, ecosystem_id, EXTERNAL_CAPABILITY_TOOL)
+        })
+    }) && preferences.approved_tool_targets.contains(approval_key)
         && !preferences
             .suppressed_source_keys
             .iter()
@@ -1192,15 +3699,101 @@ async fn persist_observed_tool_conflicts(conflicts: &[ExternalToolConflict]) -> 
     let conflicts = conflicts.to_vec();
     ExternalSourcePreferenceStore::global()?
         .update(move |config| {
+            let previous = config.tool_conflict_choices.clone();
             for conflict in conflicts {
                 reconcile_observed_tool_conflict(
                     &mut config.tool_conflict_choices,
                     &conflict.conflict_key,
                 );
             }
+            if config.tool_conflict_choices != previous {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
         })
         .await
         .map(|_| ())
+}
+
+async fn persist_observed_subagent_conflicts(
+    observed: &BTreeMap<String, String>,
+) -> Result<(bool, ExternalSourcesConfig), String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    persist_observed_subagent_conflicts_with_store(&store, observed).await
+}
+
+async fn persist_observed_subagent_conflicts_with_store(
+    store: &ExternalSourcePreferenceStore,
+    observed: &BTreeMap<String, String>,
+) -> Result<(bool, ExternalSourcesConfig), String> {
+    if observed.is_empty() {
+        return store.read().await.map(|config| (false, config));
+    }
+    let observed = observed.clone();
+    store
+        .update(move |config| {
+            let mut changed = false;
+            for (lineage, current_key) in observed {
+                let previous_key = config
+                    .subagent_conflict_lineage_current_keys
+                    .get(&lineage)
+                    .cloned();
+                if previous_key.as_deref() == Some(current_key.as_str()) {
+                    continue;
+                }
+                config
+                    .subagent_conflict_lineage_current_keys
+                    .insert(lineage, current_key.clone());
+                changed = true;
+                let previous_choice = previous_key
+                    .as_ref()
+                    .and_then(|previous_key| config.subagent_conflict_choices.remove(previous_key));
+                if previous_choice.is_some() {
+                    let replaced = config.subagent_conflict_choices.insert(
+                        current_key,
+                        SUBAGENT_CONFLICT_RESELECTION_REQUIRED.to_string(),
+                    );
+                    changed |= replaced.as_deref() != Some(SUBAGENT_CONFLICT_RESELECTION_REQUIRED);
+                }
+            }
+            if changed {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            changed
+        })
+        .await
+}
+
+fn merge_subagent_state(
+    snapshot: &mut ExternalSourceCatalogSnapshot,
+    coordinator_snapshot: &bitfun_external_sources::ExternalSubagentCoordinatorSnapshot,
+    state: &ExternalSubagentProductState,
+    preference_revision: u64,
+) {
+    snapshot.generation = snapshot.generation.max(coordinator_snapshot.generation);
+    snapshot.discovery_pending |= coordinator_snapshot.discovery_pending;
+    let known_sources = snapshot
+        .sources
+        .iter()
+        .map(|entry| entry.stable_key.clone())
+        .collect::<BTreeSet<_>>();
+    snapshot.sources.extend(
+        coordinator_snapshot
+            .sources
+            .iter()
+            .filter(|source| !known_sources.contains(&source.stable_key))
+            .cloned(),
+    );
+    snapshot
+        .sources
+        .sort_by(|left, right| left.stable_key.cmp(&right.stable_key));
+    snapshot.subagent_generation = coordinator_snapshot.generation;
+    snapshot.preference_revision = preference_revision;
+    snapshot.subagents = state.summaries.clone();
+    snapshot.subagent_conflicts = state.conflicts.clone();
+    snapshot.pending_subagent_approvals = state.pending_approvals.clone();
+    snapshot
+        .diagnostics
+        .extend(coordinator_snapshot.diagnostics.clone());
 }
 
 fn reconcile_observed_tool_conflict(choices: &mut BTreeMap<String, String>, conflict_key: &str) {
@@ -1238,10 +3831,14 @@ fn reconcile_observed_tool_conflict(choices: &mut BTreeMap<String, String>, conf
 async fn persist_source_enabled_change(
     stable_key: &str,
     enabled: bool,
+    expected_preference_revision: u64,
 ) -> Result<BTreeSet<String>, String> {
     let stable_key = stable_key.to_string();
     ExternalSourcePreferenceStore::global()?
         .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return None;
+            }
             let mut sources = config
                 .suppressed_source_keys
                 .iter()
@@ -1252,22 +3849,39 @@ async fn persist_source_enabled_change(
             } else {
                 sources.insert(stable_key);
             }
-            config.suppressed_source_keys = sources.iter().cloned().collect();
-            sources
+            let next = sources.iter().cloned().collect::<Vec<_>>();
+            if config.suppressed_source_keys != next {
+                config.suppressed_source_keys = next;
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            Some(sources)
         })
         .await
-        .map(|(sources, _)| sources)
+        .and_then(|(sources, _)| {
+            sources.ok_or_else(|| {
+                stale_operation_error(
+                    "External source preferences changed; refresh before retrying",
+                )
+            })
+        })
 }
 
 async fn persist_conflict_choice(
     conflict_key: &str,
     candidate_id: &str,
     participants: Vec<String>,
+    expected_preference_revision: u64,
 ) -> Result<ExternalSourcesConfig, String> {
     let conflict_key = conflict_key.to_string();
     let candidate_id = candidate_id.to_string();
     ExternalSourcePreferenceStore::global()?
         .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            let previous_choices = config.conflict_choices.clone();
+            let previous_lineage = config.conflict_lineage_current_keys.clone();
+            let previous_candidates = config.conflicted_candidate_ids.clone();
             ExternalSourceCoordinator::reconcile_conflict_preferences(
                 &mut config.conflict_choices,
                 &mut config.conflict_lineage_current_keys,
@@ -1276,24 +3890,53 @@ async fn persist_conflict_choice(
                 &candidate_id,
                 &participants,
             );
+            if config.conflict_choices != previous_choices
+                || config.conflict_lineage_current_keys != previous_lineage
+                || config.conflicted_candidate_ids != previous_candidates
+            {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            true
         })
         .await
-        .map(|(_, config)| config)
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External command preferences changed; refresh before retrying",
+                )
+            })
+        })
 }
 
 async fn persist_tool_target_decision(
     approval_key: &str,
     decision_key: &str,
     approved: bool,
+    expected_preference_revision: u64,
 ) -> Result<ExternalSourcesConfig, String> {
     let approval_key = approval_key.to_string();
     let decision_key = decision_key.to_string();
     ExternalSourcePreferenceStore::global()?
         .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            let previous_approved = config.approved_tool_targets.clone();
+            let previous_declined = config.declined_tool_decisions.clone();
             reconcile_tool_target_decision(config, approval_key, decision_key, approved);
+            if config.approved_tool_targets != previous_approved
+                || config.declined_tool_decisions != previous_declined
+            {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            true
         })
         .await
-        .map(|(_, config)| config)
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error("External tool preferences changed; refresh before retrying")
+            })
+        })
 }
 
 fn reconcile_tool_target_decision(
@@ -1316,19 +3959,466 @@ fn reconcile_tool_target_decision(
 async fn persist_tool_conflict_choice(
     conflict_key: &str,
     candidate_id: &str,
+    expected_preference_revision: u64,
 ) -> Result<ExternalSourcesConfig, String> {
     let conflict_key = conflict_key.to_string();
     let candidate_id = candidate_id.to_string();
     ExternalSourcePreferenceStore::global()?
         .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            let previous = config.tool_conflict_choices.clone();
             reconcile_versioned_tool_conflict_choice(
                 &mut config.tool_conflict_choices,
                 conflict_key,
                 candidate_id,
             );
+            if config.tool_conflict_choices != previous {
+                config.preference_revision = config.preference_revision.saturating_add(1);
+            }
+            true
         })
         .await
-        .map(|(_, config)| config)
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error("External tool preferences changed; refresh before retrying")
+            })
+        })
+}
+
+async fn persist_subagent_activation(
+    approval_key: &str,
+    approved: bool,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let approval_key = approval_key.to_string();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            if approved {
+                config
+                    .approved_subagent_envelopes
+                    .insert(approval_key.clone());
+                config.declined_subagent_decisions.remove(&approval_key);
+            } else {
+                config.approved_subagent_envelopes.remove(&approval_key);
+                config
+                    .declined_subagent_decisions
+                    .insert(approval_key.clone(), approval_key);
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External subagent preferences changed; refresh before retrying",
+                )
+            })
+        })
+}
+
+async fn persist_subagent_conflict_choice(
+    conflict_key: &str,
+    candidate_id: &str,
+    approval_key: Option<&str>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    persist_subagent_conflict_choice_with_store(
+        &store,
+        conflict_key,
+        candidate_id,
+        approval_key,
+        expected_preference_revision,
+    )
+    .await
+}
+
+async fn persist_subagent_conflict_choice_with_store(
+    store: &ExternalSourcePreferenceStore,
+    conflict_key: &str,
+    candidate_id: &str,
+    approval_key: Option<&str>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let conflict_key = conflict_key.to_string();
+    let candidate_id = candidate_id.to_string();
+    let approval_key = approval_key.map(str::to_string);
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            config
+                .subagent_conflict_choices
+                .insert(conflict_key, candidate_id);
+            if let Some(approval_key) = approval_key {
+                config
+                    .approved_subagent_envelopes
+                    .insert(approval_key.clone());
+                config.declined_subagent_decisions.remove(&approval_key);
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External subagent preferences changed; refresh before retrying",
+                )
+            })
+        })
+}
+
+async fn persist_mcp_server_decision(
+    decision_key: &str,
+    approved: bool,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    let decision_key = decision_key.to_string();
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            reconcile_versioned_mcp_server_decision(
+                &mut config.mcp_server_decisions,
+                decision_key,
+                approved,
+            );
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error("External MCP preferences changed; refresh before retrying")
+            })
+        })
+}
+
+async fn persist_mcp_conflict_choice(
+    conflict_key: &str,
+    candidate_id: &str,
+    external_decision: Option<&str>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    let conflict_key = conflict_key.to_string();
+    let candidate_id = candidate_id.to_string();
+    let external_decision = external_decision.map(str::to_string);
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            reconcile_versioned_mcp_conflict_choice(
+                &mut config.mcp_conflict_choices,
+                conflict_key,
+                candidate_id,
+            );
+            if let Some(decision_key) = external_decision {
+                reconcile_versioned_mcp_server_decision(
+                    &mut config.mcp_server_decisions,
+                    decision_key,
+                    true,
+                );
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error("External MCP preferences changed; refresh before retrying")
+            })
+        })
+}
+
+fn validate_integration_policy_operation(
+    scope: ExternalIntegrationPolicyScope,
+    operation: &ExternalIntegrationPolicyOperation,
+) -> Result<(), String> {
+    let descriptors = default_external_integration_ecosystems();
+    let validate_ecosystem =
+        |ecosystem_id: &bitfun_product_domains::external_sources::EcosystemId| {
+            descriptors
+                .iter()
+                .find(|descriptor| descriptor.ecosystem_id == *ecosystem_id)
+                .ok_or_else(|| {
+                    invalid_operation_error(format!(
+                        "External ecosystem '{}' is not registered",
+                        ecosystem_id
+                    ))
+                })
+        };
+    match operation {
+        ExternalIntegrationPolicyOperation::SetEnabled { .. } => Ok(()),
+        ExternalIntegrationPolicyOperation::SetEcosystemMode { ecosystem_id, mode } => {
+            validate_ecosystem(ecosystem_id)?;
+            mode.is_known().then_some(()).ok_or_else(|| {
+                invalid_operation_error("External integration mode is not supported")
+            })
+        }
+        ExternalIntegrationPolicyOperation::SetCapabilityAccess {
+            ecosystem_id,
+            capability_id,
+            access,
+        } => {
+            let descriptor = validate_ecosystem(ecosystem_id)?;
+            if !descriptor
+                .capabilities
+                .iter()
+                .any(|capability| capability.capability_id == *capability_id)
+                || !access.is_known()
+            {
+                return Err(invalid_operation_error(format!(
+                    "External capability '{}' is not registered",
+                    capability_id
+                )));
+            }
+            Ok(())
+        }
+        ExternalIntegrationPolicyOperation::ResetWorkspace
+            if scope == ExternalIntegrationPolicyScope::Workspace =>
+        {
+            Ok(())
+        }
+        ExternalIntegrationPolicyOperation::ResetWorkspace => Err(invalid_operation_error(
+            "reset_workspace requires workspace policy scope",
+        )),
+        ExternalIntegrationPolicyOperation::ResetIncompatiblePolicy
+            if scope == ExternalIntegrationPolicyScope::User =>
+        {
+            Ok(())
+        }
+        ExternalIntegrationPolicyOperation::ResetIncompatiblePolicy => Err(
+            invalid_operation_error("reset_incompatible_policy requires user policy scope"),
+        ),
+        _ => Err(invalid_operation_error("Policy operation is not supported")),
+    }
+}
+
+fn apply_user_policy_operation(
+    settings: &mut ExternalIntegrationPolicySettings,
+    operation: &ExternalIntegrationPolicyOperation,
+) -> Result<bool, String> {
+    match operation {
+        ExternalIntegrationPolicyOperation::SetEnabled { enabled } => {
+            let changed = settings.enabled != *enabled;
+            settings.enabled = *enabled;
+            Ok(changed)
+        }
+        ExternalIntegrationPolicyOperation::SetEcosystemMode { ecosystem_id, mode } => {
+            let policy = settings.ecosystems.entry(ecosystem_id.clone()).or_default();
+            let changed = policy.mode != *mode;
+            policy.mode = mode.clone();
+            Ok(changed)
+        }
+        ExternalIntegrationPolicyOperation::SetCapabilityAccess {
+            ecosystem_id,
+            capability_id,
+            access,
+        } => {
+            let policy = settings.ecosystems.entry(ecosystem_id.clone()).or_default();
+            let changed = policy.mode != ExternalIntegrationMode::Custom
+                || policy.capability_overrides.get(capability_id) != Some(access);
+            policy.mode = ExternalIntegrationMode::Custom;
+            policy
+                .capability_overrides
+                .insert(capability_id.clone(), access.clone());
+            Ok(changed)
+        }
+        ExternalIntegrationPolicyOperation::ResetWorkspace => Err(invalid_operation_error(
+            "reset_workspace cannot update user defaults",
+        )),
+        _ => Err(invalid_operation_error("Policy operation is not supported")),
+    }
+}
+
+fn apply_workspace_policy_operation(
+    document: &mut ExternalIntegrationPolicyDocument,
+    workspace_key: &str,
+    operation: &ExternalIntegrationPolicyOperation,
+) -> Result<bool, String> {
+    if matches!(
+        operation,
+        ExternalIntegrationPolicyOperation::ResetWorkspace
+    ) {
+        return Ok(document.workspace_overrides.remove(workspace_key).is_some());
+    }
+    let policy = document
+        .workspace_overrides
+        .entry(workspace_key.to_string())
+        .or_default();
+    match operation {
+        ExternalIntegrationPolicyOperation::SetEnabled { enabled } => {
+            let changed = policy.enabled != Some(*enabled);
+            policy.enabled = Some(*enabled);
+            Ok(changed)
+        }
+        ExternalIntegrationPolicyOperation::SetEcosystemMode { ecosystem_id, mode } => {
+            let ecosystem = policy.ecosystems.entry(ecosystem_id.clone()).or_default();
+            let changed = ecosystem.mode.as_ref() != Some(mode);
+            ecosystem.mode = Some(mode.clone());
+            Ok(changed)
+        }
+        ExternalIntegrationPolicyOperation::SetCapabilityAccess {
+            ecosystem_id,
+            capability_id,
+            access,
+        } => {
+            let ecosystem = policy.ecosystems.entry(ecosystem_id.clone()).or_default();
+            let changed = ecosystem.mode != Some(ExternalIntegrationMode::Custom)
+                || ecosystem.capability_overrides.get(capability_id) != Some(access);
+            ecosystem.mode = Some(ExternalIntegrationMode::Custom);
+            ecosystem
+                .capability_overrides
+                .insert(capability_id.clone(), access.clone());
+            Ok(changed)
+        }
+        ExternalIntegrationPolicyOperation::ResetWorkspace => Ok(false),
+        _ => Err(invalid_operation_error("Policy operation is not supported")),
+    }
+}
+
+async fn persist_integration_policy_mutation(
+    workspace_root: Option<&Path>,
+    mutation: ExternalIntegrationPolicyMutation,
+) -> Result<ExternalSourcesConfig, String> {
+    validate_integration_policy_operation(mutation.scope, &mutation.change)?;
+    let workspace_key = match mutation.scope {
+        ExternalIntegrationPolicyScope::User => None,
+        ExternalIntegrationPolicyScope::Workspace => {
+            Some(workspace_policy_key(workspace_root).ok_or_else(|| {
+                invalid_operation_error("Workspace policy scope requires a workspace")
+            })?)
+        }
+        _ => {
+            return Err(invalid_operation_error("Policy scope is not supported"));
+        }
+    };
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            apply_integration_policy_mutation_to_config(config, workspace_key.as_deref(), &mutation)
+                .map(|_| ())
+        })
+        .await
+        .and_then(|(result, config)| result.map(|()| config))
+}
+
+fn apply_integration_policy_mutation_to_config(
+    config: &mut ExternalSourcesConfig,
+    workspace_key: Option<&str>,
+    mutation: &ExternalIntegrationPolicyMutation,
+) -> Result<bool, String> {
+    if config.preference_revision != mutation.expected_preference_revision {
+        return Err(stale_operation_error(
+            "External integration policy changed; refresh before retrying",
+        ));
+    }
+    let incompatible = config.integration_policy.known().is_none();
+    if incompatible {
+        if mutation.scope == ExternalIntegrationPolicyScope::User
+            && matches!(
+                &mutation.change,
+                ExternalIntegrationPolicyOperation::ResetIncompatiblePolicy
+            )
+        {
+            config
+                .integration_policy_backups
+                .push(config.integration_policy.raw_value());
+            const MAX_POLICY_BACKUPS: usize = 3;
+            if config.integration_policy_backups.len() > MAX_POLICY_BACKUPS {
+                let remove_count = config.integration_policy_backups.len() - MAX_POLICY_BACKUPS;
+                config.integration_policy_backups.drain(0..remove_count);
+            }
+            let mut reset_policy = StoredExternalIntegrationPolicy::default();
+            reset_policy
+                .known_mut()
+                .expect("the host-owned default policy schema must be compatible")
+                .user_defaults
+                .enabled = false;
+            config.integration_policy = reset_policy;
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            return Ok(true);
+        }
+        return Err(incompatible_policy_error(format!(
+            "External integration policy schema {} is not supported; back up and reset it before making changes",
+            config.integration_policy.schema_major()
+        )));
+    }
+    if matches!(
+        &mutation.change,
+        ExternalIntegrationPolicyOperation::ResetIncompatiblePolicy
+    ) {
+        return Err(invalid_operation_error(
+            "External integration policy is already compatible",
+        ));
+    }
+    let document = config.integration_policy.known_mut().ok_or_else(|| {
+        incompatible_policy_error("External integration policy requires a backup and reset")
+    })?;
+    let changed = match mutation.scope {
+        ExternalIntegrationPolicyScope::User => {
+            apply_user_policy_operation(&mut document.user_defaults, &mutation.change)?
+        }
+        ExternalIntegrationPolicyScope::Workspace => apply_workspace_policy_operation(
+            document,
+            workspace_key.ok_or_else(|| {
+                invalid_operation_error("Workspace policy scope requires a workspace")
+            })?,
+            &mutation.change,
+        )?,
+        _ => return Err(invalid_operation_error("Policy scope is not supported")),
+    };
+    if changed {
+        config.preference_revision = config.preference_revision.saturating_add(1);
+    }
+    Ok(changed)
+}
+
+fn reconcile_versioned_mcp_conflict_choice(
+    choices: &mut BTreeMap<String, String>,
+    conflict_key: String,
+    candidate_id: String,
+) {
+    if let Some((lineage, _)) = conflict_key.rsplit_once(':') {
+        choices.retain(|existing_key, _| {
+            existing_key
+                .rsplit_once(':')
+                .is_none_or(|(existing_lineage, _)| existing_lineage != lineage)
+        });
+    }
+    choices.insert(conflict_key, candidate_id);
+}
+
+fn reconcile_versioned_mcp_server_decision(
+    decisions: &mut BTreeMap<String, ExternalMcpDecision>,
+    decision_key: String,
+    approved: bool,
+) {
+    if let Some((lineage, _)) = decision_key.rsplit_once(':') {
+        decisions.retain(|existing_key, _| {
+            existing_key
+                .rsplit_once(':')
+                .is_none_or(|(existing_lineage, _)| existing_lineage != lineage)
+        });
+    }
+    decisions.insert(
+        decision_key.clone(),
+        ExternalMcpDecision {
+            decision_key,
+            approved,
+        },
+    );
 }
 
 fn reconcile_versioned_tool_conflict_choice(
@@ -1346,18 +4436,30 @@ fn reconcile_versioned_tool_conflict_choice(
     choices.insert(conflict_key, candidate_id);
 }
 
-fn propagate_suppressed_sources(sources: &BTreeSet<String>) {
+fn propagate_suppressed_sources(
+    sources: &BTreeSet<String>,
+    current: &Arc<WorkspaceExternalSourceService>,
+) {
     for service in workspace_services().iter() {
         let Some(service) = service.value().upgrade() else {
             continue;
         };
+        if Arc::ptr_eq(&service, current) {
+            continue;
+        }
         lock_coordinator(&service.coordinator).replace_suppressed_sources(sources.clone());
         lock_tool_coordinator(&service.tool_coordinator)
             .replace_suppressed_sources(sources.clone());
+        lock_subagent_coordinator(&service.subagent_coordinator)
+            .replace_suppressed_sources(sources.clone());
+        lock_mcp_coordinator(&service.mcp_coordinator).replace_suppressed_sources(sources.clone());
         tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
+            if let Err(error) = service.refresh_preserving_worker_recovery().await {
+                log::warn!(
+                    "Could not refresh external sources after source preference change scope={} error_category={}",
+                    external_log_scope(service.workspace_root.as_deref()),
+                    external_log_error_category(&error),
+                );
             }
         });
     }
@@ -1395,6 +4497,57 @@ fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
             let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
             if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
                 let _ = service.updates.send(snapshot);
+            }
+        });
+    }
+}
+
+fn propagate_subagent_preferences(_preferences: &ExternalSourcesConfig) {
+    for service in workspace_services().iter() {
+        let Some(service) = service.value().upgrade() else {
+            continue;
+        };
+        tokio::spawn(async move {
+            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
+                let _ = service.updates.send(snapshot);
+            }
+        });
+    }
+}
+
+fn propagate_mcp_preferences(_preferences: &ExternalSourcesConfig) {
+    for service in workspace_services().iter() {
+        let Some(service) = service.value().upgrade() else {
+            continue;
+        };
+        tokio::spawn(async move {
+            let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
+                let _ = service.updates.send(snapshot);
+            }
+        });
+    }
+}
+
+fn propagate_integration_policy_preferences(
+    _preferences: &ExternalSourcesConfig,
+    current: &Arc<WorkspaceExternalSourceService>,
+) {
+    for service in workspace_services().iter() {
+        let Some(service) = service.value().upgrade() else {
+            continue;
+        };
+        if Arc::ptr_eq(&service, current) {
+            continue;
+        }
+        tokio::spawn(async move {
+            if let Err(error) = service.refresh_preserving_worker_recovery().await {
+                log::warn!(
+                    "Could not apply external integration policy update scope={} error_category={}",
+                    external_log_scope(service.workspace_root.as_deref()),
+                    external_log_error_category(&error),
+                );
             }
         });
     }
@@ -1438,6 +4591,7 @@ pub(crate) fn notify_external_tool_registry_changed() {
 
 async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> Result<(), String> {
     let preferences = read_external_sources_config().await?;
+    let policy = integration_policy_snapshot(&preferences, service.workspace_root.as_deref())?;
     let suppressed_sources = preferences
         .suppressed_source_keys
         .iter()
@@ -1471,28 +4625,100 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
     let tool_changed = {
         let mut coordinator = lock_tool_coordinator(&service.tool_coordinator);
         if coordinator.suppressed_sources() != &suppressed_sources {
-            coordinator.replace_suppressed_sources(suppressed_sources);
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
             true
         } else {
             false
         }
     };
-    if command_changed || tool_changed {
+    let subagent_changed = {
+        let mut coordinator = lock_subagent_coordinator(&service.subagent_coordinator);
+        if coordinator.suppressed_sources() != &suppressed_sources {
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
+            true
+        } else {
+            false
+        }
+    };
+    let mcp_changed = {
+        let mut coordinator = lock_mcp_coordinator(&service.mcp_coordinator);
+        if coordinator.suppressed_sources() != &suppressed_sources {
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
+            true
+        } else {
+            false
+        }
+    };
+    let subagent_preferences_changed =
+        service.snapshot().preference_revision != preferences.preference_revision;
+    let policy_changed = service.snapshot().integration_policy != policy;
+    if command_changed
+        || tool_changed
+        || subagent_changed
+        || mcp_changed
+        || subagent_preferences_changed
+        || policy_changed
+    {
         let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
         let snapshot = service.rebuild_product_snapshot(command_snapshot).await?;
         let _ = service.updates.send(snapshot);
     }
+    service.ensure_watch_roots(&policy).await;
     Ok(())
 }
 
 fn validate_conflict_preference(conflict_key: &str, candidate_id: &str) -> Result<(), String> {
     if conflict_key.is_empty() || conflict_key.len() > 512 {
-        return Err("external source conflict key is invalid".to_string());
+        return Err(invalid_operation_error(
+            "External source conflict key is invalid",
+        ));
     }
     if candidate_id.is_empty() || candidate_id.len() > 512 {
-        return Err("external source conflict candidate is invalid".to_string());
+        return Err(invalid_operation_error(
+            "External source conflict candidate is invalid",
+        ));
     }
     Ok(())
+}
+
+fn validate_subagent_decision_value(value: &str, label: &str) -> Result<(), String> {
+    if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
+        return Err(invalid_operation_error(format!(
+            "External subagent {label} is invalid"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_mcp_decision_value(value: &str, label: &str) -> Result<(), String> {
+    if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
+        return Err(invalid_operation_error(format!(
+            "External MCP {label} is invalid"
+        )));
+    }
+    Ok(())
+}
+
+pub(super) fn external_mcp_decision_allowed(
+    state: &ExternalMcpActivationState,
+    approved: bool,
+) -> bool {
+    if matches!(
+        state,
+        ExternalMcpActivationState::Conflict
+            | ExternalMcpActivationState::Covered { .. }
+            | ExternalMcpActivationState::SourceDisabled
+            | ExternalMcpActivationState::Unsupported { .. }
+            | ExternalMcpActivationState::Removed
+    ) {
+        return false;
+    }
+    !approved
+        || !matches!(
+            state,
+            ExternalMcpActivationState::Starting
+                | ExternalMcpActivationState::RuntimeUnavailable { .. }
+        )
 }
 
 pub async fn external_source_conflict_choices() -> Result<
@@ -1515,11 +4741,13 @@ pub async fn remember_external_source_conflict_choice(
     conflict_key: &str,
     candidate_id: &str,
     participants: Vec<String>,
+    expected_preference_revision: u64,
 ) -> Result<
     (
         BTreeMap<String, String>,
         BTreeMap<String, String>,
         BTreeSet<String>,
+        u64,
     ),
     String,
 > {
@@ -1532,14 +4760,23 @@ pub async fn remember_external_source_conflict_choice(
             .iter()
             .any(|candidate| validate_conflict_preference(conflict_key, candidate).is_err())
     {
-        return Err("external source conflict participants are invalid".to_string());
+        return Err(invalid_operation_error(
+            "External source conflict participants are invalid",
+        ));
     }
-    let preferences = persist_conflict_choice(conflict_key, candidate_id, participants).await?;
+    let preferences = persist_conflict_choice(
+        conflict_key,
+        candidate_id,
+        participants,
+        expected_preference_revision,
+    )
+    .await?;
     propagate_conflict_preferences(&preferences);
     Ok((
         preferences.conflict_choices,
         preferences.conflict_lineage_current_keys,
         preferences.conflicted_candidate_ids,
+        preferences.preference_revision,
     ))
 }
 
@@ -1547,11 +4784,12 @@ pub async fn set_external_prompt_command_conflict_choice(
     workspace_root: Option<&Path>,
     conflict_key: &str,
     candidate_id: &str,
+    expected_preference_revision: u64,
 ) -> Result<ExternalSourceCatalogSnapshot, String> {
     validate_conflict_preference(conflict_key, candidate_id)?;
     service_for(workspace_root)
         .await?
-        .set_conflict_choice(conflict_key, candidate_id)
+        .set_conflict_choice(conflict_key, candidate_id, expected_preference_revision)
         .await
 }
 
@@ -1560,10 +4798,16 @@ pub async fn set_external_tool_target_decision(
     approval_key: &str,
     decision_key: &str,
     approved: bool,
+    expected_preference_revision: u64,
 ) -> Result<ExternalSourceCatalogSnapshot, String> {
     service_for(workspace_root)
         .await?
-        .set_tool_target_decision(approval_key, decision_key, approved)
+        .set_tool_target_decision(
+            approval_key,
+            decision_key,
+            approved,
+            expected_preference_revision,
+        )
         .await
 }
 
@@ -1571,10 +4815,91 @@ pub async fn set_external_tool_conflict_choice(
     workspace_root: Option<&Path>,
     conflict_key: &str,
     candidate_id: &str,
+    expected_preference_revision: u64,
 ) -> Result<ExternalSourceCatalogSnapshot, String> {
     service_for(workspace_root)
         .await?
-        .set_tool_conflict_choice(conflict_key, candidate_id)
+        .set_tool_conflict_choice(conflict_key, candidate_id, expected_preference_revision)
+        .await
+}
+
+pub async fn set_external_mcp_server_decision(
+    workspace_root: Option<&Path>,
+    candidate_id: &str,
+    decision_key: &str,
+    approved: bool,
+    expected_mcp_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_mcp_server_decision(
+            candidate_id,
+            decision_key,
+            approved,
+            expected_mcp_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
+pub async fn choose_external_mcp_conflict(
+    workspace_root: Option<&Path>,
+    conflict_key: &str,
+    candidate_id: &str,
+    approve_external: bool,
+    expected_mcp_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .choose_mcp_conflict(
+            conflict_key,
+            candidate_id,
+            approve_external,
+            expected_mcp_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
+pub async fn set_external_subagent_activation(
+    workspace_root: Option<&Path>,
+    candidate_id: &str,
+    approved: bool,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+    decision_key: &str,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_subagent_activation(
+            candidate_id,
+            approved,
+            expected_subagent_generation,
+            expected_preference_revision,
+            decision_key,
+        )
+        .await
+}
+
+pub async fn choose_external_subagent_conflict(
+    workspace_root: Option<&Path>,
+    conflict_key: &str,
+    candidate_id: &str,
+    approve_external: bool,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .choose_subagent_conflict(
+            conflict_key,
+            candidate_id,
+            approve_external,
+            expected_subagent_generation,
+            expected_preference_revision,
+        )
         .await
 }
 
@@ -1591,6 +4916,209 @@ pub async fn external_source_snapshot(
     }
 }
 
+/// Returns a static, sanitized projection for Hosts that may inspect external
+/// configuration but must never load external code or alter runtime routes.
+pub async fn external_source_read_only_snapshot(
+    workspace_root: Option<&Path>,
+    force_refresh: bool,
+) -> Result<ExternalSourcePublicSnapshot, String> {
+    let service = read_only_service_for(workspace_root).await?;
+    let snapshot = if force_refresh {
+        service.refresh().await?
+    } else {
+        service.ensure_background_refresh();
+        service.snapshot()
+    };
+    let mut public = ExternalSourcePublicSnapshot::from(snapshot);
+    public.host_capabilities = ExternalSourceHostCapabilities::read_only_projection();
+    Ok(public)
+}
+
+pub async fn update_external_integration_policy(
+    workspace_root: Option<&Path>,
+    mutation: ExternalIntegrationPolicyMutation,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    let expected_revision = mutation.expected_preference_revision;
+    let (scope, operation, ecosystem, capability) = integration_policy_log_context(&mutation);
+    let result = match service_for(workspace_root).await {
+        Ok(service) => service.update_integration_policy(mutation).await,
+        Err(error) => Err(error),
+    };
+    match &result {
+        Ok(snapshot) => log::info!(
+            "External integration policy mutation outcome=success scope={} operation={} ecosystem={} capability={} revision={} changed={}",
+            scope,
+            operation,
+            ecosystem,
+            capability,
+            snapshot.preference_revision,
+            snapshot.preference_revision != expected_revision,
+        ),
+        Err(error) => log::warn!(
+            "External integration policy mutation outcome=failure scope={} operation={} ecosystem={} capability={} expected_revision={} error_code={}",
+            scope,
+            operation,
+            ecosystem,
+            capability,
+            expected_revision,
+            external_integration_error_code(error),
+        ),
+    }
+    result
+}
+
+fn integration_policy_log_context(
+    mutation: &ExternalIntegrationPolicyMutation,
+) -> (&'static str, &'static str, String, String) {
+    let scope = match mutation.scope {
+        ExternalIntegrationPolicyScope::User => "user",
+        ExternalIntegrationPolicyScope::Workspace => "workspace",
+        _ => "unknown",
+    };
+    let (operation, ecosystem, capability) = match &mutation.change {
+        ExternalIntegrationPolicyOperation::SetEnabled { .. } => {
+            ("set_enabled", "all".to_string(), "all".to_string())
+        }
+        ExternalIntegrationPolicyOperation::SetEcosystemMode { ecosystem_id, .. } => (
+            "set_ecosystem_mode",
+            safe_external_log_token(ecosystem_id.as_str()),
+            "all".to_string(),
+        ),
+        ExternalIntegrationPolicyOperation::SetCapabilityAccess {
+            ecosystem_id,
+            capability_id,
+            ..
+        } => (
+            "set_capability_access",
+            safe_external_log_token(ecosystem_id.as_str()),
+            safe_external_log_token(capability_id.as_str()),
+        ),
+        ExternalIntegrationPolicyOperation::ResetWorkspace => {
+            ("reset_workspace", "all".to_string(), "all".to_string())
+        }
+        ExternalIntegrationPolicyOperation::ResetIncompatiblePolicy => (
+            "reset_incompatible_policy",
+            "all".to_string(),
+            "all".to_string(),
+        ),
+        _ => ("unknown", "unknown".to_string(), "unknown".to_string()),
+    };
+    (scope, operation, ecosystem, capability)
+}
+
+fn safe_external_log_token(value: &str) -> String {
+    value
+        .chars()
+        .take(64)
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn external_log_scope(workspace_root: Option<&Path>) -> &'static str {
+    if workspace_root.is_some() {
+        "workspace"
+    } else {
+        "user-global"
+    }
+}
+
+fn external_log_error_category(error: &str) -> String {
+    ExternalSourceOperationError::decode(error)
+        .map(|typed| typed.code.as_str().to_string())
+        .unwrap_or_else(|| "internal".to_string())
+}
+
+/// Converts legacy internal failures at the product boundary without deriving
+/// control flow from prose. Callers may pass an exactly encoded shared error;
+/// every other failure becomes a sanitized internal error with a correlation
+/// id, while the local log retains only a bounded category token.
+pub fn sanitize_external_source_operation_error(error: String) -> ExternalSourceOperationError {
+    if let Some(typed) = ExternalSourceOperationError::decode(&error) {
+        return typed;
+    }
+    static NEXT_CORRELATION_ID: AtomicU64 = AtomicU64::new(1);
+    let correlation_id = format!(
+        "external-source-{}-{}",
+        epoch_seconds(),
+        NEXT_CORRELATION_ID.fetch_add(1, Ordering::Relaxed)
+    );
+    log::error!(
+        "External source operation failed correlation_id={} category={}",
+        correlation_id,
+        external_log_error_category(&error),
+    );
+    ExternalSourceOperationError::new(
+        ExternalSourceOperationErrorCode::Internal,
+        "External source operation failed. Retry, then use the reference id if the problem continues.",
+        true,
+    )
+    .with_correlation_id(correlation_id)
+}
+
+fn encoded_operation_error(
+    code: ExternalSourceOperationErrorCode,
+    detail: impl Into<String>,
+    retryable: bool,
+) -> String {
+    ExternalSourceOperationError::new(code, detail, retryable).encode()
+}
+
+fn stale_operation_error(detail: impl Into<String>) -> String {
+    encoded_operation_error(
+        ExternalSourceOperationErrorCode::StaleRevision,
+        detail,
+        true,
+    )
+}
+
+fn missing_candidate_error(detail: impl Into<String>) -> String {
+    encoded_operation_error(ExternalSourceOperationErrorCode::NotFound, detail, false)
+}
+
+fn policy_limited_error(detail: impl Into<String>) -> String {
+    encoded_operation_error(
+        ExternalSourceOperationErrorCode::PolicyLimited,
+        detail,
+        false,
+    )
+}
+
+fn conflict_operation_error(detail: impl Into<String>) -> String {
+    encoded_operation_error(ExternalSourceOperationErrorCode::Conflict, detail, true)
+}
+
+fn unavailable_operation_error(detail: impl Into<String>) -> String {
+    encoded_operation_error(ExternalSourceOperationErrorCode::Unavailable, detail, true)
+}
+
+fn invalid_operation_error(detail: impl Into<String>) -> String {
+    encoded_operation_error(
+        ExternalSourceOperationErrorCode::InvalidRequest,
+        detail,
+        false,
+    )
+}
+
+fn incompatible_policy_error(detail: impl Into<String>) -> String {
+    encoded_operation_error(
+        ExternalSourceOperationErrorCode::PolicyIncompatible,
+        detail,
+        false,
+    )
+}
+
+fn external_integration_error_code(error: &str) -> String {
+    ExternalSourceOperationError::decode(error)
+        .map(|error| error.code.as_str().to_string())
+        .unwrap_or_else(|| "internal".to_string())
+}
+
 /// Keep the external-source runtime aligned with an actively assembled product
 /// tool catalog. A newly created service performs one synchronous refresh so an
 /// idle-retired workspace can restore approved routes before the catalog is
@@ -1600,17 +5128,29 @@ pub(crate) async fn ensure_external_source_workspace_runtime(workspace_root: Opt
     let service = match service_for(workspace_root).await {
         Ok(service) => service,
         Err(error) => {
-            log::warn!("Could not retain external source workspace runtime: {error}");
+            log::warn!(
+                "Could not retain external source workspace runtime scope={} error_category={}",
+                external_log_scope(workspace_root),
+                external_log_error_category(&error),
+            );
             return;
         }
     };
     if let Err(error) = service.ensure_initial_refresh().await {
-        log::warn!("Could not initialize external source workspace runtime: {error}");
+        log::warn!(
+            "Could not initialize external source workspace runtime scope={} error_category={}",
+            external_log_scope(workspace_root),
+            external_log_error_category(&error),
+        );
         return;
     }
     if external_tool_workspace_requires_recovery(workspace_root).await {
         if let Err(error) = service.refresh_worker_loss_once().await {
-            log::warn!("Could not recover external source tool runtime: {error}");
+            log::warn!(
+                "Could not recover external source tool runtime scope={} error_category={}",
+                external_log_scope(workspace_root),
+                external_log_error_category(&error),
+            );
         }
     }
 }
@@ -1619,10 +5159,11 @@ pub async fn set_external_source_enabled(
     workspace_root: Option<&Path>,
     source_key: &str,
     enabled: bool,
+    expected_preference_revision: u64,
 ) -> Result<ExternalSourceCatalogSnapshot, String> {
     service_for(workspace_root)
         .await?
-        .set_source_enabled(source_key, enabled)
+        .set_source_enabled(source_key, enabled, expected_preference_revision)
         .await
 }
 
@@ -1673,11 +5214,204 @@ impl ExternalSourceSubscription {
 mod tests {
     use super::*;
     use bitfun_product_domains::external_sources::{
-        ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord,
-        ExternalSourceScope, PromptCommandAvailability, PromptCommandDefinition,
-        PromptCommandProviderIdentity, PromptCommandProviderSnapshot, SourceQualifiedCommandId,
+        EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
+        PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
+        PromptCommandProviderSnapshot, SourceQualifiedCommandId,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn only_model_configuration_events_refresh_external_model_bindings() {
+        assert!(config_update_refreshes_external_model_bindings(
+            &ConfigUpdateEvent::ModelConfigurationUpdated
+        ));
+        assert!(!config_update_refreshes_external_model_bindings(
+            &ConfigUpdateEvent::ThemeUpdated {
+                theme_id: "dark".to_string(),
+            }
+        ));
+    }
+
+    #[test]
+    fn integration_error_metrics_decode_typed_codes_without_parsing_prose() {
+        let stale = stale_operation_error("preferences changed");
+        assert_eq!(external_integration_error_code(&stale), "stale_revision");
+        assert_eq!(
+            external_integration_error_code("legacy internal failure: private detail"),
+            "internal"
+        );
+    }
+
+    #[test]
+    fn background_log_categories_never_include_error_details_or_paths() {
+        let stale = stale_operation_error("private workspace path changed");
+        assert_eq!(external_log_error_category(&stale), "stale_revision");
+
+        for raw in [
+            r"directory_read_failed: C:\Users\alice\.config\opencode",
+            "Failed to watch path /home/alice/.config/opencode: permission denied",
+        ] {
+            let category = external_log_error_category(raw);
+            assert_eq!(category, "internal");
+            assert!(!category.contains("alice"));
+            assert!(!category.contains("opencode"));
+        }
+        assert_eq!(external_log_scope(Some(Path::new("C:/repo"))), "workspace");
+        assert_eq!(external_log_scope(None), "user-global");
+    }
+
+    #[test]
+    fn final_catalog_redacts_known_absolute_paths_from_diagnostics() {
+        let source_key = SourceKey::new("future.tools", "project").unwrap();
+        let raw_root = r"C:\Users\alice\repo\.future-ai\tools";
+        let raw_file = format!(r"{raw_root}\review.js");
+        let mut snapshot = ExternalSourceCatalogSnapshot {
+            generation: 1,
+            discovery_pending: false,
+            sources: vec![ExternalSourceCatalogEntry {
+                stable_key: source_key.stable_key(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key.clone(),
+                    ecosystem_id: EcosystemId::new("future-ai").unwrap(),
+                    display_name: "Future AI project tools".to_string(),
+                    source_kind: "standalone_tools".to_string(),
+                    scope: ExternalSourceScope::Project,
+                    location: raw_root.to_string(),
+                    execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+                    health: bitfun_product_domains::external_sources::ExternalSourceHealth::Partial,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: vec![ExternalSourceDiagnostic::warning(
+                        "future.tool.directory_read_failed",
+                        format!("Failed to read '{raw_root}'"),
+                        Some(source_key.clone()),
+                    )
+                    .with_asset_kind(ExternalSourceAssetKind::Tool)],
+                },
+                lifecycle: ExternalSourceLifecycleState::Degraded,
+            }],
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
+            subagent_generation: 0,
+            preference_revision: 0,
+            subagents: Vec::new(),
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
+            diagnostics: vec![ExternalSourceDiagnostic::warning(
+                "future.tool.file_read_failed",
+                format!("Failed to read '{raw_file}'"),
+                Some(source_key),
+            )
+            .with_asset_kind(ExternalSourceAssetKind::Tool)],
+        };
+
+        sanitize_external_snapshot_locations(
+            &mut snapshot,
+            Some(Path::new(r"C:\Users\alice\repo")),
+        );
+
+        assert_eq!(
+            snapshot.sources[0].record.location,
+            "<workspace>/.future-ai/tools"
+        );
+        assert_eq!(
+            snapshot.sources[0].record.diagnostics[0].message,
+            "Failed to read '<workspace>/.future-ai/tools'"
+        );
+        assert_eq!(
+            snapshot.diagnostics[0].message,
+            "Failed to read '<workspace>/.future-ai/tools/review.js'"
+        );
+        let serialized = serde_json::to_string(&snapshot).unwrap();
+        assert!(!serialized.contains("C:\\\\Users\\\\alice"));
+        assert!(!serialized.contains("C:/Users/alice"));
+    }
+
+    #[test]
+    fn presentation_groups_are_assigned_before_location_redaction() {
+        let make_source = |provider_id: &str, stable_key: &str, location: &str| {
+            let source_key = SourceKey::new(provider_id, "user-configuration").unwrap();
+            ExternalSourceCatalogEntry {
+                stable_key: stable_key.to_string(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key,
+                    ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                    display_name: "OpenCode user configuration".to_string(),
+                    source_kind: "configuration".to_string(),
+                    scope: ExternalSourceScope::RemoteUser,
+                    location: location.to_string(),
+                    execution_domain_id: ExecutionDomainId::new("peer-a").unwrap(),
+                    health:
+                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: Vec::new(),
+                },
+                lifecycle: ExternalSourceLifecycleState::Available,
+            }
+        };
+        let mut snapshot = ExternalSourceCatalogSnapshot {
+            generation: 0,
+            discovery_pending: false,
+            sources: vec![
+                make_source(
+                    "opencode.commands",
+                    "command-source",
+                    "/remote/alice/.config/opencode/opencode.json",
+                ),
+                make_source(
+                    "opencode.subagents",
+                    "agent-source",
+                    "/remote/alice/.config/opencode/opencode.json",
+                ),
+                make_source(
+                    "opencode.mcp",
+                    "other-user-source",
+                    "/remote/bob/.config/opencode/opencode.json",
+                ),
+            ],
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
+            subagent_generation: 0,
+            preference_revision: 0,
+            subagents: Vec::new(),
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
+            diagnostics: Vec::new(),
+        };
+
+        assign_external_source_presentation_groups(&mut snapshot);
+        sanitize_external_snapshot_locations(&mut snapshot, None);
+
+        assert_eq!(
+            snapshot.sources[0].presentation_group_id,
+            snapshot.sources[1].presentation_group_id,
+        );
+        assert_ne!(
+            snapshot.sources[0].presentation_group_id,
+            snapshot.sources[2].presentation_group_id,
+        );
+        assert!(snapshot
+            .sources
+            .iter()
+            .all(|source| source.record.location == "<remote>/.config/opencode/opencode.json"));
+    }
 
     struct DelayedProvider {
         identity: PromptCommandProviderIdentity,
@@ -1706,7 +5440,7 @@ mod tests {
                 scope: ExternalSourceScope::UserGlobal,
                 location: format!("/{}", self.command_name),
                 execution_domain_id: context.execution_domain_id.clone(),
-                health: ExternalSourceHealth::Available,
+                health: bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
                 content_version: "source-v1".to_string(),
                 diagnostics: Vec::new(),
             };
@@ -1771,16 +5505,26 @@ mod tests {
         };
         let (updates, _) = broadcast::channel(8);
         let coordinator = ExternalSourceCoordinator::new(context.clone(), providers).unwrap();
-        let tool_coordinator = ExternalToolCoordinator::new(context, Vec::new()).unwrap();
-        let snapshot = merge_tool_state(
+        let tool_coordinator = ExternalToolCoordinator::new(context.clone(), Vec::new()).unwrap();
+        let subagent_coordinator =
+            ExternalSubagentCoordinator::new(context.clone(), Vec::new()).unwrap();
+        let mcp_coordinator = ExternalMcpCoordinator::new(context, Vec::new()).unwrap();
+        let mut snapshot = merge_tool_state(
             coordinator.snapshot(),
             &tool_coordinator.snapshot(),
             ExternalToolProductState::default(),
         );
+        snapshot.integration_policy =
+            integration_policy_snapshot(&ExternalSourcesConfig::default(), None)
+                .expect("built-in integration policy is valid");
         Arc::new(WorkspaceExternalSourceService {
+            profile: ExternalSourceServiceProfile::LocalExecution,
             workspace_root: None,
+            execution_domain_id: ExecutionDomainId::new(LEGACY_LOCAL_EXECUTION_DOMAIN_ID).unwrap(),
             coordinator: Arc::new(StdMutex::new(coordinator)),
             tool_coordinator: Arc::new(StdMutex::new(tool_coordinator)),
+            subagent_coordinator: Arc::new(StdMutex::new(subagent_coordinator)),
+            mcp_coordinator: Arc::new(StdMutex::new(mcp_coordinator)),
             snapshot: StdMutex::new(snapshot),
             updates,
             watch_states: tokio::sync::Mutex::new(BTreeMap::new()),
@@ -1788,6 +5532,10 @@ mod tests {
             product_rebuild_gate: tokio::sync::Mutex::new(()),
             discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
             tool_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            subagent_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_discovery_tasks: tokio::sync::Mutex::new(BTreeMap::new()),
+            mcp_runtime: Arc::new(BitFunExternalMcpRuntime),
+            active_mcp_runtime_ids: tokio::sync::Mutex::new(BTreeSet::new()),
             initial_refresh_completed: AtomicBool::new(false),
             background_refresh_scheduled: AtomicBool::new(false),
             initial_refresh_gate: tokio::sync::Mutex::new(()),
@@ -1796,7 +5544,79 @@ mod tests {
             watcher: Arc::new(FileWatchService::new(FileWatcherConfig::default())),
             tool_decision_gate_waiting: tokio::sync::Notify::new(),
             tool_decision_gate_acquired: tokio::sync::Notify::new(),
+            subagent_expiry_schedule: AtomicU64::new(0),
         })
+    }
+
+    #[derive(Default)]
+    struct CountingExternalMcpRuntime {
+        calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl ExternalMcpRuntimePort for CountingExternalMcpRuntime {
+        async fn install(
+            &self,
+            _candidate: &crate::external_mcp::ActiveExternalMcpCandidate,
+            _prepared: bitfun_product_domains::external_sources::PreparedExternalMcpServer,
+            _workspace_key: &str,
+        ) -> Result<(), String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn retire(&self, _runtime_id: &str) -> Result<(), String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn status(&self, _runtime_id: &str) -> Result<ExternalMcpRuntimeStatus, String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(ExternalMcpRuntimeStatus::Active)
+        }
+
+        async fn replace_workspace_route(
+            &self,
+            _workspace_key: &str,
+            _active_external_server_ids: BTreeSet<String>,
+            _suppressed_native_server_ids: BTreeSet<String>,
+        ) -> Result<(), String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn read_only_projection_never_calls_the_mcp_runtime() {
+        let runtime = Arc::new(CountingExternalMcpRuntime::default());
+        let mut service = test_service(Vec::new());
+        let service_inner = Arc::get_mut(&mut service).expect("test owns the service");
+        service_inner.profile = ExternalSourceServiceProfile::ReadOnlyProjection;
+        service_inner.mcp_runtime = runtime.clone();
+
+        let preferences = ExternalSourcesConfig::default();
+        let policy = integration_policy_snapshot(&preferences, None).unwrap();
+        let command_snapshot = lock_coordinator(&service.coordinator).snapshot();
+        let snapshot = service
+            .rebuild_read_only_projection(command_snapshot, preferences, policy)
+            .await
+            .unwrap();
+
+        assert_eq!(runtime.calls.load(Ordering::SeqCst), 0);
+        assert!(snapshot
+            .mcp_servers
+            .iter()
+            .all(|entry| entry.runtime_id.is_none()));
+        assert!(snapshot
+            .tools
+            .iter()
+            .all(|entry| { !matches!(entry.activation, ExternalToolActivationState::Active) }));
+        assert!(snapshot.subagents.iter().all(|entry| {
+            !matches!(
+                entry.activation_state,
+                ExternalSubagentActivationState::Active
+            )
+        }));
     }
 
     #[tokio::test]
@@ -1844,6 +5664,380 @@ mod tests {
         );
     }
 
+    #[test]
+    fn opencode_registry_owns_low_friction_defaults_and_safety_ceilings() {
+        let policy = integration_policy_snapshot(&ExternalSourcesConfig::default(), None)
+            .expect("built-in policy is valid");
+        let descriptor = policy
+            .registered_ecosystems
+            .iter()
+            .find(|descriptor| descriptor.ecosystem_id.as_str() == OPENCODE_ECOSYSTEM_ID)
+            .expect("OpenCode is registered by product assembly");
+
+        for (capability_id, recommended, ceiling) in [
+            (
+                EXTERNAL_CAPABILITY_COMMAND,
+                ExternalIntegrationAccess::Auto,
+                ExternalIntegrationAccess::Auto,
+            ),
+            (
+                EXTERNAL_CAPABILITY_TOOL,
+                ExternalIntegrationAccess::AskBeforeUse,
+                ExternalIntegrationAccess::AskBeforeUse,
+            ),
+            (
+                EXTERNAL_CAPABILITY_SUBAGENT,
+                ExternalIntegrationAccess::AskBeforeUse,
+                ExternalIntegrationAccess::AskBeforeUse,
+            ),
+            (
+                EXTERNAL_CAPABILITY_MCP,
+                ExternalIntegrationAccess::AskBeforeUse,
+                ExternalIntegrationAccess::AskBeforeUse,
+            ),
+        ] {
+            let capability = descriptor
+                .capabilities
+                .iter()
+                .find(|capability| capability.capability_id.as_str() == capability_id)
+                .expect("built-in capability is registered");
+            assert_eq!(capability.recommended_access, recommended);
+            assert_eq!(capability.safety_ceiling, ceiling);
+            assert_eq!(
+                integration_access(&policy, OPENCODE_ECOSYSTEM_ID, capability_id),
+                recommended
+            );
+        }
+    }
+
+    #[test]
+    fn active_capability_sets_are_scoped_per_ecosystem_for_every_asset_kind() {
+        let mut policy = integration_policy_snapshot(&ExternalSourcesConfig::default(), None)
+            .expect("built-in policy is valid");
+        let template_descriptor = policy.registered_ecosystems[0].clone();
+        let template_effective = policy
+            .effective
+            .ecosystems
+            .get(&template_descriptor.ecosystem_id)
+            .cloned()
+            .expect("built-in effective ecosystem exists");
+        let discover_id = EcosystemId::new("discover.ecosystem").unwrap();
+        let active_id = EcosystemId::new("active.ecosystem").unwrap();
+        let mut discover_descriptor = template_descriptor.clone();
+        discover_descriptor.ecosystem_id = discover_id.clone();
+        discover_descriptor.display_name = "Discover ecosystem".to_string();
+        let mut active_descriptor = template_descriptor;
+        active_descriptor.ecosystem_id = active_id.clone();
+        active_descriptor.display_name = "Active ecosystem".to_string();
+        policy.registered_ecosystems = vec![discover_descriptor, active_descriptor];
+
+        let mut discover_effective = template_effective.clone();
+        discover_effective.ecosystem_id = discover_id.clone();
+        for access in discover_effective.capabilities.values_mut() {
+            *access = ExternalIntegrationAccess::DiscoverOnly;
+        }
+        let mut active_effective = template_effective;
+        active_effective.ecosystem_id = active_id.clone();
+        policy.effective.ecosystems = BTreeMap::from([
+            (discover_id.clone(), discover_effective),
+            (active_id.clone(), active_effective),
+        ]);
+
+        for capability in [
+            EXTERNAL_CAPABILITY_COMMAND,
+            EXTERNAL_CAPABILITY_TOOL,
+            EXTERNAL_CAPABILITY_SUBAGENT,
+            EXTERNAL_CAPABILITY_MCP,
+        ] {
+            assert_eq!(
+                ecosystems_with_discoverable_capability(&policy, capability),
+                BTreeSet::from([discover_id.clone(), active_id.clone()])
+            );
+            assert_eq!(
+                ecosystems_with_active_capability(&policy, capability),
+                BTreeSet::from([active_id.clone()])
+            );
+        }
+    }
+
+    #[test]
+    fn ecosystem_registration_rejects_provider_and_capability_mismatches() {
+        let mut incompatible_contract = default_external_integration_registry()
+            .into_iter()
+            .next()
+            .expect("built-in registration exists");
+        incompatible_contract.contract_major = EXTERNAL_ADAPTER_CONTRACT_MAJOR + 1;
+        assert!(incompatible_contract
+            .validate()
+            .unwrap_err()
+            .contains("contract major"));
+
+        let mut wrong_ecosystem = default_external_integration_registry()
+            .into_iter()
+            .next()
+            .expect("built-in registration exists");
+        wrong_ecosystem.command_provider = Some(delayed_provider(
+            "different.ecosystem",
+            std::time::Duration::ZERO,
+            Arc::new(AtomicUsize::new(0)),
+        ));
+        assert!(wrong_ecosystem
+            .validate()
+            .unwrap_err()
+            .contains("different ecosystem"));
+
+        let mut missing_provider = default_external_integration_registry()
+            .into_iter()
+            .next()
+            .expect("built-in registration exists");
+        missing_provider.command_provider = None;
+        assert!(missing_provider
+            .validate()
+            .unwrap_err()
+            .contains("provider registration do not match"));
+    }
+
+    #[test]
+    fn integration_policy_mutations_share_revision_and_keep_workspace_paths_private() {
+        let temp = tempfile::tempdir().unwrap();
+        let workspace_key = workspace_policy_key(Some(temp.path())).expect("workspace has a key");
+        assert!(workspace_key.starts_with("workspace:"));
+        assert!(!workspace_key.contains(&temp.path().to_string_lossy().to_string()));
+
+        let ecosystem_id =
+            bitfun_product_domains::external_sources::EcosystemId::new(OPENCODE_ECOSYSTEM_ID)
+                .unwrap();
+        let mut config = ExternalSourcesConfig::default();
+        let user_mutation = ExternalIntegrationPolicyMutation {
+            expected_preference_revision: 0,
+            scope: ExternalIntegrationPolicyScope::User,
+            change: ExternalIntegrationPolicyOperation::SetEcosystemMode {
+                ecosystem_id: ecosystem_id.clone(),
+                mode: ExternalIntegrationMode::DiscoverOnly,
+            },
+        };
+        assert!(
+            apply_integration_policy_mutation_to_config(&mut config, None, &user_mutation,)
+                .unwrap()
+        );
+        assert_eq!(config.preference_revision, 1);
+
+        let stale = apply_integration_policy_mutation_to_config(&mut config, None, &user_mutation)
+            .expect_err("old revisions cannot overwrite a newer policy");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&stale)
+                .expect("stale policy revisions use the typed error contract")
+                .code,
+            ExternalSourceOperationErrorCode::StaleRevision
+        );
+
+        let workspace_mutation = ExternalIntegrationPolicyMutation {
+            expected_preference_revision: 1,
+            scope: ExternalIntegrationPolicyScope::Workspace,
+            change: ExternalIntegrationPolicyOperation::SetEcosystemMode {
+                ecosystem_id: ecosystem_id.clone(),
+                mode: ExternalIntegrationMode::Disabled,
+            },
+        };
+        assert!(apply_integration_policy_mutation_to_config(
+            &mut config,
+            Some(&workspace_key),
+            &workspace_mutation,
+        )
+        .unwrap());
+        assert_eq!(config.preference_revision, 2);
+        assert_eq!(
+            config
+                .integration_policy
+                .known()
+                .expect("the built-in policy schema is known")
+                .workspace_overrides[&workspace_key]
+                .ecosystems[&ecosystem_id]
+                .mode,
+            Some(ExternalIntegrationMode::Disabled)
+        );
+    }
+
+    #[test]
+    fn preference_document_preserves_future_minor_fields() {
+        let raw = serde_json::json!({
+            "integrationPolicy": {
+                "schemaMajor": 1,
+                "userDefaults": {
+                    "enabled": true,
+                    "futureSetting": "keep"
+                },
+                "futurePolicyField": { "revision": 2 }
+            },
+            "preferenceRevision": 4,
+            "futurePreferenceField": ["keep"]
+        });
+        let mut config: ExternalSourcesConfig = serde_json::from_value(raw).unwrap();
+        config.preference_revision += 1;
+        let encoded = serde_json::to_value(config).unwrap();
+
+        assert_eq!(
+            encoded["integrationPolicy"]["userDefaults"]["futureSetting"],
+            "keep"
+        );
+        assert_eq!(
+            encoded["integrationPolicy"]["futurePolicyField"]["revision"],
+            2
+        );
+        assert_eq!(encoded["futurePreferenceField"][0], "keep");
+    }
+
+    #[test]
+    fn incompatible_policy_requires_explicit_reset_and_keeps_a_bounded_backup() {
+        let future_policy = serde_json::json!({
+            "schemaMajor": 13,
+            "userDefaults": "future-policy-shape",
+            "workspaceOverrides": ["also", "structurally", "different"],
+            "futurePolicyField": { "schema": 13 }
+        });
+        let stored_future_policy: StoredExternalIntegrationPolicy =
+            serde_json::from_value(future_policy.clone()).unwrap();
+        let mut config = ExternalSourcesConfig {
+            integration_policy: stored_future_policy,
+            integration_policy_backups: vec![
+                serde_json::json!({ "schemaMajor": 10, "opaque": "first" }),
+                serde_json::json!({ "schemaMajor": 11, "opaque": "second" }),
+                serde_json::json!({ "schemaMajor": 12, "opaque": "third" }),
+            ],
+            preference_revision: 7,
+            ..ExternalSourcesConfig::default()
+        };
+        let public_snapshot = integration_policy_snapshot(&config, None).unwrap();
+        assert_eq!(
+            public_snapshot.status,
+            ExternalIntegrationPolicyStatus::IncompatibleSchema
+        );
+        assert!(!public_snapshot.global_effective.enabled);
+        assert!(!public_snapshot.effective.enabled);
+        let serialized_snapshot = serde_json::to_value(&public_snapshot).unwrap();
+        assert!(!serialized_snapshot
+            .to_string()
+            .contains("future-policy-shape"));
+        assert!(!serialized_snapshot
+            .to_string()
+            .contains("futurePolicyField"));
+
+        config
+            .suppressed_source_keys
+            .push("opencode:project".to_string());
+        let persisted = serde_json::to_value(&config).unwrap();
+        config = serde_json::from_value(persisted).unwrap();
+        assert_eq!(config.integration_policy.raw_value(), future_policy);
+        assert_eq!(config.suppressed_source_keys, ["opencode:project"]);
+
+        let ordinary_mutation = ExternalIntegrationPolicyMutation {
+            expected_preference_revision: 7,
+            scope: ExternalIntegrationPolicyScope::User,
+            change: ExternalIntegrationPolicyOperation::SetEnabled { enabled: false },
+        };
+        let error =
+            apply_integration_policy_mutation_to_config(&mut config, None, &ordinary_mutation)
+                .expect_err("future schemas cannot be edited by an older host");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error)
+                .expect("incompatible schemas use the typed error contract")
+                .code,
+            ExternalSourceOperationErrorCode::PolicyIncompatible
+        );
+        assert_eq!(config.preference_revision, 7);
+        assert_eq!(config.integration_policy.schema_major(), 13);
+
+        let reset = ExternalIntegrationPolicyMutation {
+            expected_preference_revision: 7,
+            scope: ExternalIntegrationPolicyScope::User,
+            change: ExternalIntegrationPolicyOperation::ResetIncompatiblePolicy,
+        };
+        assert!(apply_integration_policy_mutation_to_config(&mut config, None, &reset).unwrap());
+        assert_eq!(config.preference_revision, 8);
+        assert_eq!(
+            config.integration_policy.schema_major(),
+            EXTERNAL_INTEGRATION_POLICY_SCHEMA_MAJOR
+        );
+        assert!(
+            !integration_policy_snapshot(&config, None)
+                .unwrap()
+                .effective
+                .enabled
+        );
+        assert_eq!(
+            config
+                .integration_policy_backups
+                .iter()
+                .map(|document| document["schemaMajor"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![11, 12, 13]
+        );
+        assert_eq!(config.integration_policy_backups[2], future_policy);
+    }
+
+    #[tokio::test]
+    async fn subagent_conflict_history_advances_revision_and_rejects_stale_process_actions() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let process_a = ExternalSourcePreferenceStore::new(path.clone());
+        let process_b = ExternalSourcePreferenceStore::new(path);
+        let lineage = "external_subagent_lineage:local-user:workspace:review";
+        let conflict_v1 = "external_subagent:local-user:workspace:review:v1";
+        let conflict_v2 = "external_subagent:local-user:workspace:review:v2";
+
+        let (changed, observed_v1) = persist_observed_subagent_conflicts_with_store(
+            &process_a,
+            &BTreeMap::from([(lineage.to_string(), conflict_v1.to_string())]),
+        )
+        .await
+        .unwrap();
+        assert!(changed);
+        assert_eq!(observed_v1.preference_revision, 1);
+
+        let selected_v1 = persist_subagent_conflict_choice_with_store(
+            &process_a,
+            conflict_v1,
+            "external_subagent:candidate-v1",
+            None,
+            observed_v1.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(selected_v1.preference_revision, 2);
+
+        let (changed, observed_v2) = persist_observed_subagent_conflicts_with_store(
+            &process_b,
+            &BTreeMap::from([(lineage.to_string(), conflict_v2.to_string())]),
+        )
+        .await
+        .unwrap();
+        assert!(changed);
+        assert_eq!(observed_v2.preference_revision, 3);
+        assert!(!observed_v2
+            .subagent_conflict_choices
+            .contains_key(conflict_v1));
+        assert_eq!(
+            observed_v2.subagent_conflict_choices[conflict_v2],
+            SUBAGENT_CONFLICT_RESELECTION_REQUIRED
+        );
+
+        let error = persist_subagent_conflict_choice_with_store(
+            &process_a,
+            conflict_v1,
+            "external_subagent:candidate-v1",
+            None,
+            selected_v1.preference_revision,
+        )
+        .await
+        .expect_err("the stale process must not overwrite the new conflict generation");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error)
+                .expect("stale conflict actions use the typed error contract")
+                .code,
+            ExternalSourceOperationErrorCode::StaleRevision
+        );
+    }
+
     #[tokio::test]
     async fn invalid_preference_file_is_an_error_instead_of_resetting_choices() {
         let temp = tempfile::tempdir().unwrap();
@@ -1869,7 +6063,7 @@ mod tests {
             scope: ExternalSourceScope::UserGlobal,
             location: "/tools".to_string(),
             execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
-            health: ExternalSourceHealth::Available,
+            health: bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
             content_version: "v1".to_string(),
             diagnostics: Vec::new(),
         };
@@ -1882,13 +6076,30 @@ mod tests {
         config.suppressed_source_keys.push(source.preference_key());
         assert!(!external_tool_invocation_is_authorized_by(
             &config,
+            source.ecosystem_id.as_str(),
             approval_key,
-            &source.preference_key()
+            &source.preference_key(),
+            "<global>",
         ));
         assert!(external_tool_invocation_is_authorized_by(
             &config,
+            source.ecosystem_id.as_str(),
             approval_key,
-            &source.key.stable_key()
+            &source.key.stable_key(),
+            "<global>",
+        ));
+        config
+            .integration_policy
+            .known_mut()
+            .expect("the built-in policy schema is known")
+            .user_defaults
+            .enabled = false;
+        assert!(!external_tool_invocation_is_authorized_by(
+            &config,
+            source.ecosystem_id.as_str(),
+            approval_key,
+            &source.key.stable_key(),
+            "<global>",
         ));
     }
 
@@ -2021,12 +6232,18 @@ mod tests {
         };
         lock_snapshot(&service.snapshot).tool_approval_requests =
             vec![request("decision-v1", "v1")];
+        let expected_preference_revision = lock_snapshot(&service.snapshot).preference_revision;
 
         let refresh_guard = service.refresh_gate.lock().await;
         let decision_service = Arc::clone(&service);
         let decision = tokio::spawn(async move {
             decision_service
-                .set_tool_target_decision("approval-a", "decision-v1", true)
+                .set_tool_target_decision(
+                    "approval-a",
+                    "decision-v1",
+                    true,
+                    expected_preference_revision,
+                )
                 .await
         });
         tokio::time::timeout(
@@ -2059,7 +6276,12 @@ mod tests {
             .await
             .unwrap()
             .expect_err("the approval must not apply to the changed content");
-        assert_eq!(error, "external tool decision is stale or unknown");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error)
+                .expect("changed tool decisions use the typed error contract")
+                .code,
+            ExternalSourceOperationErrorCode::NotFound
+        );
     }
 
     #[test]
@@ -2085,6 +6307,41 @@ mod tests {
         assert_eq!(choices["external_tool:local-user:review:new"], "external-b");
         assert_eq!(choices["external_tool:local-user:help:old"], "builtin-help");
         assert_eq!(choices.len(), 2);
+    }
+
+    #[test]
+    fn mcp_server_decisions_keep_one_version_per_workspace_lineage() {
+        let mut decisions = BTreeMap::from([
+            (
+                "external_mcp_approval:local-user:workspace-a:server:old".to_string(),
+                ExternalMcpDecision {
+                    decision_key: "external_mcp_approval:local-user:workspace-a:server:old"
+                        .to_string(),
+                    approved: true,
+                },
+            ),
+            (
+                "external_mcp_approval:local-user:workspace-b:server:current".to_string(),
+                ExternalMcpDecision {
+                    decision_key: "external_mcp_approval:local-user:workspace-b:server:current"
+                        .to_string(),
+                    approved: true,
+                },
+            ),
+        ]);
+
+        reconcile_versioned_mcp_server_decision(
+            &mut decisions,
+            "external_mcp_approval:local-user:workspace-a:server:new".to_string(),
+            false,
+        );
+
+        assert!(!decisions.contains_key("external_mcp_approval:local-user:workspace-a:server:old"));
+        assert!(!decisions["external_mcp_approval:local-user:workspace-a:server:new"].approved);
+        assert!(
+            decisions.contains_key("external_mcp_approval:local-user:workspace-b:server:current")
+        );
+        assert_eq!(decisions.len(), 2);
     }
 
     #[tokio::test]

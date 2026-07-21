@@ -1777,6 +1777,22 @@ $_section-header-height: 24px;
   }
 }
 
+.bitfun-nav-panel__footer-menu-item-label {
+  flex: 1;
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bitfun-nav-panel__footer-menu-item-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
 .bitfun-nav-panel__remote-disclaimer {
   display: flex;
   flex-direction: column;

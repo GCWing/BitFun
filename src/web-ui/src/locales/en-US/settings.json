@@ -17,8 +17,8 @@
     "tabDescriptions": {
       "basics": "Logging, terminal shell, notifications, and launch at login.",
       "appearance": "Language, theme, and UI font size.",
-      "models": "AI models, API keys, providers, and proxy.",
-      "sessionPersonalization": "Session title and Agent companion.",
+      "models": "AI models, API keys, providers, proxy, and session title.",
+      "sessionPersonalization": "Agent companion.",
       "sessionPermissions": "Accelerated workspace search, tool confirmation, Computer use, browser, and debug.",
       "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
       "review": "Review strategy, coverage depth, capacity, cost, and latency controls.",

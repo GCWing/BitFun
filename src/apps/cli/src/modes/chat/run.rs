@@ -43,61 +43,61 @@ impl ChatMode {
             })
         });
 
-        let (mut session_id, mut chat_state) = if let Some(ref restore_id) = self.restore_session_id
-        {
-            // Restore existing session
-            tracing::info!("Restoring session: {}", restore_id);
-            let agent = self.agent.clone();
-            let rid = restore_id.clone();
+        let (mut session_id, mut chat_state, mode_migration_notice) =
+            if let Some(ref restore_id) = self.restore_session_id {
+                // Restore existing session
+                tracing::info!("Restoring session: {}", restore_id);
+                let agent = self.agent.clone();
+                let rid = restore_id.clone();
 
-            tokio::task::block_in_place(|| {
-                rt_handle.block_on(async {
-                    // Restore session in core (loads metadata, messages, managers)
-                    let (summary, effective_workspace_path) =
-                        agent.restore_session_in_current_workspace(&rid).await?;
-                    let effective_workspace =
-                        Some(effective_workspace_path.to_string_lossy().to_string());
+                tokio::task::block_in_place(|| {
+                    rt_handle.block_on(async {
+                        // Restore session in core (loads metadata, messages, managers)
+                        let (summary, effective_workspace_path, migration_notice) =
+                            agent.restore_session_in_current_workspace(&rid).await?;
+                        let effective_workspace =
+                            Some(effective_workspace_path.to_string_lossy().to_string());
 
-                    // Load historical messages for UI display
-                    let transcript = agent.get_transcript(&rid).await.unwrap_or_else(|_| {
-                        bitfun_agent_runtime::sdk::SessionTranscript {
-                            session_id: rid.clone(),
-                            messages: Vec::new(),
-                        }
-                    });
+                        // Load historical messages for UI display
+                        let transcript = agent.get_transcript(&rid).await.unwrap_or_else(|_| {
+                            bitfun_agent_runtime::sdk::SessionTranscript {
+                                session_id: rid.clone(),
+                                messages: Vec::new(),
+                            }
+                        });
 
-                    let state = ChatState::from_session_transcript(
-                        rid.clone(),
-                        summary.session_name,
-                        summary.agent_type,
-                        effective_workspace,
-                        &transcript,
-                    );
+                        let state = ChatState::from_session_transcript(
+                            rid.clone(),
+                            summary.session_name,
+                            summary.agent_type,
+                            effective_workspace,
+                            &transcript,
+                        );
 
-                    tracing::info!(
-                        "Session restored: {}, {} messages loaded",
-                        rid,
-                        transcript.messages.len()
-                    );
+                        tracing::info!(
+                            "Session restored: {}, {} messages loaded",
+                            rid,
+                            transcript.messages.len()
+                        );
 
-                    Ok::<_, anyhow::Error>((rid, state))
-                })
-            })?
-        } else {
-            // Create new session
-            let session_id = tokio::task::block_in_place(|| {
-                rt_handle.block_on(self.agent.ensure_session(&self.agent_type))
-            })?;
-            tracing::info!("Core session ready: {}", session_id);
+                        Ok::<_, anyhow::Error>((rid, state, migration_notice))
+                    })
+                })?
+            } else {
+                // Create new session
+                let session_id = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.ensure_session(&self.agent_type))
+                })?;
+                tracing::info!("Core session ready: {}", session_id);
 
-            let state = ChatState::new(
-                session_id.clone(),
-                "CLI Session".to_string(),
-                self.agent_type.clone(),
-                self.workspace.clone(),
-            );
-            (session_id, state)
-        };
+                let state = ChatState::new(
+                    session_id.clone(),
+                    "CLI Session".to_string(),
+                    self.agent_type.clone(),
+                    self.workspace.clone(),
+                );
+                (session_id, state, None)
+            };
         self.auto_approve_ask_override = None;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -131,14 +131,21 @@ impl ChatMode {
                     .filter(|conflict| conflict.selected_candidate_id.is_none())
                     .count();
                 let tool_notice = self.take_external_tool_notice(&snapshot);
+                let agent_notice = self.take_external_agent_notice(&snapshot);
                 self.update_external_source_view(&mut chat_view, &snapshot);
                 self.external_source_snapshot = Some(snapshot.clone());
                 if snapshot.discovery_pending {
                     chat_view.set_status(Some(
                         "Checking compatible content from external AI applications".to_string(),
                     ));
-                } else if let Some(notice) = tool_notice {
-                    chat_view.set_status(Some(notice));
+                } else if tool_notice.is_some() || agent_notice.is_some() {
+                    chat_view.set_status(Some(
+                        [tool_notice, agent_notice]
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                    ));
                 } else if available + restricted > 0 || pending_conflicts > 0 {
                     chat_view.set_status(Some(format!(
                         "External sources: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
@@ -181,13 +188,23 @@ impl ChatMode {
             }
         }
 
+        if let Some(notice) = &mode_migration_notice {
+            chat_state.add_system_message(notice.user_message());
+        }
+
         // Send initial prompt if provided (from startup page input)
         if let Some(prompt) = self.initial_prompt.take() {
-            tracing::info!("Sending initial prompt: {}", prompt);
-            if prompt.starts_with('/') {
+            if mode_migration_notice.is_some() {
+                chat_view.text_input.set_text(&prompt);
+                chat_view.set_status(Some(
+                    "The restored session uses a fallback mode. Review it, then send the preserved input explicitly."
+                        .to_string(),
+                ));
+            } else if prompt.starts_with('/') {
                 // Slash commands will be handled in the main loop
                 chat_view.text_input.set_text(&prompt);
             } else {
+                tracing::info!("Sending initial prompt: {}", prompt);
                 let display_name = agent_display_name(&self.agent_type);
                 chat_view.set_status(Some(format!("{} is thinking...", display_name)));
 
@@ -241,7 +258,19 @@ impl ChatMode {
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
             }
+            match self.poll_mode_change_completion(&mut chat_view, &mut chat_state, &rt_handle) {
+                ModeChangePollOutcome::NoChange => {}
+                ModeChangePollOutcome::Redraw => needs_redraw = true,
+                ModeChangePollOutcome::ExitAfterSave => {
+                    should_quit = true;
+                    exit_reason = ChatExitReason::Quit;
+                    continue;
+                }
+            }
             if self.poll_external_tool_mutation(&mut chat_view) {
+                needs_redraw = true;
+            }
+            if self.poll_external_agent_mutation(&mut chat_view) {
                 needs_redraw = true;
             }
 
@@ -311,13 +340,20 @@ impl ChatMode {
                         self.replace_external_conflict_preferences(preferences);
                     }
                     let tool_notice = self.take_external_tool_notice(&snapshot);
+                    let agent_notice = self.take_external_agent_notice(&snapshot);
                     self.update_external_source_view(&mut chat_view, &snapshot);
                     if snapshot.discovery_pending {
                         chat_view.set_status(Some(
                             "Checking compatible content from external AI applications".to_string(),
                         ));
-                    } else if let Some(notice) = tool_notice {
-                        chat_view.set_status(Some(notice));
+                    } else if tool_notice.is_some() || agent_notice.is_some() {
+                        chat_view.set_status(Some(
+                            [tool_notice, agent_notice]
+                                .into_iter()
+                                .flatten()
+                                .collect::<Vec<_>>()
+                                .join("; "),
+                        ));
                     } else if discovery_just_finished {
                         let (available, restricted) = external_command_counts(&snapshot);
                         let pending_conflicts = snapshot
@@ -330,6 +366,10 @@ impl ChatMode {
                         )));
                     }
                     self.external_source_snapshot = Some(snapshot);
+                    if chat_view.mcp_selector_visible() {
+                        chat_view.mcp_selector_cancel_confirm_external();
+                        chat_view.mcp_selector_update_items(self.get_mcp_items(&rt_handle));
+                    }
                     needs_redraw = true;
                 }
             }
@@ -365,6 +405,14 @@ impl ChatMode {
                         PendingMcpOp::Toggle(server_id) => {
                             self.execute_mcp_toggle(
                                 &server_id,
+                                &mut chat_view,
+                                &mut chat_state,
+                                &rt_handle,
+                            );
+                        }
+                        PendingMcpOp::External(item) => {
+                            self.execute_external_mcp_action(
+                                item,
                                 &mut chat_view,
                                 &mut chat_state,
                                 &rt_handle,

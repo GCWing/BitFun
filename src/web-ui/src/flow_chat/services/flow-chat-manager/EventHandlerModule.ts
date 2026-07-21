@@ -8,10 +8,11 @@ import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { agenticEventListener, type AgenticEventCallbacks } from '../AgenticEventListener';
 import { 
-  generateTextChunkKey, 
+  generateTextChunkKey,
   generateToolEventKey,
   normalizeParamsPartialFragment,
   parseEventKey,
+  TEXT_CHUNK_MAX_LATENCY_MS,
   type FlowToolEvent,
   type SubagentParentInfo,
   type TextChunkEventData,
@@ -1658,7 +1659,8 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
       ...existing,
       text: existing.text + incoming.text,
       isThinkingEnd: existing.isThinkingEnd || incoming.isThinkingEnd
-    })
+    }),
+    { maxLatencyMs: TEXT_CHUNK_MAX_LATENCY_MS }
   );
 }
 

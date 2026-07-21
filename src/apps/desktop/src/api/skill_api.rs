@@ -47,6 +47,28 @@ const MARKET_DESC_MAX_LEN: usize = 220;
 
 static MARKET_DESCRIPTION_CACHE: OnceLock<RwLock<HashMap<String, String>>> = OnceLock::new();
 
+fn can_delete_owned_skill(source_id: &str, source_slot: &str, is_builtin: bool) -> bool {
+    if is_builtin {
+        return false;
+    }
+
+    let source_id = source_id.trim().to_ascii_lowercase();
+    if !source_id.is_empty() {
+        return matches!(source_id.as_str(), "bitfun" | "bitfun-system");
+    }
+
+    let source_slot = source_slot.trim().to_ascii_lowercase();
+    source_slot.starts_with("bitfun")
+}
+
+fn ensure_skill_can_be_deleted(skill: &SkillInfo) -> Result<(), String> {
+    if can_delete_owned_skill(&skill.source_id, &skill.source_slot, skill.is_builtin) {
+        Ok(())
+    } else {
+        Err("Only BitFun-owned, non-built-in Skills can be deleted from BitFun".to_string())
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SkillValidationResult {
     pub valid: bool,
@@ -907,6 +929,7 @@ pub async fn delete_skill(
             .find_skill_by_key_for_remote_workspace(&remote_workspace_fs, &remote_root, &skill_key)
             .await
             .ok_or_else(|| format!("Skill '{}' not found", skill_key))?;
+        ensure_skill_can_be_deleted(&skill_info)?;
 
         match skill_info.level {
             SkillLocation::Project => {
@@ -944,6 +967,7 @@ pub async fn delete_skill(
         .find_skill_by_key_for_workspace(&skill_key, workspace_root.as_deref())
         .await
         .ok_or_else(|| format!("Skill '{}' not found", skill_key))?;
+    ensure_skill_can_be_deleted(&skill_info)?;
 
     let skill_path = std::path::PathBuf::from(&skill_info.path);
 
@@ -963,6 +987,32 @@ pub async fn delete_skill(
         skill_path.display()
     );
     Ok(format!("Skill '{}' deleted successfully", skill_info.name))
+}
+
+#[cfg(test)]
+mod skill_delete_policy_tests {
+    use super::can_delete_owned_skill;
+
+    #[test]
+    fn only_bitfun_owned_non_builtin_skills_are_deletable() {
+        assert!(can_delete_owned_skill("bitfun", "bitfun", false));
+        assert!(can_delete_owned_skill("", "bitfun", false));
+        assert!(can_delete_owned_skill(
+            "bitfun-system",
+            "bitfun-system",
+            false
+        ));
+        assert!(!can_delete_owned_skill(
+            "bitfun-system",
+            "bitfun-system",
+            true
+        ));
+        assert!(!can_delete_owned_skill("opencode", "home.opencode", false));
+        assert!(!can_delete_owned_skill("codex", "home.codex", false));
+        assert!(!can_delete_owned_skill("future-ecosystem", "future", false));
+        assert!(!can_delete_owned_skill("", "future", false));
+        assert!(!can_delete_owned_skill("", "", false));
+    }
 }
 
 #[tauri::command]

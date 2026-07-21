@@ -61,6 +61,54 @@ CREATE TABLE IF NOT EXISTS sync_settings (
   version        INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pages (
+  user_id     TEXT NOT NULL REFERENCES users(user_id),
+  slug        TEXT NOT NULL,
+  visibility  TEXT NOT NULL DEFAULT 'private',
+  title       TEXT NOT NULL DEFAULT '',
+  file_count  INTEGER NOT NULL DEFAULT 0,
+  total_bytes INTEGER NOT NULL DEFAULT 0,
+  deployed_version_id TEXT,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_pages_user ON pages(user_id);
+CREATE TABLE IF NOT EXISTS page_versions (
+  user_id     TEXT NOT NULL,
+  slug        TEXT NOT NULL,
+  version_id  TEXT NOT NULL,
+  title       TEXT NOT NULL DEFAULT '',
+  file_count  INTEGER NOT NULL DEFAULT 0,
+  total_bytes INTEGER NOT NULL DEFAULT 0,
+  has_worker  INTEGER NOT NULL DEFAULT 0,
+  note        TEXT NOT NULL DEFAULT '',
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, slug, version_id),
+  FOREIGN KEY (user_id, slug) REFERENCES pages(user_id, slug) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_page_versions_page ON page_versions(user_id, slug);
+CREATE TABLE IF NOT EXISTS page_kv (
+  user_id    TEXT NOT NULL,
+  slug       TEXT NOT NULL,
+  key        TEXT NOT NULL,
+  value      TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, slug, key)
+);
+CREATE TABLE IF NOT EXISTS page_blobs (
+  user_id    TEXT NOT NULL,
+  slug       TEXT NOT NULL,
+  blob_id    TEXT NOT NULL,
+  content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+  size_bytes INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, slug, blob_id)
+);
+"#;
+
+const MIGRATE_PAGES_DEPLOYED_VERSION: &str = r#"
+ALTER TABLE pages ADD COLUMN deployed_version_id TEXT;
 "#;
 
 /// Open (or create) the SQLite database and ensure the schema exists.
@@ -72,6 +120,10 @@ pub async fn connect(db_path: &str) -> Result<DbPool> {
         .connect_with(options)
         .await?;
     sqlx::query(SCHEMA).execute(&pool).await?;
+    // Older DBs created pages without deployed_version_id.
+    let _ = sqlx::query(MIGRATE_PAGES_DEPLOYED_VERSION)
+        .execute(&pool)
+        .await;
     tracing::info!("Account database initialized at {db_path}");
     Ok(pool)
 }
@@ -143,6 +195,29 @@ impl UserRow {
         Ok(row)
     }
 
+    pub async fn find_by_user_id(pool: &DbPool, user_id: &str) -> Result<Option<UserRow>> {
+        let row = sqlx::query_as::<_, UserRow>(
+            "SELECT user_id, username, salt, kdf_salt, argon2_params, password_hash, \
+             wrapped_master_key, failed_attempts, locked_until, created_at, updated_at \
+             FROM users WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("find user by id: {e}"))?;
+        Ok(row)
+    }
+
+    /// Resolve username for a user id (convenience for page URL construction).
+    pub async fn find_by_username_for_user_id(
+        pool: &DbPool,
+        user_id: &str,
+    ) -> Result<Option<String>> {
+        Ok(Self::find_by_user_id(pool, user_id)
+            .await?
+            .map(|u| u.username))
+    }
+
     /// Rename a user. Fails if the new username already exists.
     pub async fn rename(pool: &DbPool, user_id: &str, new_username: &str) -> Result<()> {
         let now = Utc::now().timestamp();
@@ -198,7 +273,7 @@ impl UserRow {
     }
 
     /// Permanently delete a user and all associated data (devices, tokens,
-    /// sync blobs).  Cascading deletes handle FK-linked rows.
+    /// sync blobs, pages). Cascading deletes handle FK-linked rows.
     pub async fn delete(pool: &DbPool, user_id: &str) -> Result<()> {
         // Clean up sync tables first (no FK cascade configured on them).
         sqlx::query("DELETE FROM sync_sessions WHERE user_id = ?")
@@ -211,6 +286,26 @@ impl UserRow {
             .execute(pool)
             .await
             .map_err(|e| anyhow!("delete sync_settings: {e}"))?;
+        sqlx::query("DELETE FROM page_kv WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete page_kv: {e}"))?;
+        sqlx::query("DELETE FROM page_blobs WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete page_blobs: {e}"))?;
+        sqlx::query("DELETE FROM page_versions WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete page_versions: {e}"))?;
+        sqlx::query("DELETE FROM pages WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete pages: {e}"))?;
         // auth_tokens and devices have REFERENCES users(user_id) but SQLite
         // doesn't cascade by default, so clean them up explicitly.
         sqlx::query("DELETE FROM auth_tokens WHERE user_id = ?")
@@ -604,6 +699,457 @@ impl SyncSettingsRow {
     }
 }
 
+// ── Pages (published static sites) ──────────────────────────────────────
+
+/// Visibility levels for a published BitFun Page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageVisibility {
+    /// Only the page owner (with their token) can access.
+    Private,
+    /// Any authenticated user on this relay can access.
+    Relay,
+    /// Anyone on the internet can access without credentials.
+    Public,
+}
+
+impl PageVisibility {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Private => "private",
+            Self::Relay => "relay",
+            Self::Public => "public",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "private" => Some(Self::Private),
+            "relay" => Some(Self::Relay),
+            "public" => Some(Self::Public),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct PageRow {
+    pub user_id: String,
+    pub slug: String,
+    pub visibility: String,
+    pub title: String,
+    pub file_count: i64,
+    pub total_bytes: i64,
+    pub deployed_version_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// Page row joined with the owning username (for public URL serving).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct PageWithUsername {
+    pub user_id: String,
+    pub username: String,
+    pub slug: String,
+    pub visibility: String,
+    pub title: String,
+    pub file_count: i64,
+    pub total_bytes: i64,
+    pub deployed_version_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct PageVersionRow {
+    pub user_id: String,
+    pub slug: String,
+    pub version_id: String,
+    pub title: String,
+    pub file_count: i64,
+    pub total_bytes: i64,
+    pub has_worker: i64,
+    pub note: String,
+    pub created_at: i64,
+}
+
+impl PageRow {
+    pub fn visibility_enum(&self) -> Option<PageVisibility> {
+        PageVisibility::parse(&self.visibility)
+    }
+
+    const SELECT_COLS: &'static str = "user_id, slug, visibility, title, file_count, total_bytes, \
+             deployed_version_id, created_at, updated_at";
+
+    /// Ensure a page metadata row exists (draft upload / first save).
+    pub async fn ensure(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        visibility: PageVisibility,
+        title: &str,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO pages \
+             (user_id, slug, visibility, title, file_count, total_bytes, deployed_version_id, \
+              created_at, updated_at) \
+             VALUES (?, ?, ?, ?, 0, 0, NULL, ?, ?) \
+             ON CONFLICT(user_id, slug) DO UPDATE SET \
+               visibility = excluded.visibility, \
+               title = CASE WHEN excluded.title = '' THEN pages.title ELSE excluded.title END, \
+               updated_at = excluded.updated_at",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(visibility.as_str())
+        .bind(title)
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("ensure page: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn get(pool: &DbPool, user_id: &str, slug: &str) -> Result<Option<PageRow>> {
+        let row = sqlx::query_as::<_, PageRow>(&format!(
+            "SELECT {} FROM pages WHERE user_id = ? AND slug = ?",
+            Self::SELECT_COLS
+        ))
+        .bind(user_id)
+        .bind(slug)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("get page: {e}"))?;
+        Ok(row)
+    }
+
+    pub async fn list_for_user(pool: &DbPool, user_id: &str) -> Result<Vec<PageRow>> {
+        let rows = sqlx::query_as::<_, PageRow>(&format!(
+            "SELECT {} FROM pages WHERE user_id = ? ORDER BY updated_at DESC",
+            Self::SELECT_COLS
+        ))
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("list pages: {e}"))?;
+        Ok(rows)
+    }
+
+    pub async fn count_for_user(pool: &DbPool, user_id: &str) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pages WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| anyhow!("count pages: {e}"))?;
+        Ok(row.0)
+    }
+
+    pub async fn update_meta(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        visibility: Option<PageVisibility>,
+        title: Option<&str>,
+    ) -> Result<bool> {
+        let existing = Self::get(pool, user_id, slug).await?;
+        let Some(page) = existing else {
+            return Ok(false);
+        };
+        let now = Utc::now().timestamp();
+        let new_vis = visibility
+            .map(|v| v.as_str().to_string())
+            .unwrap_or(page.visibility);
+        let new_title = title.map(|t| t.to_string()).unwrap_or(page.title);
+        let result = sqlx::query(
+            "UPDATE pages SET visibility = ?, title = ?, updated_at = ? \
+             WHERE user_id = ? AND slug = ?",
+        )
+        .bind(&new_vis)
+        .bind(&new_title)
+        .bind(now)
+        .bind(user_id)
+        .bind(slug)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("update page meta: {e}"))?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn set_deployed_version(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        version_id: &str,
+        file_count: i64,
+        total_bytes: i64,
+        title: &str,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "UPDATE pages SET deployed_version_id = ?, file_count = ?, total_bytes = ?, \
+             title = CASE WHEN ? = '' THEN title ELSE ? END, updated_at = ? \
+             WHERE user_id = ? AND slug = ?",
+        )
+        .bind(version_id)
+        .bind(file_count)
+        .bind(total_bytes)
+        .bind(title)
+        .bind(title)
+        .bind(now)
+        .bind(user_id)
+        .bind(slug)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("set deployed version: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn delete(pool: &DbPool, user_id: &str, slug: &str) -> Result<bool> {
+        sqlx::query("DELETE FROM page_kv WHERE user_id = ? AND slug = ?")
+            .bind(user_id)
+            .bind(slug)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete page_kv: {e}"))?;
+        sqlx::query("DELETE FROM page_blobs WHERE user_id = ? AND slug = ?")
+            .bind(user_id)
+            .bind(slug)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete page_blobs: {e}"))?;
+        sqlx::query("DELETE FROM page_versions WHERE user_id = ? AND slug = ?")
+            .bind(user_id)
+            .bind(slug)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete page_versions: {e}"))?;
+        let result = sqlx::query("DELETE FROM pages WHERE user_id = ? AND slug = ?")
+            .bind(user_id)
+            .bind(slug)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete page: {e}"))?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Resolve a page by public URL components `(username, slug)`.
+    pub async fn get_by_username(
+        pool: &DbPool,
+        username: &str,
+        slug: &str,
+    ) -> Result<Option<PageWithUsername>> {
+        let row = sqlx::query_as::<_, PageWithUsername>(
+            "SELECT p.user_id, u.username, p.slug, p.visibility, p.title, \
+             p.file_count, p.total_bytes, p.deployed_version_id, p.created_at, p.updated_at \
+             FROM pages p JOIN users u ON u.user_id = p.user_id \
+             WHERE u.username = ? AND p.slug = ?",
+        )
+        .bind(username)
+        .bind(slug)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("get page by username: {e}"))?;
+        Ok(row)
+    }
+}
+
+impl PageWithUsername {
+    pub fn visibility_enum(&self) -> Option<PageVisibility> {
+        PageVisibility::parse(&self.visibility)
+    }
+}
+
+impl PageVersionRow {
+    pub async fn insert(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        version_id: &str,
+        title: &str,
+        file_count: i64,
+        total_bytes: i64,
+        has_worker: bool,
+        note: &str,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO page_versions \
+             (user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(version_id)
+        .bind(title)
+        .bind(file_count)
+        .bind(total_bytes)
+        .bind(has_worker as i64)
+        .bind(note)
+        .bind(now)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("insert page version: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn get(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        version_id: &str,
+    ) -> Result<Option<PageVersionRow>> {
+        let row = sqlx::query_as::<_, PageVersionRow>(
+            "SELECT user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at \
+             FROM page_versions WHERE user_id = ? AND slug = ? AND version_id = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(version_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("get page version: {e}"))?;
+        Ok(row)
+    }
+
+    pub async fn list_for_page(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+    ) -> Result<Vec<PageVersionRow>> {
+        let rows = sqlx::query_as::<_, PageVersionRow>(
+            "SELECT user_id, slug, version_id, title, file_count, total_bytes, has_worker, note, created_at \
+             FROM page_versions WHERE user_id = ? AND slug = ? ORDER BY created_at DESC",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("list page versions: {e}"))?;
+        Ok(rows)
+    }
+
+    pub async fn count_for_page(pool: &DbPool, user_id: &str, slug: &str) -> Result<i64> {
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM page_versions WHERE user_id = ? AND slug = ?")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| anyhow!("count page versions: {e}"))?;
+        Ok(row.0)
+    }
+
+    pub async fn delete(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        version_id: &str,
+    ) -> Result<bool> {
+        let result = sqlx::query(
+            "DELETE FROM page_versions WHERE user_id = ? AND slug = ? AND version_id = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(version_id)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("delete page version: {e}"))?;
+        Ok(result.rows_affected() > 0)
+    }
+}
+
+/// Page KV helpers (mutable runtime data, keyed by page not version).
+pub mod page_kv {
+    use super::*;
+
+    pub async fn get(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        key: &str,
+    ) -> Result<Option<String>> {
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?")
+                .bind(user_id)
+                .bind(slug)
+                .bind(key)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| anyhow!("page_kv get: {e}"))?;
+        Ok(row.map(|r| r.0))
+    }
+
+    pub async fn put(
+        pool: &DbPool,
+        user_id: &str,
+        slug: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO page_kv (user_id, slug, key, value, updated_at) VALUES (?, ?, ?, ?, ?) \
+             ON CONFLICT(user_id, slug, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(key)
+        .bind(value)
+        .bind(now)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("page_kv put: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn delete(pool: &DbPool, user_id: &str, slug: &str, key: &str) -> Result<bool> {
+        let result = sqlx::query("DELETE FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?")
+            .bind(user_id)
+            .bind(slug)
+            .bind(key)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("page_kv delete: {e}"))?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn list_keys(pool: &DbPool, user_id: &str, slug: &str) -> Result<Vec<String>> {
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT key FROM page_kv WHERE user_id = ? AND slug = ? ORDER BY key")
+                .bind(user_id)
+                .bind(slug)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| anyhow!("page_kv list: {e}"))?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+}
+
+/// Legacy single-room asset key (pre-versioning). Used only for one-time migration.
+pub fn page_legacy_asset_key(user_id: &str, slug: &str) -> String {
+    format!("pages/{user_id}/{slug}")
+}
+
+/// Draft upload namespace (mutable until freeze).
+pub fn page_draft_asset_key(user_id: &str, slug: &str) -> String {
+    format!("pages/{user_id}/{slug}/draft")
+}
+
+/// Immutable version namespace.
+pub fn page_version_asset_key(user_id: &str, slug: &str, version_id: &str) -> String {
+    format!("pages/{user_id}/{slug}/v/{version_id}")
+}
+
+/// Generate a new version id (`v` + 12 hex chars).
+pub fn new_page_version_id() -> String {
+    let bytes: [u8; 6] = rand::random();
+    format!(
+        "v{}",
+        bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -668,5 +1214,57 @@ mod tests {
 
         let missing = AuthToken::find(&pool, "nonexistent").await.unwrap();
         assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn page_ensure_version_deploy_and_resolve() {
+        let pool = setup().await;
+        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        PageRow::ensure(&pool, "u1", "my-site", PageVisibility::Public, "My Site")
+            .await
+            .unwrap();
+        PageVersionRow::insert(
+            &pool, "u1", "my-site", "vabc", "My Site", 3, 1024, false, "first",
+        )
+        .await
+        .unwrap();
+        PageRow::set_deployed_version(&pool, "u1", "my-site", "vabc", 3, 1024, "My Site")
+            .await
+            .unwrap();
+
+        let listed = PageRow::list_for_user(&pool, "u1").await.unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].deployed_version_id.as_deref(), Some("vabc"));
+
+        let versions = PageVersionRow::list_for_page(&pool, "u1", "my-site")
+            .await
+            .unwrap();
+        assert_eq!(versions.len(), 1);
+
+        let by_name = PageRow::get_by_username(&pool, "alice", "my-site")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(by_name.user_id, "u1");
+        assert_eq!(by_name.deployed_version_id.as_deref(), Some("vabc"));
+
+        page_kv::put(&pool, "u1", "my-site", "k", "v")
+            .await
+            .unwrap();
+        assert_eq!(
+            page_kv::get(&pool, "u1", "my-site", "k")
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("v")
+        );
+
+        assert!(PageRow::delete(&pool, "u1", "my-site").await.unwrap());
+        assert!(PageRow::get(&pool, "u1", "my-site")
+            .await
+            .unwrap()
+            .is_none());
     }
 }
