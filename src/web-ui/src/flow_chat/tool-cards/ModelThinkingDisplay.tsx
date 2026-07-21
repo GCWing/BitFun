@@ -12,7 +12,7 @@ import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
-import { useReportTypewriterReveal } from '../hooks/TypewriterRevealGate';
+import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import './ModelThinkingDisplay.scss';

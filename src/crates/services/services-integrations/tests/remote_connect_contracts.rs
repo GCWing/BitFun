@@ -1416,13 +1416,28 @@ fn make_temp_remote_workspace() -> (PathBuf, PathBuf, PathBuf) {
 #[test]
 fn remote_connect_file_path_resolution_stays_within_workspace_root() {
     let (base, workspace, report) = make_temp_remote_workspace();
+    let secret = base.join("secret.md");
+    std::fs::write(&secret, b"outside workspace").expect("write outside file");
 
     let resolved =
         resolve_remote_workspace_path("computer://artifacts/report.md", Some(&workspace))
             .expect("workspace-relative file resolves");
     assert_eq!(resolved, report.canonicalize().expect("canonical report"));
 
+    let absolute_resolved =
+        resolve_remote_workspace_path(report.to_str().expect("UTF-8 test path"), Some(&workspace))
+            .expect("absolute path within workspace resolves");
+    assert_eq!(
+        absolute_resolved,
+        report.canonicalize().expect("canonical report")
+    );
+
     assert!(resolve_remote_workspace_path("../secret.md", Some(&workspace)).is_none());
+    assert!(resolve_remote_workspace_path(
+        secret.to_str().expect("UTF-8 test path"),
+        Some(&workspace)
+    )
+    .is_none());
     assert!(resolve_remote_workspace_path("artifacts/report.md", None).is_none());
 
     std::fs::remove_dir_all(base).expect("cleanup remote workspace");

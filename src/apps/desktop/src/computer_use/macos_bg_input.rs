@@ -39,7 +39,7 @@ use std::time::{Duration, Instant};
 
 /// Logical mouse button for `bg_click`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BgMouseButton {
+pub(super) enum BgMouseButton {
     Left,
     Right,
     Middle,
@@ -74,7 +74,7 @@ impl BgMouseButton {
 /// Maps to the standard macOS modifier flag bits. We deliberately do not
 /// touch `CapsLock` here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BgModifier {
+pub(super) enum BgModifier {
     Command,
     Shift,
     Option, // alias: alt
@@ -83,7 +83,7 @@ pub enum BgModifier {
 }
 
 impl BgModifier {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub(super) fn from_str(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "cmd" | "command" | "meta" | "super" => Some(Self::Command),
             "shift" => Some(Self::Shift),
@@ -125,7 +125,7 @@ impl BgModifier {
 /// `CGEventSource` create + `CGEventPostToPid` round-trip on every call.
 /// A `false` result is NOT cached so callers can re-probe after the user
 /// grants Accessibility permission without restarting the host.
-pub fn supports_background_input() -> bool {
+pub(super) fn supports_background_input() -> bool {
     use std::sync::atomic::{AtomicBool, Ordering};
     static CACHED_OK: AtomicBool = AtomicBool::new(false);
     if CACHED_OK.load(Ordering::Relaxed) {
@@ -161,14 +161,14 @@ pub fn supports_background_input() -> bool {
 
 /// Whether the SkyLight SPI bridge is available for dual-post delivery.
 /// When `true`, Chromium/Catalyst/Electron background targets are reachable.
-pub fn supports_skylight_post() -> bool {
+pub(super) fn supports_skylight_post() -> bool {
     super::macos_skylight::is_available()
 }
 
 /// Whether the focus-without-raise SPI is available.
 /// When `true`, we can activate a window without raising it or stealing
 /// focus/Space.
-pub fn supports_focus_without_raise() -> bool {
+pub(super) fn supports_focus_without_raise() -> bool {
     super::macos_skylight::is_focus_without_raise_available()
 }
 
@@ -294,7 +294,7 @@ fn stamp_chromium_fields(
 ///
 /// `point` is in Quartz global pointer coordinates (origin top-left of main
 /// display, same space as the existing screenshot pipeline).
-pub fn bg_click(
+pub(super) fn bg_click(
     pid: i32,
     point: (f64, f64),
     button: BgMouseButton,
@@ -387,7 +387,7 @@ pub fn bg_click(
 /// Best-effort lookup of the macOS frontmost-application pid via NSWorkspace.
 /// Returns `None` when the AppKit lookup is not available (e.g. headless tests
 /// or non-main-thread contexts where we don't want to assert).
-pub fn frontmost_pid_macos() -> Option<i32> {
+pub(super) fn frontmost_pid_macos() -> Option<i32> {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
     unsafe {
@@ -425,7 +425,7 @@ pub fn frontmost_pid_macos() -> Option<i32> {
 ///
 /// Returns `Ok(true)` when activation succeeded, `Ok(false)` when the app
 /// could not be found, and `Err(_)` on AppKit FFI failures.
-pub fn activate_pid_macos(pid: i32) -> BitFunResult<bool> {
+pub(super) fn activate_pid_macos(pid: i32) -> BitFunResult<bool> {
     // Without a window_id we can't use the focus-without-raise SPI.
     // Fall through to the public API.
     activate_pid_macos_with_window(pid, None)
@@ -433,7 +433,10 @@ pub fn activate_pid_macos(pid: i32) -> BitFunResult<bool> {
 
 /// Like `activate_pid_macos` but uses the focus-without-raise SPI when a
 /// `window_id` is provided and the SkyLight SPI is available.
-pub fn activate_pid_macos_with_window(pid: i32, window_id: Option<u32>) -> BitFunResult<bool> {
+pub(super) fn activate_pid_macos_with_window(
+    pid: i32,
+    window_id: Option<u32>,
+) -> BitFunResult<bool> {
     // Try focus-without-raise first when we have a window id.
     if let Some(wid) = window_id {
         if super::macos_skylight::is_focus_without_raise_available() {
@@ -489,7 +492,7 @@ pub fn activate_pid_macos_with_window(pid: i32, window_id: Option<u32>) -> BitFu
 /// Pixel-delta scroll inside the focused scroll container of the target
 /// pid's frontmost window. Positive `dy` scrolls content down (matches
 /// trackpad / `wheel1>0` direction).
-pub fn bg_scroll(pid: i32, dx: i32, dy: i32) -> BitFunResult<()> {
+pub(super) fn bg_scroll(pid: i32, dx: i32, dy: i32) -> BitFunResult<()> {
     info!(
         target: "computer_use::bg_input",
         "bg_scroll.enter pid={} dx={} dy={}",
@@ -509,7 +512,7 @@ pub fn bg_scroll(pid: i32, dx: i32, dy: i32) -> BitFunResult<()> {
 /// `kCGEventKeyboardEventUnicodeString` field. This bypasses keymap
 /// translation entirely, so it correctly handles emoji, CJK and other
 /// non-Latin input without touching the system IME.
-pub fn bg_type_text(pid: i32, text: &str) -> BitFunResult<()> {
+pub(super) fn bg_type_text(pid: i32, text: &str) -> BitFunResult<()> {
     if text.is_empty() {
         return Ok(());
     }
@@ -551,7 +554,7 @@ pub fn bg_type_text(pid: i32, text: &str) -> BitFunResult<()> {
 /// Send a key chord (modifier+key combo) to the target pid using the
 /// private event source. `key` is the AX / Carbon virtual keycode; callers
 /// can use `keycode_for_char` for ASCII letters or pass a literal keycode.
-pub fn bg_key_chord(pid: i32, modifiers: &[BgModifier], key: u16) -> BitFunResult<()> {
+pub(super) fn bg_key_chord(pid: i32, modifiers: &[BgModifier], key: u16) -> BitFunResult<()> {
     info!(
         target: "computer_use::bg_input",
         "bg_key_chord.enter pid={} keycode={} modifiers={:?}",
@@ -613,7 +616,7 @@ pub fn bg_key_chord(pid: i32, modifiers: &[BgModifier], key: u16) -> BitFunResul
 ///
 /// Uses both SkyLight `SLEventPostToPid` AND `CGEvent::post_to_pid`
 /// (belt+suspenders) for AppKit/Catalyst target coverage.
-pub fn bg_click_chromium(
+pub(super) fn bg_click_chromium(
     pid: i32,
     screen_x: f64,
     screen_y: f64,
@@ -747,7 +750,7 @@ pub fn bg_click_chromium(
 
 /// Mouse button for drag gestures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BgDragButton {
+pub(super) enum BgDragButton {
     Left,
     Right,
     Middle,
@@ -790,7 +793,7 @@ impl BgDragButton {
 /// `duration_ms` is the wall-clock budget; `steps` is the number of
 /// intermediate `leftMouseDragged` events linearly interpolated along the
 /// path. Modifiers are held across the entire gesture.
-pub fn bg_drag(
+pub(super) fn bg_drag(
     pid: i32,
     from_x: f64,
     from_y: f64,
@@ -883,7 +886,11 @@ pub fn bg_drag(
 /// sees those events. Without the envelope the path goes through
 /// IOHIDPostEvent so `NSApplication.sendEvent:` dispatches NSMenu key
 /// equivalents.
-pub fn bg_key_chord_no_auth(pid: i32, modifiers: &[BgModifier], key: u16) -> BitFunResult<()> {
+pub(super) fn bg_key_chord_no_auth(
+    pid: i32,
+    modifiers: &[BgModifier],
+    key: u16,
+) -> BitFunResult<()> {
     info!(
         target: "computer_use::bg_input",
         "bg_key_chord_no_auth.enter pid={} keycode={} modifiers={:?}",
@@ -925,7 +932,11 @@ pub fn bg_key_chord_no_auth(pid: i32, modifiers: &[BgModifier], key: u16) -> Bit
 }
 
 /// Right-click at `(x, y)` screen coordinates, posted to `pid` via dual-post.
-pub fn bg_right_click(pid: i32, point: (f64, f64), modifiers: &[BgModifier]) -> BitFunResult<()> {
+pub(super) fn bg_right_click(
+    pid: i32,
+    point: (f64, f64),
+    modifiers: &[BgModifier],
+) -> BitFunResult<()> {
     let src = private_source("right_click")?;
     let pt = CGPoint {
         x: point.0,
@@ -963,7 +974,11 @@ pub fn bg_right_click(pid: i32, point: (f64, f64), modifiers: &[BgModifier]) -> 
 }
 
 /// Middle-click at `(x, y)` screen coordinates, posted to `pid` via dual-post.
-pub fn bg_middle_click(pid: i32, point: (f64, f64), modifiers: &[BgModifier]) -> BitFunResult<()> {
+pub(super) fn bg_middle_click(
+    pid: i32,
+    point: (f64, f64),
+    modifiers: &[BgModifier],
+) -> BitFunResult<()> {
     let src = private_source("middle_click")?;
     let pt = CGPoint {
         x: point.0,
@@ -1003,7 +1018,7 @@ pub fn bg_middle_click(pid: i32, point: (f64, f64), modifiers: &[BgModifier]) ->
 /// Parse a key spec the dispatch layer might pass us, of the form
 /// `"command+shift+p"` / `"return"` / `"escape"` / `"a"`. Returns the
 /// modifier list and the resolved keycode.
-pub fn parse_key_spec(spec: &str) -> BitFunResult<(Vec<BgModifier>, u16)> {
+pub(super) fn parse_key_spec(spec: &str) -> BitFunResult<(Vec<BgModifier>, u16)> {
     let mut mods = Vec::new();
     let parts: Vec<&str> = spec.split('+').map(str::trim).collect();
     if parts.is_empty() {
@@ -1031,7 +1046,7 @@ pub fn parse_key_spec(spec: &str) -> BitFunResult<(Vec<BgModifier>, u16)> {
 
 /// Parse the ControlHub/Codex chord shape: `["command", "shift", "p"]`,
 /// `["command+shift+p"]`, or `["return"]`.
-pub fn parse_key_sequence(keys: &[String]) -> BitFunResult<(Vec<BgModifier>, u16)> {
+pub(super) fn parse_key_sequence(keys: &[String]) -> BitFunResult<(Vec<BgModifier>, u16)> {
     if keys.is_empty() {
         return Err(BitFunError::tool("empty key sequence".to_string()));
     }
@@ -1060,7 +1075,7 @@ pub fn parse_key_sequence(keys: &[String]) -> BitFunResult<(Vec<BgModifier>, u16
 }
 
 /// Map common named keys (Codex parity) to AX / Carbon keycodes.
-pub fn keycode_for_named(name: &str) -> Option<u16> {
+pub(super) fn keycode_for_named(name: &str) -> Option<u16> {
     Some(match name.to_ascii_lowercase().as_str() {
         "return" | "enter" => 36,
         "tab" => 48,
@@ -1094,7 +1109,7 @@ pub fn keycode_for_named(name: &str) -> Option<u16> {
 /// Map a single ASCII character to the **US-keyboard** keycode. This is the
 /// same table Codex / enigo use; the user's actual keymap is irrelevant for
 /// our chord injection because we set explicit modifier flags ourselves.
-pub fn keycode_for_char(c: char) -> Option<u16> {
+pub(super) fn keycode_for_char(c: char) -> Option<u16> {
     let upper = c.to_ascii_uppercase();
     Some(match upper {
         'A' => 0,
@@ -1186,7 +1201,7 @@ const TERMINAL_NAME_HINTS: &[&str] = &[
 /// Check if the target pid is a terminal emulator by looking up its
 /// bundle id via `NSRunningApplication`. Returns `true` when the app is
 /// a known terminal emulator that may silently drop Unicode string events.
-pub fn is_terminal_emulator(pid: i32) -> bool {
+pub(super) fn is_terminal_emulator(pid: i32) -> bool {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
     let bundle_id = unsafe {
@@ -1237,7 +1252,7 @@ pub fn is_terminal_emulator(pid: i32) -> bool {
 ///
 /// Only works for ASCII characters that have direct keycodes. Non-ASCII text
 /// (CJK, emoji) should use `bg_type_text` (Unicode string) or `paste` instead.
-pub fn bg_type_text_terminal_safe(pid: i32, text: &str) -> BitFunResult<()> {
+pub(super) fn bg_type_text_terminal_safe(pid: i32, text: &str) -> BitFunResult<()> {
     if text.is_empty() {
         return Ok(());
     }
@@ -1296,7 +1311,7 @@ pub fn bg_type_text_terminal_safe(pid: i32, text: &str) -> BitFunResult<()> {
 /// Type text with automatic terminal detection: routes to
 /// `bg_type_text_terminal_safe` when the target is a terminal emulator,
 /// otherwise uses the standard `bg_type_text` (Unicode string injection).
-pub fn bg_type_text_auto(pid: i32, text: &str) -> BitFunResult<()> {
+pub(super) fn bg_type_text_auto(pid: i32, text: &str) -> BitFunResult<()> {
     if is_terminal_emulator(pid) {
         debug!(
             target: "computer_use::bg_input",
@@ -1330,7 +1345,7 @@ const kCGNullWindowID: u32 = 0;
 /// window owned by `pid`. Uses `CGWindowListCopyWindowInfo` — the same API
 /// `screencapture -l <wid>` consumes. Returns `None` when no matching
 /// window is found.
-pub fn frontmost_window_id_for_pid(pid: i32) -> Option<u32> {
+pub(super) fn frontmost_window_id_for_pid(pid: i32) -> Option<u32> {
     use core_foundation::array::CFArray;
     use core_foundation::base::{CFGetTypeID, CFTypeRef, TCFType};
     use core_foundation::dictionary::CFDictionary;
@@ -1405,7 +1420,7 @@ const CHROMIUM_BUNDLE_KEYWORDS: &[&str] = &[
 /// Returns `true` when the bundle_id indicates a Chromium-based or
 /// Electron-based application. These apps need the `bg_click_chromium`
 /// 5-event recipe for reliable background clicks.
-pub fn is_chromium_electron(bundle_id: Option<&str>) -> bool {
+pub(super) fn is_chromium_electron(bundle_id: Option<&str>) -> bool {
     if let Some(bid) = bundle_id {
         let lc = bid.to_ascii_lowercase();
         CHROMIUM_BUNDLE_KEYWORDS.iter().any(|&kw| lc.contains(kw))
@@ -1415,7 +1430,7 @@ pub fn is_chromium_electron(bundle_id: Option<&str>) -> bool {
 }
 
 /// Convenience: look up the bundle_id for a pid via NSRunningApplication.
-pub fn bundle_id_for_pid(pid: i32) -> Option<String> {
+pub(super) fn bundle_id_for_pid(pid: i32) -> Option<String> {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
     unsafe {

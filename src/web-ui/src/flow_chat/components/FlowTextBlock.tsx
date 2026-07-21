@@ -12,7 +12,7 @@ import type { MarkdownTraceContext } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
-import { useReportTypewriterReveal } from '../hooks/TypewriterRevealGate';
+import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { isStartupRenderTraceEnabled } from '@/shared/utils/startupTrace';
 import './FlowTextBlock.scss';
 

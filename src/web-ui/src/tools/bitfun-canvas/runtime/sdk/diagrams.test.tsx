@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { DependencyGraph, FlowDiagram, computeDAGLayout } from './diagrams';
+import { DependencyGraph, FlowDiagram } from './diagrams';
+import { computeDAGLayout } from './diagramLayout';
 
 describe('Canvas diagram helpers', () => {
   it('computes a vertical DAG layout compatible with generated architecture canvases', () => {

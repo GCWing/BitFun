@@ -31,9 +31,9 @@ import {
 } from './toolGroups';
 import {
   AgentCapabilityTooltip,
-  capabilityTooltipAriaLabel,
   type AgentCapabilityTooltipField,
 } from './AgentCapabilityTooltip';
+import { capabilityTooltipAriaLabel } from './agentCapabilityTooltipUtils';
 import './ToolGroupPicker.scss';
 
 interface ToolGroupPickerProps {

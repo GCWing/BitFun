@@ -69,22 +69,26 @@ fn frontmost_pid() -> BitFunResult<i32> {
 }
 
 unsafe fn ax_release(v: CFTypeRef) {
-    if !v.is_null() {
-        core_foundation::base::CFRelease(v);
+    unsafe {
+        if !v.is_null() {
+            core_foundation::base::CFRelease(v);
+        }
     }
 }
 
 unsafe fn ax_copy_attr(elem: AXUIElementRef, key: &str) -> Option<CFTypeRef> {
-    let mut val: CFTypeRef = std::ptr::null();
-    let k = CFString::new(key);
-    let st = AXUIElementCopyAttributeValue(elem, k.as_concrete_TypeRef(), &mut val);
-    if st != 0 || val.is_null() {
-        if !val.is_null() {
-            ax_release(val);
+    unsafe {
+        let mut val: CFTypeRef = std::ptr::null();
+        let k = CFString::new(key);
+        let st = AXUIElementCopyAttributeValue(elem, k.as_concrete_TypeRef(), &mut val);
+        if st != 0 || val.is_null() {
+            if !val.is_null() {
+                ax_release(val);
+            }
+            return None;
         }
-        return None;
+        Some(val)
     }
-    Some(val)
 }
 
 /// Safely convert a CF object to `String`.
@@ -96,77 +100,87 @@ unsafe fn ax_copy_attr(elem: AXUIElementRef, key: &str) -> Option<CFTypeRef> {
 /// boundary — Rust then aborts with `fatal runtime error: Rust cannot catch foreign exceptions`.
 /// Always type-check first.
 unsafe fn cfstring_to_string(cf: CFTypeRef) -> Option<String> {
-    if cf.is_null() {
-        return None;
+    unsafe {
+        if cf.is_null() {
+            return None;
+        }
+        if CFGetTypeID(cf) != CFStringGetTypeID() {
+            return None;
+        }
+        let s = CFString::wrap_under_get_rule(cf as CFStringRef);
+        Some(s.to_string())
     }
-    if CFGetTypeID(cf) != CFStringGetTypeID() {
-        return None;
-    }
-    let s = CFString::wrap_under_get_rule(cf as CFStringRef);
-    Some(s.to_string())
 }
 
 unsafe fn ax_value_to_point(v: CFTypeRef) -> Option<CGPoint> {
-    let v = v as AXValueRef;
-    let t = AXValueGetType(v);
-    if t != K_AX_VALUE_CGPOINT {
-        return None;
+    unsafe {
+        let v = v as AXValueRef;
+        let t = AXValueGetType(v);
+        if t != K_AX_VALUE_CGPOINT {
+            return None;
+        }
+        let mut pt = CGPoint { x: 0.0, y: 0.0 };
+        if !AXValueGetValue(v, K_AX_VALUE_CGPOINT, &mut pt as *mut _ as *mut c_void) {
+            return None;
+        }
+        Some(pt)
     }
-    let mut pt = CGPoint { x: 0.0, y: 0.0 };
-    if !AXValueGetValue(v, K_AX_VALUE_CGPOINT, &mut pt as *mut _ as *mut c_void) {
-        return None;
-    }
-    Some(pt)
 }
 
 unsafe fn ax_value_to_size(v: CFTypeRef) -> Option<CGSize> {
-    let v = v as AXValueRef;
-    let t = AXValueGetType(v);
-    if t != K_AX_VALUE_CGSIZE {
-        return None;
+    unsafe {
+        let v = v as AXValueRef;
+        let t = AXValueGetType(v);
+        if t != K_AX_VALUE_CGSIZE {
+            return None;
+        }
+        let mut sz = CGSize {
+            width: 0.0,
+            height: 0.0,
+        };
+        if !AXValueGetValue(v, K_AX_VALUE_CGSIZE, &mut sz as *mut _ as *mut c_void) {
+            return None;
+        }
+        Some(sz)
     }
-    let mut sz = CGSize {
-        width: 0.0,
-        height: 0.0,
-    };
-    if !AXValueGetValue(v, K_AX_VALUE_CGSIZE, &mut sz as *mut _ as *mut c_void) {
-        return None;
-    }
-    Some(sz)
 }
 
 unsafe fn ax_copy_action_names(elem: AXUIElementRef) -> Vec<String> {
-    let mut names: CFArrayRef = std::ptr::null();
-    let st = AXUIElementCopyActionNames(elem, &mut names);
-    if st != 0 || names.is_null() {
-        return vec![];
-    }
-    let arr = CFArray::<*const c_void>::wrap_under_create_rule(names);
-    let mut res = Vec::new();
-    for i in 0..arr.len() {
-        if let Some(s) = arr.get(i) {
-            let p = *s;
-            if !p.is_null() {
-                let cf_str = CFString::wrap_under_get_rule(p as CFStringRef);
-                res.push(cf_str.to_string());
+    unsafe {
+        let mut names: CFArrayRef = std::ptr::null();
+        let st = AXUIElementCopyActionNames(elem, &mut names);
+        if st != 0 || names.is_null() {
+            return vec![];
+        }
+        let arr = CFArray::<*const c_void>::wrap_under_create_rule(names);
+        let mut res = Vec::new();
+        for i in 0..arr.len() {
+            if let Some(s) = arr.get(i) {
+                let p = *s;
+                if !p.is_null() {
+                    let cf_str = CFString::wrap_under_get_rule(p as CFStringRef);
+                    res.push(cf_str.to_string());
+                }
             }
         }
+        res
     }
-    res
 }
 
 unsafe fn is_ax_enabled(elem: AXUIElementRef) -> bool {
-    let Some(val) = ax_copy_attr(elem, "AXEnabled") else {
-        return false;
-    };
-    let mut enabled: bool = false;
-    let type_id = core_foundation::base::CFGetTypeID(val);
-    if type_id == core_foundation::boolean::CFBooleanGetTypeID() {
-        let b = val as core_foundation::boolean::CFBooleanRef;
-        enabled = core_foundation::number::CFBooleanGetValue(b);
+    unsafe {
+        let Some(val) = ax_copy_attr(elem, "AXEnabled") else {
+            return false;
+        };
+        let mut enabled: bool = false;
+        let type_id = core_foundation::base::CFGetTypeID(val);
+        if type_id == core_foundation::boolean::CFBooleanGetTypeID() {
+            let b = val as core_foundation::boolean::CFBooleanRef;
+            enabled = core_foundation::number::CFBooleanGetValue(b);
+        }
+        ax_release(val);
+        enabled
     }
-    ax_release(val);
-    enabled
 }
 
 /// All text-bearing AX attributes a single element exposes — read in one pass so the BFS
@@ -183,22 +197,26 @@ pub(crate) struct NodeText {
 }
 
 unsafe fn ax_copy_string_attr(elem: AXUIElementRef, key: &str) -> Option<String> {
-    ax_copy_attr(elem, key).and_then(|v| {
-        let s = cfstring_to_string(v);
-        ax_release(v);
-        s
-    })
+    unsafe {
+        ax_copy_attr(elem, key).and_then(|v| {
+            let s = cfstring_to_string(v);
+            ax_release(v);
+            s
+        })
+    }
 }
 
 pub(crate) unsafe fn read_node_text(elem: AXUIElementRef) -> NodeText {
-    NodeText {
-        role: ax_copy_string_attr(elem, "AXRole"),
-        subrole: ax_copy_string_attr(elem, "AXSubrole"),
-        title: ax_copy_string_attr(elem, "AXTitle"),
-        value: ax_copy_string_attr(elem, "AXValue"),
-        description: ax_copy_string_attr(elem, "AXDescription"),
-        identifier: ax_copy_string_attr(elem, "AXIdentifier"),
-        help: ax_copy_string_attr(elem, "AXHelp"),
+    unsafe {
+        NodeText {
+            role: ax_copy_string_attr(elem, "AXRole"),
+            subrole: ax_copy_string_attr(elem, "AXSubrole"),
+            title: ax_copy_string_attr(elem, "AXTitle"),
+            value: ax_copy_string_attr(elem, "AXValue"),
+            description: ax_copy_string_attr(elem, "AXDescription"),
+            identifier: ax_copy_string_attr(elem, "AXIdentifier"),
+            help: ax_copy_string_attr(elem, "AXHelp"),
+        }
     }
 }
 
@@ -207,35 +225,41 @@ pub(crate) unsafe fn read_node_text(elem: AXUIElementRef) -> NodeText {
 unsafe fn read_role_title_id(
     elem: AXUIElementRef,
 ) -> (Option<String>, Option<String>, Option<String>) {
-    let role = ax_copy_string_attr(elem, "AXRole");
-    let title = ax_copy_string_attr(elem, "AXTitle");
-    let ident = ax_copy_string_attr(elem, "AXIdentifier");
-    (role, title, ident)
+    unsafe {
+        let role = ax_copy_string_attr(elem, "AXRole");
+        let title = ax_copy_string_attr(elem, "AXTitle");
+        let ident = ax_copy_string_attr(elem, "AXIdentifier");
+        (role, title, ident)
+    }
 }
 
 /// Legacy two-field reader used by `enumerate_ui_tree_text`. Prefer [`read_node_text`].
 unsafe fn read_value_desc(elem: AXUIElementRef) -> (Option<String>, Option<String>) {
-    let value = ax_copy_string_attr(elem, "AXValue");
-    let desc = ax_copy_string_attr(elem, "AXDescription");
-    (value, desc)
+    unsafe {
+        let value = ax_copy_string_attr(elem, "AXValue");
+        let desc = ax_copy_string_attr(elem, "AXDescription");
+        (value, desc)
+    }
 }
 
 /// Global center and axis-aligned bounds from `AXPosition` + `AXSize`.
 unsafe fn element_frame_global(elem: AXUIElementRef) -> Option<(f64, f64, f64, f64, f64, f64)> {
-    let pos = ax_copy_attr(elem, "AXPosition")?;
-    let size = ax_copy_attr(elem, "AXSize")?;
-    let pt = ax_value_to_point(pos)?;
-    let sz = ax_value_to_size(size)?;
-    ax_release(pos);
-    ax_release(size);
-    if sz.width <= 0.0 || sz.height <= 0.0 {
-        return None;
+    unsafe {
+        let pos = ax_copy_attr(elem, "AXPosition")?;
+        let size = ax_copy_attr(elem, "AXSize")?;
+        let pt = ax_value_to_point(pos)?;
+        let sz = ax_value_to_size(size)?;
+        ax_release(pos);
+        ax_release(size);
+        if sz.width <= 0.0 || sz.height <= 0.0 {
+            return None;
+        }
+        let left = pt.x;
+        let top = pt.y;
+        let w = sz.width;
+        let h = sz.height;
+        Some((left + w / 2.0, top + h / 2.0, left, top, w, h))
     }
-    let left = pt.x;
-    let top = pt.y;
-    let w = sz.width;
-    let h = sz.height;
-    Some((left + w / 2.0, top + h / 2.0, left, top, w, h))
 }
 
 struct Queued {
@@ -458,51 +482,56 @@ unsafe fn climb_to_clickable_ancestor(
     start: AXUIElementRef,
     max_steps: u32,
 ) -> Option<(AXUIElementRef, NodeText, (f64, f64, f64, f64, f64, f64))> {
-    let mut cur = start;
-    let mut owns_cur = false;
-    for _ in 0..max_steps {
-        let parent_val = ax_copy_attr(cur, "AXParent");
-        if owns_cur {
-            ax_release(cur as CFTypeRef);
-        }
-        let Some(parent_val) = parent_val else {
-            return None;
-        };
-        let parent = parent_val as AXUIElementRef;
-        if parent.is_null() {
-            ax_release(parent_val);
-            return None;
-        }
-        // We now own `parent_val`; treat it as our retained ref.
-        cur = parent;
-        owns_cur = true;
+    unsafe {
+        let mut cur = start;
+        let mut owns_cur = false;
+        for _ in 0..max_steps {
+            let parent_val = ax_copy_attr(cur, "AXParent");
+            if owns_cur {
+                ax_release(cur as CFTypeRef);
+            }
+            let Some(parent_val) = parent_val else {
+                return None;
+            };
+            let parent = parent_val as AXUIElementRef;
+            if parent.is_null() {
+                ax_release(parent_val);
+                return None;
+            }
+            // We now own `parent_val`; treat it as our retained ref.
+            cur = parent;
+            owns_cur = true;
 
-        let nt = read_node_text(cur);
-        if let Some(role) = nt.role.as_deref() {
-            if is_clickable_role(role) {
-                if let Some(frame) = element_frame_global(cur) {
-                    if frame.4 > 0.0 && frame.5 > 0.0 {
-                        return Some((cur, nt, frame));
+            let nt = read_node_text(cur);
+            if let Some(role) = nt.role.as_deref() {
+                if is_clickable_role(role) {
+                    if let Some(frame) = element_frame_global(cur) {
+                        if frame.4 > 0.0 && frame.5 > 0.0 {
+                            return Some((cur, nt, frame));
+                        }
                     }
                 }
             }
         }
+        if owns_cur {
+            ax_release(cur as CFTypeRef);
+        }
+        None
     }
-    if owns_cur {
-        ax_release(cur as CFTypeRef);
-    }
-    None
 }
 
 /// Check if an AX element has `AXHidden` set to true.
 unsafe fn is_ax_hidden(elem: AXUIElementRef) -> bool {
-    let Some(val) = ax_copy_attr(elem, "AXHidden") else {
-        return false; // No AXHidden attribute = not hidden
-    };
-    // AXHidden is a CFBoolean
-    let hidden = val as *const c_void == core_foundation::boolean::kCFBooleanTrue as *const c_void;
-    ax_release(val);
-    hidden
+    unsafe {
+        let Some(val) = ax_copy_attr(elem, "AXHidden") else {
+            return false; // No AXHidden attribute = not hidden
+        };
+        // AXHidden is a CFBoolean
+        let hidden =
+            val as *const c_void == core_foundation::boolean::kCFBooleanTrue as *const c_void;
+        ax_release(val);
+        hidden
+    }
 }
 
 /// Build a short description string for an element (for use as parent context).
@@ -518,7 +547,7 @@ const MAX_CANDIDATES: usize = 10;
 
 /// Search the **frontmost** app's accessibility tree (BFS) for elements matching filters.
 /// Collects all matches, filters invisible/off-screen ones, ranks by relevance, returns the best.
-pub fn locate_ui_element_center(
+pub(super) fn locate_ui_element_center(
     query: &UiElementLocateQuery,
 ) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(query)?;
@@ -838,45 +867,47 @@ pub fn locate_ui_element_center(
 }
 
 unsafe fn is_ax_interactive(elem: AXUIElementRef, role: &str) -> bool {
-    let actions = ax_copy_action_names(elem);
-    let interactive_actions = [
-        "AXPress",
-        "AXShowMenu",
-        "AXIncrement",
-        "AXDecrement",
-        "AXConfirm",
-        "AXCancel",
-        "AXRaise",
-        "AXSetValue",
-        "AXScrollLeftByPage",
-        "AXScrollRightByPage",
-        "AXScrollUpByPage",
-        "AXScrollDownByPage",
-    ];
+    unsafe {
+        let actions = ax_copy_action_names(elem);
+        let interactive_actions = [
+            "AXPress",
+            "AXShowMenu",
+            "AXIncrement",
+            "AXDecrement",
+            "AXConfirm",
+            "AXCancel",
+            "AXRaise",
+            "AXSetValue",
+            "AXScrollLeftByPage",
+            "AXScrollRightByPage",
+            "AXScrollUpByPage",
+            "AXScrollDownByPage",
+        ];
 
-    let mut has_interactive = false;
-    for a in &actions {
-        if interactive_actions.contains(&a.as_str()) {
-            has_interactive = true;
-            break;
+        let mut has_interactive = false;
+        for a in &actions {
+            if interactive_actions.contains(&a.as_str()) {
+                has_interactive = true;
+                break;
+            }
         }
-    }
 
-    if actions.iter().any(|a| a == "AXSetValue") && role == "AXTextField" {
-        return is_ax_enabled(elem);
-    }
+        if actions.iter().any(|a| a == "AXSetValue") && role == "AXTextField" {
+            return is_ax_enabled(elem);
+        }
 
-    if actions.iter().any(|a| a == "AXPress") && (role == "AXButton" || role == "AXLink") {
-        return is_ax_enabled(elem);
-    }
+        if actions.iter().any(|a| a == "AXPress") && (role == "AXButton" || role == "AXLink") {
+            return is_ax_enabled(elem);
+        }
 
-    has_interactive
+        has_interactive
+    }
 }
 
 /// Enumerate visible interactive elements in the frontmost app's AX tree
 /// and return a condensed text representation of the UI for context (no
 /// numbered labels rendered on the screenshot).
-pub fn enumerate_ui_tree_text(max_elements: usize) -> Option<String> {
+pub(super) fn enumerate_ui_tree_text(max_elements: usize) -> Option<String> {
     let pid = frontmost_pid().ok()?;
     let root = unsafe { AXUIElementCreateApplication(pid) };
     if root.is_null() {
@@ -1036,19 +1067,21 @@ pub fn enumerate_ui_tree_text(max_elements: usize) -> Option<String> {
 }
 
 unsafe fn ax_parent_context_line(elem: AXUIElementRef) -> Option<String> {
-    let parent_val = ax_copy_attr(elem, "AXParent")?;
-    let parent = parent_val as AXUIElementRef;
-    if parent.is_null() {
+    unsafe {
+        let parent_val = ax_copy_attr(elem, "AXParent")?;
+        let parent = parent_val as AXUIElementRef;
+        if parent.is_null() {
+            ax_release(parent_val);
+            return None;
+        }
+        let (r, t, _) = read_role_title_id(parent);
         ax_release(parent_val);
-        return None;
+        Some(element_short_desc(r.as_deref(), t.as_deref()))
     }
-    let (r, t, _) = read_role_title_id(parent);
-    ax_release(parent_val);
-    Some(element_short_desc(r.as_deref(), t.as_deref()))
 }
 
 /// Hit-test the accessibility element at global screen coordinates (OCR `move_to_text` disambiguation).
-pub fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> Option<OcrAccessibilityHit> {
+pub(super) fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> Option<OcrAccessibilityHit> {
     unsafe {
         let sys = AXUIElementCreateSystemWide();
         if sys.is_null() {
@@ -1087,13 +1120,13 @@ pub fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> Option<OcrAccessib
 
 /// Bounds of the foreground app's focused or main window in global screen coordinates (same space as pointer / screen capture).
 /// Used to crop **raw** pixels for Vision OCR without pointer overlays from the agent screenshot path.
-pub fn frontmost_window_bounds_global() -> BitFunResult<(i32, i32, u32, u32)> {
+pub(super) fn frontmost_window_bounds_global() -> BitFunResult<(i32, i32, u32, u32)> {
     let pid = frontmost_pid()?;
     window_bounds_global_for_pid(pid)
 }
 
 /// Bounds of the selected app's focused or main window in global screen coordinates.
-pub fn window_bounds_global_for_pid(pid: i32) -> BitFunResult<(i32, i32, u32, u32)> {
+pub(super) fn window_bounds_global_for_pid(pid: i32) -> BitFunResult<(i32, i32, u32, u32)> {
     let app = unsafe { AXUIElementCreateApplication(pid) };
     if app.is_null() {
         return Err(BitFunError::tool(
@@ -1129,16 +1162,18 @@ pub fn window_bounds_global_for_pid(pid: i32) -> BitFunResult<(i32, i32, u32, u3
 }
 
 unsafe fn try_frontmost_window_element(app: AXUIElementRef) -> Option<AXUIElementRef> {
-    for key in ["AXFocusedWindow", "AXMainWindow"] {
-        if let Some(w) = ax_copy_attr(app, key) {
-            let elem = w as AXUIElementRef;
-            if !elem.is_null() && element_frame_global(elem).is_some() {
-                return Some(elem);
+    unsafe {
+        for key in ["AXFocusedWindow", "AXMainWindow"] {
+            if let Some(w) = ax_copy_attr(app, key) {
+                let elem = w as AXUIElementRef;
+                if !elem.is_null() && element_frame_global(elem).is_some() {
+                    return Some(elem);
+                }
+                ax_release(w);
             }
-            ax_release(w);
         }
+        first_ax_window_from_ax_windows(app)
     }
-    first_ax_window_from_ax_windows(app)
 }
 
 #[allow(dead_code)] // legacy: text-caret crop is gone; kept for completeness
@@ -1151,26 +1186,28 @@ fn is_text_editing_ax_role(role: &str) -> bool {
 
 #[allow(dead_code)]
 unsafe fn ax_focused_element_from_system_wide() -> Option<AXUIElementRef> {
-    let sys = AXUIElementCreateSystemWide();
-    if sys.is_null() {
-        return None;
-    }
-    let mut focused: CFTypeRef = std::ptr::null();
-    let k = CFString::new("AXFocusedUIElement");
-    let st = AXUIElementCopyAttributeValue(sys, k.as_concrete_TypeRef(), &mut focused);
-    if st != 0 || focused.is_null() {
-        if !focused.is_null() {
-            ax_release(focused);
+    unsafe {
+        let sys = AXUIElementCreateSystemWide();
+        if sys.is_null() {
+            return None;
         }
-        return None;
+        let mut focused: CFTypeRef = std::ptr::null();
+        let k = CFString::new("AXFocusedUIElement");
+        let st = AXUIElementCopyAttributeValue(sys, k.as_concrete_TypeRef(), &mut focused);
+        if st != 0 || focused.is_null() {
+            if !focused.is_null() {
+                ax_release(focused);
+            }
+            return None;
+        }
+        Some(focused as AXUIElementRef)
     }
-    Some(focused as AXUIElementRef)
 }
 
 /// Best-effort global (x, y) for a 500×500 screenshot centered near the focused text field (AX element center).
 /// Returns `None` if no suitable focused text UI; caller should fall back to the mouse position.
 #[allow(dead_code)]
-pub fn global_point_for_text_caret_screenshot(mx: f64, my: f64) -> (f64, f64) {
+pub(super) fn global_point_for_text_caret_screenshot(mx: f64, my: f64) -> (f64, f64) {
     unsafe {
         let Some(el) = ax_focused_element_from_system_wide() else {
             return (mx, my);
@@ -1194,27 +1231,29 @@ pub fn global_point_for_text_caret_screenshot(mx: f64, my: f64) -> (f64, f64) {
 }
 
 unsafe fn first_ax_window_from_ax_windows(app: AXUIElementRef) -> Option<AXUIElementRef> {
-    let arr_ref = ax_copy_attr(app, "AXWindows")?;
-    let arr = CFArray::<*const c_void>::wrap_under_create_rule(arr_ref as CFArrayRef);
-    for i in 0..arr.len() {
-        let Some(w) = arr.get(i) else {
-            continue;
-        };
-        let child = *w as AXUIElementRef;
-        if child.is_null() {
-            continue;
+    unsafe {
+        let arr_ref = ax_copy_attr(app, "AXWindows")?;
+        let arr = CFArray::<*const c_void>::wrap_under_create_rule(arr_ref as CFArrayRef);
+        for i in 0..arr.len() {
+            let Some(w) = arr.get(i) else {
+                continue;
+            };
+            let child = *w as AXUIElementRef;
+            if child.is_null() {
+                continue;
+            }
+            let retained = CFRetain(child as CFTypeRef) as AXUIElementRef;
+            if retained.is_null() {
+                continue;
+            }
+            let (role, _, _) = read_role_title_id(retained);
+            if role.as_deref() == Some("AXWindow") && element_frame_global(retained).is_some() {
+                return Some(retained);
+            }
+            ax_release(retained as CFTypeRef);
         }
-        let retained = CFRetain(child as CFTypeRef) as AXUIElementRef;
-        if retained.is_null() {
-            continue;
-        }
-        let (role, _, _) = read_role_title_id(retained);
-        if role.as_deref() == Some("AXWindow") && element_frame_global(retained).is_some() {
-            return Some(retained);
-        }
-        ax_release(retained as CFTypeRef);
+        None
     }
-    None
 }
 
 #[cfg(test)]

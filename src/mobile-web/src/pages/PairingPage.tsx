@@ -33,7 +33,40 @@ function isProtectedUserIdError(message: string): boolean {
     || message.includes('This mobile device must continue using the previously confirmed user ID')
     || message.includes('Invalid username or password')
     || message.includes('Missing password')
-    || message.includes('Missing username');
+    || message.includes('Missing username')
+    || message.includes('Too many pairing attempts');
+}
+
+function normalizeRelayUrl(value: string): string | null {
+  try {
+    const normalized = value
+      .replace(/^wss:\/\//, 'https://')
+      .replace(/^ws:\/\//, 'http://')
+      .replace(/\/ws\/?$/, '')
+      .replace(/\/$/, '');
+    const url = new URL(normalized);
+    if (!['http:', 'https:'].includes(url.protocol)
+      || !url.hostname
+      || url.username
+      || url.password
+      || url.search
+      || url.hash) {
+      return null;
+    }
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
+function validPairingSecret(room: string | null, publicKey: string | null): boolean {
+  return !!room
+    && room.length <= 128
+    && /^[A-Za-z0-9_-]+$/.test(room)
+    && !['_store', 'page-data', 'pages'].includes(room)
+    && !!publicKey
+    && publicKey.length <= 512
+    && /^[A-Za-z0-9+/=_-]+$/.test(publicKey);
 }
 
 function generateInstallId(): string {
@@ -70,11 +103,7 @@ function resolvePairingTarget(): {
     return {
       room,
       pk,
-      httpBaseUrl: relayParam
-        .replace(/^wss:\/\//, 'https://')
-        .replace(/^ws:\/\//, 'http://')
-        .replace(/\/ws\/?$/, '')
-        .replace(/\/$/, ''),
+      httpBaseUrl: normalizeRelayUrl(relayParam) ?? '',
       accountAuth,
       accountUsername,
     };
@@ -126,8 +155,12 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     providedPassword: string,
     options?: { autoReconnect?: boolean; installId?: string },
   ) => {
+    const roomId = pairingTarget.room;
+    const desktopPublicKey = pairingTarget.pk;
     const userIdValue = providedUserId.trim();
-    const passwordValue = providedPassword.trim();
+    // Passwords are opaque credentials: preserve intentional leading or
+    // trailing spaces exactly as entered.
+    const passwordValue = providedPassword;
     const autoReconnect = options?.autoReconnect === true;
     const currentInstallId = options?.installId || mobileInstallId || getOrCreateInstallId();
     const activeLockUntil = lockUntilRef.current;
@@ -135,13 +168,21 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     const currentRemainingLockSeconds = lockActive
       ? Math.max(1, Math.ceil((activeLockUntil - Date.now()) / 1000))
       : 0;
-    if (!pairingTarget.room || !pairingTarget.pk) {
+    if (!roomId
+      || !desktopPublicKey
+      || !validPairingSecret(roomId, desktopPublicKey)
+      || !pairingTarget.httpBaseUrl) {
       setError(t('pairing.invalidQrCode'));
       setConnectionStatus('error');
       return;
     }
     if (!userIdValue) {
       setError(requiresAccountAuth ? t('pairing.usernameRequired') : t('pairing.userIdRequired'));
+      setConnectionStatus('error');
+      return;
+    }
+    if (userIdValue.length > 128 || passwordValue.length > 1024) {
+      setError(t('pairing.fieldsTooLong'));
       setConnectionStatus('error');
       return;
     }
@@ -159,12 +200,12 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     setMobileInstallId(currentInstallId);
     setSubmitting(true);
 
-    const client = new RelayHttpClient(pairingTarget.httpBaseUrl, pairingTarget.room);
+    const client = new RelayHttpClient(pairingTarget.httpBaseUrl, roomId);
 
     try {
       setError(null);
       setConnectionStatus('pairing');
-      const initialSync = await client.pair(pairingTarget.pk, {
+      const initialSync = await client.pair(desktopPublicKey, {
         userId: userIdValue,
         mobileInstallId: currentInstallId,
         password: requiresAccountAuth ? passwordValue : undefined,
@@ -244,7 +285,16 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
 
       onPaired(client, sessionMgr);
     } catch (e: any) {
-      const errorMessage = e?.message || t('pairing.pairingFailed');
+      const rawErrorMessage = e?.message || '';
+      const errorMessage = rawErrorMessage.includes('timed out')
+        ? t('pairing.requestTimedOut')
+        : rawErrorMessage.includes('HTTP 404')
+          ? t('pairing.qrExpired')
+          : rawErrorMessage.includes('HTTP 429')
+            ? t('pairing.rateLimited')
+            : rawErrorMessage.includes('HTTP 503') || rawErrorMessage.includes('HTTP 504')
+              ? t('pairing.relayUnavailable')
+              : rawErrorMessage || t('pairing.pairingFailed');
       if (!autoReconnect && isProtectedUserIdError(errorMessage)) {
         const nextFailureCount = failureCountRef.current + 1;
         const shouldLock = nextFailureCount >= MAX_FAILED_USER_ID_ATTEMPTS;
@@ -260,7 +310,9 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
         setError(
           shouldLock
             ? t('pairing.tooManyAttempts', { seconds: Math.ceil(USER_ID_LOCKOUT_MS / 1000) })
-            : errorMessage,
+            : rawErrorMessage.includes('Too many pairing attempts')
+              ? t('pairing.rateLimited')
+              : t('pairing.credentialsRejected'),
         );
       } else {
         setError(errorMessage);
@@ -404,6 +456,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
               autoCapitalize="off"
               autoCorrect="off"
               autoComplete="username"
+              maxLength={128}
               disabled={submitting || isLocked}
             />
           </label>
@@ -417,6 +470,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t('pairing.passwordPlaceholder')}
                 autoComplete="current-password"
+                maxLength={1024}
                 disabled={submitting || isLocked}
               />
             </label>

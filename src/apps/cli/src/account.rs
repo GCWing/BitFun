@@ -394,6 +394,15 @@ async fn handle_relay_event(
         RelayEvent::AuthError { message } => {
             tracing::warn!("Device routing auth error: {message}");
             TOKEN_EXPIRED.store(true, Ordering::Relaxed);
+            // Keep CLI/daemon semantics aligned with Desktop: a relay-rejected
+            // token is no longer a usable local login and must not be restored
+            // again on the next process start. Preserve the non-secret hint so
+            // the re-login form can still be prefilled.
+            relay_client.disconnect().await;
+            *session_arc.write().await = None;
+            *account_relay_url().write().await = None;
+            PENDING_SYNC_CHOICE.store(false, Ordering::Relaxed);
+            session_store::clear_session();
             crate::peer_host::update_controller_presence(Vec::new()).await;
         }
         RelayEvent::DevicePresence { devices } => {

@@ -7,7 +7,7 @@
  * through the same limited command set.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { RelayHttpClient } from '../services/RelayHttpClient';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
@@ -16,6 +16,7 @@ interface DeviceInfo {
   device_id: string;
   device_name: string;
   online: boolean;
+  last_seen_at?: number | null;
 }
 
 interface Props {
@@ -65,6 +66,25 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
+    const leftCurrent = left.device_id === client.pairedDeviceId;
+    const rightCurrent = right.device_id === client.pairedDeviceId;
+    if (leftCurrent !== rightCurrent) return leftCurrent ? -1 : 1;
+    if (left.online !== right.online) return left.online ? -1 : 1;
+    return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
+  }), [client.pairedDeviceId, devices]);
+
+  const friendlyError = useCallback((value: unknown, fallbackKey: string) => {
+    const message = String((value as { message?: string })?.message || value);
+    if (message.includes('HTTP 401') || message.includes('No delegated identity')) {
+      return t('devices.authorizationExpired');
+    }
+    if (message.includes('HTTP 404')) return t('devices.deviceUnavailable');
+    if (message.includes('HTTP 503') || message.includes('HTTP 504')) {
+      return t('devices.deviceUnavailable');
+    }
+    return t(fallbackKey);
+  }, [t]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -88,28 +108,30 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         setIdentityReady(false);
         setDevices([]);
       } else {
-        setError(message);
+        setError(friendlyError(e, 'devices.loadFailed'));
       }
     }
-  }, [client]);
+  }, [client, friendlyError]);
 
   // Acquire the delegated identity lazily: the desktop may have logged into
   // its account after this mobile session was paired. Force-refresh so a
   // desktop account switch is reflected without re-scanning.
   const ensureIdentity = useCallback(async (force = false) => {
     setIdentityChecking(true);
+    setError(null);
     let granted = false;
     try {
       granted = await client.requestDelegatedIdentity({ force: force || !client.hasDelegatedIdentity });
-    } catch {
+    } catch (e: unknown) {
       granted = false;
+      if (mountedRef.current) setError(friendlyError(e, 'devices.identityFailed'));
     }
     if (mountedRef.current) {
       setIdentityReady(granted);
       setIdentityChecking(false);
     }
     return granted;
-  }, [client]);
+  }, [client, friendlyError]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined;
@@ -167,12 +189,12 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         setIdentityReady(false);
         setDevices([]);
       } else {
-        setError(message || t('devices.switchFailed'));
+        setError(friendlyError(e, 'devices.switchFailed'));
       }
     } finally {
       if (mountedRef.current) setSwitchingId(null);
     }
-  }, [client, onBack, resetForDeviceSwitch, setControlTarget, switchingId, t]);
+  }, [client, friendlyError, onBack, resetForDeviceSwitch, setControlTarget, switchingId, t]);
 
   const renderBody = () => {
     if (identityChecking) {
@@ -211,7 +233,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
     return (
       <div className="devices-page__list">
-        {devices.map((d) => {
+        {sortedDevices.map((d) => {
           const isCurrent = client.pairedDeviceId === d.device_id;
           const isHome = client.homeDeviceId === d.device_id;
           const isSwitching = switchingId === d.device_id;
@@ -232,7 +254,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
               <span className="devices-page__device-icon"><DeviceIcon /></span>
               <span className="devices-page__device-copy">
                 <span className="devices-page__device-name-row">
-                  <span className="devices-page__device-name">{d.device_name}</span>
+                  <span className="devices-page__device-name">
+                    {d.device_name || t('devices.unknownDevice')}
+                  </span>
                   {isCurrent && (
                     <span className="devices-page__badge devices-page__badge--current">
                       {t('devices.current')}
@@ -275,7 +299,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         <h2 className="devices-page__title">{t('devices.title')}</h2>
         <button
           type="button"
-          className="devices-page__refresh-btn"
+          className={`devices-page__refresh-btn ${loading || identityChecking ? 'is-loading' : ''}`}
           onClick={handleManualRefresh}
           disabled={loading || !!switchingId}
           aria-label={t('devices.refresh')}

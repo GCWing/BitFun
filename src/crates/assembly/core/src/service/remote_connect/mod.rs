@@ -48,8 +48,8 @@ pub mod sync_state {
 }
 
 pub use account::{
-    AccountClient, AccountSession, DelegateToken, DelegatedIdentity, FetchedSession, KdfParams,
-    ListedSessionEntry, SettingsBlob,
+    validate_relay_base_url, AccountClient, AccountSession, DelegateToken, DelegatedIdentity,
+    FetchedSession, KdfParams, ListedSessionEntry, SettingsBlob,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
@@ -375,6 +375,12 @@ impl RemoteConnectService {
         trusted_mobile_identity: &Arc<RwLock<Option<TrustedMobileIdentity>>>,
         local_device_id: &str,
     ) -> remote_server::RemoteResponse {
+        let trusted_identity = trusted_mobile_identity.read().await.clone();
+        let Some(trusted_identity) = trusted_identity else {
+            return remote_server::RemoteResponse::Error {
+                message: "Pairing authorization expired; scan a new QR code".to_string(),
+            };
+        };
         let provider = delegated_identity_fn.read().await.clone();
         let Some(get_identity) = provider else {
             return remote_server::RemoteResponse::Error {
@@ -386,17 +392,11 @@ impl RemoteConnectService {
                 message: "Desktop is not logged into a BitFun account".to_string(),
             };
         };
-        let user_id = trusted_mobile_identity
-            .read()
-            .await
-            .as_ref()
-            .map(|identity| identity.user_id.clone())
-            .unwrap_or_default();
         use base64::{engine::general_purpose::STANDARD as B64, Engine};
         info!("Delegated identity resolved for paired client");
         remote_server::RemoteResponse::DelegateIdentity {
             token,
-            user_id,
+            user_id: trusted_identity.user_id,
             master_key: B64.encode(master_key),
             device_id: local_device_id.to_string(),
         }
@@ -513,8 +513,14 @@ impl RemoteConnectService {
                 *self.ngrok_tunnel.write().await = Some(tunnel);
                 url
             }
-            ConnectionMethod::BitfunServer => self.config.bitfun_server_url.clone(),
-            ConnectionMethod::CustomServer { url } => url.clone(),
+            ConnectionMethod::BitfunServer => validate_relay_base_url(&self.config.bitfun_server_url)?
+                .as_str()
+                .trim_end_matches('/')
+                .to_string(),
+            ConnectionMethod::CustomServer { url } => validate_relay_base_url(url)?
+                .as_str()
+                .trim_end_matches('/')
+                .to_string(),
             _ => unreachable!(),
         };
 
@@ -696,7 +702,7 @@ impl RemoteConnectService {
                                 match server.decrypt_command(&encrypted_data, &nonce) {
                                     Ok((cmd, request_id)) => {
                                         handled_as_active_command = true;
-                                        debug!("Remote command: {cmd:?}");
+                                        debug!("Remote command decrypted");
                                         let response = if matches!(
                                             cmd,
                                             remote_server::RemoteCommand::GetDelegatedIdentity
@@ -752,6 +758,17 @@ impl RemoteConnectService {
                                 if let Ok(response) =
                                     serde_json::from_str::<pairing::PairingResponse>(&json)
                                 {
+                                    if let Err(error) = response.validate_untrusted() {
+                                        drop(p);
+                                        RemoteConnectService::send_pairing_error_response(
+                                            &relay_arc,
+                                            &correlation_id,
+                                            &shared_secret,
+                                            format!("Invalid pairing response: {error}"),
+                                        )
+                                        .await;
+                                        continue;
+                                    }
                                     let canonical_user_id = match RemoteConnectService::resolve_pairing_user_id(
                                         &account_pairing_verifier_arc,
                                         &response,
@@ -761,6 +778,11 @@ impl RemoteConnectService {
                                         Ok(user_id) => user_id,
                                         Err(message) => {
                                             drop(p);
+                                            pairing_arc
+                                                .write()
+                                                .await
+                                                .retry_after_identity_rejection()
+                                                .await;
                                             RemoteConnectService::send_pairing_error_response(
                                                 &relay_arc,
                                                 &correlation_id,
@@ -786,6 +808,11 @@ impl RemoteConnectService {
                                             Ok(identity) => identity,
                                             Err(message) => {
                                                 drop(p);
+                                                pairing_arc
+                                                    .write()
+                                                    .await
+                                                    .retry_after_identity_rejection()
+                                                    .await;
                                                 RemoteConnectService::send_pairing_error_response(
                                                     &relay_arc,
                                                     &correlation_id,
@@ -1496,6 +1523,7 @@ impl RemoteConnectService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn pairing_response(user_id: Option<&str>, password: Option<&str>) -> pairing::PairingResponse {
         pairing::PairingResponse {
@@ -1599,5 +1627,61 @@ mod tests {
         )
         .await
         .is_err());
+    }
+
+    #[tokio::test]
+    async fn delegated_identity_requires_a_trusted_pairing_before_minting_credentials() {
+        let provider_called = Arc::new(AtomicBool::new(false));
+        let called = provider_called.clone();
+        let provider: DelegatedIdentityFn = Arc::new(move || {
+            let called = called.clone();
+            Box::pin(async move {
+                called.store(true, Ordering::SeqCst);
+                Some(("account-token".to_string(), [7_u8; 32], "relay".to_string()))
+            })
+        });
+        let provider = Arc::new(RwLock::new(Some(provider)));
+        let trusted = Arc::new(RwLock::new(None));
+
+        let response = RemoteConnectService::resolve_delegated_identity_response(
+            &provider,
+            &trusted,
+            "desktop-1",
+        )
+        .await;
+
+        assert!(matches!(
+            response,
+            remote_server::RemoteResponse::Error { .. }
+        ));
+        assert!(!provider_called.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn delegated_identity_uses_the_account_bound_during_pairing() {
+        let provider: DelegatedIdentityFn = Arc::new(|| {
+            Box::pin(async { Some(("account-token".to_string(), [7_u8; 32], "relay".to_string())) })
+        });
+        let provider = Arc::new(RwLock::new(Some(provider)));
+        let trusted = Arc::new(RwLock::new(Some(TrustedMobileIdentity {
+            mobile_install_id: "install-1".to_string(),
+            user_id: "paired-user".to_string(),
+        })));
+
+        let response = RemoteConnectService::resolve_delegated_identity_response(
+            &provider,
+            &trusted,
+            "desktop-1",
+        )
+        .await;
+
+        assert!(matches!(
+            response,
+            remote_server::RemoteResponse::DelegateIdentity {
+                user_id,
+                device_id,
+                ..
+            } if user_id == "paired-user" && device_id == "desktop-1"
+        ));
     }
 }

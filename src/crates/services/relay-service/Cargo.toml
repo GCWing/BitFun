@@ -26,6 +26,7 @@ dashmap = "6"
 rand = "0.8"
 base64 = "0.22"
 sha2 = "0.10"
+subtle = "2"
 
 # The relay stores encrypted blobs and password-derived hashes, not master keys.
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }

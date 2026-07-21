@@ -882,7 +882,7 @@ function normalizeOperationReference(value: unknown): string | undefined {
     || value.length === 0
     || value.length > 160
     || value.trim() !== value
-    || /[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
+    || Array.from(value).some(isControlCharacter)) {
     return undefined;
   }
   return value;
@@ -891,9 +891,16 @@ function normalizeOperationReference(value: unknown): string | undefined {
 function normalizeOperationDetail(value: string): string {
   const bounded = Array.from(value)
     .slice(0, 4096)
-    .join('')
-    .replace(/[\u0000-\u001f\u007f-\u009f]/gu, ' ');
+    .map((character) => isControlCharacter(character) ? ' ' : character)
+    .join('');
   return bounded.trim() ? bounded : 'External source operation failed';
+}
+
+function isControlCharacter(character: string): boolean {
+  const codePoint = character.codePointAt(0);
+  return codePoint !== undefined && (
+    codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)
+  );
 }
 
 function parseOperationError(value: unknown, visited = new Set<unknown>()): ExternalSourceApiError | null {

@@ -57,6 +57,13 @@
     color: var(--color-text-secondary);
   }
 
+  &__security-note {
+    margin: -4px 0 0;
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+  }
+
   &__deploy-link {
     display: inline-flex;
     align-items: center;
@@ -120,6 +127,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+    flex-wrap: wrap;
     flex-shrink: 0;
     margin-top: 0;
     padding: 8px 16px;
@@ -300,6 +308,13 @@
     padding: 20px;
     color: var(--color-text-secondary);
     font-size: 12px;
+
+    &--loading {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
   }
 
   &__device-card {
@@ -315,6 +330,11 @@
 
     &:hover { border-color: var(--color-accent-500); }
 
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: 1px;
+    }
+
     &.offline {
       opacity: 0.5;
       cursor: not-allowed;
@@ -324,6 +344,7 @@
     &.current {
       border-color: var(--color-accent-500);
       background: color-mix(in srgb, var(--color-accent-500) 8%, var(--color-bg-primary));
+      cursor: default;
     }
 
     .account-panel__device-info {
@@ -349,6 +370,16 @@
     &:hover {
       color: var(--color-error);
       background: var(--color-error-bg);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      cursor: wait;
+      opacity: 0.5;
     }
   }
 

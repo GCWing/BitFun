@@ -1,14 +1,11 @@
 import React from 'react';
 import { Tooltip } from '@/component-library';
+import type { AgentCapabilityTooltipField } from './agentCapabilityTooltipUtils';
 import './AgentCapabilityTooltip.scss';
 
-type TooltipPlacement = React.ComponentProps<typeof Tooltip>['placement'];
+export type { AgentCapabilityTooltipField } from './agentCapabilityTooltipUtils';
 
-export interface AgentCapabilityTooltipField {
-  label: string;
-  value: React.ReactNode;
-  monospace?: boolean;
-}
+type TooltipPlacement = React.ComponentProps<typeof Tooltip>['placement'];
 
 interface AgentCapabilityTooltipProps {
   title: string;
@@ -17,19 +14,6 @@ interface AgentCapabilityTooltipProps {
   children: React.ReactElement;
   placement?: TooltipPlacement;
   titleMonospace?: boolean;
-}
-
-export function capabilityTooltipAriaLabel(
-  title: string,
-  description: string | undefined,
-  fields: AgentCapabilityTooltipField[],
-): string {
-  const fieldText = fields.flatMap((field) => (
-    typeof field.value === 'string' && field.value.trim()
-      ? [`${field.label}: ${field.value}`]
-      : []
-  ));
-  return [title, description, ...fieldText].filter(Boolean).join('. ');
 }
 
 export const AgentCapabilityTooltip: React.FC<AgentCapabilityTooltipProps> = ({

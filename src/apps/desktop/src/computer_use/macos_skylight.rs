@@ -114,7 +114,7 @@ fn find_sym(name: &[u8]) -> Option<*mut c_void> {
 /// # Safety
 /// Caller guarantees T matches the symbol's actual signature.
 unsafe fn as_fn<T: Copy>(ptr: *mut c_void) -> T {
-    std::mem::transmute_copy::<*mut c_void, T>(&ptr)
+    unsafe { std::mem::transmute_copy::<*mut c_void, T>(&ptr) }
 }
 
 // ── Lazily-resolved handles ────────────────────────────────────────────────
@@ -180,12 +180,12 @@ fn get_process_for_pid_fn() -> Option<GetProcessForPIDFn> {
 }
 
 /// `true` when `SLEventPostToPid` resolved.
-pub fn is_available() -> bool {
+pub(super) fn is_available() -> bool {
     post_to_pid_fn().is_some()
 }
 
 /// `true` when all three focus-without-raise SPIs resolved.
-pub fn is_focus_without_raise_available() -> bool {
+pub(super) fn is_focus_without_raise_available() -> bool {
     get_front_process_fn().is_some()
         && get_process_for_pid_fn().is_some()
         && post_event_record_to_fn().is_some()
@@ -243,14 +243,16 @@ fn class_responds_to_selector(cls: *mut c_void, sel: *mut c_void) -> bool {
 /// On 64-bit: CFRuntimeBase=16, uint32=4, 4 bytes pad -> record pointer at offset 24.
 /// We probe offsets 24, 32, 16 for resilience across OS versions.
 unsafe fn extract_event_record(event_ptr: *mut c_void) -> *mut c_void {
-    for &offset in &[24usize, 32, 16] {
-        let slot = (event_ptr as *const u8).add(offset).cast::<*mut c_void>();
-        let p = std::ptr::read_unaligned(slot);
-        if !p.is_null() {
-            return p;
+    unsafe {
+        for &offset in &[24usize, 32, 16] {
+            let slot = (event_ptr as *const u8).add(offset).cast::<*mut c_void>();
+            let p = std::ptr::read_unaligned(slot);
+            if !p.is_null() {
+                return p;
+            }
         }
+        std::ptr::null_mut()
     }
-    std::ptr::null_mut()
 }
 
 // ── Public entry points ────────────────────────────────────────────────────
@@ -263,7 +265,7 @@ unsafe fn extract_event_record(event_ptr: *mut c_void) -> *mut c_void {
 /// Returns `true` when `SLEventPostToPid` resolved and the post was attempted.
 /// Returns `false` when the SPI is absent — caller falls back to
 /// `CGEvent::post_to_pid`.
-pub fn post_to_pid(pid: i32, event_ptr: *mut c_void, attach_auth_message: bool) -> bool {
+pub(super) fn post_to_pid(pid: i32, event_ptr: *mut c_void, attach_auth_message: bool) -> bool {
     let post_fn = match post_to_pid_fn() {
         Some(f) => f,
         None => return false,
@@ -295,7 +297,7 @@ pub fn post_to_pid(pid: i32, event_ptr: *mut c_void, attach_auth_message: bool) 
 
 /// Stamp a window-local `(x, y)` point onto `event_ptr` via the private
 /// `CGEventSetWindowLocation` SPI. Returns `true` when the SPI resolved.
-pub fn set_window_location(event_ptr: *mut c_void, x: f64, y: f64) -> bool {
+pub(super) fn set_window_location(event_ptr: *mut c_void, x: f64, y: f64) -> bool {
     match set_window_loc_fn() {
         Some(f) => {
             unsafe { f(event_ptr, x, y) };
@@ -307,7 +309,7 @@ pub fn set_window_location(event_ptr: *mut c_void, x: f64, y: f64) -> bool {
 
 /// Stamp `value` onto `event_ptr` at raw SkyLight field index `field` via
 /// `SLEventSetIntegerValueField`. Returns `false` when SPI absent.
-pub fn set_integer_field(event_ptr: *mut c_void, field: u32, value: i64) -> bool {
+pub(super) fn set_integer_field(event_ptr: *mut c_void, field: u32, value: i64) -> bool {
     match set_int_field_fn() {
         Some(f) => {
             unsafe { f(event_ptr, field, value) };
@@ -318,7 +320,7 @@ pub fn set_integer_field(event_ptr: *mut c_void, field: u32, value: i64) -> bool
 }
 
 /// Return the SkyLight main connection ID for the current process.
-pub fn main_connection_id() -> Option<u32> {
+pub(super) fn main_connection_id() -> Option<u32> {
     connection_id_fn().map(|f| unsafe { f() })
 }
 
@@ -336,7 +338,7 @@ pub fn main_connection_id() -> Option<u32> {
 ///    `bytes[0x3c..0x3f]` = `target_wid` little-endian).
 ///
 /// Returns `true` when all SPIs resolved and both posts succeeded.
-pub fn activate_without_raise(target_pid: i32, target_wid: u32) -> bool {
+pub(super) fn activate_without_raise(target_pid: i32, target_wid: u32) -> bool {
     let post_fn = match post_event_record_to_fn() {
         Some(f) => f,
         None => return false,
@@ -385,7 +387,7 @@ pub fn activate_without_raise(target_pid: i32, target_wid: u32) -> bool {
 /// Gets the PSN for the process that owns `window_id`.
 /// Uses `CGSMainConnectionID` + `SLSGetWindowOwner` + `SLSGetConnectionPSN`.
 /// Falls back to `GetProcessForPID(pid)` when the SkyLight path fails.
-pub fn get_process_psn_for_window(window_id: u32, pid: i32, out_psn: &mut [u8; 8]) -> bool {
+pub(super) fn get_process_psn_for_window(window_id: u32, pid: i32, out_psn: &mut [u8; 8]) -> bool {
     if let (Some(get_owner), Some(get_psn), Some(conn_id_fn)) = (
         get_window_owner_fn(),
         get_connection_psn_fn(),
@@ -416,7 +418,7 @@ pub fn get_process_psn_for_window(window_id: u32, pid: i32, out_psn: &mut [u8; 8
 ///
 /// Returns `Ok(true)` when activation succeeded, `Ok(false)` when SPIs
 /// unavailable (action still ran).
-pub fn with_menu_shortcut_activation(
+pub(super) fn with_menu_shortcut_activation(
     target_pid: i32,
     target_wid: u32,
     action: impl FnOnce() -> BitFunResult<()>,

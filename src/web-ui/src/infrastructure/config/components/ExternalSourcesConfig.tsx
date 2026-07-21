@@ -21,7 +21,7 @@ import {
   Tooltip,
 } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { WorkspaceKind } from '@/shared/types';
 import { createLogger } from '@/shared/utils/logger';
 

@@ -20,6 +20,26 @@ use crate::routes::api::AppState;
 /// conversations. Keep an explicit ceiling so reverse proxies and operators
 /// can align `client_max_body_size` (nginx) / equivalent limits.
 pub const SYNC_BODY_LIMIT: usize = 64 * 1024 * 1024;
+const MAX_ENCRYPTED_BLOB_BYTES: usize = 48 * 1024 * 1024;
+const MAX_SESSION_ID_BYTES: usize = 256;
+const MAX_NONCE_BYTES: usize = 256;
+const MAX_SYNC_SESSIONS_PER_USER: i64 = 2048;
+const MAX_SYNC_SESSION_BYTES_PER_USER: i64 = 128 * 1024 * 1024;
+
+fn valid_session_id(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= MAX_SESSION_ID_BYTES
+        && !value.chars().any(char::is_control)
+}
+
+fn valid_encrypted_blob(encrypted_data: &str, nonce: &str, version: i64) -> bool {
+    !encrypted_data.is_empty()
+        && encrypted_data.len() <= MAX_ENCRYPTED_BLOB_BYTES
+        && !nonce.is_empty()
+        && nonce.len() <= MAX_NONCE_BYTES
+        && !nonce.chars().any(char::is_control)
+        && version > 0
+}
 
 /// Validated principal extracted from the bearer token.
 pub struct AuthUser {
@@ -51,6 +71,9 @@ pub async fn validate_token(state: &AppState, token: &str) -> Result<AuthUser, S
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
+    if !auth.is_device_token() {
+        return Err(StatusCode::FORBIDDEN);
+    }
     Ok(AuthUser {
         user_id: auth.user_id,
         device_id: auth.device_id,
@@ -107,17 +130,27 @@ async fn sessions_upsert(
     Json(body): Json<SessionUpsertRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_session_id(&body.session_id)
+        || !valid_encrypted_blob(&body.encrypted_data, &body.nonce, body.version)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    SyncSessionRow::upsert(
+    let stored = SyncSessionRow::upsert_with_quota(
         db,
         &auth.user_id,
         &body.session_id,
         &body.encrypted_data,
         &body.nonce,
         body.version,
+        MAX_SYNC_SESSIONS_PER_USER,
+        MAX_SYNC_SESSION_BYTES_PER_USER,
     )
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !stored {
+        return Err(StatusCode::INSUFFICIENT_STORAGE);
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -150,6 +183,9 @@ async fn sessions_get(
     Path(session_id): Path<String>,
 ) -> Result<Json<SessionBlob>, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_session_id(&session_id) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     let row = SyncSessionRow::get(db, &auth.user_id, &session_id)
         .await
@@ -170,6 +206,9 @@ async fn sessions_delete(
     Path(session_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_session_id(&session_id) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     SyncSessionRow::delete(db, &auth.user_id, &session_id)
         .await
@@ -200,6 +239,9 @@ async fn settings_upsert(
     Json(body): Json<SettingsUpsertRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
+    if !valid_encrypted_blob(&body.encrypted_data, &body.nonce, body.version) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     SyncSettingsRow::upsert(
         db,

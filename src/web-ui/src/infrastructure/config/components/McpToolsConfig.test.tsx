@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: vi.fn() },
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-vi.mock('@/infrastructure/peer-device/PeerDeviceContext', () => ({
+vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({
   usePeerDeviceModeOptional: () => ({
     peerMode: peerState.active
       ? { active: true, deviceId: 'remote-device', deviceName: 'Remote device' }

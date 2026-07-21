@@ -110,6 +110,9 @@ impl EmbeddedRelayHost for DesktopEmbeddedRelayHost {
                 .layer(axum::middleware::from_fn(static_cache_headers));
             app = app.fallback_service(static_app);
         }
+        app = app.layer(axum::middleware::from_fn(
+            bitfun_relay_service::relay_security_headers,
+        ));
 
         info!("Embedded relay started on 0.0.0.0:{port}");
 
@@ -123,12 +126,15 @@ impl EmbeddedRelayHost for DesktopEmbeddedRelayHost {
 
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let server_task = tokio::spawn(async move {
-            axum::serve(listener, app)
-                .with_graceful_shutdown(async {
-                    let _ = shutdown_rx.await;
-                })
-                .await
-                .ok();
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .with_graceful_shutdown(async {
+                let _ = shutdown_rx.await;
+            })
+            .await
+            .ok();
         });
 
         // Keep the candidate local until readiness completes. If the start

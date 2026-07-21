@@ -6,12 +6,15 @@ const PING_INTERVAL = 15000;
 const PING_TIMEOUT = 10000;
 
 function pingWithTimeout(mgr: RemoteSessionManager, ms: number): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     mgr.ping(),
-    new Promise<void>((_, reject) =>
-      setTimeout(() => reject(new Error('ping timeout')), ms),
-    ),
-  ]);
+    new Promise<void>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('ping timeout')), ms);
+    }),
+  ]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
 }
 
 export function useConnectionHealth(sessionMgr: RemoteSessionManager | null) {
@@ -25,6 +28,8 @@ export function useConnectionHealth(sessionMgr: RemoteSessionManager | null) {
       setConnectionHealth('unpaired');
       return;
     }
+
+    setConnectionHealth('checking');
 
     const loop = async () => {
       try {

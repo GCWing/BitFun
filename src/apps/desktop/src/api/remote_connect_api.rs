@@ -320,11 +320,17 @@ async fn invalidate_local_account_session(reason: &str) {
     TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
     if let Some(service) = get_service_holder().read().await.as_ref() {
         service.stop_device_connection().await;
+        service.clear_account_pairing_context().await;
+        service.clear_trusted_mobile_identity().await;
     }
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
     session_store::clear_session();
     sync_account_login_capability(false);
+    emit_account_event(
+        "account://login-state",
+        serde_json::json!({ "logged_in": false, "reason": "session_expired" }),
+    );
     log::warn!("Invalidated local account session after relay auth failure: {reason}");
 }
 
@@ -504,11 +510,25 @@ async fn register_account_pairing_context(service: &RemoteConnectService) {
 
     let session_arc = get_account_session().clone();
     let relay_url_arc = get_account_relay_url().clone();
+    let pairing_attempts = Arc::new(tokio::sync::Mutex::new((0_u32, None::<std::time::Instant>)));
     service
         .set_account_pairing_verifier(move |username, password| {
             let session_arc = session_arc.clone();
             let relay_url_arc = relay_url_arc.clone();
+            let pairing_attempts = pairing_attempts.clone();
             async move {
+                {
+                    let mut attempts = pairing_attempts.lock().await;
+                    if let Some(locked_until) = attempts.1 {
+                        if locked_until > std::time::Instant::now() {
+                            return Err(
+                                "Too many pairing attempts. Wait one minute and scan again."
+                                    .to_string(),
+                            );
+                        }
+                        *attempts = (0, None);
+                    }
+                }
                 let session = session_arc
                     .read()
                     .await
@@ -519,20 +539,29 @@ async fn register_account_pairing_context(service: &RemoteConnectService) {
                     .await
                     .clone()
                     .ok_or_else(|| "Desktop is not logged into a BitFun account".to_string())?;
-                AccountClient::new()
+                let verification = AccountClient::new()
                     .verify_password_for_master_key(
                         &relay_url,
                         &username,
                         &password,
                         &session.master_key,
                     )
-                    .await
-                    .map_err(|e| {
-                        // Keep the real cause in desktop logs (network vs bad
-                        // credentials); the mobile only gets the unified message.
-                        log::warn!("Account pairing verification failed: {e}");
-                        "Invalid username or password".to_string()
-                    })?;
+                    .await;
+                if let Err(error) = verification {
+                    // Keep the real cause in desktop logs (network vs bad
+                    // credentials); the mobile only gets the unified message.
+                    log::warn!("Account pairing verification failed: {error}");
+                    let mut attempts = pairing_attempts.lock().await;
+                    attempts.0 = attempts.0.saturating_add(1);
+                    if attempts.0 >= 5 {
+                        attempts.1 =
+                            Some(std::time::Instant::now() + std::time::Duration::from_secs(60));
+                        return Err("Too many pairing attempts. Wait one minute and scan again."
+                            .to_string());
+                    }
+                    return Err("Invalid username or password".to_string());
+                }
+                *pairing_attempts.lock().await = (0, None);
                 Ok(session.user_id)
             }
         })
@@ -1474,19 +1503,24 @@ pub async fn account_status() -> Result<AccountStatus, String> {
     })
 }
 
-#[tauri::command]
-pub async fn account_logout() -> Result<(), String> {
+/// Stop account-backed runtime services and clear all local login state.
+///
+/// `revoke_relay_token` is false after deleting this device because the relay
+/// deletion already revoked the current token along with the device row.
+async fn clear_account_login(revoke_relay_token: bool) {
     // Disconnect device routing before clearing the session.
     if let Some(service) = get_service_holder().read().await.as_ref() {
         service.stop_device_connection().await;
         service.clear_account_pairing_context().await;
         service.clear_trusted_mobile_identity().await;
     }
-    // Revoke the token on the relay (best-effort — don't block on failure)
-    if let Ok((session, relay_url)) = read_account_context().await {
-        let _ = AccountClient::new()
-            .revoke_token(&relay_url, &session)
-            .await;
+    if revoke_relay_token {
+        // Best-effort relay revocation must not prevent local logout.
+        if let Ok((session, relay_url)) = read_account_context().await {
+            let _ = AccountClient::new()
+                .revoke_token(&relay_url, &session)
+                .await;
+        }
     }
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
@@ -1501,6 +1535,11 @@ pub async fn account_logout() -> Result<(), String> {
         "account://login-state",
         serde_json::json!({ "logged_in": false }),
     );
+}
+
+#[tauri::command]
+pub async fn account_logout() -> Result<(), String> {
+    clear_account_login(true).await;
     log::info!("Account logged out");
     Ok(())
 }
@@ -1602,8 +1641,11 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                 }
                 RelayEvent::AuthError { message } => {
                     log::warn!("Device routing auth error: {message}");
-                    // Token expired or invalid — mark for re-login prompt
-                    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+                    // The socket can be rejected while the account panel is
+                    // closed. Fully invalidate local state here so desktop
+                    // capabilities and every UI surface agree immediately.
+                    invalidate_local_account_session(&message).await;
+                    break;
                 }
                 RelayEvent::DevicePresence { devices } => {
                     log::info!("Device presence updated: {} online", devices.len());
@@ -1730,7 +1772,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                     // Execute the command locally and send back
                                     // the encrypted response (including errors).
                                     log::info!(
-                                        "RPC request from relay: {cmd:?} corr={correlation_id}"
+                                        "RPC request received from relay: corr={correlation_id}"
                                     );
                                     match execute_local_remote_command(&cmd).await {
                                         Ok(resp_value) => {
@@ -1749,7 +1791,8 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                     }
                                 }
                                 Ok(cmd) => {
-                                    log::info!("Received device command: {cmd:?}");
+                                    let _ = cmd;
+                                    log::info!("Received device command");
                                 }
                                 Err(e) => {
                                     log::warn!("Could not parse device command: {e}");
@@ -2386,11 +2429,22 @@ pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
 #[tauri::command]
 pub async fn account_delete_device(targetDeviceId: String) -> Result<(), String> {
     let (session, relay_url) = read_account_context().await?;
-    AccountClient::new()
+    let is_current_device = current_device_identity()?.device_id == targetDeviceId;
+    if let Err(error) = AccountClient::new()
         .delete_device(&relay_url, &session, &targetDeviceId)
         .await
-        .map_err(|e| format!("{e}"))?;
+    {
+        let message = error.to_string();
+        if error_indicates_expired_token(&message) {
+            invalidate_local_account_session(&message).await;
+        }
+        return Err(message);
+    }
     log::info!("Device {targetDeviceId} removed from account");
+    if is_current_device {
+        clear_account_login(false).await;
+        log::info!("Current device removed; local account session cleared");
+    }
     Ok(())
 }
 

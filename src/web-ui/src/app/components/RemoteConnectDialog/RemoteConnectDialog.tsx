@@ -85,6 +85,23 @@ function pickLocalizedUrl(urls: Partial<Record<LocaleId, string>>, locale: Local
   return urls['en-US'] ?? Object.values(urls)[0] ?? '';
 }
 
+function parseRelayServer(value: string): URL | null {
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol)
+      || !url.hostname
+      || url.username
+      || url.password
+      || url.search
+      || url.hash) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 const methodToNetworkTab = (method: string | null | undefined): NetworkTab | null => {
   if (!method) return null;
   if (method.startsWith('Lan')) return 'lan';
@@ -430,6 +447,19 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     setConnectionResult(null);
 
     try {
+      if (activeGroup === 'network' && networkTab === 'custom_server') {
+        const relayUrl = parseRelayServer(customUrl);
+        if (!relayUrl) {
+          setError(t('accountLogin.invalidServer'));
+          return;
+        }
+        const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(relayUrl.hostname);
+        if (relayUrl.protocol === 'http:'
+          && !isLoopback
+          && !window.confirm(t('accountLogin.insecureServerConfirm'))) {
+          return;
+        }
+      }
       await remoteConnectAPI.setFormState({
         custom_server_url: customUrl,
         telegram_bot_token: tgToken,
@@ -478,7 +508,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [activeGroup, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling]);
+  }, [activeGroup, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, t]);
 
   const handleStartWeixinQr = useCallback(async () => {
     setError(null);
