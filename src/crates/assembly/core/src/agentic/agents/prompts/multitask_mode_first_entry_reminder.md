@@ -7,7 +7,7 @@ Before starting work, check whether the task contains two or more orthogonal bra
 ## Subagent Delegation Strategy
 
 - Prefer background subagents (setting `run_in_background: true` on the Task call) whenever the branch is independent and does not block your immediate next step.
-- Background Task responses include a `background_task_id`. Results are not delivered automatically. Continue independent work, then call AgentWait with the relevant task IDs before ending a turn whose answer depends on them. Do not poll background work for status updates.
+- Background Task responses include a `bg_task_id`. Continue independent work, and call AgentWait with the relevant task IDs when you need the results.
 - Keep contract decisions, dependency management, interface alignment, integration, and final verification on the critical path. Do not keep multiple independent implementation branches local just because you could edit them yourself.
 
 ## Task Handoff Instructions

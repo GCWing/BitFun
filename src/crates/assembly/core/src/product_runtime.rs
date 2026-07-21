@@ -733,6 +733,7 @@ impl CoreSessionOperationsPort {
                 "source turn id is required",
             ));
         }
+        let source_session_id_for_coordination = source_session_id.clone();
         let result = self
             .persistence
             .branch_session(
@@ -744,6 +745,26 @@ impl CoreSessionOperationsPort {
             )
             .await
             .map_err(runtime_port_error)?;
+        if let Err(error) = self
+            .coordinator
+            .initialize_fork_coordination(&source_session_id_for_coordination, &result.session_id)
+            .await
+        {
+            if let Err(cleanup_error) = self
+                .persistence
+                .delete_session(storage_path, &result.session_id)
+                .await
+            {
+                return Err(PortError::new(
+                    PortErrorKind::CleanupRequired,
+                    format!(
+                        "Session fork coordination initialization failed and rollback did not complete: session_id={}, error={}, cleanup_error={}",
+                        result.session_id, error, cleanup_error
+                    ),
+                ));
+            }
+            return Err(runtime_port_error(error));
+        }
         Ok(AgentSessionForkResult {
             session_id: result.session_id,
             session_name: result.session_name,

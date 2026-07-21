@@ -40,14 +40,14 @@ impl TaskAction {
             return None;
         }
 
-        let has_session_id = value.get("session_id").is_some();
+        let has_agent_id = value.get("agent_id").is_some();
         let has_subagent_type = value.get("subagent_type").is_some();
         let has_fork_context = value.get("fork_context").is_some();
 
-        if !has_session_id && (has_subagent_type || has_fork_context) {
+        if !has_agent_id && (has_subagent_type || has_fork_context) {
             return Some(Self::Spawn);
         }
-        if has_session_id && !has_subagent_type && !has_fork_context {
+        if has_agent_id && !has_subagent_type && !has_fork_context {
             return Some(Self::SendInput);
         }
 
@@ -69,7 +69,7 @@ pub(super) struct TaskInvocation {
     pub(super) description: Option<String>,
     pub(super) prompt: Option<String>,
     pub(super) context_mode: SubagentContextMode,
-    pub(super) target_session_id: Option<String>,
+    pub(super) target_agent_id: Option<String>,
     pub(super) subagent_type: Option<String>,
     pub(super) model_id: Option<String>,
     pub(super) inherit_parent_model: bool,
@@ -97,7 +97,7 @@ impl TaskTool {
                     "action is not supported for DeepReview Task calls".to_string(),
                 ));
             }
-            for field in ["fork_context", "session_id", "run_in_background"] {
+            for field in ["fork_context", "agent_id", "run_in_background"] {
                 if input.get(field).is_some() {
                     return Err(BitFunError::tool(format!(
                         "{field} is not allowed for DeepReview Task calls"
@@ -112,7 +112,7 @@ impl TaskTool {
                 description: Self::string_field(input, "description", "DeepReview Task calls")?,
                 prompt: Self::string_field(input, "prompt", "DeepReview Task calls")?,
                 context_mode: SubagentContextMode::Fresh,
-                target_session_id: None,
+                target_agent_id: None,
                 subagent_type: Self::string_field(input, "subagent_type", "DeepReview Task calls")?,
                 model_id,
                 inherit_parent_model,
@@ -143,9 +143,9 @@ impl TaskTool {
             TaskAction::Spawn => {
                 let description = Self::required_string_for_action(input, "description", action)?;
                 let prompt = Self::required_string_for_action(input, "prompt", action)?;
-                if input.get("session_id").is_some() {
+                if input.get("agent_id").is_some() {
                     return Err(BitFunError::tool(
-                        "session_id is not allowed when action is spawn".to_string(),
+                        "agent_id is not allowed when action is spawn".to_string(),
                     ));
                 }
                 let context_mode = Self::context_mode_from_input(input)?;
@@ -180,7 +180,7 @@ impl TaskTool {
                     description,
                     prompt,
                     context_mode,
-                    target_session_id: None,
+                    target_agent_id: None,
                     subagent_type: Self::optional_trimmed_string(input, "subagent_type")?,
                     model_id,
                     inherit_parent_model,
@@ -191,8 +191,7 @@ impl TaskTool {
                 })
             }
             TaskAction::SendInput => {
-                let target_session_id =
-                    Self::required_string_for_action(input, "session_id", action)?;
+                let target_agent_id = Self::required_string_for_action(input, "agent_id", action)?;
                 let description = Self::required_string_for_action(input, "description", action)?;
                 let prompt = Self::required_string_for_action(input, "prompt", action)?;
                 Self::ensure_fields_absent(
@@ -214,7 +213,7 @@ impl TaskTool {
                     description,
                     prompt,
                     context_mode: SubagentContextMode::Fresh,
-                    target_session_id,
+                    target_agent_id,
                     subagent_type: None,
                     model_id,
                     inherit_parent_model,
@@ -225,8 +224,7 @@ impl TaskTool {
                 })
             }
             TaskAction::Cancel => {
-                let target_session_id =
-                    Self::required_string_for_action(input, "session_id", action)?;
+                let target_agent_id = Self::required_string_for_action(input, "agent_id", action)?;
                 Self::ensure_fields_absent(
                     input,
                     &[
@@ -247,7 +245,7 @@ impl TaskTool {
                     description: None,
                     prompt: None,
                     context_mode: SubagentContextMode::Fresh,
-                    target_session_id,
+                    target_agent_id,
                     subagent_type: None,
                     model_id: None,
                     inherit_parent_model: false,

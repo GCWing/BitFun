@@ -18,7 +18,7 @@ pub struct AgentWaitTool;
 
 #[derive(Debug, PartialEq, Eq)]
 struct AgentWaitRequest {
-    background_task_ids: Vec<String>,
+    bg_task_ids: Vec<String>,
     wait_mode: BackgroundSubagentWaitMode,
     timeout_ms: u64,
 }
@@ -39,20 +39,23 @@ impl AgentWaitTool {
             .as_object()
             .ok_or_else(|| BitFunError::tool("AgentWait input must be an object".to_string()))?;
 
-        let (values, require_task_id) = match object.get("background_task_ids") {
+        let task_ids = object
+            .get("bg_task_ids")
+            .or_else(|| object.get("background_task_ids"));
+        let (values, require_task_id) = match task_ids {
             None => (Vec::new(), false),
             Some(value @ Value::String(_)) => (vec![value], true),
             Some(Value::Array(values)) if values.is_empty() => (Vec::new(), false),
             Some(Value::Array(values)) => (values.iter().collect::<Vec<_>>(), true),
             Some(_) => {
                 return Err(BitFunError::tool(
-                    "background_task_ids must be a string or an array".to_string(),
+                    "bg_task_ids must be a string or an array".to_string(),
                 ));
             }
         };
 
         let mut seen = HashSet::new();
-        let background_task_ids = values
+        let bg_task_ids = values
             .into_iter()
             .filter_map(Value::as_str)
             .map(str::trim)
@@ -60,14 +63,14 @@ impl AgentWaitTool {
             .filter(|value| seen.insert((*value).to_string()))
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>();
-        if require_task_id && background_task_ids.is_empty() {
+        if require_task_id && bg_task_ids.is_empty() {
             return Err(BitFunError::tool(
-                "background_task_ids must contain at least one non-empty string".to_string(),
+                "bg_task_ids must contain at least one non-empty string".to_string(),
             ));
         }
 
         Ok(AgentWaitRequest {
-            background_task_ids,
+            bg_task_ids,
             wait_mode: Self::parse_wait_mode(object.get("wait_mode"))?,
             timeout_ms: Self::parse_timeout_ms(object.get("timeout_ms")),
         })
@@ -105,8 +108,8 @@ impl AgentWaitTool {
 
     fn outcome_json(outcome: &BackgroundSubagentOutcome) -> Value {
         json!({
-            "background_task_id": outcome.background_task_id,
-            "subagent_session_id": outcome.subagent_session_id,
+            "bg_task_id": outcome.model_bg_task_id(),
+            "agent_id": outcome.model_agent_id(),
             "outcome": outcome.status.as_str(),
             "content": outcome.content,
             "error": outcome.error,
@@ -118,16 +121,16 @@ impl AgentWaitTool {
             return format!(
                 "AgentWait finished with status {}. Pending background task IDs: {}.",
                 result.status.as_str(),
-                result.pending_background_task_ids.join(", ")
+                result.pending_bg_task_ids.join(", ")
             );
         }
 
         let mut message = format!("AgentWait finished with status {}.", result.status.as_str());
         for outcome in &result.outcomes {
             message.push_str(&format!(
-                "\n<background_subagent_result task_id=\"{}\" session_id=\"{}\" status=\"{}\">",
-                outcome.background_task_id,
-                outcome.subagent_session_id,
+                "\n<result bg_task_id=\"{}\" agent_id=\"{}\" status=\"{}\">",
+                outcome.model_bg_task_id(),
+                outcome.model_agent_id(),
                 outcome.status.as_str(),
             ));
             if let Some(content) = &outcome.content {
@@ -137,12 +140,12 @@ impl AgentWaitTool {
                 message.push_str("\nError: ");
                 message.push_str(error);
             }
-            message.push_str("</background_subagent_result>");
+            message.push_str("</result>");
         }
-        if !result.pending_background_task_ids.is_empty() {
+        if !result.pending_bg_task_ids.is_empty() {
             message.push_str(&format!(
                 "\nPending background task IDs: {}.",
-                result.pending_background_task_ids.join(", ")
+                result.pending_bg_task_ids.join(", ")
             ));
         }
         message
@@ -162,7 +165,7 @@ impl Tool for AgentWaitTool {
     async fn description(&self) -> BitFunResult<String> {
         Ok("Wait for background subagent results.
 Set wait_mode to `any` to return after any selected task completes, or `all` to wait for every selected task.
-Provide background_task_ids when known; omit it or pass [] to select all unconsumed background tasks.
+Provide bg_task_ids when known; omit it or pass [] to select all unconsumed background tasks.
 The selected task set is fixed when the call starts. wait_mode defaults to `all`; the tool also returns when `timeout_ms` has elapsed.".to_string())
     }
 
@@ -174,7 +177,7 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
         json!({
             "type": "object",
             "properties": {
-                "background_task_ids": {
+                "bg_task_ids": {
                     "type": "array",
                     "items": { "type": "string" },
                     "description": "Optional background task IDs returned by Task tool. Omit this field or pass [] to select all unconsumed background subagent results."
@@ -241,14 +244,18 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
             .session_id
             .as_deref()
             .ok_or_else(|| BitFunError::tool("session_id is required in context".to_string()))?;
+        let dialog_turn_id = context.dialog_turn_id.as_deref().ok_or_else(|| {
+            BitFunError::tool("dialog_turn_id is required in context".to_string())
+        })?;
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
         let result = coordinator
             .wait_for_background_subagent_outcomes(
                 session_id,
-                &request.background_task_ids,
+                &request.bg_task_ids,
                 request.wait_mode,
                 Duration::from_millis(request.timeout_ms),
+                dialog_turn_id,
                 context.cancellation_token(),
             )
             .await?;
@@ -256,7 +263,7 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
             "status": result.status.as_str(),
             "wait_mode": request.wait_mode.as_str(),
             "results": result.outcomes.iter().map(Self::outcome_json).collect::<Vec<_>>(),
-            "pending_background_task_ids": result.pending_background_task_ids,
+            "pending_bg_task_ids": result.pending_bg_task_ids,
         });
         Ok(vec![ToolResult::Result {
             data,
@@ -270,11 +277,20 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
 mod tests {
     use super::{AgentWaitTool, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS};
     use crate::agentic::coordination::BackgroundSubagentWaitMode;
+    use crate::agentic::tools::framework::Tool;
+
+    #[test]
+    fn schema_exposes_only_parent_scoped_background_task_ids() {
+        let schema = AgentWaitTool::new().input_schema();
+
+        assert_eq!(schema["properties"]["bg_task_ids"]["type"], "array");
+        assert!(schema["properties"].get("background_task_ids").is_none());
+    }
 
     #[test]
     fn empty_input_uses_the_default_timeout_and_session_selector() {
         let request = AgentWaitTool::parse_request(&serde_json::json!({})).expect("valid request");
-        assert!(request.background_task_ids.is_empty());
+        assert!(request.bg_task_ids.is_empty());
         assert_eq!(request.wait_mode, BackgroundSubagentWaitMode::All);
         assert_eq!(request.timeout_ms, DEFAULT_TIMEOUT_MS);
     }
@@ -285,55 +301,64 @@ mod tests {
             "wait_mode": "any"
         }))
         .expect("any wait mode must be valid");
-        assert!(any.background_task_ids.is_empty());
+        assert!(any.bg_task_ids.is_empty());
         assert_eq!(any.wait_mode, BackgroundSubagentWaitMode::Any);
 
         let all = AgentWaitTool::parse_request(&serde_json::json!({
             "wait_mode": "all"
         }))
         .expect("all wait mode must be valid");
-        assert!(all.background_task_ids.is_empty());
+        assert!(all.bg_task_ids.is_empty());
         assert_eq!(all.wait_mode, BackgroundSubagentWaitMode::All);
 
         let empty = AgentWaitTool::parse_request(&serde_json::json!({
-            "background_task_ids": [],
+            "bg_task_ids": [],
             "wait_mode": "any"
         }))
         .expect("an empty selector must be valid");
         assert_eq!(empty.wait_mode, BackgroundSubagentWaitMode::Any);
 
         let exact = AgentWaitTool::parse_request(&serde_json::json!({
-            "background_task_ids": ["bg-1", "bg-2"],
+            "bg_task_ids": ["bg1", "bg2"],
             "wait_mode": "any"
         }))
         .expect("exact task IDs must be valid");
         assert_eq!(exact.wait_mode, BackgroundSubagentWaitMode::Any);
-        assert_eq!(exact.background_task_ids, ["bg-1", "bg-2"]);
+        assert_eq!(exact.bg_task_ids, ["bg1", "bg2"]);
     }
 
     #[test]
     fn a_single_task_id_string_is_accepted() {
         let request = AgentWaitTool::parse_request(&serde_json::json!({
-            "background_task_ids": " background-task "
+            "bg_task_ids": " bg1 "
         }))
         .expect("a single task ID string must be accepted");
-        assert_eq!(request.background_task_ids, ["background-task"]);
+        assert_eq!(request.bg_task_ids, ["bg1"]);
         assert_eq!(request.wait_mode, BackgroundSubagentWaitMode::All);
+    }
+
+    #[test]
+    fn legacy_background_task_ids_are_tolerated_without_schema_exposure() {
+        let request = AgentWaitTool::parse_request(&serde_json::json!({
+            "background_task_ids": ["bg1"]
+        }))
+        .expect("legacy task IDs must remain unambiguous at runtime");
+        assert_eq!(request.bg_task_ids, ["bg1"]);
     }
 
     #[test]
     fn task_ids_filter_empty_values_and_deduplicate() {
         let request = AgentWaitTool::parse_request(&serde_json::json!({
-            "background_task_ids": [" bg-1 ", "", null, 1, "bg-1", "bg-2", "   "]
+            "bg_task_ids": [" bg1 ", "", null, 1, "bg1", "bg2", "   "]
         }))
         .expect("valid task IDs must be retained");
-        assert_eq!(request.background_task_ids, ["bg-1", "bg-2"]);
+        assert_eq!(request.bg_task_ids, ["bg1", "bg2"]);
     }
 
     #[test]
     fn task_ids_require_a_string_after_filtering_non_empty_inputs() {
         let error = AgentWaitTool::parse_request(&serde_json::json!({
-            "background_task_ids": ["", null, 1]
+            "bg_task_ids": ["", null, 1]
         }))
         .expect_err("non-empty selectors without usable IDs must fail");
         assert!(error.to_string().contains("at least one non-empty string"));

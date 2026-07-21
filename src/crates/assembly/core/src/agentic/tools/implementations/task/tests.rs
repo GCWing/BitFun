@@ -115,6 +115,8 @@ fn task_schema_accepts_optional_model_id() {
     let schema = TaskTool::new().input_schema();
 
     assert_eq!(schema["properties"]["action"]["type"], "string");
+    assert_eq!(schema["properties"]["agent_id"]["type"], "string");
+    assert!(schema["properties"].get("session_id").is_none());
     assert_eq!(schema["properties"]["model_id"]["type"], "string");
     assert!(schema["required"]
         .as_array()
@@ -213,7 +215,7 @@ fn task_schema_describes_spawn_context_modes_as_exclusive() {
 }
 
 #[tokio::test]
-async fn launch_review_agent_schema_exposes_retry_without_session_or_fork_controls() {
+async fn launch_review_agent_schema_exposes_retry_without_agent_or_fork_controls() {
     let context = test_tool_context("DeepReview");
     let schema = LaunchReviewAgentTool::new()
         .input_schema_for_model_with_context(Some(&context))
@@ -227,7 +229,7 @@ async fn launch_review_agent_schema_exposes_retry_without_session_or_fork_contro
     assert_eq!(schema["properties"]["retry_coverage"]["type"], "object");
     assert_eq!(schema["properties"]["packet_id"]["type"], "string");
     assert!(schema["properties"].get("fork_context").is_none());
-    assert!(schema["properties"].get("session_id").is_none());
+    assert!(schema["properties"].get("agent_id").is_none());
     assert!(schema["properties"].get("run_in_background").is_none());
     assert!(schema["required"]
         .as_array()
@@ -297,14 +299,11 @@ async fn managed_review_agent_requires_an_exact_packet_id() {
 
 #[test]
 fn background_subagent_start_acknowledgement_exposes_agent_wait_task_id() {
-    let message = TaskTool::background_subagent_started_assistant_message(
-        "subagent-session-123",
-        "bg-subagent-123",
-    );
+    let message = TaskTool::background_subagent_started_assistant_message("a1", "bg1");
 
     assert!(message.starts_with("Background subagent started successfully."));
-    assert!(message.contains("session_id: \"subagent-session-123\""));
-    assert!(message.contains("background_task_id: \"bg-subagent-123\""));
+    assert!(message.contains("agent_id: \"a1\""));
+    assert!(message.contains("bg_task_id: \"bg1\""));
     assert!(message.contains("Use AgentWait"));
     assert!(!message.contains("GeneralPurpose"));
     assert!(!message.contains("<background_task"));
@@ -405,14 +404,14 @@ async fn validate_input_rejects_fork_context_with_subagent_type_as_mode_conflict
 }
 
 #[tokio::test]
-async fn validate_input_accepts_send_input_session_id_without_subagent_type() {
+async fn validate_input_accepts_send_input_agent_id_without_subagent_type() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
                 "action": "send_input",
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -429,7 +428,7 @@ async fn validate_input_accepts_send_input_with_model_id() {
                 "action": "send_input",
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "model_id": "fast"
             }),
             None,
@@ -440,13 +439,13 @@ async fn validate_input_accepts_send_input_with_model_id() {
 }
 
 #[tokio::test]
-async fn validate_input_infers_send_input_without_action_when_session_id_present() {
+async fn validate_input_infers_send_input_without_action_when_agent_id_present() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -463,7 +462,7 @@ async fn validate_input_rejects_send_input_with_subagent_type() {
                 "action": "send_input",
                 "description": "continue",
                 "prompt": "Continue the previous analysis",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "subagent_type": "Explore"
             }),
             None,
@@ -526,7 +525,7 @@ async fn validate_input_rejects_timeout_for_regular_parent() {
 #[tokio::test]
 async fn launch_review_agent_rejects_task_context_controls() {
     let context = test_tool_context("DeepReview");
-    for field in ["action", "fork_context", "session_id", "run_in_background"] {
+    for field in ["action", "fork_context", "agent_id", "run_in_background"] {
         let mut input = json!({
             "description": "delegate",
             "prompt": "Review security-sensitive files",
@@ -534,7 +533,7 @@ async fn launch_review_agent_rejects_task_context_controls() {
         });
         input[field] = match field {
             "action" => json!("spawn"),
-            "session_id" => json!("subagent-session-1"),
+            "agent_id" => json!("a1"),
             _ => json!(false),
         };
 
@@ -594,12 +593,12 @@ async fn launch_review_agent_rejects_non_string_model_id() {
 }
 
 #[tokio::test]
-async fn validate_input_accepts_cancel_with_session_id_only() {
+async fn validate_input_accepts_cancel_with_agent_id_only() {
     let validation = TaskTool::new()
         .validate_input(
             &json!({
                 "action": "cancel",
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -614,7 +613,7 @@ async fn validate_input_accepts_cancel_with_description() {
         .validate_input(
             &json!({
                 "action": "cancel",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "description": "cancel task"
             }),
             None,
@@ -630,7 +629,7 @@ async fn validate_input_rejects_cancel_with_prompt() {
         .validate_input(
             &json!({
                 "action": "cancel",
-                "session_id": "subagent-session-1",
+                "agent_id": "a1",
                 "prompt": "Stop this work"
             }),
             None,
@@ -661,7 +660,7 @@ async fn validate_input_rejects_fork_context_conflicting_fields() {
                 "description": "delegate",
                 "prompt": "Continue with inherited context",
                 "fork_context": true,
-                "session_id": "subagent-session-1"
+                "agent_id": "a1"
             }),
             None,
         )
@@ -671,7 +670,7 @@ async fn validate_input_rejects_fork_context_conflicting_fields() {
     assert!(validation
         .message
         .as_deref()
-        .is_some_and(|message| message.contains("session_id is not allowed")));
+        .is_some_and(|message| message.contains("agent_id is not allowed")));
 }
 
 #[tokio::test]

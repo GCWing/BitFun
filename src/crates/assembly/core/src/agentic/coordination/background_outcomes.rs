@@ -1,112 +1,40 @@
+use super::coordination_store::{
+    BackgroundTaskRecord, BackgroundTaskRegistration, BackgroundTaskStatus, CoordinationStore,
+    RegisteredBackgroundTask,
+};
 use super::coordinator::{SubagentResult, SubagentResultStatus};
 use crate::agentic::session::SessionManager;
+use crate::service::session::TurnStatus;
 use crate::util::errors::{BitFunError, BitFunResult};
 use dashmap::DashMap;
 use log::warn;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Notify;
 use tokio::time::{sleep_until, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
-const OUTCOME_METADATA_KEY_PREFIX: &str = "backgroundSubagentOutcome:";
 const RESULT_DEBOUNCE: Duration = Duration::from_secs(5);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum BackgroundSubagentOutcomeStatus {
-    Running,
-    Completed,
-    PartialTimeout,
-    Failed,
-    Cancelled,
-}
+pub(crate) type BackgroundSubagentOutcomeStatus = BackgroundTaskStatus;
 
-impl BackgroundSubagentOutcomeStatus {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Running => "running",
-            Self::Completed => "completed",
-            Self::PartialTimeout => "partial_timeout",
-            Self::Failed => "failed",
-            Self::Cancelled => "cancelled",
-        }
-    }
-
-    fn is_terminal(self) -> bool {
-        !matches!(self, Self::Running)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub(crate) struct BackgroundSubagentOutcome {
-    pub background_task_id: String,
-    pub parent_session_id: String,
-    pub parent_dialog_turn_id: String,
-    pub subagent_session_id: String,
-    pub subagent_dialog_turn_id: String,
-    pub subagent_type: String,
-    pub task_description: String,
+    task_pk: i64,
+    pub bg_task_id: String,
+    pub agent_id: String,
     pub status: BackgroundSubagentOutcomeStatus,
     pub content: Option<String>,
     pub error: Option<String>,
-    pub created_at_ms: u64,
-    pub completed_at_ms: Option<u64>,
-    pub consumed_at_ms: Option<u64>,
 }
 
 impl BackgroundSubagentOutcome {
-    pub(crate) fn running(
-        background_task_id: String,
-        parent_session_id: String,
-        parent_dialog_turn_id: String,
-        subagent_session_id: String,
-        subagent_dialog_turn_id: String,
-        subagent_type: String,
-        task_description: String,
-    ) -> Self {
-        Self {
-            background_task_id,
-            parent_session_id,
-            parent_dialog_turn_id,
-            subagent_session_id,
-            subagent_dialog_turn_id,
-            subagent_type,
-            task_description,
-            status: BackgroundSubagentOutcomeStatus::Running,
-            content: None,
-            error: None,
-            created_at_ms: unix_time_ms(),
-            completed_at_ms: None,
-            consumed_at_ms: None,
-        }
+    pub(crate) fn model_bg_task_id(&self) -> &str {
+        &self.bg_task_id
     }
 
-    fn complete_from_subagent_result(&mut self, result: &SubagentResult) {
-        self.status = match result.status {
-            SubagentResultStatus::Completed => BackgroundSubagentOutcomeStatus::Completed,
-            SubagentResultStatus::PartialTimeout => BackgroundSubagentOutcomeStatus::PartialTimeout,
-        };
-        self.content = Some(result.text.clone());
-        self.error = result.reason.clone();
-        self.completed_at_ms = Some(unix_time_ms());
-    }
-
-    fn fail(&mut self, error: &BitFunError) {
-        self.status = BackgroundSubagentOutcomeStatus::Failed;
-        self.content = None;
-        self.error = Some(error.to_string());
-        self.completed_at_ms = Some(unix_time_ms());
-    }
-
-    fn cancel(&mut self) {
-        self.status = BackgroundSubagentOutcomeStatus::Cancelled;
-        self.content = None;
-        self.error = Some("Background subagent task was cancelled".to_string());
-        self.completed_at_ms = Some(unix_time_ms());
+    pub(crate) fn model_agent_id(&self) -> &str {
+        &self.agent_id
     }
 }
 
@@ -146,105 +74,166 @@ impl BackgroundSubagentWaitMode {
 pub(crate) struct BackgroundSubagentWaitResult {
     pub status: BackgroundSubagentWaitStatus,
     pub outcomes: Vec<BackgroundSubagentOutcome>,
-    pub pending_background_task_ids: Vec<String>,
+    pub pending_bg_task_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct LiveBackgroundResult {
+    status: BackgroundTaskStatus,
+    content: Option<String>,
+    error: Option<String>,
 }
 
 #[derive(Debug, Default)]
-struct OutcomeClaim {
-    had_matching_tasks: bool,
+struct AvailableOutcomes {
     outcomes: Vec<BackgroundSubagentOutcome>,
-    pending_background_task_ids: Vec<String>,
+    pending_bg_task_ids: Vec<String>,
 }
 
 pub(crate) struct BackgroundSubagentOutcomeStore {
-    outcomes: DashMap<String, BackgroundSubagentOutcome>,
+    live_results: DashMap<i64, LiveBackgroundResult>,
     changes: Notify,
     session_manager: Arc<SessionManager>,
+    coordination_store: Arc<CoordinationStore>,
 }
 
 impl BackgroundSubagentOutcomeStore {
-    pub(crate) fn new(session_manager: Arc<SessionManager>) -> Self {
+    pub(crate) fn new(
+        session_manager: Arc<SessionManager>,
+        coordination_store: Arc<CoordinationStore>,
+    ) -> Self {
         Self {
-            outcomes: DashMap::new(),
+            live_results: DashMap::new(),
             changes: Notify::new(),
             session_manager,
+            coordination_store,
         }
     }
 
-    pub(crate) async fn register(&self, outcome: BackgroundSubagentOutcome) -> BitFunResult<()> {
-        self.outcomes
-            .insert(outcome.background_task_id.clone(), outcome.clone());
-        if let Err(error) = self.persist(&outcome).await {
-            self.outcomes.remove(&outcome.background_task_id);
-            return Err(error);
-        }
+    pub(crate) async fn register(
+        &self,
+        registration: BackgroundTaskRegistration,
+    ) -> BitFunResult<RegisteredBackgroundTask> {
+        let registered = self
+            .coordination_store
+            .register_background_task(registration)
+            .await?;
         self.changes.notify_waiters();
-        Ok(())
+        Ok(registered)
     }
 
     pub(crate) async fn complete(
         &self,
-        background_task_id: &str,
+        task_pk: i64,
         result: Result<&SubagentResult, &BitFunError>,
     ) {
-        let outcome = {
-            let Some(mut entry) = self.outcomes.get_mut(background_task_id) else {
-                warn!(
-                    "Background subagent outcome record is missing at completion: background_task_id={}",
-                    background_task_id
-                );
-                return;
-            };
-            if entry.status == BackgroundSubagentOutcomeStatus::Cancelled {
-                return;
-            }
-            match result {
-                Ok(result) => entry.complete_from_subagent_result(result),
-                Err(error) => entry.fail(error),
-            }
-            entry.clone()
+        let live_result = match result {
+            Ok(result) => LiveBackgroundResult {
+                status: match result.status {
+                    SubagentResultStatus::Completed => BackgroundTaskStatus::Completed,
+                    SubagentResultStatus::PartialTimeout => BackgroundTaskStatus::PartialTimeout,
+                },
+                content: Some(result.text.clone()),
+                error: result.reason.clone(),
+            },
+            Err(error) => LiveBackgroundResult {
+                status: if matches!(error, BitFunError::Cancelled(_)) {
+                    BackgroundTaskStatus::Cancelled
+                } else {
+                    BackgroundTaskStatus::Failed
+                },
+                content: None,
+                error: Some(error.to_string()),
+            },
         };
-        self.persist_best_effort(&outcome).await;
+        match self
+            .coordination_store
+            .update_task_status(task_pk, live_result.status, None, live_result.error.clone())
+            .await
+        {
+            Ok(true) => {
+                self.live_results.insert(task_pk, live_result);
+                self.changes.notify_waiters();
+            }
+            Ok(false) => {}
+            Err(error) => {
+                warn!(
+                    "Failed to persist background subagent completion: task_pk={}, error={}",
+                    task_pk, error
+                );
+            }
+        }
+    }
+
+    pub(crate) async fn cancel(&self, task_pks: &[i64]) {
+        for task_pk in task_pks {
+            match self
+                .coordination_store
+                .update_task_status(
+                    *task_pk,
+                    BackgroundTaskStatus::Cancelled,
+                    Some("cancelled".to_string()),
+                    Some("Background subagent task was cancelled".to_string()),
+                )
+                .await
+            {
+                Ok(true) => {
+                    self.live_results.insert(
+                        *task_pk,
+                        LiveBackgroundResult {
+                            status: BackgroundTaskStatus::Cancelled,
+                            content: None,
+                            error: Some("Background subagent task was cancelled".to_string()),
+                        },
+                    );
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    warn!(
+                        "Failed to persist background subagent cancellation: task_pk={}, error={}",
+                        task_pk, error
+                    );
+                }
+            }
+        }
         self.changes.notify_waiters();
     }
 
-    pub(crate) async fn cancel(&self, background_task_ids: &[String]) {
-        for background_task_id in background_task_ids {
-            let outcome = {
-                let Some(mut entry) = self.outcomes.get_mut(background_task_id) else {
-                    continue;
-                };
-                if entry.status.is_terminal() {
-                    continue;
-                }
-                entry.cancel();
-                entry.clone()
-            };
-            self.persist_best_effort(&outcome).await;
-        }
+    pub(crate) async fn discard(&self, task_pk: i64) -> BitFunResult<()> {
+        self.live_results.remove(&task_pk);
+        self.coordination_store
+            .delete_background_task(task_pk)
+            .await?;
         self.changes.notify_waiters();
+        Ok(())
     }
 
     pub(crate) async fn wait_for(
         &self,
         parent_session_id: &str,
-        requested_task_ids: &[String],
+        requested_bg_task_ids: &[String],
         wait_mode: BackgroundSubagentWaitMode,
         timeout: Duration,
+        delivered_parent_dialog_turn_id: &str,
         cancellation_token: Option<&CancellationToken>,
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
-        self.hydrate_parent_session(parent_session_id).await?;
-
-        // A session-wide selector is resolved once so new Task calls cannot change this wait.
-        let requested_task_ids = self.resolve_wait_task_ids(parent_session_id, requested_task_ids);
-        if requested_task_ids.is_empty() {
-            return Ok(BackgroundSubagentWaitResult {
-                status: BackgroundSubagentWaitStatus::NoMatchingTasks,
-                outcomes: Vec::new(),
-                pending_background_task_ids: Vec::new(),
-            });
+        self.reconcile_stale_running_tasks(parent_session_id)
+            .await?;
+        let selected = self
+            .coordination_store
+            .wait_candidates(parent_session_id, requested_bg_task_ids)
+            .await?;
+        if selected.is_empty() {
+            return Ok(wait_result(
+                BackgroundSubagentWaitStatus::NoMatchingTasks,
+                Vec::new(),
+                Vec::new(),
+            ));
         }
-
+        let selected_task_pks = selected
+            .iter()
+            .map(|record| record.task_pk)
+            .collect::<Vec<_>>();
         let deadline = Instant::now() + timeout;
         let mut debounce_deadline = None;
 
@@ -252,23 +241,14 @@ impl BackgroundSubagentOutcomeStore {
             let notified = self.changes.notified();
             tokio::pin!(notified);
 
-            let available = self
-                .collect_available(parent_session_id, &requested_task_ids, false)
-                .await?;
-            if !available.had_matching_tasks {
-                return Ok(BackgroundSubagentWaitResult {
-                    status: BackgroundSubagentWaitStatus::NoMatchingTasks,
-                    outcomes: Vec::new(),
-                    pending_background_task_ids: Vec::new(),
-                });
-            }
-
-            if !available.outcomes.is_empty() && available.pending_background_task_ids.is_empty() {
+            let available = self.collect_available(&selected_task_pks).await?;
+            if !available.outcomes.is_empty() && available.pending_bg_task_ids.is_empty() {
                 if let Some(result) = self
-                    .claim_wait_result(
+                    .claim_result(
                         parent_session_id,
-                        &requested_task_ids,
+                        delivered_parent_dialog_turn_id,
                         BackgroundSubagentWaitStatus::Completed,
+                        available,
                     )
                     .await?
                 {
@@ -287,21 +267,22 @@ impl BackgroundSubagentOutcomeStore {
             let wake_at = debounce_deadline.unwrap_or(deadline);
             if Instant::now() >= wake_at {
                 if available.outcomes.is_empty() {
-                    return Ok(BackgroundSubagentWaitResult {
-                        status: BackgroundSubagentWaitStatus::TimedOut,
-                        outcomes: Vec::new(),
-                        pending_background_task_ids: available.pending_background_task_ids,
-                    });
+                    return Ok(wait_result(
+                        BackgroundSubagentWaitStatus::TimedOut,
+                        Vec::new(),
+                        available.pending_bg_task_ids,
+                    ));
                 }
                 if let Some(result) = self
-                    .claim_wait_result(
+                    .claim_result(
                         parent_session_id,
-                        &requested_task_ids,
+                        delivered_parent_dialog_turn_id,
                         if wake_at == deadline {
                             BackgroundSubagentWaitStatus::TimedOut
                         } else {
                             BackgroundSubagentWaitStatus::Completed
                         },
+                        available,
                     )
                     .await?
                 {
@@ -331,180 +312,339 @@ impl BackgroundSubagentOutcomeStore {
         }
     }
 
-    async fn claim_wait_result(
-        &self,
-        parent_session_id: &str,
-        requested_task_ids: &[String],
-        status: BackgroundSubagentWaitStatus,
-    ) -> BitFunResult<Option<BackgroundSubagentWaitResult>> {
-        let claim = self
-            .collect_available(parent_session_id, requested_task_ids, true)
+    async fn collect_available(&self, task_pks: &[i64]) -> BitFunResult<AvailableOutcomes> {
+        let records = self
+            .coordination_store
+            .records_by_task_pks(task_pks)
             .await?;
-        Ok((!claim.outcomes.is_empty()).then(|| {
-            wait_result_for_outcomes(status, claim.outcomes, claim.pending_background_task_ids)
-        }))
-    }
-
-    fn resolve_wait_task_ids(
-        &self,
-        parent_session_id: &str,
-        requested_task_ids: &[String],
-    ) -> Vec<String> {
-        if !requested_task_ids.is_empty() {
-            return requested_task_ids.to_vec();
-        }
-
-        self.outcomes
-            .iter()
-            .filter(|entry| {
-                entry.parent_session_id == parent_session_id && entry.consumed_at_ms.is_none()
-            })
-            .map(|entry| entry.background_task_id.clone())
-            .collect()
-    }
-
-    async fn collect_available(
-        &self,
-        parent_session_id: &str,
-        requested_task_ids: &[String],
-        consume_terminal_outcomes: bool,
-    ) -> BitFunResult<OutcomeClaim> {
-        let task_ids = if requested_task_ids.is_empty() {
-            self.outcomes
-                .iter()
-                .filter(|entry| {
-                    entry.parent_session_id == parent_session_id && entry.consumed_at_ms.is_none()
-                })
-                .map(|entry| entry.background_task_id.clone())
-                .collect::<Vec<_>>()
-        } else {
-            requested_task_ids.to_vec()
-        };
-
-        if task_ids.is_empty() {
-            return Ok(OutcomeClaim::default());
-        }
-
-        let mut claim = OutcomeClaim::default();
-        let mut consumed = Vec::new();
-        for background_task_id in task_ids {
-            let Some(mut entry) = self.outcomes.get_mut(&background_task_id) else {
-                if requested_task_ids.is_empty() {
-                    continue;
-                }
-                return Err(BitFunError::tool(format!(
-                    "Background task was not found: {}",
-                    background_task_id
-                )));
-            };
-            if entry.parent_session_id != parent_session_id {
-                return Err(BitFunError::tool(format!(
-                    "Background task does not belong to the current session: {}",
-                    background_task_id
-                )));
-            }
-            if entry.consumed_at_ms.is_some() {
+        let mut available = AvailableOutcomes::default();
+        for record in records {
+            if record.delivered_at_ms.is_some() {
                 continue;
             }
-            claim.had_matching_tasks = true;
-            if entry.status.is_terminal() {
-                if consume_terminal_outcomes {
-                    entry.consumed_at_ms = Some(unix_time_ms());
-                }
-                let outcome = entry.clone();
-                claim.outcomes.push(outcome.clone());
-                if consume_terminal_outcomes {
-                    consumed.push(outcome);
-                }
+            if record.status.is_terminal() {
+                available
+                    .outcomes
+                    .push(self.outcome_from_record(&record).await?);
             } else {
-                claim
-                    .pending_background_task_ids
-                    .push(entry.background_task_id.clone());
+                available.pending_bg_task_ids.push(record.bg_task_id);
             }
         }
-
-        for outcome in consumed {
-            self.persist_best_effort(&outcome).await;
-        }
-        Ok(claim)
+        Ok(available)
     }
 
-    async fn hydrate_parent_session(&self, parent_session_id: &str) -> BitFunResult<()> {
-        let Some(custom_metadata) = self
+    async fn claim_result(
+        &self,
+        parent_session_id: &str,
+        delivered_parent_dialog_turn_id: &str,
+        status: BackgroundSubagentWaitStatus,
+        available: AvailableOutcomes,
+    ) -> BitFunResult<Option<BackgroundSubagentWaitResult>> {
+        let task_pks = available
+            .outcomes
+            .iter()
+            .map(|outcome| outcome.task_pk)
+            .collect::<Vec<_>>();
+        let claimed = self
+            .coordination_store
+            .claim_terminal_tasks(
+                parent_session_id,
+                &task_pks,
+                delivered_parent_dialog_turn_id,
+            )
+            .await?;
+        let claimed_task_pks = claimed
+            .into_iter()
+            .map(|record| record.task_pk)
+            .collect::<HashSet<_>>();
+        let outcomes = available
+            .outcomes
+            .into_iter()
+            .filter(|outcome| claimed_task_pks.contains(&outcome.task_pk))
+            .collect::<Vec<_>>();
+        Ok((!outcomes.is_empty())
+            .then(|| wait_result(status, outcomes, available.pending_bg_task_ids)))
+    }
+
+    async fn outcome_from_record(
+        &self,
+        record: &BackgroundTaskRecord,
+    ) -> BitFunResult<BackgroundSubagentOutcome> {
+        if let Some(live) = self.live_results.get(&record.task_pk) {
+            return Ok(BackgroundSubagentOutcome {
+                task_pk: record.task_pk,
+                bg_task_id: record.bg_task_id.clone(),
+                agent_id: record.agent_id.clone(),
+                status: live.status,
+                content: live.content.clone(),
+                error: live.error.clone(),
+            });
+        }
+
+        let content = if matches!(
+            record.status,
+            BackgroundTaskStatus::Completed | BackgroundTaskStatus::PartialTimeout
+        ) {
+            self.load_persisted_result_text(record).await?
+        } else {
+            None
+        };
+        Ok(BackgroundSubagentOutcome {
+            task_pk: record.task_pk,
+            bg_task_id: record.bg_task_id.clone(),
+            agent_id: record.agent_id.clone(),
+            status: record.status,
+            content,
+            error: record.error_message.clone(),
+        })
+    }
+
+    async fn load_persisted_result_text(
+        &self,
+        record: &BackgroundTaskRecord,
+    ) -> BitFunResult<Option<String>> {
+        let turn = self
             .session_manager
-            .load_session_custom_metadata(parent_session_id)
+            .load_related_dialog_turn(
+                &record.parent_session_id,
+                &record.child_session_id,
+                &record.child_dialog_turn_id,
+            )
             .await?
-        else {
-            return Ok(());
-        };
-        let Some(metadata) = custom_metadata.as_object() else {
-            return Ok(());
-        };
-        for (key, value) in metadata {
-            if !key.starts_with(OUTCOME_METADATA_KEY_PREFIX) {
-                continue;
-            }
-            let Ok(outcome) = serde_json::from_value::<BackgroundSubagentOutcome>(value.clone())
-            else {
-                warn!(
-                    "Ignoring invalid persisted background subagent outcome: session_id={}, metadata_key={}",
-                    parent_session_id, key
-                );
-                continue;
+            .ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "Persisted subagent result is unavailable for {}",
+                    record.bg_task_id
+                ))
+            })?;
+        Ok(turn
+            .model_rounds
+            .iter()
+            .rev()
+            .flat_map(|round| round.text_items.iter().rev())
+            .find(|item| !item.content.trim().is_empty())
+            .map(|item| item.content.clone()))
+    }
+
+    async fn reconcile_stale_running_tasks(&self, parent_session_id: &str) -> BitFunResult<()> {
+        let stale = self
+            .coordination_store
+            .stale_running_tasks(parent_session_id)
+            .await?;
+        for record in stale {
+            let turn = self
+                .session_manager
+                .load_related_dialog_turn(
+                    &record.parent_session_id,
+                    &record.child_session_id,
+                    &record.child_dialog_turn_id,
+                )
+                .await?;
+            let (status, error_code, error_message) = match turn.map(|turn| turn.status) {
+                Some(TurnStatus::Completed) => (BackgroundTaskStatus::Completed, None, None),
+                Some(TurnStatus::Error) => (
+                    BackgroundTaskStatus::Failed,
+                    Some("child_turn_failed".to_string()),
+                    Some("The persisted subagent turn failed".to_string()),
+                ),
+                Some(TurnStatus::Cancelled) => (
+                    BackgroundTaskStatus::Cancelled,
+                    Some("child_turn_cancelled".to_string()),
+                    Some("The persisted subagent turn was cancelled".to_string()),
+                ),
+                Some(TurnStatus::InProgress) | None => (
+                    BackgroundTaskStatus::Interrupted,
+                    Some("execution_interrupted".to_string()),
+                    Some("Background subagent execution was interrupted".to_string()),
+                ),
             };
-            if outcome.parent_session_id == parent_session_id {
-                self.outcomes
-                    .entry(outcome.background_task_id.clone())
-                    .or_insert(outcome);
-            }
+            let _ = self
+                .coordination_store
+                .update_task_status(record.task_pk, status, error_code, error_message)
+                .await?;
+        }
+        if !parent_session_id.is_empty() {
+            self.changes.notify_waiters();
         }
         Ok(())
     }
 
-    async fn persist(&self, outcome: &BackgroundSubagentOutcome) -> BitFunResult<()> {
-        let value = serde_json::to_value(outcome).map_err(|error| {
-            BitFunError::tool(format!(
-                "Failed to serialize background task outcome: {}",
-                error
-            ))
-        })?;
-        self.session_manager
-            .merge_session_custom_metadata(
-                &outcome.parent_session_id,
-                json!({ outcome_metadata_key(&outcome.background_task_id): value }),
-            )
+    pub(crate) async fn agent_id_for_session(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> BitFunResult<String> {
+        self.coordination_store
+            .agent_id_for_session(parent_session_id, child_session_id)
             .await
     }
 
-    async fn persist_best_effort(&self, outcome: &BackgroundSubagentOutcome) {
-        if let Err(error) = self.persist(outcome).await {
-            warn!(
-                "Failed to persist background subagent outcome: background_task_id={}, parent_session_id={}, error={}",
-                outcome.background_task_id, outcome.parent_session_id, error
-            );
+    pub(crate) async fn resolve_agent_id(
+        &self,
+        parent_session_id: &str,
+        agent_id: &str,
+    ) -> BitFunResult<String> {
+        self.coordination_store
+            .resolve_agent_id(parent_session_id, agent_id)
+            .await
+    }
+
+    pub(crate) async fn delete_session_references(&self, session_id: &str) -> BitFunResult<()> {
+        let deleted_task_pks = self
+            .coordination_store
+            .delete_session_references(session_id)
+            .await?;
+        for task_pk in deleted_task_pks {
+            self.live_results.remove(&task_pk);
         }
+        self.changes.notify_waiters();
+        Ok(())
+    }
+
+    pub(crate) async fn rollback_parent_turns(
+        &self,
+        parent_session_id: &str,
+        parent_dialog_turn_ids: &[String],
+    ) -> BitFunResult<()> {
+        let deleted_task_pks = self
+            .coordination_store
+            .rollback_parent_turns(parent_session_id, parent_dialog_turn_ids)
+            .await?;
+        for task_pk in deleted_task_pks {
+            self.live_results.remove(&task_pk);
+        }
+        self.changes.notify_waiters();
+        Ok(())
+    }
+
+    pub(crate) async fn initialize_fork(
+        &self,
+        source_parent_session_id: &str,
+        target_parent_session_id: &str,
+    ) -> BitFunResult<()> {
+        self.coordination_store
+            .initialize_fork(source_parent_session_id, target_parent_session_id)
+            .await
     }
 }
 
-fn wait_result_for_outcomes(
+fn wait_result(
     status: BackgroundSubagentWaitStatus,
     outcomes: Vec<BackgroundSubagentOutcome>,
-    pending_background_task_ids: Vec<String>,
+    pending_bg_task_ids: Vec<String>,
 ) -> BackgroundSubagentWaitResult {
     BackgroundSubagentWaitResult {
         status,
         outcomes,
-        pending_background_task_ids,
+        pending_bg_task_ids,
     }
 }
 
-fn outcome_metadata_key(background_task_id: &str) -> String {
-    format!("{}{}", OUTCOME_METADATA_KEY_PREFIX, background_task_id)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::core::{SessionConfig, TurnStats};
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::{PromptCachePolicy, SessionContextStore, SessionManagerConfig};
+    use crate::infrastructure::PathManager;
 
-fn unix_time_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    #[tokio::test]
+    async fn restart_recovers_completed_result_from_child_turn_history() {
+        let root = tempfile::tempdir().expect("background outcome temp directory");
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("create workspace");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.path().join("config"),
+        ));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager")),
+            SessionManagerConfig {
+                max_active_sessions: 10,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let config = SessionConfig {
+            workspace_path: Some(workspace.to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+        session_manager
+            .create_session_with_id(
+                Some("parent-session".to_string()),
+                "Parent".to_string(),
+                "agentic".to_string(),
+                config.clone(),
+            )
+            .await
+            .expect("create parent session");
+        session_manager
+            .create_session_with_id(
+                Some("child-session".to_string()),
+                "Child".to_string(),
+                "GeneralPurpose".to_string(),
+                config,
+            )
+            .await
+            .expect("create child session");
+        session_manager
+            .start_dialog_turn(
+                "child-session",
+                "GeneralPurpose".to_string(),
+                "Inspect implementation".to_string(),
+                Some("child-turn".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start child turn");
+        session_manager
+            .complete_dialog_turn(
+                "child-session",
+                "child-turn",
+                "persisted child result".to_string(),
+                &[],
+                TurnStats::default(),
+            )
+            .await
+            .expect("complete child turn");
+
+        let db_path = path_manager.agent_coordination_database_file();
+        let previous_owner = CoordinationStore::new(db_path.clone());
+        let registered = previous_owner
+            .register_background_task(BackgroundTaskRegistration {
+                parent_session_id: "parent-session".to_string(),
+                requested_agent_id: None,
+                child_session_id: "child-session".to_string(),
+                parent_dialog_turn_id: "parent-turn".to_string(),
+                parent_tool_call_id: "task-tool".to_string(),
+                child_dialog_turn_id: "child-turn".to_string(),
+            })
+            .await
+            .expect("register task for previous owner");
+        let recovered = BackgroundSubagentOutcomeStore::new(
+            session_manager,
+            Arc::new(CoordinationStore::new(db_path)),
+        )
+        .wait_for(
+            "parent-session",
+            &[],
+            BackgroundSubagentWaitMode::All,
+            Duration::from_millis(50),
+            "wait-turn",
+            None,
+        )
+        .await
+        .expect("recover persisted background result");
+
+        assert_eq!(recovered.status, BackgroundSubagentWaitStatus::Completed);
+        assert_eq!(recovered.outcomes.len(), 1);
+        assert_eq!(recovered.outcomes[0].bg_task_id, registered.bg_task_id);
+        assert_eq!(
+            recovered.outcomes[0].content.as_deref(),
+            Some("persisted child result")
+        );
+    }
 }

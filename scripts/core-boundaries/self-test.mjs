@@ -3358,7 +3358,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'delegation_policy\\(\\)\\.spawn_child\\(\\)',
         'start_background_subagent',
-        'background_task_id',
+        'bg_task_id',
       ],
     },
     {

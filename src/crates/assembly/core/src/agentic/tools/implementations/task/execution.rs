@@ -136,25 +136,28 @@ impl TaskTool {
         parent_session_id: &str,
         invocation: TaskInvocation,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let target_session_id = invocation.target_session_id.as_deref().ok_or_else(|| {
-            BitFunError::tool("session_id is required when action is cancel".to_string())
+        let agent_id = invocation.target_agent_id.as_deref().ok_or_else(|| {
+            BitFunError::tool("agent_id is required when action is cancel".to_string())
         })?;
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+        let target_session_id = coordinator
+            .resolve_agent_id(parent_session_id, agent_id)
+            .await?;
         let cancelled_count = coordinator
-            .cancel_background_subagents_for_parent(parent_session_id, target_session_id)
+            .cancel_background_subagents_for_parent(parent_session_id, &target_session_id)
             .await?;
 
         Ok(vec![ToolResult::Result {
             data: json!({
                 "action": "cancel",
                 "status": "cancelled",
-                "session_id": target_session_id,
+                "agent_id": agent_id,
                 "cancelled_background_tasks": cancelled_count,
             }),
             result_for_assistant: Some(format!(
-                "Cancelled {} background Task run(s) for subagent session {}.\n<background_task status=\"cancelled\" session_id=\"{}\" cancelled_count=\"{}\">Cancelled background runs will not deliver results back to you.</background_task>",
-                cancelled_count, target_session_id, target_session_id, cancelled_count
+                "Cancelled {} background Task run(s) for agent {}.\n<background_task status=\"cancelled\" agent_id=\"{}\" cancelled_count=\"{}\">Cancelled background runs will not deliver results back to you.</background_task>",
+                cancelled_count, agent_id, agent_id, cancelled_count
             )),
             image_attachments: None,
         }])
@@ -169,6 +172,8 @@ impl TaskTool {
         session_id: String,
     ) -> BitFunResult<Vec<ToolResult>> {
         Self::ensure_delegation_allowed(context)?;
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
 
         let description = invocation.description.clone();
         let mut prompt = invocation.prompt.clone().ok_or_else(|| {
@@ -177,7 +182,10 @@ impl TaskTool {
             )
         })?;
         let context_mode = invocation.context_mode;
-        let target_session_id = invocation.target_session_id.clone();
+        let target_session_id = match invocation.target_agent_id.as_deref() {
+            Some(agent_id) => Some(coordinator.resolve_agent_id(&session_id, agent_id).await?),
+            None => None,
+        };
         let model_id = invocation.model_id.clone();
         let inherit_parent_model = invocation.inherit_parent_model;
         let mut timeout_seconds = invocation.timeout_seconds;
@@ -199,7 +207,7 @@ impl TaskTool {
                 } else {
                     let subagent_type = invocation.subagent_type.clone().ok_or_else(|| {
                         BitFunError::tool(
-                            "subagent_type is required when fork_context is false or omitted and session_id is not provided"
+                            "subagent_type is required when fork_context is false or omitted and agent_id is not provided"
                                 .to_string(),
                         )
                     })?;
@@ -278,9 +286,6 @@ impl TaskTool {
         let mut deep_review_retry_scope_files: Option<Vec<String>> = None;
         let mut deep_review_subagent_role: Option<DeepReviewSubagentRole> = None;
         let mut deep_review_run_manifest: Option<Value> = None;
-        let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
-
         if is_deep_review_parent {
             let subagent_type = subagent_type.as_deref().ok_or_else(|| {
                 BitFunError::tool("subagent_type is required for DeepReview Task calls".to_string())
@@ -688,12 +693,12 @@ impl TaskTool {
                 "context_mode": context_mode.as_str(),
                 "status": "started",
                 "run_in_background": true,
-                "background_task_id": background_result.background_task_id.clone(),
-                "session_id": background_result.session_id.clone(),
+                "bg_task_id": background_result.bg_task_id.clone(),
+                "agent_id": background_result.agent_id.clone(),
             }),
             result_for_assistant: Some(Self::background_subagent_started_assistant_message(
-                &background_result.session_id,
-                &background_result.background_task_id,
+                &background_result.agent_id,
+                &background_result.bg_task_id,
             )),
             image_attachments: None,
         }])
@@ -1045,10 +1050,13 @@ impl TaskTool {
             );
         if supports_follow_up {
             if let Some(subagent_session_id) = result.session_id() {
-                data["session_id"] = json!(subagent_session_id);
+                let agent_id = coordinator
+                    .agent_id_for_subagent_session(&session_id, subagent_session_id)
+                    .await?;
+                data["agent_id"] = json!(agent_id.clone());
                 result_for_assistant.push_str(&format!(
-                "\n<subagent_session id=\"{}\">Use this session_id to continue the same subagent session.</subagent_session>",
-                subagent_session_id
+                "\n<subagent id=\"{}\">Use this agent_id to continue the same subagent.</subagent>",
+                agent_id
             ));
             }
         }

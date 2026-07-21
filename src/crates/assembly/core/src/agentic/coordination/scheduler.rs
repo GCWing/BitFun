@@ -2608,11 +2608,7 @@ mod tests {
             .expect("parent storage binding");
         scheduler
             .coordinator
-            .register_background_subagent_task_for_test(
-                "background-task",
-                parent_session_id,
-                child_session_id,
-            );
+            .register_background_subagent_task_for_test(1, parent_session_id, child_session_id);
         scheduler
             .coordinator
             .set_active_turn_count_for_test(child_session_id, 1);

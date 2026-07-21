@@ -3,6 +3,7 @@
 //! Top-level component that integrates all subsystems
 
 mod background_outcomes;
+mod coordination_store;
 pub mod coordinator;
 pub mod scheduler;
 pub mod state_manager;

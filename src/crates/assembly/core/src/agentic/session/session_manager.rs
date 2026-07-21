@@ -51,7 +51,7 @@ use bitfun_services_core::session::{
 };
 use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -811,6 +811,37 @@ impl SessionManager {
     async fn effective_session_storage_path(&self, session_id: &str) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
         self.effective_storage_path_for_config(&config).await
+    }
+
+    pub(crate) fn path_manager(&self) -> Arc<crate::infrastructure::PathManager> {
+        self.persistence_manager.path_manager().clone()
+    }
+
+    pub(crate) async fn load_related_dialog_turn(
+        &self,
+        parent_session_id: &str,
+        related_session_id: &str,
+        dialog_turn_id: &str,
+    ) -> BitFunResult<Option<DialogTurnData>> {
+        let storage_path = self
+            .effective_session_storage_path(parent_session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(parent_session_id)
+                    .map(|entry| entry.value().path.clone())
+            })
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Session storage path not found: {parent_session_id}"
+                ))
+            })?;
+        Ok(self
+            .persistence_manager
+            .load_session_turns(&storage_path, related_session_id)
+            .await?
+            .into_iter()
+            .find(|turn| turn.turn_id == dialog_turn_id))
     }
 
     pub async fn create_compression_transcript_reference(
@@ -4637,22 +4668,6 @@ impl SessionManager {
             merge_session_custom_metadata_value(metadata, patch)
         })
         .await
-    }
-
-    pub(crate) async fn load_session_custom_metadata(
-        &self,
-        session_id: &str,
-    ) -> BitFunResult<Option<Value>> {
-        if !self.should_persist_session_id(session_id) {
-            return Ok(None);
-        }
-
-        let workspace_path = self.metadata_workspace_path_for_update(session_id).await?;
-        Ok(self
-            .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await?
-            .and_then(|metadata| metadata.custom_metadata))
     }
 
     pub async fn merge_session_relationship(

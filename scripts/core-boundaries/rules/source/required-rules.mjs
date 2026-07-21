@@ -7888,8 +7888,8 @@ export const requiredContentRules = [
         message: 'missing background subagent launch path',
       },
       {
-        regex: /\bbackground_task_id\b/,
-        message: 'missing background task id result contract',
+        regex: /\bbg_task_id\b/,
+        message: 'missing parent-scoped background task id result contract',
       },
     ],
   },

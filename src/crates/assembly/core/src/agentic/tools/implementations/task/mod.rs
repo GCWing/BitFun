@@ -199,9 +199,9 @@ impl Tool for TaskTool {
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
         match TaskAction::parse(input).ok() {
             Some(TaskAction::Cancel) => input
-                .get("session_id")
+                .get("agent_id")
                 .and_then(Value::as_str)
-                .map(|session_id| format!("Cancelling background task: {}", session_id))
+                .map(|agent_id| format!("Cancelling background task: {}", agent_id))
                 .unwrap_or_else(|| "Cancelling background task".to_string()),
             Some(TaskAction::SendInput) => input
                 .get("description")

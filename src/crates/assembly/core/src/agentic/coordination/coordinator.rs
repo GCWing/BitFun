@@ -3,14 +3,14 @@
 //! Top-level component that integrates all subsystems and provides a unified interface
 
 use super::{
+    coordination_store::{BackgroundTaskRegistration, CoordinationStore},
     scheduler::{
         abort_thread_goal_continuation_for_session, clear_thread_goal_continuation_abort,
         get_global_scheduler, DialogSubmissionPolicy, HiddenSubagentQueueCancelHandle,
     },
     turn_outcome::TurnOutcome,
     turn_settlement::TurnSettlementTracker,
-    BackgroundSubagentOutcome, BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode,
-    BackgroundSubagentWaitResult,
+    BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode, BackgroundSubagentWaitResult,
 };
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
@@ -324,8 +324,8 @@ impl SubagentResult {
 
 #[derive(Debug, Clone)]
 pub struct BackgroundSubagentStartResult {
-    pub background_task_id: String,
-    pub session_id: String,
+    pub bg_task_id: String,
+    pub agent_id: String,
 }
 
 fn build_subagent_session_relationship(
@@ -705,8 +705,8 @@ pub struct ConversationCoordinator {
     subagent_timeout_registry: Arc<RwLock<HashMap<String, Arc<SubagentTimeoutHandle>>>>,
     /// Active subagent executions keyed by subagent session id.
     active_subagent_executions: Arc<DashMap<String, ActiveSubagentExecution>>,
-    /// Background Task runs keyed by background_task_id.
-    background_subagent_tasks: Arc<DashMap<String, BackgroundSubagentTaskControl>>,
+    /// Background Task runs keyed by the coordination database task primary key.
+    background_subagent_tasks: Arc<DashMap<i64, BackgroundSubagentTaskControl>>,
     /// Parent-owned terminal outcomes consumed only through AgentWait.
     background_subagent_outcomes: Arc<BackgroundSubagentOutcomeStore>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
@@ -1253,8 +1253,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         event_queue: Arc<EventQueue>,
         event_router: Arc<EventRouter>,
     ) -> Self {
+        let coordination_database_file = session_manager
+            .path_manager()
+            .agent_coordination_database_file();
+        Self::new_with_coordination_database_file(
+            session_manager,
+            execution_engine,
+            tool_pipeline,
+            event_queue,
+            event_router,
+            coordination_database_file,
+        )
+    }
+
+    fn new_with_coordination_database_file(
+        session_manager: Arc<SessionManager>,
+        execution_engine: Arc<ExecutionEngine>,
+        tool_pipeline: Arc<ToolPipeline>,
+        event_queue: Arc<EventQueue>,
+        event_router: Arc<EventRouter>,
+        coordination_database_file: PathBuf,
+    ) -> Self {
+        let coordination_store = Arc::new(CoordinationStore::new(coordination_database_file));
         let background_subagent_outcomes = Arc::new(BackgroundSubagentOutcomeStore::new(
             Arc::clone(&session_manager),
+            coordination_store,
         ));
         Self {
             session_manager,
@@ -4257,6 +4280,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager
             .delete_session(workspace_path, session_id)
             .await?;
+        self.background_subagent_outcomes
+            .delete_session_references(session_id)
+            .await?;
         self.emit_event(AgenticEvent::SessionDeleted {
             session_id: session_id.to_string(),
         })
@@ -4278,6 +4304,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
+        let rolled_back_turn_ids = parent_dialog_turn_ids.iter().cloned().collect::<Vec<_>>();
+        self.background_subagent_outcomes
+            .rollback_parent_turns(parent_session_id, &rolled_back_turn_ids)
+            .await?;
+
         let mut deleted_session_ids = Vec::new();
 
         for session_id in session_ids {
@@ -4287,6 +4318,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         Ok(deleted_session_ids)
+    }
+
+    pub(crate) async fn initialize_fork_coordination(
+        &self,
+        source_session_id: &str,
+        target_session_id: &str,
+    ) -> BitFunResult<()> {
+        self.background_subagent_outcomes
+            .initialize_fork(source_session_id, target_session_id)
+            .await
     }
 
     pub(crate) async fn collect_hidden_subagent_sessions_for_parent_turns(
@@ -6758,14 +6799,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     fn register_background_subagent_task(
         &self,
-        background_task_id: String,
+        task_pk: i64,
         parent_session_id: String,
         subagent_session_id: String,
         cancel_target: BackgroundSubagentCancelTarget,
     ) -> Arc<AtomicBool> {
         let suppress_delivery = Arc::new(AtomicBool::new(false));
         self.background_subagent_tasks.insert(
-            background_task_id,
+            task_pk,
             BackgroundSubagentTaskControl {
                 parent_session_id,
                 subagent_session_id,
@@ -6779,12 +6820,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     #[cfg(test)]
     pub(crate) fn register_background_subagent_task_for_test(
         &self,
-        background_task_id: &str,
+        task_pk: i64,
         parent_session_id: &str,
         subagent_session_id: &str,
     ) {
         self.register_background_subagent_task(
-            background_task_id.to_string(),
+            task_pk,
             parent_session_id.to_string(),
             subagent_session_id.to_string(),
             BackgroundSubagentCancelTarget::Direct(CancellationToken::new()),
@@ -6803,14 +6844,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             control.parent_session_id == parent_session_id
                 && control.subagent_session_id == subagent_session_id
         });
-        let background_task_ids = controls
+        let task_pks = controls
             .iter()
-            .map(|(background_task_id, _)| background_task_id.clone())
+            .map(|(task_pk, _)| *task_pk)
             .collect::<Vec<_>>();
         let cancelled = self.cancel_background_subagent_controls(controls).await?;
-        self.background_subagent_outcomes
-            .cancel(&background_task_ids)
-            .await;
+        self.background_subagent_outcomes.cancel(&task_pks).await;
         Ok(cancelled)
     }
 
@@ -6825,71 +6864,89 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .iter()
             .map(|(_, control)| control.subagent_session_id.clone())
             .collect::<Vec<_>>();
-        let background_task_ids = controls
+        let task_pks = controls
             .iter()
-            .map(|(background_task_id, _)| background_task_id.clone())
+            .map(|(task_pk, _)| *task_pk)
             .collect::<Vec<_>>();
         self.cancel_background_subagent_controls(controls).await?;
-        self.background_subagent_outcomes
-            .cancel(&background_task_ids)
-            .await;
+        self.background_subagent_outcomes.cancel(&task_pks).await;
         Ok(subagent_session_ids)
     }
 
     pub(crate) async fn wait_for_background_subagent_outcomes(
         &self,
         parent_session_id: &str,
-        background_task_ids: &[String],
+        bg_task_ids: &[String],
         wait_mode: BackgroundSubagentWaitMode,
         timeout: Duration,
+        delivered_parent_dialog_turn_id: &str,
         cancellation_token: Option<&CancellationToken>,
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
         self.background_subagent_outcomes
             .wait_for(
                 parent_session_id,
-                background_task_ids,
+                bg_task_ids,
                 wait_mode,
                 timeout,
+                delivered_parent_dialog_turn_id,
                 cancellation_token,
             )
+            .await
+    }
+
+    pub(crate) async fn agent_id_for_subagent_session(
+        &self,
+        parent_session_id: &str,
+        subagent_session_id: &str,
+    ) -> BitFunResult<String> {
+        self.background_subagent_outcomes
+            .agent_id_for_session(parent_session_id, subagent_session_id)
+            .await
+    }
+
+    pub(crate) async fn resolve_agent_id(
+        &self,
+        parent_session_id: &str,
+        agent_id: &str,
+    ) -> BitFunResult<String> {
+        self.background_subagent_outcomes
+            .resolve_agent_id(parent_session_id, agent_id)
             .await
     }
 
     fn claim_background_subagent_controls(
         &self,
         matches: impl Fn(&BackgroundSubagentTaskControl) -> bool,
-    ) -> Vec<(String, BackgroundSubagentTaskControl)> {
+    ) -> Vec<(i64, BackgroundSubagentTaskControl)> {
         let candidate_ids = self
             .background_subagent_tasks
             .iter()
             .filter(|entry| matches(entry.value()))
-            .map(|entry| entry.key().clone())
+            .map(|entry| *entry.key())
             .collect::<Vec<_>>();
         candidate_ids
             .into_iter()
-            .filter_map(|background_task_id| {
-                self.background_subagent_tasks.remove_if(
-                    &background_task_id,
-                    |_task_id, control| {
+            .filter_map(|task_pk| {
+                self.background_subagent_tasks
+                    .remove_if(&task_pk, |_task_pk, control| {
                         if !matches(control) {
                             return false;
                         }
                         control.suppress_delivery.store(true, Ordering::SeqCst);
                         true
-                    },
-                )
+                    })
             })
             .collect()
     }
 
     async fn cancel_background_subagent_controls(
         &self,
-        controls: Vec<(String, BackgroundSubagentTaskControl)>,
+        controls: Vec<(i64, BackgroundSubagentTaskControl)>,
     ) -> BitFunResult<usize> {
-        for (background_task_id, control) in &controls {
+        for (task_pk, control) in &controls {
             debug!(
-                "Cancelling background subagent task: background_task_id={}, parent_session_id={}, subagent_session_id={}",
-                background_task_id, control.parent_session_id, control.subagent_session_id
+                "Cancelling background subagent task: task_pk={}, parent_session_id={}, subagent_session_id={}",
+                task_pk, control.parent_session_id, control.subagent_session_id
             );
             match &control.cancel_target {
                 BackgroundSubagentCancelTarget::Scheduler(handle) => {
@@ -6897,8 +6954,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         scheduler.request_hidden_subagent_cancellation(handle).await;
                     } else {
                         warn!(
-                            "Cannot cancel scheduler-backed background subagent because scheduler is unavailable: background_task_id={}, subagent_session_id={}",
-                            background_task_id, control.subagent_session_id
+                            "Cannot cancel scheduler-backed background subagent because scheduler is unavailable: task_pk={}, subagent_session_id={}",
+                            task_pk, control.subagent_session_id
                         );
                     }
                 }
@@ -7024,7 +7081,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
             })?
             .to_string();
-        let logical_agent_type = request.logical_agent_type.clone();
         let subagent_parent_info = match request.subagent_parent_info.clone() {
             Some(info) => info,
             None => {
@@ -7050,9 +7106,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )));
             }
         };
-        let background_task_id = format!("bg-subagent-{}", uuid::Uuid::new_v4());
-        let background_task_id_for_delivery = background_task_id.clone();
-        let task_description = request.user_input_text.clone();
         let coordinator = match get_global_coordinator() {
             Some(coordinator) => coordinator,
             None => {
@@ -7063,23 +7116,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 ));
             }
         };
-        if let Err(error) = self
+        let registered_task = match self
             .background_subagent_outcomes
-            .register(BackgroundSubagentOutcome::running(
-                background_task_id.clone(),
-                subagent_parent_info.session_id.clone(),
-                subagent_parent_info.dialog_turn_id.clone(),
-                subagent_session_id.clone(),
-                subagent_dialog_turn_id.clone(),
-                logical_agent_type.clone(),
-                task_description.clone(),
-            ))
+            .register(BackgroundTaskRegistration {
+                parent_session_id: subagent_parent_info.session_id.clone(),
+                requested_agent_id: None,
+                child_session_id: subagent_session_id.clone(),
+                parent_dialog_turn_id: subagent_parent_info.dialog_turn_id.clone(),
+                parent_tool_call_id: subagent_parent_info.tool_call_id.clone(),
+                child_dialog_turn_id: subagent_dialog_turn_id.clone(),
+            })
             .await
         {
-            self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
-                .await;
-            return Err(error);
-        }
+            Ok(registered_task) => registered_task,
+            Err(error) => {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                    .await;
+                return Err(error);
+            }
+        };
+        let task_pk = registered_task.task_pk;
+        let bg_task_id = registered_task.bg_task_id;
+        let agent_id = registered_task.agent_id;
         let parent_cancel_token = self
             .execution_engine
             .cancel_token_for_dialog_turn(&subagent_parent_info.dialog_turn_id)
@@ -7092,9 +7150,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             {
                 Ok(submit_result) => submit_result,
                 Err(error) => {
-                    self.background_subagent_outcomes
-                        .cancel(std::slice::from_ref(&background_task_id))
-                        .await;
+                    if let Err(discard_error) =
+                        self.background_subagent_outcomes.discard(task_pk).await
+                    {
+                        warn!(
+                            "Failed to discard unsubmitted background task: task_pk={}, error={}",
+                            task_pk, discard_error
+                        );
+                    }
                     self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                         .await;
                     return Err(BitFunError::tool(error));
@@ -7104,7 +7167,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             let cancel_handle = submit_result.cancel_handle.clone();
             let scheduler_for_cancel = scheduler.clone();
             let suppress_delivery = self.register_background_subagent_task(
-                background_task_id.clone(),
+                task_pk,
                 subagent_parent_info.session_id.clone(),
                 subagent_session_id.clone(),
                 BackgroundSubagentCancelTarget::Scheduler(cancel_handle.clone()),
@@ -7133,23 +7196,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     None => Self::await_hidden_subagent_receiver(receiver).await,
                 };
                 if suppress_delivery.load(Ordering::SeqCst) {
-                    background_subagent_tasks.remove(&background_task_id_for_delivery);
+                    background_subagent_tasks.remove(&task_pk);
                     debug!(
-                        "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
-                        background_task_id_for_delivery, subagent_parent_info.session_id
+                        "Suppressing cancelled background subagent result delivery: task_pk={}, parent_session_id={}",
+                        task_pk, subagent_parent_info.session_id
                     );
                     return;
                 }
 
                 background_subagent_outcomes
-                    .complete(&background_task_id_for_delivery, result.as_ref())
+                    .complete(task_pk, result.as_ref())
                     .await;
-                background_subagent_tasks.remove(&background_task_id_for_delivery);
+                background_subagent_tasks.remove(&task_pk);
             });
 
             return Ok(BackgroundSubagentStartResult {
-                background_task_id,
-                session_id: subagent_session_id,
+                bg_task_id,
+                agent_id,
             });
         }
 
@@ -7174,7 +7237,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }),
         };
         let suppress_delivery = self.register_background_subagent_task(
-            background_task_id.clone(),
+            task_pk,
             subagent_parent_info.session_id.clone(),
             subagent_session_id.clone(),
             BackgroundSubagentCancelTarget::Direct(background_cancel_token),
@@ -7192,23 +7255,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await;
             cancel_bridge_handle.abort();
             if suppress_delivery.load(Ordering::SeqCst) {
-                background_subagent_tasks.remove(&background_task_id_for_delivery);
+                background_subagent_tasks.remove(&task_pk);
                 debug!(
-                    "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
-                    background_task_id_for_delivery, subagent_parent_info.session_id
+                    "Suppressing cancelled background subagent result delivery: task_pk={}, parent_session_id={}",
+                    task_pk, subagent_parent_info.session_id
                 );
                 return;
             }
 
             background_subagent_outcomes
-                .complete(&background_task_id_for_delivery, result.as_ref())
+                .complete(task_pk, result.as_ref())
                 .await;
-            background_subagent_tasks.remove(&background_task_id_for_delivery);
+            background_subagent_tasks.remove(&task_pk);
         });
 
         Ok(BackgroundSubagentStartResult {
-            background_task_id,
-            session_id: subagent_session_id,
+            bg_task_id,
+            agent_id,
         })
     }
 
@@ -8362,8 +8425,11 @@ mod tests {
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
         resolve_subagent_model_selection, runtime_port_error_preserving_message,
         should_require_tool_confirmation, turn_review_manifest_for_agent,
-        BackgroundSubagentOutcome, BackgroundSubagentWaitMode, ConversationCoordinator,
-        SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
+        BackgroundSubagentWaitMode, ConversationCoordinator, SubagentExecutionRequest,
+        TEST_AGENT_MODEL_DEFAULTS,
+    };
+    use crate::agentic::coordination::coordination_store::{
+        BackgroundTaskRegistration, RegisteredBackgroundTask,
     };
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
@@ -8736,6 +8802,9 @@ mod tests {
         max_active_sessions: usize,
     ) -> (ConversationCoordinator, Arc<SessionManager>) {
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let coordination_database_file = std::env::temp_dir()
+            .join(format!("bitfun-coordinator-test-{}", uuid::Uuid::new_v4()))
+            .join("coordination.sqlite");
         let session_manager = Arc::new(SessionManager::new(
             Arc::new(SessionContextStore::new()),
             Arc::new(
@@ -8766,12 +8835,13 @@ mod tests {
             Arc::new(ContextCompressor::new(CompressionConfig::default())),
             ExecutionEngineConfig::default(),
         ));
-        let coordinator = ConversationCoordinator::new(
+        let coordinator = ConversationCoordinator::new_with_coordination_database_file(
             session_manager.clone(),
             execution_engine,
             tool_pipeline,
             event_queue,
             Arc::new(EventRouter::new()),
+            coordination_database_file,
         );
         coordinator.set_terminal_port(
             bitfun_runtime_services::test_support::FakeRuntimeServicesProvider::terminal_port(),
@@ -8785,6 +8855,26 @@ mod tests {
 
     fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
         test_coordinator_with_max_active_sessions(100)
+    }
+
+    async fn register_test_background_task(
+        coordinator: &ConversationCoordinator,
+        parent_session_id: &str,
+        parent_dialog_turn_id: &str,
+        child_session_id: &str,
+    ) -> RegisteredBackgroundTask {
+        coordinator
+            .background_subagent_outcomes
+            .register(BackgroundTaskRegistration {
+                parent_session_id: parent_session_id.to_string(),
+                requested_agent_id: None,
+                child_session_id: child_session_id.to_string(),
+                parent_dialog_turn_id: parent_dialog_turn_id.to_string(),
+                parent_tool_call_id: format!("tool-{child_session_id}"),
+                child_dialog_turn_id: format!("turn-{child_session_id}"),
+            })
+            .await
+            .expect("register background task")
     }
 
     #[test]
@@ -8853,32 +8943,28 @@ mod tests {
     #[tokio::test]
     async fn background_subagent_outcome_is_consumed_only_by_agent_wait() {
         let (coordinator, _) = test_coordinator();
-        let background_task_id = "background-task".to_string();
-        coordinator
-            .background_subagent_outcomes
-            .register(BackgroundSubagentOutcome::running(
-                background_task_id.clone(),
-                "parent-session".to_string(),
-                "parent-turn".to_string(),
-                "subagent-session".to_string(),
-                "subagent-turn".to_string(),
-                "GeneralPurpose".to_string(),
-                "Inspect implementation".to_string(),
-            ))
-            .await
-            .expect("register outcome");
+        let registered = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session",
+        )
+        .await;
+        assert_eq!(registered.agent_id, "a1");
+        assert_eq!(registered.bg_task_id, "a1_bg1");
         let completed = super::SubagentResult::completed("done".to_string());
         coordinator
             .background_subagent_outcomes
-            .complete(&background_task_id, Ok(&completed))
+            .complete(registered.task_pk, Ok(&completed))
             .await;
 
         let result = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                std::slice::from_ref(&background_task_id),
+                std::slice::from_ref(&registered.bg_task_id),
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
+                "wait-turn-1",
                 None,
             )
             .await
@@ -8887,14 +8973,17 @@ mod tests {
         assert_eq!(result.status.as_str(), "completed");
         assert_eq!(result.outcomes.len(), 1);
         assert_eq!(result.outcomes[0].content.as_deref(), Some("done"));
-        assert!(result.pending_background_task_ids.is_empty());
+        assert_eq!(result.outcomes[0].model_bg_task_id(), "a1_bg1");
+        assert_eq!(result.outcomes[0].model_agent_id(), "a1");
+        assert!(result.pending_bg_task_ids.is_empty());
 
         let second = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                std::slice::from_ref(&background_task_id),
+                std::slice::from_ref(&registered.bg_task_id),
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
+                "wait-turn-2",
                 None,
             )
             .await
@@ -8904,26 +8993,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn model_facing_subagent_ids_are_stable_and_parent_scoped() {
+        let (coordinator, _) = test_coordinator();
+
+        let first_agent = coordinator
+            .agent_id_for_subagent_session("parent-1", "subagent-session-1")
+            .await
+            .expect("allocate first agent id");
+        let repeated_agent = coordinator
+            .agent_id_for_subagent_session("parent-1", "subagent-session-1")
+            .await
+            .expect("reuse first agent id");
+        let second_agent = coordinator
+            .agent_id_for_subagent_session("parent-1", "subagent-session-2")
+            .await
+            .expect("allocate second agent id");
+        let other_parent_agent = coordinator
+            .agent_id_for_subagent_session("parent-2", "subagent-session-3")
+            .await
+            .expect("allocate agent id for another parent");
+
+        assert_eq!(first_agent, "a1");
+        assert_eq!(repeated_agent, "a1");
+        assert_eq!(second_agent, "a2");
+        assert_eq!(other_parent_agent, "a1");
+        assert_eq!(
+            coordinator
+                .resolve_agent_id("parent-1", "a2")
+                .await
+                .expect("resolve agent id"),
+            "subagent-session-2"
+        );
+
+        let first_bg_task = register_test_background_task(
+            &coordinator,
+            "parent-1",
+            "parent-turn-1",
+            "subagent-session-1",
+        )
+        .await;
+        let second_bg_task = register_test_background_task(
+            &coordinator,
+            "parent-1",
+            "parent-turn-2",
+            "subagent-session-1",
+        )
+        .await;
+        assert_eq!(first_bg_task.bg_task_id, "a1_bg1");
+        assert_eq!(second_bg_task.bg_task_id, "a1_bg2");
+
+        let custom = coordinator
+            .background_subagent_outcomes
+            .register(BackgroundTaskRegistration {
+                parent_session_id: "parent-1".to_string(),
+                requested_agent_id: Some("reviewer".to_string()),
+                child_session_id: "reviewer-session".to_string(),
+                parent_dialog_turn_id: "parent-turn-3".to_string(),
+                parent_tool_call_id: "tool-reviewer".to_string(),
+                child_dialog_turn_id: "turn-reviewer".to_string(),
+            })
+            .await
+            .expect("register caller-named agent");
+        assert_eq!(custom.agent_id, "reviewer");
+        assert_eq!(custom.bg_task_id, "reviewer_bg1");
+        assert_eq!(
+            coordinator
+                .resolve_agent_id("parent-1", "reviewer")
+                .await
+                .expect("resolve caller-named agent"),
+            "reviewer-session"
+        );
+    }
+
+    #[tokio::test]
     async fn agent_wait_without_task_ids_collects_unconsumed_session_outcomes() {
         let (coordinator, _) = test_coordinator();
-        let background_task_id = "background-task-earlier-turn".to_string();
-        coordinator
-            .background_subagent_outcomes
-            .register(BackgroundSubagentOutcome::running(
-                background_task_id.clone(),
-                "parent-session".to_string(),
-                "earlier-parent-turn".to_string(),
-                "subagent-session".to_string(),
-                "subagent-turn".to_string(),
-                "GeneralPurpose".to_string(),
-                "Inspect implementation".to_string(),
-            ))
-            .await
-            .expect("register outcome");
+        let registered = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "earlier-parent-turn",
+            "subagent-session",
+        )
+        .await;
         let completed = super::SubagentResult::completed("done".to_string());
         coordinator
             .background_subagent_outcomes
-            .complete(&background_task_id, Ok(&completed))
+            .complete(registered.task_pk, Ok(&completed))
             .await;
 
         let result = coordinator
@@ -8932,6 +9087,7 @@ mod tests {
                 &[],
                 BackgroundSubagentWaitMode::Any,
                 Duration::from_millis(10),
+                "wait-turn",
                 None,
             )
             .await
@@ -8939,34 +9095,31 @@ mod tests {
 
         assert_eq!(result.status.as_str(), "completed");
         assert_eq!(result.outcomes.len(), 1);
-        assert_eq!(result.outcomes[0].background_task_id, background_task_id);
-        assert!(result.pending_background_task_ids.is_empty());
+        assert_eq!(result.outcomes[0].bg_task_id, registered.bg_task_id);
+        assert!(result.pending_bg_task_ids.is_empty());
     }
 
     #[tokio::test]
     async fn agent_wait_all_times_out_with_returned_partial_results() {
         let (coordinator, _) = test_coordinator();
-        let completed_task_id = "background-task-completed".to_string();
-        let pending_task_id = "background-task-pending".to_string();
-        for background_task_id in [&completed_task_id, &pending_task_id] {
-            coordinator
-                .background_subagent_outcomes
-                .register(BackgroundSubagentOutcome::running(
-                    background_task_id.clone(),
-                    "parent-session".to_string(),
-                    "parent-turn".to_string(),
-                    format!("subagent-session-{background_task_id}"),
-                    format!("subagent-turn-{background_task_id}"),
-                    "GeneralPurpose".to_string(),
-                    "Inspect implementation".to_string(),
-                ))
-                .await
-                .expect("register outcome");
-        }
+        let completed_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-completed",
+        )
+        .await;
+        let pending_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-pending",
+        )
+        .await;
         let completed = super::SubagentResult::completed("done".to_string());
         coordinator
             .background_subagent_outcomes
-            .complete(&completed_task_id, Ok(&completed))
+            .complete(completed_task.task_pk, Ok(&completed))
             .await;
 
         let result = coordinator
@@ -8975,6 +9128,7 @@ mod tests {
                 &[],
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(1),
+                "wait-turn-1",
                 None,
             )
             .await
@@ -8982,15 +9136,16 @@ mod tests {
 
         assert_eq!(result.status.as_str(), "timed_out");
         assert_eq!(result.outcomes.len(), 1);
-        assert_eq!(result.outcomes[0].background_task_id, completed_task_id);
-        assert_eq!(result.pending_background_task_ids, vec![pending_task_id]);
+        assert_eq!(result.outcomes[0].bg_task_id, completed_task.bg_task_id);
+        assert_eq!(result.pending_bg_task_ids, vec![pending_task.bg_task_id]);
 
         let retry = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                std::slice::from_ref(&completed_task_id),
+                std::slice::from_ref(&completed_task.bg_task_id),
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
+                "wait-turn-2",
                 None,
             )
             .await
@@ -9001,27 +9156,24 @@ mod tests {
     #[tokio::test]
     async fn agent_wait_any_returns_partial_results_after_debounce() {
         let (coordinator, _) = test_coordinator();
-        let completed_task_id = "background-task-completed".to_string();
-        let pending_task_id = "background-task-pending".to_string();
-        for background_task_id in [&completed_task_id, &pending_task_id] {
-            coordinator
-                .background_subagent_outcomes
-                .register(BackgroundSubagentOutcome::running(
-                    background_task_id.clone(),
-                    "parent-session".to_string(),
-                    "parent-turn".to_string(),
-                    format!("subagent-session-{background_task_id}"),
-                    format!("subagent-turn-{background_task_id}"),
-                    "GeneralPurpose".to_string(),
-                    "Inspect implementation".to_string(),
-                ))
-                .await
-                .expect("register outcome");
-        }
+        let completed_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-completed",
+        )
+        .await;
+        let pending_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-pending",
+        )
+        .await;
         let completed = super::SubagentResult::completed("done".to_string());
         coordinator
             .background_subagent_outcomes
-            .complete(&completed_task_id, Ok(&completed))
+            .complete(completed_task.task_pk, Ok(&completed))
             .await;
 
         let result = coordinator
@@ -9030,6 +9182,7 @@ mod tests {
                 &[],
                 BackgroundSubagentWaitMode::Any,
                 Duration::from_secs(6),
+                "wait-turn",
                 None,
             )
             .await
@@ -9037,45 +9190,46 @@ mod tests {
 
         assert_eq!(result.status.as_str(), "completed");
         assert_eq!(result.outcomes.len(), 1);
-        assert_eq!(result.outcomes[0].background_task_id, completed_task_id);
-        assert_eq!(result.pending_background_task_ids, vec![pending_task_id]);
+        assert_eq!(result.outcomes[0].bg_task_id, completed_task.bg_task_id);
+        assert_eq!(result.pending_bg_task_ids, vec![pending_task.bg_task_id]);
     }
 
     #[tokio::test]
     async fn cancelled_agent_wait_keeps_collected_outcomes_available() {
         let (coordinator, _) = test_coordinator();
-        let completed_task_id = "background-task-completed".to_string();
-        let pending_task_id = "background-task-pending".to_string();
-        for background_task_id in [&completed_task_id, &pending_task_id] {
-            coordinator
-                .background_subagent_outcomes
-                .register(BackgroundSubagentOutcome::running(
-                    background_task_id.clone(),
-                    "parent-session".to_string(),
-                    "parent-turn".to_string(),
-                    format!("subagent-session-{background_task_id}"),
-                    format!("subagent-turn-{background_task_id}"),
-                    "GeneralPurpose".to_string(),
-                    "Inspect implementation".to_string(),
-                ))
-                .await
-                .expect("register outcome");
-        }
+        let completed_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-completed",
+        )
+        .await;
+        let pending_task = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session-pending",
+        )
+        .await;
         let completed = super::SubagentResult::completed("done".to_string());
         coordinator
             .background_subagent_outcomes
-            .complete(&completed_task_id, Ok(&completed))
+            .complete(completed_task.task_pk, Ok(&completed))
             .await;
 
         let cancellation = tokio_util::sync::CancellationToken::new();
         cancellation.cancel();
-        let requested_task_ids = vec![completed_task_id.clone(), pending_task_id];
+        let requested_task_ids = vec![
+            completed_task.bg_task_id.clone(),
+            pending_task.bg_task_id.clone(),
+        ];
         let error = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
                 &requested_task_ids,
                 BackgroundSubagentWaitMode::All,
                 Duration::from_secs(10),
+                "cancelled-wait-turn",
                 Some(&cancellation),
             )
             .await
@@ -9085,42 +9239,37 @@ mod tests {
         let retry = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                std::slice::from_ref(&completed_task_id),
+                std::slice::from_ref(&completed_task.bg_task_id),
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
+                "retry-wait-turn",
                 None,
             )
             .await
             .expect("a cancelled wait must not consume the completed outcome");
 
         assert_eq!(retry.outcomes.len(), 1);
-        assert_eq!(retry.outcomes[0].background_task_id, completed_task_id);
+        assert_eq!(retry.outcomes[0].bg_task_id, completed_task.bg_task_id);
     }
 
     #[tokio::test]
     async fn agent_wait_timeout_keeps_background_outcome_pending_without_follow_up() {
         let (coordinator, _) = test_coordinator();
-        let background_task_id = "background-task-timeout".to_string();
-        coordinator
-            .background_subagent_outcomes
-            .register(BackgroundSubagentOutcome::running(
-                background_task_id.clone(),
-                "parent-session".to_string(),
-                "parent-turn".to_string(),
-                "subagent-session".to_string(),
-                "subagent-turn".to_string(),
-                "GeneralPurpose".to_string(),
-                "Inspect implementation".to_string(),
-            ))
-            .await
-            .expect("register outcome");
+        let registered = register_test_background_task(
+            &coordinator,
+            "parent-session",
+            "parent-turn",
+            "subagent-session",
+        )
+        .await;
 
         let result = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                std::slice::from_ref(&background_task_id),
+                std::slice::from_ref(&registered.bg_task_id),
                 BackgroundSubagentWaitMode::All,
                 Duration::from_millis(1),
+                "wait-turn",
                 None,
             )
             .await
@@ -9128,7 +9277,7 @@ mod tests {
 
         assert_eq!(result.status.as_str(), "timed_out");
         assert!(result.outcomes.is_empty());
-        assert_eq!(result.pending_background_task_ids, vec![background_task_id]);
+        assert_eq!(result.pending_bg_task_ids, vec![registered.bg_task_id]);
     }
 
     #[test]

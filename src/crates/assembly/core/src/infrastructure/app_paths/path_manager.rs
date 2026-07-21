@@ -284,6 +284,13 @@ impl PathManager {
             .join("memories.sqlite")
     }
 
+    /// Get the durable agent coordination database file.
+    pub fn agent_coordination_database_file(&self) -> PathBuf {
+        self.user_data_dir()
+            .join("agent-runtime")
+            .join("coordination.sqlite")
+    }
+
     /// Get user memory workspace root directory: ~/.bitfun/memories/
     pub fn memories_root_dir(&self) -> PathBuf {
         self.bitfun_home_dir().join("memories")
