@@ -33,6 +33,13 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('get_system_info')).toBe('high');
   });
 
+  it('ranks all terminal commands high', () => {
+    expect(peerInvokePriorityFor('terminal_create')).toBe('high');
+    expect(peerInvokePriorityFor('terminal_write')).toBe('high');
+    expect(peerInvokePriorityFor('terminal_resize')).toBe('high');
+    expect(peerInvokePriorityFor('terminal_signal')).toBe('high');
+  });
+
   it('ranks git/ssh/editor/fs/search noise low', () => {
     expect(peerInvokePriorityFor('git_is_repository')).toBe('low');
     expect(peerInvokePriorityFor('ssh_is_connected')).toBe('low');
@@ -89,6 +96,75 @@ describe('PeerDeviceTransportAdapter queue', () => {
       'restore_session_view',
       'ssh_is_connected',
     ]);
+  });
+
+  it('reserves one concurrency slot for terminal work', async () => {
+    const started: string[] = [];
+    const firstLowGate = createDeferred<void>();
+
+    const deviceRpc = vi.fn(async (_target: string, commandJson: string) => {
+      const parsed = JSON.parse(commandJson) as { command: string };
+      started.push(parsed.command);
+      if (parsed.command === 'git_is_repository') {
+        await firstLowGate.promise;
+      }
+      return JSON.stringify({
+        resp: 'host_invoke_result',
+        ok: true,
+        value: true,
+      });
+    });
+
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {}, 2);
+    await adapter.connect();
+
+    const low1 = adapter.request('git_is_repository', {
+      request: { repositoryPath: '/a' },
+    });
+    const low2 = adapter.request('ssh_is_connected', { connectionId: 'ssh-x' });
+    await Promise.resolve();
+    expect(started).toEqual(['git_is_repository']);
+
+    const terminal = adapter.request('terminal_write', {
+      request: { sessionId: 't1', data: 'pwd\r' },
+    });
+    await terminal;
+    expect(started).toEqual(['git_is_repository', 'terminal_write']);
+
+    firstLowGate.resolve();
+    await Promise.all([low1, low2]);
+    expect(started).toEqual([
+      'git_is_repository',
+      'terminal_write',
+      'ssh_is_connected',
+    ]);
+  });
+
+  it('sends split-endpoint file reads as direct peer commands', async () => {
+    const deviceRpc = vi.fn(async (_target: string, commandJson: string) => {
+      const parsed = JSON.parse(commandJson) as { cmd: string; path: string };
+      expect(parsed).toEqual({
+        cmd: 'get_file_info',
+        path: '/peer/report.bin',
+        session_id: null,
+      });
+      return JSON.stringify({
+        resp: 'file_info',
+        name: 'report.bin',
+        size: 4,
+        mime_type: 'application/octet-stream',
+      });
+    });
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    const response = await adapter.requestPeerCommand({
+      cmd: 'get_file_info',
+      path: '/peer/report.bin',
+      session_id: null,
+    });
+
+    expect(response.resp).toBe('file_info');
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
   });
 });
 

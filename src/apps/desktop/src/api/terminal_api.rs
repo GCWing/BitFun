@@ -344,6 +344,29 @@ async fn is_remote_session(session_id: &str) -> bool {
     false
 }
 
+fn emit_terminal_event(app_handle: &AppHandle, event: &TerminalEvent) -> bool {
+    let event_name = "terminal_event";
+    let local_emit_succeeded = match app_handle.emit(event_name, event) {
+        Ok(()) => true,
+        Err(error) => {
+            warn!("Failed to emit terminal event: {}", error);
+            false
+        }
+    };
+    if let Ok(payload) = serde_json::to_value(event) {
+        super::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
+    }
+    local_emit_succeeded
+}
+
+fn remote_terminal_signal_bytes(signal: &str) -> Option<&'static [u8]> {
+    match signal.trim().to_ascii_uppercase().as_str() {
+        "SIGINT" | "INT" => Some(&[0x03]),
+        "SIGTSTP" | "TSTP" => Some(&[0x1a]),
+        _ => None,
+    }
+}
+
 async fn spawn_remote_pty_session(
     app: &AppHandle,
     terminal_manager: &bitfun_core::service::remote_ssh::RemoteTerminalManager,
@@ -384,8 +407,8 @@ async fn spawn_remote_pty_session(
     let app_handle = app.clone();
     let sid = session_id.clone();
     tokio::spawn(async move {
-        let _ = app_handle.emit(
-            "terminal_event",
+        emit_terminal_event(
+            &app_handle,
             &TerminalEvent::Ready {
                 session_id: sid.clone(),
                 pid: 0,
@@ -397,14 +420,13 @@ async fn spawn_remote_pty_session(
             match rx.recv().await {
                 Ok(data) => {
                     let text = String::from_utf8_lossy(&data).to_string();
-                    if let Err(e) = app_handle.emit(
-                        "terminal_event",
+                    if !emit_terminal_event(
+                        &app_handle,
                         &TerminalEvent::Data {
                             session_id: sid.clone(),
                             data: text,
                         },
                     ) {
-                        warn!("Failed to emit remote terminal event: {}", e);
                         break;
                     }
                 }
@@ -421,8 +443,8 @@ async fn spawn_remote_pty_session(
             }
         }
 
-        let _ = app_handle.emit(
-            "terminal_event",
+        emit_terminal_event(
+            &app_handle,
             &TerminalEvent::Exit {
                 session_id: sid,
                 exit_code: Some(0),
@@ -699,7 +721,22 @@ pub async fn terminal_signal(
     state: State<'_, TerminalState>,
 ) -> Result<(), String> {
     if is_remote_session(&request.session_id).await {
-        // Remote terminals don't support signal yet
+        let signal_data = remote_terminal_signal_bytes(&request.signal).ok_or_else(|| {
+            format!(
+                "Unsupported remote terminal signal: {}",
+                request.signal.trim()
+            )
+        })?;
+        let remote_manager =
+            get_remote_workspace_manager().ok_or("Remote workspace manager not available")?;
+        let terminal_manager = remote_manager
+            .get_terminal_manager()
+            .await
+            .ok_or("Remote terminal manager not available")?;
+        terminal_manager
+            .write(&request.session_id, signal_data)
+            .await
+            .map_err(|e| format!("Failed to send remote terminal signal: {}", e))?;
         return Ok(());
     }
 
@@ -913,13 +950,21 @@ pub fn start_terminal_event_loop(terminal_state: TerminalState, app_handle: AppH
         let mut rx = api.subscribe_events();
 
         while let Some(event) = rx.recv().await {
-            let event_name = "terminal_event";
-            if let Err(e) = app_handle.emit(event_name, &event) {
-                warn!("Failed to emit terminal event: {}", e);
-            }
-            if let Ok(payload) = serde_json::to_value(&event) {
-                crate::api::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
-            }
+            emit_terminal_event(&app_handle, &event);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remote_terminal_signal_bytes;
+
+    #[test]
+    fn maps_supported_remote_terminal_signals_to_control_bytes() {
+        assert_eq!(remote_terminal_signal_bytes("SIGINT"), Some(&[0x03][..]));
+        assert_eq!(remote_terminal_signal_bytes("int"), Some(&[0x03][..]));
+        assert_eq!(remote_terminal_signal_bytes("SIGTSTP"), Some(&[0x1a][..]));
+        assert_eq!(remote_terminal_signal_bytes("tstp"), Some(&[0x1a][..]));
+        assert_eq!(remote_terminal_signal_bytes("SIGTERM"), None);
+    }
 }

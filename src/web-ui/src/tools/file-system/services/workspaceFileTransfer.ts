@@ -5,6 +5,11 @@
 import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { sshApi } from "@/features/ssh-remote/sshApi";
 import { workspaceAPI } from "@/infrastructure/api";
+import { getTransportAdapter } from "@/infrastructure/api/adapters";
+import {
+  PeerDeviceTransportAdapter,
+  type PeerDeviceCommandResponse,
+} from "@/infrastructure/api/adapters/peer-device-adapter";
 import { i18nService } from "@/infrastructure/i18n";
 import { isRemoteWorkspace, type WorkspaceInfo } from "@/shared/types";
 import {
@@ -40,6 +45,257 @@ export interface WorkspaceTransferResult {
 
 export interface UploadToWorkspaceOptions {
   isCut?: boolean;
+}
+
+const PEER_FILE_CHUNK_BYTES = 1024 * 1024;
+
+interface PeerFileInfoResponse extends PeerDeviceCommandResponse {
+  resp: "file_info";
+  name: string;
+  size: number;
+  mime_type: string;
+}
+
+interface PeerFileChunkResponse extends PeerDeviceCommandResponse {
+  resp: "file_chunk";
+  name: string;
+  chunk_base64: string;
+  offset: number;
+  chunk_size: number;
+  total_size: number;
+  mime_type: string;
+}
+
+interface PeerDownloadEntry {
+  sourcePath: string;
+  destinationPath: string;
+  size: number;
+  name: string;
+}
+
+export function decodeBase64FileChunk(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function isSafePeerTransferEntryName(name: string): boolean {
+  return Boolean(
+    name &&
+    name !== "." &&
+    name !== ".." &&
+    !name.includes("/") &&
+    !name.includes("\\") &&
+    !name.includes("\0"),
+  );
+}
+
+function currentPeerAdapter(): PeerDeviceTransportAdapter | null {
+  const adapter = getTransportAdapter();
+  return adapter instanceof PeerDeviceTransportAdapter ? adapter : null;
+}
+
+async function writeAllToLocalFile(
+  destinationPath: string,
+  chunks: AsyncIterable<Uint8Array>,
+  onChunkWritten: (bytes: number) => void,
+): Promise<void> {
+  const { open } = await import("@tauri-apps/plugin-fs");
+  const file = await open(destinationPath, {
+    write: true,
+    create: true,
+    truncate: true,
+  });
+  try {
+    for await (const chunk of chunks) {
+      const written = await file.write(chunk);
+      if (written !== chunk.byteLength) {
+        throw new Error(
+          `Incomplete local file write (${written}/${chunk.byteLength} bytes)`,
+        );
+      }
+      onChunkWritten(written);
+    }
+  } finally {
+    await file.close();
+  }
+}
+
+async function* readPeerFileChunks(
+  adapter: PeerDeviceTransportAdapter,
+  sourcePath: string,
+  onFileSize: (size: number) => void,
+): AsyncGenerator<Uint8Array, number> {
+  const info = await adapter.requestPeerCommand<PeerFileInfoResponse>({
+    cmd: "get_file_info",
+    path: sourcePath,
+    session_id: null,
+  });
+  if (info.resp !== "file_info" || !Number.isSafeInteger(info.size) || info.size < 0) {
+    throw new Error(`Invalid peer file info response for '${sourcePath}'`);
+  }
+  onFileSize(info.size);
+
+  let offset = 0;
+  while (offset < info.size) {
+    const response = await adapter.requestPeerCommand<PeerFileChunkResponse>({
+      cmd: "read_file_chunk",
+      path: sourcePath,
+      session_id: null,
+      offset,
+      limit: PEER_FILE_CHUNK_BYTES,
+    });
+    if (
+      response.resp !== "file_chunk" ||
+      response.offset !== offset ||
+      !Number.isSafeInteger(response.chunk_size) ||
+      response.chunk_size < 0 ||
+      !Number.isSafeInteger(response.total_size) ||
+      response.total_size !== info.size ||
+      response.chunk_size > Math.min(PEER_FILE_CHUNK_BYTES, info.size - offset)
+    ) {
+      throw new Error(`Invalid peer file chunk response for '${sourcePath}'`);
+    }
+    const bytes = decodeBase64FileChunk(response.chunk_base64);
+    if (
+      bytes.byteLength !== response.chunk_size ||
+      bytes.byteLength === 0 ||
+      offset + bytes.byteLength > info.size
+    ) {
+      throw new Error(`Incomplete peer file chunk for '${sourcePath}' at offset ${offset}`);
+    }
+    offset += bytes.byteLength;
+    yield bytes;
+  }
+  return info.size;
+}
+
+async function* readPeerSshFile(
+  sourcePath: string,
+  remoteConnectionId: string | undefined,
+): AsyncGenerator<Uint8Array> {
+  const content = await workspaceAPI.readFileContent(
+    sourcePath,
+    "base64",
+    remoteConnectionId,
+  );
+  yield decodeBase64FileChunk(content);
+}
+
+async function collectPeerDirectoryEntries(
+  sourceDirectory: string,
+  destinationDirectory: string,
+): Promise<PeerDownloadEntry[]> {
+  const { mkdir } = await import("@tauri-apps/plugin-fs");
+  const pending = [{ source: sourceDirectory, destination: destinationDirectory }];
+  const files: PeerDownloadEntry[] = [];
+
+  while (pending.length > 0) {
+    const current = pending.shift()!;
+    await mkdir(current.destination, { recursive: true });
+    const children = await workspaceAPI.getDirectoryChildren(current.source);
+    for (const child of children) {
+      if (!isSafePeerTransferEntryName(child.name)) {
+        throw new Error(`Unsafe peer file name: '${child.name}'`);
+      }
+      const destinationPath = joinWorkspaceTargetPath(
+        current.destination,
+        child.name,
+        false,
+      );
+      if (child.isDirectory) {
+        pending.push({ source: child.path, destination: destinationPath });
+      } else {
+        files.push({
+          sourcePath: child.path,
+          destinationPath,
+          size: typeof child.size === "number" && child.size >= 0 ? child.size : 0,
+          name: child.name,
+        });
+      }
+    }
+  }
+
+  return files;
+}
+
+async function downloadPeerWorkspacePathToDisk(
+  adapter: PeerDeviceTransportAdapter,
+  sourcePath: string,
+  destinationPath: string,
+  workspace: WorkspaceInfo | null,
+  isDirectory: boolean,
+  onProgress: (state: TransferProgressState | null) => void,
+): Promise<void> {
+  const entries = isDirectory
+    ? await collectPeerDirectoryEntries(sourcePath, destinationPath)
+    : [{
+        sourcePath,
+        destinationPath,
+        size: 0,
+        name: sourcePath.split(/[/\\]/).pop() || "file",
+      }];
+  let bytesTransferred = 0;
+  let bytesTotal = entries.reduce((sum, entry) => sum + entry.size, 0);
+  let lastTime = performance.now();
+  let lastBytes = 0;
+  let smoothedSpeed = 0;
+
+  for (const entry of entries) {
+    const entryStart = bytesTransferred;
+    let entryWritten = 0;
+    let expectedEntrySize = entry.size;
+    const updateExpectedEntrySize = (size: number) => {
+      bytesTotal += size - expectedEntrySize;
+      expectedEntrySize = size;
+    };
+    const chunks = isRemoteWorkspace(workspace)
+      ? readPeerSshFile(entry.sourcePath, workspace?.connectionId)
+      : readPeerFileChunks(adapter, entry.sourcePath, updateExpectedEntrySize);
+    await writeAllToLocalFile(entry.destinationPath, chunks, (written) => {
+      entryWritten += written;
+      bytesTransferred = entryStart + entryWritten;
+      if (expectedEntrySize === 0 && entryWritten > 0) {
+        bytesTotal = Math.max(bytesTotal, bytesTransferred);
+      }
+      const now = performance.now();
+      const elapsed = now - lastTime;
+      const byteDelta = bytesTransferred - lastBytes;
+      if (elapsed > 0 && byteDelta > 0) {
+        const instantSpeed = (byteDelta / elapsed) * 1000;
+        smoothedSpeed = smoothedSpeed === 0
+          ? instantSpeed
+          : smoothedSpeed * 0.7 + instantSpeed * 0.3;
+      }
+      lastTime = now;
+      lastBytes = bytesTransferred;
+      onProgress({
+        phase: "download",
+        current: bytesTransferred,
+        total: Math.max(bytesTotal, bytesTransferred, 1),
+        label: entry.name,
+        indeterminate: bytesTotal === 0,
+        bytesTransferred,
+        bytesTotal: Math.max(bytesTotal, bytesTransferred),
+        speed: smoothedSpeed,
+      });
+    });
+    bytesTransferred = entryStart + entryWritten;
+  }
+
+  onProgress({
+    phase: "download",
+    current: Math.max(bytesTransferred, 1),
+    total: Math.max(bytesTransferred, 1),
+    label: sourcePath.split(/[/\\]/).pop() || "file",
+    indeterminate: false,
+    bytesTransferred,
+    bytesTotal: bytesTransferred,
+    speed: smoothedSpeed,
+  });
 }
 
 function normalizeClipboardLocalPath(path: string): string {
@@ -296,7 +552,7 @@ export async function downloadWorkspaceFileToDisk(
     if (picked === null) {
       return;
     }
-    dest = `${picked}${picked.endsWith("/") ? "" : "/"}${baseName}`;
+    dest = joinWorkspaceTargetPath(picked, baseName, false);
   } else {
     const { save } = await import("@tauri-apps/plugin-dialog");
     dest = await save({
@@ -316,7 +572,17 @@ export async function downloadWorkspaceFileToDisk(
     indeterminate: true,
   });
   try {
-    if (isRemoteWorkspace(workspace)) {
+    const peerAdapter = currentPeerAdapter();
+    if (peerAdapter) {
+      await downloadPeerWorkspacePathToDisk(
+        peerAdapter,
+        filePath,
+        dest,
+        workspace,
+        Boolean(isDirectory),
+        onProgress,
+      );
+    } else if (isRemoteWorkspace(workspace)) {
       const cid = workspace?.connectionId;
       if (!cid) {
         throw new Error(

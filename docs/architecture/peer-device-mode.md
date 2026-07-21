@@ -52,7 +52,9 @@ FS) and must not be mixed with Peer Device Mode.
 - HostInvoke on the controller is **priority-queued** (max 2 in flight). Session
   restore / session-list / dialog / workspace-startup commands outrank background
   `git_*` / `ssh_*` / `lsp_*` / `search_*` / FS / canvas / editor RPCs so hydrate
-  is not starved into relay HTTP 504s.
+  is not starved into relay HTTP 504s. Terminal commands are always interactive
+  priority, and one slot is kept free from low-priority background work so input
+  cannot be trapped behind two slow polling requests.
 - While Peer Mode is active, background noise is reduced further:
   - controller-local SSH heartbeats and remote-workspace auto-reconnect pause
   - Git / FilesPanel window-focus refresh pauses
@@ -69,7 +71,9 @@ FS) and must not be mixed with Peer Device Mode.
     return empty or no-op so hydrate does not fail.
 - Events: peer agentic projection (and other product events such as terminal /
   FS / MCP interaction) fan-out as `RemoteCommand::DeviceEvent` to attached
-  controllers; controller re-emits the same event names locally.
+  controllers; controller re-emits the same event names locally. This includes
+  SSH-backed remote PTY Ready / Data / Exit events created on B, not only B's
+  local terminal service events.
 - CLI Peer Host forwards only turns submitted through Peer Host and linked
   child turns. A background-result follow-up inherits ownership only when its
   Core-internal metadata identifies the exact tracked parent and source child
@@ -112,6 +116,17 @@ call `pickWorkspaceDirectory()`:
 
 Still use normal `openWorkspace` / create-workspace flows (not SSH
 `openRemoteWorkspace` / `WorkspaceKind.Remote`).
+
+## File download ownership
+
+The native save/folder dialog always selects a destination on controller A,
+while the workspace source belongs to peer B. A download is therefore a
+split-endpoint operation: B returns file bytes through the existing
+`GetFileInfo` / `ReadFileChunk` protocol and A writes those chunks through its
+local filesystem adapter. Directory downloads enumerate B recursively and
+create the corresponding tree on A. Never forward A's selected destination to
+B through `export_local_file_to_path`; paths and permissions are host-specific
+and may represent a different operating system.
 
 ## Ownership
 

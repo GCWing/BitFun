@@ -153,7 +153,7 @@ const LOW_PRIORITY_EXACT = new Set([
 ]);
 
 export function peerInvokePriorityFor(command: string): PeerInvokePriority {
-  if (HIGH_PRIORITY_COMMANDS.has(command)) {
+  if (HIGH_PRIORITY_COMMANDS.has(command) || command.startsWith('terminal_')) {
     return 'high';
   }
   if (
@@ -189,6 +189,11 @@ interface HostInvokeResultEnvelope {
   message?: string;
 }
 
+export interface PeerDeviceCommandResponse {
+  resp?: string;
+  message?: string;
+}
+
 /** Product-level HostInvoke failure (peer executed the command and returned ok:false). */
 export class PeerProductCommandError extends Error {
   readonly isPeerProductError = true;
@@ -218,6 +223,11 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   private readonly local = new TauriTransportAdapter();
   private connected = false;
   private activeCount = 0;
+  private readonly activeByPriority: Record<PeerInvokePriority, number> = {
+    high: 0,
+    normal: 0,
+    low: 0,
+  };
   private readonly queues: Record<PeerInvokePriority, QueuedPeerRequest[]> = {
     high: [],
     normal: [],
@@ -254,6 +264,21 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     return this.enqueue(priority, () => this.invokeOnPeer<T>(action, params, timing, transportStartedAt));
   }
 
+  /**
+   * Send an existing RemoteCommand envelope directly to the peer. This is for
+   * split-endpoint operations such as file download, where the peer reads the
+   * source but the controller owns the destination path and local write.
+   */
+  async requestPeerCommand<T extends PeerDeviceCommandResponse>(
+    command: Record<string, unknown>,
+    priority: PeerInvokePriority = 'normal',
+  ): Promise<T> {
+    if (!this.connected) {
+      await this.connect();
+    }
+    return this.enqueue(priority, () => this.invokePeerCommand<T>(command, priority));
+  }
+
   listen<T>(event: string, callback: (data: T) => void): () => void {
     return this.local.listen<T>(event, callback);
   }
@@ -267,6 +292,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     this.connected = false;
     for (const priority of ['high', 'normal', 'low'] as const) {
       this.queues[priority].length = 0;
+      this.activeByPriority[priority] = 0;
     }
     this.activeCount = 0;
   }
@@ -308,8 +334,13 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
         return;
       }
       this.activeCount += 1;
+      this.activeByPriority[next.priority] += 1;
       void next.run().finally(() => {
-        this.activeCount -= 1;
+        this.activeCount = Math.max(0, this.activeCount - 1);
+        this.activeByPriority[next.priority] = Math.max(
+          0,
+          this.activeByPriority[next.priority] - 1,
+        );
         this.pump();
       });
     }
@@ -324,10 +355,45 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     if (this.queues.normal.length > 0) {
       return this.queues.normal.shift();
     }
-    if (this.queues.low.length > 0) {
+    // Keep one transport slot available for future interactive work. Without
+    // this, two slow background RPCs can make terminal input appear frozen.
+    const lowConcurrencyLimit = this.maxConcurrent > 1 ? this.maxConcurrent - 1 : 1;
+    if (
+      this.queues.low.length > 0 &&
+      this.activeByPriority.low < lowConcurrencyLimit
+    ) {
       return this.queues.low.shift();
     }
     return undefined;
+  }
+
+  private async invokePeerCommand<T extends PeerDeviceCommandResponse>(
+    command: Record<string, unknown>,
+    priority: PeerInvokePriority,
+  ): Promise<T> {
+    const action = typeof command.cmd === 'string' ? command.cmd : 'unknown';
+    try {
+      const raw = await this.deviceRpc(this.targetDeviceId, JSON.stringify(command));
+      const envelope = JSON.parse(raw) as T;
+      if (envelope.resp === 'error') {
+        throw new PeerProductCommandError(
+          envelope.message || `Peer command '${action}' failed`,
+        );
+      }
+      if (!envelope.resp) {
+        throw new Error(`Unexpected peer RPC response for '${action}'`);
+      }
+      this.hooks.onHostInvokeSuccess?.();
+      return envelope;
+    } catch (error) {
+      if (error instanceof PeerProductCommandError) {
+        log.warn('Peer product command failed', { action, error });
+        throw error;
+      }
+      log.error('Peer direct command transport failed', { action, error });
+      this.hooks.onHostInvokeTransportFailure?.(error, { action, priority });
+      throw error;
+    }
   }
 
   private async invokeOnPeer<T>(

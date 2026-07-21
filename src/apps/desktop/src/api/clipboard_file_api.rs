@@ -417,7 +417,7 @@ fn generate_unique_path(path: &Path) -> std::path::PathBuf {
     }
 }
 
-fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {
+pub(crate) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {
     std::fs::create_dir_all(target).map_err(|e| format!("Failed to create directory: {}", e))?;
 
     for entry in
@@ -441,7 +441,8 @@ fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_file_uri, generate_unique_path, parse_clipboard_path_segments, parse_uri_list,
+        copy_directory_recursive, decode_file_uri, generate_unique_path,
+        parse_clipboard_path_segments, parse_uri_list,
     };
     use std::path::Path;
 
@@ -518,5 +519,33 @@ mod tests {
             files,
             vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()]
         );
+    }
+
+    #[test]
+    fn copy_directory_recursive_copies_nested_binary_files() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-directory-copy-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let source = root.join("source");
+        let target = root.join("target");
+        std::fs::create_dir_all(source.join("nested")).expect("create source directory");
+        std::fs::write(source.join("root.bin"), [0_u8, 255, 128]).expect("write root file");
+        std::fs::write(source.join("nested").join("child.txt"), b"child")
+            .expect("write nested file");
+
+        copy_directory_recursive(&source, &target).expect("copy directory recursively");
+
+        assert_eq!(
+            std::fs::read(target.join("root.bin")).expect("read copied root file"),
+            [0_u8, 255, 128]
+        );
+        assert_eq!(
+            std::fs::read(target.join("nested").join("child.txt"))
+                .expect("read copied nested file"),
+            b"child"
+        );
+
+        std::fs::remove_dir_all(root).expect("remove test directory");
     }
 }

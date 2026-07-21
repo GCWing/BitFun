@@ -2944,7 +2944,7 @@ pub async fn rename_file(
     .await
 }
 
-/// Copy a local file to another local path (binary-safe). Used for export and drag-upload into local workspaces.
+/// Copy a local file or directory to another local path (binary-safe).
 #[tauri::command]
 pub async fn export_local_file_to_path(request: ExportLocalFileRequest) -> Result<(), String> {
     let src = request.source_path;
@@ -2956,7 +2956,54 @@ pub async fn export_local_file_to_path(request: ExportLocalFileRequest) -> Resul
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
         }
-        std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
+        let src_path = Path::new(&src);
+        let src_metadata = std::fs::metadata(src_path).map_err(|e| {
+            format!(
+                "Failed to inspect export source '{}': {e}",
+                src_path.display()
+            )
+        })?;
+        if src_metadata.is_dir() {
+            let canonical_source = std::fs::canonicalize(src_path).map_err(|e| {
+                format!(
+                    "Failed to resolve export source '{}': {e}",
+                    src_path.display()
+                )
+            })?;
+            let destination_parent = dst_path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let canonical_parent = std::fs::canonicalize(destination_parent).map_err(|e| {
+                format!(
+                    "Failed to resolve export destination '{}': {e}",
+                    destination_parent.display()
+                )
+            })?;
+            let resolved_destination = if dst_path.exists() {
+                std::fs::canonicalize(dst_path).map_err(|e| {
+                    format!(
+                        "Failed to resolve existing export destination '{}': {e}",
+                        dst_path.display()
+                    )
+                })?
+            } else {
+                canonical_parent.join(
+                    dst_path
+                        .file_name()
+                        .ok_or_else(|| "Export destination has no directory name".to_string())?,
+                )
+            };
+            if resolved_destination == canonical_source
+                || resolved_destination.starts_with(&canonical_source)
+            {
+                return Err("Cannot export a directory into itself".to_string());
+            }
+            super::clipboard_file_api::copy_directory_recursive(src_path, dst_path)?;
+        } else {
+            std::fs::copy(src_path, dst_path)
+                .map_err(|e| format!("Failed to copy export file: {e}"))?;
+        }
         Ok::<(), String>(())
     })
     .await
