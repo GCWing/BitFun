@@ -114,7 +114,6 @@ impl BackgroundSubagentOutcome {
 pub(crate) enum BackgroundSubagentWaitStatus {
     Completed,
     TimedOut,
-    Cancelled,
     NoMatchingTasks,
 }
 
@@ -123,8 +122,22 @@ impl BackgroundSubagentWaitStatus {
         match self {
             Self::Completed => "completed",
             Self::TimedOut => "timed_out",
-            Self::Cancelled => "cancelled",
             Self::NoMatchingTasks => "no_matching_tasks",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BackgroundSubagentWaitMode {
+    Any,
+    All,
+}
+
+impl BackgroundSubagentWaitMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::All => "all",
         }
     }
 }
@@ -215,25 +228,34 @@ impl BackgroundSubagentOutcomeStore {
     pub(crate) async fn wait_for(
         &self,
         parent_session_id: &str,
-        parent_dialog_turn_id: &str,
         requested_task_ids: &[String],
+        wait_mode: BackgroundSubagentWaitMode,
         timeout: Duration,
         cancellation_token: Option<&CancellationToken>,
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
         self.hydrate_parent_session(parent_session_id).await?;
 
+        // A session-wide selector is resolved once so new Task calls cannot change this wait.
+        let requested_task_ids = self.resolve_wait_task_ids(parent_session_id, requested_task_ids);
+        if requested_task_ids.is_empty() {
+            return Ok(BackgroundSubagentWaitResult {
+                status: BackgroundSubagentWaitStatus::NoMatchingTasks,
+                outcomes: Vec::new(),
+                pending_background_task_ids: Vec::new(),
+            });
+        }
+
         let deadline = Instant::now() + timeout;
-        let mut collected = Vec::new();
         let mut debounce_deadline = None;
 
         loop {
             let notified = self.changes.notified();
             tokio::pin!(notified);
 
-            let claim = self
-                .claim_available(parent_session_id, parent_dialog_turn_id, requested_task_ids)
+            let available = self
+                .collect_available(parent_session_id, &requested_task_ids, false)
                 .await?;
-            if !claim.had_matching_tasks && collected.is_empty() {
+            if !available.had_matching_tasks {
                 return Ok(BackgroundSubagentWaitResult {
                     status: BackgroundSubagentWaitStatus::NoMatchingTasks,
                     outcomes: Vec::new(),
@@ -241,27 +263,52 @@ impl BackgroundSubagentOutcomeStore {
                 });
             }
 
-            collected.extend(claim.outcomes);
-            if !collected.is_empty() && claim.pending_background_task_ids.is_empty() {
-                return Ok(wait_result_for_outcomes(collected, Vec::new()));
+            if !available.outcomes.is_empty() && available.pending_background_task_ids.is_empty() {
+                if let Some(result) = self
+                    .claim_wait_result(
+                        parent_session_id,
+                        &requested_task_ids,
+                        BackgroundSubagentWaitStatus::Completed,
+                    )
+                    .await?
+                {
+                    return Ok(result);
+                }
+                debounce_deadline = None;
+                continue;
             }
-            if !collected.is_empty() && debounce_deadline.is_none() {
+            if wait_mode == BackgroundSubagentWaitMode::Any
+                && !available.outcomes.is_empty()
+                && debounce_deadline.is_none()
+            {
                 debounce_deadline = Some((Instant::now() + RESULT_DEBOUNCE).min(deadline));
             }
 
             let wake_at = debounce_deadline.unwrap_or(deadline);
             if Instant::now() >= wake_at {
-                if collected.is_empty() {
+                if available.outcomes.is_empty() {
                     return Ok(BackgroundSubagentWaitResult {
                         status: BackgroundSubagentWaitStatus::TimedOut,
                         outcomes: Vec::new(),
-                        pending_background_task_ids: claim.pending_background_task_ids,
+                        pending_background_task_ids: available.pending_background_task_ids,
                     });
                 }
-                return Ok(wait_result_for_outcomes(
-                    collected,
-                    claim.pending_background_task_ids,
-                ));
+                if let Some(result) = self
+                    .claim_wait_result(
+                        parent_session_id,
+                        &requested_task_ids,
+                        if wake_at == deadline {
+                            BackgroundSubagentWaitStatus::TimedOut
+                        } else {
+                            BackgroundSubagentWaitStatus::Completed
+                        },
+                    )
+                    .await?
+                {
+                    return Ok(result);
+                }
+                debounce_deadline = None;
+                continue;
             }
 
             match cancellation_token {
@@ -284,19 +331,49 @@ impl BackgroundSubagentOutcomeStore {
         }
     }
 
-    async fn claim_available(
+    async fn claim_wait_result(
         &self,
         parent_session_id: &str,
-        parent_dialog_turn_id: &str,
         requested_task_ids: &[String],
+        status: BackgroundSubagentWaitStatus,
+    ) -> BitFunResult<Option<BackgroundSubagentWaitResult>> {
+        let claim = self
+            .collect_available(parent_session_id, requested_task_ids, true)
+            .await?;
+        Ok((!claim.outcomes.is_empty()).then(|| {
+            wait_result_for_outcomes(status, claim.outcomes, claim.pending_background_task_ids)
+        }))
+    }
+
+    fn resolve_wait_task_ids(
+        &self,
+        parent_session_id: &str,
+        requested_task_ids: &[String],
+    ) -> Vec<String> {
+        if !requested_task_ids.is_empty() {
+            return requested_task_ids.to_vec();
+        }
+
+        self.outcomes
+            .iter()
+            .filter(|entry| {
+                entry.parent_session_id == parent_session_id && entry.consumed_at_ms.is_none()
+            })
+            .map(|entry| entry.background_task_id.clone())
+            .collect()
+    }
+
+    async fn collect_available(
+        &self,
+        parent_session_id: &str,
+        requested_task_ids: &[String],
+        consume_terminal_outcomes: bool,
     ) -> BitFunResult<OutcomeClaim> {
         let task_ids = if requested_task_ids.is_empty() {
             self.outcomes
                 .iter()
                 .filter(|entry| {
-                    entry.parent_session_id == parent_session_id
-                        && entry.parent_dialog_turn_id == parent_dialog_turn_id
-                        && entry.consumed_at_ms.is_none()
+                    entry.parent_session_id == parent_session_id && entry.consumed_at_ms.is_none()
                 })
                 .map(|entry| entry.background_task_id.clone())
                 .collect::<Vec<_>>()
@@ -331,10 +408,14 @@ impl BackgroundSubagentOutcomeStore {
             }
             claim.had_matching_tasks = true;
             if entry.status.is_terminal() {
-                entry.consumed_at_ms = Some(unix_time_ms());
+                if consume_terminal_outcomes {
+                    entry.consumed_at_ms = Some(unix_time_ms());
+                }
                 let outcome = entry.clone();
                 claim.outcomes.push(outcome.clone());
-                consumed.push(outcome);
+                if consume_terminal_outcomes {
+                    consumed.push(outcome);
+                }
             } else {
                 claim
                     .pending_background_task_ids
@@ -406,17 +487,10 @@ impl BackgroundSubagentOutcomeStore {
 }
 
 fn wait_result_for_outcomes(
+    status: BackgroundSubagentWaitStatus,
     outcomes: Vec<BackgroundSubagentOutcome>,
     pending_background_task_ids: Vec<String>,
 ) -> BackgroundSubagentWaitResult {
-    let status = if outcomes
-        .iter()
-        .all(|outcome| outcome.status == BackgroundSubagentOutcomeStatus::Cancelled)
-    {
-        BackgroundSubagentWaitStatus::Cancelled
-    } else {
-        BackgroundSubagentWaitStatus::Completed
-    };
     BackgroundSubagentWaitResult {
         status,
         outcomes,

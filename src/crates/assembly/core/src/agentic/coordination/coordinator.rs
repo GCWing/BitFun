@@ -9,7 +9,8 @@ use super::{
     },
     turn_outcome::TurnOutcome,
     turn_settlement::TurnSettlementTracker,
-    BackgroundSubagentOutcome, BackgroundSubagentOutcomeStore, BackgroundSubagentWaitResult,
+    BackgroundSubagentOutcome, BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode,
+    BackgroundSubagentWaitResult,
 };
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
@@ -6838,16 +6839,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     pub(crate) async fn wait_for_background_subagent_outcomes(
         &self,
         parent_session_id: &str,
-        parent_dialog_turn_id: &str,
         background_task_ids: &[String],
+        wait_mode: BackgroundSubagentWaitMode,
         timeout: Duration,
         cancellation_token: Option<&CancellationToken>,
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
         self.background_subagent_outcomes
             .wait_for(
                 parent_session_id,
-                parent_dialog_turn_id,
                 background_task_ids,
+                wait_mode,
                 timeout,
                 cancellation_token,
             )
@@ -8361,8 +8362,8 @@ mod tests {
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
         resolve_subagent_model_selection, runtime_port_error_preserving_message,
         should_require_tool_confirmation, turn_review_manifest_for_agent,
-        BackgroundSubagentOutcome, ConversationCoordinator, SubagentExecutionRequest,
-        TEST_AGENT_MODEL_DEFAULTS,
+        BackgroundSubagentOutcome, BackgroundSubagentWaitMode, ConversationCoordinator,
+        SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
@@ -8875,8 +8876,8 @@ mod tests {
         let result = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                "parent-turn",
                 std::slice::from_ref(&background_task_id),
+                BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
                 None,
             )
@@ -8891,8 +8892,8 @@ mod tests {
         let second = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                "parent-turn",
                 std::slice::from_ref(&background_task_id),
+                BackgroundSubagentWaitMode::All,
                 Duration::from_millis(10),
                 None,
             )
@@ -8900,6 +8901,200 @@ mod tests {
             .expect("a consumed outcome should not be delivered twice");
         assert_eq!(second.status.as_str(), "no_matching_tasks");
         assert!(second.outcomes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn agent_wait_without_task_ids_collects_unconsumed_session_outcomes() {
+        let (coordinator, _) = test_coordinator();
+        let background_task_id = "background-task-earlier-turn".to_string();
+        coordinator
+            .background_subagent_outcomes
+            .register(BackgroundSubagentOutcome::running(
+                background_task_id.clone(),
+                "parent-session".to_string(),
+                "earlier-parent-turn".to_string(),
+                "subagent-session".to_string(),
+                "subagent-turn".to_string(),
+                "GeneralPurpose".to_string(),
+                "Inspect implementation".to_string(),
+            ))
+            .await
+            .expect("register outcome");
+        let completed = super::SubagentResult::completed("done".to_string());
+        coordinator
+            .background_subagent_outcomes
+            .complete(&background_task_id, Ok(&completed))
+            .await;
+
+        let result = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                &[],
+                BackgroundSubagentWaitMode::Any,
+                Duration::from_millis(10),
+                None,
+            )
+            .await
+            .expect("AgentWait should collect a prior-turn outcome in the same session");
+
+        assert_eq!(result.status.as_str(), "completed");
+        assert_eq!(result.outcomes.len(), 1);
+        assert_eq!(result.outcomes[0].background_task_id, background_task_id);
+        assert!(result.pending_background_task_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn agent_wait_all_times_out_with_returned_partial_results() {
+        let (coordinator, _) = test_coordinator();
+        let completed_task_id = "background-task-completed".to_string();
+        let pending_task_id = "background-task-pending".to_string();
+        for background_task_id in [&completed_task_id, &pending_task_id] {
+            coordinator
+                .background_subagent_outcomes
+                .register(BackgroundSubagentOutcome::running(
+                    background_task_id.clone(),
+                    "parent-session".to_string(),
+                    "parent-turn".to_string(),
+                    format!("subagent-session-{background_task_id}"),
+                    format!("subagent-turn-{background_task_id}"),
+                    "GeneralPurpose".to_string(),
+                    "Inspect implementation".to_string(),
+                ))
+                .await
+                .expect("register outcome");
+        }
+        let completed = super::SubagentResult::completed("done".to_string());
+        coordinator
+            .background_subagent_outcomes
+            .complete(&completed_task_id, Ok(&completed))
+            .await;
+
+        let result = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                &[],
+                BackgroundSubagentWaitMode::All,
+                Duration::from_millis(1),
+                None,
+            )
+            .await
+            .expect("all selector timeout should return partial results");
+
+        assert_eq!(result.status.as_str(), "timed_out");
+        assert_eq!(result.outcomes.len(), 1);
+        assert_eq!(result.outcomes[0].background_task_id, completed_task_id);
+        assert_eq!(result.pending_background_task_ids, vec![pending_task_id]);
+
+        let retry = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                std::slice::from_ref(&completed_task_id),
+                BackgroundSubagentWaitMode::All,
+                Duration::from_millis(10),
+                None,
+            )
+            .await
+            .expect("returned results should be consumed");
+        assert_eq!(retry.status.as_str(), "no_matching_tasks");
+    }
+
+    #[tokio::test]
+    async fn agent_wait_any_returns_partial_results_after_debounce() {
+        let (coordinator, _) = test_coordinator();
+        let completed_task_id = "background-task-completed".to_string();
+        let pending_task_id = "background-task-pending".to_string();
+        for background_task_id in [&completed_task_id, &pending_task_id] {
+            coordinator
+                .background_subagent_outcomes
+                .register(BackgroundSubagentOutcome::running(
+                    background_task_id.clone(),
+                    "parent-session".to_string(),
+                    "parent-turn".to_string(),
+                    format!("subagent-session-{background_task_id}"),
+                    format!("subagent-turn-{background_task_id}"),
+                    "GeneralPurpose".to_string(),
+                    "Inspect implementation".to_string(),
+                ))
+                .await
+                .expect("register outcome");
+        }
+        let completed = super::SubagentResult::completed("done".to_string());
+        coordinator
+            .background_subagent_outcomes
+            .complete(&completed_task_id, Ok(&completed))
+            .await;
+
+        let result = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                &[],
+                BackgroundSubagentWaitMode::Any,
+                Duration::from_secs(6),
+                None,
+            )
+            .await
+            .expect("any selector should return after the result debounce");
+
+        assert_eq!(result.status.as_str(), "completed");
+        assert_eq!(result.outcomes.len(), 1);
+        assert_eq!(result.outcomes[0].background_task_id, completed_task_id);
+        assert_eq!(result.pending_background_task_ids, vec![pending_task_id]);
+    }
+
+    #[tokio::test]
+    async fn cancelled_agent_wait_keeps_collected_outcomes_available() {
+        let (coordinator, _) = test_coordinator();
+        let completed_task_id = "background-task-completed".to_string();
+        let pending_task_id = "background-task-pending".to_string();
+        for background_task_id in [&completed_task_id, &pending_task_id] {
+            coordinator
+                .background_subagent_outcomes
+                .register(BackgroundSubagentOutcome::running(
+                    background_task_id.clone(),
+                    "parent-session".to_string(),
+                    "parent-turn".to_string(),
+                    format!("subagent-session-{background_task_id}"),
+                    format!("subagent-turn-{background_task_id}"),
+                    "GeneralPurpose".to_string(),
+                    "Inspect implementation".to_string(),
+                ))
+                .await
+                .expect("register outcome");
+        }
+        let completed = super::SubagentResult::completed("done".to_string());
+        coordinator
+            .background_subagent_outcomes
+            .complete(&completed_task_id, Ok(&completed))
+            .await;
+
+        let cancellation = tokio_util::sync::CancellationToken::new();
+        cancellation.cancel();
+        let requested_task_ids = vec![completed_task_id.clone(), pending_task_id];
+        let error = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                &requested_task_ids,
+                BackgroundSubagentWaitMode::All,
+                Duration::from_secs(10),
+                Some(&cancellation),
+            )
+            .await
+            .expect_err("cancelled AgentWait should not return a partial result");
+        assert!(error.to_string().contains("AgentWait was cancelled"));
+
+        let retry = coordinator
+            .wait_for_background_subagent_outcomes(
+                "parent-session",
+                std::slice::from_ref(&completed_task_id),
+                BackgroundSubagentWaitMode::All,
+                Duration::from_millis(10),
+                None,
+            )
+            .await
+            .expect("a cancelled wait must not consume the completed outcome");
+
+        assert_eq!(retry.outcomes.len(), 1);
+        assert_eq!(retry.outcomes[0].background_task_id, completed_task_id);
     }
 
     #[tokio::test]
@@ -8923,8 +9118,8 @@ mod tests {
         let result = coordinator
             .wait_for_background_subagent_outcomes(
                 "parent-session",
-                "parent-turn",
                 std::slice::from_ref(&background_task_id),
+                BackgroundSubagentWaitMode::All,
                 Duration::from_millis(1),
                 None,
             )
