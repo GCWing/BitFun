@@ -59,11 +59,15 @@ fn named_invoke_request(operation_id: &str, revision: &str) -> ScriptToolInvokeR
 }
 
 #[tokio::test]
-async fn runtime_availability_does_not_claim_an_unchecked_node_version() {
+async fn runtime_availability_reports_the_probed_node_version() {
     let runtime = NodeScriptToolRuntime::discover();
 
     if let ScriptToolRuntimeAvailability::Available { version, .. } = runtime.availability().await {
-        assert_eq!(version, "not checked");
+        assert!(
+            version.starts_with('v'),
+            "unexpected Node.js version: {version}"
+        );
+        assert!(version[1..].split('.').count() >= 2);
     }
 }
 

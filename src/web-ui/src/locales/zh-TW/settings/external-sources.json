@@ -1,6 +1,7 @@
 {
   "title": "外部 AI 應用",
   "subtitle": "使用其他 AI 應用的命令、工具、Agent 與 MCP。",
+  "legacyHostNotice": "目前執行 Host 使用舊版外部來源協定；升級 Host 後才能使用安全模式。",
   "loading": "正在檢查外部來源…",
   "checkingNonBlocking": "正在檢查更新…",
   "common": {
@@ -14,7 +15,8 @@
     "notSelected": "未使用",
     "availableChoice": "可選",
     "openInExplorer": "在檔案管理員中開啟",
-    "openInExplorerRemote": "遠端工作區路徑無法在本機檔案管理員中開啟"
+    "openInExplorerRemote": "遠端工作區路徑無法在本機檔案管理員中開啟",
+    "openInExplorerUnavailable": "目前 Host 無法開啟來源位置"
   },
   "actions": {
     "refresh": "重新整理",
@@ -23,6 +25,24 @@
     "waitForUpdate": "另一項變更仍在儲存，請等待完成後再做選擇。",
     "agentUpdated": "已儲存「{{name}}」的變更並重新整理狀態。",
     "mcpUpdated": "已儲存 MCP 伺服器選擇並重新整理狀態。"
+  },
+  "recoveryActions": {
+    "refresh": "重新整理狀態",
+    "retry": "重試",
+    "review": "檢查待處理項目",
+    "resolve_conflict": "解決衝突",
+    "install_runtime": "安裝或修復所需執行階段，然後重新整理。",
+    "reconnect_host": "重新連線或升級執行 Host，然後重試。",
+    "exit_safe_mode": "退出安全模式"
+  },
+  "safeMode": {
+    "title": "外部來源安全模式",
+    "description": "阻止新的外部工具、Agent 與 MCP 呼叫，同時保留已探索的命令與診斷資訊；已在執行的呼叫不會被取消。",
+    "activeDescription": "新的外部可執行呼叫已被阻止；已在執行的呼叫仍可能完成，命令與診斷資訊可繼續用於復原。",
+    "activeNotice": "安全模式僅對目前的 Host 程序與執行域有效；重新啟動或切換執行 Host 後會自動關閉。",
+    "toggleLabel": "使用外部來源安全模式",
+    "entered": "外部來源安全模式已啟用。",
+    "exited": "外部來源安全模式已關閉，符合條件的整合已重新協調。"
   },
   "unavailable": {
     "hostTitle": "此處暫時無法使用",
@@ -105,7 +125,9 @@
     "policyIncompatible": "外部設定由較新的 BitFun 版本寫入。請先備份並重設，再進行變更。",
     "unavailableRetry": "暫時無法使用，請稍後重試。",
     "internal": "操作失敗，請重新整理後重試。",
-    "referenceId": "參考編號：{{id}}"
+    "referenceId": "參考編號：{{id}}",
+    "stage": "處理階段：{{stage}}",
+    "causationId": "關聯操作：{{id}}"
   },
   "diagnostics": {
     "summary": "有 {{count}} 項內容需要注意，請查看詳細資料以瞭解影響範圍。",
@@ -315,6 +337,7 @@
   },
   "toolState": {
     "approval_required": "待確認",
+    "declined": "已保持停用",
     "disabled": "已停用",
     "active": "已啟用",
     "conflict": "需要選擇",
@@ -324,7 +347,8 @@
   },
   "toolReason": {
     "approval_required": "啟用前，需要確認此工具檔案的存取範圍。",
-    "disabled": "你已選擇停用此工具來源。",
+    "declined": "你已選擇保持這些工具停用。",
+    "disabled": "來源或其工具能力已被策略停用。",
     "active": "工具程式碼已載入，可以使用。",
     "conflict": "另一個工具使用了相同名稱。",
     "unsupported": "此工具檔案包含 BitFun 目前不支援的語法或操作。",
@@ -333,7 +357,8 @@
   },
   "toolNextStep": {
     "approval_required": "確認上方來源與存取範圍後，啟用或繼續停用這些工具。",
-    "disabled": "確認上方來源與存取範圍後，再啟用這些工具。",
+    "declined": "確認上方來源與存取範圍後，再啟用這些工具。",
+    "disabled": "請先啟用此來源或其工具能力。",
     "active": "無需操作。若要停止使用該來源的所有工具，請停用這些工具。",
     "conflict": "請在下方選擇要使用的工具，或繼續保持停用。",
     "unsupported": "請將來源改為 BitFun 目前支援的單一 JavaScript 檔案格式，然後重新整理。",

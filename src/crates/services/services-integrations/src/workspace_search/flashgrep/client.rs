@@ -9,10 +9,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use bitfun_services_core::process_manager;
+use bitfun_services_core::{process_manager, process_tree::ProcessTreeChild};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
-    process::{Child, ChildStderr, ChildStdin, ChildStdout},
+    process::{ChildStderr, ChildStdin, ChildStdout},
     sync::{mpsc, Mutex},
     time::{sleep, timeout},
 };
@@ -62,7 +62,7 @@ struct ManagedClientState {
 
 #[derive(Debug)]
 struct AsyncDaemonClient {
-    child: StdMutex<Option<Child>>,
+    child: StdMutex<Option<ProcessTreeChild>>,
     protocol: ProtocolClient,
     writer_task: StdMutex<Option<tokio::task::JoinHandle<()>>>,
     reader_task: StdMutex<Option<tokio::task::JoinHandle<()>>>,
@@ -440,16 +440,14 @@ impl AsyncDaemonClient {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-        process_manager::configure_process_group(&mut command);
-
-        let mut child = command.spawn()?;
-        let stdin = child.stdin.take().ok_or_else(|| {
+        let mut child = ProcessTreeChild::spawn(&mut command).await?;
+        let stdin = child.take_stdin().ok_or_else(|| {
             AppError::Protocol("flashgrep stdio backend did not provide stdin".into())
         })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
+        let stdout = child.take_stdout().ok_or_else(|| {
             AppError::Protocol("flashgrep stdio backend did not provide stdout".into())
         })?;
-        let stderr = child.stderr.take();
+        let stderr = child.take_stderr();
 
         let (protocol, write_rx) = ProtocolClient::channel("flashgrep stdio backend");
 
@@ -555,11 +553,11 @@ impl AsyncDaemonClient {
                 wait_result?;
                 Ok(())
             }
-            Err(_) => {
-                process_manager::terminate_child_process_tree(child, Duration::from_millis(750))
-                    .await
-                    .map_err(AppError::Io)
-            }
+            Err(_) => child
+                .terminate(Duration::from_millis(750))
+                .await
+                .map(|_| ())
+                .map_err(AppError::Io),
         }
     }
 
@@ -670,7 +668,7 @@ impl AsyncDaemonClient {
         self.protocol.reject_pending(message.into()).await;
     }
 
-    fn take_child_for_drop(&self) -> Option<Child> {
+    fn take_child_for_drop(&self) -> Option<ProcessTreeChild> {
         take_std_option(&self.child)
     }
 
@@ -692,7 +690,7 @@ impl Drop for AsyncDaemonClient {
         self.mark_closed();
         self.abort_background_tasks_for_drop();
         if let Some(child) = self.take_child_for_drop() {
-            process_manager::spawn_child_process_tree_cleanup(child, DROP_CLEANUP_TIMEOUT);
+            child.spawn_cleanup(DROP_CLEANUP_TIMEOUT);
         }
     }
 }

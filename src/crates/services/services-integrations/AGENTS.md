@@ -75,8 +75,13 @@ slices that are outside pure product logic but still platform-neutral.
   decide approval/conflicts, register product tools, or claim OS sandboxing.
   Approved modules run in target child processes separated from the Rust host for
   failure containment, not as a security or protocol-authentication boundary.
-  Target process trees and OS resource containment remain an explicit product
-  risk until a platform process-tree boundary is implemented.
+  The shared `services-core::process_tree` boundary owns managed-descendant cleanup for
+  script workers, local stdio MCP, and other managed service children: Unix uses a dedicated process group; Windows attaches a
+  suspended child to a kill-on-close Job Object before resuming it and fails
+  closed when attachment fails. This is lifecycle containment, not an OS
+  sandbox or a CPU/memory/filesystem/network resource limit; surfaces must keep
+  those residual risks explicit. Unix descendants that deliberately create a
+  new session/process group are outside the managed boundary.
 - Announcement remote fetch/cache lives here; product assembly supplies config
   values such as endpoint, locale, version, platform, and cache path.
 - DeepResearch report IO here may own report/citation sidecar filesystem work;

@@ -1,6 +1,7 @@
 {
   "title": "External AI applications",
   "subtitle": "Use commands, tools, agents, and MCP from other AI applications.",
+  "legacyHostNotice": "This execution Host uses the legacy external-source protocol. Safe Mode requires a Host upgrade.",
   "loading": "Checking external sources…",
   "checkingNonBlocking": "Checking for updates…",
   "common": {
@@ -14,7 +15,8 @@
     "notSelected": "Not used",
     "availableChoice": "Available choice",
     "openInExplorer": "Open in file explorer",
-    "openInExplorerRemote": "Remote workspace paths cannot be opened in the local file manager"
+    "openInExplorerRemote": "Remote workspace paths cannot be opened in the local file manager",
+    "openInExplorerUnavailable": "This Host cannot open source locations"
   },
   "actions": {
     "refresh": "Refresh",
@@ -23,6 +25,24 @@
     "waitForUpdate": "Another change is still being saved. Wait for it to finish before making another choice.",
     "agentUpdated": "Saved changes to {{name}} and refreshed its status.",
     "mcpUpdated": "Saved the MCP server choice and refreshed its status."
+  },
+  "recoveryActions": {
+    "refresh": "Refresh status",
+    "retry": "Retry",
+    "review": "Review items",
+    "resolve_conflict": "Resolve conflict",
+    "install_runtime": "Install or repair the required runtime, then refresh.",
+    "reconnect_host": "Reconnect or upgrade the execution Host, then retry.",
+    "exit_safe_mode": "Exit Safe Mode"
+  },
+  "safeMode": {
+    "title": "External Safe Mode",
+    "description": "Block new external tool, agent, and MCP calls while keeping discovered commands and diagnostics visible. Calls already in progress are not cancelled.",
+    "activeDescription": "New executable external calls are blocked. Calls already in progress may finish; commands and diagnostics remain available for recovery.",
+    "activeNotice": "Safe Mode applies only to this Host process and execution domain. Restarting or switching the execution Host turns it off.",
+    "toggleLabel": "Use External Safe Mode",
+    "entered": "External Safe Mode is active.",
+    "exited": "External Safe Mode is off and eligible integrations were reconciled."
   },
   "unavailable": {
     "hostTitle": "Unavailable here",
@@ -105,7 +125,9 @@
     "policyIncompatible": "External settings were written by a newer BitFun version. Back up and reset them before making changes.",
     "unavailableRetry": "Temporarily unavailable. Try again later.",
     "internal": "The action failed. Refresh to retry.",
-    "referenceId": "Reference: {{id}}"
+    "referenceId": "Reference: {{id}}",
+    "stage": "Stage: {{stage}}",
+    "causationId": "Related operation: {{id}}"
   },
   "diagnostics": {
     "summary": "{{count}} items need attention. Review the details to see what is affected.",
@@ -315,6 +337,7 @@
   },
   "toolState": {
     "approval_required": "Confirmation required",
+    "declined": "Kept disabled",
     "disabled": "Disabled",
     "active": "Enabled",
     "conflict": "Choice required",
@@ -324,7 +347,8 @@
   },
   "toolReason": {
     "approval_required": "Review this tool file's access before enabling it.",
-    "disabled": "You chose to disable this tool source.",
+    "declined": "You chose to keep these tools disabled.",
+    "disabled": "The source or its tool capability is disabled by policy.",
     "active": "The tool code is loaded and ready to use.",
     "conflict": "Another tool has the same name.",
     "unsupported": "This tool file contains code or operations that BitFun does not support.",
@@ -333,7 +357,8 @@
   },
   "toolNextStep": {
     "approval_required": "Review the source and access above, then enable or keep these tools disabled.",
-    "disabled": "Review the source and access above before enabling these tools.",
+    "declined": "Review the source and access above before enabling these tools.",
+    "disabled": "Enable this source or its tool capability before using these tools.",
     "active": "No action needed. Disable these tools to stop using this source's tools.",
     "conflict": "Choose which tool to use below, or leave them disabled.",
     "unsupported": "Change the source to a single JavaScript file supported by BitFun, then refresh.",

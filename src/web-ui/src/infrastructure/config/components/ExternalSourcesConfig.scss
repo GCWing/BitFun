@@ -270,6 +270,14 @@
     cursor: pointer;
   }
 
+  &__recovery-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
   &__diagnostics {
     margin: 8px 0 0;
     padding-left: 20px;

@@ -3,13 +3,15 @@
 use std::path::PathBuf;
 
 use bitfun_core::external_sources::{
-    choose_external_mcp_conflict, choose_external_subagent_conflict, external_source_snapshot,
-    set_external_mcp_server_decision, set_external_prompt_command_conflict_choice,
-    set_external_source_enabled, set_external_subagent_activation,
-    set_external_tool_conflict_choice, set_external_tool_target_decision,
-    update_external_integration_policy, ExternalIntegrationPolicyMutation,
-    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceOperationResult,
-    ExternalSourcePublicSnapshot,
+    apply_external_source_control_action, choose_external_mcp_conflict,
+    choose_external_subagent_conflict, external_source_snapshot,
+    get_external_source_control_snapshot, set_external_mcp_server_decision,
+    set_external_prompt_command_conflict_choice, set_external_source_enabled,
+    set_external_subagent_activation, set_external_tool_conflict_choice,
+    set_external_tool_target_decision, update_external_integration_policy,
+    ExternalIntegrationPolicyMutation, ExternalSourceControlRequestV1,
+    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
 };
 use serde_json::Value;
 
@@ -104,13 +106,14 @@ async fn workspace_root(
 fn public_snapshot(
     snapshot: bitfun_core::external_sources::ExternalSourceCatalogSnapshot,
 ) -> ExternalSourceOperationResult<Value> {
-    serde_json::to_value(ExternalSourcePublicSnapshot::from(snapshot)).map_err(|_| {
-        ExternalSourceOperationError::new(
-            ExternalSourceOperationErrorCode::Internal,
-            "External source response could not be encoded",
-            false,
-        )
-    })
+    serde_json::to_value(ExternalSourcePublicSnapshot::from(snapshot).into_legacy_v0_compatible())
+        .map_err(|_| {
+            ExternalSourceOperationError::new(
+                ExternalSourceOperationErrorCode::Internal,
+                "External source response could not be encoded",
+                false,
+            )
+        })
 }
 
 pub(crate) async fn dispatch(
@@ -128,9 +131,43 @@ async fn dispatch_inner(
     args: &Value,
     state: &PeerHostState,
 ) -> ExternalSourceOperationResult<Value> {
+    if command == "reveal_external_source_location" {
+        return Err(ExternalSourceOperationError::host_capability_unavailable(
+            "This Peer Host cannot reveal source locations in its file manager",
+        ));
+    }
     let request = request_value(args);
     let workspace = workspace_root(state, request).await?;
     let workspace = workspace.as_deref();
+    if command == "get_external_source_control_snapshot" {
+        let snapshot = get_external_source_control_snapshot(
+            workspace,
+            optional_bool_field(request, "forceRefresh")?.unwrap_or(false),
+            ExternalSourceHostCapabilities::read_write(),
+        )
+        .await?;
+        return serde_json::to_value(snapshot).map_err(|_| {
+            ExternalSourceOperationError::new(
+                ExternalSourceOperationErrorCode::Internal,
+                "External source control response could not be encoded",
+                false,
+            )
+        });
+    }
+    if command == "apply_external_source_control_action_command" {
+        let control = request.get("control").ok_or_else(|| {
+            ExternalSourceOperationError::invalid_request("Missing control request")
+        })?;
+        let snapshot =
+            apply_external_source_control_action(workspace, control_request(control)?).await?;
+        return serde_json::to_value(snapshot).map_err(|_| {
+            ExternalSourceOperationError::new(
+                ExternalSourceOperationErrorCode::Internal,
+                "External source control response could not be encoded",
+                false,
+            )
+        });
+    }
     let snapshot = match command {
         "get_external_source_snapshot" => {
             external_source_snapshot(
@@ -245,6 +282,7 @@ async fn dispatch_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitfun_core::external_sources::ExternalSourceControlActionV1;
 
     #[test]
     fn optional_host_fields_reject_wrong_types() {
@@ -278,4 +316,34 @@ mod tests {
         assert_eq!(value["code"], "stale_revision");
         assert_eq!(value["retryable"], true);
     }
+
+    #[test]
+    fn peer_host_does_not_advertise_desktop_local_reveal_actions() {
+        assert!(!ExternalSourceHostCapabilities::read_write().can_reveal_source_location);
+    }
+
+    #[test]
+    fn peer_control_request_deserializes_the_shared_action() {
+        let request = serde_json::json!({
+            "schemaVersion": 1,
+            "operationId": "peer-safe-mode",
+            "expectedPreferenceRevision": 3,
+            "action": { "type": "set_safe_mode", "enabled": true }
+        });
+
+        let control = control_request(&request).unwrap();
+
+        assert!(matches!(
+            control.action,
+            ExternalSourceControlActionV1::SetSafeMode { enabled: true }
+        ));
+    }
+}
+
+fn control_request(
+    request: &Value,
+) -> ExternalSourceOperationResult<ExternalSourceControlRequestV1> {
+    serde_json::from_value(request.clone()).map_err(|_| {
+        ExternalSourceOperationError::invalid_request("Invalid external source control request")
+    })
 }

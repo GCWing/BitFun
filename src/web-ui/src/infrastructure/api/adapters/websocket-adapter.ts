@@ -11,6 +11,19 @@ interface PendingRequest {
   timeout: NodeJS.Timeout;
 }
 
+export function webSocketResponseError(value: unknown): Error {
+  const record = value && typeof value === 'object'
+    ? value as { code?: unknown; message?: unknown; data?: unknown }
+    : undefined;
+  const message = typeof record?.message === 'string'
+    ? record.message
+    : String(value);
+  const error = new Error(message) as Error & { code?: unknown; data?: unknown };
+  error.code = record?.code;
+  error.data = record?.data;
+  return error;
+}
+
 export class WebSocketTransportAdapter implements ITransportAdapter {
   private ws: WebSocket | null = null;
   private url: string;
@@ -120,10 +133,7 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
           clearTimeout(pending.timeout);
           
           if (message.error) {
-            const errorMsg = typeof message.error === 'object' && message.error.message
-              ? message.error.message
-              : String(message.error);
-            pending.reject(new Error(errorMsg));
+            pending.reject(webSocketResponseError(message.error));
           } else {
             pending.resolve(message.result);
           }

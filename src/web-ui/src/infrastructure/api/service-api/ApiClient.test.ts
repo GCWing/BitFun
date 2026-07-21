@@ -85,6 +85,62 @@ describe('ApiClient startup trace classification', () => {
     }));
   });
 
+  it('preserves structured transport error facts across command wrapping', async () => {
+    const transportError = Object.assign(new Error('Unknown Server Host operation'), {
+      code: -32004,
+      data: {
+        code: 'host_capability_unavailable',
+        detail: 'Unknown Server Host operation',
+        retryable: false,
+        stage: 'execute_remote',
+        correlationId: 'server-legacy-1',
+        recoveryActions: [{ type: 'reconnect_host' }],
+      },
+    });
+    adapterMocks.request.mockRejectedValueOnce(transportError);
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    const error = await client.invoke('get_external_source_control_snapshot', {
+      request: { workspacePath: 'D:/workspace/BitFun' },
+    }).catch((caught: unknown) => caught as {
+      code: string;
+      details?: { originalError?: unknown };
+    });
+
+    expect(error).toMatchObject({
+      code: 'COMMAND_FAILED',
+      details: {
+        originalError: {
+          code: -32004,
+          data: {
+            code: 'host_capability_unavailable',
+            correlationId: 'server-legacy-1',
+            recoveryActions: [{ type: 'reconnect_host' }],
+          },
+        },
+      },
+    });
+  });
+
+  it('keeps message-only transport errors parseable by domain adapters', async () => {
+    const encoded = JSON.stringify({
+      code: 'stale_revision',
+      detail: 'Refresh and try again',
+      retryable: true,
+      recoveryActions: [{ type: 'refresh' }],
+    });
+    adapterMocks.request.mockRejectedValueOnce(new Error(encoded));
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    const error = await client.invoke('apply_external_source_control_action_command', {
+      request: {},
+    }).catch((caught: unknown) => caught as {
+      details?: { originalError?: unknown };
+    });
+
+    expect(error.details?.originalError).toBe(encoded);
+  });
+
   it('uses a bounded response estimate cap for session view restore when perf trace is enabled', async () => {
     globalThis.__BITFUN_PERF_TRACE_ENABLED__ = true;
     adapterMocks.request.mockResolvedValueOnce({ turns: [] });

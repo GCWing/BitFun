@@ -1042,6 +1042,7 @@ impl StartupPage {
             ActionHandler::ClearConversation
             | ActionHandler::ReloadSkills
             | ActionHandler::Tools
+            | ActionHandler::Extensions
             | ActionHandler::History
             | ActionHandler::Interrupt
             | ActionHandler::ToggleFocusedTool

@@ -128,6 +128,8 @@ export interface ExternalSourceCatalogSnapshot {
     canManageSources: boolean;
     canApproveRuntime: boolean;
     canExecuteExternalAssets: boolean;
+    canSetSafeMode: boolean;
+    canRevealSourceLocation: boolean;
   };
   generation: number;
   discoveryPending: boolean;
@@ -184,6 +186,8 @@ export interface ExternalSourceCatalogSnapshot {
     code: string;
     message: string;
   }>;
+  /** Frontend view of the atomic control+catalog response. Legacy hosts omit it. */
+  control?: ExternalSourceControlSnapshot;
 }
 
 export type ExternalSubagentActivation =
@@ -229,6 +233,7 @@ export interface ExternalSubagentConflict {
 export type ExternalToolCapability = 'file_system' | 'network' | 'process' | 'environment';
 export type ExternalToolActivation =
   | { state: 'approval_required' }
+  | { state: 'declined' }
   | { state: 'disabled' }
   | { state: 'active' }
   | { state: 'conflict' }
@@ -364,16 +369,119 @@ export interface ExternalMcpConflict {
   }>;
 }
 
+export type ExternalSourceOperationStage =
+  | 'validate_request'
+  | 'discover'
+  | 'reconcile'
+  | 'apply_preference'
+  | 'activate_runtime'
+  | 'project_response'
+  | 'execute_remote';
+
+export type ExternalSourceRecoveryActionType =
+  | 'refresh'
+  | 'retry'
+  | 'review'
+  | 'resolve_conflict'
+  | 'install_runtime'
+  | 'reconnect_host'
+  | 'exit_safe_mode';
+
+export interface ExternalSourceRecoveryAction {
+  type: ExternalSourceRecoveryActionType;
+}
+
+export type ExternalSourceControlAction =
+  | { type: 'refresh' }
+  | { type: 'set_source_enabled'; sourceKey: string; enabled: boolean }
+  | { type: 'set_safe_mode'; enabled: boolean };
+
+export interface ExternalSourceControlRequest {
+  schemaVersion: 1;
+  operationId: string;
+  expectedPreferenceRevision?: number;
+  action: ExternalSourceControlAction;
+}
+
+export type ExternalSourceRuntimeState =
+  | 'not_applicable'
+  | 'inactive'
+  | 'starting'
+  | 'active'
+  | 'degraded'
+  | 'quarantined'
+  | 'unsupported';
+
+export interface ExternalSourceControlSnapshot {
+  schemaVersion: 1;
+  executionDomainId: string;
+  refreshGeneration: number;
+  preferenceRevision: number;
+  safeMode: boolean;
+  hostCapabilities: ExternalSourceCatalogSnapshot['hostCapabilities'];
+  sources: Array<{
+    stableKey: string;
+    ecosystemId: string;
+    displayName: string;
+    scope: ExternalSourceScope;
+    contentVersion: string;
+    discovery: 'pending' | 'current' | 'last_known_good' | 'failed' | 'removed';
+    desired: 'enabled' | 'disabled';
+    review:
+      | { state: 'not_required' }
+      | { state: 'required'; contentVersion: string };
+    runtime: ExternalSourceRuntimeState;
+    support: 'supported' | 'partial' | 'unsupported' | 'unavailable';
+    effectiveStatus:
+      | 'discovering'
+      | 'disabled'
+      | 'review_required'
+      | 'conflict'
+      | 'active'
+      | 'degraded'
+      | 'unsupported'
+      | 'available'
+      | 'removed';
+  }>;
+  capabilities: Array<{
+    kind: 'command' | 'tool' | 'subagent' | 'mcp';
+    revision: number;
+    itemCount: number;
+    pendingReviewCount: number;
+    unresolvedConflictCount: number;
+    runtime: ExternalSourceRuntimeState;
+    support: 'supported' | 'partial' | 'unsupported' | 'unavailable';
+  }>;
+  diagnostics: NonNullable<ExternalSourceCatalogSnapshot['diagnostics']>;
+  recoveryActions: ExternalSourceRecoveryAction[];
+}
+
+export interface ExternalSourceSurfaceSnapshot {
+  control: ExternalSourceControlSnapshot;
+  catalog: ExternalSourceCatalogSnapshot;
+}
+
 export type ExternalSourceOperationErrorCode =
   | 'invalid_request'
   | 'host_unavailable'
   | 'host_capability_unavailable'
+  | 'trust_required'
   | 'policy_incompatible'
   | 'policy_limited'
   | 'stale_revision'
   | 'conflict'
   | 'not_found'
   | 'unavailable'
+  | 'runtime_unavailable'
+  | 'unsupported'
+  | 'incompatible_version'
+  | 'dependency_failed'
+  | 'timeout'
+  | 'cancelled'
+  | 'overloaded'
+  | 'process_lost'
+  | 'invalid_response'
+  | 'temporarily_unavailable'
   | 'internal';
 
 export class ExternalSourceApiError extends Error {
@@ -382,6 +490,9 @@ export class ExternalSourceApiError extends Error {
     public readonly detail: string,
     public readonly retryable: boolean,
     public readonly correlationId?: string,
+    public readonly causationId?: string,
+    public readonly stage?: ExternalSourceOperationStage,
+    public readonly recoveryActions: ExternalSourceRecoveryAction[] = [],
   ) {
     super(detail);
     this.name = 'ExternalSourceApiError';
@@ -394,7 +505,146 @@ const READ_ONLY_HOST_CAPABILITIES: ExternalSourceCatalogSnapshot['hostCapabiliti
   canManageSources: false,
   canApproveRuntime: false,
   canExecuteExternalAssets: false,
+  canSetSafeMode: false,
+  canRevealSourceLocation: false,
 };
+
+const CONTROL_DISCOVERY_STATES = new Set(['pending', 'current', 'last_known_good', 'failed', 'removed']);
+const CONTROL_DESIRED_STATES = new Set(['enabled', 'disabled']);
+const CONTROL_RUNTIME_STATES = new Set<ExternalSourceRuntimeState>([
+  'not_applicable', 'inactive', 'starting', 'active', 'degraded', 'quarantined', 'unsupported',
+]);
+const CONTROL_SUPPORT_STATES = new Set(['supported', 'partial', 'unsupported', 'unavailable']);
+const CONTROL_EFFECTIVE_STATUSES = new Set([
+  'discovering', 'disabled', 'review_required', 'conflict', 'active', 'degraded', 'unsupported', 'available', 'removed',
+]);
+const CONTROL_CAPABILITY_KINDS = new Set(['command', 'tool', 'subagent', 'mcp']);
+const EXTERNAL_SOURCE_SCOPES = new Set<ExternalSourceScope>([
+  'user_global', 'project', 'workspace_local', 'remote_user', 'remote_project',
+]);
+const OPERATION_STAGES = new Set<ExternalSourceOperationStage>([
+  'validate_request', 'discover', 'reconcile', 'apply_preference', 'activate_runtime', 'project_response', 'execute_remote',
+]);
+const RECOVERY_ACTION_TYPES = new Set<ExternalSourceRecoveryActionType>([
+  'refresh', 'retry', 'review', 'resolve_conflict', 'install_runtime', 'reconnect_host', 'exit_safe_mode',
+]);
+const HOST_CAPABILITY_KEYS = [
+  'canRefresh',
+  'canMutatePolicy',
+  'canManageSources',
+  'canApproveRuntime',
+  'canExecuteExternalAssets',
+  'canSetSafeMode',
+  'canRevealSourceLocation',
+] as const;
+const REQUIRED_HOST_CAPABILITY_KEYS = HOST_CAPABILITY_KEYS.filter(
+  (key) => key !== 'canRevealSourceLocation',
+);
+
+function isOneOf<T extends string>(value: unknown, values: ReadonlySet<T>): value is T {
+  return typeof value === 'string' && values.has(value as T);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isHostCapabilities(
+  value: unknown,
+): value is ExternalSourceCatalogSnapshot['hostCapabilities'] {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return Object.keys(record).every(
+    (key) => (HOST_CAPABILITY_KEYS as readonly string[]).includes(key),
+  )
+    && REQUIRED_HOST_CAPABILITY_KEYS.every((key) => typeof record[key] === 'boolean')
+    && (record.canRevealSourceLocation === undefined
+      || typeof record.canRevealSourceLocation === 'boolean');
+}
+
+function hostCapabilitiesEqual(
+  left: ExternalSourceCatalogSnapshot['hostCapabilities'],
+  right: ExternalSourceCatalogSnapshot['hostCapabilities'],
+): boolean {
+  return HOST_CAPABILITY_KEYS.every((key) => left[key] === right[key]);
+}
+
+function normalizeHostCapabilities(
+  value: unknown,
+): ExternalSourceCatalogSnapshot['hostCapabilities'] {
+  const capabilities = value && typeof value === 'object'
+    ? value as Partial<ExternalSourceCatalogSnapshot['hostCapabilities']>
+    : undefined;
+  return {
+    ...READ_ONLY_HOST_CAPABILITIES,
+    canRefresh: capabilities?.canRefresh === true,
+    canMutatePolicy: capabilities?.canMutatePolicy === true,
+    canManageSources: capabilities?.canManageSources === true,
+    canApproveRuntime: capabilities?.canApproveRuntime === true,
+    canExecuteExternalAssets: capabilities?.canExecuteExternalAssets === true,
+    canSetSafeMode: capabilities?.canSetSafeMode === true,
+    canRevealSourceLocation: capabilities?.canRevealSourceLocation === true,
+  };
+}
+
+function isRecoveryAction(value: unknown): value is ExternalSourceRecoveryAction {
+  return Boolean(value)
+    && typeof value === 'object'
+    && isOneOf((value as { type?: unknown }).type, RECOVERY_ACTION_TYPES);
+}
+
+function normalizeRecoveryActions(value: unknown, strict: boolean): ExternalSourceRecoveryAction[] {
+  const actions = normalizeOptionalArray<unknown>(value);
+  if (strict && !actions.every(isRecoveryAction)) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'External source recovery actions were invalid',
+      false,
+    );
+  }
+  return actions.filter(isRecoveryAction);
+}
+
+function isControlReview(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const review = value as Record<string, unknown>;
+  switch (review.state) {
+    case 'not_required':
+      return true;
+    case 'required':
+      return typeof review.contentVersion === 'string';
+    default:
+      return false;
+  }
+}
+
+function isControlSource(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const source = value as Record<string, unknown>;
+  return typeof source.stableKey === 'string'
+    && typeof source.ecosystemId === 'string'
+    && typeof source.displayName === 'string'
+    && isOneOf(source.scope, EXTERNAL_SOURCE_SCOPES)
+    && typeof source.contentVersion === 'string'
+    && isOneOf(source.discovery, CONTROL_DISCOVERY_STATES)
+    && isOneOf(source.desired, CONTROL_DESIRED_STATES)
+    && isControlReview(source.review)
+    && isOneOf(source.runtime, CONTROL_RUNTIME_STATES)
+    && isOneOf(source.support, CONTROL_SUPPORT_STATES)
+    && isOneOf(source.effectiveStatus, CONTROL_EFFECTIVE_STATUSES);
+}
+
+function isCapabilityControl(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const capability = value as Record<string, unknown>;
+  return isOneOf(capability.kind, CONTROL_CAPABILITY_KINDS)
+    && isNonNegativeInteger(capability.revision)
+    && isNonNegativeInteger(capability.itemCount)
+    && isNonNegativeInteger(capability.pendingReviewCount)
+    && isNonNegativeInteger(capability.unresolvedConflictCount)
+    && isOneOf(capability.runtime, CONTROL_RUNTIME_STATES)
+    && isOneOf(capability.support, CONTROL_SUPPORT_STATES);
+}
 
 function safePolicySnapshot(
   status: ExternalIntegrationPolicySnapshot['status'] = 'unknown',
@@ -533,30 +783,118 @@ function normalizeSnapshot(value: unknown): ExternalSourceCatalogSnapshot {
     })),
     pendingSubagentApprovals: normalizeOptionalArray(candidate.pendingSubagentApprovals),
     diagnostics: normalizeOptionalArray(candidate.diagnostics),
-    hostCapabilities: {
-      ...READ_ONLY_HOST_CAPABILITIES,
-      canRefresh: capabilities?.canRefresh === true,
-      canMutatePolicy: capabilities?.canMutatePolicy === true,
-      canManageSources: capabilities?.canManageSources === true,
-      canApproveRuntime: capabilities?.canApproveRuntime === true,
-      canExecuteExternalAssets: capabilities?.canExecuteExternalAssets === true,
-    },
+    hostCapabilities: normalizeHostCapabilities(capabilities),
     integrationPolicy: normalizePolicySnapshot(candidate.integrationPolicy),
   };
+}
+
+function normalizeControlSnapshot(value: unknown): ExternalSourceControlSnapshot {
+  if (!value || typeof value !== 'object') {
+    throw new ExternalSourceApiError('invalid_response', 'External source control response was not usable', true);
+  }
+  const candidate = value as Partial<ExternalSourceControlSnapshot>;
+  if (candidate.schemaVersion !== 1
+    || typeof candidate.executionDomainId !== 'string'
+    || !isNonNegativeInteger(candidate.refreshGeneration)
+    || !isNonNegativeInteger(candidate.preferenceRevision)
+    || typeof candidate.safeMode !== 'boolean'
+    || !isHostCapabilities(candidate.hostCapabilities)
+    || !Array.isArray(candidate.sources)
+    || !Array.isArray(candidate.capabilities)
+    || !candidate.sources.every(isControlSource)
+    || !candidate.capabilities.every(isCapabilityControl)) {
+    throw new ExternalSourceApiError('invalid_response', 'External source control schema was invalid', false);
+  }
+  return {
+    ...candidate,
+    hostCapabilities: normalizeHostCapabilities(candidate.hostCapabilities),
+    diagnostics: normalizeOptionalArray(candidate.diagnostics),
+    recoveryActions: normalizeRecoveryActions(candidate.recoveryActions, true),
+  } as ExternalSourceControlSnapshot;
+}
+
+function normalizeSurfaceSnapshot(value: unknown): ExternalSourceSurfaceSnapshot {
+  if (!value || typeof value !== 'object') {
+    throw new ExternalSourceApiError('invalid_response', 'External source surface response was not usable', true);
+  }
+  const candidate = value as Partial<ExternalSourceSurfaceSnapshot>;
+  const control = normalizeControlSnapshot(candidate.control);
+  const rawCatalog = candidate.catalog;
+  const catalog = normalizeSnapshot(candidate.catalog);
+  if (catalog.generation !== control.refreshGeneration) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'External source control and catalog generations did not match',
+      true,
+    );
+  }
+  if ((catalog.preferenceRevision ?? 0) !== control.preferenceRevision) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'External source control and catalog preference revisions did not match',
+      true,
+    );
+  }
+  if (rawCatalog && typeof rawCatalog === 'object'
+    && Object.prototype.hasOwnProperty.call(rawCatalog, 'hostCapabilities')) {
+    const rawCapabilities = (rawCatalog as { hostCapabilities?: unknown }).hostCapabilities;
+    if (!isHostCapabilities(rawCapabilities)
+      || !hostCapabilitiesEqual(
+        control.hostCapabilities,
+        normalizeHostCapabilities(rawCapabilities),
+      )) {
+      throw new ExternalSourceApiError(
+        'invalid_response',
+        'External source control and catalog Host capabilities did not match',
+        false,
+      );
+    }
+  }
+  return { control, catalog: { ...catalog, control } };
 }
 
 const OPERATION_ERROR_CODES = new Set<ExternalSourceOperationErrorCode>([
   'invalid_request',
   'host_unavailable',
   'host_capability_unavailable',
+  'trust_required',
   'policy_incompatible',
   'policy_limited',
   'stale_revision',
   'conflict',
   'not_found',
   'unavailable',
+  'runtime_unavailable',
+  'unsupported',
+  'incompatible_version',
+  'dependency_failed',
+  'timeout',
+  'cancelled',
+  'overloaded',
+  'process_lost',
+  'invalid_response',
+  'temporarily_unavailable',
   'internal',
 ]);
+
+function normalizeOperationReference(value: unknown): string | undefined {
+  if (typeof value !== 'string'
+    || value.length === 0
+    || value.length > 160
+    || value.trim() !== value
+    || /[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function normalizeOperationDetail(value: string): string {
+  const bounded = Array.from(value)
+    .slice(0, 4096)
+    .join('')
+    .replace(/[\u0000-\u001f\u007f-\u009f]/gu, ' ');
+  return bounded.trim() ? bounded : 'External source operation failed';
+}
 
 function parseOperationError(value: unknown, visited = new Set<unknown>()): ExternalSourceApiError | null {
   if (value === null || value === undefined || visited.has(value)) return null;
@@ -577,9 +915,12 @@ function parseOperationError(value: unknown, visited = new Set<unknown>()): Exte
   ) {
     return new ExternalSourceApiError(
       record.code as ExternalSourceOperationErrorCode,
-      record.detail,
+      normalizeOperationDetail(record.detail),
       record.retryable === true,
-      typeof record.correlationId === 'string' ? record.correlationId : undefined,
+      normalizeOperationReference(record.correlationId),
+      normalizeOperationReference(record.causationId),
+      isOneOf(record.stage, OPERATION_STAGES) ? record.stage : undefined,
+      normalizeRecoveryActions(record.recoveryActions, false),
     );
   }
   for (const candidate of [
@@ -600,7 +941,37 @@ async function invokeExternal<T>(command: string, args: Record<string, unknown>)
   try {
     return await api.invoke<T>(command, args);
   } catch (error) {
-    throw parseOperationError(error) ?? new ExternalSourceApiError(
+    const parsed = parseOperationError(error);
+    let raw = typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : '';
+    if (!raw) {
+      try {
+        raw = JSON.stringify(error) ?? '';
+      } catch {
+        raw = '';
+      }
+    }
+    const normalized = raw.toLowerCase();
+    const legacyPeerMissingCommand = raw.includes(command)
+      && normalized.includes('not supported on cli peer host');
+    const legacyServerMissingCommand = parsed?.code === 'host_capability_unavailable'
+      && parsed.detail === 'Unknown Server Host operation';
+    if (legacyPeerMissingCommand
+      || legacyServerMissingCommand
+      || (raw.includes(command)
+      && (normalized.includes('unknown command')
+        || normalized.includes('not found')
+        || normalized.includes('not registered')))) {
+      throw new ExternalSourceApiError(
+        'incompatible_version',
+        'The connected Host does not support this external source command',
+        false,
+      );
+    }
+    throw parsed ?? new ExternalSourceApiError(
       'internal',
       'External source operation failed',
       false,
@@ -612,16 +983,92 @@ async function invokeSnapshot(
   command: string,
   args: Record<string, unknown>,
 ): Promise<ExternalSourceCatalogSnapshot> {
-  return normalizeSnapshot(await invokeExternal<unknown>(command, args));
+  await invokeExternal<unknown>(command, args);
+  const request = args.request && typeof args.request === 'object'
+    ? args.request as Record<string, unknown>
+    : {};
+  return (await invokeCompatibleSurfaceSnapshot({
+    request: {
+      workspacePath: request.workspacePath,
+      forceRefresh: false,
+    },
+  })).catalog;
+}
+
+async function invokeSurfaceSnapshot(
+  command: string,
+  args: Record<string, unknown>,
+): Promise<ExternalSourceSurfaceSnapshot> {
+  return normalizeSurfaceSnapshot(await invokeExternal<unknown>(command, args));
+}
+
+function legacySurfaceSnapshot(catalog: ExternalSourceCatalogSnapshot): ExternalSourceSurfaceSnapshot {
+  const hostCapabilities = {
+    ...catalog.hostCapabilities,
+    canSetSafeMode: false,
+    canRevealSourceLocation: false,
+  };
+  const control: ExternalSourceControlSnapshot = {
+    schemaVersion: 1,
+    executionDomainId: catalog.sources[0]?.record.executionDomainId ?? 'legacy-host',
+    refreshGeneration: catalog.generation,
+    preferenceRevision: catalog.preferenceRevision ?? 0,
+    safeMode: false,
+    hostCapabilities,
+    sources: [],
+    capabilities: [],
+    diagnostics: catalog.diagnostics ?? [],
+    recoveryActions: [{ type: 'reconnect_host' }],
+  };
+  return {
+    control,
+    catalog: { ...catalog, hostCapabilities, control },
+  };
+}
+
+async function invokeCompatibleSurfaceSnapshot(
+  args: Record<string, unknown>,
+): Promise<ExternalSourceSurfaceSnapshot> {
+  try {
+    return await invokeSurfaceSnapshot('get_external_source_control_snapshot', args);
+  } catch (error) {
+    if (!(error instanceof ExternalSourceApiError) || error.code !== 'incompatible_version') {
+      throw error;
+    }
+    const catalog = normalizeSnapshot(await invokeExternal<unknown>(
+      'get_external_source_snapshot',
+      args,
+    ));
+    return legacySurfaceSnapshot(catalog);
+  }
 }
 
 function normalizeOptionalWorkspacePath(workspacePath: string | undefined): string | undefined {
   return workspacePath?.trim() ? workspacePath : undefined;
 }
 
+let operationSequence = 0;
+
+function nextOperationId(action: ExternalSourceControlAction['type']): string {
+  operationSequence += 1;
+  return `web-${action}-${Date.now().toString(36)}-${operationSequence.toString(36)}`;
+}
+
+function controlRequest(
+  action: ExternalSourceControlAction,
+  expectedPreferenceRevision?: number,
+): ExternalSourceControlRequest {
+  return {
+    schemaVersion: 1,
+    operationId: nextOperationId(action.type),
+    ...(expectedPreferenceRevision === undefined ? {} : { expectedPreferenceRevision }),
+    action,
+  };
+}
+
 export const externalSourcesAPI = {
-  getSnapshot(workspacePath?: string, forceRefresh = false) {
-    return invokeSnapshot('get_external_source_snapshot', {
+  async getControlSnapshot(workspacePath?: string, forceRefresh = false) {
+    return invokeCompatibleSurfaceSnapshot({
       request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), forceRefresh },
     });
   },
@@ -635,20 +1082,60 @@ export const externalSourcesAPI = {
     });
   },
 
-  setSourceEnabled(
+  async getSnapshot(workspacePath?: string, forceRefresh = false) {
+    return (await invokeCompatibleSurfaceSnapshot({
+      request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), forceRefresh },
+    })).catalog;
+  },
+
+  async setSourceEnabled(
     workspacePath: string | undefined,
     sourceKey: string,
     enabled: boolean,
     expectedPreferenceRevision: number,
   ) {
-    return invokeSnapshot('set_external_source_enabled_command', {
+    const normalizedWorkspacePath = normalizeOptionalWorkspacePath(workspacePath);
+    try {
+      const surface = await invokeSurfaceSnapshot('apply_external_source_control_action_command', {
+        request: {
+          workspacePath: normalizedWorkspacePath,
+          control: controlRequest(
+            { type: 'set_source_enabled', sourceKey, enabled },
+            expectedPreferenceRevision,
+          ),
+        },
+      });
+      return surface.catalog;
+    } catch (error) {
+      if (!(error instanceof ExternalSourceApiError) || error.code !== 'incompatible_version') {
+        throw error;
+      }
+      return invokeSnapshot('set_external_source_enabled_command', {
+        request: {
+          workspacePath: normalizedWorkspacePath,
+          sourceKey,
+          enabled,
+          expectedPreferenceRevision,
+        },
+      });
+    }
+  },
+
+  async setSafeMode(
+    workspacePath: string | undefined,
+    enabled: boolean,
+    expectedPreferenceRevision: number,
+  ) {
+    const surface = await invokeSurfaceSnapshot('apply_external_source_control_action_command', {
       request: {
         workspacePath: normalizeOptionalWorkspacePath(workspacePath),
-        sourceKey,
-        enabled,
-        expectedPreferenceRevision,
+        control: controlRequest(
+          { type: 'set_safe_mode', enabled },
+          expectedPreferenceRevision,
+        ),
       },
     });
+    return surface.catalog;
   },
 
   setConflictChoice(

@@ -7,6 +7,7 @@ import ExternalSourcesConfig from './ExternalSourcesConfig';
 
 const getSnapshotMock = vi.hoisted(() => vi.fn());
 const setSourceEnabledMock = vi.hoisted(() => vi.fn());
+const setSafeModeMock = vi.hoisted(() => vi.fn());
 const setConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setToolTargetDecisionMock = vi.hoisted(() => vi.fn());
 const setToolConflictChoiceMock = vi.hoisted(() => vi.fn());
@@ -67,6 +68,7 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
   externalSourcesAPI: {
     getSnapshot: getSnapshotMock,
     setSourceEnabled: setSourceEnabledMock,
+    setSafeMode: setSafeModeMock,
     setConflictChoice: setConflictChoiceMock,
     setToolTargetDecision: setToolTargetDecisionMock,
     setToolConflictChoice: setToolConflictChoiceMock,
@@ -86,6 +88,8 @@ const snapshot = {
     canManageSources: true,
     canApproveRuntime: true,
     canExecuteExternalAssets: true,
+    canSetSafeMode: true,
+    canRevealSourceLocation: true,
   },
   generation: 1,
   discoveryPending: false,
@@ -238,6 +242,7 @@ describe('ExternalSourcesConfig', () => {
     peerState.deviceId = '';
     getSnapshotMock.mockResolvedValue(snapshot);
     setSourceEnabledMock.mockResolvedValue(snapshot);
+    setSafeModeMock.mockResolvedValue(snapshot);
     setConflictChoiceMock.mockResolvedValue({
       ...snapshot,
       commandConflicts: [{
@@ -309,6 +314,125 @@ describe('ExternalSourcesConfig', () => {
       scope: 'workspace',
       change: { operation: 'set_enabled', enabled: false },
     });
+  });
+
+  it('uses the shared control projection to enter Safe Mode without hiding commands', async () => {
+    const controlledSnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      commands: [discoveredCommand],
+      control: {
+        schemaVersion: 1,
+        executionDomainId: 'local-user',
+        refreshGeneration: 1,
+        preferenceRevision: 4,
+        safeMode: false,
+        hostCapabilities: snapshot.hostCapabilities,
+        sources: [],
+        capabilities: [],
+        diagnostics: [],
+        recoveryActions: [],
+      },
+    };
+    getSnapshotMock.mockResolvedValue(controlledSnapshot);
+    setSafeModeMock.mockResolvedValue({
+      ...controlledSnapshot,
+      control: { ...controlledSnapshot.control, safeMode: true },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('safeMode.title');
+    expect(container.textContent).toContain('sources.commandCount:{"count":1}');
+    const toggle = container.querySelector(
+      'input[aria-label="safeMode.toggleLabel"]',
+    ) as HTMLInputElement;
+    await act(async () => toggle.click());
+
+    expect(setSafeModeMock).toHaveBeenCalledWith('D:/workspace/project', true, 4);
+    expect(container.textContent).toContain('safeMode.activeNotice');
+  });
+
+  it('keeps Safe Mode available when the persisted integration policy is incompatible', async () => {
+    const controlledSnapshot = {
+      ...snapshot,
+      preferenceRevision: 4,
+      integrationPolicy: {
+        ...integrationPolicy,
+        status: 'incompatible_schema' as const,
+        schemaMajor: 99,
+      },
+      control: {
+        schemaVersion: 1 as const,
+        executionDomainId: 'local-user',
+        refreshGeneration: 1,
+        preferenceRevision: 4,
+        safeMode: false,
+        hostCapabilities: snapshot.hostCapabilities,
+        sources: [],
+        capabilities: [],
+        diagnostics: [],
+        recoveryActions: [],
+      },
+    };
+    getSnapshotMock.mockResolvedValue(controlledSnapshot);
+    setSafeModeMock.mockResolvedValue({
+      ...controlledSnapshot,
+      control: { ...controlledSnapshot.control, safeMode: true },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const toggle = container.querySelector(
+      'input[aria-label="safeMode.toggleLabel"]',
+    ) as HTMLInputElement;
+    expect(toggle.disabled).toBe(false);
+    await act(async () => toggle.click());
+
+    expect(setSafeModeMock).toHaveBeenCalledWith('D:/workspace/project', true, 4);
+  });
+
+  it('explains the upgrade boundary when a legacy Host cannot provide Safe Mode', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      control: {
+        schemaVersion: 1 as const,
+        executionDomainId: 'remote-user',
+        refreshGeneration: snapshot.generation,
+        preferenceRevision: snapshot.preferenceRevision,
+        safeMode: false,
+        hostCapabilities: {
+          ...snapshot.hostCapabilities,
+          canSetSafeMode: false,
+        },
+        sources: [],
+        capabilities: [],
+        diagnostics: [],
+        recoveryActions: [{ type: 'reconnect_host' as const }],
+      },
+      hostCapabilities: {
+        ...snapshot.hostCapabilities,
+        canSetSafeMode: false,
+      },
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('legacyHostNotice');
+    expect(container.textContent).toContain('recoveryActions.reconnect_host');
+    const toggle = container.querySelector(
+      'input[aria-label="safeMode.toggleLabel"]',
+    ) as HTMLInputElement;
+    expect(toggle.disabled).toBe(true);
   });
 
   it('shows the effective safety ceiling when stored policy requests broader access', async () => {
@@ -827,7 +951,7 @@ describe('ExternalSourcesConfig', () => {
         },
         approvalKey: 'tool-approval-v1',
         decisionKey: 'tool-decision-v1',
-        activation: { state: 'disabled' },
+        activation: { state: 'declined' },
       }],
       toolConflicts: [{
         conflictKey: 'tool-conflict-v1',
@@ -1474,7 +1598,7 @@ describe('ExternalSourcesConfig', () => {
         },
         approvalKey: 'approval-1',
         decisionKey: 'decision-1',
-        activation: { state: 'disabled' },
+        activation: { state: 'declined' },
       }],
       toolApprovalRequests: [],
     };
@@ -2058,7 +2182,14 @@ describe('ExternalSourcesConfig', () => {
     getSnapshotMock.mockResolvedValue(snapshot);
     setSourceEnabledMock.mockRejectedValueOnce(Object.assign(
       new Error('database connection string should stay private'),
-      { code: 'internal', retryable: true, correlationId: 'external-source-ref-7' },
+      {
+        code: 'internal',
+        retryable: true,
+        correlationId: 'external-source-ref-7',
+        causationId: 'refresh-generation-6',
+        stage: 'activate_runtime',
+        recoveryActions: [{ type: 'retry' }, { type: 'reconnect_host' }],
+      },
     ));
 
     await act(async () => {
@@ -2072,7 +2203,17 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).toContain('operationErrors.internal');
     expect(container.textContent).toContain('external-source-ref-7');
+    expect(container.textContent).toContain('operationErrors.stage:{"stage":"activate_runtime"}');
+    expect(container.textContent).toContain('operationErrors.causationId:{"id":"refresh-generation-6"}');
+    expect(container.textContent).toContain('recoveryActions.retry');
+    expect(container.textContent).toContain('recoveryActions.reconnect_host');
     expect(container.textContent).not.toContain('database connection string');
+
+    const retry = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'recoveryActions.retry',
+    );
+    await act(async () => retry?.click());
+    expect(setSourceEnabledMock).toHaveBeenCalledTimes(2);
   });
 
   it('shows MCP empty state when no MCP servers found', async () => {
@@ -2254,6 +2395,124 @@ describe('ExternalSourcesConfig', () => {
       'D:/workspace/project',
       'opencode-source-secondary',
     );
+  });
+
+  it('does not expose source-location actions when the Host does not support them', async () => {
+    const readOnlyHostSnapshot = {
+      ...snapshot,
+      hostCapabilities: {
+        ...snapshot.hostCapabilities,
+        canRevealSourceLocation: false,
+      },
+      integrationPolicy,
+      commandConflicts: [],
+      sources: [{
+        ...snapshot.sources[0],
+        stableKey: 'opencode-source',
+        presentationGroupId: 'opencode-source',
+        record: {
+          ...snapshot.sources[0].record,
+          ecosystemId: 'opencode',
+        },
+        lifecycle: 'suppressed',
+      }, {
+        ...snapshot.sources[0],
+        stableKey: 'opencode-source-secondary',
+        presentationGroupId: 'opencode-source-secondary',
+        record: {
+          ...snapshot.sources[0].record,
+          key: { providerId: 'opencode.commands', sourceId: 'user' },
+          ecosystemId: 'opencode',
+          scope: 'user_global',
+          contentVersion: 'v2',
+        },
+        lifecycle: 'suppressed',
+      }],
+    };
+    getSnapshotMock.mockResolvedValue(readOnlyHostSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const expandButton = container.querySelector(
+      'button[aria-controls="external-capabilities-opencode"]',
+    );
+    await act(async () => {
+      (expandButton as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(
+      '.bitfun-external-sources-config__opencode-locations a.bitfun-external-sources-config__path-link',
+    )).toBeNull();
+    expect(container.querySelector(
+      '.bitfun-external-sources-config__opencode-locations .bitfun-external-sources-config__path-link--disabled',
+    )?.getAttribute('aria-label')).toBe('common.openInExplorerUnavailable');
+    expect(revealSourceLocationMock).not.toHaveBeenCalled();
+  });
+
+  it('shows typed recovery feedback when revealing a source location fails', async () => {
+    const opencodeSnapshot = {
+      ...snapshot,
+      integrationPolicy,
+      commandConflicts: [],
+      sources: [{
+        ...snapshot.sources[0],
+        stableKey: 'opencode-source',
+        presentationGroupId: 'opencode-source',
+        record: {
+          ...snapshot.sources[0].record,
+          ecosystemId: 'opencode',
+        },
+        lifecycle: 'suppressed',
+      }, {
+        ...snapshot.sources[0],
+        stableKey: 'opencode-source-secondary',
+        presentationGroupId: 'opencode-source-secondary',
+        record: {
+          ...snapshot.sources[0].record,
+          key: { providerId: 'opencode.commands', sourceId: 'user' },
+          ecosystemId: 'opencode',
+          scope: 'user_global',
+          contentVersion: 'v2',
+        },
+        lifecycle: 'suppressed',
+      }],
+    };
+    getSnapshotMock.mockResolvedValue(opencodeSnapshot);
+    revealSourceLocationMock.mockRejectedValueOnce({
+      code: 'not_found',
+      message: 'The source is no longer available',
+      retryable: false,
+      recoveryActions: [{ type: 'refresh' }],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const expandButton = container.querySelector(
+      'button[aria-controls="external-capabilities-opencode"]',
+    );
+    await act(async () => {
+      (expandButton as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    const pathLink = container.querySelector(
+      '.bitfun-external-sources-config__opencode-locations a.bitfun-external-sources-config__path-link',
+    );
+    await act(async () => {
+      (pathLink as HTMLAnchorElement).click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain('operationErrors.rejected');
+    expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain('recoveryActions.refresh');
   });
 
   it('labels all OpenCode scopes with supported translations and includes tools in the summary', async () => {

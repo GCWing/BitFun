@@ -192,6 +192,17 @@ impl ChatMode {
             self.handle_external_agent_review(arguments, chat_view, chat_state, rt_handle);
             return Ok(None);
         }
+        let can_route_external_control = builtin_action
+            .is_some_and(|action| action.handler == ActionHandler::Extensions)
+            && qualifier != CommandQualifier::External
+            && (qualifier == CommandQualifier::Builtin
+                || (external.is_none()
+                    && unresolved_candidates.is_empty()
+                    && !builtin_reconfirmation_required));
+        if can_route_external_control {
+            self.handle_external_control(arguments, chat_view, chat_state, rt_handle);
+            return Ok(None);
+        }
         let native_choice_is_active = unresolved_candidates.iter().any(|candidate| {
             candidate
                 .native_collision
@@ -629,6 +640,9 @@ impl ChatMode {
             ActionHandler::Tools => {
                 self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
             }
+            ActionHandler::Extensions => {
+                self.handle_external_control("", chat_view, chat_state, rt_handle);
+            }
             ActionHandler::AcpHelp => {
                 chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun"));
                 chat_view.set_status(Some(
@@ -796,6 +810,6 @@ impl ChatMode {
 fn action_opens_extension_management(action: &ActionSpec) -> bool {
     matches!(
         action.handler,
-        ActionHandler::Tools | ActionHandler::OpenAgentSelector
+        ActionHandler::Tools | ActionHandler::Extensions | ActionHandler::OpenAgentSelector
     )
 }

@@ -149,6 +149,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("add_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("analyze_work_state", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "apply_external_source_control_action_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("apply_patch", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "archive_all_sessions",
@@ -460,6 +464,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "reveal_external_source_location",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "get_external_source_control_snapshot",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
@@ -1721,6 +1729,23 @@ mod tests {
         assert!(
             stale.is_empty(),
             "remote workspace policies declared for commands that are no longer registered: {stale:?}"
+        );
+    }
+
+    #[test]
+    fn external_source_control_web_command_is_registered() {
+        const COMMAND: &str = "get_external_source_control_snapshot";
+        let web_api = include_str!(
+            "../../../../web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts"
+        );
+
+        assert!(
+            web_api.contains(&format!("invokeSurfaceSnapshot('{COMMAND}'")),
+            "Web UI must invoke the stable external-source control command"
+        );
+        assert!(
+            registered_commands().contains(COMMAND),
+            "Desktop must register the external-source control command invoked by Web UI"
         );
     }
 

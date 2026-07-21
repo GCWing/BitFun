@@ -6,7 +6,7 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_external_sources::{ExternalToolCoordinator, ExternalToolCoordinatorSnapshot};
+use bitfun_external_sources::{ExternalSourceControlPlane, ExternalToolCoordinatorSnapshot};
 use bitfun_product_domains::external_sources::{
     external_tool_approval_key, external_tool_conflict_key, external_tool_decision_key,
     EcosystemId, ExternalSourceAssetKind, ExternalSourceDiagnostic,
@@ -98,7 +98,7 @@ pub(super) fn project_external_tools_read_only(
             .get(&approval_key)
             .is_some_and(|declined| declined == &decision_key)
         {
-            ExternalToolActivationState::Disabled
+            ExternalToolActivationState::Declined
         } else {
             state.approval_requests.push(ExternalToolApprovalRequest {
                 approval_key: approval_key.clone(),
@@ -1294,15 +1294,12 @@ pub(super) async fn release_external_tool_workspace(workspace_root: Option<&Path
 pub(super) async fn reconcile_external_tools(
     workspace_root: Option<&Path>,
     execution_domain_id: &str,
-    coordinator: &Arc<StdMutex<ExternalToolCoordinator>>,
+    control_plane: &Arc<ExternalSourceControlPlane>,
     decisions: ExternalToolDecisions<'_>,
     worker_recovery_targets: &BTreeSet<String>,
 ) -> ExternalToolProductState {
     let workspace_key = workspace_route_key(workspace_root);
-    let snapshot = coordinator
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .snapshot();
+    let snapshot = control_plane.tools(|coordinator| coordinator.snapshot());
     let mut state = ExternalToolProductState::default();
     let source_by_key = snapshot
         .sources
@@ -1425,7 +1422,7 @@ pub(super) async fn reconcile_external_tools(
                 .get(&approval_key)
                 .is_some_and(|declined| declined == &decision_key)
             {
-                ExternalToolActivationState::Disabled
+                ExternalToolActivationState::Declined
             } else {
                 let source = source_by_key.get(&target_id.source);
                 state.approval_requests.push(ExternalToolApprovalRequest {
@@ -1610,14 +1607,13 @@ pub(super) async fn reconcile_external_tools(
             continue;
         }
 
-        let preparation_coordinator = Arc::clone(coordinator);
+        let preparation_control_plane = Arc::clone(control_plane);
         let preparation_target = target_id.clone();
         let preparation_revision = first.content_version.clone();
         let prepared = tokio::task::spawn_blocking(move || {
-            preparation_coordinator
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .prepare_target_guarded(&preparation_target, &preparation_revision)
+            preparation_control_plane.tools_mut(|coordinator| {
+                coordinator.prepare_target_guarded(&preparation_target, &preparation_revision)
+            })
         })
         .await
         .map_err(|error| format!("tool preparation task failed: {error}"))

@@ -526,6 +526,9 @@ fn external_cli_operation_error(error: String) -> anyhow::Error {
         ExternalSourceOperationErrorCode::HostCapabilityUnavailable => {
             "This workspace host is read-only for external integrations."
         }
+        ExternalSourceOperationErrorCode::TrustRequired => {
+            "This external integration requires review before it can run."
+        }
         ExternalSourceOperationErrorCode::PolicyIncompatible => {
             "Compatibility settings were written by a newer BitFun version."
         }
@@ -542,7 +545,25 @@ fn external_cli_operation_error(error: String) -> anyhow::Error {
         ExternalSourceOperationErrorCode::Unavailable => {
             "The external integration is temporarily unavailable."
         }
-        ExternalSourceOperationErrorCode::Internal => {
+        ExternalSourceOperationErrorCode::RuntimeUnavailable
+        | ExternalSourceOperationErrorCode::DependencyFailed
+        | ExternalSourceOperationErrorCode::ProcessLost => {
+            "The external integration runtime is unavailable."
+        }
+        ExternalSourceOperationErrorCode::Unsupported
+        | ExternalSourceOperationErrorCode::IncompatibleVersion => {
+            "This external integration is not supported by the current BitFun version."
+        }
+        ExternalSourceOperationErrorCode::Timeout
+        | ExternalSourceOperationErrorCode::Overloaded
+        | ExternalSourceOperationErrorCode::TemporarilyUnavailable => {
+            "The external integration is temporarily unavailable."
+        }
+        ExternalSourceOperationErrorCode::Cancelled => {
+            "The external integration operation was cancelled."
+        }
+        ExternalSourceOperationErrorCode::InvalidResponse
+        | ExternalSourceOperationErrorCode::Internal => {
             "BitFun could not complete the external integration operation."
         }
     };

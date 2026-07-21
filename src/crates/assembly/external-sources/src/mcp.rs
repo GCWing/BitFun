@@ -10,6 +10,25 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 
+impl crate::DiscoveryRequest for ExternalMcpDiscoveryRequest {
+    type Result = ExternalMcpDiscoveryResult;
+
+    const DIAGNOSTIC_PREFIX: &'static str = "external_mcp";
+    const PROVIDER_LABEL: &'static str = "MCP";
+
+    fn provider_id(&self) -> ProviderId {
+        self.provider_id.clone()
+    }
+
+    fn execute(self) -> Self::Result {
+        ExternalMcpDiscoveryRequest::execute(self)
+    }
+
+    fn failed(provider_id: ProviderId, error: ExternalSourceProviderError) -> Self::Result {
+        ExternalMcpDiscoveryResult::failed(provider_id, error)
+    }
+}
+
 struct McpProviderGeneration {
     provider: Arc<dyn ExternalMcpSourceProvider>,
     identity: ExternalMcpProviderIdentity,

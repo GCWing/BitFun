@@ -4,9 +4,16 @@
 //! branches on ecosystem identity. Concrete provider selection remains in the
 //! product composition root.
 
+mod control_plane;
 mod mcp;
+mod refresh;
 mod subagent;
 mod tool;
+
+pub use control_plane::ExternalSourceControlPlane;
+pub use refresh::{DeferredDiscovery, DiscoveryBatch};
+
+use refresh::{DiscoveryLane, DiscoveryRequest};
 
 pub use mcp::{
     ExternalMcpCoordinator, ExternalMcpCoordinatorSnapshot, ExternalMcpDiscoveryRequest,
@@ -33,6 +40,25 @@ use bitfun_product_domains::external_sources::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
+
+impl DiscoveryRequest for ExternalSourceDiscoveryRequest {
+    type Result = ExternalSourceDiscoveryResult;
+
+    const DIAGNOSTIC_PREFIX: &'static str = "external_source";
+    const PROVIDER_LABEL: &'static str = "command";
+
+    fn provider_id(&self) -> ProviderId {
+        self.provider_id.clone()
+    }
+
+    fn execute(self) -> Self::Result {
+        ExternalSourceDiscoveryRequest::execute(self)
+    }
+
+    fn failed(provider_id: ProviderId, error: ExternalSourceProviderError) -> Self::Result {
+        ExternalSourceDiscoveryResult::failed(provider_id, error)
+    }
+}
 
 struct ProviderGeneration {
     provider: Arc<dyn PromptCommandSourceProvider>,
