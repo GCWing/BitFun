@@ -2,6 +2,7 @@ import { bundleManager } from "@kit.AbilityKit";
 import hilog from "@ohos.hilog";
 import filePicker from '@ohos.file.picker';
 import fileUri from "@ohos.file.fileuri";
+import pasteboard from '@ohos.pasteboard';
 import { Err, Ok, Result } from "./Result";
 
 export class CommonUtils {
@@ -78,6 +79,88 @@ export class CommonUtils {
       return JSON.stringify({ paths });
     } catch (e) {
       return JSON.stringify({ error: 'open file or folder failed: ' + e });
+    }
+  }
+
+  /// Normalize a docs:// (or file://) URI from the picker / pasteboard into the
+  /// sandbox-relative path the Rust side expects. Mirrors the two-step
+  /// normalization that originally lived inline in `open_file_dialog`:
+  ///   1. `fileUri.FileUri(uri).path` — strip the `file://docs/...` prefix.
+  ///   2. remap appdata → /data/storage, and the bundle name → `base`.
+  /// Extracted so the picker and the clipboard reader stay in sync.
+  static normalizeFileUri(uri: string): string {
+    const fileUrl = new fileUri.FileUri(uri);
+    const bundleName = CommonUtils.getBundleName();
+    const tmp = fileUrl.path.replace('/storage/Users/currentUser/appdata', '/data/storage');
+    return tmp.replace(bundleName, 'base');
+  }
+
+  /// Read file paths from the OHOS system pasteboard.
+  ///
+  /// When the user taps "复制" (copy) in `DocumentViewPicker`, the picker
+  /// writes the selected file URIs to the system pasteboard. This reads them
+  /// back so the project's paste flow can reach them.
+  ///
+  /// Iterates every record and collects whatever looks like a file URI — the
+  /// `uri` field when the record's mime hints at a file/URI, and any `plainText`
+  /// value that parses as a `file://` / `docs://` URI (some sources drop a bare
+  /// URI list into plain text). Each candidate is run through the same
+  /// normalization as the picker. Returns the same envelope as
+  /// `open_file_dialog`: `{ paths: string[] }` / `{ paths: [] }` (no files) /
+  /// `{ error: string }`.
+  static async read_clipboard_files(): Promise<string> {
+    try {
+      const systemPasteboard = pasteboard.getSystemPasteboard();
+      const hasData = await systemPasteboard.hasData();
+      if (!hasData) {
+        return JSON.stringify({ paths: [] });
+      }
+
+      const data = await systemPasteboard.getData();
+      const recordCount = data.getRecordCount();
+      const paths: string[] = [];
+      const seen = new Set<string>();
+      for (let index = 0; index < recordCount; index++) {
+        const record = data.getRecord(index);
+        const candidates: string[] = [];
+
+        const uri = (record.uri || '').trim();
+        if (uri.length > 0) {
+          candidates.push(uri);
+        }
+
+        const plainText = (record.plainText || '').trim();
+        if (plainText.length > 0) {
+          // A bare URI list may come through as plain text (one per line).
+          for (const line of plainText.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (trimmed.length > 0) {
+              candidates.push(trimmed);
+            }
+          }
+        }
+
+        for (const candidate of candidates) {
+          if (seen.has(candidate)) {
+            continue;
+          }
+          // Only accept things that look like a file/docs URI; plain text
+          // snippets (e.g. a copied URL) must not become a "file path".
+          if (!candidate.startsWith('file://') && !candidate.startsWith('docs://')) {
+            continue;
+          }
+          seen.add(candidate);
+          try {
+            paths.push(CommonUtils.normalizeFileUri(candidate));
+          } catch (e) {
+            hilog.warn(0x0000, 'vnext', 'read_clipboard_files: skip un-normalizable uri: ' + candidate + ' ' + e);
+          }
+        }
+      }
+
+      return JSON.stringify({ paths });
+    } catch (e) {
+      return JSON.stringify({ error: 'read clipboard files failed: ' + e });
     }
   }
 }
