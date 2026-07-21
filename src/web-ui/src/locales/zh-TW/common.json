@@ -424,8 +424,7 @@
       },
       "deleteWorkspaceDialog": {
         "title": "刪除 {{name}}？",
-        "message": "此操作會永久刪除該工作區目錄及其中的所有檔案，無法復原。",
-        "pathLabel": "工作區路徑"
+        "message": "此操作會永久刪除 BitFun 為該工作區管理的資料目錄（包含工作階段、快照、計畫等），該操作無法復原。"
       }
     },
     "agents": {

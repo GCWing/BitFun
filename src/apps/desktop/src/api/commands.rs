@@ -1654,19 +1654,25 @@ pub async fn delete_assistant_workspace(
     Ok(())
 }
 
-/// Remove a workspace from the registry and delete its project directory on disk.
+/// Remove a workspace from the registry and delete its BitFun-managed runtime
+/// data on disk.
 ///
 /// This is the destructive counterpart to "close": close unloads but keeps the
 /// workspace in the list and leaves files on disk; delete removes the workspace
-/// from the list and recursively deletes its `root_path` directory. It:
+/// from the list and recursively deletes the BitFun-managed runtime directory
+/// at `~/.bitfun/projects/<workspace-slug>/` (sessions, snapshots, plans,
+/// locks, config, request-traces). The user's actual workspace source directory
+/// (`root_path`) is never touched. It:
 ///   1. Closes the workspace if it is the active one.
 ///   2. Unregisters a remote restore entry for remote workspaces.
-///   3. Deletes the workspace directory on disk for local workspaces.
+///   3. Deletes the per-workspace runtime directory under the managed
+///      `projects/` root for local workspaces.
 ///   4. Removes the workspace from the in-memory registry and recent list.
 ///   5. Reapplies (or clears) the active workspace context.
 ///
 /// Remote workspaces cannot be deleted locally; their `root_path` lives on the
-/// remote host, so disk deletion is skipped for them.
+/// remote host and their local mirror under `~/.bitfun/remote_ssh/` is not
+/// removed by this command.
 #[tauri::command]
 pub async fn delete_workspace(
     state: State<'_, AppState>,
@@ -1707,18 +1713,31 @@ pub async fn delete_workspace(
         || workspace_info.workspace_kind == WorkspaceKind::Remote;
 
     if !is_remote && !workspace_path_str.trim().is_empty() {
-        if is_unsafe_workspace_deletion_path(&workspace_info.root_path) {
+        let path_manager = state.workspace_service.path_manager();
+        let runtime_root = path_manager.project_runtime_root(&workspace_info.root_path);
+        let projects_root = path_manager.projects_root();
+
+        // Safety: only delete a per-workspace runtime directory that is strictly
+        // contained under the managed `projects/` root. The user's actual
+        // workspace source directory (`root_path`) is never touched here.
+        let is_strict_subdir = runtime_root.is_absolute()
+            && runtime_root.starts_with(&projects_root)
+            && runtime_root != projects_root;
+        if !is_strict_subdir {
             return Err(format!(
-                "Refusing to delete unsafe workspace path: {}",
-                workspace_info.root_path.display()
+                "Refusing to delete runtime directory outside managed projects root: {}",
+                runtime_root.display()
             ));
         }
 
-        state
-            .filesystem_service
-            .delete_directory(&workspace_path_str, true)
-            .await
-            .map_err(|e| format!("Failed to delete workspace files: {}", e))?;
+        if runtime_root.exists() {
+            let runtime_root_str = runtime_root.to_string_lossy().to_string();
+            state
+                .filesystem_service
+                .delete_directory(&runtime_root_str, true)
+                .await
+                .map_err(|e| format!("Failed to delete workspace runtime data: {}", e))?;
+        }
     }
 
     state
@@ -1752,28 +1771,6 @@ pub async fn delete_workspace(
     );
 
     Ok(())
-}
-
-/// Returns true if the path is unsafe to delete as a workspace directory.
-///
-/// Blocks filesystem roots, relative paths, and any path with fewer than two
-/// components (e.g. `/`, `C:\`) to avoid catastrophic deletions.
-fn is_unsafe_workspace_deletion_path(path: &Path) -> bool {
-    if path.is_relative() {
-        return true;
-    }
-
-    let mut components = path.components();
-    let first = components.next();
-    if first.is_none() {
-        return true;
-    }
-
-    if components.next().is_none() {
-        return true;
-    }
-
-    false
 }
 
 async fn clear_directory_contents(directory: &Path) -> Result<(), String> {
