@@ -187,6 +187,7 @@ interface TaskWithSubagentWrapperProps {
   roundId?: string;
   completedToolExitNowMs: number;
   allowCompletedToolExit?: boolean;
+  learningEligible?: boolean;
 }
 
 const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.memo(({
@@ -199,6 +200,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
   roundId,
   completedToolExitNowMs,
   allowCompletedToolExit = false,
+  learningEligible = true,
 }) => {
   const isCollapsed = useTaskCollapsed(parentTaskToolId);
   const isTaskRunning =
@@ -222,6 +224,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
         isLastItem={false}
         completedToolExitNowMs={completedToolExitNowMs}
         allowCompletedToolExit={allowCompletedToolExit}
+        learningEligible={learningEligible}
       />
       <SubagentProjectionView
         parentTaskToolId={parentTaskToolId}
@@ -440,6 +443,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         roundId: string;
         keyPrefix: string;
         isFinalSection: boolean;
+        learningEligible: boolean;
       },
     ) => (
       groups.map((group, groupIndex) => {
@@ -456,6 +460,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 isLastItem={isLast && itemIdx === group.items.length - 1}
                 completedToolExitNowMs={transientNowMs}
                 allowCompletedToolExit
+                learningEligible={options.learningEligible}
               />
             ));
 
@@ -476,6 +481,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   roundId={options.roundId}
                   completedToolExitNowMs={transientNowMs}
                   allowCompletedToolExit={false}
+                  learningEligible={options.learningEligible}
                 />
               );
             }
@@ -488,6 +494,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 isLastItem={isLast}
                 completedToolExitNowMs={transientNowMs}
                 allowCompletedToolExit={false}
+                learningEligible={options.learningEligible}
               />
             );
           }
@@ -713,6 +720,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                               roundId: historyRound.id,
                               keyPrefix: `history-round:${historyRound.id}:attempt:${attempt.id}`,
                               isFinalSection: false,
+                              learningEligible: false,
                             })}
                           </div>
                         );
@@ -723,6 +731,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                     roundId: historyRound.id,
                     keyPrefix: `history-round:${historyRound.id}`,
                     isFinalSection: false,
+                    learningEligible: false,
                   })}
                 </div>
               );
@@ -760,6 +769,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                     roundId: round.id,
                     keyPrefix: `attempt:${attempt.id}`,
                     isFinalSection: false,
+                    learningEligible: false,
                   })}
                 </div>
               );
@@ -771,6 +781,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           roundId: round.id,
           keyPrefix: latestAttempt ? `attempt:${latestAttempt.id}` : 'round',
           isFinalSection: isLastRound,
+          learningEligible: true,
         })}
 
         {hasDeferredLaterGroups && (
@@ -852,6 +863,7 @@ interface FlowItemRendererProps {
   isLastItem?: boolean;
   completedToolExitNowMs: number;
   allowCompletedToolExit?: boolean;
+  learningEligible?: boolean;
 }
 
 // Do not memoize: streaming content updates frequently.
@@ -862,6 +874,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
   isLastItem,
   completedToolExitNowMs,
   allowCompletedToolExit = false,
+  learningEligible = true,
 }) => {
   const {
     onToolConfirm,
@@ -884,7 +897,10 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
           testId="chat-assistant-message-content"
           testAttributes={{
             'data-turn-id': turnId,
+            'data-round-id': learningEligible ? roundId : undefined,
             'data-flow-item-id': item.id,
+            'data-learning-item-id': learningEligible ? item.id : undefined,
+            'data-learning-source-kind': learningEligible ? 'assistant_text' : undefined,
             'data-status': item.status,
           }}
         />
@@ -892,7 +908,15 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
     
     case 'thinking':
       return (
-        <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
+        <div
+          className="flowchat-learning-source"
+          data-turn-id={learningEligible ? turnId : undefined}
+          data-round-id={learningEligible ? roundId : undefined}
+          data-learning-item-id={learningEligible ? item.id : undefined}
+          data-learning-source-kind={learningEligible ? 'assistant_thinking' : undefined}
+        >
+          <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
+        </div>
       );
     
     case 'tool': {
@@ -915,7 +939,15 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
       ].filter(Boolean).join(' ');
 
       return (
-        <div className={toolClassName} data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div
+          className={toolClassName}
+          data-turn-id={learningEligible ? turnId : undefined}
+          data-round-id={learningEligible ? roundId : undefined}
+          data-flow-item-id={item.id}
+          data-flow-item-type="tool"
+          data-learning-item-id={learningEligible ? item.id : undefined}
+          data-learning-source-kind={learningEligible ? 'tool' : undefined}
+        >
           <FlowToolCard
             toolItem={toolItem}
             onConfirm={async (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => {

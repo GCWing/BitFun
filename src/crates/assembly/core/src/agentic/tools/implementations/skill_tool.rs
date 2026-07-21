@@ -278,6 +278,7 @@ impl Tool for SkillTool {
                 "source_slot": skill_data.source_slot,
                 "description": skill_data.description,
                 "location": location_str,
+                "path": skill_data.path,
                 "content": skill_data.content,
                 "success": true
             }),
@@ -478,6 +479,10 @@ Use the remote project skill.
         };
         assert_eq!(data["skill_name"], "cso");
         assert_eq!(data["location"], "user");
+        assert!(data["path"].as_str().is_some_and(|path| path
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .ends_with("cso")));
         assert!(data["content"]
             .as_str()
             .unwrap_or_default()
@@ -524,6 +529,10 @@ Use the remote project skill.
         assert_eq!(data["skill_name"], "ppt-design");
         assert_eq!(data["skill_key"], "user::bitfun-system::ppt-design");
         assert_eq!(data["source_slot"], "bitfun-system");
+        assert!(data["path"].as_str().is_some_and(|path| path
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .ends_with("ppt-design")));
         assert!(data["content"]
             .as_str()
             .unwrap_or_default()

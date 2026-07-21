@@ -2230,6 +2230,75 @@
       "title": "该轮以非标准方式结束"
     }
   },
+  "learningProposal": {
+    "selectionToolbarLabel": "已选对话内容操作",
+    "actions": {
+      "addToInput": "添加到输入框",
+      "capture": "沉淀为经验",
+      "review": "审阅",
+      "close": "关闭",
+      "reject": "拒绝",
+      "refresh": "刷新分析",
+      "requestReanalysis": "要求重新分析",
+      "approve": "批准并写入"
+    },
+    "notification": {
+      "analyzingTitle": "正在分析所选信息",
+      "analyzingMessage": "BitFun 正在判断这条经验应该沉淀到哪里。",
+      "readyTitle": "经验沉淀提案已就绪",
+      "readyMessage": "请审阅针对 {{target}} 的建议更新。",
+      "staleTitle": "经验沉淀提案需要刷新",
+      "staleMessage": "提案创建后，目标 {{target}} 已发生变化。",
+      "failedTitle": "经验沉淀提案需要处理",
+      "failedMessage": "请打开提案查看问题，或要求重新分析。",
+      "appliedMessage": "已写入批准的经验。",
+      "rejectedMessage": "已拒绝这条经验沉淀提案。"
+    },
+    "target": {
+      "pending": "正在判断目标",
+      "kind": {
+        "memory": "Memory",
+        "skill": "Skill",
+        "agents_md": "仓库指令",
+        "none": "无需持久化"
+      }
+    },
+    "status": {
+      "analyzing": "正在分析",
+      "ready": "等待审阅",
+      "applying": "正在写入",
+      "applied": "已写入",
+      "rejected": "已拒绝",
+      "stale": "需要刷新",
+      "failed": "需要处理"
+    },
+    "sourceKind": {
+      "user_message": "用户消息",
+      "assistant_text": "Agent 回复",
+      "assistant_thinking": "Agent 推理",
+      "tool": "工具活动",
+      "unknown": "对话内容"
+    },
+    "review": {
+      "title": "审阅经验沉淀提案",
+      "loading": "正在加载最新提案...",
+      "remoteReadOnly": "当前版本仅支持审阅远端工作区提案，不会修改任何文件。",
+      "targetReadOnly": "当前版本仅提供此目标的修改建议，不会直接修改 Skill 或仓库指令文件。",
+      "staleNotice": "分析完成后目标已发生变化，请先刷新提案再批准。",
+      "sourceTitle": "选中的原始内容",
+      "sourceKind": "来源",
+      "turn": "Turn",
+      "round": "Round",
+      "item": "Item",
+      "rationaleTitle": "为什么选择此目标",
+      "futureUseTitle": "以后何时会发挥作用",
+      "previewTitle": "建议变更"
+    },
+    "errors": {
+      "workspaceRequired": "请先打开工作区，再沉淀经验。",
+      "createFailed": "无法创建经验沉淀提案，请重试。"
+    }
+  },
   "errors": {
     "sendFailed": "发送消息失败"
   },

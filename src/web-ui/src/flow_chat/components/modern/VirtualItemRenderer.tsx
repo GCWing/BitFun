@@ -95,6 +95,22 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
       'virtual-item-wrapper',
       isSearchCurrent ? 'virtual-item-wrapper--search-current' : isSearchMatch ? 'virtual-item-wrapper--search-match' : '',
     ].filter(Boolean).join(' ');
+    const learningMetadata = (() => {
+      switch (item.type) {
+        case 'user-message':
+          return { sourceKind: 'user_message', itemId: item.data.id };
+        case 'user-steering-message':
+          return { sourceKind: undefined, itemId: undefined };
+        case 'model-round':
+          return { sourceKind: 'unknown', itemId: item.data.id, roundId: item.data.id };
+        case 'explore-group':
+          return { sourceKind: 'unknown', itemId: item.data.groupId };
+        case 'turn-completion-notice':
+          return { sourceKind: 'unknown', itemId: `turn-completion:${item.turnId}` };
+        case 'image-analyzing':
+          return { sourceKind: 'unknown', itemId: `image-analyzing:${item.turnId}` };
+      }
+    })();
 
     return (
       <div 
@@ -104,6 +120,9 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
         data-item-type={item.type}
         data-virtual-index={index}
         data-item-index={index}
+        data-round-id={learningMetadata.roundId}
+        data-learning-item-id={learningMetadata.itemId}
+        data-learning-source-kind={learningMetadata.sourceKind}
       >
         {content || <div style={{ minHeight: '1px' }} />}
       </div>
