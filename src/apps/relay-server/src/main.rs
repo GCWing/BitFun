@@ -8,7 +8,7 @@ use tracing::info;
 
 mod config;
 
-use bitfun_relay_service::{build_relay_router, DiskAssetStore, RoomManager, WebAssetStore};
+use bitfun_relay_service::{DiskAssetStore, RoomManager, WebAssetStore};
 use config::RelayConfig;
 
 #[tokio::main]

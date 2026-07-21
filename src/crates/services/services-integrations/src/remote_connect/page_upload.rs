@@ -160,8 +160,6 @@ pub async fn save_page_version_to_relay(
             &HashMap::new(),
             0,
             true,
-            all_files.len() as i64,
-            total_bytes as i64,
         )
         .await?;
     }
@@ -173,8 +171,6 @@ pub async fn save_page_version_to_relay(
         .json(&serde_json::json!({
             "title": title,
             "note": note.unwrap_or(""),
-            "file_count": all_files.len() as i64,
-            "total_bytes": total_bytes as i64,
         }))
         .timeout(std::time::Duration::from_secs(30))
         .send()
@@ -504,8 +500,6 @@ async fn upload_needed_page_files(
     let mut current_batch: HashMap<String, serde_json::Value> = HashMap::new();
     let mut current_batch_b64_bytes = 0usize;
     let mut batch_index = 0usize;
-    let total_files = all_files.len() as i64;
-    let total_bytes: i64 = all_files.iter().map(|f| f.content.len() as i64).sum();
 
     for (path, entry, entry_len) in files_payload {
         let should_flush = !current_batch.is_empty()
@@ -521,8 +515,6 @@ async fn upload_needed_page_files(
                 &current_batch,
                 batch_index,
                 false,
-                total_files,
-                total_bytes,
             )
             .await?;
             batch_index += 1;
@@ -543,8 +535,6 @@ async fn upload_needed_page_files(
             &current_batch,
             batch_index,
             true,
-            total_files,
-            total_bytes,
         )
         .await?;
     }
@@ -562,8 +552,6 @@ async fn post_upload_batch(
     files: &HashMap<String, serde_json::Value>,
     batch_index: usize,
     finalize: bool,
-    file_count: i64,
-    total_bytes: i64,
 ) -> Result<()> {
     let resp = client
         .post(url)
@@ -574,8 +562,6 @@ async fn post_upload_batch(
             "visibility": visibility,
             "files": files,
             "finalize": finalize,
-            "file_count": file_count,
-            "total_bytes": total_bytes,
         }))
         .timeout(std::time::Duration::from_secs(60))
         .send()

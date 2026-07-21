@@ -4,7 +4,7 @@
 //! Preview: `/p/{user}/{slug}/@v/{version}/...`
 //! Production: `/p/{user}/{slug}/...` (deployed version only).
 
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{header, HeaderMap, Method, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -144,10 +144,6 @@ pub struct UploadPageFilesRequest {
     pub visibility: String,
     pub files: HashMap<String, UploadFileEntry>,
     #[serde(default)]
-    pub file_count: Option<i64>,
-    #[serde(default)]
-    pub total_bytes: Option<i64>,
-    #[serde(default)]
     pub finalize: bool,
 }
 
@@ -157,10 +153,6 @@ pub struct FreezeVersionRequest {
     pub title: String,
     #[serde(default)]
     pub note: String,
-    #[serde(default)]
-    pub file_count: Option<i64>,
-    #[serde(default)]
-    pub total_bytes: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -199,11 +191,6 @@ pub struct VersionInfo {
 pub struct UpdatePageRequest {
     pub visibility: Option<String>,
     pub title: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct AccessTokenQuery {
-    access_token: Option<String>,
 }
 
 // ── Management ──────────────────────────────────────────────────────────
@@ -394,8 +381,15 @@ async fn freeze_version(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let file_count = body.file_count.unwrap_or(entries.len() as i64);
-    let total_bytes = body.total_bytes.unwrap_or(0);
+    // Derive version stats from the actual stored files; never trust
+    // client-reported file_count/total_bytes for quota accounting.
+    let file_count = entries.len() as i64;
+    let total_bytes = state.asset_store.room_total_bytes(&version_key);
+    if total_bytes > MAX_PAGE_BYTES {
+        state.asset_store.cleanup_room(&version_key);
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+    let total_bytes = total_bytes as i64;
     let title = if body.title.is_empty() {
         page.title.clone()
     } else {
@@ -630,21 +624,9 @@ async fn serve_prod_root(
     method: Method,
     headers: HeaderMap,
     Path((username, slug)): Path<(String, String)>,
-    Query(query): Query<AccessTokenQuery>,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
-    serve_page(
-        state,
-        method,
-        headers,
-        &username,
-        &slug,
-        None,
-        "",
-        query.access_token.as_deref(),
-        body,
-    )
-    .await
+    serve_page(state, method, headers, &username, &slug, None, "", body).await
 }
 
 async fn serve_prod_path(
@@ -652,25 +634,13 @@ async fn serve_prod_path(
     method: Method,
     headers: HeaderMap,
     Path((username, slug, path)): Path<(String, String, String)>,
-    Query(query): Query<AccessTokenQuery>,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
     // Guard against treating `@v/...` as production path when catch-all matches wrongly.
     if path.starts_with("@v/") || path == "@v" {
         return Err(StatusCode::NOT_FOUND);
     }
-    serve_page(
-        state,
-        method,
-        headers,
-        &username,
-        &slug,
-        None,
-        &path,
-        query.access_token.as_deref(),
-        body,
-    )
-    .await
+    serve_page(state, method, headers, &username, &slug, None, &path, body).await
 }
 
 async fn serve_preview_root(
@@ -678,7 +648,6 @@ async fn serve_preview_root(
     method: Method,
     headers: HeaderMap,
     Path((username, slug, version_id)): Path<(String, String, String)>,
-    Query(query): Query<AccessTokenQuery>,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
     serve_page(
@@ -689,7 +658,6 @@ async fn serve_preview_root(
         &slug,
         Some(version_id.as_str()),
         "",
-        query.access_token.as_deref(),
         body,
     )
     .await
@@ -700,7 +668,6 @@ async fn serve_preview_path(
     method: Method,
     headers: HeaderMap,
     Path((username, slug, version_id, path)): Path<(String, String, String, String)>,
-    Query(query): Query<AccessTokenQuery>,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
     serve_page(
@@ -711,7 +678,6 @@ async fn serve_preview_path(
         &slug,
         Some(version_id.as_str()),
         &path,
-        query.access_token.as_deref(),
         body,
     )
     .await
@@ -726,7 +692,6 @@ async fn serve_page(
     slug: &str,
     version_override: Option<&str>,
     path: &str,
-    access_token: Option<&str>,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
     let db = require_db(&state)?;
@@ -741,7 +706,7 @@ async fn serve_page(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
-    enforce_visibility(&state, &headers, &page, access_token).await?;
+    enforce_visibility(&state, &headers, &page).await?;
 
     // Resolve version.
     let version_id = if let Some(v) = version_override {
@@ -841,8 +806,16 @@ async fn serve_with_worker(
     };
     let worker_source = String::from_utf8(worker_source).map_err(|_| StatusCode::BAD_GATEWAY)?;
 
+    // Never forward credential headers into the page worker: a malicious page
+    // owner could persist viewer tokens via env.KV/BLOBS and harvest them.
     let mut req_headers = HashMap::new();
     for (k, v) in headers.iter() {
+        if matches!(
+            k.as_str(),
+            "authorization" | "cookie" | "proxy-authorization"
+        ) {
+            continue;
+        }
         if let Ok(val) = v.to_str() {
             req_headers.insert(k.as_str().to_string(), val.to_string());
         }
@@ -910,14 +883,22 @@ async fn serve_with_worker(
         {
             let mime = mime_from_path(&lookup_path_owned);
             return Ok((
-                [(header::CONTENT_TYPE, mime)],
+                [
+                    (header::CONTENT_TYPE, mime),
+                    (
+                        header::HeaderName::from_static("x-content-type-options"),
+                        "nosniff",
+                    ),
+                ],
                 axum::body::Body::from(bytes),
             )
                 .into_response());
         }
     }
 
-    let mut builder = axum::http::Response::builder().status(response.status);
+    let mut builder = axum::http::Response::builder()
+        .status(response.status)
+        .header("x-content-type-options", "nosniff");
     for (k, v) in response.headers {
         if let (Ok(name), Ok(val)) = (
             axum::http::HeaderName::try_from(k),
@@ -1020,7 +1001,6 @@ async fn enforce_visibility(
     state: &AppState,
     headers: &HeaderMap,
     page: &PageWithUsername,
-    access_token: Option<&str>,
 ) -> Result<(), StatusCode> {
     let visibility = page
         .visibility_enum()
@@ -1028,11 +1008,15 @@ async fn enforce_visibility(
     match visibility {
         PageVisibility::Public => Ok(()),
         PageVisibility::Relay => {
-            resolve_viewer(state, headers, access_token).await?;
+            resolve_viewer(state, headers).await?;
             Ok(())
         }
         PageVisibility::Private => {
-            let viewer = resolve_viewer(state, headers, access_token).await?;
+            // Return NOT_FOUND for any auth failure so the existence of a
+            // private page is not revealed to anonymous or foreign viewers.
+            let viewer = resolve_viewer(state, headers)
+                .await
+                .map_err(|_| StatusCode::NOT_FOUND)?;
             if viewer.user_id != page.user_id {
                 return Err(StatusCode::NOT_FOUND);
             }
@@ -1041,18 +1025,12 @@ async fn enforce_visibility(
     }
 }
 
-async fn resolve_viewer(
-    state: &AppState,
-    headers: &HeaderMap,
-    access_token: Option<&str>,
-) -> Result<AuthUser, StatusCode> {
-    if let Some(token) = extract_bearer_token(headers) {
-        return validate_token(state, &token).await;
-    }
-    if let Some(token) = access_token.filter(|t| !t.is_empty()) {
-        return validate_token(state, token).await;
-    }
-    Err(StatusCode::UNAUTHORIZED)
+async fn resolve_viewer(state: &AppState, headers: &HeaderMap) -> Result<AuthUser, StatusCode> {
+    // Only the Authorization header is accepted for viewer auth. Query-string
+    // tokens are deliberately unsupported: published pages serve arbitrary
+    // same-origin user JS, which could read tokens from `location.search`.
+    let token = extract_bearer_token(headers).ok_or(StatusCode::UNAUTHORIZED)?;
+    validate_token(state, &token).await
 }
 
 fn process_check_page_files(
@@ -1086,7 +1064,11 @@ fn process_upload_page_files(
     asset_key: &str,
     files: HashMap<String, UploadFileEntry>,
 ) -> Result<usize, StatusCode> {
-    let mut stored = 0usize;
+    // Decode and verify the whole batch before writing anything, then enforce
+    // the cumulative draft quota up front. Checking only after storing would
+    // let repeated rejected batches bloat the content-addressed store.
+    let mut decoded_files: Vec<(String, String, Vec<u8>)> = Vec::with_capacity(files.len());
+    let mut batch_bytes: u64 = 0;
     for (rel_path, entry) in files {
         if rel_path.contains("..") {
             continue;
@@ -1101,6 +1083,19 @@ fn process_upload_page_files(
         if actual_hash != entry.hash {
             return Err(StatusCode::BAD_REQUEST);
         }
+        batch_bytes = batch_bytes.saturating_add(decoded.len() as u64);
+        decoded_files.push((rel_path, actual_hash, decoded));
+    }
+    if asset_store
+        .room_total_bytes(asset_key)
+        .saturating_add(batch_bytes)
+        > MAX_PAGE_BYTES
+    {
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    let mut stored = 0usize;
+    for (rel_path, actual_hash, decoded) in decoded_files {
         if !asset_store.has_content(&actual_hash) {
             asset_store
                 .store_content(&actual_hash, decoded)
@@ -1176,12 +1171,22 @@ mod tests {
     }
 
     async fn save_and_deploy(app: &axum::Router, token: &str, slug: &str, html: &str) -> String {
+        save_and_deploy_with_visibility(app, token, slug, html, "public").await
+    }
+
+    async fn save_and_deploy_with_visibility(
+        app: &axum::Router,
+        token: &str,
+        slug: &str,
+        html: &str,
+        visibility: &str,
+    ) -> String {
         let hash = hex_sha256(html.as_bytes());
         let b64 = B64.encode(html.as_bytes());
         let upload = serde_json::json!({
             "slug": slug,
             "title": slug,
-            "visibility": "public",
+            "visibility": visibility,
             "finalize": true,
             "files": { "index.html": { "content": b64, "hash": hash } }
         });
@@ -1383,7 +1388,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri("/p/alice/fn/api/hello")
+                    .uri(format!("/p/alice/fn/api/hello"))
                     .body(axum::body::Body::empty())
                     .unwrap(),
             )
@@ -1392,5 +1397,173 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         assert_eq!(String::from_utf8_lossy(&body), "hi");
+    }
+
+    async fn get_page(app: &axum::Router, uri: &str, token: Option<&str>) -> StatusCode {
+        let mut builder = Request::builder().uri(uri);
+        if let Some(token) = token {
+            builder = builder.header("Authorization", format!("Bearer {token}"));
+        }
+        let resp = app
+            .clone()
+            .oneshot(builder.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        resp.status()
+    }
+
+    #[tokio::test]
+    async fn visibility_matrix_private_relay_public() {
+        let (app, alice, bob) = setup_app().await;
+        save_and_deploy_with_visibility(&app, &alice, "priv", "<html>p</html>", "private").await;
+        save_and_deploy_with_visibility(&app, &alice, "rel", "<html>r</html>", "relay").await;
+        save_and_deploy(&app, &alice, "pub", "<html>u</html>").await;
+
+        // Private: hidden from anonymous and foreign users, visible to owner.
+        assert_eq!(
+            get_page(&app, "/p/alice/priv", None).await,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            get_page(&app, "/p/alice/priv", Some(&bob)).await,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            get_page(&app, "/p/alice/priv", Some(&alice)).await,
+            StatusCode::OK
+        );
+        // Query-string tokens must be ignored (same-origin JS could steal them).
+        assert_eq!(
+            get_page(&app, &format!("/p/alice/priv?access_token={alice}"), None).await,
+            StatusCode::NOT_FOUND
+        );
+
+        // Relay: any authenticated relay user may view, anonymous may not.
+        assert_eq!(
+            get_page(&app, "/p/alice/rel", None).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            get_page(&app, "/p/alice/rel", Some(&bob)).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            get_page(&app, "/p/alice/rel", Some(&alice)).await,
+            StatusCode::OK
+        );
+
+        // Public: no credentials needed.
+        assert_eq!(get_page(&app, "/p/alice/pub", None).await, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn worker_does_not_receive_credential_headers() {
+        let (app, alice, _) = setup_app().await;
+        let worker = r#"
+            function fetch(request, env) {
+              const leaked = request.headers["authorization"] || request.headers["cookie"] || "none";
+              return { status: 200, headers: { "content-type": "text/plain" }, body: leaked };
+            }
+        "#;
+        let files = [("server/worker.js", worker.as_bytes())];
+        let mut map = serde_json::Map::new();
+        for (path, content) in files {
+            let hash = hex_sha256(content);
+            map.insert(
+                path.to_string(),
+                serde_json::json!({ "content": B64.encode(content), "hash": hash }),
+            );
+        }
+        let upload = serde_json::json!({
+            "slug": "hdr",
+            "title": "hdr",
+            "visibility": "relay",
+            "files": map
+        });
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/upload-files")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(upload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/hdr/versions")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let version_id = v["version_id"].as_str().unwrap();
+        let deploy = serde_json::json!({ "version_id": version_id });
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/hdr/deploy")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(deploy.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Viewer presents a valid bearer token to pass the relay gate; the
+        // worker must not see it.
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/hdr/api/echo")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), "none");
+    }
+
+    #[tokio::test]
+    async fn freeze_records_real_stats() {
+        let (app, alice, _) = setup_app().await;
+        let html = "<html>real bytes</html>";
+        save_and_deploy(&app, &alice, "stats", html).await;
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/pages")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let pages: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let page = &pages[0];
+        assert_eq!(page["file_count"].as_i64().unwrap(), 1);
+        assert_eq!(page["total_bytes"].as_i64().unwrap(), html.len() as i64);
     }
 }

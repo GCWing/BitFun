@@ -51,6 +51,9 @@ pub trait WebAssetStore: Send + Sync + 'static {
     /// List `(rel_path, content_hash)` entries in a room manifest.
     fn list_room_entries(&self, room_id: &str) -> Vec<(String, String)>;
 
+    /// Total size in bytes of all files mapped in a room.
+    fn room_total_bytes(&self, room_id: &str) -> u64;
+
     /// Copy all path→hash mappings from one room namespace to another.
     fn copy_room(&self, from_room_id: &str, to_room_id: &str) -> Result<(), String>;
 
@@ -123,6 +126,17 @@ impl WebAssetStore for MemoryAssetStore {
             .get(room_id)
             .map(|m| m.iter().map(|(p, h)| (p.clone(), h.clone())).collect())
             .unwrap_or_default()
+    }
+
+    fn room_total_bytes(&self, room_id: &str) -> u64 {
+        self.room_manifests
+            .get(room_id)
+            .map(|m| {
+                m.values()
+                    .filter_map(|h| self.content_store.get(h).map(|c| c.len() as u64))
+                    .sum()
+            })
+            .unwrap_or(0)
     }
 
     fn copy_room(&self, from_room_id: &str, to_room_id: &str) -> Result<(), String> {
@@ -312,6 +326,31 @@ impl WebAssetStore for DiskAssetStore {
 
     fn has_room_files(&self, room_id: &str) -> bool {
         self.room_dir(room_id).exists()
+    }
+
+    fn room_total_bytes(&self, room_id: &str) -> u64 {
+        let room_dir = self.room_dir(room_id);
+        if !room_dir.is_dir() {
+            return 0;
+        }
+        fn walk(dir: &std::path::Path, total: &mut u64) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, total);
+                } else if let Ok(meta) = std::fs::metadata(&path) {
+                    if meta.is_file() {
+                        *total = total.saturating_add(meta.len());
+                    }
+                }
+            }
+        }
+        let mut total = 0u64;
+        walk(&room_dir, &mut total);
+        total
     }
 
     fn cleanup_room(&self, room_id: &str) {
