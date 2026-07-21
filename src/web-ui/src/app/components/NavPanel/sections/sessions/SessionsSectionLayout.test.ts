@@ -102,7 +102,7 @@ describe('SessionsSection layout styles', () => {
     expect(backgroundSubagentIconBlock).toContain('transform-origin: center center;');
     expect(backgroundSubagentIconBlock).toContain('--bitfun-subagent-bot-optical-y: -1px;');
     expect(stylesheet).toContain(
-      'transform: translateY(var(--bitfun-subagent-bot-optical-y, 0px)) scale(1);',
+      'transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(1);',
     );
   });
 });

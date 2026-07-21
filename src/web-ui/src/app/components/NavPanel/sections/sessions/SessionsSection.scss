@@ -727,13 +727,13 @@
   62%,
   100% {
     opacity: 1;
-    transform: translateY(var(--bitfun-subagent-bot-optical-y, 0px)) scale(1);
+    transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(1);
   }
 
   70%,
   88% {
     opacity: 0;
-    transform: translateY(var(--bitfun-subagent-bot-optical-y, 0px)) scale(0.82);
+    transform: translateY(var(--bitfun-subagent-bot-optical-y)) scale(0.82);
   }
 }
 
@@ -777,7 +777,7 @@
 
     &.is-bot {
       opacity: 1;
-      transform: translateY(var(--bitfun-subagent-bot-optical-y, 0px));
+      transform: translateY(var(--bitfun-subagent-bot-optical-y));
     }
 
     &.is-loader {
