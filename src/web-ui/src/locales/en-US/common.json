@@ -546,7 +546,8 @@
     "syncPhaseSettingsDone": "Settings synced",
     "syncPhaseListingSessions": "Scanning local sessions…",
     "syncPhaseExportingSessions": "Backing up sessions {{current}}/{{total}}",
-    "copyServerUrl": "Copy server address"
+    "copyServerUrl": "Copy server address",
+    "loginValueProp": "Log in to link your devices: control one from another and keep settings & sessions in sync."
   },
   "relayDeploy": {
     "entryHint": "No relay server yet?",
@@ -617,6 +618,11 @@
     "passwordMismatch": "Passwords do not match",
     "createAccount": "Create Account",
     "creatingAccount": "Creating account…",
+    "regModeCreate": "Create new account",
+    "regModeExisting": "Use existing account",
+    "registerExistingTitle": "Use an existing account",
+    "registerExistingDesc": "Redeploying keeps the relay database. Enter your existing credentials to finish and log in — no new account is created.",
+    "accountExistsHint": "This username already exists — switch to \"Use existing account\" to log in.",
     "doneTitle": "Your relay is ready",
     "verifyOk": "Reachable from this device",
     "verifyFailed": "Not reachable from this device. Check the cloud firewall / security group for this inbound port — or continue and fix it later.",
@@ -628,6 +634,7 @@
     "tabBot": "IM Bot",
     "groupNetwork": "Network Relay",
     "groupBot": "IM Bot",
+    "groupAccount": "My Devices",
     "connect": "Connect",
     "connecting": "Connecting...",
     "disconnect": "Disconnect",

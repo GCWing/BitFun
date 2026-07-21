@@ -546,7 +546,8 @@
     "syncPhaseSettingsDone": "設定已同步",
     "syncPhaseListingSessions": "正在掃描本地工作階段…",
     "syncPhaseExportingSessions": "正在備份工作階段 {{current}}/{{total}}",
-    "copyServerUrl": "複製伺服器位址"
+    "copyServerUrl": "複製伺服器位址",
+    "loginValueProp": "登入以關聯你的多台裝置：互相遠端控制，並雲端同步設定與工作階段。"
   },
   "relayDeploy": {
     "entryHint": "還沒有中繼伺服器？",
@@ -617,6 +618,11 @@
     "passwordMismatch": "兩次輸入的密碼不一致",
     "createAccount": "建立帳戶",
     "creatingAccount": "正在建立帳戶…",
+    "regModeCreate": "建立新帳戶",
+    "regModeExisting": "使用已有帳號",
+    "registerExistingTitle": "使用已有帳號",
+    "registerExistingDesc": "重新部署會保留 relay 資料庫。輸入已有帳號密碼即可完成登入，不會建立新帳戶。",
+    "accountExistsHint": "該使用者名稱已存在，可切換到「使用已有帳號」直接登入。",
     "doneTitle": "你的 relay 已就緒",
     "verifyOk": "從本機存取正常",
     "verifyFailed": "無法從本機存取。請檢查雲端伺服器安全群組 / 防火牆是否放行該連接埠——也可以先繼續，稍後修復。",
@@ -628,6 +634,7 @@
     "tabBot": "IM機器人",
     "groupNetwork": "網絡中繼",
     "groupBot": "IM機器人",
+    "groupAccount": "我的裝置",
     "connect": "連接",
     "connecting": "連接中...",
     "disconnect": "斷開連接",

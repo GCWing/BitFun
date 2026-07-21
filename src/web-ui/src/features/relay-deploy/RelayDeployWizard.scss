@@ -215,6 +215,39 @@
     }
   }
 
+  &__reg-mode {
+    display: flex;
+    gap: 8px;
+    margin: 0 16px 12px;
+  }
+
+  &__reg-mode-btn {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+
+    &:hover:not(:disabled) {
+      color: var(--color-text-primary);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &.is-active {
+      border-color: var(--color-accent-500);
+      color: var(--color-accent-500);
+      font-weight: 600;
+    }
+  }
+
   &__row {
     display: flex;
     gap: 8px;

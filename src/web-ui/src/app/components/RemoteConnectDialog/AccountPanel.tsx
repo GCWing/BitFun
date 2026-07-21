@@ -1,23 +1,23 @@
 /**
- * Account Login + Online Devices
+ * Account ("My Devices") panel inside the Remote Connect dialog.
  *
  * Views: login → overwrite (optional) → devices
- * After login / overwrite choice the dialog closes immediately while cloud
- * sync continues in the background; reopening Online Devices shows progress.
- * Clicking an online peer device enters Peer Device Mode and closes the dialog.
+ * Unlike the old standalone dialog, a successful login keeps the panel open
+ * and lands on the devices view so sync progress stays visible in place.
  *
  * Sync-choice invariants (do not regress):
  * - When the relay already has cloud settings, `account_login` keeps the
- *   session memory-only until `account_finalize_login`. Closing / canceling
- *   the overwrite view must logout so a killed process does not restore login.
- * - One-click deploy opens `RelayDeployWizard` (same feature as Remote Connect),
- *   not an external README. See `src/features/relay-deploy/README.md`.
+ *   session memory-only until `account_finalize_login`. Canceling the
+ *   overwrite view, switching away from this panel, or closing the dialog
+ *   must logout so a killed process does not restore login.
+ * - One-click deploy opens `RelayDeployWizard` (same feature as the Network
+ *   group), not an external README. See `src/features/relay-deploy/README.md`.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { Modal, Button, Input, Alert } from '@/component-library';
+import { Button, Input, Alert } from '@/component-library';
 import {
   User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
   ChevronRight, RefreshCw, Eye, EyeOff, X, Rocket, Copy, Check,
@@ -35,9 +35,9 @@ import type { AccountSyncPhase } from '@/infrastructure/account/accountSyncStore
 import { isAccountAuthFailure } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
-import './AccountLoginDialog.scss';
+import './AccountPanel.scss';
 
-const log = createLogger('AccountLoginDialog');
+const log = createLogger('AccountPanel');
 
 const DEVICE_POLL_FALLBACK_MS = 30_000;
 
@@ -73,16 +73,15 @@ function syncPhaseLabel(
   }
 }
 
-interface AccountLoginDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface AccountPanelProps {
+  /** Close the whole Remote Connect dialog (used when entering peer mode). */
+  onCloseDialog: () => void;
 }
 
 type View = 'login' | 'overwrite' | 'devices';
 
-export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
-  isOpen,
-  onClose,
+export const AccountPanel: React.FC<AccountPanelProps> = ({
+  onCloseDialog,
 }) => {
   const { t } = useI18n('common');
   const { success, info, warning } = useNotification();
@@ -114,6 +113,9 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   /** Prevent overlapping background syncs from rapid clicks. */
   const syncInFlightRef = useRef(false);
+  /** Track the overwrite view for the unmount logout invariant. */
+  const viewRef = useRef<View>(view);
+  viewRef.current = view;
 
   const resetState = useCallback(() => {
     setDevices([]);
@@ -217,25 +219,62 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     });
   }, []);
 
+  /** Latest refreshDevices for the polling interval (avoids stale closures). */
+  const refreshDevicesRef = useRef(refreshDevices);
+  refreshDevicesRef.current = refreshDevices;
+
   const startDevicePolling = useCallback(() => {
     if (refreshTimer.current) {
       clearInterval(refreshTimer.current);
     }
-    refreshTimer.current = setInterval(refreshDevices, DEVICE_POLL_FALLBACK_MS);
-  }, [refreshDevices]);
+    refreshTimer.current = setInterval(
+      () => { void refreshDevicesRef.current(); },
+      DEVICE_POLL_FALLBACK_MS,
+    );
+  }, []);
+
+  /** Connect presence + load the device list for an active account session. */
+  const initializeDevices = useCallback(async () => {
+    try {
+      await remoteConnectAPI.accountConnectDevices();
+      // Re-read after AuthOk may have adopted the account-bound device_id.
+      try {
+        const info = await remoteConnectAPI.getDeviceInfo();
+        setLocalDeviceId(info.device_id);
+      } catch (e) {
+        log.warn('getDeviceInfo after connect failed', e);
+      }
+    } catch (err) {
+      log.warn('accountConnectDevices failed', err);
+      if (isAccountAuthFailure(err)) {
+        await handleSessionExpired(err);
+        return;
+      }
+      markRelayUnreachable();
+    }
+    void refreshDevices();
+    startDevicePolling();
+  }, [handleSessionExpired, markRelayUnreachable, refreshDevices, startDevicePolling]);
 
   useEffect(() => {
     ensureAccountSyncProgressListener();
   }, []);
 
+  // Unmounting (dialog close or group switch) during the sync-choice step
+  // abandons the incomplete login — pair with `account_finalize_login`.
+  // The dialog tree unmounts this panel directly, so this must be a cleanup,
+  // not an effect gated on a prop flip.
   useEffect(() => {
-    if (!isOpen) {
-      setUsername(''); setPassword(''); setAuthServer('');
-      setError(null); setLoading(false); setView('login');
-      resetState();
-      return;
-    }
+    return () => {
+      if (viewRef.current === 'overwrite') {
+        void remoteConnectAPI.accountLogout().catch((e) => {
+          log.warn('logout on overwrite abandon failed', e);
+        });
+      }
+    };
+  }, []);
 
+  useEffect(() => {
     remoteConnectAPI.getDeviceInfo().then((info) => {
       setLocalDeviceId(info.device_id);
     }).catch((e) => { log.warn('getDeviceInfo failed', e); });
@@ -245,25 +284,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     remoteConnectAPI.accountStatus().then(async (status) => {
       if (status.logged_in && status.user_id) {
         setView('devices');
-        try {
-          await remoteConnectAPI.accountConnectDevices();
-          // Re-read after AuthOk may have adopted the account-bound device_id.
-          try {
-            const info = await remoteConnectAPI.getDeviceInfo();
-            setLocalDeviceId(info.device_id);
-          } catch (e) {
-            log.warn('getDeviceInfo after connect failed', e);
-          }
-        } catch (err) {
-          log.warn('accountConnectDevices failed', err);
-          if (isAccountAuthFailure(err)) {
-            await handleSessionExpired(err);
-            return;
-          }
-          markRelayUnreachable();
-        }
-        void refreshDevices();
-        startDevicePolling();
+        await initializeDevices();
       }
     });
 
@@ -281,13 +302,8 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       unlistenPresence();
     };
   }, [
-    isOpen,
-    refreshDevices,
-    resetState,
-    startDevicePolling,
     applyPresenceOnline,
-    handleSessionExpired,
-    markRelayUnreachable,
+    initializeDevices,
   ]);
 
   const validate = useCallback(() => {
@@ -300,8 +316,8 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   }, [username, password, authServer, t]);
 
   /**
-   * Run cloud sync + device connect in the background. Dialog can close
-   * immediately; progress is visible when Online Devices is reopened.
+   * Run cloud sync + device connect in the background. Progress is visible
+   * in the devices view while it continues.
    */
   const startBackgroundSync = useCallback((isFirstLogin: boolean) => {
     if (syncInFlightRef.current) {
@@ -313,7 +329,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setSyncing();
     info(t('accountLogin.syncStarted'));
 
-    // Connect device presence immediately so Online Devices can populate
+    // Connect device presence immediately so the device list can populate
     // while the heavier settings/session sync continues.
     void remoteConnectAPI.accountConnectDevices().catch((err) => {
       log.warn('accountConnectDevices failed at sync start', err);
@@ -392,6 +408,14 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     workspacePath,
   ]);
 
+  /** Landing path after a completed login: devices view + background sync. */
+  const completeLogin = useCallback((relayUrl: string, isFirstLogin: boolean) => {
+    setAccountRelayUrl(relayUrl);
+    setView('devices');
+    void initializeDevices();
+    startBackgroundSync(isFirstLogin);
+  }, [initializeDevices, startBackgroundSync]);
+
   const performLogin = useCallback(async (server: string, user: string, pass: string) => {
     setLoading(true); setError(null);
     try {
@@ -402,13 +426,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         return;
       }
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
-      setAccountRelayUrl(server);
-      startBackgroundSync(true);
-      onClose();
+      completeLogin(server, true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [startBackgroundSync, success, t, onClose]);
+  }, [completeLogin, success, t]);
 
   const handleLogin = useCallback(async () => {
     if (!validate()) return;
@@ -433,8 +455,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     try {
       await remoteConnectAPI.accountFinalizeLogin();
       success(t('accountLogin.loginSuccess', { user_id: username }));
-      startBackgroundSync(isFirstLogin);
-      onClose();
+      completeLogin(authServer.trim(), isFirstLogin);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
       try { await remoteConnectAPI.accountLogout(); } catch (logoutErr) {
@@ -445,7 +466,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [onClose, resetState, startBackgroundSync, success, t, username]);
+  }, [authServer, completeLogin, resetState, success, t, username]);
 
   const handleConfirmOverwrite = useCallback(() => {
     void finalizeAndSync(false);
@@ -459,17 +480,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
     resetState();
     setView('login');
-    onClose();
-  }, [onClose, resetState]);
-
-  /** Closing the dialog during the sync-choice step abandons the incomplete login. */
-  const handleDialogClose = useCallback(() => {
-    if (view === 'overwrite') {
-      void handleCancelOverwrite();
-      return;
-    }
-    onClose();
-  }, [handleCancelOverwrite, onClose, view]);
+  }, [resetState]);
 
   const handleLogout = useCallback(async () => {
     setLoading(true);
@@ -505,46 +516,41 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     try {
       await enterPeerMode(device.device_id, device.device_name);
       success(t('accountLogin.enteredPeerMode', { name: device.device_name }));
-      onClose();
+      onCloseDialog();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [enterPeerMode, info, localDeviceId, onClose, success, syncStatus, t]);
-
-  const title = view === 'login' || view === 'overwrite'
-    ? t('shared:features.accountLogin')
-    : t('accountLogin.devices');
+  }, [enterPeerMode, info, localDeviceId, onCloseDialog, success, syncStatus, t]);
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={handleDialogClose} title={title} size="medium"
-        showCloseButton closeOnOverlayClick={false} contentClassName="modal__content--fill-flex">
-      <div className="account-login-dialog">
+      <div className="account-panel">
         {error && (
-          <div className="account-login-dialog__error-banner">
+          <div className="account-panel__error-banner">
             <Alert type="error" message={error} closable onClose={() => setError(null)}
-              className="account-login-dialog__error-alert" />
+              className="account-panel__error-alert" />
           </div>
         )}
 
         {loading && view === 'devices' && (
-          <div className="account-login-dialog__loading-overlay">
+          <div className="account-panel__loading-overlay">
             <RefreshCw size={20} className="spinning" />
             <span>{t('accountLogin.processing')}</span>
           </div>
         )}
 
         {view === 'login' && (
-          <div className="account-login-dialog__scroll">
-            <div className="account-login-dialog__form">
-              <div className="account-login-dialog__field">
+          <div className="account-panel__scroll">
+            <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
+            <div className="account-panel__form">
+              <div className="account-panel__field">
                 <Input label={t('accountLogin.username')} type="text" value={username}
                   onChange={(e) => setUsername(e.target.value)} prefix={<User size={16} />}
                   size="medium" disabled={loading} />
               </div>
-              <div className="account-login-dialog__field">
+              <div className="account-panel__field">
                 <Input label={t('accountLogin.password')} type={showPassword ? 'text' : 'password'} value={password}
                   onChange={(e) => setPassword(e.target.value)} prefix={<Lock size={16} />}
                   size="medium" disabled={loading}
@@ -554,17 +560,17 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                     </button>
                   } />
               </div>
-              <div className="account-login-dialog__field">
+              <div className="account-panel__field">
                 <Input label={t('accountLogin.authServer')} type="url" value={authServer}
                   onChange={(e) => setAuthServer(e.target.value)}
                   placeholder={t('accountLogin.authServerPlaceholder')}
                   prefix={<Server size={16} />} size="medium" disabled={loading} />
               </div>
-              <div className="account-login-dialog__deploy-entry">
+              <div className="account-panel__deploy-entry">
                 <span>{t('relayDeploy.entryHint')}</span>
                 <button
                   type="button"
-                  className="account-login-dialog__deploy-link"
+                  className="account-panel__deploy-link"
                   onClick={() => setShowRelayDeploy(true)}
                   disabled={loading}
                 >
@@ -573,10 +579,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                 </button>
               </div>
             </div>
-            <div className="account-login-dialog__actions">
-              <Button variant="secondary" size="small" onClick={onClose} disabled={loading}>
-                {t('accountLogin.cancel')}
-              </Button>
+            <div className="account-panel__actions">
               <Button variant="primary" size="small" onClick={handleLogin} disabled={loading}>
                 <LogIn size={14} />
                 {loading ? t('accountLogin.processing') : t('accountLogin.login')}
@@ -586,36 +589,36 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         )}
 
         {view === 'overwrite' && (
-          <div className="account-login-dialog__scroll">
-            <div className="account-login-dialog__overwrite-notice">
+          <div className="account-panel__scroll">
+            <div className="account-panel__overwrite-notice">
               <CloudDownload size={32} />
               <p>{t('accountLogin.cloudOverwriteWarning')}</p>
             </div>
-            <div className="account-login-dialog__sync-options">
+            <div className="account-panel__sync-options">
               <button
-                className="account-login-dialog__sync-option"
+                className="account-panel__sync-option"
                 onClick={handleUseLocalOverwrite}
                 disabled={loading}
               >
                 <Upload size={20} />
-                <div className="account-login-dialog__sync-option-text">
-                  <span className="account-login-dialog__sync-option-title">{t('accountLogin.useLocalTitle')}</span>
-                  <span className="account-login-dialog__sync-option-desc">{t('accountLogin.useLocalDesc')}</span>
+                <div className="account-panel__sync-option-text">
+                  <span className="account-panel__sync-option-title">{t('accountLogin.useLocalTitle')}</span>
+                  <span className="account-panel__sync-option-desc">{t('accountLogin.useLocalDesc')}</span>
                 </div>
               </button>
               <button
-                className="account-login-dialog__sync-option"
+                className="account-panel__sync-option"
                 onClick={handleConfirmOverwrite}
                 disabled={loading}
               >
                 <CloudDownload size={20} />
-                <div className="account-login-dialog__sync-option-text">
-                  <span className="account-login-dialog__sync-option-title">{t('accountLogin.useCloudTitle')}</span>
-                  <span className="account-login-dialog__sync-option-desc">{t('accountLogin.useCloudDesc')}</span>
+                <div className="account-panel__sync-option-text">
+                  <span className="account-panel__sync-option-title">{t('accountLogin.useCloudTitle')}</span>
+                  <span className="account-panel__sync-option-desc">{t('accountLogin.useCloudDesc')}</span>
                 </div>
               </button>
             </div>
-            <div className="account-login-dialog__actions">
+            <div className="account-panel__actions">
               <Button variant="secondary" size="small" onClick={handleCancelOverwrite} disabled={loading}>
                 {t('accountLogin.disagree')}
               </Button>
@@ -624,16 +627,16 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         )}
 
         {view === 'devices' && (
-          <div className="account-login-dialog__scroll">
+          <div className="account-panel__scroll">
             {accountRelayUrl && (
-              <div className="account-login-dialog__server-line">
+              <div className="account-panel__server-line">
                 <Server size={13} />
-                <span className="account-login-dialog__server-url" title={accountRelayUrl}>
+                <span className="account-panel__server-url" title={accountRelayUrl}>
                   {accountRelayUrl}
                 </span>
                 <button
                   type="button"
-                  className="account-login-dialog__copy-btn"
+                  className="account-panel__copy-btn"
                   onClick={handleCopyRelayUrl}
                   title={t('accountLogin.copyServerUrl')}
                 >
@@ -642,12 +645,12 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               </div>
             )}
             {syncStatus !== 'idle' && !relayError && (
-              <div className={`account-login-dialog__sync-indicator ${syncStatus}`}>
-                <div className="account-login-dialog__sync-indicator-row">
+              <div className={`account-panel__sync-indicator ${syncStatus}`}>
+                <div className="account-panel__sync-indicator-row">
                   {syncStatus === 'syncing' && <RefreshCw size={14} className="spinning" />}
                   {syncStatus === 'done' && <span>✓</span>}
                   {syncStatus === 'failed' && <span>⚠</span>}
-                  <span className="account-login-dialog__sync-indicator-text">
+                  <span className="account-panel__sync-indicator-text">
                     {syncStatus === 'syncing' && syncPhaseLabel(
                       t,
                       syncProgress.phase,
@@ -658,21 +661,21 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                     {syncStatus === 'failed' && t('accountLogin.syncFailed')}
                   </span>
                   {syncStatus === 'syncing' && (
-                    <span className="account-login-dialog__sync-indicator-percent">
+                    <span className="account-panel__sync-indicator-percent">
                       {t('accountLogin.syncProgressPercent', { percent: syncProgress.percent })}
                     </span>
                   )}
                 </div>
                 {syncStatus === 'syncing' && (
                   <div
-                    className="account-login-dialog__sync-progress-track"
+                    className="account-panel__sync-progress-track"
                     role="progressbar"
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={syncProgress.percent}
                   >
                     <div
-                      className="account-login-dialog__sync-progress-fill"
+                      className="account-panel__sync-progress-fill"
                       style={{ width: `${Math.max(2, syncProgress.percent)}%` }}
                     />
                   </div>
@@ -680,35 +683,35 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               </div>
             )}
             {relayError && (
-              <div className="account-login-dialog__error-banner">
+              <div className="account-panel__error-banner">
                 <Alert
                   type="error"
                   message={relayError}
-                  className="account-login-dialog__error-alert"
+                  className="account-panel__error-alert"
                 />
               </div>
             )}
-            <div className="account-login-dialog__device-list">
+            <div className="account-panel__device-list">
               {!relayError && devicesReady && devices.length === 0 && (
-                <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>
+                <div className="account-panel__empty">{t('accountLogin.noDevices')}</div>
               )}
               {!relayError && devices.map((d) => {
                 const isLocal = localDeviceId === d.device_id;
                 return (
                 <div key={d.device_id}
-                  className={`account-login-dialog__device-card ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''} ${syncStatus === 'syncing' && !isLocal ? 'syncing' : ''}`}
+                  className={`account-panel__device-card ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''} ${syncStatus === 'syncing' && !isLocal ? 'syncing' : ''}`}
                   onClick={() => !isLocal && selectDevice(d)}>
                   <Monitor size={16} />
-                  <div className="account-login-dialog__device-info">
-                    <span className="account-login-dialog__device-name">
+                  <div className="account-panel__device-info">
+                    <span className="account-panel__device-name">
                       {d.device_name}
-                      {isLocal && <span className="account-login-dialog__device-badge">{t('accountLogin.thisDevice')}</span>}
+                      {isLocal && <span className="account-panel__device-badge">{t('accountLogin.thisDevice')}</span>}
                     </span>
-                    <span className="account-login-dialog__device-meta">
-                      <span className="account-login-dialog__device-id">
+                    <span className="account-panel__device-meta">
+                      <span className="account-panel__device-id">
                         {d.device_id.slice(0, 8)}
                       </span>
-                      <span className="account-login-dialog__device-status">
+                      <span className="account-panel__device-status">
                         {' · '}
                         {d.online ? t('accountLogin.online') : t('accountLogin.offline')}
                       </span>
@@ -721,7 +724,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                         {d.online && syncStatus === 'syncing' && (
                           <RefreshCw size={14} className="spinning" aria-label={t('accountLogin.syncing')} />
                         )}
-                        <button className="account-login-dialog__device-remove"
+                        <button className="account-panel__device-remove"
                           onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, d.device_name); }}
                           title={t('accountLogin.removeDevice')}
                           tabIndex={-1}>
@@ -732,7 +735,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                 );
               })}
             </div>
-            <div className="account-login-dialog__actions">
+            <div className="account-panel__actions">
               {relayError && (
                 <Button variant="primary" size="small" onClick={handleRetryConnect} disabled={loading}>
                   <RefreshCw size={14} />
@@ -746,7 +749,6 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
           </div>
         )}
       </div>
-      </Modal>
 
       {showRelayDeploy && (
         <RelayDeployWizard
@@ -759,4 +761,4 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   );
 };
 
-export default AccountLoginDialog;
+export default AccountPanel;

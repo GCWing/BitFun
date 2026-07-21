@@ -546,7 +546,8 @@
     "syncPhaseSettingsDone": "配置已同步",
     "syncPhaseListingSessions": "正在扫描本地会话…",
     "syncPhaseExportingSessions": "正在备份会话 {{current}}/{{total}}",
-    "copyServerUrl": "复制服务器地址"
+    "copyServerUrl": "复制服务器地址",
+    "loginValueProp": "登录以关联你的多台设备：互相远程控制，并云同步设置与会话。"
   },
   "relayDeploy": {
     "entryHint": "还没有中继服务器？",
@@ -617,6 +618,11 @@
     "passwordMismatch": "两次输入的密码不一致",
     "createAccount": "创建账户",
     "creatingAccount": "正在创建账户…",
+    "regModeCreate": "创建新账户",
+    "regModeExisting": "使用已有账户",
+    "registerExistingTitle": "使用已有账户",
+    "registerExistingDesc": "重新部署会保留 relay 数据库。输入已有账号密码即可完成登录，不会创建新账户。",
+    "accountExistsHint": "该用户名已存在，可切换到「使用已有账户」直接登录。",
     "doneTitle": "你的 relay 已就绪",
     "verifyOk": "从本机访问正常",
     "verifyFailed": "无法从本机访问。请检查云服务器安全组 / 防火墙是否放行该端口——也可以先继续，稍后修复。",
@@ -628,6 +634,7 @@
     "tabBot": "IM机器人",
     "groupNetwork": "网络中继",
     "groupBot": "IM机器人",
+    "groupAccount": "我的设备",
     "connect": "连接",
     "connecting": "连接中...",
     "disconnect": "断开连接",

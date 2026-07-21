@@ -162,6 +162,12 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   const [regConfirm, setRegConfirm] = useState('');
   const [regLoading, setRegLoading] = useState(false);
   const [showRegPassword, setShowRegPassword] = useState(false);
+  /**
+   * Redeploys keep the relay database, so account creation can fail with
+   * "already exists". `existing` skips provisioning and hands the typed
+   * credentials straight to the caller's real login.
+   */
+  const [regMode, setRegMode] = useState<'create' | 'existing'>('create');
 
   // ── done ─────────────────────────────────────────────────────────────────
   const [verify, setVerify] = useState<RelayVerifyResult | null>(null);
@@ -268,6 +274,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       setRegPassword('');
       setRegConfirm('');
       setRegLoading(false);
+      setRegMode('create');
       setVerify(null);
       return;
     }
@@ -603,10 +610,23 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       setVerify(v);
       setStep('done');
     } catch (e) {
-      setError(errMsg(e));
+      const msg = errMsg(e);
+      // Redeploy keeps the database — point the user at the existing-account
+      // mode instead of leaving a raw relay error.
+      setError(/already exists/i.test(msg)
+        ? `${msg} — ${t('relayDeploy.accountExistsHint')}`
+        : msg);
     } finally {
       setRegLoading(false);
     }
+  };
+
+  /** Existing-account mode: no provisioning; the caller performs the login. */
+  const handleUseExisting = () => {
+    if (!regUsername.trim()) { setError(t('relayDeploy.usernameRequired')); return; }
+    if (!regPassword) { setError(t('accountLogin.emptyFields')); return; }
+    setError(null);
+    onRegistered({ relayUrl, username: regUsername.trim(), password: regPassword });
   };
 
   const handleFinish = () => {
@@ -1187,11 +1207,33 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <Server size={14} />
         <span>{relayUrl}</span>
       </div>
+      <div className="relay-deploy-wizard__reg-mode">
+        <button
+          type="button"
+          className={`relay-deploy-wizard__reg-mode-btn${regMode === 'create' ? ' is-active' : ''}`}
+          onClick={() => { setRegMode('create'); setError(null); }}
+          disabled={regLoading}
+        >
+          {t('relayDeploy.regModeCreate')}
+        </button>
+        <button
+          type="button"
+          className={`relay-deploy-wizard__reg-mode-btn${regMode === 'existing' ? ' is-active' : ''}`}
+          onClick={() => { setRegMode('existing'); setError(null); }}
+          disabled={regLoading}
+        >
+          {t('relayDeploy.regModeExisting')}
+        </button>
+      </div>
       <div className="relay-deploy-wizard__notice relay-deploy-wizard__notice--info">
         <User size={18} />
         <div className="relay-deploy-wizard__notice-text">
-          <span className="relay-deploy-wizard__notice-title">{t('relayDeploy.registerTitle')}</span>
-          <span className="relay-deploy-wizard__notice-desc">{t('relayDeploy.registerDesc')}</span>
+          <span className="relay-deploy-wizard__notice-title">
+            {regMode === 'create' ? t('relayDeploy.registerTitle') : t('relayDeploy.registerExistingTitle')}
+          </span>
+          <span className="relay-deploy-wizard__notice-desc">
+            {regMode === 'create' ? t('relayDeploy.registerDesc') : t('relayDeploy.registerExistingDesc')}
+          </span>
         </div>
       </div>
       <div className="relay-deploy-wizard__form">
@@ -1210,25 +1252,35 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               </button>
             } />
         </div>
-        <div className="relay-deploy-wizard__field">
-          <Input label={t('relayDeploy.confirmPassword')} type={showRegPassword ? 'text' : 'password'}
-            value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)}
-            prefix={<Lock size={16} />} size="medium" disabled={regLoading} />
-        </div>
+        {regMode === 'create' && (
+          <div className="relay-deploy-wizard__field">
+            <Input label={t('relayDeploy.confirmPassword')} type={showRegPassword ? 'text' : 'password'}
+              value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)}
+              prefix={<Lock size={16} />} size="medium" disabled={regLoading} />
+          </div>
+        )}
       </div>
       <div className="relay-deploy-wizard__actions">
         <Button variant="secondary" size="small" onClick={handleBackToPreflight} disabled={regLoading}>
           <ChevronLeft size={14} />
           {t('relayDeploy.back')}
         </Button>
-        <Button variant="primary" size="small" onClick={handleRegister}
-          disabled={regLoading || !regUsername.trim() || !regPassword || !regConfirm}>
-          {regLoading ? (
-            <><Loader2 size={14} className="spinning" />{t('relayDeploy.creatingAccount')}</>
-          ) : (
-            <><User size={14} />{t('relayDeploy.createAccount')}</>
-          )}
-        </Button>
+        {regMode === 'create' ? (
+          <Button variant="primary" size="small" onClick={handleRegister}
+            disabled={regLoading || !regUsername.trim() || !regPassword || !regConfirm}>
+            {regLoading ? (
+              <><Loader2 size={14} className="spinning" />{t('relayDeploy.creatingAccount')}</>
+            ) : (
+              <><User size={14} />{t('relayDeploy.createAccount')}</>
+            )}
+          </Button>
+        ) : (
+          <Button variant="primary" size="small" onClick={handleUseExisting}
+            disabled={regLoading || !regUsername.trim() || !regPassword}>
+            <CheckCircle2 size={14} />
+            {t('relayDeploy.finishAndLogin')}
+          </Button>
+        )}
       </div>
     </div>
   );

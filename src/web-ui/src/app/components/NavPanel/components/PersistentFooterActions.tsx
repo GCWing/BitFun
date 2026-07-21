@@ -11,7 +11,6 @@ import {
   ExternalLink,
   BarChart3,
   ChevronUp,
-  LogIn,
 } from 'lucide-react';
 import { Tooltip, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -20,8 +19,8 @@ import { useNavSceneStore } from '../../../stores/navSceneStore';
 import { useSceneStore } from '../../../stores/sceneStore';
 import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
+import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import {
@@ -33,7 +32,6 @@ import {
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
-const AccountLoginDialog = lazy(() => import('../../AccountLoginDialog'));
 const AboutDialog = lazy(() =>
   import('../../AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -53,8 +51,8 @@ const PersistentFooterActions: React.FC = () => {
     return activeTab?.content.type === 'browser';
   });
   const { enableToolbarMode } = useToolbarModeContext();
-  const { hasWorkspace } = useCurrentWorkspace();
   const { warning } = useNotification();
+  const { loggedIn: accountLoggedIn, deviceName: accountDeviceName } = useAccountLoginState();
 
   useEffect(() => {
     const onAutoExit = (event: Event) => {
@@ -73,18 +71,20 @@ const PersistentFooterActions: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [showAccountLogin, setShowAccountLogin] = useState(false);
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
+  const [remoteInitialGroup, setRemoteInitialGroup] = useState<'network' | 'bot' | 'account' | undefined>(undefined);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
 
-  // Periodic token-expiry check. Only auto-open the login dialog if the
-  // token has actually expired while the app is running — not on startup.
+  // Periodic token-expiry check. Only auto-open the dialog if the token has
+  // actually expired while the app is running — not on startup. Lands on the
+  // account group so the user can sign in again right away.
   useEffect(() => {
     const expiryCheck = setInterval(() => {
       remoteConnectAPI.accountTokenExpired().then((expired) => {
         if (expired) {
-          setShowAccountLogin(true);
+          setRemoteInitialGroup('account');
+          setShowRemoteConnect(true);
         }
       });
     }, 60000);
@@ -152,32 +152,24 @@ const PersistentFooterActions: React.FC = () => {
     enableToolbarMode();
   };
 
-  const handleAccountLogin = () => {
-    closeMenu();
-    setShowAccountLogin(true);
-  };
-
   const handleRemoteConnect = useCallback(async () => {
-    if (!hasWorkspace) {
-      warning(t('header.remoteConnectRequiresWorkspace'));
-      return;
-    }
-
     closeMenu();
 
     if (hasAgreedRemoteDisclaimer || getRemoteConnectDisclaimerAgreed()) {
       setHasAgreedRemoteDisclaimer(true);
+      setRemoteInitialGroup(undefined);
       setShowRemoteConnect(true);
       return;
     }
 
     setShowRemoteDisclaimer(true);
-  }, [hasWorkspace, warning, t, closeMenu, hasAgreedRemoteDisclaimer]);
+  }, [closeMenu, hasAgreedRemoteDisclaimer]);
 
   const handleAgreeDisclaimer = useCallback(() => {
     setRemoteConnectDisclaimerAgreed();
     setHasAgreedRemoteDisclaimer(true);
     setShowRemoteDisclaimer(false);
+    setRemoteInitialGroup(undefined);
     setShowRemoteConnect(true);
   }, []);
 
@@ -224,29 +216,18 @@ const PersistentFooterActions: React.FC = () => {
                     type="button"
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
-                    onClick={handleAccountLogin}
-                    data-testid="nav-footer-account-login-item"
+                    onClick={handleRemoteConnect}
                   >
-                    <LogIn size={14} />
-                    <span>{t('shared:features.accountLogin')}</span>
+                    <Smartphone size={14} />
+                    <span className="bitfun-nav-panel__footer-menu-item-label">
+                      {accountLoggedIn && accountDeviceName
+                        ? accountDeviceName
+                        : t('shared:features.remoteControl')}
+                    </span>
+                    {accountLoggedIn && (
+                      <span className="bitfun-nav-panel__footer-menu-item-dot" />
+                    )}
                   </button>
-                  <div className="bitfun-nav-panel__footer-menu-divider" />
-                  <Tooltip
-                    content={t('header.remoteConnectRequiresWorkspace')}
-                    placement="right"
-                    disabled={hasWorkspace}
-                  >
-                    <button
-                      type="button"
-                      className={`bitfun-nav-panel__footer-menu-item${!hasWorkspace ? ' is-disabled' : ''}`}
-                      role="menuitem"
-                      aria-disabled={!hasWorkspace}
-                      onClick={handleRemoteConnect}
-                    >
-                      <Smartphone size={14} />
-                      <span>{t('shared:features.remoteControl')}</span>
-                    </button>
-                  </Tooltip>
                   <div className="bitfun-nav-panel__footer-menu-divider" />
                   <button
                     type="button"
@@ -333,14 +314,13 @@ const PersistentFooterActions: React.FC = () => {
           <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
         </Suspense>
       )}
-      {showAccountLogin && (
-        <Suspense fallback={null}>
-          <AccountLoginDialog isOpen={showAccountLogin} onClose={() => setShowAccountLogin(false)} />
-        </Suspense>
-      )}
       {showRemoteConnect && (
         <Suspense fallback={null}>
-          <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
+          <RemoteConnectDialog
+            isOpen={showRemoteConnect}
+            onClose={() => setShowRemoteConnect(false)}
+            initialGroup={remoteInitialGroup}
+          />
         </Suspense>
       )}
       <Modal

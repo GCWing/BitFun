@@ -25,12 +25,13 @@ Most changes start in:
 
 Peer Device Mode (same-account remote full client) is documented in
 `docs/architecture/peer-device-mode.md`. Frontend invariants:
-`src/infrastructure/peer-device/README.md`. Do not reintroduce AccountLoginDialog
-nested sessions/chat shells; enter peer mode from the device list instead.
+`src/infrastructure/peer-device/README.md`. Do not reintroduce nested
+sessions/chat shells; enter peer mode from the device list (Remote Connect →
+My Devices) instead.
 
 One-click relay deploy wizard: `src/features/relay-deploy/` (see its README).
-Account Login and Remote Connect Self-Hosted entries must open
-`RelayDeployWizard`, not an external README.
+The Remote Connect account group (My Devices) login form and the Remote Connect
+Self-Hosted entries must open `RelayDeployWizard`, not an external README.
 
 ## Local rules
 

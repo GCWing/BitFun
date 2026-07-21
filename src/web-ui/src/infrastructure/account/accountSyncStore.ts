@@ -68,7 +68,7 @@ function normalizePhase(phase: string): AccountSyncPhase {
 }
 
 /**
- * Survives AccountLoginDialog close/reopen so users can reopen Online Devices
+ * Survives Remote Connect dialog close/reopen so users can reopen My Devices
  * and still see in-progress cloud sync after choosing local/cloud overwrite.
  */
 export const useAccountSyncStore = create<AccountSyncState>((set) => ({

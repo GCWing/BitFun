@@ -124,11 +124,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
-        key: "features.accountLogin",
-        value: "账户登录",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhCN,
         key: "features.codeAgent",
         value: "代码助手",
     },
@@ -299,11 +294,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
-        key: "features.accountLogin",
-        value: "帳號登入",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhTW,
         key: "features.codeAgent",
         value: "程式碼助手",
     },
@@ -471,11 +461,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::EnUS,
         key: "connectionMethods.ngrok",
         value: "Ngrok",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::EnUS,
-        key: "features.accountLogin",
-        value: "Account Login",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,

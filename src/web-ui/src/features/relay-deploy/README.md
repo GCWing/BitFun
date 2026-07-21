@@ -5,7 +5,7 @@ Desktop wizard that SSHes to a user-owned Linux host and deploys
 
 Entry points:
 
-- Account Login → “一键部署到自己的服务器”
+- Remote Connect → My Devices → login form → “一键部署到自己的服务器”
 - Remote Connect → Network Relay → Self-Hosted → same action (must open this
   wizard, not an external README)
 
