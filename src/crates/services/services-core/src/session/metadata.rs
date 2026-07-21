@@ -161,7 +161,7 @@ fn legacy_custom_metadata_string(value: Option<&Value>, key: &str) -> Option<Str
         .map(str::to_string)
 }
 
-fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
+pub fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
     let assistant_text_count: usize = turn
         .model_rounds
         .iter()

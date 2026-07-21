@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { listen } from '@tauri-apps/api/event';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsProgressEvent } from '@/infrastructure/api/insightsApi';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('InsightsStore');
 
-const RETRY_STAGES = new Set(['facet_retry', 'recommendations_retry']);
+const RETRY_STAGES = new Set(['facet_retry', 'analysis_retry']);
+let nextGenerationRunId = 0;
 
 export type InsightsView = 'list' | 'report';
 
@@ -24,10 +24,13 @@ interface InsightsState {
   generating: boolean;
   progress: InsightsProgress;
   selectedDays: number;
+  selectedModel: string;
   error: string;
   loadingMetas: boolean;
+  activeGenerationRunId: number | null;
 
   setSelectedDays: (days: number) => void;
+  setSelectedModel: (modelId: string) => void;
   fetchReportMetas: () => Promise<void>;
   loadReport: (meta: InsightsReportMeta) => Promise<void>;
   generateReport: () => Promise<void>;
@@ -51,10 +54,13 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
   generating: false,
   progress: { ...defaultProgress },
   selectedDays: 30,
+  selectedModel: 'auto',
   error: '',
   loadingMetas: false,
+  activeGenerationRunId: null,
 
   setSelectedDays: (days) => set({ selectedDays: days }),
+  setSelectedModel: (selectedModel) => set({ selectedModel }),
 
   fetchReportMetas: async () => {
     set({ loadingMetas: true });
@@ -78,30 +84,35 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
   },
 
   generateReport: async () => {
-    const { selectedDays, generating } = get();
+    const { selectedDays, selectedModel, generating } = get();
     if (generating) return;
+    const runId = ++nextGenerationRunId;
 
     set({
       generating: true,
+      activeGenerationRunId: runId,
       error: '',
-      progress: { ...defaultProgress, message: 'Starting...' },
+      progress: { ...defaultProgress, stage: 'starting' },
     });
 
-    const unlisten = await listen<InsightsProgressEvent>('insights-progress', (event) => {
-      const { message, stage, current, total } = event.payload;
-      set({
-        progress: {
-          stage,
-          message,
-          current,
-          total,
-          isRetrying: RETRY_STAGES.has(stage),
-        },
-      });
-    });
-
+    let unlisten: (() => void) | undefined;
     try {
-      const report = await insightsApi.generateInsights(selectedDays);
+      unlisten = await insightsApi.listenProgress((event: InsightsProgressEvent) => {
+        if (get().activeGenerationRunId !== runId) return;
+        const { message, stage, current, total } = event;
+        set({
+          progress: {
+            stage,
+            message,
+            current,
+            total,
+            isRetrying: RETRY_STAGES.has(stage),
+          },
+        });
+      });
+
+      const report = await insightsApi.generateInsights(selectedDays, selectedModel);
+      if (get().activeGenerationRunId !== runId) return;
       log.info('Insights report generated', {
         sessions: report.total_sessions,
         analyzed: report.analyzed_sessions,
@@ -110,31 +121,37 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
         currentReport: report,
         view: 'report',
         generating: false,
+        activeGenerationRunId: null,
         progress: { ...defaultProgress },
       });
       get().fetchReportMetas();
     } catch (err) {
+      if (get().activeGenerationRunId !== runId) return;
       log.error('Failed to generate insights', err);
       set({
         generating: false,
+        activeGenerationRunId: null,
         view: 'list',
         error: String(err),
         progress: { ...defaultProgress },
       });
     } finally {
-      unlisten();
+      unlisten?.();
     }
   },
 
   cancelGeneration: async () => {
-    if (!get().generating) return;
+    const runId = get().activeGenerationRunId;
+    if (!get().generating || runId == null) return;
     try {
       await insightsApi.cancelGeneration();
     } catch (err) {
       log.error('Failed to cancel insights generation', err);
     }
+    if (get().activeGenerationRunId !== runId) return;
     set({
       generating: false,
+      activeGenerationRunId: null,
       progress: { ...defaultProgress },
     });
   },

@@ -6,6 +6,7 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct GenerateInsightsRequest {
     pub days: Option<u32>,
+    pub model_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -17,12 +18,18 @@ pub struct LoadInsightsReportRequest {
 #[tauri::command]
 pub async fn generate_insights(request: GenerateInsightsRequest) -> Result<InsightsReport, String> {
     let days = request.days.unwrap_or(30);
-    info!("Generating insights for the last {} days", days);
+    let model_id = request.model_id;
+    info!(
+        "Generating insights for the last {} days with model selector {:?}",
+        days, model_id
+    );
 
-    InsightsService::generate(days).await.map_err(|e| {
-        error!("Failed to generate insights: {}", e);
-        format!("Failed to generate insights: {}", e)
-    })
+    InsightsService::generate(days, model_id)
+        .await
+        .map_err(|e| {
+            error!("Failed to generate insights: {}", e);
+            format!("Failed to generate insights: {}", e)
+        })
 }
 
 #[tauri::command]
