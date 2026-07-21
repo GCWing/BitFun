@@ -50,6 +50,18 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
    `createChatSession` when a live workspace exists — use
    `flowChatSessionConfigForCurrentWorkspace`.
 
+10. **Download destinations stay on the controller.** Native dialogs select a
+    path on A. Read file chunks from B with direct Peer commands, then write
+    them through A's local filesystem adapter. Do not HostInvoke
+    `export_local_file_to_path` with A's path. Directory downloads must preserve
+    the tree and reject traversal-like entry names.
+
+11. **Terminal traffic stays interactive and observable.** All `terminal_*`
+    commands are high priority, low-priority polling leaves one transport slot
+    available, and both local and SSH-backed PTY events on B must fan out to A.
+    Remote `SIGINT` / `SIGTSTP` map to PTY control bytes instead of silently
+    succeeding without affecting the process.
+
 ## Related account-login guards
 
 Incomplete login (cloud vs local settings choice) must not persist a session
