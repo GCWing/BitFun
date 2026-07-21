@@ -1,5 +1,6 @@
 use htmd::HtmlToMarkdown;
 use legible::{parse as parse_legible, Error as LegibleError, Options as LegibleOptions};
+#[cfg(not(target_env = "ohos"))]
 use readability_js::{Readability, ReadabilityOptions};
 use regex::{Captures, Regex};
 
@@ -73,10 +74,12 @@ pub fn extract_markdown_with_text_fallback(
     // Keep the existing extractor order. Local extraction experiments across
     // article, documentation, wiki, and forum pages showed `legible` gives the
     // best current quality/latency balance, with readability-js as fallback.
-    for extractor in [
-        attempt_legible as ExtractorFn,
-        attempt_readability_js as ExtractorFn,
-    ] {
+    #[cfg(not(target_env = "ohos"))]
+    let extractors: &[ExtractorFn] = &[attempt_legible as ExtractorFn, attempt_readability_js as ExtractorFn];
+    #[cfg(target_env = "ohos")]
+    let extractors: &[ExtractorFn] = &[attempt_legible as ExtractorFn];
+
+    for extractor in extractors {
         let Ok(candidate) = extractor(html, base_url) else {
             continue;
         };
@@ -145,6 +148,7 @@ fn attempt_legible(html: &str, base_url: &str) -> Result<ExtractedCandidate, Str
     })
 }
 
+#[cfg(not(target_env = "ohos"))]
 fn attempt_readability_js(html: &str, base_url: &str) -> Result<ExtractedCandidate, String> {
     let reader = Readability::new()
         .map_err(|err| format!("Failed to initialize readability-js: {}", err))?;
