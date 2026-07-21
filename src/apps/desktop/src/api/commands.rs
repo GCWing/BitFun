@@ -3532,8 +3532,15 @@ pub async fn reveal_in_explorer(
             ))
         }
     };
+    reveal_local_path_in_explorer(path, &request.path)
+}
+
+pub(crate) fn reveal_local_path_in_explorer(
+    path: &std::path::Path,
+    display_path: &str,
+) -> Result<(), String> {
     if !path.exists() {
-        return Err(format!("Path does not exist: {}", request.path));
+        return Err(format!("Path does not exist: {display_path}"));
     }
     let is_directory = path.is_dir();
     let path_str = path.to_string_lossy().to_string();

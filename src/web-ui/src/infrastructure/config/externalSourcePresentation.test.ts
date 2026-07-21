@@ -124,6 +124,7 @@ describe('external source presentation', () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]).toMatchObject({
+      ecosystemId: 'opencode',
       displayName: 'OpenCode user configuration',
       location: '~/.config/opencode/opencode.json',
       counts: { commands: 1, tools: 0, agents: 1, mcps: 1 },

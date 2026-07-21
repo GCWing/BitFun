@@ -37,6 +37,20 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('reveals a source by stable identity without sending its display location', async () => {
+    await externalSourcesAPI.revealSourceLocation(
+      'D:/workspace/project',
+      'opencode.commands:project',
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('reveal_external_source_location', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        sourceKey: 'opencode.commands:project',
+      },
+    });
+  });
+
   it('sends policy scope and optimistic revision as one atomic mutation', async () => {
     await externalSourcesAPI.updateIntegrationPolicy('D:/workspace/project', {
       expectedPreferenceRevision: 8,

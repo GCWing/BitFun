@@ -416,7 +416,7 @@
   }
 
   &__path-link {
-    color: var(--color-text-link);
+    color: var(--color-accent-500);
     text-decoration: underline;
     cursor: pointer;
     overflow-wrap: anywhere;
@@ -454,6 +454,13 @@
     gap: 4px;
     color: var(--color-text-secondary);
     font-size: 12px;
+
+    > div {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--size-gap-2);
+    }
   }
 
   &__source-detail-toggle {
@@ -469,7 +476,7 @@
 
     code {
       font-size: 12px;
-      color: var(--color-text-tertiary);
+      color: var(--color-text-muted);
     }
   }
 

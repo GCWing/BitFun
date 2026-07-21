@@ -21,9 +21,11 @@ import {
   Tooltip,
 } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
 import { WorkspaceKind } from '@/shared/types';
+import { createLogger } from '@/shared/utils/logger';
+
+const logger = createLogger('ExternalSourcesConfig');
 import {
   externalSourcesAPI,
   type ExternalIntegrationAccess,
@@ -44,6 +46,7 @@ import {
   buildExternalSourcePresentationGroups,
   catalogDiagnosticsWithoutSourceDuplicates,
   externalSourceDiagnosticKey,
+  type ExternalSourcePresentationGroup,
 } from '../externalSourcePresentation';
 import { externalSourceRequestScopeKey } from './externalSourceRequestScope';
 import './ExternalSourcesConfig.scss';
@@ -109,6 +112,12 @@ function sourceDiagnosticCategory(code: string): string {
   }
   if (code.includes('failed')) return 'checkFailed';
   return 'sourceIssue';
+}
+
+function sourceScopeLabel(scope: string, t: TFunction): string {
+  return scope === 'workspace_local'
+    ? t('shared:features.workspace')
+    : t(`scope.${scope}`);
 }
 
 function externalAgentModelLabel(model: string | undefined, t: TFunction): string {
@@ -456,13 +465,19 @@ const ExternalSourcesConfig: React.FC = () => {
     [snapshot],
   );
   const opencodeGroups = useMemo(
-    () => sourceGroups.filter((group) => group.displayName.toLowerCase().includes('opencode')),
+    () => sourceGroups.filter((group) => group.ecosystemId === 'opencode'),
     [sourceGroups],
   );
   const nonOpencodeGroups = useMemo(
-    () => sourceGroups.filter((group) => !group.displayName.toLowerCase().includes('opencode')),
+    () => sourceGroups.filter((group) => group.ecosystemId !== 'opencode'),
     [sourceGroups],
   );
+  const opencodeScopeLabel = useMemo(() => {
+    const scopes = Array.from(new Set(opencodeGroups.flatMap((group) => group.scopes)));
+    return (scopes.length > 0 ? scopes : ['user_global'])
+      .map((scope) => sourceScopeLabel(scope, t))
+      .join(' + ');
+  }, [opencodeGroups, t]);
   const catalogDiagnostics = useMemo(
     () => snapshot ? catalogDiagnosticsWithoutSourceDuplicates(snapshot, sourceGroups) : [],
     [snapshot, sourceGroups],
@@ -739,7 +754,8 @@ const ExternalSourcesConfig: React.FC = () => {
     return accepted;
   }, [loadSnapshot, runMutation, snapshot, t, workspacePath]);
 
-  const isRemote = workspace?.workspaceKind === 'remote' || Boolean(workspace?.connectionId);
+  const isRemote = workspace?.workspaceKind === WorkspaceKind.Remote
+    || Boolean(workspace?.connectionId);
   const policy = snapshot?.integrationPolicy;
   const selectedPolicyEnabled = policyScope === 'workspace'
     ? policy?.workspaceOverride?.enabled ?? policy?.userDefaults.enabled ?? true
@@ -903,9 +919,16 @@ const ExternalSourcesConfig: React.FC = () => {
     target.focus();
   }, []);
 
-  const renderPathLink = useCallback((location: string) => {
+  const renderPathLink = useCallback((location: string, sourceKey?: string) => {
     const display = abbreviatedLocation(location);
-    if (isRemote) {
+    if (isRemote || !sourceKey) {
+      if (!isRemote) {
+        return (
+          <span className="bitfun-external-sources-config__path-link bitfun-external-sources-config__path-link--disabled">
+            {display}
+          </span>
+        );
+      }
       return (
         <Tooltip content={t('common.openInExplorerRemote')} placement="top">
           <span className="bitfun-external-sources-config__path-link bitfun-external-sources-config__path-link--disabled">
@@ -916,20 +939,68 @@ const ExternalSourcesConfig: React.FC = () => {
     }
     return (
       <a
+        href="#"
         className="bitfun-external-sources-config__path-link"
         title={location}
         translate="no"
         onClick={(event) => {
           event.preventDefault();
-          void workspaceAPI.revealInExplorer(location).catch(() => {
-            // silently ignore — do not block UI
+          void externalSourcesAPI.revealSourceLocation(workspacePath, sourceKey).catch((error) => {
+            logger.warn('Could not reveal external source location', { sourceKey, error });
           });
         }}
       >
         {display}
       </a>
     );
-  }, [isRemote, t]);
+  }, [isRemote, t, workspacePath]);
+
+  const renderSourceMembers = useCallback((group: ExternalSourcePresentationGroup) => (
+    <div
+      className="bitfun-external-sources-config__source-members"
+      role="group"
+      aria-label={t('sources.toggleLabel', { name: group.displayName })}
+    >
+      {group.members.map((member) => {
+        const capabilityLabel = member.capability === 'source'
+          ? group.displayName
+          : t(`policy.capability.${member.capability}`);
+        const scopeLabel = sourceScopeLabel(member.scope, t);
+        return (
+          <Switch
+            key={member.stableKey}
+            className="bitfun-external-sources-config__source-member"
+            size="small"
+            label={capabilityLabel}
+            description={group.scopes.length > 1 ? scopeLabel : undefined}
+            checked={member.enabled}
+            disabled={!policyCompatible
+              || !member.mutable
+              || !hostCapabilities.canManageSources}
+            loading={busyKey === member.stableKey}
+            aria-label={t('sources.toggleLabel', {
+              name: [
+                group.displayName,
+                capabilityLabel,
+                scopeLabel,
+                t(`lifecycle.${member.lifecycle}`),
+              ].join(' · '),
+            })}
+            onChange={(event) => void setEnabled(
+              member.stableKey,
+              event.currentTarget.checked,
+            )}
+          >
+            {member.lifecycle !== 'available' ? (
+              <span className={`bitfun-external-sources-config__state is-${member.lifecycle}`}>
+                {t(`lifecycle.${member.lifecycle}`)}
+              </span>
+            ) : null}
+          </Switch>
+        );
+      })}
+    </div>
+  ), [busyKey, hostCapabilities.canManageSources, policyCompatible, setEnabled, t]);
 
   if (loading && !snapshot) {
     return <ConfigPageLoading text={t('loading')} />;
@@ -1118,8 +1189,7 @@ const ExternalSourcesConfig: React.FC = () => {
                 </div>
 
                 {ecosystemPolicies.map((ecosystem) => {
-                  const isOpencode = ecosystem.descriptor.ecosystemId === 'opencode'
-                    || ecosystem.descriptor.displayName === 'OpenCode';
+                  const isOpencode = ecosystem.descriptor.ecosystemId === 'opencode';
                   if (isOpencode) {
                     return (
                       <React.Fragment key={ecosystem.ecosystemId}>
@@ -1130,6 +1200,7 @@ const ExternalSourcesConfig: React.FC = () => {
                               <span> · {t('opencode.summary', {
                                 agents: opencodeGroups.reduce((sum, g) => sum + g.counts.agents, 0),
                                 commands: opencodeGroups.reduce((sum, g) => sum + g.counts.commands, 0),
+                                tools: opencodeGroups.reduce((sum, g) => sum + g.counts.tools, 0),
                                 mcps: opencodeGroups.reduce((sum, g) => sum + g.counts.mcps, 0),
                               })}</span>
                             </div>
@@ -1184,6 +1255,47 @@ const ExternalSourcesConfig: React.FC = () => {
                               </Tooltip>
                             </div>
                           </div>
+                          {opencodeGroups.length > 0 ? (
+                            <div className="bitfun-external-sources-config__opencode-locations">
+                              {opencodeGroups.map((group) => (
+                                <div key={group.key}>
+                                  <span>{renderPathLink(
+                                    group.location,
+                                    group.members[0]?.stableKey,
+                                  )}</span>
+                                  <span>
+                                    {group.scopes.map((scope) => sourceScopeLabel(scope, t)).join(' + ')}
+                                  </span>
+                                  {renderSourceMembers(group)}
+                                  {group.diagnostics.length > 0 ? (
+                                    <details
+                                      className="bitfun-external-sources-config__notice"
+                                      data-external-attention="true"
+                                    >
+                                      <summary>
+                                        {t('diagnostics.sourceSummary', {
+                                          name: group.displayName,
+                                          count: group.diagnostics.length,
+                                        })}
+                                      </summary>
+                                      <ul className="bitfun-external-sources-config__diagnostics">
+                                        {group.diagnostics.map((diagnostic) => (
+                                          <li key={externalSourceDiagnosticKey(diagnostic)}>
+                                            <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>
+                                            <details>
+                                              <summary>{t('common.technicalDetails')}</summary>
+                                              <code>{diagnostic.code}</code>
+                                              <div>{diagnostic.message}</div>
+                                            </details>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </details>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                           {expandedEcosystems.has(ecosystem.ecosystemId) ? (
                             <div
                               id={`external-capabilities-${ecosystem.ecosystemId}`}
@@ -1198,6 +1310,8 @@ const ExternalSourcesConfig: React.FC = () => {
                                   || KNOWN_INTEGRATION_ACCESS.has(configuredAccess);
                                 const countKey = capabilityId === 'subagent' ? 'agents'
                                   : capabilityId === 'command' ? 'commands'
+                                  : capabilityId === 'mcp' ? 'mcps'
+                                  : capabilityId === 'tool' ? 'tools'
                                   : capabilityId;
                                 const count = opencodeGroups.reduce(
                                   (sum, g) => sum + (g.counts[countKey as keyof typeof g.counts] ?? 0),
@@ -1220,7 +1334,7 @@ const ExternalSourcesConfig: React.FC = () => {
                                       <span className="bitfun-external-sources-config__candidate-detail">
                                         {t(`opencode.capability.${capabilityId}.description`, {
                                           count,
-                                          scope: t('scope.user_global'),
+                                          scope: opencodeScopeLabel,
                                         })}
                                       </span>
                                       <span className="bitfun-external-sources-config__candidate-detail">
@@ -1275,8 +1389,11 @@ const ExternalSourcesConfig: React.FC = () => {
                               {opencodeGroups.length > 0 ? (
                                 <div className="bitfun-external-sources-config__opencode-locations">
                                   <span>{t('opencode.configLocations')}</span>
-                                  {Array.from(new Set(opencodeGroups.map((g) => g.location))).map((location) => (
-                                    <span key={location}>{renderPathLink(location)}</span>
+                                  {opencodeGroups.map((group) => (
+                                    <span key={group.key}>{renderPathLink(
+                                      group.location,
+                                      group.members[0]?.stableKey,
+                                    )}</span>
                                   ))}
                                 </div>
                               ) : null}
@@ -1502,9 +1619,7 @@ const ExternalSourcesConfig: React.FC = () => {
                       ) : null}
                       {source ? (
                         <span>{t('mcp.scope', {
-                          scope: source.record.scope === 'workspace_local'
-                            ? t('shared:features.workspace')
-                            : t(`scope.${source.record.scope}`),
+                          scope: sourceScopeLabel(source.record.scope, t),
                         })}</span>
                       ) : null}
                       <span>{t(`mcp.transport.${request.definition.transport}`)}</span>
@@ -1639,9 +1754,12 @@ const ExternalSourcesConfig: React.FC = () => {
                             })}</span>
                             {source ? (
                               <>
-                                <span>{t('mcp.sourceLocation')}: {renderPathLink(source.record.location)}</span>
+                                <span>{t('mcp.sourceLocation')}: {renderPathLink(
+                                  source.record.location,
+                                  source.stableKey,
+                                )}</span>
                                 <span>{t('mcp.scope', {
-                                  scope: t(`scope.${source.record.scope}`),
+                                  scope: sourceScopeLabel(source.record.scope, t),
                                 })}</span>
                               </>
                             ) : null}
@@ -1787,7 +1905,7 @@ const ExternalSourcesConfig: React.FC = () => {
                                       location: externalSource.record.location,
                                     })}</span>
                                     <span>{t('mcp.scope', {
-                                      scope: t(`scope.${externalSource.record.scope}`),
+                                      scope: sourceScopeLabel(externalSource.record.scope, t),
                                     })}</span>
                                   </>
                                 ) : null}
@@ -1866,7 +1984,7 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
-            {(snapshot?.mcpServers?.length ?? 0) === 0
+            {snapshot && (snapshot.mcpServers?.length ?? 0) === 0
               && (snapshot?.mcpApprovalRequests?.length ?? 0) === 0
               && mcpConflicts.length === 0
               && !snapshot?.discoveryPending ? (
@@ -1889,6 +2007,25 @@ const ExternalSourcesConfig: React.FC = () => {
                   const state = agent.activationState.state;
                   const canEnable = state === 'approval_required' || state === 'declined';
                   const canDisable = state === 'active';
+                  const matchingSources = Array.from(new Map(
+                    snapshot.sources
+                      .filter((source) => agent.sourceKeys.some((key) => (
+                        key.providerId === source.record.key.providerId
+                        && key.sourceId === source.record.key.sourceId
+                      )))
+                      .map((source) => [source.stableKey, source]),
+                  ).values());
+                  const sourceLocations = matchingSources.length > 0
+                    ? matchingSources.map((source) => ({
+                        key: source.stableKey,
+                        label: source.record.location,
+                        stableKey: source.stableKey,
+                      }))
+                    : agent.sourceLocationLabels.map((label, index) => ({
+                        key: `${index}:${label}`,
+                        label,
+                        stableKey: undefined,
+                      }));
                   return (
                     <React.Fragment key={agent.candidateId}>
                       <ConfigPageRow
@@ -1935,12 +2072,15 @@ const ExternalSourcesConfig: React.FC = () => {
                             <span>{t('agents.tools', { tools: agent.effectiveToolLabels.join(', ') || t('agents.noTools') })}</span>
                             <span>{t('agents.executionDomain')}</span>
                             <span>{t('agents.compatibility', { state: t(`agentCompatibility.${agent.compatibilityState}`) })}</span>
-                            {agent.sourceLocationLabels.length > 0 ? (
+                            {sourceLocations.length > 0 ? (
                               <details className="bitfun-external-sources-config__source-detail-toggle">
-                                <summary>{t('agents.sourceLocations', { count: agent.sourceLocationLabels.length })}</summary>
+                                <summary>{t('agents.sourceLocations', { count: sourceLocations.length })}</summary>
                                 <div className="bitfun-external-sources-config__tool-detail">
-                                  {agent.sourceLocationLabels.map((location) => (
-                                    <span key={location}>{renderPathLink(location)}</span>
+                                  {sourceLocations.map((location) => (
+                                    <span key={location.key}>{renderPathLink(
+                                      location.label,
+                                      location.stableKey,
+                                    )}</span>
                                   ))}
                                 </div>
                               </details>
@@ -2158,9 +2298,10 @@ const ExternalSourcesConfig: React.FC = () => {
                         ))}
                         <span>
                           {t('toolApprovals.scope', {
-                            scope: (source?.record.scope ?? request.sourceScope) === 'workspace_local'
-                              ? t('shared:features.workspace')
-                              : t(`scope.${source?.record.scope ?? request.sourceScope}`),
+                            scope: sourceScopeLabel(
+                              source?.record.scope ?? request.sourceScope,
+                              t,
+                            ),
                           })}
                         </span>
                         <span>
@@ -2247,9 +2388,7 @@ const ExternalSourcesConfig: React.FC = () => {
                                   <React.Fragment key={scope}>
                                     {index > 0 ? <span aria-hidden="true"> + </span> : null}
                                     <span>
-                                      {scope === 'workspace_local'
-                                        ? t('shared:features.workspace')
-                                        : t(`scope.${scope}`)}
+                                      {sourceScopeLabel(scope, t)}
                                     </span>
                                   </React.Fragment>
                                 ))}
@@ -2276,52 +2415,7 @@ const ExternalSourcesConfig: React.FC = () => {
                         )}
                         align="center"
                       >
-                        <div
-                          className="bitfun-external-sources-config__source-members"
-                          role="group"
-                          aria-label={t('sources.toggleLabel', { name: group.displayName })}
-                        >
-                          {group.members.map((member) => {
-                            const capabilityLabel = member.capability === 'source'
-                              ? group.displayName
-                              : t(`policy.capability.${member.capability}`);
-                            const scopeLabel = member.scope === 'workspace_local'
-                              ? t('shared:features.workspace')
-                              : t(`scope.${member.scope}`);
-                            return (
-                              <Switch
-                                key={member.stableKey}
-                                className="bitfun-external-sources-config__source-member"
-                                size="small"
-                                label={capabilityLabel}
-                                description={group.scopes.length > 1 ? scopeLabel : undefined}
-                                checked={member.enabled}
-                                disabled={!policyCompatible
-                                  || !member.mutable
-                                  || !hostCapabilities.canManageSources}
-                                loading={busyKey === member.stableKey}
-                                aria-label={t('sources.toggleLabel', {
-                                  name: [
-                                    group.displayName,
-                                    capabilityLabel,
-                                    scopeLabel,
-                                    t(`lifecycle.${member.lifecycle}`),
-                                  ].join(' · '),
-                                })}
-                                onChange={(event) => void setEnabled(
-                                  member.stableKey,
-                                  event.currentTarget.checked,
-                                )}
-                              >
-                                {member.lifecycle !== 'available' ? (
-                                  <span className={`bitfun-external-sources-config__state is-${member.lifecycle}`}>
-                                    {t(`lifecycle.${member.lifecycle}`)}
-                                  </span>
-                                ) : null}
-                              </Switch>
-                            );
-                          })}
-                        </div>
+                        {renderSourceMembers(group)}
                       </ConfigPageRow>
                       {group.diagnostics.length > 0 ? (
                         <details
@@ -2439,11 +2533,9 @@ const ExternalSourcesConfig: React.FC = () => {
                             </span>
                             <span>
                               {t('toolApprovals.scope', {
-                                scope: source?.record.scope === 'workspace_local'
-                                  ? t('shared:features.workspace')
-                                  : source?.record.scope
-                                    ? t(`scope.${source.record.scope}`)
-                                    : t('common.unknown'),
+                                scope: source?.record.scope
+                                  ? sourceScopeLabel(source.record.scope, t)
+                                  : t('common.unknown'),
                               })}
                             </span>
                             <span>
@@ -2574,9 +2666,7 @@ const ExternalSourcesConfig: React.FC = () => {
                             <div className="bitfun-external-sources-config__candidate-detail">
                               {candidate.commandDescription}
                               {' · '}
-                              {candidate.sourceScope === 'workspace_local'
-                                ? t('shared:features.workspace')
-                                : t(`scope.${candidate.sourceScope}`)}
+                              {sourceScopeLabel(candidate.sourceScope, t)}
                               {' · '}
                               <span title={candidate.sourceLocation}>
                                 {abbreviatedLocation(candidate.sourceLocation)}

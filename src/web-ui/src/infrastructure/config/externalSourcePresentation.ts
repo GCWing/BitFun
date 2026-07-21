@@ -25,6 +25,7 @@ export interface ExternalSourcePresentationMember {
 
 export interface ExternalSourcePresentationGroup {
   key: string;
+  ecosystemId: string;
   scopes: ExternalSourceScope[];
   displayName: string;
   location: string;
@@ -272,6 +273,7 @@ export function buildExternalSourcePresentationGroups(
 
     groups.push({
       key,
+      ecosystemId: representative.record.ecosystemId,
       scopes,
       displayName: representative.record.displayName,
       location: normalizeLocation(representative.record.location),

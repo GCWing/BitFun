@@ -148,7 +148,6 @@
     "tools": "工具：{{tools}}",
     "executionDomain": "執行位置：本機與目前工作區",
     "compatibility": "狀態：{{state}}",
-    "sources": "由 {{count}} 個設定來源共同定義",
     "noDescription": "未提供說明",
     "noTools": "無工具",
     "sourceLocations": "設定來源（{{count}} 個）"
@@ -390,7 +389,7 @@
   "opencode": {
     "title": "OpenCode 擴充",
     "description": "從 OpenCode 相容設定中發現的外部能力。",
-    "summary": "發現 {{agents}} 個 Agent · {{commands}} 個命令 · {{mcps}} 個 MCP",
+    "summary": "發現 {{agents}} 個 Agent · {{commands}} 個命令 · {{tools}} 個工具 · {{mcps}} 個 MCP",
     "configLocations": "設定位置",
     "inherited": "繼承自整體模式",
     "capability": {

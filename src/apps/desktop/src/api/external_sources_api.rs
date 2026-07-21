@@ -1,7 +1,8 @@
 //! Desktop host API for ecosystem-neutral external AI application sources.
 
 use bitfun_core::external_sources::{
-    choose_external_mcp_conflict, choose_external_subagent_conflict, external_source_snapshot,
+    choose_external_mcp_conflict, choose_external_subagent_conflict,
+    external_source_location_for_host_action, external_source_snapshot,
     set_external_mcp_server_decision, set_external_prompt_command_conflict_choice,
     set_external_source_enabled, set_external_subagent_activation,
     set_external_tool_conflict_choice, set_external_tool_target_decision,
@@ -28,6 +29,13 @@ pub struct SetExternalSourceEnabledRequest {
     pub source_key: String,
     pub enabled: bool,
     pub expected_preference_revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RevealExternalSourceLocationRequest {
+    pub workspace_path: Option<String>,
+    pub source_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +162,18 @@ pub async fn get_external_source_snapshot(
     external_source_snapshot(workspace, request.force_refresh)
         .await
         .map(Into::into)
+        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn reveal_external_source_location(
+    request: RevealExternalSourceLocationRequest,
+) -> ExternalSourceOperationResult<()> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    let path = external_source_location_for_host_action(workspace, &request.source_key)
+        .await
+        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
+    super::commands::reveal_local_path_in_explorer(&path, &request.source_key)
         .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
 }
 

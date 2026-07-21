@@ -576,6 +576,12 @@ export const externalSourceCorePublicApiEntries = [
       'BitFun CLI and desktop host APIs',
     ),
   ),
+  externalSourceEntry(
+    'external_source_location_for_host_action',
+    'bitfun-core external source composition owner',
+    'Desktop external-source configuration host adapter',
+    true,
+  ),
   ...[
     'ExternalToolActivationState',
     'ExternalToolApprovalRequest',

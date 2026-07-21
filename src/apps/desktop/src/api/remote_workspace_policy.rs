@@ -459,6 +459,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "reveal_external_source_location",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "get_file_change_history",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

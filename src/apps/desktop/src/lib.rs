@@ -936,6 +936,7 @@ pub async fn run() {
             api::editor_ai_api::editor_ai_stream,
             api::editor_ai_api::editor_ai_cancel,
             get_external_source_snapshot,
+            reveal_external_source_location,
             update_external_integration_policy_command,
             set_external_source_enabled_command,
             set_external_source_conflict_choice_command,

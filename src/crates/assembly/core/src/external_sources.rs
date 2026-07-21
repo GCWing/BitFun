@@ -2074,6 +2074,22 @@ impl WorkspaceExternalSourceService {
         lock_snapshot(&self.snapshot).clone()
     }
 
+    fn source_location(&self, stable_key: &str) -> Result<PathBuf, String> {
+        let command_snapshot = lock_coordinator(&self.coordinator).snapshot();
+        let tool_snapshot = lock_tool_coordinator(&self.tool_coordinator).snapshot();
+        let subagent_snapshot = lock_subagent_coordinator(&self.subagent_coordinator).snapshot();
+        let mcp_snapshot = lock_mcp_coordinator(&self.mcp_coordinator).snapshot();
+        resolve_external_source_location(
+            stable_key,
+            command_snapshot
+                .sources
+                .iter()
+                .chain(tool_snapshot.sources.iter())
+                .chain(subagent_snapshot.sources.iter())
+                .chain(mcp_snapshot.sources.iter()),
+        )
+    }
+
     async fn set_source_enabled(
         self: &Arc<Self>,
         stable_key: &str,
@@ -3177,6 +3193,29 @@ fn relative_display_path(location: &str, root: &Path) -> Option<String> {
     (prefix.eq_ignore_ascii_case(root) && relative.starts_with('/'))
         .then(|| relative.trim_start_matches('/').to_string())
         .or_else(|| (prefix.eq_ignore_ascii_case(root) && relative.is_empty()).then(String::new))
+}
+
+fn resolve_external_source_location<'a>(
+    stable_key: &str,
+    sources: impl IntoIterator<Item = &'a ExternalSourceCatalogEntry>,
+) -> Result<PathBuf, String> {
+    let location = sources
+        .into_iter()
+        .find(|source| source.stable_key == stable_key)
+        .map(|source| source.record.location.trim())
+        .filter(|location| !location.is_empty())
+        .ok_or_else(|| {
+            missing_candidate_error(format!(
+                "External source '{stable_key}' is no longer available"
+            ))
+        })?;
+    let path = PathBuf::from(location);
+    if !path.is_absolute() {
+        return Err(invalid_operation_error(
+            "External source location is not an absolute host path",
+        ));
+    }
+    Ok(path)
 }
 
 pub(super) fn safe_external_source_location(
@@ -4916,6 +4955,17 @@ pub async fn external_source_snapshot(
     }
 }
 
+/// Resolves an opaque source identity to its host-local location for a host
+/// action. The raw path must not be serialized into the public snapshot.
+pub async fn external_source_location_for_host_action(
+    workspace_root: Option<&Path>,
+    stable_key: &str,
+) -> Result<PathBuf, String> {
+    service_for(workspace_root)
+        .await?
+        .source_location(stable_key)
+}
+
 /// Returns a static, sanitized projection for Hosts that may inspect external
 /// configuration but must never load external code or alter runtime routes.
 pub async fn external_source_read_only_snapshot(
@@ -5411,6 +5461,41 @@ mod tests {
             .sources
             .iter()
             .all(|source| source.record.location == "<remote>/.config/opencode/opencode.json"));
+    }
+
+    #[test]
+    fn reveal_location_uses_stable_identity_and_keeps_the_raw_path_private() {
+        let raw_location = std::env::current_dir()
+            .unwrap()
+            .join(".opencode")
+            .join("opencode.json");
+        let source = ExternalSourceCatalogEntry {
+            stable_key: "opencode-project".to_string(),
+            presentation_group_id: Some("opencode-project".to_string()),
+            record: ExternalSourceRecord {
+                key: SourceKey::new("opencode.commands", "project").unwrap(),
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                display_name: "OpenCode project configuration".to_string(),
+                source_kind: "configuration".to_string(),
+                scope: ExternalSourceScope::Project,
+                location: raw_location.to_string_lossy().into_owned(),
+                execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+                health: bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                content_version: "source-v1".to_string(),
+                diagnostics: Vec::new(),
+            },
+            lifecycle: ExternalSourceLifecycleState::Available,
+        };
+
+        let resolved =
+            resolve_external_source_location("opencode-project", std::iter::once(&source)).unwrap();
+
+        assert_eq!(resolved, raw_location);
+        assert!(resolve_external_source_location(
+            "<workspace>/.opencode",
+            std::iter::once(&source)
+        )
+        .is_err());
     }
 
     struct DelayedProvider {

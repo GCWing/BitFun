@@ -148,7 +148,6 @@
     "tools": "Tools: {{tools}}",
     "executionDomain": "Runs in: this computer and current workspace",
     "compatibility": "Status: {{state}}",
-    "sources": "Combined from {{count}} configuration sources",
     "noDescription": "No description provided",
     "noTools": "No tools",
     "sourceLocations": "Configuration sources ({{count}})"
@@ -390,7 +389,7 @@
   "opencode": {
     "title": "OpenCode extensions",
     "description": "External capabilities discovered from OpenCode-compatible configurations.",
-    "summary": "Found {{agents}} agents · {{commands}} commands · {{mcps}} MCP",
+    "summary": "Found {{agents}} agents · {{commands}} commands · {{tools}} tools · {{mcps}} MCP",
     "configLocations": "Configuration locations",
     "inherited": "Inherited from overall mode",
     "capability": {

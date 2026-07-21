@@ -626,6 +626,15 @@ export const externalSourcesAPI = {
     });
   },
 
+  revealSourceLocation(workspacePath: string | undefined, sourceKey: string) {
+    return invokeExternal<void>('reveal_external_source_location', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        sourceKey,
+      },
+    });
+  },
+
   setSourceEnabled(
     workspacePath: string | undefined,
     sourceKey: string,
