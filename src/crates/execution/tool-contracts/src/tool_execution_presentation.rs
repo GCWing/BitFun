@@ -160,6 +160,27 @@ pub fn build_user_rejected_tool_presentation_with_instruction(
     }
 }
 
+pub fn build_permission_denied_tool_presentation(
+    tool_name: &str,
+    reason: &str,
+) -> ToolExecutionErrorPresentation {
+    let reason = reason.trim();
+    let message = format!(
+        "This tool call was blocked by the current permission policy: \"{reason}\". Do not retry it. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
+    );
+
+    ToolExecutionErrorPresentation {
+        result_json: serde_json::json!({
+            "status": "rejected",
+            "category": "permission_denied",
+            "tool_name": tool_name,
+            "reason": reason,
+            "message": message,
+        }),
+        result_for_assistant: message,
+    }
+}
+
 pub fn build_invalid_tool_call_error_message(
     tool_name: &str,
     tool_is_error: bool,

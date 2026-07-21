@@ -102,9 +102,10 @@ pub use mcp_tool_bridge::{
 };
 pub use permission_intent::PermissionIntent;
 pub use tool_execution_presentation::{
-    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_execution_error_presentation, build_tool_execution_timeout_presentation,
-    build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
+    build_invalid_tool_call_error_message, build_permission_denied_tool_presentation,
+    build_tool_call_truncation_recovery_notice, build_tool_execution_error_presentation,
+    build_tool_execution_timeout_presentation, build_user_rejected_tool_presentation,
+    build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, is_write_like_tool_name,
     render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
     truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,

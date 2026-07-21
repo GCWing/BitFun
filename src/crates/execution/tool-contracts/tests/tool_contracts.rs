@@ -38,9 +38,9 @@ use bitfun_agent_tools::{
     ToolWorkspaceKind, ValidationResult, CALL_DEFERRED_TOOL_NAME, GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_execution_error_presentation, build_user_rejected_tool_presentation,
-    build_user_rejected_tool_presentation_with_instruction,
+    build_invalid_tool_call_error_message, build_permission_denied_tool_presentation,
+    build_tool_call_truncation_recovery_notice, build_tool_execution_error_presentation,
+    build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, is_write_like_tool_name,
     render_tool_result_for_assistant, truncate_raw_tool_arguments_preview_to,
     truncate_tool_arguments_preview, TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES,
@@ -557,6 +557,27 @@ fn user_rejected_tool_presentation_is_not_an_argument_error() {
         presentation.result_for_assistant,
         "The user rejected this tool call with the following instruction: \"Use the built-in status view instead.\". Do not retry it unless the user explicitly asks you to. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
     );
+}
+
+#[test]
+fn permission_denied_tool_presentation_is_not_a_user_rejection() {
+    let presentation = build_permission_denied_tool_presentation(
+        "ExecCommand",
+        "Global permission policy denies bash commands.",
+    );
+
+    assert_eq!(presentation.result_json["status"], "rejected");
+    assert_eq!(presentation.result_json["category"], "permission_denied");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(
+        presentation.result_json["reason"],
+        "Global permission policy denies bash commands."
+    );
+    assert_eq!(
+        presentation.result_for_assistant,
+        "This tool call was blocked by the current permission policy: \"Global permission policy denies bash commands.\". Do not retry it. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
+    );
+    assert!(!presentation.result_for_assistant.contains("user rejected"));
 }
 
 #[test]

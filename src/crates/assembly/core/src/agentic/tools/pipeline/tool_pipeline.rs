@@ -19,14 +19,15 @@ use bitfun_agent_runtime::permission::{
     PendingPermissionReceiver, PermissionRequestManager, PermissionWaitOutcome,
 };
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_execution_error_presentation, build_tool_execution_timeout_presentation,
+    build_invalid_tool_call_error_message, build_permission_denied_tool_presentation,
+    build_tool_call_truncation_recovery_notice, build_tool_execution_error_presentation,
+    build_tool_execution_timeout_presentation,
     build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
     truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
     validate_tool_execution_admission, PermissionIntent, ResolvedToolInvocation,
-    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
-    USER_STEERING_INTERRUPTED_MESSAGE,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExecutionErrorPresentation,
+    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::{
     wildcard_matches, PermissionEffect, PermissionGrant, PermissionReply, PermissionRequest,
@@ -305,7 +306,27 @@ fn build_user_steering_interrupted_result(
 fn build_user_rejected_tool_result(
     task_id: &str,
     task: Option<ToolTask>,
-    instruction: Option<&str>,
+    feedback: Option<&str>,
+) -> ToolExecutionResult {
+    build_permission_rejected_tool_result(task_id, task, |tool_name| {
+        build_user_rejected_tool_presentation_with_instruction(tool_name, feedback)
+    })
+}
+
+fn build_permission_denied_tool_result(
+    task_id: &str,
+    task: Option<ToolTask>,
+    reason: &str,
+) -> ToolExecutionResult {
+    build_permission_rejected_tool_result(task_id, task, |tool_name| {
+        build_permission_denied_tool_presentation(tool_name, reason)
+    })
+}
+
+fn build_permission_rejected_tool_result(
+    task_id: &str,
+    task: Option<ToolTask>,
+    presentation_for: impl FnOnce(&str) -> ToolExecutionErrorPresentation,
 ) -> ToolExecutionResult {
     let (tool_id, wire_tool_name, effective_tool_name, execution_time_ms) = if let Some(task) = task
     {
@@ -328,8 +349,7 @@ fn build_user_rejected_tool_result(
         )
     };
 
-    let presentation =
-        build_user_rejected_tool_presentation_with_instruction(&effective_tool_name, instruction);
+    let presentation = presentation_for(&effective_tool_name);
     let persisted_effective_tool_name =
         persisted_effective_tool_name(&wire_tool_name, &effective_tool_name);
 
@@ -402,7 +422,17 @@ fn recovered_write_has_potentially_truncated_marked_path(
 
 enum PermissionAuthorization {
     Allowed,
-    Rejected { reason: String },
+    UserRejected { feedback: Option<String> },
+    PolicyDenied { reason: String },
+}
+
+fn user_rejection_audit_reason(tool_name: &str, feedback: Option<&str>) -> String {
+    match feedback {
+        Some(feedback) => {
+            format!("User rejected permission for tool '{tool_name}' with feedback: {feedback}")
+        }
+        None => format!("User rejected permission for tool '{tool_name}'"),
+    }
 }
 
 #[derive(Debug)]
@@ -840,27 +870,25 @@ impl ToolPipeline {
     async fn await_prepared_permission_plan(
         &self,
         task_id: &str,
-        tool_name: String,
         cancellation_token: &CancellationToken,
     ) -> BitFunResult<PermissionAuthorization> {
         let Some(plan) = self.permission_plans.lock().await.remove(task_id) else {
             return Ok(PermissionAuthorization::Allowed);
         };
 
-        self.await_permission_execution_plan(plan, tool_name, cancellation_token)
+        self.await_permission_execution_plan(plan, cancellation_token)
             .await
     }
 
     async fn await_permission_execution_plan(
         &self,
         plan: PermissionExecutionPlan,
-        tool_name: String,
         cancellation_token: &CancellationToken,
     ) -> BitFunResult<PermissionAuthorization> {
         let receivers = match plan {
             PermissionExecutionPlan::Allowed => return Ok(PermissionAuthorization::Allowed),
             PermissionExecutionPlan::Rejected { reason } => {
-                return Ok(PermissionAuthorization::Rejected { reason });
+                return Ok(PermissionAuthorization::PolicyDenied { reason });
             }
             PermissionExecutionPlan::Awaiting(receivers) => receivers,
         };
@@ -895,11 +923,10 @@ impl ToolPipeline {
                         "Another permission request for this tool was rejected".to_string(),
                     )
                     .await;
-                    return Ok(PermissionAuthorization::Rejected {
-                        reason: feedback.unwrap_or_else(|| {
-                            format!("User rejected permission for tool '{tool_name}'")
-                        }),
-                    });
+                    let feedback = feedback
+                        .map(|feedback| feedback.trim().to_string())
+                        .filter(|feedback| !feedback.is_empty());
+                    return Ok(PermissionAuthorization::UserRejected { feedback });
                 }
                 PermissionWaitOutcome::Cancelled { reason } => {
                     self.cancel_permission_request_ids(
@@ -989,7 +1016,7 @@ impl ToolPipeline {
             ),
         };
 
-        self.await_permission_execution_plan(plan, tool_name.to_string(), cancellation_token)
+        self.await_permission_execution_plan(plan, cancellation_token)
             .await
     }
 
@@ -1503,7 +1530,7 @@ impl ToolPipeline {
 
         let has_prepared_plan = self.permission_plans.lock().await.contains_key(&tool_id);
         let permission_authorization = if has_prepared_plan {
-            self.await_prepared_permission_plan(&tool_id, tool_name.clone(), &cancellation_token)
+            self.await_prepared_permission_plan(&tool_id, &cancellation_token)
                 .await
         } else {
             let permission_intents = tool.permission_intents(&tool_args, &tool_context)?;
@@ -1517,34 +1544,48 @@ impl ToolPipeline {
             .await
         };
 
-        match permission_authorization {
-            Ok(PermissionAuthorization::Allowed) => {}
-            Ok(PermissionAuthorization::Rejected { reason }) => {
-                let preflight_ms = elapsed_ms_u64(start_time);
-                self.state_manager
-                    .update_state(
-                        &tool_id,
-                        ToolExecutionState::Rejected {
-                            reason: reason.clone(),
-                            duration_ms: Some(preflight_ms),
-                            queue_wait_ms: Some(queue_wait_ms),
-                            preflight_ms: Some(preflight_ms),
-                            confirmation_wait_ms: Some(0),
-                            execution_ms: None,
-                        },
-                    )
-                    .await;
-                self.cancellation_tokens.remove(&tool_id);
-                return Ok(build_user_rejected_tool_result(
+        let rejected = match permission_authorization {
+            Ok(PermissionAuthorization::Allowed) => None,
+            Ok(PermissionAuthorization::UserRejected { feedback }) => {
+                let reason = user_rejection_audit_reason(&tool_name, feedback.as_deref());
+                let result = build_user_rejected_tool_result(
                     &tool_id,
                     self.state_manager.get_task(&tool_id),
-                    Some(&reason),
-                ));
+                    feedback.as_deref(),
+                );
+                Some((reason, result))
+            }
+            Ok(PermissionAuthorization::PolicyDenied { reason }) => {
+                let result = build_permission_denied_tool_result(
+                    &tool_id,
+                    self.state_manager.get_task(&tool_id),
+                    &reason,
+                );
+                Some((reason, result))
             }
             Err(error) => {
                 self.cancellation_tokens.remove(&tool_id);
                 return Err(error);
             }
+        };
+
+        if let Some((reason, result)) = rejected {
+            let preflight_ms = elapsed_ms_u64(start_time);
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Rejected {
+                        reason,
+                        duration_ms: Some(preflight_ms),
+                        queue_wait_ms: Some(queue_wait_ms),
+                        preflight_ms: Some(preflight_ms),
+                        confirmation_wait_ms: Some(0),
+                        execution_ms: None,
+                    },
+                )
+                .await;
+            self.cancellation_tokens.remove(&tool_id);
+            return Ok(result);
         }
 
         debug!("Executing tool: tool_name={}", tool_name);
@@ -2061,7 +2102,9 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::WorkspaceBinding;
     use async_trait::async_trait;
-    use bitfun_agent_tools::{LoadedDeferredToolSpec, CALL_DEFERRED_TOOL_NAME};
+    use bitfun_agent_tools::{
+        LoadedDeferredToolSpec, CALL_DEFERRED_TOOL_NAME, USER_REJECTED_TOOL_MESSAGE,
+    };
     use bitfun_runtime_ports::{
         ClockPort, PermissionAuditEvent, PermissionAuditRecord, PermissionAuditStorePort,
         PermissionGrant, PermissionGrantKey, PermissionGrantStorePort, PermissionReplyStorePort,
@@ -2659,7 +2702,12 @@ mod tests {
                 .map(|task| task.state),
             Some(ToolExecutionState::Rejected { .. })
         ));
-        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert_eq!(results[0].result.result["category"], "permission_denied");
+        assert!(results[0]
+            .result
+            .result_for_assistant
+            .as_deref()
+            .is_some_and(|message| message.contains("current permission policy")));
     }
 
     fn permission_test_manager(store: Arc<MemoryPermissionStore>) -> Arc<PermissionRequestManager> {
@@ -2753,6 +2801,7 @@ mod tests {
             Some(ToolExecutionState::Rejected { .. })
         ));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(results[0].result.result["category"], "permission_denied");
     }
 
     #[tokio::test]
@@ -2856,7 +2905,69 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert!(results[0].result.result["instruction"].is_null());
+        assert_eq!(
+            results[0].result.result_for_assistant.as_deref(),
+            Some(USER_REJECTED_TOOL_MESSAGE)
+        );
         assert!(!results[1].result.is_error);
+    }
+
+    #[tokio::test]
+    async fn v2_rejection_feedback_is_preserved_for_the_assistant() {
+        let store = Arc::new(MemoryPermissionStore::default());
+        let manager = permission_test_manager(Arc::clone(&store));
+        let pipeline = test_tool_pipeline().with_permission_request_manager(Arc::clone(&manager));
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/main.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let running_pipeline = pipeline.clone();
+        let execution = tokio::spawn(async move {
+            running_pipeline
+                .execute_tools(
+                    vec![test_tool_call("reject-with-feedback", "Write")],
+                    permission_test_context(),
+                    ToolExecutionOptions::default(),
+                )
+                .await
+        });
+
+        let request = wait_for_permission_request(&manager).await;
+        manager
+            .reply(
+                &request.request_id,
+                PermissionReply::Reject {
+                    feedback: Some("Use a read-only path".to_string()),
+                },
+                bitfun_runtime_ports::PermissionReplySource::User,
+            )
+            .await
+            .expect("reject request with feedback");
+
+        let results = execution
+            .await
+            .expect("feedback rejection task join")
+            .expect("feedback rejection should return a structured result");
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(results[0].result.result["category"], "user_rejected");
+        assert_eq!(
+            results[0].result.result["instruction"],
+            "Use a read-only path"
+        );
+        assert_eq!(
+            results[0].result.result_for_assistant.as_deref(),
+            Some(
+                "The user rejected this tool call with the following instruction: \"Use a read-only path\". Do not retry it unless the user explicitly asks you to. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
+            )
+        );
     }
 
     #[tokio::test]
