@@ -455,7 +455,7 @@ fn print_external_policy_status(snapshot: &ExternalSourceCatalogSnapshot) {
             "Status: safely off (policy schema {} is not supported by this version)",
             policy.schema_major
         );
-        println!("Recovery: bitfun-cli config external reset-incompatible");
+        println!("Recovery: bitfun config external reset-incompatible");
         println!("The original policy will be backed up before safe defaults are restored.");
         return;
     }

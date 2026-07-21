@@ -4,10 +4,16 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "BitFun CLI - Terminal User Interface"
+default-run = "bitfun"
+autobins = false
+
+[[bin]]
+name = "bitfun"
+path = "src/main.rs"
 
 [[bin]]
 name = "bitfun-cli"
-path = "src/main.rs"
+path = "src/bin/bitfun_cli_compat.rs"
 
 [dependencies]
 # Internal crates
@@ -76,6 +82,9 @@ tempfile = "3"
 sha2 = { workspace = true }
 hex = { workspace = true }
 portable-pty = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Console"] }
 
 [features]
 default = []

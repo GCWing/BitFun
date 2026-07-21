@@ -537,7 +537,7 @@ export const externalSourceCorePublicApiEntries = [
     externalIntegrationPolicyEntry(
       symbol,
       'bitfun-core external integration policy composition facade',
-      'bitfun-cli, Desktop, Server, Peer Host, and Web API adapters',
+      'BitFun CLI, Desktop, Server, Peer Host, and Web API adapters',
       true,
     ),
   ),
@@ -573,7 +573,7 @@ export const externalSourceCorePublicApiEntries = [
     externalSourceEntry(
       symbol,
       'bitfun-core external source composition facade',
-      'bitfun-cli and desktop host APIs',
+      'BitFun CLI and desktop host APIs',
     ),
   ),
   ...[
@@ -590,7 +590,7 @@ export const externalSourceCorePublicApiEntries = [
     externalToolEntry(
       symbol,
       'bitfun-core external tool composition facade',
-      'bitfun-cli and desktop host APIs',
+      'BitFun CLI and desktop host APIs',
     ),
   ),
   ...[
@@ -605,7 +605,7 @@ export const externalSourceCorePublicApiEntries = [
     externalSubagentEntry(
       symbol,
       'bitfun-core external subagent composition facade',
-      'bitfun-cli and desktop host APIs',
+      'BitFun CLI and desktop host APIs',
     ),
   ),
   ...[
@@ -621,7 +621,7 @@ export const externalSourceCorePublicApiEntries = [
     externalMcpEntry(
       symbol,
       'bitfun-core external MCP composition facade',
-      'bitfun-cli and desktop host APIs',
+      'BitFun CLI and desktop host APIs',
     ),
   ),
 ];
@@ -675,8 +675,8 @@ export const managedPluginSourcePublicApiEntries = [
   pluginSourceEntry(
     symbol,
     'bitfun-core managed plugin source compatibility facade',
-    'bitfun-cli plugins and doctor commands',
-    'services-integrations plugin_source tests, core boundary checks, and bitfun-cli plugin command tests',
+    'BitFun CLI plugins and doctor commands',
+    'services-integrations plugin_source tests, core boundary checks, and BitFun CLI plugin command tests',
     false,
   ),
 );
@@ -692,8 +692,8 @@ export const managedPluginActivationPublicApiEntries = [
   pluginSourceEntry(
     symbol,
     'bitfun-core managed plugin composition root',
-    'bitfun-cli plugin activation commands',
-    'bitfun-core plugin_runtime tests, bitfun-cli plugin source tests, and core boundary checks',
+    'BitFun CLI plugin activation commands',
+    'bitfun-core plugin_runtime tests, BitFun CLI plugin source tests, and core boundary checks',
     false,
   ),
 );

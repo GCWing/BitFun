@@ -278,7 +278,7 @@ mod tests {
         assert!(text.contains("OpenCode: recommended"));
         assert!(text.contains("command auto"));
         assert!(text.contains("tool ask"));
-        assert!(text.contains("bitfun-cli config external --help"));
+        assert!(text.contains("bitfun config external --help"));
     }
 
     #[test]

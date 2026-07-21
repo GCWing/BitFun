@@ -181,10 +181,23 @@ fn active_turn_resize_can_be_cancelled_and_returns_to_editable_input() {
 
 #[test]
 fn exec_stream_json_ctrl_c_emits_one_cancelled_terminal_and_disconnects() {
+    assert_exec_stream_json_ctrl_c_contract(false);
+}
+
+#[test]
+fn legacy_exec_stream_json_ctrl_c_emits_one_cancelled_terminal_and_disconnects() {
+    assert_exec_stream_json_ctrl_c_contract(true);
+}
+
+fn assert_exec_stream_json_ctrl_c_contract(deprecated_entrypoint: bool) {
     let server = MockOpenAiServer::gated();
     let environment = CliTestEnvironment::new();
     environment.configure_mock_model(server.base_url());
-    let mut command = environment.pty_command();
+    let mut command = if deprecated_entrypoint {
+        environment.deprecated_pty_command()
+    } else {
+        environment.pty_command()
+    };
     command.args([
         "exec",
         "exercise interrupt contract",
@@ -256,6 +269,14 @@ fn exec_stream_json_ctrl_c_emits_one_cancelled_terminal_and_disconnects() {
         events.last().expect("stream-json cancellation event")["event"]["type"],
         "DialogTurnCancelled",
         "cancellation must be the final protocol envelope:\n{output}"
+    );
+    let deprecation_count = output
+        .matches("Warning: `bitfun-cli` is deprecated; use `bitfun` instead.")
+        .count();
+    assert_eq!(
+        deprecation_count,
+        usize::from(deprecated_entrypoint),
+        "deprecated warning count changed:\n{output}"
     );
 }
 
@@ -355,7 +376,7 @@ impl PtyProcess {
         let mut child = pair
             .slave
             .spawn_command(command)
-            .expect("spawn bitfun-cli in native PTY");
+            .expect("spawn BitFun CLI in native PTY");
         drop(pair.slave);
 
         let mut reader = pair.master.try_clone_reader().expect("clone PTY reader");
@@ -377,7 +398,7 @@ impl PtyProcess {
 
         // Detect an immediate startup failure before handing the process to the test.
         if let Some(status) = child.try_wait().expect("poll initial CLI process") {
-            panic!("bitfun-cli exited during PTY startup: {status}");
+            panic!("BitFun CLI exited during PTY startup: {status}");
         }
 
         Self {
@@ -404,7 +425,7 @@ impl PtyProcess {
                 .as_mut()
                 .expect("PTY process child")
                 .try_wait()
-                .expect("poll bitfun-cli process")
+                .expect("poll BitFun CLI process")
             {
                 let output = self.output();
                 self.close_io();
@@ -440,7 +461,7 @@ impl PtyProcess {
                 .as_mut()
                 .expect("PTY process child")
                 .try_wait()
-                .expect("poll bitfun-cli process")
+                .expect("poll BitFun CLI process")
             {
                 break status;
             }

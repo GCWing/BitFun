@@ -630,7 +630,7 @@ impl ChatMode {
                 self.handle_external_tool_review("", chat_view, chat_state, rt_handle);
             }
             ActionHandler::AcpHelp => {
-                chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun-cli"));
+                chat_state.add_system_message(crate::acp_cli::acp_help_text("bitfun"));
                 chat_view.set_status(Some(
                     "ACP setup added to the conversation. You can keep typing.".to_string(),
                 ));

@@ -261,13 +261,13 @@ enum AcpAction {
     /// Show ACP server status and capabilities
     Status {
         /// Command name or path to show in generated examples
-        #[arg(long, default_value = "bitfun-cli")]
+        #[arg(long, default_value = "bitfun")]
         command: String,
     },
     /// Check local readiness for ACP clients
     Doctor {
         /// Command name or path to show in generated examples
-        #[arg(long, default_value = "bitfun-cli")]
+        #[arg(long, default_value = "bitfun")]
         command: String,
     },
     /// Print editor/client integration snippets
@@ -277,7 +277,7 @@ enum AcpAction {
         client: acp_cli::AcpConfigClient,
 
         /// Command name or path your editor should execute
-        #[arg(long, default_value = "bitfun-cli")]
+        #[arg(long, default_value = "bitfun")]
         command: String,
     },
     /// Manage external ACP agents that BitFun can launch
@@ -1114,7 +1114,7 @@ fn main() {
                 .expect("failed to build tokio runtime");
             runtime.block_on(run_cli())
         })
-        .expect("failed to spawn bitfun-cli worker thread");
+        .expect("failed to spawn bitfun worker thread");
 
     match worker.join() {
         Ok(Ok(())) => {}
@@ -1126,7 +1126,7 @@ fn main() {
             std::process::exit(1);
         }
         Err(_) => {
-            eprintln!("Error: bitfun-cli worker thread panicked");
+            eprintln!("Error: bitfun worker thread panicked");
             std::process::exit(1);
         }
     }
@@ -1139,15 +1139,14 @@ mod plugin_command_tests {
 
     #[test]
     fn plugin_commands_parse_list_and_source_review_actions() {
-        let list = Cli::try_parse_from(["bitfun-cli", "plugins"]).expect("parse plugin list");
+        let list = Cli::try_parse_from(["bitfun", "plugins"]).expect("parse plugin list");
         assert!(matches!(
             list.command,
             Some(Commands::Plugins { action: None })
         ));
 
-        let approval =
-            Cli::try_parse_from(["bitfun-cli", "plugins", "approve-source", "acme.demo"])
-                .expect("parse plugin source approval");
+        let approval = Cli::try_parse_from(["bitfun", "plugins", "approve-source", "acme.demo"])
+            .expect("parse plugin source approval");
         assert!(matches!(
             approval.command,
             Some(Commands::Plugins {
@@ -1155,7 +1154,7 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo"
         ));
 
-        let deny = Cli::try_parse_from(["bitfun-cli", "plugins", "deny", "acme.demo"])
+        let deny = Cli::try_parse_from(["bitfun", "plugins", "deny", "acme.demo"])
             .expect("parse plugin deny");
         assert!(matches!(
             deny.command,
@@ -1164,7 +1163,7 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo"
         ));
 
-        let revoke = Cli::try_parse_from(["bitfun-cli", "plugins", "revoke", "acme.demo"])
+        let revoke = Cli::try_parse_from(["bitfun", "plugins", "revoke", "acme.demo"])
             .expect("parse plugin revoke");
         assert!(matches!(
             revoke.command,
@@ -1173,7 +1172,7 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo"
         ));
 
-        let preview = Cli::try_parse_from(["bitfun-cli", "plugins", "activate", "acme.demo"])
+        let preview = Cli::try_parse_from(["bitfun", "plugins", "activate", "acme.demo"])
             .expect("parse plugin activation preview");
         assert!(matches!(
             preview.command,
@@ -1186,7 +1185,7 @@ mod plugin_command_tests {
         ));
 
         let confirm = Cli::try_parse_from([
-            "bitfun-cli",
+            "bitfun",
             "plugins",
             "activate",
             "acme.demo",
@@ -1204,7 +1203,7 @@ mod plugin_command_tests {
             }) if package_id == "acme.demo" && content_hash == "sha256:previewed"
         ));
 
-        let deactivate = Cli::try_parse_from(["bitfun-cli", "plugins", "deactivate", "acme.demo"])
+        let deactivate = Cli::try_parse_from(["bitfun", "plugins", "deactivate", "acme.demo"])
             .expect("parse plugin deactivation");
         assert!(matches!(
             deactivate.command,
@@ -1225,7 +1224,7 @@ mod external_config_command_tests {
 
     #[test]
     fn external_config_commands_keep_scope_and_capability_explicit() {
-        let status = Cli::try_parse_from(["bitfun-cli", "config", "external", "status"])
+        let status = Cli::try_parse_from(["bitfun", "config", "external", "status"])
             .expect("parse external status");
         assert!(matches!(
             status.command,
@@ -1237,7 +1236,7 @@ mod external_config_command_tests {
         ));
 
         let mode = Cli::try_parse_from([
-            "bitfun-cli",
+            "bitfun",
             "config",
             "external",
             "set-mode",
@@ -1260,7 +1259,7 @@ mod external_config_command_tests {
         ));
 
         let capability = Cli::try_parse_from([
-            "bitfun-cli",
+            "bitfun",
             "config",
             "external",
             "set-capability",
@@ -1284,7 +1283,7 @@ mod external_config_command_tests {
             }) if ecosystem == "opencode"
         ));
 
-        let reset = Cli::try_parse_from(["bitfun-cli", "config", "external", "reset-incompatible"])
+        let reset = Cli::try_parse_from(["bitfun", "config", "external", "reset-incompatible"])
             .expect("parse incompatible policy reset");
         assert!(matches!(
             reset.command,
