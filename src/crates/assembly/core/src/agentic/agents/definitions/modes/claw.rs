@@ -44,6 +44,7 @@ impl ClawMode {
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
                 "PageDeploy".to_string(),
+                "PagePublish".to_string(),
             ],
         }
     }

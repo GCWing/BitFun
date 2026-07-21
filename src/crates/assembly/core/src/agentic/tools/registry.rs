@@ -499,6 +499,7 @@ mod tests {
             "ReviewPlatform",
             "InitMiniApp",
             "PageDeploy",
+            "PagePublish",
             "ControlHub",
             "ComputerUse",
             "Playbook",

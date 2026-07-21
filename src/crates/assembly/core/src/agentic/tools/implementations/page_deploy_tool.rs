@@ -29,13 +29,15 @@ impl Tool for PageDeployTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            r#"Deploy a previously saved BitFun Page version to the production URL on the account relay.
+            r#"Switch the production pointer of an existing BitFun Page to a previously saved version_id (rollback or promote a prior version).
 
-Requires a logged-in BitFun account. Saving a version is done in the BitFun Page scene (Save version); this tool only switches the production pointer.
+Requires a logged-in BitFun account. This tool is only available after account login. To create or update page content and publish, use PagePublish instead — do not ask the user for a version_id they do not have, and do not mention a Page management scene.
 
-Input: slug (page path id), version_id (immutable saved version). Returns the updated page info including production url_path and deployed_version_id.
+Input: slug (page path id), version_id (immutable saved version from a prior PagePublish). Returns absolute `url` plus url_path / deployed_version_id.
 
-Preview a version before deploy at /p/{username}/{slug}/@v/{version_id}."#
+When telling the user the link: paste the full absolute URL and put a trailing space after it (before any punctuation or newline).
+
+Preview a version at /p/{username}/{slug}/@v/{version_id}."#
                 .to_string(),
         )
     }
@@ -104,10 +106,21 @@ Preview a version before deploy at /p/{username}/{slug}/@v/{version_id}."#
             .await
             .map_err(BitFunError::tool)?;
 
-        let assistant = format!(
-            "Deployed BitFun Page '{}' version '{}' to production.",
-            slug, version_id
-        );
+        let url = result
+            .get("url")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| result.get("url_path").and_then(|v| v.as_str()))
+            .unwrap_or("");
+        // Trailing space after URL keeps chat linkifiers from eating the next char.
+        let assistant = if url.is_empty() {
+            format!("Deployed BitFun Page '{slug}' version '{version_id}' to production.")
+        } else {
+            format!(
+                "Deployed BitFun Page '{slug}' version '{version_id}'. Production URL: {url} \n\
+                 Share this full absolute URL with the user, and keep a trailing space after the URL."
+            )
+        };
 
         Ok(vec![ToolResult::Result {
             data: result,

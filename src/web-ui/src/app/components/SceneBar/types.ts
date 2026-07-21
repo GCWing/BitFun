@@ -16,7 +16,6 @@ export type SceneTabId =
   | 'agents'
   | 'skills'
   | 'miniapps'
-  | 'bitfun-page'
   | 'browser'
   | 'assistant'
   | 'insights'

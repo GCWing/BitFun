@@ -15,7 +15,6 @@ export const ALL_NAMESPACES = [
   'panels/git',
   'panels/terminal',
   'scenes/agents',
-  'scenes/bitfun-page',
   'scenes/capabilities',
   'scenes/miniapp',
   'scenes/profile',

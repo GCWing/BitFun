@@ -1,5 +1,5 @@
 /**
- * PageDeploy tool card — shows deploy slug / version result.
+ * PagePublish tool card — shows publish slug / version / URLs.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +25,7 @@ async function openPagePath(path: string | undefined) {
   }
 }
 
-export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
+export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const { t } = useTranslation('flow-chat');
   const { status, toolResult, partialParams, isParamsStreaming, toolCall } = toolItem;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -44,19 +44,17 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   }, [isParamsStreaming, partialParams, toolCall?.input]);
 
   const versionId = useMemo(() => {
-    if (isParamsStreaming) return (partialParams?.version_id as string | undefined) || '';
-    return (
-      (toolCall?.input as Record<string, unknown> | undefined)?.version_id as
-        | string
-        | undefined
-    ) || '';
-  }, [isParamsStreaming, partialParams, toolCall?.input]);
+    if (isParamsStreaming) return '';
+    return (toolResult?.result?.version_id as string | undefined) || '';
+  }, [isParamsStreaming, toolResult?.result]);
 
-  const deployedVersion =
-    (toolResult?.result?.deployed_version_id as string | undefined) || versionId;
   const urlPath =
     (toolResult?.result?.url as string | undefined) ||
     (toolResult?.result?.url_path as string | undefined);
+  const previewPath =
+    (toolResult?.result?.preview_url as string | undefined) ||
+    (toolResult?.result?.preview_url_path as string | undefined);
+  const deployed = toolResult?.result?.deployed === true;
   const success = toolResult?.success === true;
   const isLoading = status === 'running' || status === 'streaming' || status === 'preparing';
   const isFailed =
@@ -64,7 +62,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     (status === 'completed' && toolResult != null && toolResult.success === false);
 
   const hasExpandableDetails =
-    isFailed || (status === 'completed' && success && Boolean(slug || deployedVersion));
+    isFailed || (status === 'completed' && success && Boolean(slug || versionId));
 
   const toggleExpanded = useCallback(() => {
     applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
@@ -74,7 +72,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     (e: React.MouseEvent) => {
       if (!hasExpandableDetails) return;
       const target = e.target as HTMLElement;
-      if (target.closest('.page-deploy-action-buttons')) return;
+      if (target.closest('.page-publish-action-buttons')) return;
       toggleExpanded();
     },
     [hasExpandableDetails, toggleExpanded]
@@ -84,14 +82,14 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     if (toolResult && 'error' in toolResult && toolResult.error) {
       return String(toolResult.error);
     }
-    return t('toolCards.pageDeploy.deployFailed');
+    return t('toolCards.pagePublish.publishFailed');
   };
 
   const commandText = useMemo(() => {
     if (isLoading) {
-      return slug || t('toolCards.pageDeploy.deployingShort');
+      return slug || t('toolCards.pagePublish.publishingShort');
     }
-    return slug || t('toolCards.pageDeploy.untitled');
+    return slug || t('toolCards.pagePublish.untitled');
   }, [isLoading, slug, t]);
 
   const renderStatusIcon = () => {
@@ -104,11 +102,11 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const renderHeader = () => (
     <ToolCardHeader
       icon={<Rocket size={16} />}
-      action={`${t('toolCards.pageDeploy.title')}:`}
+      action={`${t('toolCards.pagePublish.title')}:`}
       content={
-        <span className="command-text" data-testid="chat-page-deploy-title">
+        <span className="command-text" data-testid="chat-page-publish-title">
           {commandText}
-          {deployedVersion ? ` @ ${deployedVersion}` : ''}
+          {versionId ? ` @ ${versionId}` : ''}
         </span>
       }
       statusIcon={renderStatusIcon()}
@@ -116,34 +114,49 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   );
 
   const renderExpandedSuccess = () => (
-    <div className="page-deploy-result">
+    <div className="page-publish-result">
       {slug && (
         <div>
-          {t('toolCards.pageDeploy.labelSlug')}: {slug}
+          {t('toolCards.pagePublish.labelSlug')}: {slug}
         </div>
       )}
-      {deployedVersion && (
+      {versionId && (
         <div>
-          {t('toolCards.pageDeploy.labelVersion')}: {deployedVersion}
+          {t('toolCards.pagePublish.labelVersion')}: {versionId}
         </div>
       )}
-      {urlPath && (
+      {deployed && urlPath && (
         <div>
-          {t('toolCards.pageDeploy.labelPath')}: {urlPath}
+          {t('toolCards.pagePublish.labelPath')}: {urlPath}
         </div>
       )}
-      {urlPath && (
-        <div className="page-deploy-action-buttons">
+      {!deployed && previewPath && (
+        <div>
+          {t('toolCards.pagePublish.labelPreview')}: {previewPath}
+        </div>
+      )}
+      <div className="page-publish-action-buttons">
+        {deployed && urlPath && (
           <button
             type="button"
-            data-testid="chat-page-deploy-open-btn"
+            data-testid="chat-page-publish-open-prod-btn"
             onClick={() => void openPagePath(urlPath)}
           >
             <ExternalLink size={12} />
-            <span>{t('toolCards.pageDeploy.openProduction')}</span>
+            <span>{t('toolCards.pagePublish.openProduction')}</span>
           </button>
-        </div>
-      )}
+        )}
+        {previewPath && (
+          <button
+            type="button"
+            data-testid="chat-page-publish-open-preview-btn"
+            onClick={() => void openPagePath(previewPath)}
+          >
+            <ExternalLink size={12} />
+            <span>{t('toolCards.pagePublish.openPreview')}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 
@@ -162,7 +175,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   return (
     <div
       ref={cardRootRef}
-      data-testid="chat-page-deploy-card"
+      data-testid="chat-page-publish-card"
       data-tool-card-id={toolId ?? ''}
       data-status={status}
       data-expanded={isExpanded ? 'true' : 'false'}
@@ -171,7 +184,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
         status={status}
         isExpanded={isExpanded}
         onClick={hasExpandableDetails ? handleCardClick : undefined}
-        className="page-deploy-tool-display"
+        className="page-publish-tool-display"
         header={renderHeader()}
         expandedContent={isExpanded ? renderDetailsWhenExpanded() : null}
         headerExpandAffordance={hasExpandableDetails}

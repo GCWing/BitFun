@@ -5,6 +5,7 @@ use crate::embedded_relay_host::DesktopEmbeddedRelayHost;
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::agentic::tools::account_login_capability::set_account_login_available;
 use bitfun_core::agentic::tools::page_deploy_host::set_page_deploy_handler;
+use bitfun_core::agentic::tools::page_publish_host::set_page_publish_handler;
 use bitfun_core::service::remote_connect::session_store::{
     clear_credential_hint, load_credential_hint, save_credential_hint, AccountHint,
 };
@@ -15,7 +16,9 @@ use bitfun_core::service::remote_connect::{
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
 use bitfun_services_integrations::remote_connect::account::error_indicates_expired_token;
-use bitfun_services_integrations::remote_connect::deploy_page_version_on_relay;
+use bitfun_services_integrations::remote_connect::{
+    deploy_page_version_on_relay, join_relay_url, publish_page_content_on_relay,
+};
 use futures::stream::{self, StreamExt};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -335,7 +338,52 @@ fn register_page_deploy_host() {
             let info = deploy_page_version_on_relay(&relay_url, &session.token, &slug, &version_id)
                 .await
                 .map_err(|e| e.to_string())?;
-            serde_json::to_value(info).map_err(|e| e.to_string())
+            let mut value = serde_json::to_value(info).map_err(|e| e.to_string())?;
+            if let Some(obj) = value.as_object_mut() {
+                let path = obj
+                    .get("url_path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let preview_path = obj
+                    .get("preview_url_path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                obj.insert(
+                    "url".into(),
+                    serde_json::Value::String(join_relay_url(&relay_url, &path)),
+                );
+                if !preview_path.is_empty() {
+                    obj.insert(
+                        "preview_url".into(),
+                        serde_json::Value::String(join_relay_url(&relay_url, &preview_path)),
+                    );
+                }
+            }
+            Ok(value)
+        })
+    }));
+}
+
+fn register_page_publish_host() {
+    set_page_publish_handler(Arc::new(|request| {
+        Box::pin(async move {
+            let (session, relay_url) = read_account_context().await?;
+            let result = publish_page_content_on_relay(
+                &relay_url,
+                &session.token,
+                &request.slug,
+                &request.visibility,
+                request.title.as_deref(),
+                request.note.as_deref(),
+                request.deploy,
+                request.directory.as_deref(),
+                request.files.as_ref(),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
         })
     }));
 }
@@ -492,6 +540,7 @@ async fn register_account_pairing_context(service: &RemoteConnectService) {
 
 pub fn init_on_startup() {
     register_page_deploy_host();
+    register_page_publish_host();
     tokio::spawn(async {
         // Restore persisted account session (if any) before anything else
         // so that auto-sync, device routing, and bot delegation work on restart.

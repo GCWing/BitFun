@@ -66,6 +66,30 @@ pub struct PageSaveVersionResult {
     pub deployed: bool,
 }
 
+/// Result of Agent/session publish: save version, optionally deploy to production.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageContentPublishResult {
+    pub slug: String,
+    pub visibility: String,
+    pub title: String,
+    pub version_id: String,
+    pub file_count: u64,
+    pub total_bytes: u64,
+    pub has_worker: bool,
+    pub preview_url_path: String,
+    pub deployed: bool,
+    #[serde(default)]
+    pub url_path: String,
+    #[serde(default)]
+    pub deployed_version_id: Option<String>,
+    /// Absolute production URL (`{relay}{url_path}`), empty when not deployed.
+    #[serde(default)]
+    pub url: String,
+    /// Absolute preview URL (`{relay}{preview_url_path}`).
+    #[serde(default)]
+    pub preview_url: String,
+}
+
 /// Backward-compatible alias used by older callers; now means save version only.
 pub type PagePublishResult = PageSaveVersionResult;
 
@@ -79,10 +103,142 @@ pub async fn save_page_version_to_relay(
     title: Option<&str>,
     note: Option<&str>,
 ) -> Result<PageSaveVersionResult> {
+    let all_files = collect_page_files(Path::new(web_dir))?;
+    save_page_version_from_collected_files(
+        relay_url, token, slug, visibility, title, note, all_files,
+    )
+    .await
+}
+
+/// Save a new immutable version from inline path→UTF-8 content map (does not deploy).
+pub async fn save_page_version_from_inline_files(
+    relay_url: &str,
+    token: &str,
+    slug: &str,
+    visibility: &str,
+    title: Option<&str>,
+    note: Option<&str>,
+    files: &HashMap<String, String>,
+) -> Result<PageSaveVersionResult> {
+    let all_files = collect_inline_page_files(files)?;
+    save_page_version_from_collected_files(
+        relay_url, token, slug, visibility, title, note, all_files,
+    )
+    .await
+}
+
+/// Save (and optionally deploy) a page from either a local directory or inline files.
+///
+/// Exactly one of `directory` / `files` must be provided.
+pub async fn publish_page_content_on_relay(
+    relay_url: &str,
+    token: &str,
+    slug: &str,
+    visibility: &str,
+    title: Option<&str>,
+    note: Option<&str>,
+    deploy: bool,
+    directory: Option<&str>,
+    files: Option<&HashMap<String, String>>,
+) -> Result<PageContentPublishResult> {
+    let saved = match (directory, files) {
+        (Some(dir), None) => {
+            save_page_version_to_relay(relay_url, token, dir, slug, visibility, title, note).await?
+        }
+        (None, Some(map)) => {
+            save_page_version_from_inline_files(
+                relay_url, token, slug, visibility, title, note, map,
+            )
+            .await?
+        }
+        (Some(_), Some(_)) => {
+            return Err(anyhow!("provide either directory or files, not both"));
+        }
+        (None, None) => {
+            return Err(anyhow!("either directory or files is required"));
+        }
+    };
+
+    if !deploy {
+        let preview_url = join_relay_url(relay_url, &saved.preview_url_path);
+        return Ok(PageContentPublishResult {
+            slug: saved.slug,
+            visibility: saved.visibility,
+            title: saved.title,
+            version_id: saved.version_id,
+            file_count: saved.file_count,
+            total_bytes: saved.total_bytes,
+            has_worker: saved.has_worker,
+            preview_url_path: saved.preview_url_path,
+            deployed: false,
+            url_path: String::new(),
+            deployed_version_id: None,
+            url: String::new(),
+            preview_url,
+        });
+    }
+
+    let info = deploy_page_version_on_relay(relay_url, token, &saved.slug, &saved.version_id)
+        .await
+        .map_err(|e| {
+            anyhow!(
+                "deploy failed: {e}. Version {} was saved on the relay but is not live; \
+                 retry deploying version {} instead of re-publishing from scratch",
+                saved.version_id,
+                saved.version_id
+            )
+        })?;
+    let preview_url = join_relay_url(relay_url, &saved.preview_url_path);
+    let url = join_relay_url(relay_url, &info.url_path);
+    Ok(PageContentPublishResult {
+        slug: saved.slug,
+        visibility: info.visibility,
+        title: info.title,
+        version_id: saved.version_id.clone(),
+        file_count: saved.file_count,
+        total_bytes: saved.total_bytes,
+        has_worker: saved.has_worker,
+        preview_url_path: saved.preview_url_path,
+        deployed: true,
+        url_path: info.url_path,
+        deployed_version_id: info.deployed_version_id.or(Some(saved.version_id)),
+        url,
+        preview_url,
+    })
+}
+
+/// Join account relay base URL with a page path into an absolute URL.
+pub fn join_relay_url(relay_url: &str, path: &str) -> String {
+    let path = path.trim();
+    if path.is_empty() {
+        return String::new();
+    }
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return path.to_string();
+    }
+    let base = relay_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return path.to_string();
+    }
+    if path.starts_with('/') {
+        format!("{base}{path}")
+    } else {
+        format!("{base}/{path}")
+    }
+}
+
+async fn save_page_version_from_collected_files(
+    relay_url: &str,
+    token: &str,
+    slug: &str,
+    visibility: &str,
+    title: Option<&str>,
+    note: Option<&str>,
+    all_files: Vec<CollectedPageFile>,
+) -> Result<PageSaveVersionResult> {
     validate_slug(slug)?;
     validate_visibility(visibility)?;
 
-    let all_files = collect_page_files(Path::new(web_dir))?;
     let total_bytes: u64 = all_files.iter().map(|f| f.content.len() as u64).sum();
     if total_bytes > MAX_PAGE_BYTES {
         return Err(anyhow!(
@@ -431,6 +587,50 @@ fn collect_page_files(base: &Path) -> Result<Vec<CollectedPageFile>> {
     Ok(all_files)
 }
 
+fn collect_inline_page_files(files: &HashMap<String, String>) -> Result<Vec<CollectedPageFile>> {
+    use sha2::{Digest, Sha256};
+
+    if files.is_empty() {
+        return Err(anyhow!("files map must not be empty"));
+    }
+
+    let has_index = files.contains_key("index.html");
+    let has_worker = files.contains_key("server/worker.js");
+    if !has_index && !has_worker {
+        return Err(anyhow!(
+            "files must include index.html and/or server/worker.js"
+        ));
+    }
+
+    let mut all_files = Vec::with_capacity(files.len());
+    for (raw_path, content) in files {
+        let rel = raw_path.replace('\\', "/");
+        let rel = rel.trim_start_matches('/');
+        if rel.is_empty() || rel.contains("..") || rel.starts_with('/') {
+            return Err(anyhow!("invalid file path: {raw_path}"));
+        }
+        if Path::new(rel).is_absolute() {
+            return Err(anyhow!("absolute file paths are not allowed: {raw_path}"));
+        }
+        let bytes = content.as_bytes();
+        if bytes.len() as u64 > MAX_FILE_BYTES {
+            return Err(anyhow!(
+                "file exceeds size limit: {rel} ({} > {MAX_FILE_BYTES} bytes)",
+                bytes.len()
+            ));
+        }
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        let hash = format!("{:x}", hasher.finalize());
+        all_files.push(CollectedPageFile {
+            rel_path: rel.to_string(),
+            content: bytes.to_vec(),
+            hash,
+        });
+    }
+    Ok(all_files)
+}
+
 fn collect_files_with_hash(
     base: &Path,
     dir: &Path,
@@ -588,6 +788,22 @@ mod tests {
     }
 
     #[test]
+    fn join_relay_url_builds_absolute_links() {
+        assert_eq!(
+            join_relay_url("https://watchitrun.com/", "/p/user/site"),
+            "https://watchitrun.com/p/user/site"
+        );
+        assert_eq!(
+            join_relay_url("https://watchitrun.com", "p/user/site"),
+            "https://watchitrun.com/p/user/site"
+        );
+        assert_eq!(
+            join_relay_url("https://x.test", "https://already.example/p"),
+            "https://already.example/p"
+        );
+    }
+
+    #[test]
     fn collect_allows_worker_without_index() {
         let base =
             std::env::temp_dir().join(format!("bitfun-page-worker-only-{}", uuid::Uuid::new_v4()));
@@ -601,5 +817,39 @@ mod tests {
         let files = collect_page_files(&base).unwrap();
         assert!(files.iter().any(|f| f.rel_path == "server/worker.js"));
         let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn inline_files_require_entry_and_reject_traversal() {
+        let mut ok = HashMap::new();
+        ok.insert("index.html".into(), "<html>hi</html>".into());
+        let files = collect_inline_page_files(&ok).unwrap();
+        assert_eq!(files.len(), 1);
+
+        let mut bad = HashMap::new();
+        bad.insert("../secret".into(), "x".into());
+        assert!(collect_inline_page_files(&bad).is_err());
+
+        let mut empty_entry = HashMap::new();
+        empty_entry.insert("styles.css".into(), "body{}".into());
+        assert!(collect_inline_page_files(&empty_entry).is_err());
+    }
+
+    #[tokio::test]
+    async fn publish_source_xor_is_enforced() {
+        let err = publish_page_content_on_relay(
+            "http://127.0.0.1:9",
+            "tok",
+            "demo",
+            "public",
+            None,
+            None,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("directory or files"));
     }
 }

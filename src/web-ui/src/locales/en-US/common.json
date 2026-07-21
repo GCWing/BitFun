@@ -1085,9 +1085,6 @@
     "shell": "Shell",
     "panelView": "Panel View"
   },
-  "bitfunPage": {
-    "menuLabel": "BitFun Page"
-  },
   "loading": {
     "app": "Starting BitFun...",
     "scenes": "Loading scene",

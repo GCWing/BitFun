@@ -12,7 +12,6 @@ import {
   BarChart3,
   ChevronUp,
   LogIn,
-  FileUp,
 } from 'lucide-react';
 import { Tooltip, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -158,11 +157,6 @@ const PersistentFooterActions: React.FC = () => {
     setShowAccountLogin(true);
   };
 
-  const handleBitFunPage = () => {
-    closeMenu();
-    openScene('bitfun-page');
-  };
-
   const handleRemoteConnect = useCallback(async () => {
     if (!hasWorkspace) {
       warning(t('header.remoteConnectRequiresWorkspace'));
@@ -235,16 +229,6 @@ const PersistentFooterActions: React.FC = () => {
                   >
                     <LogIn size={14} />
                     <span>{t('shared:features.accountLogin')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    onClick={handleBitFunPage}
-                    data-testid="nav-footer-bitfun-page-item"
-                  >
-                    <FileUp size={14} />
-                    <span>{t('bitfunPage.menuLabel')}</span>
                   </button>
                   <div className="bitfun-nav-panel__footer-menu-divider" />
                   <Tooltip

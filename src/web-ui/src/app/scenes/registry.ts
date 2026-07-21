@@ -116,15 +116,6 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     defaultOpen: false,
   },
   {
-    id: 'bitfun-page' as SceneTabId,
-    label: 'BitFun Page',
-    labelKey: 'bitfunPage.menuLabel',
-    Icon: Globe,
-    pinned: false,
-    singleton: true,
-    defaultOpen: false,
-  },
-  {
     id: 'browser' as SceneTabId,
     label: 'Browser',
     labelKey: 'scenes.browser',

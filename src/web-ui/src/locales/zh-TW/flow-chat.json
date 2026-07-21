@@ -1335,7 +1335,19 @@
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
-      "openScene": "開啟 BitFun Page"
+      "openProduction": "開啟生產連結"
+    },
+    "pagePublish": {
+      "title": "發佈頁面",
+      "publishingShort": "…",
+      "untitled": "（未命名）",
+      "publishFailed": "無法發佈 BitFun Page",
+      "labelSlug": "slug",
+      "labelVersion": "version",
+      "labelPath": "url_path",
+      "labelPreview": "preview_url_path",
+      "openProduction": "開啟生產連結",
+      "openPreview": "開啟預覽連結"
     },
     "terminal": {
       "executeCommand": "執行命令:",
