@@ -24,6 +24,7 @@ bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
+bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false, features = ["external-sources"] }
 
 # CLI framework
 clap = { workspace = true }

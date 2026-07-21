@@ -7,15 +7,16 @@ mod tests {
         apply_model_selection_feedback, builtin_command_reconfirmation, command_route,
         external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
-        external_agent_review_text, external_command_projections,
+        external_agent_review_text, external_command_projections, external_control_review_text,
         external_integration_policy_lines, external_operation_error_status,
         external_tool_mutation_result_label, external_tool_pending_notice_key,
         external_tool_result_is_stale, external_tool_review_text, external_tool_run_location_label,
         mark_active_turn_failed, merge_external_agent_mutation_snapshot,
         mode_change_blocks_typed_submission, mode_change_completion_should_exit,
         native_command_conflict_key, parse_command_token, parse_external_agent_review_action,
-        parse_external_tool_review_action, previous_session_mode_change_status, CommandQualifier,
-        CommandRoute, ExternalAgentReviewAction, ExternalSourceConflictPreferences,
+        parse_external_control_action, parse_external_tool_review_action,
+        previous_session_mode_change_status, CommandQualifier, CommandRoute,
+        ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
         ExternalToolReviewAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
     };
     use crate::actions::{action_conflict_behavior_version, ActionState, ResolvedKeymap};
@@ -23,8 +24,8 @@ mod tests {
     use crate::config::ShortcutsConfig;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use bitfun_core::external_sources::{
-        ExternalSourceAssetKind, ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic,
-        ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+        ExternalSourceAssetKind, ExternalSourceCatalogSnapshot, ExternalSourceControlSnapshotV1,
+        ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
         ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
         ExternalToolActivationState,
     };
@@ -51,6 +52,149 @@ mod tests {
                 selected_candidate_id: selected_candidate_id.map(str::to_string),
             }),
         }
+    }
+
+    #[test]
+    fn external_control_commands_use_one_small_closed_action_set() {
+        assert_eq!(
+            parse_external_control_action("").unwrap(),
+            ExternalControlUiAction::Show
+        );
+        assert_eq!(
+            parse_external_control_action("status").unwrap(),
+            ExternalControlUiAction::Show
+        );
+        assert_eq!(
+            parse_external_control_action("refresh").unwrap(),
+            ExternalControlUiAction::Refresh
+        );
+        assert_eq!(
+            parse_external_control_action("safe-mode on").unwrap(),
+            ExternalControlUiAction::SetSafeMode(true)
+        );
+        assert_eq!(
+            parse_external_control_action("safe-mode off").unwrap(),
+            ExternalControlUiAction::SetSafeMode(false)
+        );
+        assert_eq!(
+            parse_external_control_action("source disable opencode.commands:project").unwrap(),
+            ExternalControlUiAction::SetSourceEnabled {
+                source_key: "opencode.commands:project".to_string(),
+                enabled: false,
+            }
+        );
+        assert_eq!(
+            parse_external_control_action("source enable opencode.commands:project").unwrap(),
+            ExternalControlUiAction::SetSourceEnabled {
+                source_key: "opencode.commands:project".to_string(),
+                enabled: true,
+            }
+        );
+        assert!(parse_external_control_action("safe-mode toggle").is_err());
+        assert!(parse_external_control_action("enable-everything").is_err());
+    }
+
+    #[test]
+    fn external_control_status_projects_shared_runtime_facts() {
+        let control: ExternalSourceControlSnapshotV1 = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "executionDomainId": "local-user",
+            "refreshGeneration": 9,
+            "preferenceRevision": 4,
+            "safeMode": true,
+            "hostCapabilities": {
+                "canRefresh": true,
+                "canMutatePolicy": true,
+                "canManageSources": true,
+                "canApproveRuntime": true,
+                "canExecuteExternalAssets": true,
+                "canSetSafeMode": true
+            },
+            "sources": [{
+                "stableKey": "opencode.commands:project",
+                "ecosystemId": "opencode",
+                "displayName": "OpenCode project commands",
+                "scope": "project",
+                "contentVersion": "v1",
+                "discovery": "current",
+                "desired": "enabled",
+                "review": { "state": "not_required" },
+                "runtime": "not_applicable",
+                "support": "supported",
+                "effectiveStatus": "available"
+            }],
+            "capabilities": [{
+                "kind": "tool",
+                "revision": 9,
+                "itemCount": 2,
+                "pendingReviewCount": 1,
+                "unresolvedConflictCount": 0,
+                "runtime": "inactive",
+                "support": "supported"
+            }],
+            "diagnostics": [],
+            "recoveryActions": [{ "type": "exit_safe_mode" }]
+        }))
+        .unwrap();
+
+        let text = external_control_review_text(&control);
+        assert!(text.contains("Safe Mode: on"));
+        assert!(text.contains("Generation: 9"));
+        assert!(text.contains("Execution domain: local-user"));
+        assert!(text.contains("New external Tool, Agent, and MCP calls are blocked"));
+        assert!(text.contains("restarting the Host turns it off"));
+        assert!(text.contains("Source opencode.commands:project"));
+        assert!(text.contains("source disable <source-key>"));
+        assert!(text.contains("Tools: 2 items, 1 review, 0 conflicts, inactive"));
+        assert!(text.contains("/builtin:extensions safe-mode off"));
+    }
+
+    #[test]
+    fn external_control_status_keeps_empty_provider_failures_actionable() {
+        let control: ExternalSourceControlSnapshotV1 = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "executionDomainId": "local-user",
+            "refreshGeneration": 10,
+            "preferenceRevision": 4,
+            "safeMode": false,
+            "hostCapabilities": {
+                "canRefresh": true,
+                "canMutatePolicy": true,
+                "canManageSources": true,
+                "canApproveRuntime": true,
+                "canExecuteExternalAssets": true,
+                "canSetSafeMode": true
+            },
+            "sources": [],
+            "capabilities": [{
+                "kind": "tool",
+                "revision": 10,
+                "itemCount": 0,
+                "pendingReviewCount": 0,
+                "unresolvedConflictCount": 0,
+                "runtime": "inactive",
+                "support": "partial"
+            }],
+            "diagnostics": [{
+                "severity": "error",
+                "assetKind": "tool",
+                "code": "external_tool.runtime_unavailable",
+                "message": "Node runtime is unavailable"
+            }],
+            "recoveryActions": [
+                { "type": "refresh" },
+                { "type": "install_runtime" }
+            ]
+        }))
+        .unwrap();
+
+        let text = external_control_review_text(&control);
+        assert!(text.contains("Tools: 0 items, 0 review, 0 conflicts, inactive, support: partial"));
+        assert!(text.contains("Issues"));
+        assert!(text.contains("[external_tool.runtime_unavailable]"));
+        assert!(text.contains("Recovery"));
+        assert!(text.contains("/builtin:extensions refresh"));
+        assert!(text.contains("install or repair the required runtime"));
     }
 
     fn external_tool_review_snapshot() -> ExternalSourceCatalogSnapshot {
@@ -114,7 +258,7 @@ mod tests {
                 },
                 "approvalKey": "approval-v2",
                 "decisionKey": "decision-v2",
-                "activation": { "state": "disabled" }
+                "activation": { "state": "declined" }
             }, {
                 "definition": {
                     "id": {
@@ -287,27 +431,30 @@ mod tests {
             ExternalSourceOperationErrorCode::StaleRevision,
             "raw stale detail",
             true,
-        );
+        )
+        .with_default_recovery_actions();
         let policy = ExternalSourceOperationError::new(
             ExternalSourceOperationErrorCode::PolicyLimited,
             "raw policy detail",
             false,
-        );
+        )
+        .with_default_recovery_actions();
         let internal = ExternalSourceOperationError::new(
             ExternalSourceOperationErrorCode::Internal,
             "database password must not be shown",
             true,
         )
-        .with_correlation_id("external-source-ref-9");
+        .with_correlation_id("external-source-ref-9")
+        .with_default_recovery_actions();
 
         let stale_status = external_operation_error_status("tools", &stale);
         assert!(stale_status.contains("settings changed"));
-        assert!(stale_status.contains("refresh and try again"));
+        assert!(stale_status.contains("/builtin:tools refresh"));
         assert!(!stale_status.contains("raw stale detail"));
 
         let policy_status = external_operation_error_status("agents", &policy);
         assert!(policy_status.contains("safety policy"));
-        assert!(policy_status.contains("review the current state"));
+        assert!(policy_status.contains("review the listed external items"));
         assert!(!policy_status.contains("raw policy detail"));
 
         let internal_status = external_operation_error_status("tools", &internal);

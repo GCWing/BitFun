@@ -5,6 +5,7 @@ export const publicApiContractSlices = [
   'bitfun-plugin-extension-contract',
   'plugin-runtime-internal-abi',
   'opencode-adapter-boundary',
+  'external-source-control-contract',
   'external-source-command-contract',
   'external-source-tool-contract',
   'external-source-subagent-contract',
@@ -17,6 +18,7 @@ const contractSlices = {
   bitfunPluginExtension: 'bitfun-plugin-extension-contract',
   pluginRuntimeInternalAbi: 'plugin-runtime-internal-abi',
   opencodeAdapterBoundary: 'opencode-adapter-boundary',
+  externalSourceControlContract: 'external-source-control-contract',
   externalSourceCommandContract: 'external-source-command-contract',
   externalSourceToolContract: 'external-source-tool-contract',
   externalSourceSubagentContract: 'external-source-subagent-contract',
@@ -232,6 +234,23 @@ function externalSourceEntry(symbol, owner, consumer, wireImpact = false) {
   };
 }
 
+function externalSourceControlEntry(symbol, owner, consumer, wireImpact = true) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'product-domain control contract tests, core safe-mode and generation tests, and Desktop, TUI, Peer Host, Server, and Web control tests',
+    p0: 'PR1 unified external source control plane and cross-host Safe Mode vertical slice',
+    contractSlice: contractSlices.externalSourceControlContract,
+    wireImpact,
+    rationale:
+      'cross-host control needs versioned lifecycle facts and closed actions without leaking capability payloads or ecosystem-specific types',
+    exit:
+      'remove only through a reviewed cross-host control migration with equivalent schema validation, safety, and host behavior tests',
+  };
+}
+
 function externalIntegrationPolicyEntry(
   symbol,
   owner = 'product-domains external integration policy contract owner',
@@ -430,6 +449,31 @@ export const externalSourceContractPublicApiEntries = [
   ),
 );
 
+export const externalSourceControlPublicApiEntries = [
+  'EXTERNAL_SOURCE_CONTROL_SCHEMA_V1',
+  'ExternalSourceOperationStage',
+  'ExternalSourceRecoveryActionV1',
+  'ExternalSourceDiscoveryState',
+  'ExternalSourceDesiredState',
+  'ExternalSourceReviewState',
+  'ExternalSourceRuntimeState',
+  'ExternalSourceSupportState',
+  'ExternalSourceEffectiveStatus',
+  'ExternalCapabilityKindV1',
+  'ExternalSourceControlSourceV1',
+  'ExternalCapabilityControlV1',
+  'ExternalSourceControlSnapshotV1',
+  'ExternalSourceSurfaceSnapshotV1',
+  'ExternalSourceControlActionV1',
+  'ExternalSourceControlRequestV1',
+].map((symbol) =>
+  externalSourceControlEntry(
+    symbol,
+    'product-domains external source control contract owner',
+    'bitfun-core control composition and neutral Desktop, TUI, Peer Host, Server, and Web surfaces',
+  ),
+);
+
 export const externalSubagentContractPublicApiEntries = [
   'ExternalSubagentLocalId',
   'ExternalSubagentCandidateId',
@@ -466,6 +510,14 @@ export const externalSubagentContractPublicApiEntries = [
 );
 
 export const externalSourceCoordinatorPublicApiEntries = [
+  ...['ExternalSourceControlPlane', 'DeferredDiscovery', 'DiscoveryBatch'].map((symbol) =>
+    externalSourceControlEntry(
+      symbol,
+      'external-sources assembly control-plane owner',
+      'bitfun-core bounded capability discovery and deferred-completion scheduler',
+      false,
+    ),
+  ),
   externalSourceEntry(
     'ExternalSourceCoordinator',
     'external-sources assembly owner',
@@ -517,6 +569,23 @@ export const externalSourceCoordinatorPublicApiEntries = [
 ];
 
 export const externalSourceCorePublicApiEntries = [
+  ...[
+    'ExternalCapabilityKindV1',
+    'ExternalSourceControlActionV1',
+    'ExternalSourceControlRequestV1',
+    'ExternalSourceControlSnapshotV1',
+    'ExternalSourceRuntimeState',
+    'ExternalSourceSurfaceSnapshotV1',
+    'EXTERNAL_SOURCE_CONTROL_SCHEMA_V1',
+    'get_external_source_control_snapshot',
+    'apply_external_source_control_action',
+  ].map((symbol) =>
+    externalSourceControlEntry(
+      symbol,
+      'bitfun-core external source control composition facade',
+      'BitFun CLI, Desktop, Server, Peer Host, and Web API adapters',
+    ),
+  ),
   ...[
     'ExternalIntegrationAccess',
     'ExternalIntegrationMode',
@@ -758,6 +827,12 @@ export const publicApiAllowlistRules = [
     reason:
       'external integration policy contracts must stay ecosystem-neutral, versioned, fail-closed, and explicitly consumer-backed',
     allowedSymbolEntries: externalIntegrationPolicyPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/external_source_control.rs',
+    reason:
+      'external source control contracts must stay versioned, capability-neutral, closed-action, and explicitly consumer-backed',
+    allowedSymbolEntries: externalSourceControlPublicApiEntries,
   },
   {
     path: 'src/crates/contracts/product-domains/src/external_sources.rs',

@@ -1,5 +1,6 @@
 use bitfun_core::external_sources::{
-    external_source_read_only_snapshot, ExternalSourceOperationError, ExternalSourceOperationResult,
+    external_source_read_only_snapshot, get_external_source_control_snapshot,
+    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationResult,
 };
 use std::path::PathBuf;
 
@@ -9,6 +10,9 @@ pub(crate) fn supports(method: &str) -> bool {
     matches!(
         method,
         "get_external_source_snapshot"
+            | "get_external_source_control_snapshot"
+            | "reveal_external_source_location"
+            | "apply_external_source_control_action_command"
             | "set_external_source_enabled_command"
             | "set_external_source_conflict_choice_command"
             | "set_external_tool_target_decision_command"
@@ -26,7 +30,10 @@ pub(crate) async fn dispatch(
     params: serde_json::Value,
     state: &AppState,
 ) -> ExternalSourceOperationResult<serde_json::Value> {
-    if method != "get_external_source_snapshot" {
+    if !matches!(
+        method,
+        "get_external_source_snapshot" | "get_external_source_control_snapshot"
+    ) {
         return Err(ExternalSourceOperationError::host_capability_unavailable(
             if supports(method) {
                 "This Server Host exposes external integrations as read-only. Use an authenticated Desktop or Peer Host to change them."
@@ -40,16 +47,27 @@ pub(crate) async fn dispatch(
         .ok_or_else(|| ExternalSourceOperationError::invalid_request("missing request"))?;
     let workspace = external_workspace_root(state, request)?;
     let workspace = workspace.as_deref();
-    let snapshot = match method {
+    match method {
         "get_external_source_snapshot" => {
             let force_refresh = optional_bool_field(request, "forceRefresh")?;
-            external_source_read_only_snapshot(workspace, force_refresh).await
+            let snapshot = external_source_read_only_snapshot(workspace, force_refresh)
+                .await
+                .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
+            serde_json::to_value(snapshot.into_legacy_v0_compatible())
+        }
+        "get_external_source_control_snapshot" => {
+            let force_refresh = optional_bool_field(request, "forceRefresh")?;
+            let snapshot = get_external_source_control_snapshot(
+                workspace,
+                force_refresh,
+                ExternalSourceHostCapabilities::read_only_projection(),
+            )
+            .await?;
+            serde_json::to_value(snapshot)
         }
         _ => unreachable!("write and unknown methods are rejected before request parsing"),
     }
-    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)?;
-
-    serde_json::to_value(snapshot).map_err(|_| {
+    .map_err(|_| {
         ExternalSourceOperationError::new(
             bitfun_core::external_sources::ExternalSourceOperationErrorCode::Internal,
             "External source response could not be encoded",
@@ -128,6 +146,8 @@ mod tests {
     #[test]
     fn only_external_source_methods_are_claimed() {
         assert!(supports("get_external_source_snapshot"));
+        assert!(supports("get_external_source_control_snapshot"));
+        assert!(supports("apply_external_source_control_action_command"));
         assert!(supports("update_external_integration_policy_command"));
         assert!(!supports("open_workspace"));
     }
@@ -180,6 +200,24 @@ mod tests {
         let state = app_state(None);
         let error = dispatch(
             "set_external_source_enabled_command",
+            serde_json::json!({ "malformed": true }),
+            &state,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code.as_str(), "host_capability_unavailable");
+
+        let error = dispatch(
+            "apply_external_source_control_action_command",
+            serde_json::json!({ "malformed": true }),
+            &state,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code.as_str(), "host_capability_unavailable");
+
+        let error = dispatch(
+            "reveal_external_source_location",
             serde_json::json!({ "malformed": true }),
             &state,
         )

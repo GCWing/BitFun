@@ -76,12 +76,23 @@ pub enum ExternalSourceOperationErrorCode {
     InvalidRequest,
     HostUnavailable,
     HostCapabilityUnavailable,
+    TrustRequired,
     PolicyIncompatible,
     PolicyLimited,
     StaleRevision,
     Conflict,
     NotFound,
     Unavailable,
+    RuntimeUnavailable,
+    Unsupported,
+    IncompatibleVersion,
+    DependencyFailed,
+    Timeout,
+    Cancelled,
+    Overloaded,
+    ProcessLost,
+    InvalidResponse,
+    TemporarilyUnavailable,
     Internal,
 }
 
@@ -91,12 +102,23 @@ impl ExternalSourceOperationErrorCode {
             Self::InvalidRequest => "invalid_request",
             Self::HostUnavailable => "host_unavailable",
             Self::HostCapabilityUnavailable => "host_capability_unavailable",
+            Self::TrustRequired => "trust_required",
             Self::PolicyIncompatible => "policy_incompatible",
             Self::PolicyLimited => "policy_limited",
             Self::StaleRevision => "stale_revision",
             Self::Conflict => "conflict",
             Self::NotFound => "not_found",
             Self::Unavailable => "unavailable",
+            Self::RuntimeUnavailable => "runtime_unavailable",
+            Self::Unsupported => "unsupported",
+            Self::IncompatibleVersion => "incompatible_version",
+            Self::DependencyFailed => "dependency_failed",
+            Self::Timeout => "timeout",
+            Self::Cancelled => "cancelled",
+            Self::Overloaded => "overloaded",
+            Self::ProcessLost => "process_lost",
+            Self::InvalidResponse => "invalid_response",
+            Self::TemporarilyUnavailable => "temporarily_unavailable",
             Self::Internal => "internal",
         }
     }
@@ -110,6 +132,12 @@ pub struct ExternalSourceOperationError {
     pub retryable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub correlation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub causation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<crate::external_source_control::ExternalSourceOperationStage>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recovery_actions: Vec<crate::external_source_control::ExternalSourceRecoveryActionV1>,
 }
 
 impl ExternalSourceOperationError {
@@ -118,17 +146,83 @@ impl ExternalSourceOperationError {
         detail: impl Into<String>,
         retryable: bool,
     ) -> Self {
-        let detail = detail.into();
+        let detail = bounded_error_detail(detail.into());
         Self {
             code,
-            detail: detail.chars().take(MAX_TEXT_LENGTH).collect(),
+            detail,
             retryable,
             correlation_id: None,
+            causation_id: None,
+            stage: None,
+            recovery_actions: Vec::new(),
         }
     }
 
     pub fn with_correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
-        self.correlation_id = Some(correlation_id.into().chars().take(MAX_ID_LENGTH).collect());
+        self.correlation_id = valid_error_id(correlation_id.into());
+        self
+    }
+
+    pub fn with_causation_id(mut self, causation_id: impl Into<String>) -> Self {
+        self.causation_id = valid_error_id(causation_id.into());
+        self
+    }
+
+    pub fn with_stage(
+        mut self,
+        stage: crate::external_source_control::ExternalSourceOperationStage,
+    ) -> Self {
+        self.stage = Some(stage);
+        self
+    }
+
+    pub fn with_recovery_action(
+        mut self,
+        action: crate::external_source_control::ExternalSourceRecoveryActionV1,
+    ) -> Self {
+        if self.recovery_actions.len() < 8 && !self.recovery_actions.contains(&action) {
+            self.recovery_actions.push(action);
+        }
+        self
+    }
+
+    pub fn with_default_recovery_actions(mut self) -> Self {
+        use crate::external_source_control::ExternalSourceRecoveryActionV1 as Recovery;
+
+        let actions: &[Recovery] = match self.code {
+            ExternalSourceOperationErrorCode::TrustRequired
+            | ExternalSourceOperationErrorCode::PolicyLimited => &[Recovery::Review],
+            ExternalSourceOperationErrorCode::StaleRevision
+            | ExternalSourceOperationErrorCode::NotFound => &[Recovery::Refresh],
+            ExternalSourceOperationErrorCode::Conflict => {
+                &[Recovery::Refresh, Recovery::ResolveConflict]
+            }
+            ExternalSourceOperationErrorCode::RuntimeUnavailable
+            | ExternalSourceOperationErrorCode::DependencyFailed => {
+                &[Recovery::InstallRuntime, Recovery::Retry]
+            }
+            ExternalSourceOperationErrorCode::HostUnavailable
+            | ExternalSourceOperationErrorCode::ProcessLost
+            | ExternalSourceOperationErrorCode::InvalidResponse => {
+                &[Recovery::ReconnectHost, Recovery::Retry]
+            }
+            ExternalSourceOperationErrorCode::Unavailable
+            | ExternalSourceOperationErrorCode::Timeout
+            | ExternalSourceOperationErrorCode::Overloaded
+            | ExternalSourceOperationErrorCode::TemporarilyUnavailable
+            | ExternalSourceOperationErrorCode::Internal => &[Recovery::Retry, Recovery::Refresh],
+            ExternalSourceOperationErrorCode::InvalidRequest
+            | ExternalSourceOperationErrorCode::HostCapabilityUnavailable
+            | ExternalSourceOperationErrorCode::PolicyIncompatible
+            | ExternalSourceOperationErrorCode::Unsupported
+            | ExternalSourceOperationErrorCode::IncompatibleVersion
+            | ExternalSourceOperationErrorCode::Cancelled => &[],
+        };
+        for action in actions {
+            if self.recovery_actions.len() < 8 && !self.recovery_actions.contains(action) {
+                self.recovery_actions.push(action.clone());
+            }
+        }
         self
     }
 
@@ -143,7 +237,19 @@ impl ExternalSourceOperationError {
     }
 
     pub fn decode(encoded: &str) -> Option<Self> {
-        serde_json::from_str(encoded).ok()
+        let mut decoded: Self = serde_json::from_str(encoded).ok()?;
+        decoded.detail = bounded_error_detail(decoded.detail);
+        decoded.correlation_id = decoded.correlation_id.and_then(valid_error_id);
+        decoded.causation_id = decoded.causation_id.and_then(valid_error_id);
+        decoded.recovery_actions.truncate(8);
+        let mut unique = Vec::with_capacity(decoded.recovery_actions.len());
+        for action in decoded.recovery_actions {
+            if !unique.contains(&action) {
+                unique.push(action);
+            }
+        }
+        decoded.recovery_actions = unique;
+        Some(decoded)
     }
 
     pub fn host_capability_unavailable(detail: impl Into<String>) -> Self {
@@ -160,6 +266,31 @@ impl ExternalSourceOperationError {
             detail,
             false,
         )
+    }
+}
+
+fn valid_error_id(value: String) -> Option<String> {
+    validate_id(&value, "external source operation reference")
+        .is_ok()
+        .then_some(value)
+}
+
+fn bounded_error_detail(value: String) -> String {
+    let bounded = value
+        .chars()
+        .take(MAX_TEXT_LENGTH)
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+    if bounded.trim().is_empty() {
+        "External source operation failed".to_string()
+    } else {
+        bounded
     }
 }
 
@@ -1478,6 +1609,7 @@ pub struct PromptCommandCatalogEntry {
 #[non_exhaustive]
 pub enum ExternalToolActivationState {
     ApprovalRequired,
+    Declined,
     Disabled,
     Active,
     Conflict,
@@ -1673,6 +1805,13 @@ pub struct ExternalSourceHostCapabilities {
     pub can_manage_sources: bool,
     pub can_approve_runtime: bool,
     pub can_execute_external_assets: bool,
+    pub can_set_safe_mode: bool,
+    #[serde(default, skip_serializing_if = "bool_is_false")]
+    pub can_reveal_source_location: bool,
+}
+
+fn bool_is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl ExternalSourceHostCapabilities {
@@ -1683,6 +1822,17 @@ impl ExternalSourceHostCapabilities {
             can_manage_sources: true,
             can_approve_runtime: true,
             can_execute_external_assets: true,
+            can_set_safe_mode: true,
+            can_reveal_source_location: false,
+        }
+    }
+
+    /// Desktop-local host actions are intentionally separate from portable
+    /// read/write control capabilities. Remote and headless hosts fail closed.
+    pub const fn local_desktop() -> Self {
+        Self {
+            can_reveal_source_location: true,
+            ..Self::read_write()
         }
     }
 
@@ -1693,6 +1843,8 @@ impl ExternalSourceHostCapabilities {
             can_manage_sources: false,
             can_approve_runtime: false,
             can_execute_external_assets: false,
+            can_set_safe_mode: false,
+            can_reveal_source_location: false,
         }
     }
 }
@@ -1746,6 +1898,21 @@ pub struct ExternalSourcePublicSnapshot {
     pub integration_policy: ExternalIntegrationPolicySnapshot,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<ExternalSourceDiagnostic>,
+}
+
+impl ExternalSourcePublicSnapshot {
+    /// Down-projects values added after the original catalog contract so an
+    /// older controller never receives an enum variant it cannot render.
+    /// New control clients use `ExternalSourceControlSnapshotV1` for the
+    /// orthogonal review state instead.
+    pub fn into_legacy_v0_compatible(mut self) -> Self {
+        for tool in &mut self.tools {
+            if matches!(tool.activation, ExternalToolActivationState::Declined) {
+                tool.activation = ExternalToolActivationState::Disabled;
+            }
+        }
+        self
+    }
 }
 
 impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {

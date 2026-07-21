@@ -32,59 +32,59 @@ impl ChatMode {
 
         let (mut session_id, mut chat_state, mode_migration_notice) =
             if let Some(ref restore_id) = self.restore_session_id {
-            // Restore existing session
-            tracing::info!("Restoring session: {}", restore_id);
-            let agent = self.agent.clone();
-            let rid = restore_id.clone();
+                // Restore existing session
+                tracing::info!("Restoring session: {}", restore_id);
+                let agent = self.agent.clone();
+                let rid = restore_id.clone();
 
-            tokio::task::block_in_place(|| {
-                rt_handle.block_on(async {
-                    // Restore session in core (loads metadata, messages, managers)
-                    let (summary, effective_workspace_path, migration_notice) =
-                        agent.restore_session_in_current_workspace(&rid).await?;
-                    let effective_workspace =
-                        Some(effective_workspace_path.to_string_lossy().to_string());
+                tokio::task::block_in_place(|| {
+                    rt_handle.block_on(async {
+                        // Restore session in core (loads metadata, messages, managers)
+                        let (summary, effective_workspace_path, migration_notice) =
+                            agent.restore_session_in_current_workspace(&rid).await?;
+                        let effective_workspace =
+                            Some(effective_workspace_path.to_string_lossy().to_string());
 
-                    // Load historical messages for UI display
-                    let transcript = agent.get_transcript(&rid).await.unwrap_or_else(|_| {
-                        bitfun_agent_runtime::sdk::SessionTranscript {
-                            session_id: rid.clone(),
-                            messages: Vec::new(),
-                        }
-                    });
+                        // Load historical messages for UI display
+                        let transcript = agent.get_transcript(&rid).await.unwrap_or_else(|_| {
+                            bitfun_agent_runtime::sdk::SessionTranscript {
+                                session_id: rid.clone(),
+                                messages: Vec::new(),
+                            }
+                        });
 
-                    let state = ChatState::from_session_transcript(
-                        rid.clone(),
-                        summary.session_name,
-                        summary.agent_type,
-                        effective_workspace,
-                        &transcript,
-                    );
+                        let state = ChatState::from_session_transcript(
+                            rid.clone(),
+                            summary.session_name,
+                            summary.agent_type,
+                            effective_workspace,
+                            &transcript,
+                        );
 
-                    tracing::info!(
-                        "Session restored: {}, {} messages loaded",
-                        rid,
-                        transcript.messages.len()
-                    );
+                        tracing::info!(
+                            "Session restored: {}, {} messages loaded",
+                            rid,
+                            transcript.messages.len()
+                        );
 
-                    Ok::<_, anyhow::Error>((rid, state, migration_notice))
-                })
-            })?
-        } else {
-            // Create new session
-            let session_id = tokio::task::block_in_place(|| {
-                rt_handle.block_on(self.agent.ensure_session(&self.agent_type))
-            })?;
-            tracing::info!("Core session ready: {}", session_id);
+                        Ok::<_, anyhow::Error>((rid, state, migration_notice))
+                    })
+                })?
+            } else {
+                // Create new session
+                let session_id = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.ensure_session(&self.agent_type))
+                })?;
+                tracing::info!("Core session ready: {}", session_id);
 
-            let state = ChatState::new(
-                session_id.clone(),
-                "CLI Session".to_string(),
-                self.agent_type.clone(),
-                self.workspace.clone(),
-            );
-            (session_id, state, None)
-        };
+                let state = ChatState::new(
+                    session_id.clone(),
+                    "CLI Session".to_string(),
+                    self.agent_type.clone(),
+                    self.workspace.clone(),
+                );
+                (session_id, state, None)
+            };
 
         // Keep ChatMode workspace in sync with the session's effective workspace
         self.agent_type = chat_state.agent_type.clone();
@@ -242,6 +242,9 @@ impl ChatMode {
                 needs_redraw = true;
             }
             if self.poll_external_agent_mutation(&mut chat_view) {
+                needs_redraw = true;
+            }
+            if self.poll_external_control_mutation(&mut chat_view) {
                 needs_redraw = true;
             }
 

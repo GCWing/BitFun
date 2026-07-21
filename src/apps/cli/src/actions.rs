@@ -66,6 +66,7 @@ pub(crate) enum ActionHandler {
     ReloadSkills,
     McpServers,
     Tools,
+    Extensions,
     AcpHelp,
     Init,
     History,
@@ -361,6 +362,21 @@ static ACTION_SPECS: &[ActionSpec] = &[
         contexts: CHAT,
         availability: ActionAvailability::Always,
         handler: ActionHandler::Tools,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Tools", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "extensions",
+        name: "External integrations",
+        aliases: &["/extensions"],
+        description: "View external source status and Safe Mode",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::Extensions,
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
@@ -1682,6 +1698,9 @@ mod tests {
     fn extension_management_uses_capability_entries_instead_of_external_commands() {
         let tools = action_for_alias("/tools", ActionContext::Chat).unwrap();
         assert_eq!(tools.handler, ActionHandler::Tools);
+        let extensions = action_for_alias("/extensions", ActionContext::Chat).unwrap();
+        assert_eq!(extensions.handler, ActionHandler::Extensions);
+        assert!(extensions.description.contains("Safe Mode"));
         let agents = action_for_alias("/agents", ActionContext::Chat).unwrap();
         assert_eq!(agents.handler, ActionHandler::OpenAgentSelector);
         assert_eq!(agents.description, "Switch modes and manage agents");

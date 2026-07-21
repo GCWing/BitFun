@@ -9,6 +9,25 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 
+impl crate::DiscoveryRequest for ExternalToolDiscoveryRequest {
+    type Result = ExternalToolDiscoveryResult;
+
+    const DIAGNOSTIC_PREFIX: &'static str = "external_tool";
+    const PROVIDER_LABEL: &'static str = "tool";
+
+    fn provider_id(&self) -> ProviderId {
+        self.provider_id.clone()
+    }
+
+    fn execute(self) -> Self::Result {
+        ExternalToolDiscoveryRequest::execute(self)
+    }
+
+    fn failed(provider_id: ProviderId, error: ExternalSourceProviderError) -> Self::Result {
+        ExternalToolDiscoveryResult::failed(provider_id, error)
+    }
+}
+
 struct ToolProviderGeneration {
     provider: Arc<dyn ExternalToolSourceProvider>,
     identity: ExternalToolProviderIdentity,

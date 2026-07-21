@@ -39,6 +39,9 @@ pub(crate) async fn dispatch(
         "get_agent_profile_config" => config::get_agent_profile_config(args).await,
         "get_agent_profile_configs" => config::get_agent_profile_configs().await,
         "get_external_source_snapshot"
+        | "get_external_source_control_snapshot"
+        | "reveal_external_source_location"
+        | "apply_external_source_control_action_command"
         | "set_external_source_enabled_command"
         | "set_external_source_conflict_choice_command"
         | "set_external_tool_target_decision_command"

@@ -387,6 +387,154 @@ impl ChatMode {
         }
     }
 
+    fn handle_external_control(
+        &mut self,
+        arguments: &str,
+        chat_view: &mut ChatView,
+        chat_state: &ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let action = match parse_external_control_action(arguments) {
+            Ok(action) => action,
+            Err(error) => {
+                chat_view.set_status(Some(error));
+                return;
+            }
+        };
+        if self.external_control_mutation_rx.is_some() {
+            chat_view.set_status(Some(
+                "An external integration update is already running; input remains available."
+                    .to_string(),
+            ));
+            return;
+        }
+
+        let workspace = self.workspace_path_for_sync(chat_state);
+        let expected_preference_revision = self
+            .external_source_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.preference_revision);
+        let task_action = action.clone();
+        let (sender, receiver) = mpsc::channel();
+        rt_handle.spawn(async move {
+            let result = async {
+                if matches!(&task_action, ExternalControlUiAction::Show) {
+                    let surface = get_external_source_control_snapshot(
+                        Some(&workspace),
+                        false,
+                        ExternalSourceHostCapabilities::read_write(),
+                    )
+                    .await?;
+                    return Ok((surface, None));
+                }
+
+                let action = match &task_action {
+                    ExternalControlUiAction::Refresh => ExternalSourceControlActionV1::Refresh,
+                    ExternalControlUiAction::SetSafeMode(enabled) => {
+                        ExternalSourceControlActionV1::SetSafeMode { enabled: *enabled }
+                    }
+                    ExternalControlUiAction::SetSourceEnabled {
+                        source_key,
+                        enabled,
+                    } => ExternalSourceControlActionV1::SetSourceEnabled {
+                        source_key: source_key.clone(),
+                        enabled: *enabled,
+                    },
+                    ExternalControlUiAction::Show => unreachable!(),
+                };
+                let surface = apply_external_source_control_action(
+                    Some(&workspace),
+                    ExternalSourceControlRequestV1 {
+                        schema_version: EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+                        operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                        expected_preference_revision,
+                        action,
+                    },
+                )
+                .await?;
+                let catalog = external_source_snapshot(Some(&workspace), false)
+                    .await
+                    .map_err(sanitize_external_source_operation_error)?;
+                Ok((surface, Some(catalog)))
+            }
+            .await;
+            let _ = sender.send(ExternalControlMutationResult {
+                action: task_action,
+                result,
+            });
+        });
+        self.external_control_mutation_rx = Some(receiver);
+        let status = match action {
+            ExternalControlUiAction::Show => "Reading external integration status",
+            ExternalControlUiAction::Refresh => "Refreshing external integrations",
+            ExternalControlUiAction::SetSafeMode(true) => "Entering External Safe Mode",
+            ExternalControlUiAction::SetSafeMode(false) => "Exiting External Safe Mode",
+            ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => {
+                "Enabling external source"
+            }
+            ExternalControlUiAction::SetSourceEnabled { enabled: false, .. } => {
+                "Disabling external source"
+            }
+        };
+        chat_view.set_status(Some(format!(
+            "{status}; you can continue typing or cancel other UI work"
+        )));
+    }
+
+    fn poll_external_control_mutation(&mut self, chat_view: &mut ChatView) -> bool {
+        let outcome = match self
+            .external_control_mutation_rx
+            .as_ref()
+            .map(Receiver::try_recv)
+        {
+            Some(Ok(outcome)) => outcome,
+            Some(Err(MpscTryRecvError::Empty)) | None => return false,
+            Some(Err(MpscTryRecvError::Disconnected)) => {
+                self.external_control_mutation_rx = None;
+                chat_view.set_status(Some(
+                    "External integration status stopped before returning a result; retry /builtin:extensions status."
+                        .to_string(),
+                ));
+                return true;
+            }
+        };
+        self.external_control_mutation_rx = None;
+        match outcome.result {
+            Ok((surface, catalog)) => {
+                if let Some(catalog) = catalog {
+                    self.update_external_source_view(chat_view, &catalog);
+                    self.external_source_snapshot = Some(catalog);
+                }
+                chat_view.show_info_popup(external_control_review_text(&surface.control));
+                let status = match outcome.action {
+                    ExternalControlUiAction::Show => "External integration status updated",
+                    ExternalControlUiAction::Refresh => "External integrations refreshed",
+                    ExternalControlUiAction::SetSafeMode(true) => "External Safe Mode is active",
+                    ExternalControlUiAction::SetSafeMode(false) => {
+                        "External Safe Mode is off; eligible integrations were reconciled"
+                    }
+                    ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => {
+                        "External source enabled"
+                    }
+                    ExternalControlUiAction::SetSourceEnabled { enabled: false, .. } => {
+                        "External source disabled"
+                    }
+                };
+                chat_view.set_status(Some(status.to_string()));
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error_code = error.code.as_str(),
+                    correlation_id = error.correlation_id.as_deref().unwrap_or("none"),
+                    operation_stage = ?error.stage,
+                    "External integration control action failed"
+                );
+                chat_view.set_status(Some(external_operation_error_status("extensions", &error)));
+            }
+        }
+        true
+    }
+
     fn handle_external_tool_review(
         &mut self,
         arguments: &str,

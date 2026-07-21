@@ -250,11 +250,22 @@ fn json_rpc_error_code(
         ExternalSourceOperationErrorCode::StaleRevision
         | ExternalSourceOperationErrorCode::Conflict => -32009,
         ExternalSourceOperationErrorCode::HostUnavailable
-        | ExternalSourceOperationErrorCode::Unavailable => -32003,
-        ExternalSourceOperationErrorCode::PolicyIncompatible
-        | ExternalSourceOperationErrorCode::PolicyLimited => -32010,
+        | ExternalSourceOperationErrorCode::Unavailable
+        | ExternalSourceOperationErrorCode::RuntimeUnavailable
+        | ExternalSourceOperationErrorCode::DependencyFailed
+        | ExternalSourceOperationErrorCode::Timeout
+        | ExternalSourceOperationErrorCode::Overloaded
+        | ExternalSourceOperationErrorCode::ProcessLost
+        | ExternalSourceOperationErrorCode::TemporarilyUnavailable => -32003,
+        ExternalSourceOperationErrorCode::Cancelled => -32800,
+        ExternalSourceOperationErrorCode::TrustRequired
+        | ExternalSourceOperationErrorCode::PolicyIncompatible
+        | ExternalSourceOperationErrorCode::PolicyLimited
+        | ExternalSourceOperationErrorCode::Unsupported
+        | ExternalSourceOperationErrorCode::IncompatibleVersion => -32010,
         ExternalSourceOperationErrorCode::NotFound => -32004,
-        ExternalSourceOperationErrorCode::Internal => -32603,
+        ExternalSourceOperationErrorCode::InvalidResponse
+        | ExternalSourceOperationErrorCode::Internal => -32603,
     }
 }
 

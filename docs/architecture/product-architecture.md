@@ -215,6 +215,9 @@ flowchart TB
 - 插件只进入扩展贡献接口，不直接写内核状态、工具结果、权限结果或审计事实。
 - 插件运行时主机只负责类型化调用、期限、取消、有界队列、逻辑 target 状态、响应校验和故障状态；
   物理进程健康、资源预算与进程树回收属于脚本执行服务。
+- 外部来源的 Command、Tool、Subagent、MCP 仍保留能力专属 DTO 和 owner，但它们的发现调度统一由
+  `ExternalSourceControlPlane` 持有；跨 Desktop/TUI/Peer/Server 的控制事实只通过版本化 product-domain 投影共享，
+  不复制生态 payload、界面状态机或远端专用 DTO。
 - 每个生态适配层独立保留该生态的外部格式、来源顺序和调用语义，并映射到 BitFun 归属模块；它本身不成为新的
   业务归属模块，也不能依赖或修改兄弟生态 adapter。通用目录、生命周期协调器和能力 owner 只依赖开放生态 ID、
   来源限定身份与能力专属 provider 契约，不按 OpenCode、Codex 或 Claude Code 分支行为。
@@ -263,7 +266,8 @@ flowchart LR
 
 - 不启动完整 OpenCode Runtime，也不依赖用户安装 OpenCode CLI；BitFun 实现自己的监督、适配和 Rust 转发层。
   当前 standalone Tool 子集通过受监督的 Node.js worker 执行且不安装依赖；未来只有冻结的 package plugin 样例证明
-  确有需要时，才单独裁决 Bun、依赖准备和版本兼容方案。
+  确有需要时，才单独裁决 Bun、依赖准备和版本兼容方案。OpenCode v2 当前同时维护 Bun 编译产物与 Node SEA 并行
+  产物，因此 BitFun 不把外部项目尚未收敛的运行时选择提升为 Host ABI 或核心架构约束。
 - 用户全局和项目来源自动发现；低风险内容默认无感应用并显示可撤销摘要，可执行来源首次启用或能力扩大时等待
   非阻塞确认。确认前不得 import module、启动 worker、读取凭据或产生直接脚本副作用。
 - 激活后的本地 target 默认按 OpenCode 语义运行，允许当前用户通常拥有的文件、网络、进程和环境能力；用户、
@@ -327,13 +331,13 @@ flowchart LR
 
 | 产品形态 | 当前扩展能力 | 入口行为 |
 |---|---|---|
-| Desktop / product-full | 生产入口仍依赖 `bitfun-core/product-full` 作为兼容组装层；Beta“外部 AI 应用”设置已消费 OpenCode Command、standalone Tool、Subagent 和 MCP 的统一来源快照、审批、冲突选择与诊断；MCP 原生清单优先展示，外部候选保持独立来源、作用域和覆盖状态；Skills 场景显示已发现 Skill 的生态来源、用户/项目作用域与覆盖结果 | 当前四条可执行纵向切片由事实所在 Host 执行；本机 Desktop 使用本机 Host，Peer 控制界面代理 Peer Host，不在控制端回退发现或执行。Skill 仍使用独立 Registry，不据来源展示宣称已并入外部来源协调器。受管 package plugin 仍只有静态预览，不能据设置页接入宣称完整 OpenCode 插件运行时 |
-| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；交互式 TUI 已可执行受支持的 Prompt Command，并在通用 `/tools` 与 `/agents` 入口按文字分组消费与 Desktop 相同的审批、冲突和刷新状态；`/agents` 同时承载主 Agent 切换、Subagent 管理和“外部 AI 应用”，不再注册 `/subagents` 或 `external-*` 平行命令。活动 turn 期间仍可查看和管理，只有主 Agent 切换被禁用。Skill 列表显示来源，模式配置按实际选择结果说明覆盖来源 | 已批准的 standalone Tool 进入现有 Tool Runtime；已批准的外部 Subagent 只支持 fresh single-run。CLI/TUI 不解析生态文件、不启动第二套 worker/Agent owner；非交互入口和 Remote 未接入时不得借本机 TUI 路径代执行。本地 Agent 与 Peer Host 路径选择 `DeliveryProfile::Cli` 并消费同一 Runtime Parts/SDK；主会话的恢复、转录、本地分支、用量报告生成/卡片持久化、模式更新与精确结算走 SDK，Peer Host 的基础会话创建/恢复/重命名/归档和 thread-goal 查询也走同一 SDK；远程分支明确不支持。TUI 模式切换异步持久化，期间保持输入和 resize 响应，只在成功后提交本地状态，失败保留原选择；用户可切换会话，退出有等待完成与再次强制退出两级路径。失效的主会话模式由 Core 恢复为可执行模式，TUI 显示迁移并阻止启动输入自动执行。本地工作区快照准备、会话文件清单、类型化统计和工作区文件回滚由 Desktop/Peer Host 共用的窄 owner port 调用现有 Core 实现；它不进入 SDK，不接受远程身份，Desktop 保留既有远程空结果，Peer Host 返回明确不支持错误，历史维护仍归宿主。账号同步、富历史及 Peer Host/ACP 其余持久化维护缺口仍由单一 Core 兼容门面转发。本切片不改变扩展执行边界 |
+| Desktop / product-full | 生产入口仍依赖 `bitfun-core/product-full` 作为兼容组装层；Beta“外部 AI 应用”设置消费版本化 control/catalog 同代快照，显示正交生命周期、审批、冲突、诊断和 Host 能力，并可切换易失 Safe Mode；MCP 原生清单优先展示，外部候选保持独立来源、作用域和覆盖状态；Skills 场景显示已发现 Skill 的生态来源、用户/项目作用域与覆盖结果 | 当前四条可执行纵向切片由事实所在 Host 执行；本机 Desktop 使用本机 Host，Peer 控制界面代理 Peer Host，不在控制端回退发现或执行。Safe Mode 只撤下外部 Tool/Subagent/MCP 新调用，不改写来源偏好、不停止发现也不取消在途调用；状态仅在当前 Host 进程/执行域有效，重启或切换 Host 后关闭，所有产品面必须明确提示。Skill 仍使用独立 Registry；受管 package plugin 仍只有静态预览 |
+| CLI | 入口仍以 `bitfun-core/product-full` 作为执行兼容 owner；交互式 TUI 已可执行受支持的 Prompt Command，`/extensions` 的 status、refresh、Safe Mode 与 source enable/disable 消费同一 v1 控制 DTO，`/tools` 与 `/agents` 继续承载能力专属查看和操作；命令结果复用现有异步事件循环，不新增调度器。Skill 列表显示来源，模式配置按实际选择结果说明覆盖来源 | 已批准的 standalone Tool 进入现有 Tool Runtime；已批准的外部 Subagent 只支持 fresh single-run。CLI/TUI 不解析生态文件、不启动第二套 worker/Agent owner；Safe Mode 操作后重读权威 catalog 再更新命令路由。非交互入口和 SSH Remote 未接入时不得借本机 TUI 路径代执行；其余 Runtime Parts/SDK、会话和工作区 owner 边界保持不变 |
 | HarmonyOS PC 原生 CLI/TUI | 未来平台目标，当前未实现 | 目标、问题和风险见平台规约；具体适配另立专题，HAP、手机 Remote App 与远端代执行均不替代 |
 | HarmonyOS PC GUI | 完整 HarmonyOS PC 支持的另一目标形态，当前未实现 | 与 CLI/TUI 共享稳定能力和 Runtime 语义，但独立设计宿主、界面与发布验证；Web、Remote 或现有 Tauri Desktop 均不能替代 |
 | HarmonyOS 手机 Remote App | `src/apps/mobile/harmonyos` 是 phone-only ArkTS 远程入口，不持有本地 Rust Agent Runtime | 保持当前能力并按移动端专题独立演进；本轮不提前设计移动 Runtime/TUI/GUI，也不能据此宣称 HarmonyOS PC 本地能力 |
 | ACP | CLI 托管的服务端仍以 `bitfun-core/product-full` 作为兼容执行层 | 入口已选择 `DeliveryProfile::Acp` 并消费 Runtime Parts；组装层在入队前原子拒绝忙碌会话，不改变其他产品入口的排队行为；活动会话模型与模式写入走 SDK。`session/load` 先校验和建立临时 MCP，再恢复 Core，在历史回放成功后才发布活动状态；失败会卸载本次内存状态而不删除历史。同 ID 的重叠打开/关闭被明确拒绝。成功的 `session/close` 阻止新轮次、排空队列和后台子会话，再卸载临时 Core 状态并回收 MCP 与连接；失败保留会话所有权和历史，返回可重试阶段。持久化历史仍可重新加载。完整历史、模型/模式目录与配置读取仍留在现有 Core/ACP 归属，不据此宣称完整解耦 |
-| Server / Remote | Server 可返回 Host 只读外部来源快照并对变更操作 fail closed；Peer Host 已代理外部来源快照、策略和既有四类操作；SSH Remote 工作区的外部来源发现与执行仍未实现 | 只读 Host 不伪装为可管理；控制端用 Host 身份与工作区共同隔离异步结果。Peer Host 只处理 Host 上的真实工作区，不在控制端替远端发现；SSH Remote 未接入时返回明确不支持且不回退本机来源 |
+| Server / Remote | Server 可返回共享 v1 control/catalog 快照，`hostCapabilities` 明确为只读，并在解析 mutation payload 前 fail closed；Peer Host 代理同一读写控制动作与既有能力专属操作，连接旧 Peer 时读路径降级到 legacy catalog、来源启停降级到既有 mutation，Safe Mode 明确要求升级 Host；SSH Remote 工作区的外部来源发现与执行仍未实现 | 控制端用 Host 身份与工作区共同隔离异步结果。Peer Host 只处理 Host 上的真实工作区，不在控制端替远端发现；SSH Remote 未接入时返回明确不支持且不回退本机来源 |
 | Web / Mobile Web | 依赖现有后端入口，不持有插件执行单元 | 对应 profile 当前为空计划或未接入生产，不能据枚举值宣称独立产品能力 |
 | SDK | 仅有 preview 门面、空 profile 计划和测试替身 | 不牵引 `product-full`、具体服务管理器或插件 host ABI；未满足独立嵌入验证前不宣称可发布 |
 

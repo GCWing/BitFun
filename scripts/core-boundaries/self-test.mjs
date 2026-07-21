@@ -710,6 +710,14 @@ export function runManifestParserSelfTest({
       throw new Error(`services-integrations review-platform must own optional dependency ${dep}`);
     }
   }
+  for (const dep of ['bitfun-services-core']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('process-tree')) {
+      throw new Error(`services-integrations process-tree must delegate to ${dep}`);
+    }
+  }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'product-domains',
   );
@@ -868,6 +876,15 @@ export function runManifestParserSelfTest({
   const externalSourcePublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_sources.rs',
   );
+  const externalSourceControlPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_source_control.rs',
+  );
+  const externalSourceCoordinatorPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/assembly/external-sources/src/lib.rs',
+  );
+  const externalSourceCorePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/assembly/core/src/external_sources.rs',
+  );
   const managedPluginActivationPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/assembly/core/src/plugin_runtime.rs',
   );
@@ -1007,6 +1024,48 @@ export function runManifestParserSelfTest({
   }
   if (!publicApiContractSlices.includes('external-source-mcp-contract')) {
     throw new Error('external MCP contracts must have an independent contract slice');
+  }
+  if (!publicApiContractSlices.includes('external-source-control-contract')) {
+    throw new Error('external source control contracts must have an independent contract slice');
+  }
+  for (const requiredSymbol of [
+    'EXTERNAL_SOURCE_CONTROL_SCHEMA_V1',
+    'ExternalSourceControlSnapshotV1',
+    'ExternalSourceSurfaceSnapshotV1',
+    'ExternalSourceControlActionV1',
+    'ExternalSourceControlRequestV1',
+    'ExternalSourceOperationStage',
+    'ExternalSourceRecoveryActionV1',
+  ]) {
+    if (!externalSourceControlPublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-control-contract'
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external source control public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
+    }
+  }
+  for (const requiredSymbol of ['ExternalSourceControlPlane', 'DeferredDiscovery', 'DiscoveryBatch']) {
+    if (!externalSourceCoordinatorPublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-control-contract',
+    )) {
+      throw new Error(`external source coordinator public API budget is missing control symbol: ${requiredSymbol}`);
+    }
+  }
+  for (const requiredSymbol of [
+    'ExternalSourceControlSnapshotV1',
+    'ExternalSourceControlRequestV1',
+    'get_external_source_control_snapshot',
+    'apply_external_source_control_action',
+  ]) {
+    if (!externalSourceCorePublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-control-contract',
+    )) {
+      throw new Error(`external source core public API budget is missing control symbol: ${requiredSymbol}`);
+    }
   }
   for (const requiredSymbol of [
     'ExternalMcpServerDefinition',

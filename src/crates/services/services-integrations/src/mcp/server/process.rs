@@ -8,11 +8,11 @@ use crate::mcp::protocol::{InitializeResult, MCPMessage, MCPServerInfo, MCPTrans
 use crate::mcp::server::{is_mcp_auth_error_message, merge_mcp_remote_headers};
 use crate::mcp::{MCPRuntimeError, MCPRuntimeResult};
 use bitfun_services_core::process_manager;
+use bitfun_services_core::process_tree::ProcessTreeChild;
 use log::{debug, error, info, warn};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::process::Child;
 use tokio::sync::{mpsc, RwLock};
 
 /// MCP server process.
@@ -21,7 +21,7 @@ pub struct MCPServerProcess {
     name: String,
     server_type: MCPServerType,
     status: Arc<RwLock<MCPServerStatus>>,
-    child: Option<Child>,
+    child: Option<ProcessTreeChild>,
     connection: Option<Arc<MCPConnection>>,
     server_info: Option<MCPServerInfo>,
     start_time: Option<Instant>,
@@ -136,7 +136,7 @@ impl MCPServerProcess {
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
 
-        let child = cmd.spawn().map_err(|e| {
+        let child = ProcessTreeChild::spawn(&mut cmd).await.map_err(|e| {
             error!(
                 "Failed to spawn MCP server process: command={} error={}",
                 final_command, e
@@ -156,12 +156,10 @@ impl MCPServerProcess {
         };
 
         let stdin = child
-            .stdin
-            .take()
+            .take_stdin()
             .ok_or_else(|| MCPRuntimeError::process("Failed to capture stdin".to_string()))?;
         let stdout = child
-            .stdout
-            .take()
+            .take_stdout()
             .ok_or_else(|| MCPRuntimeError::process("Failed to capture stdout".to_string()))?;
 
         let (tx, rx) = mpsc::unbounded_channel();
@@ -322,7 +320,7 @@ impl MCPServerProcess {
         }
 
         if let Some(child) = self.child.as_mut() {
-            if let Err(error) = child.kill().await {
+            if let Err(error) = child.terminate(Duration::from_millis(500)).await {
                 let message = format!(
                     "Failed to kill MCP server process: name={} id={} error={}",
                     self.name, self.id, error
@@ -574,8 +572,6 @@ fn safe_process_environment_keys() -> &'static [&'static str] {
 
 impl Drop for MCPServerProcess {
     fn drop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            let _ = child.start_kill();
-        }
+        self.child.take();
     }
 }

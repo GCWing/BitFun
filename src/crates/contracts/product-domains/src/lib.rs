@@ -9,6 +9,9 @@ pub mod canvas;
 pub mod external_integration_policy;
 
 #[cfg(feature = "external-sources")]
+pub mod external_source_control;
+
+#[cfg(feature = "external-sources")]
 pub mod external_sources;
 
 #[cfg(feature = "external-sources")]

@@ -12,7 +12,7 @@ integration, or stable product-domain contracts.
 | Crate | Responsibility | Local doc |
 |---|---|---|
 | `core` | `bitfun-core` compatibility facade and product-full assembly | [AGENTS.md](core/AGENTS.md) |
-| `external-sources` | Ecosystem-neutral source lifecycle coordination over capability-specific provider contracts | inherited |
+| `external-sources` | Ecosystem-neutral lifecycle owner: capability-specific coordinators plus shared bounded discovery lanes | inherited |
 | `product-capabilities` | Product capability profiles, tool group facts, service requirements, and harness selections | [AGENTS.md](product-capabilities/AGENTS.md) |
 
 ## Placement Rules
@@ -28,6 +28,10 @@ integration, or stable product-domain contracts.
   them with compatibility notes and tests.
 - Keep assembly additions small and traceable; broad feature growth here is a
   sign that ownership has not been pushed down far enough.
+- Keep external-source capability payloads in their typed contracts and owners.
+  `ExternalSourceControlPlane` may share scheduling, generation fencing, and
+  provider isolation, but must not become a generic asset registry or a second
+  product-state owner.
 
 ## Dependency Boundaries
 

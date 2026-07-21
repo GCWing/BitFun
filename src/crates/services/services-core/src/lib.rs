@@ -14,6 +14,7 @@ pub mod managed_runtime;
 pub mod markdown;
 pub mod persistence;
 pub mod process_manager;
+pub mod process_tree;
 pub mod session;
 pub mod session_usage;
 pub mod storage_cleanup;

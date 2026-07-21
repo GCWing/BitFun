@@ -12,6 +12,25 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+impl crate::DiscoveryRequest for ExternalSubagentDiscoveryRequest {
+    type Result = ExternalSubagentDiscoveryResult;
+
+    const DIAGNOSTIC_PREFIX: &'static str = "external_subagent";
+    const PROVIDER_LABEL: &'static str = "subagent";
+
+    fn provider_id(&self) -> ProviderId {
+        self.provider_id.clone()
+    }
+
+    fn execute(self) -> Self::Result {
+        ExternalSubagentDiscoveryRequest::execute(self)
+    }
+
+    fn failed(provider_id: ProviderId, error: ExternalSourceProviderError) -> Self::Result {
+        ExternalSubagentDiscoveryResult::failed(provider_id, error)
+    }
+}
+
 const EXTERNAL_SUBAGENT_LAST_VALID_MAX_AGE: Duration = Duration::from_secs(30);
 const EXTERNAL_SUBAGENT_LAST_VALID_MAX_FAILURES: u32 = 3;
 

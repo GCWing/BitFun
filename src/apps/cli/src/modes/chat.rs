@@ -66,16 +66,19 @@ use bitfun_core::agentic::tools::implementations::skills::{
     ModeSkillInfo, SkillInfo,
 };
 use bitfun_core::external_sources::{
-    choose_external_subagent_conflict, expand_external_prompt_command,
-    external_source_conflict_choices, external_source_snapshot, prompt_command_conflict_key,
+    apply_external_source_control_action, choose_external_subagent_conflict,
+    expand_external_prompt_command, external_source_conflict_choices, external_source_snapshot,
+    get_external_source_control_snapshot, prompt_command_conflict_key,
     remember_external_source_conflict_choice, sanitize_external_source_operation_error,
     set_external_prompt_command_conflict_choice, set_external_subagent_activation,
     set_external_tool_conflict_choice, set_external_tool_target_decision,
     subscribe_external_source_updates, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
-    ExternalSourceDiagnosticSeverity, ExternalSourceOperationError,
+    ExternalSourceControlActionV1, ExternalSourceControlRequestV1,
+    ExternalSourceDiagnosticSeverity, ExternalSourceHostCapabilities, ExternalSourceOperationError,
     ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
     ExternalSubagentCompatibilityState, ExternalToolActivationState, ExternalToolCapability,
     ExternalToolCatalogEntry, ExternalToolRuntimeKind, PromptCommandAvailability,
+    EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
 use bitfun_core::service::config::GlobalConfigManager;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
@@ -201,6 +204,7 @@ pub(crate) struct ChatMode {
     external_tool_notice_key: Option<String>,
     external_tool_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_tool_mutation_rx: Option<Receiver<ExternalToolMutationResult>>,
+    external_control_mutation_rx: Option<Receiver<ExternalControlMutationResult>>,
     external_agent_notice_key: Option<String>,
     external_agent_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_agent_mutation_rx: Option<Receiver<ExternalAgentMutationResult>>,
@@ -246,6 +250,7 @@ impl ChatMode {
             external_tool_notice_key: None,
             external_tool_review_snapshot: None,
             external_tool_mutation_rx: None,
+            external_control_mutation_rx: None,
             external_agent_notice_key: None,
             external_agent_review_snapshot: None,
             external_agent_mutation_rx: None,

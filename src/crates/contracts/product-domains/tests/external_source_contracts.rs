@@ -5,6 +5,11 @@ use bitfun_product_domains::external_integration_policy::{
     ExternalIntegrationMode, ExternalIntegrationPolicyDocument, ExternalIntegrationPolicyOverride,
     ExternalIntegrationPolicyStatus,
 };
+use bitfun_product_domains::external_source_control::{
+    ExternalSourceControlActionV1, ExternalSourceControlRequestV1, ExternalSourceControlSnapshotV1,
+    ExternalSourceDesiredState, ExternalSourceDiscoveryState, ExternalSourceOperationStage,
+    ExternalSourceRecoveryActionV1, ExternalSourceReviewState, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+};
 use bitfun_product_domains::external_sources::{
     external_mcp_approval_key, external_mcp_conflict_key, external_tool_approval_key,
     external_tool_conflict_key, prompt_command_conflict_key, EcosystemId, ExecutionDomainId,
@@ -14,7 +19,8 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
     ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
     ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,
+    ExternalSourceHealth, ExternalSourceHostCapabilities, ExternalSourceLifecycleState,
+    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceProviderError,
     ExternalSourcePublicSnapshot, ExternalSourceRecord, ExternalSourceScope,
     ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
     ExternalToolStaticStatus, ExternalWatchRoot, PreparedExternalMcpServer,
@@ -548,6 +554,43 @@ fn standalone_tool_contract_separates_static_preview_from_executable_source() {
     assert!(encoded.get("moduleSource").is_none());
     assert!(encoded.get("payload").is_none());
     tool.validate().expect("valid standalone tool preview");
+}
+
+#[test]
+fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
+    let snapshot: ExternalSourcePublicSnapshot = serde_json::from_value(serde_json::json!({
+        "generation": 1,
+        "discoveryPending": false,
+        "sources": [],
+        "commands": [],
+        "tools": [{
+            "definition": {
+                "id": {
+                    "target": {
+                        "source": { "providerId": "opencode.tools", "sourceId": "project" },
+                        "localId": "weather.js"
+                    },
+                    "exportId": "default"
+                },
+                "name": "weather",
+                "descriptionPreview": "Get weather",
+                "modulePath": "<workspace>/.opencode/tools/weather.js",
+                "workingDirectory": "<workspace>",
+                "runtimeKind": "java_script",
+                "capabilities": [],
+                "contentVersion": "sha256:v1",
+                "staticStatus": { "state": "ready" }
+            },
+            "approvalKey": "approval-v1",
+            "decisionKey": "decision-v1",
+            "activation": { "state": "declined" }
+        }]
+    }))
+    .expect("new public snapshot");
+
+    let legacy =
+        serde_json::to_value(snapshot.into_legacy_v0_compatible()).expect("legacy public snapshot");
+    assert_eq!(legacy["tools"][0]["activation"]["state"], "disabled");
 }
 
 #[test]
@@ -1215,4 +1258,233 @@ fn public_snapshot_never_exposes_executable_prompt_templates() {
     assert!(encoded["commands"][0]["definition"]
         .get("template")
         .is_none());
+}
+
+#[test]
+fn control_projection_keeps_lifecycle_facts_orthogonal() {
+    let catalog = ExternalSourceCatalogSnapshot {
+        generation: 7,
+        discovery_pending: false,
+        sources: vec![ExternalSourceCatalogEntry {
+            stable_key: "opencode.commands:project".to_string(),
+            presentation_group_id: None,
+            record: source("opencode.commands", "opencode", "project"),
+            lifecycle: ExternalSourceLifecycleState::UsingLastValidVersion,
+        }],
+        commands: vec![PromptCommandCatalogEntry {
+            definition: command("opencode.commands", "project", 1),
+        }],
+        command_conflicts: Vec::new(),
+        tools: Vec::new(),
+        tool_approval_requests: Vec::new(),
+        tool_conflicts: Vec::new(),
+        mcp_generation: 2,
+        mcp_servers: Vec::new(),
+        mcp_approval_requests: Vec::new(),
+        mcp_conflicts: Vec::new(),
+        subagent_generation: 3,
+        preference_revision: 11,
+        subagents: Vec::new(),
+        subagent_conflicts: Vec::new(),
+        pending_subagent_approvals: Vec::new(),
+        integration_policy: Default::default(),
+        diagnostics: Vec::new(),
+    };
+
+    let control = ExternalSourceControlSnapshotV1::from_catalog(
+        &catalog,
+        ExecutionDomainId::new("local-user").unwrap(),
+        false,
+        ExternalSourceHostCapabilities::read_write(),
+    );
+
+    assert_eq!(control.schema_version, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1);
+    assert_eq!(control.refresh_generation, 7);
+    assert_eq!(control.preference_revision, 11);
+    assert_eq!(control.sources.len(), 1);
+    assert_eq!(
+        control.sources[0].discovery,
+        ExternalSourceDiscoveryState::LastKnownGood
+    );
+    assert_eq!(
+        control.sources[0].desired,
+        ExternalSourceDesiredState::Enabled
+    );
+    assert_eq!(
+        control.sources[0].review,
+        ExternalSourceReviewState::NotRequired
+    );
+    assert_eq!(control.capabilities.len(), 4);
+}
+
+#[test]
+fn control_projection_does_not_infer_review_facts_from_runtime_activation() {
+    let record = source("opencode.mcp", "opencode", "project-config");
+    let definition = ExternalMcpServerDefinition {
+        id: SourceQualifiedMcpServerId::new(record.key.clone(), "docs").unwrap(),
+        provenance: vec![record.key.clone()],
+        name: "docs".to_string(),
+        transport: ExternalMcpTransportKind::StreamableHttp,
+        command_preview: None,
+        argument_count: 0,
+        working_directory: None,
+        environment_keys: Vec::new(),
+        environment_reference_names: Vec::new(),
+        remote_url_preview: Some("https://mcp.example.com".to_string()),
+        header_names: Vec::new(),
+        source_enabled: true,
+        behavior_version: "behavior-v1".to_string(),
+        static_status: ExternalMcpStaticStatus::Ready,
+    };
+    let catalog = ExternalSourceCatalogSnapshot {
+        generation: 1,
+        discovery_pending: false,
+        sources: vec![ExternalSourceCatalogEntry {
+            stable_key: "opencode.mcp:project-config".to_string(),
+            presentation_group_id: None,
+            record: record.clone(),
+            lifecycle: ExternalSourceLifecycleState::Available,
+        }],
+        commands: Vec::new(),
+        command_conflicts: Vec::new(),
+        tools: Vec::new(),
+        tool_approval_requests: Vec::new(),
+        tool_conflicts: Vec::new(),
+        mcp_generation: 1,
+        mcp_servers: vec![ExternalMcpCatalogEntry {
+            candidate_id: "external_mcp:docs".to_string(),
+            definition,
+            approval_key: "approval-v1".to_string(),
+            decision_key: "decision-v1".to_string(),
+            runtime_id: None,
+            activation_state: ExternalMcpActivationState::Declined,
+        }],
+        mcp_approval_requests: Vec::new(),
+        mcp_conflicts: Vec::new(),
+        subagent_generation: 1,
+        preference_revision: 1,
+        subagents: Vec::new(),
+        subagent_conflicts: Vec::new(),
+        pending_subagent_approvals: Vec::new(),
+        integration_policy: Default::default(),
+        diagnostics: Vec::new(),
+    };
+
+    let control = ExternalSourceControlSnapshotV1::from_catalog(
+        &catalog,
+        ExecutionDomainId::new("local-user").unwrap(),
+        false,
+        ExternalSourceHostCapabilities::read_write(),
+    );
+
+    assert_eq!(
+        control.sources[0].review,
+        ExternalSourceReviewState::NotRequired
+    );
+}
+
+#[test]
+fn desktop_local_host_capability_is_additive_on_the_wire() {
+    let portable = serde_json::to_value(ExternalSourceHostCapabilities::read_write()).unwrap();
+    let read_only =
+        serde_json::to_value(ExternalSourceHostCapabilities::read_only_projection()).unwrap();
+    let desktop = serde_json::to_value(ExternalSourceHostCapabilities::local_desktop()).unwrap();
+
+    assert!(portable.get("canRevealSourceLocation").is_none());
+    assert!(read_only.get("canRevealSourceLocation").is_none());
+    assert_eq!(desktop["canRevealSourceLocation"], true);
+
+    let legacy: ExternalSourceHostCapabilities = serde_json::from_value(serde_json::json!({
+        "canRefresh": true,
+        "canMutatePolicy": true,
+        "canManageSources": true,
+        "canApproveRuntime": true,
+        "canExecuteExternalAssets": true,
+        "canSetSafeMode": true
+    }))
+    .unwrap();
+    assert!(!legacy.can_reveal_source_location);
+}
+
+#[test]
+fn operation_error_round_trip_preserves_typed_recovery_without_message_parsing() {
+    let error = ExternalSourceOperationError::new(
+        ExternalSourceOperationErrorCode::StaleRevision,
+        "refresh required",
+        true,
+    )
+    .with_stage(ExternalSourceOperationStage::ApplyPreference)
+    .with_causation_id("refresh-generation-7")
+    .with_recovery_action(ExternalSourceRecoveryActionV1::Refresh);
+
+    let encoded = error.encode();
+    assert_eq!(ExternalSourceOperationError::decode(&encoded), Some(error));
+    assert!(!encoded.contains("metadata"));
+}
+
+#[test]
+fn control_action_uses_one_camel_case_dto_across_product_surfaces() {
+    let request = ExternalSourceControlRequestV1 {
+        schema_version: EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+        operation_id: "surface-operation-1".to_string(),
+        expected_preference_revision: Some(8),
+        action: ExternalSourceControlActionV1::SetSourceEnabled {
+            source_key: "opencode.commands:project".to_string(),
+            enabled: false,
+        },
+    };
+
+    let encoded = serde_json::to_value(&request).expect("serialize control request");
+    assert_eq!(encoded["schemaVersion"], 1);
+    assert_eq!(encoded["operationId"], "surface-operation-1");
+    assert_eq!(encoded["expectedPreferenceRevision"], 8);
+    assert_eq!(encoded["action"]["type"], "set_source_enabled");
+    assert_eq!(encoded["action"]["sourceKey"], "opencode.commands:project");
+    assert!(encoded["action"].get("source_key").is_none());
+    assert_eq!(
+        serde_json::from_value::<ExternalSourceControlRequestV1>(encoded)
+            .expect("deserialize the shared control request"),
+        request
+    );
+}
+
+#[test]
+fn legacy_operation_errors_decode_with_empty_extension_fields() {
+    let decoded = ExternalSourceOperationError::decode(
+        r#"{"code":"unavailable","detail":"retry","retryable":true}"#,
+    )
+    .expect("legacy operation error remains readable");
+
+    assert_eq!(decoded.code, ExternalSourceOperationErrorCode::Unavailable);
+    assert!(decoded.stage.is_none());
+    assert!(decoded.causation_id.is_none());
+    assert!(decoded.recovery_actions.is_empty());
+}
+
+#[test]
+fn decoded_operation_errors_bound_untrusted_extension_fields() {
+    let oversized = "x".repeat(5000);
+    let encoded = serde_json::json!({
+        "code": "stale_revision",
+        "detail": oversized,
+        "retryable": true,
+        "correlationId": "forged\nreference",
+        "recoveryActions": [
+            { "type": "refresh" },
+            { "type": "refresh" },
+            { "type": "retry" }
+        ]
+    })
+    .to_string();
+
+    let decoded = ExternalSourceOperationError::decode(&encoded).unwrap();
+    assert_eq!(decoded.detail.chars().count(), 4096);
+    assert!(decoded.correlation_id.is_none());
+    assert_eq!(
+        decoded.recovery_actions,
+        vec![
+            ExternalSourceRecoveryActionV1::Refresh,
+            ExternalSourceRecoveryActionV1::Retry,
+        ]
+    );
 }

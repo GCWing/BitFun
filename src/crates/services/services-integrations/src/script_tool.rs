@@ -6,6 +6,7 @@ use bitfun_runtime_ports::{
     ScriptToolLoadRequest, ScriptToolLoadResponse, ScriptToolRuntime,
     ScriptToolRuntimeAvailability,
 };
+use bitfun_services_core::process_tree::ProcessTreeChild;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -13,8 +14,8 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{ChildStdin, ChildStdout, Command};
 use tokio::sync::{oneshot, watch, Mutex, OwnedSemaphorePermit, RwLock, Semaphore};
 
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -427,7 +428,7 @@ async fn read_protocol_frame(
 
 struct NodeWorker {
     stdin: Mutex<ChildStdin>,
-    child: Mutex<Child>,
+    child: Mutex<ProcessTreeChild>,
     pending: Arc<Mutex<HashMap<u64, PendingRequest>>>,
     next_request_id: AtomicU64,
     response_token: String,
@@ -447,21 +448,23 @@ impl NodeWorker {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        let mut child = command.spawn().map_err(|error| {
-            PortError::new(
-                PortErrorKind::NotAvailable,
-                format!("failed to start JavaScript tool worker: {error}"),
-            )
-        })?;
+            .env_remove("NODE_OPTIONS")
+            .env_remove("NODE_PATH");
+        let mut child = ProcessTreeChild::spawn(&mut command)
+            .await
+            .map_err(|error| {
+                PortError::new(
+                    PortErrorKind::NotAvailable,
+                    format!("failed to start JavaScript tool worker: {error}"),
+                )
+            })?;
         let stdin = child
-            .stdin
-            .take()
+            .take_stdin()
             .ok_or_else(|| PortError::new(PortErrorKind::Backend, "worker stdin is unavailable"))?;
-        let stdout = child.stdout.take().ok_or_else(|| {
+        let stdout = child.take_stdout().ok_or_else(|| {
             PortError::new(PortErrorKind::Backend, "worker stdout is unavailable")
         })?;
-        let stderr = child.stderr.take().ok_or_else(|| {
+        let stderr = child.take_stderr().ok_or_else(|| {
             PortError::new(PortErrorKind::Backend, "worker stderr is unavailable")
         })?;
         let mut reader = BufReader::new(stdout);
@@ -651,12 +654,16 @@ impl NodeWorker {
         if matches!(child.try_wait(), Ok(Some(_))) {
             return Ok(());
         }
-        child.kill().await.map_err(|error| {
-            PortError::new(
-                PortErrorKind::Backend,
-                format!("failed to stop script tool worker: {error}"),
-            )
-        })
+        child
+            .terminate(CANCEL_GRACE_PERIOD)
+            .await
+            .map(|_| ())
+            .map_err(|error| {
+                PortError::new(
+                    PortErrorKind::Backend,
+                    format!("failed to stop script tool worker: {error}"),
+                )
+            })
     }
 
     async fn is_running(&self) -> bool {
@@ -811,9 +818,12 @@ impl NodeScriptToolRuntime {
 impl ScriptToolRuntime for NodeScriptToolRuntime {
     async fn availability(&self) -> ScriptToolRuntimeAvailability {
         match self.resolve_executable().await {
-            Some(executable) => ScriptToolRuntimeAvailability::Available {
-                executable: executable.to_string_lossy().into_owned(),
-                version: "not checked".to_string(),
+            Some(executable) => match probe_node_version(&executable).await {
+                Ok(version) => ScriptToolRuntimeAvailability::Available {
+                    executable: executable.to_string_lossy().into_owned(),
+                    version,
+                },
+                Err(reason) => ScriptToolRuntimeAvailability::Unavailable { reason },
             },
             None => ScriptToolRuntimeAvailability::Unavailable {
                 reason: "BitFun could not find Node.js for external tools".to_string(),
@@ -993,6 +1003,50 @@ impl ScriptToolRuntime for NodeScriptToolRuntime {
         };
         worker.dispose(target_id).await
     }
+}
+
+async fn probe_node_version(executable: &PathBuf) -> Result<String, String> {
+    let mut command = Command::new(executable);
+    command
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .env_remove("NODE_OPTIONS")
+        .env_remove("NODE_PATH");
+    let mut child = ProcessTreeChild::spawn(&mut command)
+        .await
+        .map_err(|_| "BitFun could not start Node.js for external tools".to_string())?;
+    let stdout = child
+        .take_stdout()
+        .ok_or_else(|| "Node.js version output was unavailable".to_string())?;
+    let probe = async move {
+        let mut output = Vec::with_capacity(65);
+        stdout
+            .take(65)
+            .read_to_end(&mut output)
+            .await
+            .map_err(|_| "Node.js version output could not be read".to_string())?;
+        let status = child
+            .wait()
+            .await
+            .map_err(|_| "Node.js version probe failed".to_string())?;
+        Ok::<_, String>((status, output))
+    };
+    let (status, output) = tokio::time::timeout(std::time::Duration::from_secs(2), probe)
+        .await
+        .map_err(|_| "Node.js version probe timed out".to_string())??;
+    if !status.success() {
+        return Err("Node.js version probe failed".to_string());
+    }
+    let version = String::from_utf8(output)
+        .map_err(|_| "Node.js returned an invalid version".to_string())?
+        .trim()
+        .to_string();
+    if version.is_empty() || version.len() > 64 || !version.starts_with('v') {
+        return Err("Node.js returned an invalid version".to_string());
+    }
+    Ok(version)
 }
 
 #[cfg(test)]

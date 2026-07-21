@@ -58,7 +58,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
       {
         depName: 'bitfun-services-core',
-        ownerFeatures: ['browser-control', 'git', 'mcp', 'miniapp-runtime', 'remote-connect', 'review-platform', 'workspace-search'],
+        ownerFeatures: ['browser-control', 'git', 'mcp', 'miniapp-runtime', 'process-tree', 'remote-connect', 'review-platform', 'workspace-search'],
       },
       { depName: 'chrono', ownerFeatures: ['debug-log', 'git', 'remote-connect', 'remote-ssh-concrete', 'review-platform'] },
       { depName: 'dirs', ownerFeatures: ['browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },

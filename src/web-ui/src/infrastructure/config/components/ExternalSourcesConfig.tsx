@@ -32,6 +32,7 @@ import {
   type ExternalIntegrationMode,
   type ExternalIntegrationPolicyMutation,
   type ExternalSourceCatalogSnapshot,
+  type ExternalSourceRecoveryAction,
   type ExternalSubagentSummary,
   type ExternalToolCatalogEntry,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
@@ -136,6 +137,9 @@ type ExternalSourcesError = {
   detail: string;
   retryable: boolean;
   correlationId?: string;
+  causationId?: string;
+  stage?: string;
+  recoveryActions: ExternalSourceRecoveryAction[];
 };
 
 type AgentChangeNotice = {
@@ -146,7 +150,7 @@ type AgentChangeNotice = {
 
 function externalOperationErrorFacts(error: unknown): Pick<
 ExternalSourcesError,
-'code' | 'detail' | 'retryable' | 'correlationId'
+'code' | 'detail' | 'retryable' | 'correlationId' | 'causationId' | 'stage' | 'recoveryActions'
 > {
   if (error && typeof error === 'object') {
     const candidate = error as {
@@ -154,6 +158,9 @@ ExternalSourcesError,
       message?: unknown;
       retryable?: unknown;
       correlationId?: unknown;
+      causationId?: unknown;
+      stage?: unknown;
+      recoveryActions?: unknown;
     };
     const code = typeof candidate.code === 'string' ? candidate.code : undefined;
     return {
@@ -165,11 +172,17 @@ ExternalSourcesError,
       correlationId: typeof candidate.correlationId === 'string'
         ? candidate.correlationId
         : undefined,
+      causationId: typeof candidate.causationId === 'string' ? candidate.causationId : undefined,
+      stage: typeof candidate.stage === 'string' ? candidate.stage : undefined,
+      recoveryActions: Array.isArray(candidate.recoveryActions)
+        ? candidate.recoveryActions as ExternalSourceRecoveryAction[]
+        : [],
     };
   }
   return {
     detail: 'External source operation failed',
     retryable: false,
+    recoveryActions: [],
   };
 }
 
@@ -256,6 +269,7 @@ const ExternalSourcesConfig: React.FC = () => {
   const pendingMutations = useRef(new Map<number, string>());
   const latestMutationByScope = useRef(new Map<string, number>());
   const activeMutation = useRef<{ scope: string; sequence: number } | null>(null);
+  const lastFailedMutationRef = useRef<(() => Promise<boolean>) | null>(null);
   const foregroundSequence = useRef<number | null>(null);
   const requestScope = externalSourceRequestScopeKey({
     peerDeviceId,
@@ -420,6 +434,7 @@ const ExternalSourcesConfig: React.FC = () => {
     setReviewingMcpKey(null);
     setReviewingMcpConflictKey(null);
     setResetPolicyConfirmation(null);
+    lastFailedMutationRef.current = null;
     setLoading(true);
     setPolicyScope(workspacePath ? 'workspace' : 'user');
     void loadSnapshot(false, false);
@@ -509,14 +524,18 @@ const ExternalSourcesConfig: React.FC = () => {
     canManageSources: false,
     canApproveRuntime: false,
     canExecuteExternalAssets: false,
+    canSetSafeMode: false,
+    canRevealSourceLocation: false,
   };
+  const control = snapshot?.control;
   const policyStatus = snapshot?.integrationPolicy?.status;
   const policyCompatible = policyStatus === 'compatible';
   const policyIncompatible = policyStatus === 'incompatible_schema';
   const policyUnknown = !policyCompatible && !policyIncompatible;
   const hostReadOnly = !hostCapabilities.canMutatePolicy
     && !hostCapabilities.canManageSources
-    && !hostCapabilities.canApproveRuntime;
+    && !hostCapabilities.canApproveRuntime
+    && !hostCapabilities.canSetSafeMode;
   const remoteWorkspace = workspace?.workspaceKind === WorkspaceKind.Remote;
   const readOnlyHintKey = remoteWorkspace
     ? 'policy.remoteReadOnlyHint'
@@ -528,19 +547,26 @@ const ExternalSourcesConfig: React.FC = () => {
     _focusResult = false,
     partition: 'all' | 'subagents' = 'all',
     successMessage?: string,
-    requiredCapability: 'canMutatePolicy' | 'canManageSources' | 'canApproveRuntime' = 'canManageSources',
-    allowIncompatiblePolicy = false,
+    requiredCapability:
+      | 'canMutatePolicy'
+      | 'canManageSources'
+      | 'canApproveRuntime'
+      | 'canSetSafeMode' = 'canManageSources',
+    policyGate: 'compatible' | 'compatible_or_incompatible' | 'none' = 'compatible',
   ): Promise<boolean> => {
     const current = snapshotRef.current;
     const currentCapabilities = current?.hostCapabilities ?? {
       canMutatePolicy: false,
       canManageSources: false,
       canApproveRuntime: false,
+      canSetSafeMode: false,
     };
     const currentStatus = current?.integrationPolicy.status;
     if (!current || currentCapabilities[requiredCapability] !== true
-      || (currentStatus !== 'compatible'
-        && !(allowIncompatiblePolicy && currentStatus === 'incompatible_schema'))) {
+      || (policyGate === 'compatible' && currentStatus !== 'compatible')
+      || (policyGate === 'compatible_or_incompatible'
+        && currentStatus !== 'compatible'
+        && currentStatus !== 'incompatible_schema')) {
       setOperationStatus(t(readOnlyHintKey));
       return false;
     }
@@ -560,6 +586,7 @@ const ExternalSourcesConfig: React.FC = () => {
       const next = await request();
       const accepted = acceptMutationSnapshot(next, scope, sequence, partition);
       if (accepted) {
+        lastFailedMutationRef.current = null;
         setOperationStatus(successMessage ?? t('actions.updated'));
       }
       return accepted;
@@ -567,7 +594,21 @@ const ExternalSourcesConfig: React.FC = () => {
       if (requestScopeRef.current === scope
         && latestMutationByScope.current.get(scope) === sequence) {
         acceptedSequence.current = sequence;
-        setError({ kind: 'mutation', ...externalOperationErrorFacts(updateError) });
+        const facts = externalOperationErrorFacts(updateError);
+        lastFailedMutationRef.current = facts.recoveryActions.some(
+          (action) => action.type === 'retry',
+        )
+          ? () => runMutation(
+            mutationKey,
+            request,
+            _focusResult,
+            partition,
+            successMessage,
+            requiredCapability,
+            policyGate,
+          )
+          : null;
+        setError({ kind: 'mutation', ...facts });
       }
       return false;
     } finally {
@@ -598,6 +639,24 @@ const ExternalSourcesConfig: React.FC = () => {
       ),
     );
   }, [runMutation, workspacePath]);
+
+  const setSafeMode = useCallback(async (enabled: boolean) => {
+    const currentSnapshot = snapshotRef.current;
+    if (!currentSnapshot?.control) return;
+    await runMutation(
+      'external-safe-mode',
+      () => externalSourcesAPI.setSafeMode(
+        workspacePath,
+        enabled,
+        currentSnapshot.control?.preferenceRevision ?? 0,
+      ),
+      false,
+      'all',
+      t(enabled ? 'safeMode.entered' : 'safeMode.exited'),
+      'canSetSafeMode',
+      'none',
+    );
+  }, [runMutation, t, workspacePath]);
 
   const chooseConflict = useCallback(async (conflictKey: string, candidateId: string) => {
     if (!snapshot) return;
@@ -863,7 +922,9 @@ const ExternalSourcesConfig: React.FC = () => {
       'all',
       t('policy.updated'),
       'canMutatePolicy',
-      change.operation === 'reset_incompatible_policy',
+      change.operation === 'reset_incompatible_policy'
+        ? 'compatible_or_incompatible'
+        : 'compatible',
     );
   }, [policyScope, runMutation, snapshot, t, workspacePath]);
 
@@ -895,7 +956,7 @@ const ExternalSourcesConfig: React.FC = () => {
       'all',
       t('policy.recoveryResetComplete'),
       'canMutatePolicy',
-      true,
+      'compatible_or_incompatible',
     );
   }, [requestScope, runMutation, t]);
 
@@ -919,19 +980,48 @@ const ExternalSourcesConfig: React.FC = () => {
     target.focus();
   }, []);
 
+  const revealSourceLocation = useCallback(async (sourceKey: string): Promise<boolean> => {
+    const scope = requestScope;
+    if (snapshotRef.current?.hostCapabilities.canRevealSourceLocation !== true) {
+      setOperationStatus(t('common.openInExplorerUnavailable'));
+      return false;
+    }
+    setOperationStatus(null);
+    setError(null);
+    try {
+      await externalSourcesAPI.revealSourceLocation(workspacePath, sourceKey);
+      if (requestScopeRef.current === scope) lastFailedMutationRef.current = null;
+      return true;
+    } catch (revealError) {
+      const facts = externalOperationErrorFacts(revealError);
+      logger.warn('Could not reveal external source location', {
+        sourceKey,
+        code: facts.code ?? 'internal',
+      });
+      if (requestScopeRef.current === scope) {
+        lastFailedMutationRef.current = facts.recoveryActions.some(
+          (action) => action.type === 'retry',
+        )
+          ? () => revealSourceLocation(sourceKey)
+          : null;
+        setError({ kind: 'mutation', ...facts });
+      }
+      return false;
+    }
+  }, [requestScope, t, workspacePath]);
+
   const renderPathLink = useCallback((location: string, sourceKey?: string) => {
     const display = abbreviatedLocation(location);
-    if (isRemote || !sourceKey) {
-      if (!isRemote) {
-        return (
-          <span className="bitfun-external-sources-config__path-link bitfun-external-sources-config__path-link--disabled">
-            {display}
-          </span>
-        );
-      }
+    if (isRemote || !sourceKey || !hostCapabilities.canRevealSourceLocation) {
+      const unavailableMessage = isRemote
+        ? t('common.openInExplorerRemote')
+        : t('common.openInExplorerUnavailable');
       return (
-        <Tooltip content={t('common.openInExplorerRemote')} placement="top">
-          <span className="bitfun-external-sources-config__path-link bitfun-external-sources-config__path-link--disabled">
+        <Tooltip content={unavailableMessage} placement="top">
+          <span
+            className="bitfun-external-sources-config__path-link bitfun-external-sources-config__path-link--disabled"
+            aria-label={unavailableMessage}
+          >
             {display}
           </span>
         </Tooltip>
@@ -945,15 +1035,13 @@ const ExternalSourcesConfig: React.FC = () => {
         translate="no"
         onClick={(event) => {
           event.preventDefault();
-          void externalSourcesAPI.revealSourceLocation(workspacePath, sourceKey).catch((error) => {
-            logger.warn('Could not reveal external source location', { sourceKey, error });
-          });
+          void revealSourceLocation(sourceKey);
         }}
       >
         {display}
       </a>
     );
-  }, [isRemote, t, workspacePath]);
+  }, [hostCapabilities.canRevealSourceLocation, isRemote, revealSourceLocation, t]);
 
   const renderSourceMembers = useCallback((group: ExternalSourcePresentationGroup) => (
     <div
@@ -1053,9 +1141,78 @@ const ExternalSourcesConfig: React.FC = () => {
                 {error.correlationId ? (
                   <div>{t('operationErrors.referenceId', { id: error.correlationId })}</div>
                 ) : null}
+                {error.recoveryActions.length > 0 ? (
+                  <div className="bitfun-external-sources-config__recovery-actions">
+                    {error.recoveryActions.map((action) => {
+                      if (action.type === 'refresh') {
+                        return (
+                          <Button
+                            key={action.type}
+                            size="small"
+                            variant="secondary"
+                            onClick={() => void loadSnapshot(true, true)}
+                          >
+                            {t(`recoveryActions.${action.type}`)}
+                          </Button>
+                        );
+                      }
+                      if (action.type === 'retry') {
+                        return (
+                          <Button
+                            key={action.type}
+                            size="small"
+                            variant="secondary"
+                            onClick={() => {
+                              if (error.kind === 'load') {
+                                void loadSnapshot(true, true);
+                              } else {
+                                void lastFailedMutationRef.current?.();
+                              }
+                            }}
+                          >
+                            {t('recoveryActions.retry')}
+                          </Button>
+                        );
+                      }
+                      if (action.type === 'exit_safe_mode' && control?.safeMode) {
+                        return (
+                          <Button
+                            key={action.type}
+                            size="small"
+                            variant="secondary"
+                            onClick={() => void setSafeMode(false)}
+                          >
+                            {t('recoveryActions.exit_safe_mode')}
+                          </Button>
+                        );
+                      }
+                      if (action.type === 'review' || action.type === 'resolve_conflict') {
+                        return (
+                          <Button
+                            key={action.type}
+                            size="small"
+                            variant="secondary"
+                            onClick={scrollToFirstAttentionItem}
+                          >
+                            {t(`recoveryActions.${action.type}`)}
+                          </Button>
+                        );
+                      }
+                      return (
+                        <span key={action.type}>{t(`recoveryActions.${action.type}`)}</span>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 <details>
                   <summary>{t('common.technicalDetails')}</summary>
                   <div>{error.detail}</div>
+                  {error.stage ? (
+                    <div>{t('operationErrors.stage', { stage: error.stage })}</div>
+                  ) : null}
+                  {error.causationId ? (
+                    <div>{t('operationErrors.causationId', { id: error.causationId })}</div>
+                  ) : null}
                 </details>
               </div>
             ) : null}
@@ -1064,6 +1221,40 @@ const ExternalSourcesConfig: React.FC = () => {
                 <ShieldCheck size={16} aria-hidden="true" />
                 <span>{t(readOnlyHintKey)}</span>
               </div>
+            ) : null}
+            {control?.recoveryActions.some((action) => action.type === 'reconnect_host') ? (
+              <div className="bitfun-external-sources-config__notice" role="status">
+                <div>{t('legacyHostNotice')}</div>
+                <div>{t('recoveryActions.reconnect_host')}</div>
+              </div>
+            ) : null}
+            {snapshot && control ? (
+              <ConfigPageSection
+                title={t('safeMode.title')}
+                description={control.safeMode
+                  ? t('safeMode.activeDescription')
+                  : t('safeMode.description')}
+                extra={(
+                  <Switch
+                    size="small"
+                    checked={control.safeMode}
+                    disabled={busyKey !== null || !hostCapabilities.canSetSafeMode}
+                    loading={busyKey === 'external-safe-mode'}
+                    aria-label={t('safeMode.toggleLabel')}
+                    onChange={(event) => void setSafeMode(event.currentTarget.checked)}
+                  />
+                )}
+              >
+                {control.safeMode ? (
+                  <div
+                    className="bitfun-external-sources-config__notice"
+                    role="status"
+                    data-external-attention="true"
+                  >
+                    {t('safeMode.activeNotice')}
+                  </div>
+                ) : null}
+              </ConfigPageSection>
             ) : null}
             {snapshot && policy ? (
               <ConfigPageSection
@@ -2462,7 +2653,7 @@ const ExternalSourcesConfig: React.FC = () => {
                       === tool.definition.id.target.localId
                   ));
                   const firstTargetExport = targetTools[0] === tool;
-                  const enableable = ['approval_required', 'disabled'].includes(
+                  const enableable = ['approval_required', 'declined'].includes(
                     tool.activation.state,
                   );
                   const disableable = firstTargetExport && targetTools.some((candidate) => (

@@ -1,4 +1,9 @@
 // Pure projections and review text derived from the external-source catalog.
+use bitfun_product_domains::external_source_control::{
+    ExternalSourceDesiredState, ExternalSourceEffectiveStatus, ExternalSourceRecoveryActionV1,
+    ExternalSourceSupportState,
+};
+
 fn native_command_conflict_key<'a>(
     execution_domain_id: &str,
     command_name: &str,
@@ -263,6 +268,165 @@ enum ExternalToolReviewAction {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ExternalControlUiAction {
+    Show,
+    Refresh,
+    SetSafeMode(bool),
+    SetSourceEnabled { source_key: String, enabled: bool },
+}
+
+fn parse_external_control_action(arguments: &str) -> Result<ExternalControlUiAction, String> {
+    match arguments.split_whitespace().collect::<Vec<_>>().as_slice() {
+        [] | ["status"] => Ok(ExternalControlUiAction::Show),
+        ["refresh"] => Ok(ExternalControlUiAction::Refresh),
+        ["safe-mode", "on"] => Ok(ExternalControlUiAction::SetSafeMode(true)),
+        ["safe-mode", "off"] => Ok(ExternalControlUiAction::SetSafeMode(false)),
+        ["source", "enable", source_key] => Ok(ExternalControlUiAction::SetSourceEnabled {
+            source_key: (*source_key).to_string(),
+            enabled: true,
+        }),
+        ["source", "disable", source_key] => Ok(ExternalControlUiAction::SetSourceEnabled {
+            source_key: (*source_key).to_string(),
+            enabled: false,
+        }),
+        _ => Err("usage: /builtin:extensions [status | refresh | safe-mode on | safe-mode off | source enable <source-key> | source disable <source-key>]".to_string()),
+    }
+}
+
+fn external_control_review_text(
+    control: &bitfun_core::external_sources::ExternalSourceControlSnapshotV1,
+) -> String {
+    use bitfun_core::external_sources::{ExternalCapabilityKindV1, ExternalSourceRuntimeState};
+
+    let mut lines = vec![
+        "External integrations".to_string(),
+        String::new(),
+        format!(
+            "Safe Mode: {}",
+            if control.safe_mode { "on" } else { "off" }
+        ),
+        format!("Execution domain: {}", control.execution_domain_id),
+        format!("Generation: {}", control.refresh_generation),
+        format!("Sources: {}", control.sources.len()),
+    ];
+    if control.safe_mode {
+        lines.push(
+            "New external Tool, Agent, and MCP calls are blocked; calls already in progress are not cancelled."
+                .to_string(),
+        );
+        lines.push(
+            "Safe Mode applies only to this Host process and execution domain; restarting the Host turns it off."
+                .to_string(),
+        );
+    }
+    for source in &control.sources {
+        let desired = match source.desired {
+            ExternalSourceDesiredState::Enabled => "enabled",
+            ExternalSourceDesiredState::Disabled => "disabled",
+        };
+        let effective = match source.effective_status {
+            ExternalSourceEffectiveStatus::Discovering => "discovering",
+            ExternalSourceEffectiveStatus::Disabled => "disabled",
+            ExternalSourceEffectiveStatus::ReviewRequired => "review required",
+            ExternalSourceEffectiveStatus::Conflict => "conflict",
+            ExternalSourceEffectiveStatus::Active => "active",
+            ExternalSourceEffectiveStatus::Degraded => "degraded",
+            ExternalSourceEffectiveStatus::Unsupported => "unsupported",
+            ExternalSourceEffectiveStatus::Available => "available",
+            ExternalSourceEffectiveStatus::Removed => "removed",
+        };
+        lines.push(format!(
+            "Source {}: {} ({desired}, {effective})",
+            source.stable_key, source.display_name
+        ));
+    }
+    for capability in &control.capabilities {
+        let label = match capability.kind {
+            ExternalCapabilityKindV1::Command => "Commands",
+            ExternalCapabilityKindV1::Tool => "Tools",
+            ExternalCapabilityKindV1::Subagent => "Agents",
+            ExternalCapabilityKindV1::Mcp => "MCP servers",
+        };
+        let runtime = match capability.runtime {
+            ExternalSourceRuntimeState::NotApplicable => "not applicable",
+            ExternalSourceRuntimeState::Inactive => "inactive",
+            ExternalSourceRuntimeState::Starting => "starting",
+            ExternalSourceRuntimeState::Active => "active",
+            ExternalSourceRuntimeState::Degraded => "degraded",
+            ExternalSourceRuntimeState::Quarantined => "quarantined",
+            ExternalSourceRuntimeState::Unsupported => "unsupported",
+        };
+        let support = match capability.support {
+            ExternalSourceSupportState::Supported => "",
+            ExternalSourceSupportState::Partial => ", support: partial",
+            ExternalSourceSupportState::Unsupported => ", support: unsupported",
+            ExternalSourceSupportState::Unavailable => ", support: unavailable",
+        };
+        lines.push(format!(
+            "{label}: {} items, {} review, {} conflicts, {runtime}{support}",
+            capability.item_count,
+            capability.pending_review_count,
+            capability.unresolved_conflict_count,
+        ));
+    }
+    const MAX_STATUS_DETAILS: usize = 4;
+    if !control.diagnostics.is_empty() {
+        lines.push(String::new());
+        lines.push("Issues".to_string());
+        for diagnostic in control.diagnostics.iter().take(MAX_STATUS_DETAILS) {
+            let severity = match diagnostic.severity {
+                ExternalSourceDiagnosticSeverity::Info => "info",
+                ExternalSourceDiagnosticSeverity::Warning => "warning",
+                ExternalSourceDiagnosticSeverity::Error => "error",
+                _ => "notice",
+            };
+            lines.push(format!(
+                "  - {severity}: [{}] {}",
+                diagnostic.code,
+                external_source_diagnostic_summary(&diagnostic.code)
+            ));
+        }
+        let hidden = control.diagnostics.len().saturating_sub(MAX_STATUS_DETAILS);
+        if hidden > 0 {
+            lines.push(format!(
+                "  - {hidden} more; refresh after fixing the listed issue(s)."
+            ));
+        }
+    }
+    if !control.recovery_actions.is_empty() {
+        lines.push(String::new());
+        lines.push("Recovery".to_string());
+        for action in control.recovery_actions.iter().take(MAX_STATUS_DETAILS) {
+            lines.push(format!(
+                "  - {}",
+                external_recovery_action_label(action, "extensions")
+            ));
+        }
+    }
+    lines.push(String::new());
+    lines.push("Refresh: /builtin:extensions refresh".to_string());
+    lines.push(if control.safe_mode {
+        "Exit Safe Mode: /builtin:extensions safe-mode off".to_string()
+    } else {
+        "Enter Safe Mode: /builtin:extensions safe-mode on".to_string()
+    });
+    lines.push("Enable source: /builtin:extensions source enable <source-key>".to_string());
+    lines.push("Disable source: /builtin:extensions source disable <source-key>".to_string());
+    lines.join("\n")
+}
+
+struct ExternalControlMutationResult {
+    action: ExternalControlUiAction,
+    result: std::result::Result<
+        (
+            bitfun_core::external_sources::ExternalSourceSurfaceSnapshotV1,
+            Option<ExternalSourceCatalogSnapshot>,
+        ),
+        ExternalSourceOperationError,
+    >,
+}
+
 struct ExternalToolMutationResult {
     action: ExternalToolReviewAction,
     result: std::result::Result<ExternalSourceCatalogSnapshot, ExternalSourceOperationError>,
@@ -276,6 +440,9 @@ fn external_operation_error_status(surface: &str, error: &ExternalSourceOperatio
         ExternalSourceOperationErrorCode::HostUnavailable => "The workspace host is not available.",
         ExternalSourceOperationErrorCode::HostCapabilityUnavailable => {
             "This workspace host is read-only for external integrations."
+        }
+        ExternalSourceOperationErrorCode::TrustRequired => {
+            "This external integration requires review before it can run."
         }
         ExternalSourceOperationErrorCode::PolicyIncompatible => {
             "Compatibility settings were written by a newer BitFun version."
@@ -293,14 +460,37 @@ fn external_operation_error_status(surface: &str, error: &ExternalSourceOperatio
         ExternalSourceOperationErrorCode::Unavailable => {
             "The external integration is temporarily unavailable."
         }
-        ExternalSourceOperationErrorCode::Internal => {
+        ExternalSourceOperationErrorCode::RuntimeUnavailable
+        | ExternalSourceOperationErrorCode::DependencyFailed
+        | ExternalSourceOperationErrorCode::ProcessLost => {
+            "The external integration runtime is unavailable."
+        }
+        ExternalSourceOperationErrorCode::Unsupported
+        | ExternalSourceOperationErrorCode::IncompatibleVersion => {
+            "This external integration is not supported by the current BitFun version."
+        }
+        ExternalSourceOperationErrorCode::Timeout
+        | ExternalSourceOperationErrorCode::Overloaded
+        | ExternalSourceOperationErrorCode::TemporarilyUnavailable => {
+            "The external integration is temporarily unavailable."
+        }
+        ExternalSourceOperationErrorCode::Cancelled => {
+            "The external integration operation was cancelled."
+        }
+        ExternalSourceOperationErrorCode::InvalidResponse
+        | ExternalSourceOperationErrorCode::Internal => {
             "BitFun could not complete the external integration update."
         }
     };
-    let next_step = if error.retryable {
-        format!(" Run /builtin:{surface} refresh and try again.")
-    } else {
+    let next_steps = error
+        .recovery_actions
+        .iter()
+        .map(|action| external_recovery_action_label(action, surface))
+        .collect::<Vec<_>>();
+    let next_step = if next_steps.is_empty() {
         format!(" Run /builtin:{surface} refresh to review the current state.")
+    } else {
+        format!(" Next: {}.", next_steps.join("; "))
     };
     let reference = error
         .correlation_id
@@ -308,6 +498,29 @@ fn external_operation_error_status(surface: &str, error: &ExternalSourceOperatio
         .map(|id| format!(" Reference: {id}."))
         .unwrap_or_default();
     format!("{reason}{next_step}{reference}")
+}
+
+fn external_recovery_action_label(
+    action: &ExternalSourceRecoveryActionV1,
+    surface: &str,
+) -> String {
+    match action {
+        ExternalSourceRecoveryActionV1::Refresh => format!("/builtin:{surface} refresh"),
+        ExternalSourceRecoveryActionV1::Retry => "retry the operation".to_string(),
+        ExternalSourceRecoveryActionV1::Review => "review the listed external items".to_string(),
+        ExternalSourceRecoveryActionV1::ResolveConflict => {
+            "resolve the listed conflict".to_string()
+        }
+        ExternalSourceRecoveryActionV1::InstallRuntime => {
+            "install or repair the required runtime".to_string()
+        }
+        ExternalSourceRecoveryActionV1::ReconnectHost => {
+            "reconnect or upgrade the execution Host".to_string()
+        }
+        ExternalSourceRecoveryActionV1::ExitSafeMode => {
+            "/builtin:extensions safe-mode off".to_string()
+        }
+    }
 }
 
 struct ExternalToolTargetSummary<'a> {
@@ -355,6 +568,7 @@ fn external_tool_target_summaries(
 fn external_tool_activation_label(activation: &ExternalToolActivationState) -> &'static str {
     match activation {
         ExternalToolActivationState::ApprovalRequired => "confirmation required",
+        ExternalToolActivationState::Declined => "kept disabled",
         ExternalToolActivationState::Disabled => "disabled",
         ExternalToolActivationState::Active => "enabled",
         ExternalToolActivationState::Conflict => "choose between same-name tools",
@@ -397,8 +611,11 @@ fn external_tool_next_step(activation: &ExternalToolActivationState) -> &'static
         ExternalToolActivationState::ApprovalRequired => {
             "Review the code source and access, then enable it or keep it disabled."
         }
-        ExternalToolActivationState::Disabled => {
+        ExternalToolActivationState::Declined => {
             "Enable these tools after reviewing their code source and access."
+        }
+        ExternalToolActivationState::Disabled => {
+            "Enable this source or its tool capability before using these tools."
         }
         ExternalToolActivationState::Active => {
             "No action is needed. Disable these tools to stop using this source's tools."
@@ -424,7 +641,10 @@ fn external_tool_default_reason(activation: &ExternalToolActivationState) -> &'s
         ExternalToolActivationState::ApprovalRequired => {
             "Review this tool file's access before enabling it."
         }
-        ExternalToolActivationState::Disabled => "You chose to disable this tool source.",
+        ExternalToolActivationState::Declined => "You chose to keep these tools disabled.",
+        ExternalToolActivationState::Disabled => {
+            "The source or its tool capability is disabled by policy."
+        }
         ExternalToolActivationState::Active => "The tool code is loaded and ready to use.",
         ExternalToolActivationState::Conflict => "Another tool uses the same name.",
         ExternalToolActivationState::Unsupported { .. } => {
@@ -441,7 +661,7 @@ fn external_tool_default_reason(activation: &ExternalToolActivationState) -> &'s
 fn external_tool_can_enable(activation: &ExternalToolActivationState) -> bool {
     matches!(
         activation,
-        ExternalToolActivationState::ApprovalRequired | ExternalToolActivationState::Disabled
+        ExternalToolActivationState::ApprovalRequired | ExternalToolActivationState::Declined
     )
 }
 

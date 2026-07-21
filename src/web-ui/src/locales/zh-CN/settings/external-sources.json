@@ -1,6 +1,7 @@
 {
   "title": "外部 AI 应用",
   "subtitle": "使用其他 AI 应用的命令、工具、Agent 和 MCP。",
+  "legacyHostNotice": "当前执行 Host 使用旧版外部来源协议；升级 Host 后才能使用安全模式。",
   "loading": "正在检查外部来源…",
   "checkingNonBlocking": "正在检查更新…",
   "common": {
@@ -14,7 +15,8 @@
     "notSelected": "未使用",
     "availableChoice": "可选",
     "openInExplorer": "在文件管理器中打开",
-    "openInExplorerRemote": "远程工作区路径无法在本地文件管理器中打开"
+    "openInExplorerRemote": "远程工作区路径无法在本地文件管理器中打开",
+    "openInExplorerUnavailable": "当前 Host 无法打开来源位置"
   },
   "actions": {
     "refresh": "刷新",
@@ -23,6 +25,24 @@
     "waitForUpdate": "另一项更改仍在保存，请等待完成后再做选择。",
     "agentUpdated": "已保存“{{name}}”的更改并刷新状态。",
     "mcpUpdated": "已保存 MCP 服务器选择并刷新状态。"
+  },
+  "recoveryActions": {
+    "refresh": "刷新状态",
+    "retry": "重试",
+    "review": "检查待处理项",
+    "resolve_conflict": "解决冲突",
+    "install_runtime": "安装或修复所需运行时，然后刷新。",
+    "reconnect_host": "重新连接或升级执行 Host，然后重试。",
+    "exit_safe_mode": "退出安全模式"
+  },
+  "safeMode": {
+    "title": "外部来源安全模式",
+    "description": "阻止新的外部工具、Agent 和 MCP 调用，同时保留已发现的命令与诊断信息；已在执行的调用不会被取消。",
+    "activeDescription": "新的外部可执行调用已被阻止；已在执行的调用仍可能完成，命令和诊断信息继续可用于恢复。",
+    "activeNotice": "安全模式仅对当前 Host 进程和执行域有效；重启或切换执行 Host 后会自动关闭。",
+    "toggleLabel": "使用外部来源安全模式",
+    "entered": "外部来源安全模式已启用。",
+    "exited": "外部来源安全模式已关闭，符合条件的集成已重新协调。"
   },
   "unavailable": {
     "hostTitle": "此处暂不可用",
@@ -105,7 +125,9 @@
     "policyIncompatible": "外部设置由较新的 BitFun 版本写入。请先备份并重置，再进行更改。",
     "unavailableRetry": "暂时不可用，请稍后重试。",
     "internal": "操作失败，请刷新重试。",
-    "referenceId": "参考编号：{{id}}"
+    "referenceId": "参考编号：{{id}}",
+    "stage": "处理阶段：{{stage}}",
+    "causationId": "关联操作：{{id}}"
   },
   "diagnostics": {
     "summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。",
@@ -315,6 +337,7 @@
   },
   "toolState": {
     "approval_required": "待确认",
+    "declined": "已保持停用",
     "disabled": "已停用",
     "active": "已启用",
     "conflict": "需要选择",
@@ -324,7 +347,8 @@
   },
   "toolReason": {
     "approval_required": "启用前，需要确认这个工具文件的访问范围。",
-    "disabled": "你已选择停用这个工具来源。",
+    "declined": "你已选择保持这些工具停用。",
+    "disabled": "来源或其工具能力已被策略停用。",
     "active": "工具代码已加载，可以使用。",
     "conflict": "另一个工具使用了相同名称。",
     "unsupported": "这个工具文件包含 BitFun 当前不支持的语法或操作。",
@@ -333,7 +357,8 @@
   },
   "toolNextStep": {
     "approval_required": "确认上方来源和访问范围后，启用或继续停用这些工具。",
-    "disabled": "确认上方来源和访问范围后，再启用这些工具。",
+    "declined": "确认上方来源和访问范围后，再启用这些工具。",
+    "disabled": "请先启用此来源或其工具能力。",
     "active": "无需操作。如需停止使用该来源的全部工具，请停用这些工具。",
     "conflict": "请在下方选择要使用的工具，或继续保持停用。",
     "unsupported": "请将来源改为 BitFun 当前支持的单文件 JavaScript 格式，然后刷新。",
