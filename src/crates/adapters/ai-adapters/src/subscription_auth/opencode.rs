@@ -221,6 +221,21 @@ async fn refresh(refresh_token: &str) -> Result<TokenResponse> {
     resp.json().await.context("parse opencode token response")
 }
 
+/// Resolves OpenCode's device verification URI to an absolute URL.
+///
+/// The console API returns a path such as `/device?user_code=...` (same as
+/// OpenCode's own client, which prefixes `https://console.opencode.ai`).
+fn absolute_verification_url(uri: &str) -> String {
+    let trimmed = uri.trim();
+    if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+        return trimmed.to_string();
+    }
+    if trimmed.starts_with('/') {
+        return format!("{SERVER}{trimmed}");
+    }
+    format!("{SERVER}/{trimmed}")
+}
+
 /// Starts the device-code login flow. The verification URL and user code are
 /// returned immediately; the runner polls in the background.
 pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogin> {
@@ -228,6 +243,7 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
     let interval = device.interval.unwrap_or(5).max(1);
     let device_code = device.device_code.clone();
     let user_code = device.user_code.clone();
+    let authorization_url = absolute_verification_url(&device.verification_uri_complete);
 
     let runner = async move {
         tokio::select! {
@@ -253,7 +269,7 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
     };
 
     Ok(StartedLogin {
-        authorization_url: device.verification_uri_complete,
+        authorization_url,
         user_code: Some(user_code),
         instructions: "Open the verification link and enter the code, then return to BitFun."
             .to_string(),
@@ -317,4 +333,27 @@ pub(crate) async fn resolve() -> Result<ResolvedCredential> {
 /// Provider metadata used to seed a new model entry.
 pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
     ("openai", ZEN_BASE_URL, DEFAULT_MODEL)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::absolute_verification_url;
+
+    #[test]
+    fn prefixes_relative_device_verification_path() {
+        assert_eq!(
+            absolute_verification_url("/device?user_code=FBPH-VLFC&client_id=opencode-cli"),
+            "https://console.opencode.ai/device?user_code=FBPH-VLFC&client_id=opencode-cli"
+        );
+    }
+
+    #[test]
+    fn keeps_absolute_verification_url() {
+        assert_eq!(
+            absolute_verification_url(
+                "https://console.opencode.ai/device?user_code=ABCD-1234&client_id=opencode-cli"
+            ),
+            "https://console.opencode.ai/device?user_code=ABCD-1234&client_id=opencode-cli"
+        );
+    }
 }
