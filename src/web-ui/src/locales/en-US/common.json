@@ -424,8 +424,7 @@
       },
       "deleteWorkspaceDialog": {
         "title": "Delete {{name}}?",
-        "message": "This will permanently delete the workspace directory and all files inside it. This action cannot be undone.",
-        "pathLabel": "Workspace path"
+        "message": "This will permanently delete the BitFun-managed data directory for this workspace (sessions, snapshots, plans, etc.). This action cannot be undone."
       }
     },
     "agents": {

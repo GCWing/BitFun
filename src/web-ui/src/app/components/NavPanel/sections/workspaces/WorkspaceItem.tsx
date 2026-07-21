@@ -1446,24 +1446,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         onClose={() => setDeleteWorkspaceDialogOpen(false)}
         onConfirm={() => { void handleConfirmDeleteWorkspace(); }}
         title={t('nav.workspaces.deleteWorkspaceDialog.title', { name: workspaceDisplayName })}
-        message={
-          <>
-            <div>{t('nav.workspaces.deleteWorkspaceDialog.message')}</div>
-            <div style={{
-              marginTop: '8px',
-              padding: '6px 10px',
-              fontFamily: 'Consolas, Monaco, Courier New, monospace',
-              fontSize: 'var(--font-size-xs)',
-              color: 'var(--color-text-primary)',
-              background: 'var(--color-bg-subtle)',
-              borderRadius: 'var(--size-radius-base, 6px)',
-              wordBreak: 'break-all',
-              lineHeight: 1.5,
-            }}>
-              {workspace.rootPath}
-            </div>
-          </>
-        }
+        message={t('nav.workspaces.deleteWorkspaceDialog.message')}
         confirmText={t('nav.workspaces.actions.deleteWorkspace')}
         cancelText={t('actions.cancel')}
         confirmDanger

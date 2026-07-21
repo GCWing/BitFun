@@ -424,8 +424,7 @@
       },
       "deleteWorkspaceDialog": {
         "title": "删除 {{name}}？",
-        "message": "此操作会永久删除该工作区目录及其中的所有文件，无法恢复。",
-        "pathLabel": "工作区路径"
+        "message": "此操作会永久删除 BitFun 为该工作区管理的数据目录（包含会话、快照、计划等），该操作无法恢复。"
       }
     },
     "agents": {
