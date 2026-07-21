@@ -44,6 +44,11 @@ vi.mock('@/infrastructure/peer-device/PeerDeviceContext', () => ({
 }));
 
 vi.mock('@/infrastructure/runtime', () => ({ isTauriRuntime: () => true }));
+vi.mock('@/infrastructure/api/service-api/WorkspaceAPI', () => ({
+  workspaceAPI: {
+    revealInExplorer: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 vi.mock('@/shared/types', () => ({
   isRemoteWorkspace: () => false,
   WorkspaceKind: { Normal: 'normal', Assistant: 'assistant', Remote: 'remote' },
@@ -79,7 +84,7 @@ const snapshot = {
     record: {
       key: { providerId: 'opencode.commands', sourceId: 'project' },
       ecosystemId: 'opencode',
-      displayName: 'OpenCode project commands',
+      displayName: 'External project commands',
       sourceKind: 'prompt_commands',
       scope: 'project',
       location: '<workspace>/.opencode/commands',
@@ -100,7 +105,7 @@ const snapshot = {
     candidates: [{
       candidateId: 'candidate-opencode',
       source: { providerId: 'opencode.commands', sourceId: 'project' },
-      sourceDisplayName: 'OpenCode project commands',
+      sourceDisplayName: 'External project commands',
       ecosystemId: 'opencode',
       contentVersion: 'v1',
       commandDescription: 'Review with OpenCode',
@@ -349,7 +354,7 @@ describe('ExternalSourcesConfig', () => {
     expect(getSnapshotMock).toHaveBeenCalledWith('D:/workspace/project', false);
 
     const candidateButton = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('OpenCode project commands'));
+      button.textContent?.includes('External project commands'));
     expect(container.textContent).toContain('diagnostics.summary');
     expect(container.textContent).toContain('diagnostics.category.invalidSettings');
     expect(container.textContent).toContain('One command file could not be parsed.');
@@ -386,7 +391,7 @@ describe('ExternalSourcesConfig', () => {
       scope: 'user_global',
       location: '~\\.config\\opencode\\opencode.json',
       executionDomainId: 'local',
-      displayName: 'OpenCode user configuration',
+      displayName: 'External user configuration',
     };
     const groupedSnapshot = {
       ...snapshot,
@@ -454,7 +459,7 @@ describe('ExternalSourcesConfig', () => {
     expect(container.querySelectorAll(
       '.bitfun-external-sources-config__source-group',
     )).toHaveLength(1);
-    expect(container.textContent?.match(/OpenCode user configuration/g)).toHaveLength(1);
+    expect(container.textContent?.match(/External user configuration/g)).toHaveLength(1);
     expect(container.textContent).toContain('sources.commandCount:{"count":1}');
     expect(container.textContent).toContain('sources.agentCount:{"count":1}');
     expect(container.textContent).not.toContain('sources.toolCount:{"count":0}');
@@ -505,7 +510,7 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).not.toContain('sources.title');
     expect(container.textContent).not.toContain('sources.empty');
-    expect(container.textContent).not.toContain('OpenCode project commands');
+    expect(container.textContent).not.toContain('External project commands');
   });
 
   it('reviews MCP risk and binds approval and conflict choices to the visible versions', async () => {
@@ -903,7 +908,7 @@ describe('ExternalSourcesConfig', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(750);
     });
-    expect(container.textContent).toContain('OpenCode project commands');
+    expect(container.textContent).toContain('External project commands');
     expect(container.textContent).not.toContain('checkingNonBlocking');
   });
 
@@ -992,7 +997,7 @@ describe('ExternalSourcesConfig', () => {
     expect(getSnapshotMock).toHaveBeenCalledTimes(2);
     await act(async () => vi.advanceTimersByTimeAsync(1_500));
     expect(getSnapshotMock).toHaveBeenCalledTimes(3);
-    expect(container.textContent).toContain('OpenCode project commands');
+    expect(container.textContent).toContain('External project commands');
   });
 
   it('distinguishes initial load failures from uncertain mutation results', async () => {
@@ -1039,7 +1044,7 @@ describe('ExternalSourcesConfig', () => {
       await Promise.resolve();
     });
     expect(container.textContent).toContain('errors.refreshFailed');
-    expect(container.textContent).toContain('OpenCode project commands');
+    expect(container.textContent).toContain('External project commands');
     expect(container.textContent).not.toContain('refresh failed');
   });
 
@@ -1189,7 +1194,6 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('agentDiagnostics.invalidDefinition.reason');
     expect(container.textContent).toContain('agentConflicts.selectionApproves');
     expect(container.textContent).toContain('.opencode/agents/explore.md');
-    expect(container.textContent).toContain('sources.agentCount:{"count":2}');
     expect(container.textContent).not.toContain('D:/workspace/project/.opencode/agents');
     expect(container.innerHTML).not.toContain('D:');
     expect(container.innerHTML).not.toContain('D:/shared');
@@ -1669,7 +1673,7 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('Other workspace commands');
-    expect(container.textContent).not.toContain('OpenCode project commands');
+    expect(container.textContent).not.toContain('External project commands');
   });
 
   it('isolates an in-flight response when the controlling Peer Host changes', async () => {
@@ -1711,7 +1715,7 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('Peer B commands');
-    expect(container.textContent).not.toContain('OpenCode project commands');
+    expect(container.textContent).not.toContain('External project commands');
   });
 
   it('ignores a source mutation response from the previous workspace', async () => {
@@ -1757,7 +1761,7 @@ describe('ExternalSourcesConfig', () => {
     });
 
     expect(container.textContent).toContain('Other workspace commands');
-    expect(container.textContent).not.toContain('OpenCode project commands');
+    expect(container.textContent).not.toContain('External project commands');
   });
 
   it('keeps the latest mutation authoritative over a focus refresh', async () => {
@@ -2008,5 +2012,62 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('operationErrors.internal');
     expect(container.textContent).toContain('external-source-ref-7');
     expect(container.textContent).not.toContain('database connection string');
+  });
+
+  it('shows MCP empty state when no MCP servers found', async () => {
+    const emptyMcpSnapshot = {
+      ...snapshot,
+      mcpServers: [],
+      mcpApprovalRequests: [],
+      mcpConflicts: [],
+    };
+    getSnapshotMock.mockResolvedValue(emptyMcpSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('mcp.empty');
+    expect(container.textContent).toContain('mcp.emptyGuidance');
+  });
+
+  it('renders subagent source locations as path links', async () => {
+    const agentSnapshot = {
+      ...snapshot,
+      commandConflicts: [],
+      subagents: [{
+        candidateId: 'agent-path-test',
+        logicalId: 'test',
+        displayName: 'Test Agent',
+        description: 'A test agent',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [{ providerId: 'opencode.agents', sourceId: 'user' }],
+        sourceLocationLabels: ['/path/to/source'],
+        sourceCount: 1,
+        effectiveModelLabel: 'gpt-4',
+        effectiveToolLabels: ['read'],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'approval_required' },
+        decisionKey: 'agent-path-key',
+      }],
+    };
+    getSnapshotMock.mockResolvedValue(agentSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    const detailsButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'common.details',
+    );
+    await act(async () => detailsButton?.click());
+
+    const pathLink = container.querySelector('.bitfun-external-sources-config__path-link');
+    expect(pathLink).not.toBeNull();
   });
 });

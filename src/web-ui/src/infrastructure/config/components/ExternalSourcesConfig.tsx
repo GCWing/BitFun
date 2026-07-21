@@ -21,6 +21,7 @@ import {
   Tooltip,
 } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
 import { WorkspaceKind } from '@/shared/types';
 import {
@@ -454,6 +455,14 @@ const ExternalSourcesConfig: React.FC = () => {
     () => snapshot ? buildExternalSourcePresentationGroups(snapshot) : [],
     [snapshot],
   );
+  const opencodeGroups = useMemo(
+    () => sourceGroups.filter((group) => group.displayName.toLowerCase().includes('opencode')),
+    [sourceGroups],
+  );
+  const nonOpencodeGroups = useMemo(
+    () => sourceGroups.filter((group) => !group.displayName.toLowerCase().includes('opencode')),
+    [sourceGroups],
+  );
   const catalogDiagnostics = useMemo(
     () => snapshot ? catalogDiagnosticsWithoutSourceDuplicates(snapshot, sourceGroups) : [],
     [snapshot, sourceGroups],
@@ -730,6 +739,7 @@ const ExternalSourcesConfig: React.FC = () => {
     return accepted;
   }, [loadSnapshot, runMutation, snapshot, t, workspacePath]);
 
+  const isRemote = workspace?.workspaceKind === 'remote' || Boolean(workspace?.connectionId);
   const policy = snapshot?.integrationPolicy;
   const selectedPolicyEnabled = policyScope === 'workspace'
     ? policy?.workspaceOverride?.enabled ?? policy?.userDefaults.enabled ?? true
@@ -892,6 +902,34 @@ const ExternalSourcesConfig: React.FC = () => {
     target.tabIndex = -1;
     target.focus();
   }, []);
+
+  const renderPathLink = useCallback((location: string) => {
+    const display = abbreviatedLocation(location);
+    if (isRemote) {
+      return (
+        <Tooltip content={t('common.openInExplorerRemote')} placement="top">
+          <span className="bitfun-external-sources-config__path-link bitfun-external-sources-config__path-link--disabled">
+            {display}
+          </span>
+        </Tooltip>
+      );
+    }
+    return (
+      <a
+        className="bitfun-external-sources-config__path-link"
+        title={location}
+        translate="no"
+        onClick={(event) => {
+          event.preventDefault();
+          void workspaceAPI.revealInExplorer(location).catch(() => {
+            // silently ignore — do not block UI
+          });
+        }}
+      >
+        {display}
+      </a>
+    );
+  }, [isRemote, t]);
 
   if (loading && !snapshot) {
     return <ConfigPageLoading text={t('loading')} />;
@@ -1079,7 +1117,176 @@ const ExternalSourcesConfig: React.FC = () => {
                   ) : null}
                 </div>
 
-                {ecosystemPolicies.map((ecosystem) => (
+                {ecosystemPolicies.map((ecosystem) => {
+                  const isOpencode = ecosystem.descriptor.ecosystemId === 'opencode'
+                    || ecosystem.descriptor.displayName === 'OpenCode';
+                  if (isOpencode) {
+                    return (
+                      <React.Fragment key={ecosystem.ecosystemId}>
+                        <div className="bitfun-external-sources-config__opencode-card">
+                          <div className="bitfun-external-sources-config__opencode-summary">
+                            <div>
+                              <strong>{t('opencode.title')}</strong>
+                              <span> · {t('opencode.summary', {
+                                agents: opencodeGroups.reduce((sum, g) => sum + g.counts.agents, 0),
+                                commands: opencodeGroups.reduce((sum, g) => sum + g.counts.commands, 0),
+                                mcps: opencodeGroups.reduce((sum, g) => sum + g.counts.mcps, 0),
+                              })}</span>
+                            </div>
+                            <div className="bitfun-external-sources-config__policy-actions">
+                              <Select
+                                size="small"
+                                value={ecosystem.mode}
+                                triggerAriaLabel={t('policy.modeLabel', {
+                                  ecosystem: ecosystem.descriptor.displayName,
+                                })}
+                                disabled={!policyCompatible || !hostCapabilities.canMutatePolicy
+                                  || !selectedPolicyEnabled || busyKey !== null}
+                                options={[
+                                  { value: 'recommended', label: t('policy.mode.recommended') },
+                                  { value: 'discover_only', label: t('policy.mode.discoverOnly') },
+                                  { value: 'disabled', label: t('policy.mode.disabled') },
+                                  ...(ecosystem.mode === 'custom'
+                                    ? [{ value: 'custom', label: t('policy.mode.custom'), disabled: true }]
+                                    : []),
+                                  ...(!KNOWN_INTEGRATION_MODES.has(ecosystem.mode)
+                                    ? [{
+                                        value: ecosystem.mode,
+                                        label: t('policy.unsupportedSafelyOff'),
+                                        disabled: true,
+                                      }]
+                                    : []),
+                                ]}
+                                onChange={(value) => void updatePolicy({
+                                  operation: 'set_ecosystem_mode',
+                                  ecosystemId: ecosystem.ecosystemId,
+                                  mode: String(Array.isArray(value) ? value[0] : value) as ExternalIntegrationMode,
+                                })}
+                              />
+                              <Tooltip content={t('policy.capabilitiesHint')} placement="top">
+                                <button
+                                  type="button"
+                                  className="bitfun-external-sources-config__icon-action"
+                                  aria-label={t('policy.capabilitiesFor', {
+                                    ecosystem: ecosystem.descriptor.displayName,
+                                  })}
+                                  aria-expanded={expandedEcosystems.has(ecosystem.ecosystemId)}
+                                  aria-controls={`external-capabilities-${ecosystem.ecosystemId}`}
+                                  onClick={() => setExpandedEcosystems((current) => {
+                                    const next = new Set(current);
+                                    if (next.has(ecosystem.ecosystemId)) next.delete(ecosystem.ecosystemId);
+                                    else next.add(ecosystem.ecosystemId);
+                                    return next;
+                                  })}
+                                >
+                                  <Settings2 size={16} aria-hidden="true" />
+                                </button>
+                              </Tooltip>
+                            </div>
+                          </div>
+                          {expandedEcosystems.has(ecosystem.ecosystemId) ? (
+                            <div
+                              id={`external-capabilities-${ecosystem.ecosystemId}`}
+                              className="bitfun-external-sources-config__capability-grid"
+                            >
+                              {ecosystem.descriptor.capabilities.map((capabilityDescriptor) => {
+                                const capabilityId = capabilityDescriptor.capabilityId;
+                                const limited = ecosystem.effective?.policyLimitedCapabilities
+                                  ?.includes(capabilityId);
+                                const configuredAccess = ecosystem.capabilityOverrides[capabilityId];
+                                const accessKnown = configuredAccess === undefined
+                                  || KNOWN_INTEGRATION_ACCESS.has(configuredAccess);
+                                const countKey = capabilityId === 'subagent' ? 'agents'
+                                  : capabilityId === 'command' ? 'commands'
+                                  : capabilityId;
+                                const count = opencodeGroups.reduce(
+                                  (sum, g) => sum + (g.counts[countKey as keyof typeof g.counts] ?? 0),
+                                  0,
+                                );
+                                const riskKey = `opencode.capability.${capabilityId}.risk`;
+                                const riskText = t(riskKey);
+                                return (
+                                  <div
+                                    className="bitfun-external-sources-config__capability-row"
+                                    key={capabilityId}
+                                  >
+                                    <div>
+                                      <span>{t(`policy.capability.${capabilityId}`)}</span>
+                                      {limited ? (
+                                        <span className="bitfun-external-sources-config__limited-badge">
+                                          {t('policy.safetyLimited')}
+                                        </span>
+                                      ) : null}
+                                      <span className="bitfun-external-sources-config__candidate-detail">
+                                        {t(`opencode.capability.${capabilityId}.description`, {
+                                          count,
+                                          scope: t('scope.user_global'),
+                                        })}
+                                      </span>
+                                      <span className="bitfun-external-sources-config__candidate-detail">
+                                        {t(`opencode.capability.${capabilityId}.effect`)}
+                                      </span>
+                                      {riskText && riskText !== riskKey ? (
+                                        <span className="bitfun-external-sources-config__tool-warning">
+                                          {riskText}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <Select
+                                      size="small"
+                                      value={accessKnown
+                                        ? selectedCapabilityAccess(ecosystem, capabilityId)
+                                        : configuredAccess}
+                                      triggerAriaLabel={t('policy.capabilityAccessLabel', {
+                                        ecosystem: ecosystem.descriptor.displayName,
+                                        capability: t(`policy.capability.${capabilityId}`),
+                                      })}
+                                      disabled={!policyCompatible || !hostCapabilities.canMutatePolicy
+                                        || !selectedPolicyEnabled || busyKey !== null}
+                                      options={[
+                                        { value: 'disabled', label: t('policy.access.disabled') },
+                                        { value: 'discover_only', label: t('policy.access.discoverOnly') },
+                                        { value: 'ask_before_use', label: t('policy.access.askBeforeUse') },
+                                        ...(capabilityDescriptor.safetyCeiling === 'auto'
+                                          ? [{ value: 'auto', label: t('policy.access.auto') }]
+                                          : []),
+                                        ...(!accessKnown && configuredAccess
+                                          ? [{
+                                              value: configuredAccess,
+                                              label: t('policy.unsupportedSafelyOff'),
+                                              disabled: true,
+                                            }]
+                                          : []),
+                                      ]}
+                                      onChange={(value) => {
+                                        const access = String(
+                                          Array.isArray(value) ? value[0] : value,
+                                        ) as ExternalIntegrationAccess;
+                                        void updateCapabilityAccess(
+                                          ecosystem.ecosystemId,
+                                          capabilityId,
+                                          access,
+                                        );
+                                      }}
+                                    />
+                                  </div>
+                                );
+                              })}
+                              {opencodeGroups.length > 0 ? (
+                                <div className="bitfun-external-sources-config__opencode-locations">
+                                  <span>{t('opencode.configLocations')}</span>
+                                  {Array.from(new Set(opencodeGroups.map((g) => g.location))).map((location) => (
+                                    <span key={location}>{renderPathLink(location)}</span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </React.Fragment>
+                    );
+                  }
+                  return (
                   <React.Fragment key={ecosystem.ecosystemId}>
                 <div className="bitfun-external-sources-config__ecosystem-card">
                   <div className="bitfun-external-sources-config__ecosystem-heading">
@@ -1216,7 +1423,8 @@ const ExternalSourcesConfig: React.FC = () => {
                   </div>
                 ) : null}
                   </React.Fragment>
-                ))}
+                  );
+                })}
               </ConfigPageSection>
             ) : null}
             {operationStatus ? (
@@ -1431,9 +1639,7 @@ const ExternalSourcesConfig: React.FC = () => {
                             })}</span>
                             {source ? (
                               <>
-                                <span>{t('mcp.sourceLocation', {
-                                  location: source.record.location,
-                                })}</span>
+                                <span>{t('mcp.sourceLocation')}: {renderPathLink(source.record.location)}</span>
                                 <span>{t('mcp.scope', {
                                   scope: t(`scope.${source.record.scope}`),
                                 })}</span>
@@ -1459,15 +1665,9 @@ const ExternalSourcesConfig: React.FC = () => {
                               })}</span>
                             ) : null}
                             {'reason' in server.activationState ? (
-                              <>
-                                <span>{t(server.activationState.state === 'runtime_unavailable'
-                                  ? 'mcp.runtimeUnavailableGuidance'
-                                  : 'mcp.unsupportedGuidance')}</span>
-                                <details>
-                                  <summary>{t('common.technicalDetails')}</summary>
-                                  <code>{server.activationState.reason}</code>
-                                </details>
-                              </>
+                              <span>{t(server.activationState.state === 'runtime_unavailable'
+                                ? 'mcp.runtimeUnavailableGuidance'
+                                : 'mcp.unsupportedGuidance')}</span>
                             ) : null}
                             <span>{t('mcp.changePolicy')}</span>
                           </div>
@@ -1666,6 +1866,22 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
+            {(snapshot?.mcpServers?.length ?? 0) === 0
+              && (snapshot?.mcpApprovalRequests?.length ?? 0) === 0
+              && mcpConflicts.length === 0
+              && !snapshot?.discoveryPending ? (
+              <ConfigPageSection title={t('mcp.title')}>
+                <div className="bitfun-external-sources-config__mcp-empty">
+                  <span>{t('mcp.empty')}</span>
+                  <span>{t('mcp.emptyGuidance')}</span>
+                  <span>· {t('mcp.emptyLocation.userGlobal')}</span>
+                  <span>· {t('mcp.emptyLocation.project')}</span>
+                  <span>· {t('mcp.emptyLocation.envConfig')}</span>
+                  <code>{t('mcp.emptyExample')}</code>
+                </div>
+              </ConfigPageSection>
+            ) : null}
+
             {(snapshot?.subagents?.length ?? 0) > 0 ? (
               <ConfigPageSection title={t('agents.title')}>
                 {snapshot?.subagents?.map((agent) => {
@@ -1719,10 +1935,16 @@ const ExternalSourcesConfig: React.FC = () => {
                             <span>{t('agents.tools', { tools: agent.effectiveToolLabels.join(', ') || t('agents.noTools') })}</span>
                             <span>{t('agents.executionDomain')}</span>
                             <span>{t('agents.compatibility', { state: t(`agentCompatibility.${agent.compatibilityState}`) })}</span>
-                            <span>{t('agents.sources', { count: agent.sourceCount })}</span>
-                            {agent.sourceLocationLabels.map((location) => (
-                              <span key={location}>{abbreviatedLocation(location)}</span>
-                            ))}
+                            {agent.sourceLocationLabels.length > 0 ? (
+                              <details className="bitfun-external-sources-config__source-detail-toggle">
+                                <summary>{t('agents.sourceLocations', { count: agent.sourceLocationLabels.length })}</summary>
+                                <div className="bitfun-external-sources-config__tool-detail">
+                                  {agent.sourceLocationLabels.map((location) => (
+                                    <span key={location}>{renderPathLink(location)}</span>
+                                  ))}
+                                </div>
+                              </details>
+                            ) : null}
                             {agent.diagnostics.map((diagnostic) => {
                                 const category = agentDiagnosticCategory(
                                   diagnostic.code,
@@ -1731,16 +1953,7 @@ const ExternalSourcesConfig: React.FC = () => {
                               return (
                                 <div key={diagnostic.code}>
                                   <span>{t(`agentDiagnostics.${category}.reason`)}</span>
-                                  <span>{t(`agentDiagnostics.${category}.impact`, {
-                                    impact: diagnostic.blocksActivation
-                                      ? t('agentDiagnostics.activationBlocked')
-                                      : t('agentDiagnostics.degradedOnly'),
-                                  })}</span>
                                   <span>{t(`agentDiagnostics.${category}.nextStep`)}</span>
-                                  <details>
-                                    <summary>{t('common.technicalDetails')}</summary>
-                                    <code>{diagnostic.code}</code>
-                                  </details>
                                 </div>
                               );
                             })}
@@ -2010,9 +2223,9 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
-            {sourceGroups.length > 0 ? (
+            {nonOpencodeGroups.length > 0 ? (
               <ConfigPageSection title={t('sources.title')}>
-                {sourceGroups.map((group) => {
+                {nonOpencodeGroups.map((group) => {
                   return (
                     <React.Fragment key={group.key}>
                       <ConfigPageRow

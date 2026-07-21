@@ -12,7 +12,9 @@
     "selected": "当前使用",
     "selectedUnavailable": "已选择，当前不可用",
     "notSelected": "未使用",
-    "availableChoice": "可选"
+    "availableChoice": "可选",
+    "openInExplorer": "在文件管理器中打开",
+    "openInExplorerRemote": "远程工作区路径无法在本地文件管理器中打开"
   },
   "actions": {
     "refresh": "刷新",
@@ -148,7 +150,8 @@
     "compatibility": "状态：{{state}}",
     "sources": "由 {{count}} 个配置来源共同定义",
     "noDescription": "未提供说明",
-    "noTools": "无工具"
+    "noTools": "无工具",
+    "sourceLocations": "配置来源（{{count}} 个）"
   },
   "agentState": {
     "approval_required": "待确认",
@@ -236,6 +239,14 @@
     "unsupportedGuidance": "请在来源应用中修改此配置，然后刷新。",
     "enable": "启用服务器",
     "disable": "停用",
+    "empty": "未发现 MCP 服务器。",
+    "emptyGuidance": "BitFun 当前从 OpenCode 兼容配置中发现 MCP 服务器，支持以下配置位置：",
+    "emptyLocation": {
+      "userGlobal": "用户全局：~/.config/opencode/opencode.json",
+      "project": "项目级：.opencode/opencode.json",
+      "envConfig": "环境变量 OPENCODE_CONFIG 指向的文件"
+    },
+    "emptyExample": "在配置文件中添加 \"mcp\" 字段即可，例如：{ \"mcp\": { \"server-name\": { ... } } }",
     "transport": {
       "local_stdio": "本地进程",
       "streamable_http": "远程连接"
@@ -375,5 +386,34 @@
     "currentSelection": "当前命令会使用已选来源。如需更改，请在上方选择其他可用来源。",
     "currentSelectionUnavailable": "仍保留此命令来源为当前选择，但它目前无法运行。请改选可用来源，或先修复此来源。",
     "restricted": "当前版本暂不支持"
+  },
+  "opencode": {
+    "title": "OpenCode 扩展",
+    "description": "从 OpenCode 兼容配置中发现的外部能力。",
+    "summary": "发现 {{agents}} 个 Agent · {{commands}} 个命令 · {{mcps}} 个 MCP",
+    "configLocations": "配置位置",
+    "inherited": "继承自整体模式",
+    "capability": {
+      "subagent": {
+        "description": "发现 {{count}} 个 Agent · 来自{{scope}}",
+        "effect": "启用后允许调用 OpenCode 中定义的 Agent。",
+        "risk": "Agent 可执行模型调用，请确认来源可信。"
+      },
+      "command": {
+        "description": "发现 {{count}} 个命令 · 来自{{scope}}",
+        "effect": "启用后可在 BitFun 中调用 OpenCode 命令。",
+        "risk": ""
+      },
+      "mcp": {
+        "description": "发现 {{count}} 个 MCP 服务器",
+        "effect": "启用后可连接 OpenCode 配置的 MCP 服务器。",
+        "risk": "MCP 服务器可启动本地进程或连接远程地址。"
+      },
+      "tool": {
+        "description": "发现 {{count}} 个工具 · 来自{{scope}}",
+        "effect": "启用后可使用 OpenCode 中定义的工具。",
+        "risk": "工具代码以你的用户权限运行，不在沙箱中隔离。"
+      }
+    }
   }
 }

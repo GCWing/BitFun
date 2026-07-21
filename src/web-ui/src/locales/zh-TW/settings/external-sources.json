@@ -12,7 +12,9 @@
     "selected": "目前使用",
     "selectedUnavailable": "已選擇，目前無法使用",
     "notSelected": "未使用",
-    "availableChoice": "可選"
+    "availableChoice": "可選",
+    "openInExplorer": "在檔案管理員中開啟",
+    "openInExplorerRemote": "遠端工作區路徑無法在本機檔案管理員中開啟"
   },
   "actions": {
     "refresh": "重新整理",
@@ -148,7 +150,8 @@
     "compatibility": "狀態：{{state}}",
     "sources": "由 {{count}} 個設定來源共同定義",
     "noDescription": "未提供說明",
-    "noTools": "無工具"
+    "noTools": "無工具",
+    "sourceLocations": "設定來源（{{count}} 個）"
   },
   "agentState": {
     "approval_required": "待確認",
@@ -236,6 +239,14 @@
     "unsupportedGuidance": "請在來源應用程式中修改此設定，然後重新整理。",
     "enable": "啟用伺服器",
     "disable": "停用",
+    "empty": "未發現 MCP 伺服器。",
+    "emptyGuidance": "BitFun 目前從 OpenCode 相容設定中發現 MCP 伺服器，支援以下設定位置：",
+    "emptyLocation": {
+      "userGlobal": "使用者全域：~/.config/opencode/opencode.json",
+      "project": "專案級：.opencode/opencode.json",
+      "envConfig": "環境變數 OPENCODE_CONFIG 指向的檔案"
+    },
+    "emptyExample": "在設定檔中加入 \"mcp\" 欄位即可，例如：{ \"mcp\": { \"server-name\": { ... } } }",
     "transport": {
       "local_stdio": "本機程序",
       "streamable_http": "遠端連線"
@@ -375,5 +386,34 @@
     "currentSelection": "目前命令會使用已選來源。若要變更，請在上方選擇其他可用來源。",
     "currentSelectionUnavailable": "仍保留此命令來源為目前選擇，但它目前無法執行。請改選可用來源，或先修復此來源。",
     "restricted": "目前版本暫不支援"
+  },
+  "opencode": {
+    "title": "OpenCode 擴充",
+    "description": "從 OpenCode 相容設定中發現的外部能力。",
+    "summary": "發現 {{agents}} 個 Agent · {{commands}} 個命令 · {{mcps}} 個 MCP",
+    "configLocations": "設定位置",
+    "inherited": "繼承自整體模式",
+    "capability": {
+      "subagent": {
+        "description": "發現 {{count}} 個 Agent · 來自{{scope}}",
+        "effect": "啟用後允許呼叫 OpenCode 中定義的 Agent。",
+        "risk": "Agent 可執行模型呼叫，請確認來源可信。"
+      },
+      "command": {
+        "description": "發現 {{count}} 個命令 · 來自{{scope}}",
+        "effect": "啟用後可在 BitFun 中呼叫 OpenCode 命令。",
+        "risk": ""
+      },
+      "mcp": {
+        "description": "發現 {{count}} 個 MCP 伺服器",
+        "effect": "啟用後可連接 OpenCode 設定的 MCP 伺服器。",
+        "risk": "MCP 伺服器可啟動本機行程或連接遠端位址。"
+      },
+      "tool": {
+        "description": "發現 {{count}} 個工具 · 來自{{scope}}",
+        "effect": "啟用後可使用 OpenCode 中定義的工具。",
+        "risk": "工具程式碼以你的使用者權限執行，不在沙箱中隔離。"
+      }
+    }
   }
 }

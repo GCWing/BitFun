@@ -12,7 +12,9 @@
     "selected": "Currently used",
     "selectedUnavailable": "Selected, currently unavailable",
     "notSelected": "Not used",
-    "availableChoice": "Available choice"
+    "availableChoice": "Available choice",
+    "openInExplorer": "Open in file explorer",
+    "openInExplorerRemote": "Remote workspace paths cannot be opened in the local file manager"
   },
   "actions": {
     "refresh": "Refresh",
@@ -148,7 +150,8 @@
     "compatibility": "Status: {{state}}",
     "sources": "Combined from {{count}} configuration sources",
     "noDescription": "No description provided",
-    "noTools": "No tools"
+    "noTools": "No tools",
+    "sourceLocations": "Configuration sources ({{count}})"
   },
   "agentState": {
     "approval_required": "Confirmation required",
@@ -236,6 +239,14 @@
     "unsupportedGuidance": "Change this setting in the source application, then refresh.",
     "enable": "Enable server",
     "disable": "Disable",
+    "empty": "No MCP servers found.",
+    "emptyGuidance": "BitFun discovers MCP servers from OpenCode-compatible configurations. Supported locations:",
+    "emptyLocation": {
+      "userGlobal": "User global: ~/.config/opencode/opencode.json",
+      "project": "Project: .opencode/opencode.json",
+      "envConfig": "File pointed to by OPENCODE_CONFIG environment variable"
+    },
+    "emptyExample": "Add an \"mcp\" field to the config file, e.g.: { \"mcp\": { \"server-name\": { ... } } }",
     "transport": {
       "local_stdio": "Local process",
       "streamable_http": "Remote connection"
@@ -375,5 +386,34 @@
     "currentSelection": "The current source is used for this command. Choose another available source above to change it.",
     "currentSelectionUnavailable": "This command source is still selected, but it cannot run in its current state. Choose an available source or fix this source first.",
     "restricted": "Not supported in this version"
+  },
+  "opencode": {
+    "title": "OpenCode extensions",
+    "description": "External capabilities discovered from OpenCode-compatible configurations.",
+    "summary": "Found {{agents}} agents · {{commands}} commands · {{mcps}} MCP",
+    "configLocations": "Configuration locations",
+    "inherited": "Inherited from overall mode",
+    "capability": {
+      "subagent": {
+        "description": "{{count}} agents found · from {{scope}}",
+        "effect": "Allows calling agents defined in OpenCode.",
+        "risk": "Agents can make model calls; confirm the source is trusted."
+      },
+      "command": {
+        "description": "{{count}} commands found · from {{scope}}",
+        "effect": "Allows calling OpenCode commands in BitFun.",
+        "risk": ""
+      },
+      "mcp": {
+        "description": "{{count}} MCP servers found",
+        "effect": "Allows connecting to MCP servers configured in OpenCode.",
+        "risk": "MCP servers can start local processes or connect to remote addresses."
+      },
+      "tool": {
+        "description": "{{count}} tools found · from {{scope}}",
+        "effect": "Allows using tools defined in OpenCode.",
+        "risk": "Tool code runs with your user permissions, not in a sandbox."
+      }
+    }
   }
 }
