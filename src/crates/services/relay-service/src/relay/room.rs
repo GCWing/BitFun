@@ -15,6 +15,19 @@ use tracing::{debug, info, warn};
 pub type ConnId = u64;
 pub const MAX_PENDING_REQUESTS: usize = 1024;
 pub const MAX_PENDING_REQUESTS_PER_ROOM: usize = 128;
+pub const MAX_ACTIVE_ROOMS: usize = 10_000;
+
+/// Room IDs cross an untrusted WebSocket boundary and later become asset
+/// namespace names. Keep them to one portable path segment so they can never
+/// influence filesystem traversal in a disk-backed relay host.
+pub fn is_valid_room_id(room_id: &str) -> bool {
+    !room_id.is_empty()
+        && room_id.len() <= 128
+        && !matches!(room_id, "_store" | "page-data" | "pages")
+        && room_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
 
 struct PendingRequest {
     tx: oneshot::Sender<ResponsePayload>,
@@ -36,6 +49,12 @@ impl Drop for PendingRequestGuard {
 #[derive(Debug, Clone)]
 pub struct OutboundMessage {
     pub text: String,
+}
+
+impl OutboundMessage {
+    pub fn text(text: impl Into<String>) -> Self {
+        Self { text: text.into() }
+    }
 }
 
 /// Payload returned by the desktop in response to a bridged HTTP request.
@@ -134,20 +153,14 @@ impl RoomManager {
         public_key: &str,
         tx: mpsc::Sender<OutboundMessage>,
     ) -> bool {
-        if let Some((_, old_room_id)) = self.conn_to_room.remove(&conn_id) {
-            let should_remove = if let Some(mut room) = self.rooms.get_mut(&old_room_id) {
-                room.desktop = None;
-                room.is_empty()
-            } else {
-                false
-            };
-            if should_remove {
-                self.rooms.remove(&old_room_id);
-            }
+        if !is_valid_room_id(room_id) {
+            warn!("Rejected invalid room id");
+            return false;
         }
-
-        self.rooms.remove(room_id);
-
+        if self.rooms.len() >= MAX_ACTIVE_ROOMS && !self.rooms.contains_key(room_id) {
+            warn!("Rejected room creation because the active-room limit was reached");
+            return false;
+        }
         let now = Utc::now().timestamp();
         let mut room = RelayRoom::new(room_id.to_string());
         room.desktop = Some(DesktopConnection {
@@ -159,8 +172,50 @@ impl RoomManager {
             last_heartbeat: now,
         });
 
-        self.rooms.insert(room_id.to_string(), room);
-        self.conn_to_room.insert(conn_id, room_id.to_string());
+        // Room ids are bearer secrets embedded in pairing QR codes. A second
+        // socket must never be able to evict the desktop that currently owns
+        // one by guessing or observing the id. Re-sending create_room from the
+        // same socket is harmless and remains supported.
+        match self.rooms.entry(room_id.to_string()) {
+            Entry::Occupied(mut existing) => {
+                let owned_by_other_connection = existing
+                    .get()
+                    .desktop
+                    .as_ref()
+                    .is_some_and(|desktop| desktop.conn_id != conn_id);
+                if owned_by_other_connection {
+                    warn!("Rejected attempt to replace an active relay room");
+                    return false;
+                }
+                existing.insert(room);
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(room);
+            }
+        }
+
+        if let Some(previous_room_id) = self
+            .conn_to_room
+            .insert(conn_id, room_id.to_string())
+            .filter(|previous| previous != room_id)
+        {
+            let should_remove =
+                if let Some(mut previous_room) = self.rooms.get_mut(&previous_room_id) {
+                    if previous_room
+                        .desktop
+                        .as_ref()
+                        .is_some_and(|desktop| desktop.conn_id == conn_id)
+                    {
+                        previous_room.desktop = None;
+                    }
+                    previous_room.is_empty()
+                } else {
+                    false
+                };
+            if should_remove {
+                self.rooms.remove(&previous_room_id);
+            }
+        }
 
         info!("Room {room_id} created by desktop {device_id}");
         true
@@ -175,13 +230,7 @@ impl RoomManager {
         };
 
         if let Some(tx) = tx {
-            send_outbound_message(
-                &tx,
-                OutboundMessage {
-                    text: message.to_string(),
-                },
-            )
-            .await
+            send_outbound_message(&tx, OutboundMessage::text(message)).await
         } else {
             false
         }
@@ -223,7 +272,34 @@ impl RoomManager {
         Some((guard, rx))
     }
 
-    pub fn resolve_pending(&self, correlation_id: &str, payload: ResponsePayload) -> bool {
+    /// Resolve a pending response only when it originates from the desktop
+    /// socket that currently owns the associated room. Correlation ids are not
+    /// authorization secrets and must not be sufficient on their own.
+    pub fn resolve_pending_from_conn(
+        &self,
+        conn_id: ConnId,
+        correlation_id: &str,
+        payload: ResponsePayload,
+    ) -> bool {
+        let expected_room_id = self
+            .pending_requests
+            .get(correlation_id)
+            .map(|pending| pending.room_id.clone());
+        let owns_expected_room = expected_room_id.as_ref().is_some_and(|expected| {
+            self.conn_to_room
+                .get(&conn_id)
+                .is_some_and(|actual| actual.value() == expected)
+                && self.rooms.get(expected).is_some_and(|room| {
+                    room.desktop
+                        .as_ref()
+                        .is_some_and(|desktop| desktop.conn_id == conn_id)
+                })
+        });
+        if !owns_expected_room {
+            warn!("Rejected relay response from a socket that does not own the pending room");
+            return false;
+        }
+
         if let Some((_, pending)) = self.pending_requests.remove(correlation_id) {
             self.release_room_pending(&pending.room_id);
             pending.tx.send(payload).is_ok()
@@ -300,15 +376,27 @@ impl RoomManager {
     }
 
     pub fn cleanup_stale_rooms(&self, ttl_secs: u64) -> Vec<String> {
+        if ttl_secs == 0 {
+            return Vec::new();
+        }
         let now = Utc::now().timestamp();
         let stale_ids: Vec<String> = self
             .rooms
             .iter()
-            .filter(|r| (now - r.last_activity) as u64 > ttl_secs)
+            .filter(|r| now.saturating_sub(r.last_activity) as u64 > ttl_secs)
             .map(|r| r.room_id.clone())
             .collect();
 
         for room_id in &stale_ids {
+            let pending_ids: Vec<String> = self
+                .pending_requests
+                .iter()
+                .filter(|pending| pending.room_id == *room_id)
+                .map(|pending| pending.key().clone())
+                .collect();
+            for correlation_id in pending_ids {
+                self.cancel_pending(&correlation_id);
+            }
             if let Some((_, room)) = self.rooms.remove(room_id) {
                 if let Some(ref desktop) = room.desktop {
                     self.conn_to_room.remove(&desktop.conn_id);
@@ -335,6 +423,14 @@ impl RoomManager {
     pub fn connection_count(&self) -> usize {
         self.conn_to_room.len()
     }
+
+    pub fn pending_request_count(&self) -> usize {
+        self.pending_requests.len()
+    }
+
+    pub fn has_connection(&self, conn_id: ConnId) -> bool {
+        self.conn_to_room.contains_key(&conn_id)
+    }
 }
 
 #[cfg(test)]
@@ -346,27 +442,11 @@ mod tests {
     async fn outbound_send_waits_for_bounded_queue_capacity() {
         let (tx, mut rx) = mpsc::channel(1);
 
-        assert!(
-            send_outbound_message(
-                &tx,
-                OutboundMessage {
-                    text: "first".to_string(),
-                },
-            )
-            .await
-        );
+        assert!(send_outbound_message(&tx, OutboundMessage::text("first"),).await);
 
         let blocked_send = tokio::spawn({
             let tx = tx.clone();
-            async move {
-                send_outbound_message(
-                    &tx,
-                    OutboundMessage {
-                        text: "second".to_string(),
-                    },
-                )
-                .await
-            }
+            async move { send_outbound_message(&tx, OutboundMessage::text("second")).await }
         });
 
         tokio::task::yield_now().await;
@@ -440,7 +520,10 @@ mod tests {
         let (_guard, _rx) = manager
             .try_register_pending("room-b", "pending-b".to_string())
             .expect("pending registration");
-        assert!(manager.resolve_pending(
+        let (tx, _rx) = mpsc::channel(1);
+        assert!(manager.create_room("room-b", 2, "desktop-b", "public-key", tx));
+        assert!(manager.resolve_pending_from_conn(
+            2,
             "pending-b",
             ResponsePayload {
                 encrypted_data: "encrypted".to_string(),
@@ -448,5 +531,59 @@ mod tests {
             },
         ));
         assert!(!manager.pending_room_counts.contains_key("room-b"));
+    }
+
+    #[test]
+    fn active_room_cannot_be_replaced_by_another_connection() {
+        let manager = RoomManager::new();
+        let (tx_a, _rx_a) = mpsc::channel(1);
+        let (tx_b, _rx_b) = mpsc::channel(1);
+
+        assert!(manager.create_room("room-a", 1, "desktop-a", "key-a", tx_a));
+        assert!(!manager.create_room("room-a", 2, "desktop-b", "key-b", tx_b));
+        assert!(manager.heartbeat(1));
+        assert!(!manager.heartbeat(2));
+    }
+
+    #[test]
+    fn pending_response_must_come_from_owning_room_connection() {
+        let manager = RoomManager::new();
+        let (tx_a, _rx_a) = mpsc::channel(1);
+        let (tx_b, _rx_b) = mpsc::channel(1);
+        assert!(manager.create_room("room-a", 1, "desktop-a", "key-a", tx_a));
+        assert!(manager.create_room("room-b", 2, "desktop-b", "key-b", tx_b));
+        let (_guard, mut rx) = manager
+            .try_register_pending("room-a", "pending-a".to_string())
+            .expect("pending registration");
+        let response = ResponsePayload {
+            encrypted_data: "encrypted".to_string(),
+            nonce: "nonce".to_string(),
+        };
+
+        assert!(!manager.resolve_pending_from_conn(2, "pending-a", response.clone()));
+        assert!(rx.try_recv().is_err());
+        assert!(manager.resolve_pending_from_conn(1, "pending-a", response));
+    }
+
+    #[test]
+    fn room_ids_are_single_portable_path_segments() {
+        for valid in ["room-a", "ROOM_1", "0123456789abcdef"] {
+            assert!(is_valid_room_id(valid), "room id should be valid: {valid}");
+        }
+        for invalid in [
+            "",
+            "../room",
+            "/tmp/room",
+            "room/child",
+            "room\\child",
+            "_store",
+            "page-data",
+            "pages",
+        ] {
+            assert!(
+                !is_valid_room_id(invalid),
+                "room id should be rejected: {invalid}"
+            );
+        }
     }
 }

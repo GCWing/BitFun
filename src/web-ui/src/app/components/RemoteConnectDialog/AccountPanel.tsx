@@ -14,7 +14,7 @@
  *   group), not an external README. See `src/features/relay-deploy/README.md`.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { Button, Input, Alert } from '@/component-library';
@@ -29,7 +29,7 @@ import type { RelayDeployResult } from '@/features/relay-deploy';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
-import { usePeerDeviceMode } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { usePeerDeviceMode } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { useAccountSyncStore, ensureAccountSyncProgressListener } from '@/infrastructure/account/accountSyncStore';
 import type { AccountSyncPhase } from '@/infrastructure/account/accountSyncStore';
 import { isAccountAuthFailure } from '@/infrastructure/account/accountErrorUtils';
@@ -40,6 +40,23 @@ import './AccountPanel.scss';
 const log = createLogger('AccountPanel');
 
 const DEVICE_POLL_FALLBACK_MS = 30_000;
+
+function parseRelayServer(value: string): URL | null {
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol)
+      || !url.hostname
+      || url.username
+      || url.password
+      || url.search
+      || url.hash) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
 
 function syncPhaseLabel(
   t: (key: string, options?: Record<string, string | number>) => string,
@@ -83,7 +100,7 @@ type View = 'login' | 'overwrite' | 'devices';
 export const AccountPanel: React.FC<AccountPanelProps> = ({
   onCloseDialog,
 }) => {
-  const { t } = useI18n('common');
+  const { t, formatRelativeTime } = useI18n('common');
   const { success, info, warning } = useNotification();
   const { workspacePath } = useCurrentWorkspace();
   const { enterPeerMode } = usePeerDeviceMode();
@@ -116,6 +133,14 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   /** Track the overwrite view for the unmount logout invariant. */
   const viewRef = useRef<View>(view);
   viewRef.current = view;
+
+  const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
+    const leftLocal = left.device_id === localDeviceId;
+    const rightLocal = right.device_id === localDeviceId;
+    if (leftLocal !== rightLocal) return leftLocal ? -1 : 1;
+    if (left.online !== right.online) return left.online ? -1 : 1;
+    return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
+  }), [devices, localDeviceId]);
 
   const resetState = useCallback(() => {
     setDevices([]);
@@ -206,7 +231,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             device_id: d.device_id,
             device_name: d.device_name,
             online: true,
-            last_seen_at: Date.now(),
+            last_seen_at: Math.floor(Date.now() / 1000),
           });
         }
       }
@@ -307,8 +332,16 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   ]);
 
   const validate = useCallback(() => {
-    if (!username.trim() || !password.trim() || !authServer.trim()) {
+    if (!username.trim() || !password || !authServer.trim()) {
       setError(t('accountLogin.emptyFields'));
+      return false;
+    }
+    if (username.trim().length > 128 || password.length > 1024) {
+      setError(t('accountLogin.invalidCredentialsLength'));
+      return false;
+    }
+    if (!parseRelayServer(authServer)) {
+      setError(t('accountLogin.invalidServer'));
       return false;
     }
     setError(null);
@@ -434,8 +467,16 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   const handleLogin = useCallback(async () => {
     if (!validate()) return;
+    const relayUrl = parseRelayServer(authServer);
+    if (!relayUrl) return;
+    const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(relayUrl.hostname);
+    if (relayUrl.protocol === 'http:'
+      && !isLoopback
+      && !window.confirm(t('accountLogin.insecureServerConfirm'))) {
+      return;
+    }
     await performLogin(authServer.trim(), username.trim(), password);
-  }, [validate, authServer, username, password, performLogin]);
+  }, [validate, authServer, username, password, performLogin, t]);
 
   /**
    * Deploy wizard finished: relay deployed and the first account registered.
@@ -457,7 +498,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       success(t('accountLogin.loginSuccess', { user_id: username }));
       completeLogin(authServer.trim(), isFirstLogin);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (isAccountAuthFailure(e)) {
+        await handleSessionExpired(e);
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
       try { await remoteConnectAPI.accountLogout(); } catch (logoutErr) {
         log.warn('logout after finalize failure failed', logoutErr);
       }
@@ -466,7 +511,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [authServer, completeLogin, resetState, success, t, username]);
+  }, [authServer, completeLogin, handleSessionExpired, resetState, success, t, username]);
 
   const handleConfirmOverwrite = useCallback(() => {
     void finalizeAndSync(false);
@@ -494,15 +539,33 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [resetState]);
 
   const handleDeleteDevice = useCallback(async (deviceId: string, deviceName: string) => {
-    if (!window.confirm(t('accountLogin.confirmRemoveDevice', { name: deviceName }))) return;
+    const isLocal = localDeviceId === deviceId;
+    const confirmation = isLocal
+      ? t('accountLogin.confirmRemoveCurrentDevice', { name: deviceName })
+      : t('accountLogin.confirmRemoveDevice', { name: deviceName });
+    if (!window.confirm(confirmation)) return;
+    setLoading(true);
+    setError(null);
     try {
       await remoteConnectAPI.accountDeleteDevice(deviceId);
-      success(t('accountLogin.deviceRemoved', { name: deviceName }));
-      refreshDevices();
+      if (isLocal) {
+        success(t('accountLogin.currentDeviceRemoved'));
+        resetState();
+        setView('login');
+      } else {
+        success(t('accountLogin.deviceRemoved', { name: deviceName }));
+        void refreshDevices();
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (isAccountAuthFailure(e)) {
+        await handleSessionExpired(e);
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      setLoading(false);
     }
-  }, [t, success, refreshDevices]);
+  }, [handleSessionExpired, localDeviceId, refreshDevices, resetState, success, t]);
 
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
     if (!device.online) return;
@@ -555,7 +618,14 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   onChange={(e) => setPassword(e.target.value)} prefix={<Lock size={16} />}
                   size="medium" disabled={loading}
                   suffix={
-                    <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassword(s => !s)} tabIndex={-1}>
+                    <button
+                      type="button"
+                      className="bitfun-input-toggle"
+                      onClick={() => setShowPassword(s => !s)}
+                      aria-label={showPassword
+                        ? t('accountLogin.hidePassword')
+                        : t('accountLogin.showPassword')}
+                    >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   } />
@@ -566,6 +636,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   placeholder={t('accountLogin.authServerPlaceholder')}
                   prefix={<Server size={16} />} size="medium" disabled={loading} />
               </div>
+              <p className="account-panel__security-note">{t('accountLogin.securityNote')}</p>
               <div className="account-panel__deploy-entry">
                 <span>{t('relayDeploy.entryHint')}</span>
                 <button
@@ -695,16 +766,35 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               {!relayError && devicesReady && devices.length === 0 && (
                 <div className="account-panel__empty">{t('accountLogin.noDevices')}</div>
               )}
-              {!relayError && devices.map((d) => {
+              {!relayError && !devicesReady && (
+                <div className="account-panel__empty account-panel__empty--loading" role="status">
+                  <RefreshCw size={14} className="spinning" />
+                  {t('accountLogin.loadingDevices')}
+                </div>
+              )}
+              {!relayError && sortedDevices.map((d) => {
                 const isLocal = localDeviceId === d.device_id;
+                const isSelectable = !isLocal && d.online && syncStatus !== 'syncing';
+                const removeLabel = isLocal
+                  ? t('accountLogin.removeCurrentDevice')
+                  : t('accountLogin.removeDevice');
+                const displayName = d.device_name || t('accountLogin.unknownDevice');
                 return (
                 <div key={d.device_id}
                   className={`account-panel__device-card ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''} ${syncStatus === 'syncing' && !isLocal ? 'syncing' : ''}`}
-                  onClick={() => !isLocal && selectDevice(d)}>
+                  onClick={() => isSelectable && selectDevice(d)}
+                  onKeyDown={(event) => {
+                    if (isSelectable && (event.key === 'Enter' || event.key === ' ')) {
+                      event.preventDefault();
+                      void selectDevice(d);
+                    }
+                  }}
+                  role={isSelectable ? 'button' : undefined}
+                  tabIndex={isSelectable ? 0 : undefined}>
                   <Monitor size={16} />
                   <div className="account-panel__device-info">
                     <span className="account-panel__device-name">
-                      {d.device_name}
+                      {displayName}
                       {isLocal && <span className="account-panel__device-badge">{t('accountLogin.thisDevice')}</span>}
                     </span>
                     <span className="account-panel__device-meta">
@@ -713,24 +803,27 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                       </span>
                       <span className="account-panel__device-status">
                         {' · '}
-                        {d.online ? t('accountLogin.online') : t('accountLogin.offline')}
+                        {d.online
+                          ? t('accountLogin.online')
+                          : d.last_seen_at
+                            ? t('accountLogin.lastSeen', {
+                              time: formatRelativeTime(d.last_seen_at * 1000),
+                            })
+                            : t('accountLogin.offline')}
                       </span>
                     </span>
                   </div>
-                  {isLocal
-                    ? null
-                    : <>
-                        {d.online && syncStatus !== 'syncing' && <ChevronRight size={14} />}
-                        {d.online && syncStatus === 'syncing' && (
-                          <RefreshCw size={14} className="spinning" aria-label={t('accountLogin.syncing')} />
-                        )}
-                        <button className="account-panel__device-remove"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, d.device_name); }}
-                          title={t('accountLogin.removeDevice')}
-                          tabIndex={-1}>
-                          <X size={14} />
-                        </button>
-                      </>}
+                  {!isLocal && d.online && syncStatus !== 'syncing' && <ChevronRight size={14} />}
+                  {!isLocal && d.online && syncStatus === 'syncing' && (
+                    <RefreshCw size={14} className="spinning" aria-label={t('accountLogin.syncing')} />
+                  )}
+                  <button className="account-panel__device-remove"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
+                    title={removeLabel}
+                    aria-label={`${removeLabel}: ${displayName}`}
+                    disabled={loading}>
+                    <X size={14} aria-hidden="true" />
+                  </button>
                 </div>
                 );
               })}
@@ -740,6 +833,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 <Button variant="primary" size="small" onClick={handleRetryConnect} disabled={loading}>
                   <RefreshCw size={14} />
                   {t('accountLogin.retryConnect')}
+                </Button>
+              )}
+              {!relayError && (
+                <Button variant="secondary" size="small" onClick={refreshDevices} disabled={loading}>
+                  <RefreshCw size={14} />
+                  {t('accountLogin.refreshDevices')}
                 </Button>
               )}
               <Button variant="secondary" size="small" onClick={handleLogout} disabled={loading}>

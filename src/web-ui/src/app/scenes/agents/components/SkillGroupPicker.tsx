@@ -32,9 +32,9 @@ import {
 } from './skillGroups';
 import {
   AgentCapabilityTooltip,
-  capabilityTooltipAriaLabel,
   type AgentCapabilityTooltipField,
 } from './AgentCapabilityTooltip';
+import { capabilityTooltipAriaLabel } from './agentCapabilityTooltipUtils';
 import './SkillGroupPicker.scss';
 
 interface SkillGroupPickerProps {

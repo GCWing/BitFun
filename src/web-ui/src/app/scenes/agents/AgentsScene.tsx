@@ -27,9 +27,9 @@ import CoreAgentCard, { type CoreAgentMeta } from './components/CoreAgentCard';
 import CreateAgentPage from './components/CreateAgentPage';
 import {
   AgentCapabilityTooltip,
-  capabilityTooltipAriaLabel,
   type AgentCapabilityTooltipField,
 } from './components/AgentCapabilityTooltip';
+import { capabilityTooltipAriaLabel } from './components/agentCapabilityTooltipUtils';
 import { SkillGroupPicker, SkillGroupSummary } from './components/SkillGroupPicker';
 import { ToolGroupPicker, ToolGroupSummary } from './components/ToolGroupPicker';
 import { useUserSkillGroups } from './components/useUserSkillGroups';

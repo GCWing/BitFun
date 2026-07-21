@@ -15,10 +15,8 @@ import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
-import {
-  TypewriterRevealGateProvider,
-  useCreateTypewriterRevealGate,
-} from '../../hooks/TypewriterRevealGate';
+import { TypewriterRevealGateProvider } from '../../hooks/TypewriterRevealGate';
+import { useCreateTypewriterRevealGate } from '../../hooks/typewriterRevealGateContext';
 import { getModelRoundItemClassName } from './modelRoundItemClassName';
 import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';

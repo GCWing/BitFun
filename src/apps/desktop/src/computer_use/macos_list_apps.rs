@@ -62,7 +62,7 @@ end tell
 return out
 "#;
 
-pub fn list_running_apps(include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
+pub(super) fn list_running_apps(include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
     if let Ok(guard) = CACHE.lock() {
         if let Some((ts, cached_hidden, ref apps)) = *guard {
             if cached_hidden == include_hidden && ts.elapsed() < CACHE_TTL {
@@ -127,7 +127,7 @@ pub fn list_running_apps(include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
 /// Drop the cached `list_running_apps` result so the next call re-probes
 /// `osascript`. Used when the agent has just launched / quit an app and
 /// needs the freshest pid set.
-pub fn invalidate_cache() {
+pub(super) fn invalidate_cache() {
     if let Ok(mut guard) = CACHE.lock() {
         *guard = None;
     }

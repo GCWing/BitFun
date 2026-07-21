@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/component-library';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import {
   type ExternalMcpActivation,
   type ExternalMcpCatalogEntry,

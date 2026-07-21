@@ -32,7 +32,7 @@ unsafe extern "C" {
 
 /// Result of an AX-first attempt.
 #[derive(Debug)]
-pub enum AxWriteOutcome {
+pub(super) enum AxWriteOutcome {
     /// The AX call succeeded — no fallback needed.
     Ok,
     /// AX rejected the call (status non-zero or unsupported). Caller should
@@ -42,7 +42,7 @@ pub enum AxWriteOutcome {
 
 /// Try to "click" via AXPress. Most controls (NSButton, links, menu items)
 /// implement this; many text fields and webviews do not.
-pub fn try_ax_press(target: AxRef) -> AxWriteOutcome {
+pub(super) fn try_ax_press(target: AxRef) -> AxWriteOutcome {
     if target.0.is_null() {
         return AxWriteOutcome::Unavailable(-1);
     }
@@ -57,7 +57,7 @@ pub fn try_ax_press(target: AxRef) -> AxWriteOutcome {
 
 /// Try to set the AXValue of a text field. `value` is sent as a CFString.
 /// Caller is responsible for any subsequent focus / commit (Tab, Return).
-pub fn try_ax_set_value(target: AxRef, value: &str) -> AxWriteOutcome {
+pub(super) fn try_ax_set_value(target: AxRef, value: &str) -> AxWriteOutcome {
     if target.0.is_null() {
         return AxWriteOutcome::Unavailable(-1);
     }
@@ -78,7 +78,7 @@ pub fn try_ax_set_value(target: AxRef, value: &str) -> AxWriteOutcome {
 }
 
 /// Try a generic AX action by name (e.g. `"AXShowMenu"`, `"AXIncrement"`).
-pub fn try_ax_action(target: AxRef, action_name: &str) -> AxWriteOutcome {
+pub(super) fn try_ax_action(target: AxRef, action_name: &str) -> AxWriteOutcome {
     if target.0.is_null() {
         return AxWriteOutcome::Unavailable(-1);
     }
@@ -98,7 +98,7 @@ pub fn try_ax_action(target: AxRef, action_name: &str) -> AxWriteOutcome {
 /// Returns `Ok` even when the AX call fails — focus errors are treated as
 /// benign because the subsequent key event may still land in the right place
 /// via pid-scoped delivery. (Ported from cua-driver-rs `ax_actions.rs:32-43`.)
-pub fn try_ax_focus(target: AxRef) -> AxWriteOutcome {
+pub(super) fn try_ax_focus(target: AxRef) -> AxWriteOutcome {
     if target.0.is_null() {
         return AxWriteOutcome::Unavailable(-1);
     }

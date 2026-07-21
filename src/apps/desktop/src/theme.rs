@@ -1074,6 +1074,7 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
     use super::*;
 
     #[cfg(target_os = "windows")]

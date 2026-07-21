@@ -13,6 +13,8 @@ use tokio::sync::RwLock;
 use super::device::DeviceIdentity;
 use super::encryption::{self, KeyPair};
 
+const PAIRING_CHALLENGE_TTL_SECS: i64 = 120;
+
 /// Current state of the pairing process.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -60,6 +62,49 @@ pub struct PairingResponse {
     pub password: Option<String>,
 }
 
+impl PairingResponse {
+    /// Validate the decrypted but still untrusted mobile payload before it is
+    /// cloned, persisted, or passed into password verification.
+    pub fn validate_untrusted(&self) -> Result<()> {
+        fn portable_id(value: &str, max_bytes: usize) -> bool {
+            !value.is_empty()
+                && value.len() <= max_bytes
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        }
+        fn bounded_text(value: &str, max_bytes: usize) -> bool {
+            !value.trim().is_empty()
+                && value.len() <= max_bytes
+                && !value.chars().any(char::is_control)
+        }
+
+        if self.challenge_echo.len() != 32
+            || !self
+                .challenge_echo
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            || !portable_id(&self.device_id, 128)
+            || !bounded_text(&self.device_name, 256)
+            || self
+                .mobile_install_id
+                .as_deref()
+                .is_some_and(|value| !portable_id(value.trim(), 128))
+            || self
+                .user_id
+                .as_deref()
+                .is_some_and(|value| !bounded_text(value, 128))
+            || self
+                .password
+                .as_deref()
+                .is_some_and(|value| value.len() > 1024 || value.chars().any(char::is_control))
+        {
+            return Err(anyhow!("invalid pairing response fields"));
+        }
+        Ok(())
+    }
+}
+
 /// Manages the pairing state machine.
 pub struct PairingProtocol {
     state: Arc<RwLock<PairingState>>,
@@ -68,6 +113,7 @@ pub struct PairingProtocol {
     room_id: Option<String>,
     device_identity: DeviceIdentity,
     challenge: Option<String>,
+    challenge_issued_at: Option<i64>,
     peer_device_id: Option<String>,
     peer_device_name: Option<String>,
 }
@@ -81,6 +127,7 @@ impl PairingProtocol {
             room_id: None,
             device_identity,
             challenge: None,
+            challenge_issued_at: None,
             peer_device_id: None,
             peer_device_name: None,
         }
@@ -125,6 +172,9 @@ impl PairingProtocol {
 
     /// Step 2 (Desktop): Peer joined with their public key — derive shared secret.
     pub async fn on_peer_joined(&mut self, peer_public_key_b64: &str) -> Result<PairingChallenge> {
+        if self.state().await != PairingState::WaitingForScan {
+            return Err(anyhow!("pairing request is not valid in the current state"));
+        }
         let keypair = self
             .keypair
             .as_ref()
@@ -136,10 +186,12 @@ impl PairingProtocol {
 
         let challenge = generate_challenge();
         self.challenge = Some(challenge.clone());
+        let issued_at = chrono::Utc::now().timestamp();
+        self.challenge_issued_at = Some(issued_at);
 
         let challenge_payload = PairingChallenge {
             challenge,
-            timestamp: chrono::Utc::now().timestamp(),
+            timestamp: issued_at,
         };
 
         *self.state.write().await = PairingState::Verifying;
@@ -148,12 +200,28 @@ impl PairingProtocol {
 
     /// Step 3 (Desktop): Verify the peer's challenge response.
     pub async fn verify_response(&mut self, response: &PairingResponse) -> Result<bool> {
+        if self.state().await != PairingState::Verifying {
+            return Err(anyhow!(
+                "pairing response is not valid in the current state"
+            ));
+        }
         let expected = self
             .challenge
-            .as_ref()
+            .take()
             .ok_or_else(|| anyhow!("no challenge issued"))?;
+        let issued_at = self
+            .challenge_issued_at
+            .take()
+            .ok_or_else(|| anyhow!("challenge timestamp missing"))?;
 
-        if response.challenge_echo != *expected {
+        if chrono::Utc::now().timestamp().saturating_sub(issued_at) > PAIRING_CHALLENGE_TTL_SECS {
+            *self.state.write().await = PairingState::Failed {
+                reason: "challenge expired".to_string(),
+            };
+            return Ok(false);
+        }
+
+        if response.challenge_echo != expected {
             *self.state.write().await = PairingState::Failed {
                 reason: "challenge mismatch".to_string(),
             };
@@ -204,8 +272,23 @@ impl PairingProtocol {
         *self.state.write().await = PairingState::Disconnected;
         self.shared_secret = None;
         self.challenge = None;
+        self.challenge_issued_at = None;
         self.peer_device_id = None;
         self.peer_device_name = None;
+    }
+
+    /// Keep the QR room/keypair but discard the failed mobile handshake so the
+    /// user can correct account credentials without restarting Remote Connect.
+    /// Call only after an authenticated, encrypted pairing response fails an
+    /// identity/account policy check; cryptographic challenge mismatches remain
+    /// terminal for the current QR.
+    pub async fn retry_after_identity_rejection(&mut self) {
+        self.shared_secret = None;
+        self.challenge = None;
+        self.challenge_issued_at = None;
+        self.peer_device_id = None;
+        self.peer_device_name = None;
+        *self.state.write().await = PairingState::WaitingForScan;
     }
 
     pub async fn reset(&mut self) {
@@ -214,6 +297,7 @@ impl PairingProtocol {
         self.shared_secret = None;
         self.room_id = None;
         self.challenge = None;
+        self.challenge_issued_at = None;
         self.peer_device_id = None;
         self.peer_device_name = None;
     }
@@ -293,6 +377,36 @@ mod tests {
         let desktop_pub = encryption::parse_public_key(&qr.public_key).unwrap();
         let mobile_shared = mobile_keypair.derive_shared_secret(&desktop_pub);
         assert_eq!(*desktop_secret, mobile_shared);
+
+        // Challenges are single-use even when a response is replayed verbatim.
+        assert!(protocol.verify_response(&response).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn expired_pairing_challenge_is_rejected_and_consumed() {
+        let device = DeviceIdentity {
+            device_id: "test-desktop-id".into(),
+            device_name: "TestDesktop".into(),
+            mac_address: "AA:BB:CC:DD:EE:FF".into(),
+        };
+        let mobile_device = DeviceIdentity {
+            device_id: "test-mobile-id".into(),
+            device_name: "TestMobile".into(),
+            mac_address: "11:22:33:44:55:66".into(),
+        };
+        let mut protocol = PairingProtocol::new(device);
+        protocol.initiate("wss://relay.example.com").await.unwrap();
+        let mobile_keypair = KeyPair::generate();
+        let challenge = protocol
+            .on_peer_joined(&mobile_keypair.public_key_base64())
+            .await
+            .unwrap();
+        protocol.challenge_issued_at =
+            Some(chrono::Utc::now().timestamp() - PAIRING_CHALLENGE_TTL_SECS - 1);
+        let response = PairingProtocol::answer_challenge(&challenge, &mobile_device, None, None);
+
+        assert!(!protocol.verify_response(&response).await.unwrap());
+        assert!(protocol.verify_response(&response).await.is_err());
     }
 
     #[test]

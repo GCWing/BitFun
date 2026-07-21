@@ -540,14 +540,13 @@ fn is_remote_absolute_workspace_path(path: &str) -> bool {
 
 pub fn resolve_remote_workspace_path(raw: &str, workspace_root: Option<&Path>) -> Option<PathBuf> {
     let stripped = strip_remote_workspace_path_prefix(raw);
-
-    if is_remote_absolute_workspace_path(stripped) {
-        return Some(PathBuf::from(stripped));
-    }
-
     let workspace_root = workspace_root?;
     let canonical_root = std::fs::canonicalize(workspace_root).ok()?;
-    let candidate = canonical_root.join(stripped);
+    let candidate = if is_remote_absolute_workspace_path(stripped) {
+        PathBuf::from(stripped)
+    } else {
+        canonical_root.join(stripped)
+    };
     let canonical_candidate = std::fs::canonicalize(candidate).ok()?;
 
     if canonical_candidate.starts_with(&canonical_root) {

@@ -46,7 +46,7 @@ vi.mock('../hooks/useTypewriter', () => ({
   },
 }));
 
-vi.mock('../hooks/TypewriterRevealGate', () => ({
+vi.mock('../hooks/typewriterRevealGateContext', () => ({
   useReportTypewriterReveal: vi.fn(),
 }));
 

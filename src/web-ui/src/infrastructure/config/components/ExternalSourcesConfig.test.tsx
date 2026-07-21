@@ -37,7 +37,7 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
     workspacePath: workspaceState.path,
   }),
 }));
-vi.mock('@/infrastructure/peer-device/PeerDeviceContext', () => ({
+vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({
   usePeerDeviceModeOptional: () => ({
     peerMode: peerState.deviceId
       ? { active: true, deviceId: peerState.deviceId, deviceName: peerState.deviceId }

@@ -236,7 +236,9 @@ async fn check_page_files(
 
     let mut total_bytes: u64 = 0;
     for entry in &body.files {
-        if entry.path.contains("..") || entry.path.starts_with('/') {
+        if crate::validated_asset_relative_path(&entry.path).is_err()
+            || !crate::is_valid_content_hash(&entry.hash)
+        {
             return Err(StatusCode::BAD_REQUEST);
         }
         if entry.size > MAX_FILE_BYTES {
@@ -283,7 +285,9 @@ async fn upload_page_files(
     let visibility = PageVisibility::parse(&body.visibility).ok_or(StatusCode::BAD_REQUEST)?;
 
     for (rel_path, entry) in &body.files {
-        if rel_path.contains("..") || rel_path.starts_with('/') {
+        if crate::validated_asset_relative_path(rel_path).is_err()
+            || !crate::is_valid_content_hash(&entry.hash)
+        {
             return Err(StatusCode::BAD_REQUEST);
         }
         let approx = (entry.content.len() as u64).saturating_mul(3) / 4;
@@ -1042,7 +1046,10 @@ fn process_check_page_files(
     let mut existing_count = 0usize;
     let total_count = files.len();
     for entry in files {
-        if entry.path.contains("..") {
+        if crate::validated_asset_relative_path(&entry.path).is_err()
+            || !crate::is_valid_content_hash(&entry.hash)
+        {
+            needed.push(entry.path);
             continue;
         }
         if asset_store.has_content(&entry.hash) {
@@ -1070,8 +1077,9 @@ fn process_upload_page_files(
     let mut decoded_files: Vec<(String, String, Vec<u8>)> = Vec::with_capacity(files.len());
     let mut batch_bytes: u64 = 0;
     for (rel_path, entry) in files {
-        if rel_path.contains("..") {
-            continue;
+        crate::validated_asset_relative_path(&rel_path).map_err(|_| StatusCode::BAD_REQUEST)?;
+        if !crate::is_valid_content_hash(&entry.hash) {
+            return Err(StatusCode::BAD_REQUEST);
         }
         let decoded = B64
             .decode(&entry.content)
@@ -1099,7 +1107,7 @@ fn process_upload_page_files(
         if !asset_store.has_content(&actual_hash) {
             asset_store
                 .store_content(&actual_hash, decoded)
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                .map_err(crate::asset_store_error_status)?;
             stored += 1;
         }
         asset_store

@@ -28,6 +28,32 @@ use crate::WebAssetStore;
 const DESKTOP_ENQUEUE_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(test)]
 const DESKTOP_ENQUEUE_TIMEOUT: Duration = Duration::from_millis(25);
+const MAX_IDENTIFIER_BYTES: usize = 128;
+const MAX_DEVICE_NAME_BYTES: usize = 256;
+const MAX_PUBLIC_KEY_BYTES: usize = 512;
+const MAX_ENCRYPTED_PAYLOAD_BYTES: usize = 10 * 1024 * 1024;
+const MAX_NONCE_BYTES: usize = 256;
+const MAX_ROOM_WEB_FILES: usize = 4096;
+
+fn is_valid_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_IDENTIFIER_BYTES
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+fn is_valid_display_text(value: &str, max_bytes: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= max_bytes && !value.chars().any(char::is_control)
+}
+
+fn is_valid_encrypted_payload(encrypted_data: &str, nonce: &str) -> bool {
+    !encrypted_data.is_empty()
+        && encrypted_data.len() <= MAX_ENCRYPTED_PAYLOAD_BYTES
+        && !nonce.is_empty()
+        && nonce.len() <= MAX_NONCE_BYTES
+        && !nonce.chars().any(char::is_control)
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -43,6 +69,9 @@ pub struct AppState {
     pub login_rate_limiter: Arc<crate::routes::auth::LoginRateLimiter>,
     /// Per-user online device registry for account-based device routing.
     pub device_manager: Arc<crate::relay::DeviceManager>,
+    /// Browser origins explicitly allowed to call this relay. An empty list
+    /// means same-origin only; non-browser clients normally omit Origin.
+    pub cors_allow_origins: Arc<Vec<String>>,
 }
 
 // ── Health & Info ──────────────────────────────────────────────────────────
@@ -54,6 +83,12 @@ pub struct HealthResponse {
     pub uptime_seconds: u64,
     pub rooms: usize,
     pub connections: usize,
+    pub account_features: bool,
+    pub device_connections: usize,
+    pub pending_room_requests: usize,
+    pub pending_device_rpcs: usize,
+    pub asset_store_bytes: u64,
+    pub asset_store_max_bytes: u64,
 }
 
 pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
@@ -70,6 +105,12 @@ pub(crate) async fn health_check_for_host(
         uptime_seconds: state.start_time.elapsed().as_secs(),
         rooms: state.room_manager.room_count(),
         connections: state.room_manager.connection_count(),
+        account_features: state.db.is_some(),
+        device_connections: state.device_manager.connection_count(),
+        pending_room_requests: state.room_manager.pending_request_count(),
+        pending_device_rpcs: state.device_manager.pending_rpc_count(),
+        asset_store_bytes: state.asset_store.stored_bytes(),
+        asset_store_max_bytes: state.asset_store.max_store_bytes(),
     })
 }
 
@@ -116,6 +157,13 @@ pub async fn pair(
     Path(room_id): Path<String>,
     Json(body): Json<PairRequest>,
 ) -> Result<Json<PairResponse>, StatusCode> {
+    if !crate::relay::room::is_valid_room_id(&room_id)
+        || !is_valid_identifier(&body.device_id)
+        || !is_valid_display_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
+        || !is_valid_display_text(&body.public_key, MAX_PUBLIC_KEY_BYTES)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     if !state.room_manager.has_desktop(&room_id) {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -179,6 +227,11 @@ pub async fn command(
     Path(room_id): Path<String>,
     Json(body): Json<CommandRequest>,
 ) -> Result<Json<CommandResponse>, StatusCode> {
+    if !crate::relay::room::is_valid_room_id(&room_id)
+        || !is_valid_encrypted_payload(&body.encrypted_data, &body.nonce)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     if !state.room_manager.has_desktop(&room_id) {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -263,6 +316,14 @@ pub async fn upload_web(
     if !state.room_manager.room_exists(&room_id) {
         return Err(StatusCode::NOT_FOUND);
     }
+    if body.files.len() > MAX_ROOM_WEB_FILES
+        || body
+            .files
+            .keys()
+            .any(|path| crate::validated_asset_relative_path(path).is_err())
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let asset_store = Arc::clone(&state.asset_store);
     let room_id_for_io = room_id.clone();
@@ -311,6 +372,14 @@ pub async fn check_web_files(
     if !state.room_manager.room_exists(&room_id) {
         return Err(StatusCode::NOT_FOUND);
     }
+    if body.files.len() > MAX_ROOM_WEB_FILES
+        || body.files.iter().any(|entry| {
+            crate::validated_asset_relative_path(&entry.path).is_err()
+                || !crate::is_valid_content_hash(&entry.hash)
+        })
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let asset_store = Arc::clone(&state.asset_store);
     let room_id_for_io = room_id.clone();
@@ -349,6 +418,14 @@ pub async fn upload_web_files(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     if !state.room_manager.room_exists(&room_id) {
         return Err(StatusCode::NOT_FOUND);
+    }
+    if body.files.len() > MAX_ROOM_WEB_FILES
+        || body.files.iter().any(|(path, entry)| {
+            crate::validated_asset_relative_path(path).is_err()
+                || !crate::is_valid_content_hash(&entry.hash)
+        })
+    {
+        return Err(StatusCode::BAD_REQUEST);
     }
 
     let asset_store = Arc::clone(&state.asset_store);
@@ -390,6 +467,8 @@ pub async fn serve_room_web_catchall(
         file_path
     }
     .to_string();
+    crate::validated_asset_relative_path(room_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+    crate::validated_asset_relative_path(&lookup_path).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let asset_store = Arc::clone(&state.asset_store);
     let room_id_for_io = room_id.to_string();
@@ -402,7 +481,14 @@ pub async fn serve_room_web_catchall(
     .ok_or(StatusCode::NOT_FOUND)?;
 
     let mime = mime_from_path(&lookup_path);
-    Ok(([(header::CONTENT_TYPE, mime)], Body::from(content)).into_response())
+    Ok((
+        [
+            (header::CONTENT_TYPE, mime),
+            (header::X_FRAME_OPTIONS, "DENY"),
+        ],
+        Body::from(content),
+    )
+        .into_response())
 }
 
 fn process_upload_web(
@@ -413,9 +499,7 @@ fn process_upload_web(
     let mut written = 0usize;
     let mut reused = 0usize;
     for (rel_path, b64_content) in files {
-        if rel_path.contains("..") {
-            continue;
-        }
+        crate::validated_asset_relative_path(&rel_path).map_err(|_| StatusCode::BAD_REQUEST)?;
         let decoded = B64
             .decode(b64_content)
             .map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -424,7 +508,7 @@ fn process_upload_web(
         if !asset_store.has_content(&hash) {
             asset_store
                 .store_content(&hash, decoded)
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                .map_err(crate::asset_store_error_status)?;
             written += 1;
         } else {
             reused += 1;
@@ -448,7 +532,10 @@ fn process_check_web_files(
     let total_count = files.len();
 
     for entry in files {
-        if entry.path.contains("..") {
+        if crate::validated_asset_relative_path(&entry.path).is_err()
+            || !crate::is_valid_content_hash(&entry.hash)
+        {
+            needed.push(entry.path);
             continue;
         }
         if asset_store.has_content(&entry.hash) {
@@ -473,9 +560,7 @@ fn process_upload_web_files(
 ) -> Result<usize, StatusCode> {
     let mut stored = 0usize;
     for (rel_path, entry) in files {
-        if rel_path.contains("..") {
-            continue;
-        }
+        crate::validated_asset_relative_path(&rel_path).map_err(|_| StatusCode::BAD_REQUEST)?;
         let decoded = B64
             .decode(&entry.content)
             .map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -491,7 +576,7 @@ fn process_upload_web_files(
         if !asset_store.has_content(&actual_hash) {
             asset_store
                 .store_content(&actual_hash, decoded)
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                .map_err(crate::asset_store_error_status)?;
             stored += 1;
         }
 
@@ -527,6 +612,7 @@ mod tests {
     use crate::MemoryAssetStore;
     use axum::extract::{Path, State};
     use axum::Json;
+    use std::collections::HashMap;
     use tokio::sync::mpsc;
 
     fn test_state(room_manager: Arc<RoomManager>) -> AppState {
@@ -538,6 +624,7 @@ mod tests {
             page_data: None,
             login_rate_limiter: Arc::new(crate::routes::auth::LoginRateLimiter::new()),
             device_manager: crate::relay::DeviceManager::new(),
+            cors_allow_origins: Arc::new(Vec::new()),
         }
     }
 
@@ -545,11 +632,9 @@ mod tests {
     async fn pair_reports_backpressure_before_response_timeout() {
         let room_manager = RoomManager::new();
         let (tx, _rx) = mpsc::channel(1);
-        tx.send(OutboundMessage {
-            text: "queued".to_string(),
-        })
-        .await
-        .expect("queue should accept first message");
+        tx.send(OutboundMessage::text("queued"))
+            .await
+            .expect("queue should accept first message");
         room_manager.create_room("room-a", 1, "desktop-a", "public-key", tx);
 
         let result = tokio::time::timeout(
@@ -568,5 +653,23 @@ mod tests {
         .expect("backpressure should return before the response timeout");
 
         assert!(matches!(result, Err(StatusCode::SERVICE_UNAVAILABLE)));
+    }
+
+    #[tokio::test]
+    async fn room_web_upload_rejects_absolute_file_paths() {
+        let room_manager = RoomManager::new();
+        let (tx, _rx) = mpsc::channel(1);
+        assert!(room_manager.create_room("room-a", 1, "desktop-a", "public-key", tx));
+        let mut files = HashMap::new();
+        files.insert("/tmp/relay-owned".to_string(), B64.encode(b"owned"));
+
+        let result = upload_web(
+            State(test_state(room_manager)),
+            Path("room-a".to_string()),
+            Json(UploadWebRequest { files }),
+        )
+        .await;
+
+        assert!(matches!(result, Err(StatusCode::BAD_REQUEST)));
     }
 }

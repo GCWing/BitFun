@@ -34,6 +34,25 @@ export class RelayHttpClient {
     this.roomId = roomId;
   }
 
+  private async fetchWithTimeout(
+    input: RequestInfo | URL,
+    init: RequestInit,
+    timeoutMs: number,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } catch (error: unknown) {
+      if ((error as { name?: string })?.name === 'AbortError') {
+        throw new Error('Request timed out');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
   /**
    * Pair with the desktop via two HTTP round-trips:
    * 1. POST /pair with our public key → receive encrypted challenge
@@ -58,11 +77,15 @@ export class RelayHttpClient {
     const deviceName = this.getMobileDeviceName();
     const userId = identity.userId.trim();
     const mobileInstallId = identity.mobileInstallId.trim();
-    const password = identity.password?.trim() || undefined;
+    // Passwords are opaque credentials. Never normalize whitespace here or
+    // credentials accepted by Desktop can fail only on the mobile path.
+    const password = identity.password && identity.password.length > 0
+      ? identity.password
+      : undefined;
 
     // Step 1: POST /pair → encrypted challenge
-    const pairResp = await fetch(
-      `${this.relayUrl}/api/rooms/${this.roomId}/pair`,
+    const pairResp = await this.fetchWithTimeout(
+      `${this.relayUrl}/api/rooms/${encodeURIComponent(this.roomId)}/pair`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -72,6 +95,7 @@ export class RelayHttpClient {
           device_name: deviceName,
         }),
       },
+      35_000,
     );
 
     if (!pairResp.ok) {
@@ -102,13 +126,14 @@ export class RelayHttpClient {
       JSON.stringify(challengeResponse),
     );
 
-    const cmdResp = await fetch(
-      `${this.relayUrl}/api/rooms/${this.roomId}/command`,
+    const cmdResp = await this.fetchWithTimeout(
+      `${this.relayUrl}/api/rooms/${encodeURIComponent(this.roomId)}/command`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ encrypted_data: encData, nonce: encNonce }),
       },
+      65_000,
     );
 
     if (!cmdResp.ok) {
@@ -183,13 +208,14 @@ export class RelayHttpClient {
 
     const body = JSON.stringify({ encrypted_data: encData, nonce: encNonce });
 
-    const resp = await fetch(
-      `${this.relayUrl}/api/rooms/${this.roomId}/command`,
+    const resp = await this.fetchWithTimeout(
+      `${this.relayUrl}/api/rooms/${encodeURIComponent(this.roomId)}/command`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
       },
+      65_000,
     );
 
     if (!resp.ok) {
@@ -234,9 +260,9 @@ export class RelayHttpClient {
   async listDevices(): Promise<Array<{ device_id: string; device_name: string; online: boolean }>> {
     return this.withDelegatedAuthRetry(async () => {
       if (!this.delegatedToken) throw new Error('No delegated identity');
-      const resp = await fetch(`${this.relayUrl}/api/devices`, {
+      const resp = await this.fetchWithTimeout(`${this.relayUrl}/api/devices`, {
         headers: { 'Authorization': `Bearer ${this.delegatedToken}` },
-      });
+      }, 20_000);
       if (!resp.ok) {
         const err = new Error(`List devices failed: HTTP ${resp.status}`) as Error & {
           status?: number;
@@ -266,8 +292,8 @@ export class RelayHttpClient {
         plaintext,
       );
 
-      const resp = await fetch(
-        `${this.relayUrl}/api/devices/${targetDeviceId}/rpc`,
+      const resp = await this.fetchWithTimeout(
+        `${this.relayUrl}/api/devices/${encodeURIComponent(targetDeviceId)}/rpc`,
         {
           method: 'POST',
           headers: {
@@ -276,6 +302,7 @@ export class RelayHttpClient {
           },
           body: JSON.stringify({ encrypted_data: encData, nonce: encNonce }),
         },
+        130_000,
       );
 
       if (!resp.ok) {

@@ -44,7 +44,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useTypewriter } from '../hooks/useTypewriter';
-import { useReportTypewriterReveal } from '../hooks/TypewriterRevealGate';
+import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
 import { useGitState } from '@/tools/git/hooks/useGitState';

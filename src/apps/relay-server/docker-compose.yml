@@ -19,7 +19,8 @@ services:
       - RELAY_STATIC_DIR=/app/static
       # Room mobile-web assets and BitFun Pages (`pages/{user_id}/{slug}/`) share this dir.
       - RELAY_ROOM_WEB_DIR=/app/room-web
-      - RELAY_ROOM_TTL=3600
+      - RELAY_ROOM_TTL=300
+      - RELAY_ASSET_STORE_MAX_BYTES=1073741824
       - RELAY_DB_PATH=/app/data/bitfun_relay.db
     volumes:
       - ./static:/app/static:ro

@@ -12,10 +12,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   TypewriterRevealGateProvider,
+} from './TypewriterRevealGate';
+import {
   useCreateTypewriterRevealGate,
   useReportTypewriterReveal,
   useTypewriterRevealGate,
-} from './TypewriterRevealGate';
+} from './typewriterRevealGateContext';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 

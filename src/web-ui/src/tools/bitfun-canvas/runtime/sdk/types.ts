@@ -78,11 +78,11 @@ export interface CanvasGridProps extends CanvasDivAttributes, CanvasCommonStyleP
   align?: React.CSSProperties['alignItems'] | 'start' | 'end';
 }
 
-export interface CanvasBoxProps extends CanvasDivAttributes, CanvasCommonStyleProps {}
+export type CanvasBoxProps = CanvasDivAttributes & CanvasCommonStyleProps;
 
-export interface CanvasDividerProps extends React.HTMLAttributes<HTMLHRElement> {}
+export type CanvasDividerProps = React.HTMLAttributes<HTMLHRElement>;
 
-export interface CanvasHeadingProps extends React.HTMLAttributes<HTMLHeadingElement> {}
+export type CanvasHeadingProps = React.HTMLAttributes<HTMLHeadingElement>;
 
 export interface CanvasTextProps extends CanvasCommonStyleProps {
   children?: React.ReactNode;
@@ -96,9 +96,9 @@ export interface CanvasTextProps extends CanvasCommonStyleProps {
   style?: React.CSSProperties;
 }
 
-export interface CanvasCodeProps extends React.HTMLAttributes<HTMLElement> {}
+export type CanvasCodeProps = React.HTMLAttributes<HTMLElement>;
 
-export interface CanvasLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {}
+export type CanvasLinkProps = React.AnchorHTMLAttributes<HTMLAnchorElement>;
 
 export interface CanvasCalloutProps extends Omit<React.HTMLAttributes<HTMLElement>, 'title'> {
   tone?: CanvasTone;

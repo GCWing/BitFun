@@ -199,6 +199,17 @@ html.theme-switching {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   animation: slideDown var(--motion-fast) var(--easing-standard);
+
+  button {
+    margin-left: 4px;
+    padding: 3px 9px;
+    border: 1px solid currentColor;
+    border-radius: var(--size-radius-full);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
 }
 
 .mobile-reconnect-spinner {

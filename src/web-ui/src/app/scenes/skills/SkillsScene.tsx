@@ -29,7 +29,7 @@ import {
   getSkillSourceLabel,
 } from '@/infrastructure/config/skillSourcePresentation';
 import { workspaceAPI } from '@/infrastructure/api';
-import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useNotification } from '@/shared/notification-system';

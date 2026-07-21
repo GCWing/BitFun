@@ -28,7 +28,7 @@ import {
 } from './common';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
-import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import {
   MCPAPI,

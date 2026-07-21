@@ -343,8 +343,16 @@ See `Caddyfile` for the Caddy equivalent.
 | `RELAY_PORT` | `9700` | Server listen port |
 | `RELAY_STATIC_DIR` | _(none)_ | Path to mobile web static files fallback SPA. When unset, no fallback static files are served. Docker Compose sets this to `/app/static`. |
 | `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
-| `RELAY_ROOM_TTL` | `3600` | Room TTL in seconds (0 = no expiry) |
+| `RELAY_ASSET_STORE_MAX_BYTES` | `1073741824` | Global content-addressed asset capacity (1 GiB by default). New uploads return HTTP 507 after the limit is reached; existing content remains readable. |
+| `RELAY_ROOM_TTL` | `300` | Idle room TTL in seconds (0 = no expiry). Active heartbeats and commands refresh activity. |
 | `RELAY_DB_PATH` | _(none)_ | SQLite path for account storage. **Unset = pure relay (no login).** Set a persistent path (Compose: `/app/data/bitfun_relay.db`) to enable login, device routing, and sync. Accounts are provisioned only via `relay-admin`. |
+| `RELAY_CORS_ALLOW_ORIGINS` | _(none)_ | Comma-separated browser origin allowlist, for example `https://remote.example.com`. Empty means same-origin only. `*` is rejected when account APIs are enabled. |
+
+When `RELAY_DB_PATH` is set, database open or migration failure is fatal: the
+process exits instead of silently starting without account protection. The
+`/health` response reports account capability, room/device connection counts,
+pending bridge requests, and asset-store used/capacity bytes for operational
+checks and capacity alerts.
 
 ## API Endpoints
 

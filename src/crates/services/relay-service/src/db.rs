@@ -6,9 +6,10 @@
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
+use std::time::Duration;
 
 pub type DbPool = Pool<Sqlite>;
 
@@ -27,19 +28,22 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at         INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS devices (
-  device_id    TEXT PRIMARY KEY,
-  user_id      TEXT NOT NULL REFERENCES users(user_id),
+  device_id    TEXT NOT NULL,
+  user_id      TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   device_name  TEXT,
   public_key   TEXT,
   last_seen_at INTEGER,
-  online       INTEGER NOT NULL DEFAULT 0
+  online       INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, device_id)
 );
 CREATE TABLE IF NOT EXISTS auth_tokens (
   token       TEXT PRIMARY KEY,
-  user_id     TEXT NOT NULL REFERENCES users(user_id),
-  device_id   TEXT NOT NULL REFERENCES devices(device_id),
+  user_id     TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  device_id   TEXT NOT NULL,
+  token_kind  TEXT NOT NULL DEFAULT 'device',
   created_at  INTEGER NOT NULL,
-  expires_at  INTEGER NOT NULL
+  expires_at  INTEGER NOT NULL,
+  FOREIGN KEY (user_id, device_id) REFERENCES devices(user_id, device_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
@@ -111,10 +115,18 @@ const MIGRATE_PAGES_DEPLOYED_VERSION: &str = r#"
 ALTER TABLE pages ADD COLUMN deployed_version_id TEXT;
 "#;
 
+const MIGRATE_AUTH_TOKEN_KIND: &str = r#"
+ALTER TABLE auth_tokens ADD COLUMN token_kind TEXT NOT NULL DEFAULT 'device';
+"#;
+
 /// Open (or create) the SQLite database and ensure the schema exists.
 pub async fn connect(db_path: &str) -> Result<DbPool> {
-    let options =
-        SqliteConnectOptions::from_str(&format!("sqlite://{db_path}"))?.create_if_missing(true);
+    let options = SqliteConnectOptions::from_str(&format!("sqlite://{db_path}"))?
+        .create_if_missing(true)
+        .foreign_keys(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .busy_timeout(Duration::from_secs(5));
     let pool = SqlitePoolOptions::new()
         .max_connections(8)
         .connect_with(options)
@@ -124,8 +136,135 @@ pub async fn connect(db_path: &str) -> Result<DbPool> {
     let _ = sqlx::query(MIGRATE_PAGES_DEPLOYED_VERSION)
         .execute(&pool)
         .await;
+    // Existing tokens predate delegation scopes and are full device tokens.
+    if let Err(error) = sqlx::query(MIGRATE_AUTH_TOKEN_KIND).execute(&pool).await {
+        if !error.to_string().contains("duplicate column name") {
+            return Err(anyhow!("migrate auth token capabilities: {error}"));
+        }
+    }
+    migrate_account_scoped_devices(&pool).await?;
+    let now = Utc::now().timestamp();
+    sqlx::query("DELETE FROM auth_tokens WHERE expires_at <= ?")
+        .bind(now)
+        .execute(&pool)
+        .await
+        .map_err(|e| anyhow!("clean expired auth tokens: {e}"))?;
+    // Online presence is owned by the in-memory connection registry. A fresh
+    // process has no live sockets, so never carry stale online flags across a
+    // restart or crash.
+    sqlx::query("UPDATE devices SET online = 0")
+        .execute(&pool)
+        .await
+        .map_err(|e| anyhow!("reset stale device presence: {e}"))?;
     tracing::info!("Account database initialized at {db_path}");
     Ok(pool)
+}
+
+/// Migrate the original globally-keyed `devices(device_id)` table to the
+/// account-scoped `(user_id, device_id)` identity model. A physical install id
+/// is intentionally stable across logins, so it must be legal for two accounts
+/// to register the same value without one account reassigning the other's row.
+async fn migrate_account_scoped_devices(pool: &DbPool) -> Result<()> {
+    let columns = sqlx::query("PRAGMA table_info(devices)")
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("inspect devices schema: {e}"))?;
+    let mut user_pk_order = 0_i64;
+    let mut device_pk_order = 0_i64;
+    for column in columns {
+        let name: String = sqlx::Row::get(&column, "name");
+        let pk_order: i64 = sqlx::Row::get(&column, "pk");
+        match name.as_str() {
+            "user_id" => user_pk_order = pk_order,
+            "device_id" => device_pk_order = pk_order,
+            _ => {}
+        }
+    }
+    if user_pk_order == 1 && device_pk_order == 2 {
+        return Ok(());
+    }
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| anyhow!("begin account-scoped device migration: {e}"))?;
+    sqlx::query("ALTER TABLE auth_tokens RENAME TO auth_tokens_legacy")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("rename legacy auth_tokens: {e}"))?;
+    sqlx::query("ALTER TABLE devices RENAME TO devices_legacy")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("rename legacy devices: {e}"))?;
+    sqlx::query(
+        "CREATE TABLE devices (\
+           device_id TEXT NOT NULL,\
+           user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,\
+           device_name TEXT, public_key TEXT, last_seen_at INTEGER,\
+           online INTEGER NOT NULL DEFAULT 0,\
+           PRIMARY KEY (user_id, device_id)\
+         )",
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| anyhow!("create account-scoped devices: {e}"))?;
+    sqlx::query(
+        "CREATE TABLE auth_tokens (\
+           token TEXT PRIMARY KEY,\
+           user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,\
+           device_id TEXT NOT NULL,\
+           token_kind TEXT NOT NULL DEFAULT 'device',\
+           created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,\
+           FOREIGN KEY (user_id, device_id)\
+             REFERENCES devices(user_id, device_id) ON DELETE CASCADE\
+         )",
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| anyhow!("create scoped auth_tokens: {e}"))?;
+    sqlx::query(
+        "INSERT INTO devices \
+         (device_id, user_id, device_name, public_key, last_seen_at, online) \
+         SELECT device_id, user_id, device_name, public_key, last_seen_at, online \
+         FROM devices_legacy",
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| anyhow!("copy legacy devices: {e}"))?;
+    // Discard any historically inconsistent token whose user_id no longer
+    // matches the device row. Such a token could only arise from the old global
+    // upsert behavior and must not survive the ownership migration.
+    sqlx::query(
+        "INSERT INTO auth_tokens \
+         (token, user_id, device_id, token_kind, created_at, expires_at) \
+         SELECT a.token, a.user_id, a.device_id, a.token_kind, a.created_at, a.expires_at \
+         FROM auth_tokens_legacy a \
+         INNER JOIN devices_legacy d \
+           ON d.user_id = a.user_id AND d.device_id = a.device_id",
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| anyhow!("copy consistent legacy auth tokens: {e}"))?;
+    sqlx::query("DROP TABLE auth_tokens_legacy")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("drop legacy auth_tokens: {e}"))?;
+    sqlx::query("DROP TABLE devices_legacy")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("drop legacy devices: {e}"))?;
+    sqlx::query("CREATE INDEX idx_auth_tokens_user ON auth_tokens(user_id)")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("recreate auth token index: {e}"))?;
+    sqlx::query("CREATE INDEX idx_devices_user ON devices(user_id)")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("recreate device index: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| anyhow!("commit account-scoped device migration: {e}"))?;
+    Ok(())
 }
 
 // ── Users ───────────────────────────────────────────────────────────────
@@ -414,8 +553,7 @@ impl DeviceRow {
         sqlx::query(
             "INSERT INTO devices (device_id, user_id, device_name, public_key, last_seen_at, online) \
              VALUES (?, ?, ?, ?, ?, 1) \
-             ON CONFLICT(device_id) DO UPDATE SET \
-               user_id = excluded.user_id, \
+             ON CONFLICT(user_id, device_id) DO UPDATE SET \
                device_name = excluded.device_name, \
                public_key = excluded.public_key, \
                last_seen_at = excluded.last_seen_at, \
@@ -432,15 +570,23 @@ impl DeviceRow {
         Ok(())
     }
 
-    pub async fn set_online(pool: &DbPool, device_id: &str, online: bool) -> Result<()> {
+    pub async fn set_online(
+        pool: &DbPool,
+        user_id: &str,
+        device_id: &str,
+        online: bool,
+    ) -> Result<()> {
         let now = Utc::now().timestamp();
-        sqlx::query("UPDATE devices SET online = ?, last_seen_at = ? WHERE device_id = ?")
-            .bind(online as i64)
-            .bind(now)
-            .bind(device_id)
-            .execute(pool)
-            .await
-            .map_err(|e| anyhow!("set device online: {e}"))?;
+        sqlx::query(
+            "UPDATE devices SET online = ?, last_seen_at = ? WHERE user_id = ? AND device_id = ?",
+        )
+        .bind(online as i64)
+        .bind(now)
+        .bind(user_id)
+        .bind(device_id)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("set device online: {e}"))?;
         Ok(())
     }
 
@@ -467,16 +613,12 @@ impl DeviceRow {
             .await
             .map_err(|e| anyhow!("begin device deletion: {e}"))?;
 
-        sqlx::query(
-            "DELETE FROM auth_tokens WHERE device_id IN (\
-               SELECT device_id FROM devices WHERE device_id = ? AND user_id = ?\
-             )",
-        )
-        .bind(device_id)
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| anyhow!("revoke device tokens: {e}"))?;
+        sqlx::query("DELETE FROM auth_tokens WHERE device_id = ? AND user_id = ?")
+            .bind(device_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| anyhow!("revoke device tokens: {e}"))?;
 
         let result = sqlx::query("DELETE FROM devices WHERE device_id = ? AND user_id = ?")
             .bind(device_id)
@@ -494,29 +636,72 @@ impl DeviceRow {
 
 // ── Auth tokens ─────────────────────────────────────────────────────────
 
-const TOKEN_TTL_SECS: i64 = 30 * 24 * 3600;
+const DEVICE_TOKEN_TTL_SECS: i64 = 30 * 24 * 3600;
+const DELEGATED_TOKEN_TTL_SECS: i64 = 24 * 3600;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct AuthToken {
     pub token: String,
     pub user_id: String,
     pub device_id: String,
+    pub token_kind: String,
     pub created_at: i64,
     pub expires_at: i64,
 }
 
 impl AuthToken {
     pub async fn create(pool: &DbPool, user_id: &str, device_id: &str) -> Result<AuthToken> {
+        Self::create_with_kind(pool, user_id, device_id, "device").await
+    }
+
+    pub async fn create_delegated(
+        pool: &DbPool,
+        user_id: &str,
+        device_id: &str,
+    ) -> Result<AuthToken> {
+        let now = Utc::now().timestamp();
+        if let Some(existing) = sqlx::query_as::<_, AuthToken>(
+            "SELECT token, user_id, device_id, token_kind, created_at, expires_at \
+             FROM auth_tokens \
+             WHERE user_id = ? AND device_id = ? \
+               AND token_kind = 'delegated_control' AND expires_at > ? \
+             ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(user_id)
+        .bind(device_id)
+        .bind(now)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("find reusable delegated token: {e}"))?
+        {
+            return Ok(existing);
+        }
+        Self::create_with_kind(pool, user_id, device_id, "delegated_control").await
+    }
+
+    async fn create_with_kind(
+        pool: &DbPool,
+        user_id: &str,
+        device_id: &str,
+        token_kind: &str,
+    ) -> Result<AuthToken> {
         let token = generate_token();
         let now = Utc::now().timestamp();
-        let expires_at = now + TOKEN_TTL_SECS;
+        let ttl = if token_kind == "delegated_control" {
+            DELEGATED_TOKEN_TTL_SECS
+        } else {
+            DEVICE_TOKEN_TTL_SECS
+        };
+        let expires_at = now + ttl;
         sqlx::query(
-            "INSERT INTO auth_tokens (token, user_id, device_id, created_at, expires_at) \
-             VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO auth_tokens \
+             (token, user_id, device_id, token_kind, created_at, expires_at) \
+             VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(&token)
         .bind(user_id)
         .bind(device_id)
+        .bind(token_kind)
         .bind(now)
         .bind(expires_at)
         .execute(pool)
@@ -526,16 +711,28 @@ impl AuthToken {
             token,
             user_id: user_id.to_string(),
             device_id: device_id.to_string(),
+            token_kind: token_kind.to_string(),
             created_at: now,
             expires_at,
         })
     }
 
+    pub fn is_device_token(&self) -> bool {
+        self.token_kind == "device"
+    }
+
+    pub fn can_control_devices(&self) -> bool {
+        self.is_device_token() || self.token_kind == "delegated_control"
+    }
+
     /// Look up a token; returns None if missing or expired (expired rows are
     /// deleted as a side effect).
     pub async fn find(pool: &DbPool, token: &str) -> Result<Option<AuthToken>> {
+        if !is_valid_auth_token(token) {
+            return Ok(None);
+        }
         let row = sqlx::query_as::<_, AuthToken>(
-            "SELECT token, user_id, device_id, created_at, expires_at \
+            "SELECT token, user_id, device_id, token_kind, created_at, expires_at \
              FROM auth_tokens WHERE token = ?",
         )
         .bind(token)
@@ -547,7 +744,7 @@ impl AuthToken {
             return Ok(None);
         };
 
-        if auth_token.expires_at < Utc::now().timestamp() {
+        if auth_token.expires_at <= Utc::now().timestamp() {
             let _ = sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
                 .bind(token)
                 .execute(pool)
@@ -558,8 +755,9 @@ impl AuthToken {
     }
 
     /// Revoke (delete) all tokens belonging to a specific device.
-    pub async fn revoke_by_device(pool: &DbPool, device_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM auth_tokens WHERE device_id = ?")
+    pub async fn revoke_by_device(pool: &DbPool, user_id: &str, device_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM auth_tokens WHERE user_id = ? AND device_id = ?")
+            .bind(user_id)
             .bind(device_id)
             .execute(pool)
             .await
@@ -571,6 +769,16 @@ impl AuthToken {
 fn generate_token() -> String {
     let bytes: [u8; 32] = rand::random();
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Account tokens are fixed-size lowercase hexadecimal bearer secrets. Check
+/// the shape before hitting SQLite so oversized or malformed untrusted input
+/// cannot become a database lookup key.
+pub fn is_valid_auth_token(token: &str) -> bool {
+    token.len() == 64
+        && token
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 // ── Sync sessions (encrypted blobs, server never decrypts) ─────────────
@@ -587,18 +795,24 @@ pub struct SyncSessionRow {
 
 impl SyncSessionRow {
     /// Upsert an encrypted session blob. Last-writer-wins via version.
-    pub async fn upsert(
+    pub async fn upsert_with_quota(
         pool: &DbPool,
         user_id: &str,
         session_id: &str,
         encrypted_data: &str,
         nonce: &str,
         version: i64,
-    ) -> Result<()> {
+        max_sessions: i64,
+        max_total_bytes: i64,
+    ) -> Result<bool> {
         let now = Utc::now().timestamp();
-        sqlx::query(
+        let result = sqlx::query(
             "INSERT INTO sync_sessions (user_id, session_id, encrypted_data, nonce, version, updated_at, deleted) \
-             VALUES (?, ?, ?, ?, ?, ?, 0) \
+             SELECT ?, ?, ?, ?, ?, ?, 0 \
+             WHERE (SELECT COUNT(*) FROM sync_sessions \
+                    WHERE user_id = ? AND deleted = 0 AND session_id <> ?) < ? \
+               AND (SELECT COALESCE(SUM(LENGTH(encrypted_data)), 0) FROM sync_sessions \
+                    WHERE user_id = ? AND deleted = 0 AND session_id <> ?) + ? <= ? \
              ON CONFLICT(user_id, session_id) DO UPDATE SET \
                encrypted_data = excluded.encrypted_data, \
                nonce = excluded.nonce, \
@@ -612,10 +826,17 @@ impl SyncSessionRow {
         .bind(nonce)
         .bind(version)
         .bind(now)
+        .bind(user_id)
+        .bind(session_id)
+        .bind(max_sessions)
+        .bind(user_id)
+        .bind(session_id)
+        .bind(encrypted_data.len() as i64)
+        .bind(max_total_bytes)
         .execute(pool)
         .await
         .map_err(|e| anyhow!("upsert sync session: {e}"))?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
     }
 
     /// Fetch all non-deleted sessions for a user updated after `since_version`.
@@ -626,7 +847,8 @@ impl SyncSessionRow {
     ) -> Result<Vec<SyncSessionRow>> {
         let rows = sqlx::query_as::<_, SyncSessionRow>(
             "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
-             FROM sync_sessions WHERE user_id = ? AND version > ? AND deleted = 0",
+             FROM sync_sessions WHERE user_id = ? AND version > ? AND deleted = 0 \
+             ORDER BY version ASC, session_id ASC",
         )
         .bind(user_id)
         .bind(since_version)
@@ -1236,10 +1458,211 @@ mod tests {
         let tok = AuthToken::create(&pool, "u1", "d1").await.unwrap();
         let found = AuthToken::find(&pool, &tok.token).await.unwrap();
         assert!(found.is_some());
-        assert_eq!(found.unwrap().user_id, "u1");
+        let found = found.unwrap();
+        assert_eq!(found.user_id, "u1");
+        assert!(found.is_device_token());
+
+        let delegated = AuthToken::create_delegated(&pool, "u1", "d1")
+            .await
+            .unwrap();
+        let delegated = AuthToken::find(&pool, &delegated.token)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(delegated.token_kind, "delegated_control");
+        assert!(!delegated.is_device_token());
 
         let missing = AuthToken::find(&pool, "nonexistent").await.unwrap();
         assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn the_same_install_device_id_is_isolated_between_accounts() {
+        let pool = setup().await;
+        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+        UserRow::create(&pool, "u2", "bob", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+
+        DeviceRow::upsert(&pool, "shared-install", "u1", "Alice laptop", None)
+            .await
+            .unwrap();
+        DeviceRow::upsert(&pool, "shared-install", "u2", "Bob laptop", None)
+            .await
+            .unwrap();
+        let token_u1 = AuthToken::create(&pool, "u1", "shared-install")
+            .await
+            .unwrap();
+        let token_u2 = AuthToken::create(&pool, "u2", "shared-install")
+            .await
+            .unwrap();
+
+        assert_eq!(DeviceRow::list_by_user(&pool, "u1").await.unwrap().len(), 1);
+        assert_eq!(DeviceRow::list_by_user(&pool, "u2").await.unwrap().len(), 1);
+        DeviceRow::delete_for_user(&pool, "u1", "shared-install")
+            .await
+            .unwrap();
+        assert!(AuthToken::find(&pool, &token_u1.token)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(AuthToken::find(&pool, &token_u2.token)
+            .await
+            .unwrap()
+            .is_some());
+        assert_eq!(DeviceRow::list_by_user(&pool, "u2").await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn sync_session_upsert_enforces_count_and_byte_quotas_atomically() {
+        let pool = setup().await;
+        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+            .await
+            .unwrap();
+
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "1234", "n", 1, 1, 5,)
+                .await
+                .unwrap()
+        );
+        assert!(
+            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "12345", "n", 2, 1, 5,)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s2", "1", "n", 1, 1, 5,)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "123456", "n", 3, 1, 5,)
+                .await
+                .unwrap()
+        );
+
+        let stored = SyncSessionRow::get(&pool, "u1", "s1")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.encrypted_data, "12345");
+    }
+
+    #[tokio::test]
+    async fn legacy_global_device_schema_is_migrated_without_ambiguous_tokens() {
+        let db_path = std::env::temp_dir().join(format!(
+            "bitfun-relay-device-migration-{}-{}.db",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        let db_path_text = db_path.to_string_lossy().to_string();
+        let legacy_options = SqliteConnectOptions::from_str(&format!("sqlite://{db_path_text}"))
+            .unwrap()
+            .create_if_missing(true)
+            .foreign_keys(false);
+        let legacy = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(legacy_options)
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE users (\
+               user_id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,\
+               salt TEXT NOT NULL, kdf_salt TEXT NOT NULL, argon2_params TEXT NOT NULL,\
+               password_hash TEXT NOT NULL, wrapped_master_key TEXT NOT NULL,\
+               failed_attempts INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0,\
+               created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL\
+             )",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE devices (\
+               device_id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(user_id),\
+               device_name TEXT, public_key TEXT, last_seen_at INTEGER,\
+               online INTEGER NOT NULL DEFAULT 0\
+             )",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE auth_tokens (\
+               token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(user_id),\
+               device_id TEXT NOT NULL REFERENCES devices(device_id),\
+               created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL\
+             )",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        for (user_id, username) in [("u1", "alice"), ("u2", "bob")] {
+            sqlx::query(
+                "INSERT INTO users \
+                 (user_id, username, salt, kdf_salt, argon2_params, password_hash,\
+                  wrapped_master_key, created_at, updated_at) \
+                 VALUES (?, ?, 's', 'ks', '{}', 'hash', 'wmk', 1, 1)",
+            )
+            .bind(user_id)
+            .bind(username)
+            .execute(&legacy)
+            .await
+            .unwrap();
+        }
+        sqlx::query(
+            "INSERT INTO devices (device_id, user_id, device_name, online) \
+             VALUES ('shared-install', 'u2', 'Bob laptop', 1)",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        let consistent_token = "a".repeat(64);
+        let inconsistent_token = "b".repeat(64);
+        for (token, user_id) in [(&consistent_token, "u2"), (&inconsistent_token, "u1")] {
+            sqlx::query(
+                "INSERT INTO auth_tokens \
+                 (token, user_id, device_id, created_at, expires_at) \
+                 VALUES (?, ?, 'shared-install', 1, 4102444800)",
+            )
+            .bind(token)
+            .bind(user_id)
+            .execute(&legacy)
+            .await
+            .unwrap();
+        }
+        legacy.close().await;
+
+        let migrated = connect(&db_path_text).await.unwrap();
+        assert!(AuthToken::find(&migrated, &consistent_token)
+            .await
+            .unwrap()
+            .is_some());
+        assert!(AuthToken::find(&migrated, &inconsistent_token)
+            .await
+            .unwrap()
+            .is_none());
+        DeviceRow::upsert(&migrated, "shared-install", "u1", "Alice laptop", None)
+            .await
+            .unwrap();
+        assert_eq!(
+            DeviceRow::list_by_user(&migrated, "u1")
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            DeviceRow::list_by_user(&migrated, "u2")
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        migrated.close().await;
+        let _ = std::fs::remove_file(db_path);
     }
 
     #[tokio::test]
