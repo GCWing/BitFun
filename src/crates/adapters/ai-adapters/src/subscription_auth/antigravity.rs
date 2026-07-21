@@ -323,3 +323,20 @@ pub(crate) async fn resolve() -> Result<ResolvedCredential> {
 pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
     ("gemini-code-assist", CODE_ASSIST_BASE_URL, DEFAULT_MODEL)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{build_authorize_url, redirect_uri};
+    use crate::subscription_auth::pkce::Pkce;
+
+    #[test]
+    fn uses_registered_localhost_redirect_uri() {
+        let redirect_uri = redirect_uri();
+        assert_eq!(redirect_uri, "http://localhost:51121/oauth-callback");
+
+        let authorize_url = build_authorize_url(&Pkce::generate(), "state", &redirect_uri);
+        assert!(
+            authorize_url.contains("redirect_uri=http%3A%2F%2Flocalhost%3A51121%2Foauth-callback")
+        );
+    }
+}

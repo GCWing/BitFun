@@ -1,7 +1,7 @@
 //! Codex (ChatGPT) subscription login and credential resolution.
 //!
 //! Aligned with OpenCode's `plugin/openai/codex.ts`: browser PKCE login against
-//! `auth.openai.com` on the fixed loopback port `1455`, then Bearer access to
+//! `auth.openai.com` on registered loopback ports, then Bearer access to
 //! `chatgpt.com/backend-api/codex/responses`.
 
 use super::store::{self, StoredCredential};
@@ -16,6 +16,9 @@ const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const ISSUER: &str = "https://auth.openai.com";
 const CALLBACK_PATH: &str = "/auth/callback";
 const CALLBACK_PORT: u16 = 1455;
+// Keep in sync with the Codex CLI OAuth redirect URI allow-list.
+const CALLBACK_FALLBACK_PORT: u16 = 1457;
+const CALLBACK_PORTS: &[u16] = &[CALLBACK_PORT, CALLBACK_FALLBACK_PORT];
 const SCOPE: &str = "openid profile email offline_access";
 const CHATGPT_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 const CHATGPT_REQUEST_URL: &str = "https://chatgpt.com/backend-api/codex/responses";
@@ -23,8 +26,8 @@ const DEFAULT_MODEL: &str = "gpt-5-codex";
 const REFRESH_LEEWAY_MS: i64 = 5 * 60 * 1000;
 const STORE_KEY: &str = "codex";
 
-fn redirect_uri() -> String {
-    oauth_server::loopback_redirect_uri(CALLBACK_PORT, CALLBACK_PATH)
+fn redirect_uri(port: u16) -> String {
+    oauth_server::loopback_redirect_uri(port, CALLBACK_PATH)
 }
 
 #[derive(Debug, Deserialize)]
@@ -170,9 +173,9 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
 pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = super::pkce::random_state();
-    let redirect_uri = redirect_uri();
+    let (listener, callback_port) = oauth_server::bind_loopback_ports(CALLBACK_PORTS).await?;
+    let redirect_uri = redirect_uri(callback_port);
     let authorization_url = build_authorize_url(&pkce, &state, &redirect_uri);
-    let listener = oauth_server::bind_loopback(CALLBACK_PORT).await?;
     let verifier = pkce.verifier.clone();
 
     let runner = async move {
@@ -322,7 +325,26 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_codex_cli_version;
+    use super::{
+        build_authorize_url, parse_codex_cli_version, redirect_uri, CALLBACK_FALLBACK_PORT,
+        CALLBACK_PORT,
+    };
+    use crate::subscription_auth::pkce::Pkce;
+
+    #[test]
+    fn uses_registered_localhost_redirect_uri() {
+        let primary_redirect_uri = redirect_uri(CALLBACK_PORT);
+        assert_eq!(primary_redirect_uri, "http://localhost:1455/auth/callback");
+        assert_eq!(
+            redirect_uri(CALLBACK_FALLBACK_PORT),
+            "http://localhost:1457/auth/callback"
+        );
+
+        let authorize_url = build_authorize_url(&Pkce::generate(), "state", &primary_redirect_uri);
+        assert!(
+            authorize_url.contains("redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback")
+        );
+    }
 
     #[test]
     fn parses_codex_cli_version_output() {

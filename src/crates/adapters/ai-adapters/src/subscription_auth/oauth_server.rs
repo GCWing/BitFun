@@ -1,6 +1,6 @@
 //! Minimal loopback HTTP server used to capture browser OAuth redirects.
 //!
-//! Providers pre-bind a `TcpListener` on their fixed port and hand it to
+//! Providers pre-bind a `TcpListener` on a registered port and hand it to
 //! [`wait_for_callback`], which accepts connections, parses the redirect query
 //! string, validates the `state`, serves an HTML result page, and returns the
 //! query parameters.
@@ -10,32 +10,75 @@ use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-/// Loopback host used in both the OAuth `redirect_uri` and the TCP bind.
-///
-/// Prefer `127.0.0.1` over `localhost` so the browser and the listener always
-/// agree on IPv4. On macOS, `localhost` often resolves to `::1`, which would
-/// miss a listener bound only to `127.0.0.1` (and vice versa).
-pub(crate) const LOOPBACK_HOST: &str = "127.0.0.1";
+/// IPv4 loopback address used for the TCP listener.
+pub(crate) const LOOPBACK_BIND_HOST: &str = "127.0.0.1";
 
-/// Builds `http://127.0.0.1:{port}{path}` for authorize/token exchange.
+/// Hostname used by provider-registered OAuth redirect URIs.
+///
+/// OAuth servers compare redirect URIs exactly. Codex and Antigravity register
+/// `localhost`, while binding the local listener to IPv4 avoids macOS resolving
+/// `localhost` to `::1` and missing a listener bound only on `127.0.0.1`.
+pub(crate) const LOOPBACK_REDIRECT_HOST: &str = "localhost";
+
+/// Builds a provider-registered `http://localhost:{port}{path}` redirect URI.
 pub(crate) fn loopback_redirect_uri(port: u16, path: &str) -> String {
     let path = if path.starts_with('/') {
         path.to_string()
     } else {
         format!("/{path}")
     };
-    format!("http://{LOOPBACK_HOST}:{port}{path}")
+    format!("http://{LOOPBACK_REDIRECT_HOST}:{port}{path}")
 }
 
-/// Binds the OAuth callback listener on [`LOOPBACK_HOST`].
+/// Binds the OAuth callback listener on [`LOOPBACK_BIND_HOST`].
 pub(crate) async fn bind_loopback(port: u16) -> Result<TcpListener> {
-    TcpListener::bind((LOOPBACK_HOST, port))
+    TcpListener::bind((LOOPBACK_BIND_HOST, port))
         .await
         .with_context(|| {
             format!(
-                "bind OAuth callback on {LOOPBACK_HOST}:{port} (is another app using this port?)"
+                "bind OAuth callback on {LOOPBACK_BIND_HOST}:{port} (is another app using this port?)"
             )
         })
+}
+
+/// Binds the first available registered callback port.
+///
+/// Fallback is attempted only when a preferred port is already in use. The
+/// returned port must be used to construct both the authorize and token
+/// exchange redirect URI.
+pub(crate) async fn bind_loopback_ports(ports: &[u16]) -> Result<(TcpListener, u16)> {
+    let Some(preferred_port) = ports.first().copied() else {
+        return Err(anyhow!("OAuth callback port list is empty"));
+    };
+
+    for (index, port) in ports.iter().copied().enumerate() {
+        match TcpListener::bind((LOOPBACK_BIND_HOST, port)).await {
+            Ok(listener) => {
+                let actual_port = listener
+                    .local_addr()
+                    .context("read OAuth callback listener address")?
+                    .port();
+                if index > 0 {
+                    log::warn!(
+                        "OAuth callback port {preferred_port} is unavailable; using registered fallback port {actual_port}"
+                    );
+                }
+                return Ok((listener, actual_port));
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AddrInUse && index + 1 < ports.len() => {
+                continue;
+            }
+            Err(err) => {
+                return Err(err).with_context(|| {
+                    format!(
+                        "bind OAuth callback on {LOOPBACK_BIND_HOST}:{port} (is another app using this port?)"
+                    )
+                });
+            }
+        }
+    }
+
+    unreachable!("a non-empty callback port list always returns from the loop")
 }
 
 /// Accepts loopback connections until the OAuth redirect arrives on
@@ -173,7 +216,10 @@ fn escape_html(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_html, loopback_redirect_uri, LOOPBACK_HOST};
+    use super::{
+        bind_loopback_ports, escape_html, loopback_redirect_uri, LOOPBACK_BIND_HOST,
+        LOOPBACK_REDIRECT_HOST,
+    };
 
     #[test]
     fn escapes_html_injection() {
@@ -184,18 +230,29 @@ mod tests {
     }
 
     #[test]
-    fn loopback_redirect_uri_uses_ipv4_literal() {
+    fn loopback_redirect_uri_uses_registered_localhost() {
         assert_eq!(
             loopback_redirect_uri(1455, "/auth/callback"),
-            format!("http://{LOOPBACK_HOST}:1455/auth/callback")
+            format!("http://{LOOPBACK_REDIRECT_HOST}:1455/auth/callback")
         );
         assert_eq!(
             loopback_redirect_uri(51121, "oauth-callback"),
-            format!("http://{LOOPBACK_HOST}:51121/oauth-callback")
+            format!("http://{LOOPBACK_REDIRECT_HOST}:51121/oauth-callback")
         );
-        assert!(
-            !loopback_redirect_uri(1455, "/auth/callback").contains("localhost"),
-            "must not use localhost (macOS often resolves it to ::1)"
-        );
+        assert_eq!(LOOPBACK_BIND_HOST, "127.0.0.1");
+        assert_eq!(LOOPBACK_REDIRECT_HOST, "localhost");
+    }
+
+    #[tokio::test]
+    async fn falls_back_when_preferred_callback_port_is_occupied() {
+        let occupied = tokio::net::TcpListener::bind((LOOPBACK_BIND_HOST, 0))
+            .await
+            .unwrap();
+        let occupied_port = occupied.local_addr().unwrap().port();
+
+        let (fallback, actual_port) = bind_loopback_ports(&[occupied_port, 0]).await.unwrap();
+
+        assert_ne!(actual_port, occupied_port);
+        assert_eq!(fallback.local_addr().unwrap().port(), actual_port);
     }
 }
