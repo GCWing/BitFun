@@ -44,27 +44,36 @@
       "updateFailed": "Update failed"
     }
   },
-  "cliAuth": {
-    "sectionTitle": "Local CLI accounts",
-    "sectionDescription": "Import Codex CLI / Gemini CLI accounts already signed in on this machine and use them as models",
-    "rescan": "Re-scan",
-    "empty": "No signed-in Codex / Gemini CLI accounts detected. Sign in from the terminal first, then re-scan.",
-    "import": "Use this account",
+  "subscriptionAuth": {
+    "sectionTitle": "Subscription accounts",
+    "sectionDescription": "Sign in to Codex, Antigravity, or OpenCode subscriptions and use them as model APIs",
+    "rescan": "Refresh status",
+    "import": "Use as model",
+    "login": "Sign in",
+    "cancel": "Cancel",
+    "loginCancelled": "Sign-in cancelled",
+    "logout": "Sign out",
     "refresh": "Refresh token",
     "refreshSuccess": "Token refreshed",
     "refreshFailed": "Refresh failed: {{error}}",
+    "loginSuccess": "Signed in",
+    "loginFailed": "Sign-in failed: {{error}}",
+    "logoutSuccess": "Signed out",
+    "logoutFailed": "Sign-out failed: {{error}}",
+    "userCodeHint": "Enter this code in the browser: {{code}}",
     "expiresAt": "Token valid until {{time}}",
     "tokenValid": "Token ready",
-    "accountLine": "Account: {{account}}",
+    "notSignedIn": "Not signed in",
     "label": "Authentication",
     "options": {
       "apiKey": "API Key",
-      "codexCli": "Codex CLI account",
-      "geminiCli": "Gemini CLI account"
+      "codex": "Codex (ChatGPT subscription)",
+      "antigravity": "Antigravity (Google subscription)",
+      "opencode": "OpenCode Zen subscription"
     },
-    "detected": "Will use the local {{label}} ({{account}})",
-    "notDetected": "No signed-in {{kind}} account detected; sign in from the terminal first.",
-    "unknownAccount": "current login"
+    "detected": "Will use {{label}} ({{account}})",
+    "notConnected": "{{kind}} is not signed in; sign in above first",
+    "unknownAccount": "current account"
   },
   "providerSelection": {
     "title": "Select Model Provider",

@@ -1373,22 +1373,28 @@ pub fn model_runtime_binding_fingerprint(model: &AIModelConfig) -> String {
     hex::encode(hasher.finalize())
 }
 
+/// Subscription provider whose in-app OAuth tokens authenticate a model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionProvider {
+    Codex,
+    Antigravity,
+    Opencode,
+}
+
 /// Where to obtain the runtime auth material for an `AIModelConfig`.
 ///
-/// Stored on disk as `{"type":"api_key"}` / `{"type":"codex_cli"}` /
-/// `{"type":"gemini_cli"}`; the concrete sub-mode (apikey vs OAuth) is
-/// auto-detected from the CLI's on-disk state at resolution time so the user
-/// only has to choose "use Codex CLI" once.
+/// Stored on disk as `{"type":"api_key"}` or
+/// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"}`.
+/// Tokens live in the subscription auth store and are resolved at request time.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AuthConfig {
-    /// Use the inline `api_key` string (default; legacy behavior).
+    /// Use the inline `api_key` string (default).
     #[default]
     ApiKey,
-    /// Reuse `~/.codex/auth.json` (apikey or ChatGPT-login).
-    CodexCli,
-    /// Reuse `~/.gemini/.env` or `~/.gemini/oauth_creds.json`.
-    GeminiCli,
+    /// Use BitFun in-app subscription OAuth for the named provider.
+    Subscription { provider: SubscriptionProvider },
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1421,8 +1427,16 @@ struct AIModelConfigCompat {
     thinking_budget_tokens: Option<u32>,
     custom_request_body: Option<String>,
     custom_request_body_mode: Option<String>,
+    /// Parsed flexibly so unknown legacy auth tags fall back to ApiKey.
     #[serde(default)]
-    auth: AuthConfig,
+    auth: Option<serde_json::Value>,
+}
+
+fn parse_auth_config(value: Option<serde_json::Value>) -> AuthConfig {
+    match value {
+        None => AuthConfig::ApiKey,
+        Some(raw) => serde_json::from_value(raw).unwrap_or(AuthConfig::ApiKey),
+    }
 }
 
 impl From<AIModelConfigCompat> for AIModelConfig {
@@ -1464,7 +1478,7 @@ impl From<AIModelConfigCompat> for AIModelConfig {
             thinking_budget_tokens: value.thinking_budget_tokens,
             custom_request_body: value.custom_request_body,
             custom_request_body_mode: value.custom_request_body_mode,
-            auth: value.auth,
+            auth: parse_auth_config(value.auth),
         }
     }
 }

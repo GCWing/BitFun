@@ -24,6 +24,7 @@ log = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true, optional = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
@@ -31,7 +32,13 @@ urlencoding = { workspace = true }
 uuid = { workspace = true, optional = true }
 
 [features]
-cli-credentials = ["dep:base64", "dep:bitfun-services-core", "dep:dirs", "dep:uuid"]
+subscription-auth = [
+    "dep:base64",
+    "dep:bitfun-services-core",
+    "dep:dirs",
+    "dep:sha2",
+    "dep:uuid",
+]
 
 [dev-dependencies]
 axum = { workspace = true }

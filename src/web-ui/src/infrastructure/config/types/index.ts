@@ -211,11 +211,13 @@ export interface AIModelConfig {
   auth?: AuthConfig;
 }
 
+/** Subscription provider for in-app OAuth auth. */
+export type SubscriptionProvider = 'codex' | 'antigravity' | 'opencode';
+
 /** Authentication source persisted on each model entry. */
 export type AuthConfig =
   | { type: 'api_key' }
-  | { type: 'codex_cli' }
-  | { type: 'gemini_cli' };
+  | { type: 'subscription'; provider: SubscriptionProvider };
 
 export interface ProxyConfig {
   enabled: boolean;

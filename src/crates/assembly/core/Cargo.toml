@@ -191,7 +191,7 @@ product-full = [
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",
-    "bitfun-ai-adapters/cli-credentials",
+    "bitfun-ai-adapters/subscription-auth",
     "dep:reqwest",
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]

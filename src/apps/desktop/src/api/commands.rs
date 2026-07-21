@@ -1181,9 +1181,9 @@ async fn create_transient_ai_client_for_config(
         .try_into()
         .map_err(|e| format!("Failed to convert configuration: {}", e))?;
 
-    bitfun_core::infrastructure::ai::client_factory::apply_cli_credential(&auth, &mut ai_config)
+    bitfun_core::infrastructure::ai::client_factory::apply_subscription_auth(&auth, &mut ai_config)
         .await
-        .map_err(|e| format!("Failed to resolve CLI credential: {}", e))?;
+        .map_err(|e| format!("Failed to resolve subscription auth: {}", e))?;
 
     let proxy_config = if global_config.ai.proxy.enabled {
         Some(global_config.ai.proxy.clone())
@@ -4307,36 +4307,54 @@ pub async fn get_watched_paths() -> Result<Vec<String>, String> {
     file_watch::get_watched_paths().await
 }
 
-#[tauri::command]
-pub async fn discover_cli_credentials(
-) -> Result<Vec<bitfun_core::infrastructure::cli_credentials::DiscoveredCredential>, String> {
-    Ok(bitfun_core::infrastructure::cli_credentials::discover_all().await)
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RefreshCliCredentialRequest {
-    pub kind: bitfun_core::infrastructure::cli_credentials::CliCredentialKind,
+pub struct SubscriptionProviderRequest {
+    pub provider: bitfun_core::infrastructure::subscription_auth::SubscriptionProvider,
 }
 
 #[tauri::command]
-pub async fn refresh_cli_credential(
-    request: RefreshCliCredentialRequest,
-) -> Result<bitfun_core::infrastructure::cli_credentials::DiscoveredCredential, String> {
-    use bitfun_core::infrastructure::cli_credentials::{
-        codex::CodexResolver, gemini::GeminiResolver, CliCredentialKind, CredentialResolver,
-    };
-    // Force a refresh by calling resolve(), then re-discover for the latest metadata.
-    let resolved = match request.kind {
-        CliCredentialKind::Codex => CodexResolver.resolve().await,
-        CliCredentialKind::Gemini => GeminiResolver.resolve().await,
-    };
-    if let Err(e) = resolved {
-        return Err(format!("Refresh failed: {}", e));
-    }
-    let discovered = bitfun_core::infrastructure::cli_credentials::discover_all().await;
-    discovered
-        .into_iter()
-        .find(|c| c.kind == request.kind)
-        .ok_or_else(|| "Credential not found after refresh".to_string())
+pub async fn list_subscription_accounts(
+) -> Result<Vec<bitfun_core::infrastructure::subscription_auth::SubscriptionAccount>, String> {
+    Ok(bitfun_core::infrastructure::subscription_auth::list_accounts().await)
+}
+
+#[tauri::command]
+pub async fn start_subscription_login(
+    request: SubscriptionProviderRequest,
+) -> Result<bitfun_core::infrastructure::subscription_auth::LoginStartResult, String> {
+    bitfun_core::infrastructure::subscription_auth::start_login(request.provider)
+        .await
+        .map_err(|e| format!("Failed to start subscription login: {e:#}"))
+}
+
+#[tauri::command]
+pub async fn get_subscription_login_status(
+    request: SubscriptionProviderRequest,
+) -> Result<bitfun_core::infrastructure::subscription_auth::LoginSessionSnapshot, String> {
+    Ok(bitfun_core::infrastructure::subscription_auth::login_status(request.provider).await)
+}
+
+#[tauri::command]
+pub async fn cancel_subscription_login(request: SubscriptionProviderRequest) -> Result<(), String> {
+    bitfun_core::infrastructure::subscription_auth::cancel_login(request.provider).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn logout_subscription_account(
+    request: SubscriptionProviderRequest,
+) -> Result<(), String> {
+    bitfun_core::infrastructure::subscription_auth::logout(request.provider)
+        .await
+        .map_err(|e| format!("Failed to logout subscription account: {e:#}"))
+}
+
+#[tauri::command]
+pub async fn refresh_subscription_account(
+    request: SubscriptionProviderRequest,
+) -> Result<bitfun_core::infrastructure::subscription_auth::SubscriptionAccount, String> {
+    bitfun_core::infrastructure::subscription_auth::refresh_account(request.provider)
+        .await
+        .map_err(|e| format!("Failed to refresh subscription account: {e:#}"))
 }

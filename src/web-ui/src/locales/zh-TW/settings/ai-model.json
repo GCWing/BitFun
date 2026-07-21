@@ -44,27 +44,36 @@
       "updateFailed": "設定失敗"
     }
   },
-  "cliAuth": {
-    "sectionTitle": "本機已登錄賬號",
-    "sectionDescription": "可直接匯入本機 Codex CLI / Gemini CLI 已登錄賬號作為模型使用",
-    "rescan": "重新掃描",
-    "empty": "未檢測到本機已登錄的 Codex / Gemini CLI 賬號，請先在終端完成登錄後重新掃描",
+  "subscriptionAuth": {
+    "sectionTitle": "訂閱賬號",
+    "sectionDescription": "登入 Codex / Antigravity / OpenCode 訂閱後，可直接作為模型 API 使用",
+    "rescan": "重新整理狀態",
     "import": "匯入使用",
+    "login": "登入",
+    "cancel": "取消",
+    "loginCancelled": "已取消登入",
+    "logout": "登出",
     "refresh": "重新整理 Token",
     "refreshSuccess": "Token 已重新整理",
     "refreshFailed": "重新整理失敗：{{error}}",
+    "loginSuccess": "登入成功",
+    "loginFailed": "登入失敗：{{error}}",
+    "logoutSuccess": "已登出",
+    "logoutFailed": "登出失敗：{{error}}",
+    "userCodeHint": "請在瀏覽器中輸入驗證碼：{{code}}",
     "expiresAt": "Token 有效期至 {{time}}",
     "tokenValid": "Token 已就緒",
-    "accountLine": "賬號：{{account}}",
+    "notSignedIn": "未登入",
     "label": "認證方式",
     "options": {
       "apiKey": "API Key",
-      "codexCli": "Codex CLI 已登錄賬號",
-      "geminiCli": "Gemini CLI 已登錄賬號"
+      "codex": "Codex（ChatGPT 訂閱）",
+      "antigravity": "Antigravity（Google 訂閱）",
+      "opencode": "OpenCode Zen 訂閱"
     },
-    "detected": "將使用本機 {{label}}（賬號 {{account}}）",
-    "notDetected": "本機未檢測到 {{kind}} 已登錄賬號，請先在終端完成登錄",
-    "unknownAccount": "目前登錄賬號"
+    "detected": "將使用 {{label}}（賬號 {{account}}）",
+    "notConnected": "尚未登入 {{kind}}，請先在上方完成登入",
+    "unknownAccount": "目前登入賬號"
   },
   "providerSelection": {
     "title": "選擇模型提供商",

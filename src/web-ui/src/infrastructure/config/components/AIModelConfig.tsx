@@ -13,7 +13,8 @@ import { getCapabilitiesByCategory, resolveModelCategory } from '../services/mod
 import { allocateModelConfigId, PROVIDER_TEMPLATES, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
 import { DEFAULT_REASONING_MODE, getEffectiveReasoningMode, supportsAnthropicAdaptive, supportsAnthropicReasoning, supportsAnthropicThinkingBudget, supportsDeepSeekReasoningEffort, supportsResponsesReasoning } from '../utils/reasoning';
 import { aiApi, systemAPI } from '@/infrastructure/api';
-import type { DiscoveredCliCredential } from '@/infrastructure/api/service-api/AIApi';
+import type { SubscriptionAccount } from '@/infrastructure/api/service-api/AIApi';
+import type { SubscriptionProvider } from '../types';
 import { useNotification } from '@/shared/notification-system';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
 import DefaultModelConfig from './DefaultModelConfig';
@@ -417,8 +418,9 @@ const AIModelConfig: React.FC = () => {
   const [editingProviderModelIds, setEditingProviderModelIds] = useState<Set<string>>(new Set());
   const [manualModelInput, setManualModelInput] = useState('');
   const [expandedModelCards, setExpandedModelCards] = useState<Set<string>>(new Set());
-  const [discoveredCli, setDiscoveredCli] = useState<DiscoveredCliCredential[]>([]);
-  const [isDiscoveringCli, setIsDiscoveringCli] = useState(false);
+  const [subscriptionAccounts, setSubscriptionAccounts] = useState<SubscriptionAccount[]>([]);
+  const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
+  const [loggingInProvider, setLoggingInProvider] = useState<SubscriptionProvider | null>(null);
   const lastRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const activeRemoteFetchSignatureRef = React.useRef<string | null>(null);
 
@@ -570,21 +572,21 @@ const AIModelConfig: React.FC = () => {
     loadConfig();
   }, [loadConfig]);
 
-  const refreshDiscoveredCli = useCallback(async () => {
-    setIsDiscoveringCli(true);
+  const refreshSubscriptionAccounts = useCallback(async () => {
+    setIsLoadingSubscriptions(true);
     try {
-      const items = await aiApi.discoverCliCredentials();
-      setDiscoveredCli(items);
+      const items = await aiApi.listSubscriptionAccounts();
+      setSubscriptionAccounts(items);
     } catch (e) {
-      log.warn('discover_cli_credentials failed', { error: String(e) });
+      log.warn('list_subscription_accounts failed', { error: String(e) });
     } finally {
-      setIsDiscoveringCli(false);
+      setIsLoadingSubscriptions(false);
     }
   }, []);
 
   useEffect(() => {
-    refreshDiscoveredCli();
-  }, [refreshDiscoveredCli]);
+    refreshSubscriptionAccounts();
+  }, [refreshSubscriptionAccounts]);
   
   // Provider options with translations (must be at top level, before any conditional returns)
   const providerOrder = useMemo(
@@ -910,18 +912,17 @@ const AIModelConfig: React.FC = () => {
     setCreationMode('selection');
   };
 
-  const handleImportFromCli = useCallback((cred: DiscoveredCliCredential) => {
+  const handleImportFromSubscription = useCallback((account: SubscriptionAccount) => {
     resetRemoteModelDiscovery();
     setManualModelInput('');
     setShowApiKey(false);
     setSelectedProviderId(null);
-    const authType: 'codex_cli' | 'gemini_cli' = cred.kind === 'codex' ? 'codex_cli' : 'gemini_cli';
     setEditingConfig({
-      name: cred.display_label,
-      provider: cred.suggested_format,
-      base_url: cred.suggested_base_url,
+      name: account.display_label,
+      provider: account.suggested_format,
+      base_url: account.suggested_base_url,
       // Leave request_url + model_name empty so the user must pick a model
-      // from the live CLI list. We never inject a hard-coded default slug.
+      // from the live list. We never inject a hard-coded default slug.
       request_url: '',
       api_key: '',
       model_name: '',
@@ -932,7 +933,7 @@ const AIModelConfig: React.FC = () => {
       recommended_for: [],
       metadata: {},
       inline_think_in_text: true,
-      auth: { type: authType },
+      auth: { type: 'subscription', provider: account.provider },
     });
     setSelectedModelDrafts([]);
     setEditingProviderModelIds(new Set());
@@ -941,15 +942,96 @@ const AIModelConfig: React.FC = () => {
     setIsEditing(true);
   }, [resetRemoteModelDiscovery]);
 
-  const handleRefreshCli = useCallback(async (kind: 'codex' | 'gemini') => {
-    try {
-      await aiApi.refreshCliCredential(kind);
-      await refreshDiscoveredCli();
-      notification.success(t('cliAuth.refreshSuccess'));
-    } catch (e) {
-      notification.error(t('cliAuth.refreshFailed', { error: String(e) }));
+  const loginAbortRef = React.useRef<{ provider: SubscriptionProvider; cancelled: boolean } | null>(null);
+
+  const pollSubscriptionLogin = useCallback(async (provider: SubscriptionProvider) => {
+    const deadline = Date.now() + 5 * 60 * 1000;
+    while (Date.now() < deadline) {
+      if (loginAbortRef.current?.provider === provider && loginAbortRef.current.cancelled) {
+        const error = new Error('Login cancelled');
+        error.name = 'SubscriptionLoginCancelled';
+        throw error;
+      }
+      const snapshot = await aiApi.getSubscriptionLoginStatus(provider);
+      if (snapshot.status === 'authorized') {
+        return snapshot;
+      }
+      if (snapshot.status === 'failed' || snapshot.status === 'cancelled') {
+        throw new Error(snapshot.error || `Login ${snapshot.status}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
-  }, [refreshDiscoveredCli, notification, t]);
+    throw new Error('Login timed out');
+  }, []);
+
+  // Cancel any in-flight subscription login when the page unmounts so the
+  // backend loopback server / device poll does not linger.
+  useEffect(() => {
+    return () => {
+      const pending = loginAbortRef.current;
+      if (pending && !pending.cancelled) {
+        pending.cancelled = true;
+        void aiApi.cancelSubscriptionLogin(pending.provider).catch(() => {});
+      }
+    };
+  }, []);
+
+  const handleSubscriptionLogin = useCallback(async (provider: SubscriptionProvider) => {
+    loginAbortRef.current = { provider, cancelled: false };
+    setLoggingInProvider(provider);
+    try {
+      const started = await aiApi.startSubscriptionLogin(provider);
+      if (started.authorization_url) {
+        await systemAPI.openExternal(started.authorization_url);
+      }
+      if (started.user_code) {
+        notification.info(t('subscriptionAuth.userCodeHint', { code: started.user_code }));
+      }
+      await pollSubscriptionLogin(provider);
+      await refreshSubscriptionAccounts();
+      notification.success(t('subscriptionAuth.loginSuccess'));
+    } catch (e) {
+      if ((e as Error).name === 'SubscriptionLoginCancelled') {
+        notification.info(t('subscriptionAuth.loginCancelled'));
+      } else {
+        notification.error(t('subscriptionAuth.loginFailed', { error: String(e) }));
+      }
+    } finally {
+      loginAbortRef.current = null;
+      setLoggingInProvider(null);
+    }
+  }, [notification, pollSubscriptionLogin, refreshSubscriptionAccounts, t]);
+
+  const handleCancelSubscriptionLogin = useCallback(async (provider: SubscriptionProvider) => {
+    if (loginAbortRef.current?.provider === provider) {
+      loginAbortRef.current.cancelled = true;
+    }
+    try {
+      await aiApi.cancelSubscriptionLogin(provider);
+    } catch (e) {
+      log.warn('cancel_subscription_login failed', { error: String(e) });
+    }
+  }, []);
+
+  const handleSubscriptionLogout = useCallback(async (provider: SubscriptionProvider) => {
+    try {
+      await aiApi.logoutSubscriptionAccount(provider);
+      await refreshSubscriptionAccounts();
+      notification.success(t('subscriptionAuth.logoutSuccess'));
+    } catch (e) {
+      notification.error(t('subscriptionAuth.logoutFailed', { error: String(e) }));
+    }
+  }, [notification, refreshSubscriptionAccounts, t]);
+
+  const handleSubscriptionRefresh = useCallback(async (provider: SubscriptionProvider) => {
+    try {
+      await aiApi.refreshSubscriptionAccount(provider);
+      await refreshSubscriptionAccounts();
+      notification.success(t('subscriptionAuth.refreshSuccess'));
+    } catch (e) {
+      notification.error(t('subscriptionAuth.refreshFailed', { error: String(e) }));
+    }
+  }, [notification, refreshSubscriptionAccounts, t]);
 
   
   const handleSelectProvider = (providerId: string) => {
@@ -1905,40 +1987,55 @@ const AIModelConfig: React.FC = () => {
       );
     };
 
-    const authType: 'api_key' | 'codex_cli' | 'gemini_cli' = editingConfig.auth?.type || 'api_key';
-    const authIsCli = authType !== 'api_key';
-    const cliAuthOptions: SelectOption[] = [
-      { value: 'api_key', label: t('cliAuth.options.apiKey') },
-      { value: 'codex_cli', label: t('cliAuth.options.codexCli') },
-      { value: 'gemini_cli', label: t('cliAuth.options.geminiCli') },
+    const authType = editingConfig.auth?.type || 'api_key';
+    const authIsSubscription = authType === 'subscription';
+    const selectedSubscriptionProvider: SubscriptionProvider | undefined =
+      editingConfig.auth?.type === 'subscription' ? editingConfig.auth.provider : undefined;
+    const authSelectValue = authIsSubscription
+      ? `subscription:${selectedSubscriptionProvider || 'codex'}`
+      : 'api_key';
+    const authOptions: SelectOption[] = [
+      { value: 'api_key', label: t('subscriptionAuth.options.apiKey') },
+      { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
+      { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
+      { value: 'subscription:opencode', label: t('subscriptionAuth.options.opencode') },
     ];
-    const matchedCliCredential = authType === 'codex_cli'
-      ? discoveredCli.find(c => c.kind === 'codex')
-      : authType === 'gemini_cli'
-        ? discoveredCli.find(c => c.kind === 'gemini')
-        : undefined;
+    const matchedSubscription = selectedSubscriptionProvider
+      ? subscriptionAccounts.find((account) => account.provider === selectedSubscriptionProvider)
+      : undefined;
 
     const renderAuthRow = () => (
-      <ConfigPageRow label={t('cliAuth.label')} align={authIsCli ? 'start' : 'center'} wide>
+      <ConfigPageRow label={t('subscriptionAuth.label')} align={authIsSubscription ? 'start' : 'center'} wide>
         <div className="bitfun-ai-model-config__control-stack">
           <Select
-            value={authType}
+            value={authSelectValue}
             onChange={(value) => {
-              const next = String(value) as 'api_key' | 'codex_cli' | 'gemini_cli';
-              setEditingConfig(prev => ({ ...prev, auth: { type: next } }));
+              const next = String(value);
+              if (next === 'api_key') {
+                setEditingConfig((prev) => ({ ...prev, auth: { type: 'api_key' } }));
+                return;
+              }
+              const provider = next.replace('subscription:', '') as SubscriptionProvider;
+              setEditingConfig((prev) => ({
+                ...prev,
+                auth: { type: 'subscription', provider },
+              }));
             }}
-            options={cliAuthOptions}
+            options={authOptions}
             size="small"
           />
-          {authIsCli && (
-            <small className={matchedCliCredential ? 'resolved-url__hint bitfun-ai-model-config__cli-auth-hint' : `resolved-url__hint bitfun-ai-model-config__cli-auth-hint bitfun-ai-model-config__json-status--error`}>
-              {matchedCliCredential
-                ? t('cliAuth.detected', {
-                    label: matchedCliCredential.display_label,
-                    account: matchedCliCredential.account || t('cliAuth.unknownAccount'),
+          {authIsSubscription && (
+            <small className={matchedSubscription?.connected
+              ? 'resolved-url__hint bitfun-ai-model-config__cli-auth-hint'
+              : 'resolved-url__hint bitfun-ai-model-config__cli-auth-hint bitfun-ai-model-config__json-status--error'}
+            >
+              {matchedSubscription?.connected
+                ? t('subscriptionAuth.detected', {
+                    label: matchedSubscription.display_label,
+                    account: matchedSubscription.account || t('subscriptionAuth.unknownAccount'),
                   })
-                : t('cliAuth.notDetected', {
-                    kind: authType === 'codex_cli' ? 'Codex CLI' : 'Gemini CLI',
+                : t('subscriptionAuth.notConnected', {
+                    kind: selectedSubscriptionProvider || 'subscription',
                   })}
             </small>
           )}
@@ -1977,7 +2074,7 @@ const AIModelConfig: React.FC = () => {
                   <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
                 </ConfigPageRow>
                 {renderAuthRow()}
-                {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
+                {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
                 <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
                   <div className="bitfun-ai-model-config__control-stack">
                     {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
@@ -2115,7 +2212,7 @@ const AIModelConfig: React.FC = () => {
                       <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
                     </ConfigPageRow>
                     {renderAuthRow()}
-                    {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
+                    {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
                     <ConfigPageRow label={`${t('form.baseUrl')} *`} align="center" wide>
                       <div className="bitfun-ai-model-config__control-stack">
                         <Input
@@ -2602,71 +2699,98 @@ const AIModelConfig: React.FC = () => {
         <SessionTitleConfig />
 
         <ConfigPageSection
-          title={t('cliAuth.sectionTitle')}
-          description={t('cliAuth.sectionDescription')}
+          title={t('subscriptionAuth.sectionTitle')}
+          description={t('subscriptionAuth.sectionDescription')}
           extra={(
             <IconButton
               variant="ghost"
               size="small"
-              onClick={refreshDiscoveredCli}
-              tooltip={t('cliAuth.rescan')}
-              disabled={isDiscoveringCli}
+              onClick={refreshSubscriptionAccounts}
+              tooltip={t('subscriptionAuth.rescan')}
+              disabled={isLoadingSubscriptions}
             >
-              <RefreshCw size={16} className={isDiscoveringCli ? 'bitfun-ai-model-config__spin' : ''} />
+              <RefreshCw size={16} className={isLoadingSubscriptions ? 'bitfun-ai-model-config__spin' : ''} />
             </IconButton>
           )}
         >
-          {discoveredCli.length === 0 ? (
-            <div className="bitfun-ai-model-config__cli-empty">
-              <p>{t('cliAuth.empty')}</p>
-            </div>
-          ) : (
-            <div className="bitfun-ai-model-config__cli-discovery">
-              {discoveredCli.map(cred => {
-                const descriptionParts: string[] = [];
-                if (cred.account) {
-                  descriptionParts.push(cred.account);
-                }
-                if (cred.expires_at) {
-                  descriptionParts.push(
-                    t('cliAuth.expiresAt', {
-                      time: i18nService.formatDate(new Date(cred.expires_at * 1000), {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      }),
+          <div className="bitfun-ai-model-config__cli-discovery">
+            {subscriptionAccounts.map((account) => {
+              const descriptionParts: string[] = [];
+              if (account.connected && account.account) {
+                descriptionParts.push(account.account);
+              }
+              if (account.connected && account.expires_at) {
+                descriptionParts.push(
+                  t('subscriptionAuth.expiresAt', {
+                    time: i18nService.formatDate(new Date(account.expires_at * 1000), {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
                     }),
-                  );
-                } else {
-                  descriptionParts.push(t('cliAuth.tokenValid'));
-                }
-                return (
-                  <ConfigPageRow
-                    key={`${cred.kind}-${cred.source_path}`}
-                    label={cred.display_label}
-                    description={descriptionParts.join(' · ')}
-                    align="center"
-                  >
-                    <div className="bitfun-ai-model-config__cli-actions">
-                      <Button
-                        size="small"
-                        variant="secondary"
-                        onClick={() => handleRefreshCli(cred.kind)}
-                      >
-                        {t('cliAuth.refresh')}
-                      </Button>
+                  }),
+                );
+              } else if (account.connected) {
+                descriptionParts.push(t('subscriptionAuth.tokenValid'));
+              } else {
+                descriptionParts.push(t('subscriptionAuth.notSignedIn'));
+              }
+              const isLoggingIn = loggingInProvider === account.provider;
+              return (
+                <ConfigPageRow
+                  key={account.provider}
+                  label={account.display_label}
+                  description={descriptionParts.join(' · ')}
+                  align="center"
+                >
+                  <div className="bitfun-ai-model-config__cli-actions">
+                    {account.connected ? (
+                      <>
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          onClick={() => void handleSubscriptionRefresh(account.provider)}
+                        >
+                          {t('subscriptionAuth.refresh')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          onClick={() => void handleSubscriptionLogout(account.provider)}
+                        >
+                          {t('subscriptionAuth.logout')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="primary"
+                          onClick={() => handleImportFromSubscription(account)}
+                        >
+                          {t('subscriptionAuth.import')}
+                        </Button>
+                      </>
+                    ) : (
                       <Button
                         size="small"
                         variant="primary"
-                        onClick={() => handleImportFromCli(cred)}
+                        isLoading={isLoggingIn}
+                        disabled={isLoggingIn}
+                        onClick={() => void handleSubscriptionLogin(account.provider)}
                       >
-                        {t('cliAuth.import')}
+                        {t('subscriptionAuth.login')}
                       </Button>
-                    </div>
-                  </ConfigPageRow>
-                );
-              })}
-            </div>
-          )}
+                    )}
+                    {isLoggingIn && (
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        onClick={() => void handleCancelSubscriptionLogin(account.provider)}
+                      >
+                        {t('subscriptionAuth.cancel')}
+                      </Button>
+                    )}
+                  </div>
+                </ConfigPageRow>
+              );
+            })}
+          </div>
         </ConfigPageSection>
 
         <ConfigPageSection

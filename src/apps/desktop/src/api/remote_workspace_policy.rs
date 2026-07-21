@@ -198,6 +198,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("cancel_search", RemoteWorkspacePolicy::LegacyUnaudited),
     ("cancel_session", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "cancel_subscription_login",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("cancel_tool", RemoteWorkspacePolicy::LegacyUnaudited),
     ("cancel_transfer", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -322,10 +326,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("delete_session", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
-    (
-        "discover_cli_credentials",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
     (
         "dismiss_announcement",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
@@ -590,6 +590,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "get_subagent_detail",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    (
+        "get_subscription_login_status",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("get_system_info", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("get_tool_info", RemoteWorkspacePolicy::LegacyUnaudited),
     ("get_turn_files", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -751,6 +755,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("list_skill_market", RemoteWorkspacePolicy::LegacyUnaudited),
     ("list_subagents", RemoteWorkspacePolicy::RemoteRouted),
     (
+        "list_subscription_accounts",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "list_visible_subagents",
         RemoteWorkspacePolicy::RemoteRouted,
     ),
@@ -777,6 +785,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("load_session_turns", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "logout_subscription_account",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     (
         "lsp_change_document",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1093,12 +1105,12 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("read_mcp_resource", RemoteWorkspacePolicy::LegacyUnaudited),
     ("record_file_change", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "refresh_cli_credential",
+        "refresh_model_client",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
-        "refresh_model_client",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        "refresh_subscription_account",
+        RemoteWorkspacePolicy::LocalOnly,
     ),
     ("reject_file", RemoteWorkspacePolicy::LegacyUnaudited),
     ("reject_operation", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -1510,6 +1522,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "start_search_filenames_stream",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    ("start_subscription_login", RemoteWorkspacePolicy::LocalOnly),
     ("startup_window_control", RemoteWorkspacePolicy::LocalOnly),
     ("steer_dialog_turn", RemoteWorkspacePolicy::LegacyUnaudited),
     ("stop_acp_client", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -1789,7 +1802,6 @@ mod tests {
         "delete_session",
         "delete_skill",
         "delete_subagent",
-        "discover_cli_credentials",
         "download_skill_market",
         "editor_ai_cancel",
         "editor_ai_stream",
@@ -1997,7 +2009,6 @@ mod tests {
         "read_file_content",
         "read_mcp_resource",
         "record_file_change",
-        "refresh_cli_credential",
         "refresh_model_client",
         "reject_file",
         "reject_operation",

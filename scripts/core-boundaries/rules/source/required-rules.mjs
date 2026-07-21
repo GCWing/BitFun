@@ -3957,8 +3957,8 @@ export const requiredContentRules = [
         message: 'AI client runtime must stay behind ai-adapter-runtime',
       },
       {
-        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod cli_credentials\b/s,
-        message: 'AI CLI credential runtime must stay behind ai-adapter-runtime',
+        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod subscription_auth\b/s,
+        message: 'AI subscription auth runtime must stay behind ai-adapter-runtime',
       },
       {
         regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod debug_log\b/s,

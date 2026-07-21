@@ -3,10 +3,10 @@
 Scope: this guide applies to `src/crates/adapters/ai-adapters`.
 
 `bitfun-ai-adapters` owns provider-specific request/response mapping, stream
-protocol parsing, CLI credential resolution, and provider/model selection
-helpers that are independent of core config IO. Keep provider quirks here, then
-convert stream chunks into the provider-neutral contracts owned by
-`bitfun-agent-stream`.
+protocol parsing, subscription auth (in-app OAuth login and credential
+resolution), and provider/model selection helpers that are independent of core
+config IO. Keep provider quirks here, then convert stream chunks into the
+provider-neutral contracts owned by `bitfun-agent-stream`.
 
 ## Guardrails
 
@@ -20,17 +20,19 @@ convert stream chunks into the provider-neutral contracts owned by
   adapter tests and downstream usage expectations.
 - Do not move provider-neutral stream DTOs, replay policy, or tool-call
   accumulation ownership back into this crate.
-- CLI credential probing may reuse lower-layer service command helpers for
-  PATH and process-platform behavior; do not introduce host framework calls.
-- Keep `cli-credentials` optional so standalone protocol adapters do not pull
-  service/process dependencies by default.
+- Subscription auth (Codex/Antigravity codex CLI user-agent probing) may reuse
+  lower-layer service command helpers for PATH and process-platform behavior; do
+  not introduce host framework calls.
+- Keep `subscription-auth` optional so standalone protocol adapters do not pull
+  service/process dependencies by default. Never scan or reuse third-party CLI
+  credential files on disk; tokens come only from the in-app OAuth store.
 
 ## Verification
 
 ```bash
 cargo test -p bitfun-agent-stream
 cargo test -p bitfun-ai-adapters
-cargo test -p bitfun-ai-adapters --features cli-credentials cli_credentials
+cargo test -p bitfun-ai-adapters --features subscription-auth subscription_auth
 ```
 
 If stream behavior affects core integration, also run the relevant tests in
