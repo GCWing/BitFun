@@ -184,6 +184,15 @@ impl RoundExecutor {
 
         let trace_config =
             prepare_model_exchange_trace(&context, &round_id, ai_client.as_ref()).await;
+        // Resolve this user policy once for the entire round, before the
+        // stream begins. The stream crate receives only this immutable fact;
+        // it never reads product configuration directly.
+        let global_config: crate::service::config::types::GlobalConfig =
+            match GlobalConfigManager::get_service().await {
+                Ok(service) => service.get_config(None).await.unwrap_or_default(),
+                Err(_) => Default::default(),
+            };
+        let allow_normal_tool_json_repair = global_config.ai.allow_tool_json_repair;
         let max_attempts = Self::MAX_STREAM_ATTEMPTS;
         let mut attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
@@ -321,6 +330,7 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
+                        allow_normal_tool_json_repair,
                         ..Default::default()
                     },
                 )
@@ -775,12 +785,8 @@ impl RoundExecutor {
                 remote_exec_port: context.remote_exec_port.clone(),
             };
 
-            // Read tool execution related configuration from global config.
-            let global_config: crate::service::config::types::GlobalConfig =
-                match GlobalConfigManager::get_service().await {
-                    Ok(service) => service.get_config(None).await.unwrap_or_default(),
-                    Err(_) => Default::default(),
-                };
+            // Use the round-start configuration so stream repair and tool
+            // execution policy stay stable throughout this model round.
             let tool_execution_timeout = global_config.ai.tool_execution_timeout_secs;
             let subagent_batch_execution_policy = Self::map_subagent_batch_execution_policy(
                 global_config.ai.subagent_batch_execution_policy,
@@ -1675,6 +1681,7 @@ mod tests {
                 raw_arguments: Some("{\"command\":".to_string()),
                 is_error: true,
                 recovered_from_truncation: false,
+                repair_kind: Default::default(),
             }],
             usage: Some(GeminiUsage {
                 prompt_token_count: 100,

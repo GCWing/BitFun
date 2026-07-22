@@ -9,6 +9,7 @@ export const crateLayoutRules = [
 
   { crateName: 'agent-runtime', layer: 'execution', path: 'src/crates/execution/agent-runtime' },
   { crateName: 'agent-stream', layer: 'execution', path: 'src/crates/execution/agent-stream' },
+  { crateName: 'tool-call-jsonrepair', layer: 'execution', path: 'src/crates/execution/tool-call-jsonrepair' },
   { crateName: 'agent-tools', layer: 'execution', path: 'src/crates/execution/tool-contracts' },
   { crateName: 'harness', layer: 'execution', path: 'src/crates/execution/harness' },
   { crateName: 'plugin-runtime-host', layer: 'execution', path: 'src/crates/execution/plugin-runtime-host' },

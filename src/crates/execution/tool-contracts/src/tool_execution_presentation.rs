@@ -23,16 +23,32 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
     matches!(tool_name, "Write" | "file_write" | "write_notebook")
 }
 
-pub fn build_tool_call_truncation_recovery_notice(tool_name: &str) -> String {
+pub fn build_write_tail_closure_notice(tool_name: &str) -> String {
     if is_write_like_tool_name(tool_name) {
         return format!(
-            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, use Edit to add only the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens).]\n\nOriginal tool result follows.\n\n"
+            "[Your previous {tool_name} call had incomplete JSON arguments and its completed payload prefix was closed before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, use Edit to add only the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the write may be incomplete.]\n\nOriginal tool result follows.\n\n"
         );
     }
 
     format!(
-        "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call rather than trying to continue a file write.]\n\nOriginal tool result follows.\n\n"
+        "[Your previous {tool_name} call had incomplete JSON arguments and was closed before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call.]\n\nOriginal tool result follows.\n\n"
     )
+}
+
+/// Inform the model that the opt-in, broad JSON repair policy changed a
+/// non-Write call after the provider explicitly completed tool use. This is a
+/// syntax recovery fact, not evidence that an output limit was reached.
+pub fn build_normal_tool_json_repair_notice(tool_name: &str) -> String {
+    format!(
+        "[Your previous {tool_name} call contained malformed JSON arguments. After the provider completed tool use normally, the explicitly enabled JSON-repair policy produced valid arguments and the tool was executed. Review the result carefully; if the repaired arguments may not match your intent, issue a fresh complete {tool_name} call.]\n\nOriginal tool result follows.\n\n"
+    )
+}
+
+/// Backward-compatible name for call sites that only understand the legacy
+/// truncation flag. New code should use repair provenance and call the
+/// specific presentation helper above.
+pub fn build_tool_call_truncation_recovery_notice(tool_name: &str) -> String {
+    build_write_tail_closure_notice(tool_name)
 }
 
 pub fn truncate_tool_arguments_preview(value: &Value) -> String {

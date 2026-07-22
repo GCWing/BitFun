@@ -5,6 +5,7 @@ use crate::stream::types::responses::{
 };
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
+use bitfun_agent_stream::ToolCallCompletion;
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -42,6 +43,14 @@ impl InProgressToolCall {
             saw_any_delta: false,
             sent_header: false,
         })
+    }
+}
+
+fn responses_completed_tool_call_completion(saw_function_call: bool) -> ToolCallCompletion {
+    if saw_function_call {
+        ToolCallCompletion::NormalToolUse
+    } else {
+        ToolCallCompletion::NormalNoToolUse
     }
 }
 
@@ -251,6 +260,7 @@ pub async fn handle_responses_stream(
     // Some providers close the stream after emitting the terminal event and may not send `[DONE]`.
     let mut received_finish_reason = false;
     let mut received_text_delta = false;
+    let mut saw_function_call = false;
     let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
     let mut tool_call_index_by_id: HashMap<String, usize> = HashMap::new();
     let mut stats = StreamStats::new("Responses");
@@ -364,6 +374,7 @@ pub async fn handle_responses_stream(
                         if let Some(ref call_id) = tc.call_id {
                             tool_call_index_by_id.insert(call_id.clone(), output_index);
                         }
+                        saw_function_call = true;
                         tool_calls_by_output_index.insert(output_index, tc);
                     }
                 }
@@ -421,6 +432,7 @@ pub async fn handle_responses_stream(
 
                 // For tool calls, prefer streaming deltas and only use item.done as a tail-filler / fallback.
                 if item_value.get("type").and_then(Value::as_str) == Some("function_call") {
+                    saw_function_call = true;
                     handle_function_call_output_item_done(
                         &mut timeout_controller,
                         &tx_event,
@@ -460,6 +472,7 @@ pub async fn handle_responses_stream(
                             if item.get("type").and_then(Value::as_str) != Some("function_call") {
                                 continue;
                             }
+                            saw_function_call = true;
                             let Some(tc) = tool_calls_by_output_index.get_mut(&idx) else {
                                 continue;
                             };
@@ -510,6 +523,9 @@ pub async fn handle_responses_stream(
                         received_finish_reason = true;
                         let unified_response = UnifiedResponse {
                             usage: response.usage.map(Into::into),
+                            tool_call_completion: Some(responses_completed_tool_call_completion(
+                                saw_function_call,
+                            )),
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
@@ -533,6 +549,9 @@ pub async fn handle_responses_stream(
                     None => {
                         received_finish_reason = true;
                         let unified_response = UnifiedResponse {
+                            tool_call_completion: Some(responses_completed_tool_call_completion(
+                                saw_function_call,
+                            )),
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
@@ -555,6 +574,9 @@ pub async fn handle_responses_stream(
                         received_finish_reason = true;
                         let unified_response = UnifiedResponse {
                             usage: response.usage.map(Into::into),
+                            tool_call_completion: Some(responses_completed_tool_call_completion(
+                                saw_function_call,
+                            )),
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
@@ -577,6 +599,9 @@ pub async fn handle_responses_stream(
                     None => {
                         received_finish_reason = true;
                         let unified_response = UnifiedResponse {
+                            tool_call_completion: Some(responses_completed_tool_call_completion(
+                                saw_function_call,
+                            )),
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
@@ -623,6 +648,13 @@ pub async fn handle_responses_stream(
                     .as_deref()
                     .map(|r| format!("incomplete:{r}"))
                     .unwrap_or_else(|| "incomplete".to_string());
+                let completion = match reason.as_deref().map(str::to_ascii_lowercase).as_deref() {
+                    Some("max_output_tokens") | Some("max_tokens") => {
+                        ToolCallCompletion::OutputLimit
+                    }
+                    Some("content_filter") => ToolCallCompletion::ContentFiltered,
+                    _ => ToolCallCompletion::Unknown,
+                };
 
                 let usage = event
                     .response
@@ -634,6 +666,7 @@ pub async fn handle_responses_stream(
                 received_finish_reason = true;
                 let unified_response = UnifiedResponse {
                     usage,
+                    tool_call_completion: Some(completion),
                     finish_reason: Some(finish_reason),
                     ..Default::default()
                 };
@@ -655,8 +688,9 @@ mod tests {
     use super::{
         super::stream_stats::StreamStats, extract_api_error_message,
         handle_function_call_arguments_delta, handle_function_call_output_item_done,
-        InProgressToolCall, StreamTimeoutController,
+        responses_completed_tool_call_completion, InProgressToolCall, StreamTimeoutController,
     };
+    use bitfun_agent_stream::ToolCallCompletion;
     use serde_json::json;
     use std::collections::HashMap;
     use tokio::sync::mpsc;
@@ -701,6 +735,18 @@ mod tests {
         });
 
         assert!(extract_api_error_message(&event).is_none());
+    }
+
+    #[test]
+    fn completed_responses_stream_marks_tool_use_only_when_a_function_call_was_seen() {
+        assert_eq!(
+            responses_completed_tool_call_completion(true),
+            ToolCallCompletion::NormalToolUse
+        );
+        assert_eq!(
+            responses_completed_tool_call_completion(false),
+            ToolCallCompletion::NormalNoToolUse
+        );
     }
 
     #[test]

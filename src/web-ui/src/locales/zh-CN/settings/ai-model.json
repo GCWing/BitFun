@@ -305,6 +305,13 @@
     "save": "保存首 Token 超时",
     "saveSuccess": "首 Token 超时已保存"
   },
+  "toolArgumentJsonRepair": {
+    "title": "工具参数 JSON 修复",
+    "description": "修改将在下一轮模型调用生效。",
+    "label": "修复非法 JSON 工具参数",
+    "hint": "仅在供应商确认工具调用正常完成后尝试。修复可能在常规工具校验前改写非法 JSON。",
+    "saveSuccess": "工具参数 JSON 修复设置已保存"
+  },
   "capabilities": {
     "text_chat": "对话",
     "image_understanding": "多模态",

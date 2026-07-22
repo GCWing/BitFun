@@ -710,8 +710,10 @@ impl Display for MessageContent {
 
 #[cfg(test)]
 mod tests {
-    use super::Message;
+    use super::{Message, ToolCall};
     use crate::util::types::Message as AIMessage;
+    use bitfun_agent_stream::ToolArgumentRepairKind;
+    use serde_json::json;
 
     #[test]
     fn preserves_empty_reasoning_content_for_provider_replay() {
@@ -722,6 +724,25 @@ mod tests {
 
         assert_eq!(ai_msg.reasoning_content.as_deref(), Some(""));
         assert_eq!(ai_msg.thinking_signature.as_deref(), Some("sig_1"));
+    }
+
+    #[test]
+    fn preserves_tool_argument_repair_provenance_from_stream_contract() {
+        let tool_call = ToolCall::from(bitfun_agent_stream::ToolCall {
+            tool_id: "call_1".to_string(),
+            tool_name: "Read".to_string(),
+            arguments: json!({ "path": "src/main.rs" }),
+            raw_arguments: Some(r#"{"path":"src/main.rs" "line_end":4}"#.to_string()),
+            is_error: false,
+            recovered_from_truncation: false,
+            repair_kind: ToolArgumentRepairKind::PermissiveNormalToolJsonRepair,
+        });
+
+        assert_eq!(
+            tool_call.repair_kind,
+            ToolArgumentRepairKind::PermissiveNormalToolJsonRepair
+        );
+        assert!(!tool_call.recovered_from_truncation);
     }
 }
 
@@ -743,6 +764,12 @@ pub struct ToolCall {
     /// model so it understands the content may be incomplete.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub recovered_from_truncation: bool,
+    /// Provenance for any argument repair accepted before tool validation.
+    #[serde(
+        default,
+        skip_serializing_if = "bitfun_agent_stream::ToolArgumentRepairKind::is_none"
+    )]
+    pub repair_kind: bitfun_agent_stream::ToolArgumentRepairKind,
 }
 
 impl ToolCall {
@@ -760,6 +787,7 @@ impl From<bitfun_agent_stream::ToolCall> for ToolCall {
             raw_arguments: tool_call.raw_arguments,
             is_error: tool_call.is_error,
             recovered_from_truncation: tool_call.recovered_from_truncation,
+            repair_kind: tool_call.repair_kind,
         }
     }
 }

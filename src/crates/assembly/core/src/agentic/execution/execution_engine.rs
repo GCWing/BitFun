@@ -4429,6 +4429,7 @@ mod tests {
             raw_arguments: None,
             is_error: false,
             recovered_from_truncation: false,
+            repair_kind: Default::default(),
         }];
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
@@ -4456,6 +4457,7 @@ mod tests {
             raw_arguments: None,
             is_error: false,
             recovered_from_truncation: false,
+            repair_kind: Default::default(),
         }];
         let results = vec![Message::tool_result(ToolResult {
             tool_id: "tool-1".to_string(),
