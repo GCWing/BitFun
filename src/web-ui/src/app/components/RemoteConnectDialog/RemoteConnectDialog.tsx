@@ -12,10 +12,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { Modal, Badge, Input, Select, Tooltip } from '@/component-library';
+import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
+import { useNotification } from '@/shared/notification-system';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { AccountPanel } from './AccountPanel';
 import {
   remoteConnectAPI,
@@ -138,6 +141,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   initialGroup,
 }) => {
   const { t, currentLanguage } = useI18n('common');
+  const { error: notifyError } = useNotification();
   const { hasWorkspace } = useCurrentWorkspace();
   const { loggedIn: accountLoggedIn } = useAccountLoginState();
 
@@ -173,6 +177,25 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [weixinQrSessionKey, setWeixinQrSessionKey] = useState<string | null>(null);
   const [weixinQrImageUrl, setWeixinQrImageUrl] = useState<string | null>(null);
   const [weixinAwaitingPhoneConfirm, setWeixinAwaitingPhoneConfirm] = useState(false);
+
+  const handleTabArrowKey = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const tabList = event.currentTarget.closest('[role="tablist"]');
+    if (!tabList) return;
+    const tabs = Array.from(
+      tabList.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'),
+    );
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    if (currentIndex < 0 || tabs.length === 0) return;
+    event.preventDefault();
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[nextIndex].focus();
+    tabs[nextIndex].click();
+  }, []);
 
   const formSnapshotRef = useRef({
     customUrl: '',
@@ -454,10 +477,16 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           return;
         }
         const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(relayUrl.hostname);
-        if (relayUrl.protocol === 'http:'
-          && !isLoopback
-          && !window.confirm(t('accountLogin.insecureServerConfirm'))) {
-          return;
+        if (relayUrl.protocol === 'http:' && !isLoopback) {
+          const confirmed = await confirmWarning(
+            t('accountLogin.insecureServerTitle'),
+            t('accountLogin.insecureServerConfirm'),
+            {
+              confirmText: t('accountLogin.continueInsecure'),
+              cancelText: t('accountLogin.cancel'),
+            },
+          );
+          if (!confirmed) return;
         }
       }
       await remoteConnectAPI.setFormState({
@@ -646,23 +675,31 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     </div>
   );
 
+  const handleCopyPairingUrl = useCallback(async () => {
+    if (!connectionResult?.qr_url) return;
+    const copied = await copyTextToClipboard(connectionResult.qr_url);
+    if (copied) {
+      setQrCopied(true);
+      window.setTimeout(() => setQrCopied(false), 2000);
+    } else {
+      notifyError(t('remoteConnect.copyUrlFailed'));
+    }
+  }, [connectionResult?.qr_url, notifyError, t]);
+
   const renderPairingInProgress = () => {
     if (!connectionResult) return null;
     return (
       <div className="bitfun-remote-connect__body">
         {connectionResult.qr_url && (
-          <div
+          <button
+            type="button"
             className="bitfun-remote-connect__qr-box"
-            style={{ cursor: 'pointer' }}
-            title="Click to copy URL"
-            onClick={() => {
-              navigator.clipboard.writeText(connectionResult.qr_url!);
-              setQrCopied(true);
-              setTimeout(() => setQrCopied(false), 2000);
-            }}
+            title={t('remoteConnect.copyUrl')}
+            aria-label={t('remoteConnect.copyUrl')}
+            onClick={() => void handleCopyPairingUrl()}
           >
             <QRCodeSVG value={connectionResult.qr_url} size={180} level="M" includeMargin />
-          </div>
+          </button>
         )}
         {connectionResult.bot_pairing_code && (
           <div className="bitfun-remote-connect__pairing-code-box">
@@ -939,14 +976,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 {isWeixinRasterQrSrc(weixinQrImageUrl) ? (
                   <img
                     src={weixinQrImageUrl}
-                    alt="WeChat QR"
+                    alt={t('remoteConnect.weixinQrAlt')}
                     className="bitfun-remote-connect__weixin-qr-img"
                   />
                 ) : (
                   <div
                     className="bitfun-remote-connect__weixin-qr-svg-wrap"
                     role="img"
-                    aria-label="WeChat login QR"
+                    aria-label={t('remoteConnect.weixinQrAlt')}
                   >
                     <QRCodeSVG
                       value={weixinQrImageUrl}
@@ -1043,7 +1080,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       >
         <div className="bitfun-remote-connect">
           {/* ── Group tabs ── */}
-          <div className="bitfun-remote-connect__groups">
+          <div className="bitfun-remote-connect__groups" role="tablist" aria-label={t('shared:features.remoteControl')}>
             <Tooltip
               content={t('header.remoteConnectRequiresWorkspace')}
               placement="bottom"
@@ -1051,6 +1088,10 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             >
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeGroup === 'network'}
+                tabIndex={activeGroup === 'network' ? 0 : -1}
+                onKeyDown={handleTabArrowKey}
                 className={`bitfun-remote-connect__group-btn${activeGroup === 'network' ? ' is-active' : ''}`}
                 onClick={() => { setActiveGroup('network'); setConnectionResult(null); setError(null); }}
                 disabled={isBotConnecting || !hasWorkspace}
@@ -1067,6 +1108,10 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             >
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeGroup === 'bot'}
+                tabIndex={activeGroup === 'bot' ? 0 : -1}
+                onKeyDown={handleTabArrowKey}
                 className={`bitfun-remote-connect__group-btn${activeGroup === 'bot' ? ' is-active' : ''}`}
                 onClick={() => { setActiveGroup('bot'); setConnectionResult(null); setError(null); }}
                 disabled={isNetworkConnecting || !hasWorkspace}
@@ -1078,6 +1123,10 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             <span className="bitfun-remote-connect__group-divider" />
             <button
               type="button"
+              role="tab"
+              aria-selected={activeGroup === 'account'}
+              tabIndex={activeGroup === 'account' ? 0 : -1}
+              onKeyDown={handleTabArrowKey}
               className={`bitfun-remote-connect__group-btn${activeGroup === 'account' ? ' is-active' : ''}`}
               onClick={() => { setActiveGroup('account'); setError(null); }}
             >
@@ -1088,12 +1137,16 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
           {/* ── Sub-tabs ── */}
           {activeGroup === 'account' ? null : activeGroup === 'network' ? (
-            <div className="bitfun-remote-connect__subtabs">
+            <div className="bitfun-remote-connect__subtabs" role="tablist" aria-label={t('remoteConnect.groupNetwork')}>
               {NETWORK_TABS.map((tab, i) => (
                 <React.Fragment key={tab.id}>
                   {i > 0 && <span className="bitfun-remote-connect__subtab-divider" />}
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={networkTab === tab.id}
+                    tabIndex={networkTab === tab.id ? 0 : -1}
+                    onKeyDown={handleTabArrowKey}
                     className={`bitfun-remote-connect__subtab${networkTab === tab.id ? ' is-active' : ''}${isRelayConnected && connectedNetworkTab === tab.id ? ' is-connected' : ''}`}
                     onClick={() => { setNetworkTab(tab.id); setConnectionResult(null); setError(null); }}
                     disabled={isNetworkSubDisabled(tab.id) || isNetworkConnecting}
@@ -1107,12 +1160,16 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               ))}
             </div>
           ) : (
-            <div className="bitfun-remote-connect__subtabs">
+            <div className="bitfun-remote-connect__subtabs" role="tablist" aria-label={t('remoteConnect.groupBot')}>
               {BOT_TABS.map((tab, i) => (
                 <React.Fragment key={tab.id}>
                   {i > 0 && <span className="bitfun-remote-connect__subtab-divider" />}
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={botTab === tab.id}
+                    tabIndex={botTab === tab.id ? 0 : -1}
+                    onKeyDown={handleTabArrowKey}
                     className={`bitfun-remote-connect__subtab${botTab === tab.id ? ' is-active' : ''}${isBotConnected && connectedBotTab === tab.id ? ' is-connected' : ''}`}
                     onClick={() => { setBotTab(tab.id); setConnectionResult(null); setError(null); }}
                     disabled={isBotSubDisabled(tab.id) || isBotConnecting}

@@ -38,6 +38,8 @@ export interface SubscriptionAccount {
   account?: string | null;
   expires_at?: number | null;
   connected: boolean;
+  reauthentication_required?: boolean;
+  vault_unavailable?: boolean;
   suggested_format: string;
   suggested_base_url: string;
   suggested_model: string;

@@ -5,18 +5,21 @@
 //! Production: `/p/{user}/{slug}/...` (deployed version only).
 
 use axum::extract::{DefaultBodyLimit, Path, State};
-use axum::http::{header, HeaderMap, Method, StatusCode};
-use axum::response::IntoResponse;
+use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use bitfun_page_function_runtime::{
-    run_fetch, FetchRequest, PageMeta, DEFAULT_TIMEOUT, WORKER_ENTRY_PATH,
+    run_fetch, FetchRequest, PageFunctionError, PageMeta, DEFAULT_TIMEOUT, WORKER_ENTRY_PATH,
 };
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::db::{
     new_page_version_id, page_draft_asset_key, page_legacy_asset_key, page_version_asset_key,
@@ -31,7 +34,207 @@ pub const MAX_PAGES_PER_USER: i64 = 50;
 pub const MAX_VERSIONS_PER_PAGE: i64 = 30;
 pub const MAX_PAGE_BYTES: u64 = 100 * 1024 * 1024;
 pub const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
+pub const MAX_PAGE_FILES: usize = 4096;
 pub const PAGE_UPLOAD_BODY_LIMIT: usize = 12 * 1024 * 1024;
+const PAGE_OPEN_TICKET_TTL: Duration = Duration::from_secs(60);
+const PAGE_BROWSER_GRANT_TTL: Duration = Duration::from_secs(10 * 60);
+const MAX_PAGE_OPEN_TICKETS: usize = 4096;
+const MAX_PAGE_BROWSER_GRANTS: usize = 8192;
+const PAGE_ACCESS_COOKIE: &str = "bitfun_page_access";
+const PAGE_UPLOAD_SESSION_TTL: Duration = Duration::from_secs(15 * 60);
+const MAX_PAGE_UPLOAD_SESSIONS: usize = 4096;
+const PAGE_UPLOAD_LOCK_SHARDS: usize = 64;
+
+#[derive(Clone)]
+struct PageAccessScope {
+    user_id: String,
+    username: String,
+    slug: String,
+    version_id: Option<String>,
+    expires_at: Instant,
+}
+
+/// Process-local, time-bounded grants used to hand an authenticated Page URL
+/// from the desktop client to the user's external browser without putting the
+/// account bearer token in a URL.
+#[derive(Default)]
+pub struct PageAccessManager {
+    open_tickets: DashMap<String, PageAccessScope>,
+    browser_grants: DashMap<String, PageAccessScope>,
+}
+
+#[derive(Clone)]
+struct PageUploadSession {
+    upload_id: String,
+    draft_key: String,
+    manifest: HashMap<String, String>,
+    finalized: bool,
+    expires_at: Instant,
+}
+
+/// Tracks the one active, manifest-bound upload session for each Page. Drafts
+/// use upload-specific asset namespaces, so superseded/concurrent uploads can
+/// never mix files before an immutable version is frozen.
+pub struct PageUploadManager {
+    sessions: DashMap<String, PageUploadSession>,
+    locks: Vec<tokio::sync::Mutex<()>>,
+}
+
+impl Default for PageUploadManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PageUploadManager {
+    pub fn new() -> Self {
+        Self {
+            sessions: DashMap::new(),
+            locks: (0..PAGE_UPLOAD_LOCK_SHARDS)
+                .map(|_| tokio::sync::Mutex::new(()))
+                .collect(),
+        }
+    }
+
+    fn lock_for(&self, page_key: &str) -> &tokio::sync::Mutex<()> {
+        let mut hasher = DefaultHasher::new();
+        page_key.hash(&mut hasher);
+        &self.locks[hasher.finish() as usize % self.locks.len()]
+    }
+
+    fn prune_expired(&self, now: Instant) -> Vec<String> {
+        let mut expired_drafts = Vec::new();
+        self.sessions.retain(|_, session| {
+            let keep = session.expires_at > now;
+            if !keep {
+                expired_drafts.push(session.draft_key.clone());
+            }
+            keep
+        });
+        expired_drafts
+    }
+}
+
+impl PageAccessManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn prune_expired(&self, now: Instant) {
+        self.open_tickets.retain(|_, scope| scope.expires_at > now);
+        self.browser_grants
+            .retain(|_, scope| scope.expires_at > now);
+    }
+
+    fn issue_open_ticket(
+        &self,
+        user_id: String,
+        username: String,
+        slug: String,
+        version_id: Option<String>,
+    ) -> Result<String, StatusCode> {
+        let now = Instant::now();
+        self.prune_expired(now);
+        if self.open_tickets.len() >= MAX_PAGE_OPEN_TICKETS {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+        let ticket = random_page_access_token();
+        self.open_tickets.insert(
+            ticket.clone(),
+            PageAccessScope {
+                user_id,
+                username,
+                slug,
+                version_id,
+                expires_at: now + PAGE_OPEN_TICKET_TTL,
+            },
+        );
+        Ok(ticket)
+    }
+
+    fn exchange_ticket(
+        &self,
+        ticket: &str,
+    ) -> Result<Option<(String, PageAccessScope)>, StatusCode> {
+        let now = Instant::now();
+        self.prune_expired(now);
+        if self.browser_grants.len() >= MAX_PAGE_BROWSER_GRANTS {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+        let Some((_, mut scope)) = self.open_tickets.remove(ticket) else {
+            return Ok(None);
+        };
+        if scope.expires_at <= now {
+            return Ok(None);
+        }
+        let grant = random_page_access_token();
+        scope.expires_at = now + PAGE_BROWSER_GRANT_TTL;
+        self.browser_grants.insert(grant.clone(), scope.clone());
+        Ok(Some((grant, scope)))
+    }
+
+    fn authorizes_page(
+        &self,
+        headers: &HeaderMap,
+        user_id: &str,
+        slug: &str,
+        version_id: Option<&str>,
+    ) -> bool {
+        let now = Instant::now();
+        let mut authorized = false;
+        for cookie_header in headers.get_all(header::COOKIE) {
+            let Ok(value) = cookie_header.to_str() else {
+                continue;
+            };
+            for cookie in value.split(';') {
+                let Some((name, token)) = cookie.trim().split_once('=') else {
+                    continue;
+                };
+                if name != PAGE_ACCESS_COOKIE {
+                    continue;
+                }
+                let Some(scope) = self.browser_grants.get(token) else {
+                    continue;
+                };
+                if scope.expires_at > now
+                    && scope.user_id == user_id
+                    && scope.slug == slug
+                    && scope.version_id.as_deref() == version_id
+                {
+                    authorized = true;
+                    break;
+                }
+            }
+            if authorized {
+                break;
+            }
+        }
+        if !authorized {
+            self.prune_expired(now);
+        }
+        authorized
+    }
+}
+
+fn random_page_access_token() -> String {
+    format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    )
+}
+
+fn is_valid_page_upload_id(upload_id: &str) -> bool {
+    upload_id.len() == 32 && upload_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn page_upload_session_key(user_id: &str, slug: &str) -> String {
+    format!("{user_id}\0{slug}")
+}
+
+fn page_upload_draft_key(user_id: &str, slug: &str, upload_id: &str) -> String {
+    format!("pages/{user_id}/{slug}/draft/{upload_id}")
+}
 
 fn is_valid_slug(slug: &str) -> bool {
     let bytes = slug.as_bytes();
@@ -73,18 +276,26 @@ pub fn pages_router() -> Router<AppState> {
             get(list_versions).post(freeze_version),
         )
         .route("/api/pages/{slug}/deploy", post(deploy_version))
+        .route("/api/pages/{slug}/unpublish", post(unpublish_page))
         .route(
             "/api/pages/{slug}/versions/{version_id}",
             axum::routing::delete(delete_version),
         )
         .route(
             "/api/pages/{slug}",
-            axum::routing::patch(update_page).delete(delete_page),
+            post(create_open_ticket)
+                .patch(update_page)
+                .delete(delete_page),
         )
+        .route("/api/page-open/{ticket}", get(exchange_open_ticket))
         // Preview routes (more specific first).
         .route(
             "/p/{username}/{slug}/@v/{version_id}",
-            get(serve_preview_root).post(serve_preview_root),
+            get(serve_preview_root)
+                .post(serve_preview_root)
+                .layer(DefaultBodyLimit::max(
+                    crate::page_execution::MAX_PAGE_FUNCTION_REQUEST_BODY_BYTES,
+                )),
         )
         .route(
             "/p/{username}/{slug}/@v/{version_id}/{*path}",
@@ -92,11 +303,18 @@ pub fn pages_router() -> Router<AppState> {
                 .post(serve_preview_path)
                 .put(serve_preview_path)
                 .delete(serve_preview_path)
-                .patch(serve_preview_path),
+                .patch(serve_preview_path)
+                .layer(DefaultBodyLimit::max(
+                    crate::page_execution::MAX_PAGE_FUNCTION_REQUEST_BODY_BYTES,
+                )),
         )
         .route(
             "/p/{username}/{slug}",
-            get(serve_prod_root).post(serve_prod_root),
+            get(serve_prod_root)
+                .post(serve_prod_root)
+                .layer(DefaultBodyLimit::max(
+                    crate::page_execution::MAX_PAGE_FUNCTION_REQUEST_BODY_BYTES,
+                )),
         )
         .route(
             "/p/{username}/{slug}/{*path}",
@@ -104,7 +322,10 @@ pub fn pages_router() -> Router<AppState> {
                 .post(serve_prod_path)
                 .put(serve_prod_path)
                 .delete(serve_prod_path)
-                .patch(serve_prod_path),
+                .patch(serve_prod_path)
+                .layer(DefaultBodyLimit::max(
+                    crate::page_execution::MAX_PAGE_FUNCTION_REQUEST_BODY_BYTES,
+                )),
         )
 }
 
@@ -120,11 +341,13 @@ pub struct FileManifestEntry {
 #[derive(Deserialize)]
 pub struct CheckPageFilesRequest {
     pub slug: String,
+    pub upload_id: String,
     pub files: Vec<FileManifestEntry>,
 }
 
 #[derive(Serialize)]
 pub struct CheckPageFilesResponse {
+    pub upload_id: String,
     pub needed: Vec<String>,
     pub existing_count: usize,
     pub total_count: usize,
@@ -139,6 +362,7 @@ pub struct UploadFileEntry {
 #[derive(Deserialize)]
 pub struct UploadPageFilesRequest {
     pub slug: String,
+    pub upload_id: String,
     #[serde(default)]
     pub title: String,
     pub visibility: String,
@@ -149,6 +373,7 @@ pub struct UploadPageFilesRequest {
 
 #[derive(Deserialize)]
 pub struct FreezeVersionRequest {
+    pub upload_id: String,
     #[serde(default)]
     pub title: String,
     #[serde(default)]
@@ -193,7 +418,127 @@ pub struct UpdatePageRequest {
     pub title: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct PageOpenRequest {
+    #[serde(default)]
+    pub version_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct PageOpenResponse {
+    pub open_url_path: String,
+    pub expires_in_seconds: u64,
+}
+
 // ── Management ──────────────────────────────────────────────────────────
+
+async fn create_open_ticket(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(slug): Path<String>,
+    Json(body): Json<PageOpenRequest>,
+) -> Result<Json<PageOpenResponse>, StatusCode> {
+    let auth = validate_auth(&state, &headers).await?;
+    let db = require_db(&state)?;
+    if !is_valid_slug(&slug) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let page = PageRow::get(db, &auth.user_id, &slug)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let username = UserRow::find_by_username_for_user_id(db, &auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    if !is_safe_page_username(&username) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let version_id = body
+        .version_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if let Some(version_id) = version_id.as_deref() {
+        PageVersionRow::get(db, &auth.user_id, &slug, version_id)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::NOT_FOUND)?;
+    } else if page.deployed_version_id.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let ticket =
+        state
+            .page_access_manager
+            .issue_open_ticket(auth.user_id, username, slug, version_id)?;
+    Ok(Json(PageOpenResponse {
+        open_url_path: format!("/api/page-open/{ticket}"),
+        expires_in_seconds: PAGE_OPEN_TICKET_TTL.as_secs(),
+    }))
+}
+
+async fn exchange_open_ticket(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(ticket): Path<String>,
+) -> Result<Response, StatusCode> {
+    if ticket.len() != 64 || !ticket.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let (grant, scope) = state
+        .page_access_manager
+        .exchange_ticket(&ticket)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let page_path = format!("/p/{}/{}", scope.username, scope.slug);
+    let target = match scope.version_id {
+        Some(version_id) => format!("{page_path}/@v/{version_id}"),
+        None => page_path.clone(),
+    };
+    let secure = request_used_https(&headers);
+    let cookie = format!(
+        "{PAGE_ACCESS_COOKIE}={grant}; Path={page_path}; Max-Age={}; HttpOnly; SameSite=Lax{}",
+        PAGE_BROWSER_GRANT_TTL.as_secs(),
+        if secure { "; Secure" } else { "" }
+    );
+    let mut response = Redirect::temporary(&target).into_response();
+    response.headers_mut().insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&cookie).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok(response)
+}
+
+fn request_used_https(headers: &HeaderMap) -> bool {
+    headers
+        .get("forwarded")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| {
+            value
+                .split(';')
+                .any(|part| part.trim().eq_ignore_ascii_case("proto=https"))
+        })
+        || headers
+            .get("x-forwarded-proto")
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| {
+                value
+                    .split(',')
+                    .next()
+                    .is_some_and(|proto| proto.trim().eq_ignore_ascii_case("https"))
+            })
+}
+
+fn is_safe_page_username(username: &str) -> bool {
+    !username.is_empty()
+        && username.len() <= 128
+        && username
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
 
 async fn list_pages(
     State(state): State<AppState>,
@@ -230,11 +575,15 @@ async fn check_page_files(
 ) -> Result<Json<CheckPageFilesResponse>, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
     let db = require_db(&state)?;
-    if !is_valid_slug(&body.slug) {
+    if !is_valid_slug(&body.slug) || !is_valid_page_upload_id(&body.upload_id) {
         return Err(StatusCode::BAD_REQUEST);
     }
 
     let mut total_bytes: u64 = 0;
+    let mut manifest = HashMap::with_capacity(body.files.len());
+    if body.files.is_empty() || body.files.len() > MAX_PAGE_FILES {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     for entry in &body.files {
         if crate::validated_asset_relative_path(&entry.path).is_err()
             || !crate::is_valid_content_hash(&entry.hash)
@@ -245,6 +594,12 @@ async fn check_page_files(
             return Err(StatusCode::PAYLOAD_TOO_LARGE);
         }
         total_bytes = total_bytes.saturating_add(entry.size);
+        if manifest
+            .insert(entry.path.clone(), entry.hash.clone())
+            .is_some()
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
     if total_bytes > MAX_PAGE_BYTES {
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
@@ -262,13 +617,50 @@ async fn check_page_files(
         }
     }
 
-    let draft_key = page_draft_asset_key(&auth.user_id, &body.slug);
+    let page_key = page_upload_session_key(&auth.user_id, &body.slug);
+    let _page_guard = state.page_upload_manager.lock_for(&page_key).lock().await;
+    let now = Instant::now();
+    for stale_draft in state.page_upload_manager.prune_expired(now) {
+        state.asset_store.cleanup_room(&stale_draft);
+    }
+    let replacing_existing_page_session =
+        state.page_upload_manager.sessions.contains_key(&page_key);
+    if !replacing_existing_page_session
+        && state.page_upload_manager.sessions.len() >= MAX_PAGE_UPLOAD_SESSIONS
+    {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    let draft_key = page_upload_draft_key(&auth.user_id, &body.slug, &body.upload_id);
+    if let Some((_, previous)) = state.page_upload_manager.sessions.remove(&page_key) {
+        state.asset_store.cleanup_room(&previous.draft_key);
+    }
+    // Reclaim upload-specific drafts left by a prior process crash. The
+    // in-memory store uses exact namespaces (the active one was removed
+    // above); the disk store recursively clears this Page's draft subtree.
+    state
+        .asset_store
+        .cleanup_room(&page_draft_asset_key(&auth.user_id, &body.slug));
+    // A retry using the same upload id must also start from the submitted
+    // manifest, never from partial mappings left by the failed attempt.
+    state.asset_store.cleanup_room(&draft_key);
     let asset_store = Arc::clone(&state.asset_store);
+    let response_upload_id = body.upload_id.clone();
     let response = tokio::task::spawn_blocking(move || {
-        process_check_page_files(asset_store, &draft_key, body.files)
+        process_check_page_files(asset_store, &draft_key, response_upload_id, body.files)
     })
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+    state.page_upload_manager.sessions.insert(
+        page_key,
+        PageUploadSession {
+            upload_id: body.upload_id.clone(),
+            draft_key: page_upload_draft_key(&auth.user_id, &body.slug, &body.upload_id),
+            manifest,
+            finalized: false,
+            expires_at: now + PAGE_UPLOAD_SESSION_TTL,
+        },
+    );
     Ok(Json(response))
 }
 
@@ -279,7 +671,7 @@ async fn upload_page_files(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
     let db = require_db(&state)?;
-    if !is_valid_slug(&body.slug) {
+    if !is_valid_slug(&body.slug) || !is_valid_page_upload_id(&body.upload_id) {
         return Err(StatusCode::BAD_REQUEST);
     }
     let visibility = PageVisibility::parse(&body.visibility).ok_or(StatusCode::BAD_REQUEST)?;
@@ -296,10 +688,32 @@ async fn upload_page_files(
         }
     }
 
+    let page_key = page_upload_session_key(&auth.user_id, &body.slug);
+    let _page_guard = state.page_upload_manager.lock_for(&page_key).lock().await;
+    let session = state
+        .page_upload_manager
+        .sessions
+        .get(&page_key)
+        .map(|entry| entry.value().clone())
+        .ok_or(StatusCode::CONFLICT)?;
+    if session.upload_id != body.upload_id {
+        return Err(StatusCode::CONFLICT);
+    }
+    if session.expires_at <= Instant::now() {
+        state.page_upload_manager.sessions.remove(&page_key);
+        state.asset_store.cleanup_room(&session.draft_key);
+        return Err(StatusCode::GONE);
+    }
+    for (path, entry) in &body.files {
+        if session.manifest.get(path) != Some(&entry.hash) {
+            return Err(StatusCode::CONFLICT);
+        }
+    }
+
     let existing = PageRow::get(db, &auth.user_id, &body.slug)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if existing.is_none() {
+    if body.finalize && existing.is_none() {
         let count = PageRow::count_for_user(db, &auth.user_id)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -316,11 +730,7 @@ async fn upload_page_files(
     } else {
         body.title.clone()
     };
-    PageRow::ensure(db, &auth.user_id, &body.slug, visibility, &title)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let draft_key = page_draft_asset_key(&auth.user_id, &body.slug);
+    let draft_key = session.draft_key.clone();
     let asset_store = Arc::clone(&state.asset_store);
     let files = body.files;
     let stored = tokio::task::spawn_blocking(move || {
@@ -329,10 +739,35 @@ async fn upload_page_files(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
 
+    if body.finalize {
+        let actual_manifest = state
+            .asset_store
+            .list_room_entries(&session.draft_key)
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+        if actual_manifest != session.manifest {
+            return Err(StatusCode::CONFLICT);
+        }
+        PageRow::ensure(db, &auth.user_id, &body.slug, visibility, &title)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mut active = state
+            .page_upload_manager
+            .sessions
+            .get_mut(&page_key)
+            .ok_or(StatusCode::CONFLICT)?;
+        if active.upload_id != body.upload_id {
+            return Err(StatusCode::CONFLICT);
+        }
+        active.finalized = true;
+        active.expires_at = Instant::now() + PAGE_UPLOAD_SESSION_TTL;
+    }
+
     Ok(Json(serde_json::json!({
         "status": "ok",
         "files_stored": stored,
         "slug": body.slug,
+        "upload_id": body.upload_id,
         "draft": true,
         "finalize": body.finalize,
     })))
@@ -346,8 +781,25 @@ async fn freeze_version(
 ) -> Result<Json<VersionInfo>, StatusCode> {
     let auth = validate_auth(&state, &headers).await?;
     let db = require_db(&state)?;
-    if !is_valid_slug(&slug) {
+    if !is_valid_slug(&slug) || !is_valid_page_upload_id(&body.upload_id) {
         return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let page_key = page_upload_session_key(&auth.user_id, &slug);
+    let _page_guard = state.page_upload_manager.lock_for(&page_key).lock().await;
+    let session = state
+        .page_upload_manager
+        .sessions
+        .get(&page_key)
+        .map(|entry| entry.value().clone())
+        .ok_or(StatusCode::CONFLICT)?;
+    if session.upload_id != body.upload_id || !session.finalized {
+        return Err(StatusCode::CONFLICT);
+    }
+    if session.expires_at <= Instant::now() {
+        state.page_upload_manager.sessions.remove(&page_key);
+        state.asset_store.cleanup_room(&session.draft_key);
+        return Err(StatusCode::GONE);
     }
 
     let page = PageRow::get(db, &auth.user_id, &slug)
@@ -362,7 +814,7 @@ async fn freeze_version(
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
-    let draft_key = page_draft_asset_key(&auth.user_id, &slug);
+    let draft_key = session.draft_key.clone();
     if !state.asset_store.has_room_files(&draft_key) {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -400,7 +852,7 @@ async fn freeze_version(
         body.title.clone()
     };
 
-    PageVersionRow::insert(
+    if PageVersionRow::insert(
         db,
         &auth.user_id,
         &slug,
@@ -412,9 +864,14 @@ async fn freeze_version(
         &body.note,
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .is_err()
+    {
+        state.asset_store.cleanup_room(&version_key);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
 
-    // Clear draft after successful freeze.
+    // Consume the exact finalized upload session after a successful freeze.
+    state.page_upload_manager.sessions.remove(&page_key);
     state.asset_store.cleanup_room(&draft_key);
 
     let username = UserRow::find_by_username_for_user_id(db, &auth.user_id)
@@ -520,6 +977,25 @@ async fn deploy_version(
     Ok(Json(page_to_info(&page, &username)))
 }
 
+async fn unpublish_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(slug): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    let auth = validate_auth(&state, &headers).await?;
+    let db = require_db(&state)?;
+    if !is_valid_slug(&slug) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let updated = PageRow::clear_deployed_version(db, &auth.user_id, &slug)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !updated {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn delete_version(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -593,9 +1069,23 @@ async fn delete_page(
     if !is_valid_slug(&slug) {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let page_key = page_upload_session_key(&auth.user_id, &slug);
+    let _page_guard = state.page_upload_manager.lock_for(&page_key).lock().await;
     let versions = PageVersionRow::list_for_page(db, &auth.user_id, &slug)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Commit the relational deletion first. Filesystem/object cleanup is
+    // idempotent, whereas deleting assets before a failed multi-table DB
+    // mutation could leave a partially present Page with missing content.
+    let deleted = PageRow::delete(db, &auth.user_id, &slug)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !deleted {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    if let Some((_, active_upload)) = state.page_upload_manager.sessions.remove(&page_key) {
+        state.asset_store.cleanup_room(&active_upload.draft_key);
+    }
     for v in &versions {
         state.asset_store.cleanup_room(&page_version_asset_key(
             &auth.user_id,
@@ -611,12 +1101,6 @@ async fn delete_page(
         .cleanup_room(&page_legacy_asset_key(&auth.user_id, &slug));
     if let Some(store) = &state.page_data {
         store.cleanup_page(&auth.user_id, &slug);
-    }
-    let deleted = PageRow::delete(db, &auth.user_id, &slug)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if !deleted {
-        return Err(StatusCode::NOT_FOUND);
     }
     Ok(Json(serde_json::json!({ "status": "ok", "slug": slug })))
 }
@@ -710,7 +1194,7 @@ async fn serve_page(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
-    enforce_visibility(&state, &headers, &page).await?;
+    enforce_visibility(&state, &headers, &page, version_override).await?;
 
     // Resolve version.
     let version_id = if let Some(v) = version_override {
@@ -794,6 +1278,13 @@ async fn serve_with_worker(
     raw_path: &str,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
+    if body.len() > crate::page_execution::MAX_PAGE_FUNCTION_REQUEST_BODY_BYTES {
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+    let _execution_permit = state
+        .page_execution_guard
+        .try_acquire(&page.user_id, &page.slug)
+        .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
     let page_data = state.page_data.clone().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     let db = state.db.clone().ok_or(StatusCode::NOT_IMPLEMENTED)?;
     let asset_store = Arc::clone(&state.asset_store);
@@ -875,7 +1366,11 @@ async fn serve_with_worker(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .map_err(|e| {
         tracing::warn!("Page function error: {e}");
-        StatusCode::BAD_GATEWAY
+        if matches!(e, PageFunctionError::Timeout(_)) {
+            StatusCode::GATEWAY_TIMEOUT
+        } else {
+            StatusCode::BAD_GATEWAY
+        }
     })?;
 
     // If worker returns 404 for document GET, fall back to static assets.
@@ -908,12 +1403,46 @@ async fn serve_with_worker(
             axum::http::HeaderName::try_from(k),
             axum::http::HeaderValue::try_from(v),
         ) {
-            builder = builder.header(name, val);
+            if should_forward_page_worker_response_header(&name) {
+                builder = builder.header(name, val);
+            }
         }
     }
     builder
         .body(axum::body::Body::from(response.body))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+/// Filter worker-controlled response headers that can mutate origin-wide
+/// browser policy/state or connection framing. This is defense in depth: Page
+/// documents still share an origin with the relay until hosting moves to a
+/// dedicated Page origin. Ordinary representation and CORS headers remain
+/// available to Page authors.
+fn should_forward_page_worker_response_header(name: &axum::http::HeaderName) -> bool {
+    !matches!(
+        name.as_str(),
+        "accept-ch"
+            | "alt-svc"
+            | "clear-site-data"
+            | "connection"
+            | "content-length"
+            | "critical-ch"
+            | "keep-alive"
+            | "nel"
+            | "proxy-authenticate"
+            | "proxy-authorization"
+            | "report-to"
+            | "reporting-endpoints"
+            | "service-worker-allowed"
+            | "set-cookie"
+            | "set-cookie2"
+            | "strict-transport-security"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "x-content-type-options"
+    )
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -1005,6 +1534,7 @@ async fn enforce_visibility(
     state: &AppState,
     headers: &HeaderMap,
     page: &PageWithUsername,
+    version_id: Option<&str>,
 ) -> Result<(), StatusCode> {
     let visibility = page
         .visibility_enum()
@@ -1012,19 +1542,37 @@ async fn enforce_visibility(
     match visibility {
         PageVisibility::Public => Ok(()),
         PageVisibility::Relay => {
-            resolve_viewer(state, headers).await?;
-            Ok(())
+            if resolve_viewer(state, headers).await.is_ok()
+                || state.page_access_manager.authorizes_page(
+                    headers,
+                    &page.user_id,
+                    &page.slug,
+                    version_id,
+                )
+            {
+                Ok(())
+            } else {
+                Err(StatusCode::UNAUTHORIZED)
+            }
         }
         PageVisibility::Private => {
             // Return NOT_FOUND for any auth failure so the existence of a
             // private page is not revealed to anonymous or foreign viewers.
-            let viewer = resolve_viewer(state, headers)
-                .await
-                .map_err(|_| StatusCode::NOT_FOUND)?;
-            if viewer.user_id != page.user_id {
-                return Err(StatusCode::NOT_FOUND);
+            if let Ok(viewer) = resolve_viewer(state, headers).await {
+                if viewer.user_id == page.user_id {
+                    return Ok(());
+                }
             }
-            Ok(())
+            if state.page_access_manager.authorizes_page(
+                headers,
+                &page.user_id,
+                &page.slug,
+                version_id,
+            ) {
+                Ok(())
+            } else {
+                Err(StatusCode::NOT_FOUND)
+            }
         }
     }
 }
@@ -1040,8 +1588,9 @@ async fn resolve_viewer(state: &AppState, headers: &HeaderMap) -> Result<AuthUse
 fn process_check_page_files(
     asset_store: Arc<dyn WebAssetStore>,
     asset_key: &str,
+    upload_id: String,
     files: Vec<FileManifestEntry>,
-) -> CheckPageFilesResponse {
+) -> Result<CheckPageFilesResponse, StatusCode> {
     let mut needed = Vec::new();
     let mut existing_count = 0usize;
     let total_count = files.len();
@@ -1054,16 +1603,19 @@ fn process_check_page_files(
         }
         if asset_store.has_content(&entry.hash) {
             existing_count += 1;
-            let _ = asset_store.map_to_room(asset_key, &entry.path, &entry.hash);
+            asset_store
+                .map_to_room(asset_key, &entry.path, &entry.hash)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         } else {
             needed.push(entry.path);
         }
     }
-    CheckPageFilesResponse {
+    Ok(CheckPageFilesResponse {
+        upload_id,
         needed,
         existing_count,
         total_count,
-    }
+    })
 }
 
 fn process_upload_page_files(
@@ -1146,6 +1698,30 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
 
+    #[test]
+    fn worker_response_headers_cannot_mutate_origin_wide_browser_state() {
+        for name in [
+            "service-worker-allowed",
+            "set-cookie",
+            "clear-site-data",
+            "strict-transport-security",
+            "reporting-endpoints",
+            "transfer-encoding",
+        ] {
+            let name = axum::http::HeaderName::from_bytes(name.as_bytes()).unwrap();
+            assert!(!should_forward_page_worker_response_header(&name), "{name}");
+        }
+
+        for name in [
+            "content-type",
+            "cache-control",
+            "access-control-allow-origin",
+        ] {
+            let name = axum::http::HeaderName::from_bytes(name.as_bytes()).unwrap();
+            assert!(should_forward_page_worker_response_header(&name), "{name}");
+        }
+    }
+
     async fn setup_app() -> (axum::Router, String, String) {
         let pool = connect(":memory:").await.unwrap();
         let pool = Arc::new(pool);
@@ -1178,6 +1754,100 @@ mod tests {
         (app, tok_alice.token, tok_bob.token)
     }
 
+    async fn begin_test_upload(
+        app: &axum::Router,
+        token: &str,
+        slug: &str,
+        files: &[(&str, &[u8])],
+    ) -> (String, serde_json::Map<String, serde_json::Value>) {
+        let upload_id = uuid::Uuid::new_v4().simple().to_string();
+        let mut manifest = Vec::new();
+        let mut upload_files = serde_json::Map::new();
+        for (path, content) in files {
+            let hash = hex_sha256(content);
+            manifest.push(serde_json::json!({
+                "path": path,
+                "hash": hash,
+                "size": content.len(),
+            }));
+            upload_files.insert(
+                (*path).to_string(),
+                serde_json::json!({ "content": B64.encode(content), "hash": hash }),
+            );
+        }
+        let check = serde_json::json!({
+            "slug": slug,
+            "upload_id": upload_id,
+            "files": manifest,
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/check-files")
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(check.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        (upload_id, upload_files)
+    }
+
+    async fn finish_test_upload(
+        app: &axum::Router,
+        token: &str,
+        slug: &str,
+        visibility: &str,
+        upload_id: &str,
+        files: serde_json::Map<String, serde_json::Value>,
+    ) -> String {
+        let upload = serde_json::json!({
+            "slug": slug,
+            "upload_id": upload_id,
+            "title": slug,
+            "visibility": visibility,
+            "files": files,
+            "finalize": true,
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/upload-files")
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(upload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let freeze = serde_json::json!({ "upload_id": upload_id, "title": slug });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/pages/{slug}/versions"))
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(freeze.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let version: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        version["version_id"].as_str().unwrap().to_string()
+    }
+
     async fn save_and_deploy(app: &axum::Router, token: &str, slug: &str, html: &str) -> String {
         save_and_deploy_with_visibility(app, token, slug, html, "public").await
     }
@@ -1191,8 +1861,29 @@ mod tests {
     ) -> String {
         let hash = hex_sha256(html.as_bytes());
         let b64 = B64.encode(html.as_bytes());
+        let upload_id = uuid::Uuid::new_v4().simple().to_string();
+        let check = serde_json::json!({
+            "slug": slug,
+            "upload_id": upload_id,
+            "files": [{ "path": "index.html", "hash": hash, "size": html.len() }]
+        });
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/check-files")
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(check.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
         let upload = serde_json::json!({
             "slug": slug,
+            "upload_id": upload_id,
             "title": slug,
             "visibility": visibility,
             "finalize": true,
@@ -1213,7 +1904,11 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        let freeze = serde_json::json!({ "title": slug, "note": "test" });
+        let freeze = serde_json::json!({
+            "upload_id": upload_id,
+            "title": slug,
+            "note": "test"
+        });
         let resp = app
             .clone()
             .oneshot(
@@ -1255,8 +1950,33 @@ mod tests {
         let (app, alice, _) = setup_app().await;
         let hash = hex_sha256(b"<html>draft</html>");
         let b64 = B64.encode(b"<html>draft</html>");
+        let upload_id = uuid::Uuid::new_v4().simple().to_string();
+        let check = serde_json::json!({
+            "slug": "staged",
+            "upload_id": upload_id,
+            "files": [{
+                "path": "index.html",
+                "hash": hash,
+                "size": b"<html>draft</html>".len()
+            }]
+        });
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/check-files")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(check.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
         let upload = serde_json::json!({
             "slug": "staged",
+            "upload_id": upload_id,
             "title": "staged",
             "visibility": "public",
             "files": { "index.html": { "content": b64, "hash": hash } }
@@ -1314,6 +2034,123 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn republish_manifest_removes_files_not_present_in_the_new_version() {
+        let (app, alice, _) = setup_app().await;
+        let first_files = [
+            ("index.html", b"<html>first</html>".as_slice()),
+            ("removed.txt", b"must not survive".as_slice()),
+        ];
+        let (first_upload, first_map) =
+            begin_test_upload(&app, &alice, "clean-republish", &first_files).await;
+        let first_version = finish_test_upload(
+            &app,
+            &alice,
+            "clean-republish",
+            "public",
+            &first_upload,
+            first_map,
+        )
+        .await;
+        assert_eq!(
+            get_page(
+                &app,
+                &format!("/p/alice/clean-republish/@v/{first_version}/removed.txt"),
+                None,
+            )
+            .await,
+            StatusCode::OK
+        );
+
+        let second_files = [("index.html", b"<html>second</html>".as_slice())];
+        let (second_upload, second_map) =
+            begin_test_upload(&app, &alice, "clean-republish", &second_files).await;
+        let second_version = finish_test_upload(
+            &app,
+            &alice,
+            "clean-republish",
+            "public",
+            &second_upload,
+            second_map,
+        )
+        .await;
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/p/alice/clean-republish/@v/{second_version}/removed.txt"
+                    ))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // Static Page routing falls back to the new index.html for unknown
+        // paths. The old file content must not survive in the new manifest.
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), "<html>second</html>");
+    }
+
+    #[tokio::test]
+    async fn superseded_upload_session_cannot_mix_or_freeze_files() {
+        let (app, alice, _) = setup_app().await;
+        let first_files = [("index.html", b"<html>first</html>".as_slice())];
+        let second_files = [("index.html", b"<html>second</html>".as_slice())];
+        let (first_upload, first_map) =
+            begin_test_upload(&app, &alice, "concurrent", &first_files).await;
+        let (second_upload, second_map) =
+            begin_test_upload(&app, &alice, "concurrent", &second_files).await;
+
+        let stale_upload = serde_json::json!({
+            "slug": "concurrent",
+            "upload_id": first_upload,
+            "visibility": "private",
+            "files": first_map,
+            "finalize": true,
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/upload-files")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(stale_upload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let _ = finish_test_upload(
+            &app,
+            &alice,
+            "concurrent",
+            "private",
+            &second_upload,
+            second_map,
+        )
+        .await;
+        let stale_freeze = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/concurrent/versions")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({ "upload_id": first_upload }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(stale_freeze.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
     async fn worker_can_use_kv() {
         let (app, alice, _) = setup_app().await;
         let worker = r#"
@@ -1329,19 +2166,14 @@ mod tests {
             ("index.html", b"<html>static</html>".as_slice()),
             ("server/worker.js", worker.as_bytes()),
         ];
-        let mut map = serde_json::Map::new();
-        for (path, content) in files {
-            let hash = hex_sha256(content);
-            map.insert(
-                path.to_string(),
-                serde_json::json!({ "content": B64.encode(content), "hash": hash }),
-            );
-        }
+        let (upload_id, map) = begin_test_upload(&app, &alice, "fn", &files).await;
         let upload = serde_json::json!({
             "slug": "fn",
+            "upload_id": upload_id,
             "title": "fn",
             "visibility": "public",
-            "files": map
+            "files": map,
+            "finalize": true
         });
         let resp = app
             .clone()
@@ -1357,7 +2189,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let freeze = serde_json::json!({});
+        let freeze = serde_json::json!({ "upload_id": upload_id });
         let resp = app
             .clone()
             .oneshot(
@@ -1465,6 +2297,197 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn one_time_open_ticket_exchanges_for_scoped_http_only_cookie() {
+        let (app, alice, bob) = setup_app().await;
+        let private_version = save_and_deploy_with_visibility(
+            &app,
+            &alice,
+            "private-open",
+            "<html>p</html>",
+            "private",
+        )
+        .await;
+        save_and_deploy_with_visibility(&app, &alice, "other-private", "<html>o</html>", "private")
+            .await;
+
+        let unauthorized = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/private-open")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+
+        let foreign = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/private-open")
+                    .header("Authorization", format!("Bearer {bob}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+
+        let ticket_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/private-open")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(ticket_response.status(), StatusCode::OK);
+        let body = to_bytes(ticket_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let open_path = json["open_url_path"].as_str().unwrap();
+        assert!(!open_path.contains(&alice));
+
+        let exchange = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(open_path)
+                    .header("x-forwarded-proto", "https")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(exchange.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            exchange.headers().get(header::LOCATION).unwrap(),
+            "/p/alice/private-open"
+        );
+        let cookie = exchange
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(cookie.contains("HttpOnly"));
+        assert!(cookie.contains("SameSite=Lax"));
+        assert!(cookie.contains("Secure"));
+        assert!(cookie.contains("Path=/p/alice/private-open"));
+        assert!(!cookie.contains(&alice));
+        let browser_cookie = cookie.split(';').next().unwrap();
+
+        let replay = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(open_path)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(replay.status(), StatusCode::NOT_FOUND);
+
+        let authorized = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/private-open")
+                    .header(header::COOKIE, browser_cookie)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(authorized.status(), StatusCode::OK);
+
+        // A production ticket is not a blanket grant for immutable preview
+        // routes, even when the preview belongs to the same Page.
+        let wrong_version_scope = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/p/alice/private-open/@v/{private_version}"))
+                    .header(header::COOKIE, browser_cookie)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wrong_version_scope.status(), StatusCode::NOT_FOUND);
+
+        let wrong_page = app
+            .oneshot(
+                Request::builder()
+                    .uri("/p/alice/other-private")
+                    .header(header::COOKIE, browser_cookie)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wrong_page.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn unpublish_stops_production_without_deleting_versions() {
+        let (app, alice, _) = setup_app().await;
+        let version_id = save_and_deploy(&app, &alice, "pause-me", "<html>live</html>").await;
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/pages/pause-me/unpublish")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            get_page(&app, "/p/alice/pause-me", None).await,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            get_page(&app, &format!("/p/alice/pause-me/@v/{version_id}"), None,).await,
+            StatusCode::OK
+        );
+
+        let versions = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/pages/pause-me/versions")
+                    .header("Authorization", format!("Bearer {alice}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(versions.status(), StatusCode::OK);
+        let body = to_bytes(versions.into_body(), usize::MAX).await.unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 1);
+        assert_eq!(list[0]["deployed"], false);
+    }
+
+    #[tokio::test]
     async fn worker_does_not_receive_credential_headers() {
         let (app, alice, _) = setup_app().await;
         let worker = r#"
@@ -1474,19 +2497,14 @@ mod tests {
             }
         "#;
         let files = [("server/worker.js", worker.as_bytes())];
-        let mut map = serde_json::Map::new();
-        for (path, content) in files {
-            let hash = hex_sha256(content);
-            map.insert(
-                path.to_string(),
-                serde_json::json!({ "content": B64.encode(content), "hash": hash }),
-            );
-        }
+        let (upload_id, map) = begin_test_upload(&app, &alice, "hdr", &files).await;
         let upload = serde_json::json!({
             "slug": "hdr",
+            "upload_id": upload_id,
             "title": "hdr",
             "visibility": "relay",
-            "files": map
+            "files": map,
+            "finalize": true
         });
         let resp = app
             .clone()
@@ -1510,7 +2528,9 @@ mod tests {
                     .uri("/api/pages/hdr/versions")
                     .header("Authorization", format!("Bearer {alice}"))
                     .header("content-type", "application/json")
-                    .body(axum::body::Body::from("{}"))
+                    .body(axum::body::Body::from(
+                        serde_json::json!({ "upload_id": upload_id }).to_string(),
+                    ))
                     .unwrap(),
             )
             .await
@@ -1573,5 +2593,22 @@ mod tests {
         let page = &pages[0];
         assert_eq!(page["file_count"].as_i64().unwrap(), 1);
         assert_eq!(page["total_bytes"].as_i64().unwrap(), html.len() as i64);
+    }
+
+    #[tokio::test]
+    async fn page_request_body_limit_is_applied_before_worker_execution() {
+        let (app, _, _) = setup_app().await;
+        let body = vec![0u8; crate::page_execution::MAX_PAGE_FUNCTION_REQUEST_BODY_BYTES + 1];
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/p/alice/missing/api")
+                    .body(axum::body::Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 }

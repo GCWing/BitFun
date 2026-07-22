@@ -18,6 +18,7 @@ bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-services-core = { path = "../../services/services-core", default-features = false, optional = true }
 chrono = { workspace = true }
 dirs = { workspace = true, optional = true }
+keyring = { workspace = true, optional = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
@@ -36,6 +37,7 @@ subscription-auth = [
     "dep:base64",
     "dep:bitfun-services-core",
     "dep:dirs",
+    "dep:keyring",
     "dep:sha2",
     "dep:uuid",
 ]

@@ -30,12 +30,54 @@ const PERMISSION_ACTION_LABEL_KEYS: Record<string, string> = {
   mcp: 'permission.actions.mcp',
   task: 'permission.actions.task',
   skill: 'permission.actions.skill',
+  page_publish: 'permission.actions.pagePublish',
+  page_deploy: 'permission.actions.pageDeploy',
   custom_tool: 'permission.actions.customTool',
   external_directory: 'permission.actions.externalDirectory',
 };
 
+const PAGE_VISIBILITY_LABEL_KEYS: Record<string, string> = {
+  private: 'permission.visibility.private',
+  relay: 'permission.visibility.relay',
+  public: 'permission.visibility.public',
+};
+
 function permissionActionLabel(action: string, t: (key: string) => string): string {
   return t(PERMISSION_ACTION_LABEL_KEYS[action] ?? 'permission.actions.other');
+}
+
+function metadataString(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function permissionRisk(
+  request: PermissionRequest | undefined,
+  t: (key: string, values?: Record<string, string>) => string,
+): string | undefined {
+  if (!request) return undefined;
+  const metadata = request.displayMetadata;
+  const operation = metadataString(metadata, 'pageOperation');
+  const slug = metadataString(metadata, 'pageSlug');
+  if (operation && slug) {
+    if (operation === 'deploy') {
+      return t('permission.risks.pageDeploy', {
+        slug,
+        version: metadataString(metadata, 'pageVersion') ?? '',
+      });
+    }
+    const visibility = metadataString(metadata, 'pageVisibility') ?? 'private';
+    const translatedVisibility = t(
+      PAGE_VISIBILITY_LABEL_KEYS[visibility] ?? PAGE_VISIBILITY_LABEL_KEYS.private,
+    );
+    return t(
+      operation === 'publish' ? 'permission.risks.pagePublish' : 'permission.risks.pageSave',
+      { slug, visibility: translatedVisibility },
+    );
+  }
+  return [metadata?.riskDescription, metadata?.risk].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  );
 }
 
 export function PermissionRequestPanel({
@@ -50,9 +92,7 @@ export function PermissionRequestPanel({
   const [error, setError] = useState(false);
   const inputHeight = useChatInputState((state) => state.inputHeight);
   const request = requests[0];
-  const risk = [request?.displayMetadata?.riskDescription, request?.displayMetadata?.risk].find(
-    (value): value is string => typeof value === 'string' && value.trim().length > 0,
-  );
+  const risk = permissionRisk(request, t);
 
   const alwaysAllowTooltip = request?.saveResources?.length
     ? request.projectPath?.trim()
@@ -156,11 +196,13 @@ export function PermissionRequestPanel({
           <button type="button" onClick={() => void respond('once')} disabled={responding}>
             <Check size={15} aria-hidden="true" /> {t('permission.allowOnce')}
           </button>
-          <Tooltip content={alwaysAllowTooltip} placement="top">
-            <button type="button" onClick={() => void respond('always')} disabled={responding}>
-              <Check size={15} aria-hidden="true" /> {t('permission.allowAlways')}
-            </button>
-          </Tooltip>
+          {!!request.saveResources?.length && (
+            <Tooltip content={alwaysAllowTooltip} placement="top">
+              <button type="button" onClick={() => void respond('always')} disabled={responding}>
+                <Check size={15} aria-hidden="true" /> {t('permission.allowAlways')}
+              </button>
+            </Tooltip>
+          )}
           <button
             type="button"
             className="permission-request-panel__reject"

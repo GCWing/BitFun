@@ -13,6 +13,13 @@ use std::time::Duration;
 
 pub type DbPool = Pool<Sqlite>;
 
+pub const MAX_PAGE_KV_KEY_BYTES: usize = 256;
+pub const MAX_PAGE_KV_VALUE_BYTES: usize = 64 * 1024;
+pub const MAX_PAGE_KV_ENTRIES: i64 = 1_024;
+pub const MAX_USER_KV_ENTRIES: i64 = 10_000;
+pub const MAX_PAGE_KV_BYTES: i64 = 5 * 1024 * 1024;
+pub const MAX_USER_KV_BYTES: i64 = 25 * 1024 * 1024;
+
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS users (
   user_id            TEXT PRIMARY KEY,
@@ -1153,32 +1160,57 @@ impl PageRow {
         Ok(())
     }
 
+    pub async fn clear_deployed_version(pool: &DbPool, user_id: &str, slug: &str) -> Result<bool> {
+        let now = Utc::now().timestamp();
+        let result = sqlx::query(
+            "UPDATE pages SET deployed_version_id = NULL, updated_at = ? \
+             WHERE user_id = ? AND slug = ?",
+        )
+        .bind(now)
+        .bind(user_id)
+        .bind(slug)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("clear deployed version: {e}"))?;
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn delete(pool: &DbPool, user_id: &str, slug: &str) -> Result<bool> {
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("begin page delete transaction: {e}"))?;
         sqlx::query("DELETE FROM page_kv WHERE user_id = ? AND slug = ?")
             .bind(user_id)
             .bind(slug)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete page_kv: {e}"))?;
         sqlx::query("DELETE FROM page_blobs WHERE user_id = ? AND slug = ?")
             .bind(user_id)
             .bind(slug)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete page_blobs: {e}"))?;
         sqlx::query("DELETE FROM page_versions WHERE user_id = ? AND slug = ?")
             .bind(user_id)
             .bind(slug)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete page_versions: {e}"))?;
         let result = sqlx::query("DELETE FROM pages WHERE user_id = ? AND slug = ?")
             .bind(user_id)
             .bind(slug)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| anyhow!("delete page: {e}"))?;
-        Ok(result.rows_affected() > 0)
+        if result.rows_affected() == 0 {
+            return Ok(false);
+        }
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("commit page delete transaction: {e}"))?;
+        Ok(true)
     }
 
     /// Resolve a page by public URL components `(username, slug)`.
@@ -1311,12 +1343,24 @@ impl PageVersionRow {
 pub mod page_kv {
     use super::*;
 
+    fn validate_key(key: &str) -> Result<()> {
+        if key.is_empty() || key.len() > MAX_PAGE_KV_KEY_BYTES || key.chars().any(char::is_control)
+        {
+            return Err(anyhow!(
+                "page KV key must be non-empty, control-free, and at most {} bytes",
+                MAX_PAGE_KV_KEY_BYTES
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn get(
         pool: &DbPool,
         user_id: &str,
         slug: &str,
         key: &str,
     ) -> Result<Option<String>> {
+        validate_key(key)?;
         let row: Option<(String,)> =
             sqlx::query_as("SELECT value FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?")
                 .bind(user_id)
@@ -1335,6 +1379,53 @@ pub mod page_kv {
         key: &str,
         value: &str,
     ) -> Result<()> {
+        validate_key(key)?;
+        if value.len() > MAX_PAGE_KV_VALUE_BYTES {
+            return Err(anyhow!(
+                "page KV value exceeds the {} byte operation limit",
+                MAX_PAGE_KV_VALUE_BYTES
+            ));
+        }
+
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| anyhow!("page_kv begin quota transaction: {e}"))?;
+        let old_bytes: Option<(i64,)> = sqlx::query_as(
+            "SELECT length(CAST(key AS BLOB)) + length(CAST(value AS BLOB)) \
+             FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .bind(key)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("page_kv read existing size: {e}"))?;
+        let page_usage: (i64, i64) = sqlx::query_as(
+            "SELECT COUNT(*), COALESCE(SUM(length(CAST(key AS BLOB)) + \
+             length(CAST(value AS BLOB))), 0) FROM page_kv WHERE user_id = ? AND slug = ?",
+        )
+        .bind(user_id)
+        .bind(slug)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("page_kv read page quota: {e}"))?;
+        let user_usage: (i64, i64) = sqlx::query_as(
+            "SELECT COUNT(*), COALESCE(SUM(length(CAST(key AS BLOB)) + \
+             length(CAST(value AS BLOB))), 0) FROM page_kv WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| anyhow!("page_kv read account quota: {e}"))?;
+        enforce_quota(
+            page_usage,
+            user_usage,
+            old_bytes.map_or(0, |row| row.0),
+            key.len().saturating_add(value.len()) as i64,
+            old_bytes.is_none(),
+        )?;
+
         let now = Utc::now().timestamp();
         sqlx::query(
             "INSERT INTO page_kv (user_id, slug, key, value, updated_at) VALUES (?, ?, ?, ?, ?) \
@@ -1345,13 +1436,17 @@ pub mod page_kv {
         .bind(key)
         .bind(value)
         .bind(now)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| anyhow!("page_kv put: {e}"))?;
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("page_kv commit: {e}"))?;
         Ok(())
     }
 
     pub async fn delete(pool: &DbPool, user_id: &str, slug: &str, key: &str) -> Result<bool> {
+        validate_key(key)?;
         let result = sqlx::query("DELETE FROM page_kv WHERE user_id = ? AND slug = ? AND key = ?")
             .bind(user_id)
             .bind(slug)
@@ -1371,6 +1466,78 @@ pub mod page_kv {
                 .await
                 .map_err(|e| anyhow!("page_kv list: {e}"))?;
         Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    fn enforce_quota(
+        page_usage: (i64, i64),
+        user_usage: (i64, i64),
+        replaced_bytes: i64,
+        added_bytes: i64,
+        is_new: bool,
+    ) -> Result<()> {
+        let added_entries = i64::from(is_new);
+        if page_usage.0.saturating_add(added_entries) > MAX_PAGE_KV_ENTRIES {
+            return Err(anyhow!("page KV entry quota exceeded"));
+        }
+        if user_usage.0.saturating_add(added_entries) > MAX_USER_KV_ENTRIES {
+            return Err(anyhow!("account KV entry quota exceeded"));
+        }
+        if page_usage
+            .1
+            .saturating_sub(replaced_bytes)
+            .saturating_add(added_bytes)
+            > MAX_PAGE_KV_BYTES
+        {
+            return Err(anyhow!("page KV byte quota exceeded"));
+        }
+        if user_usage
+            .1
+            .saturating_sub(replaced_bytes)
+            .saturating_add(added_bytes)
+            > MAX_USER_KV_BYTES
+        {
+            return Err(anyhow!("account KV byte quota exceeded"));
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    mod quota_tests {
+        use super::*;
+
+        #[test]
+        fn quota_projection_handles_insert_and_overwrite() {
+            assert!(enforce_quota(
+                (MAX_PAGE_KV_ENTRIES, 100),
+                (MAX_PAGE_KV_ENTRIES, 100),
+                10,
+                10,
+                false,
+            )
+            .is_ok());
+            assert!(enforce_quota(
+                (MAX_PAGE_KV_ENTRIES, 100),
+                (MAX_PAGE_KV_ENTRIES, 100),
+                0,
+                1,
+                true,
+            )
+            .is_err());
+            assert!(
+                enforce_quota((1, MAX_PAGE_KV_BYTES), (1, MAX_PAGE_KV_BYTES), 1, 2, false,)
+                    .is_err()
+            );
+            assert!(enforce_quota((1, 1), (1, MAX_USER_KV_BYTES), 0, 1, false,).is_err());
+        }
+
+        #[tokio::test]
+        async fn put_rejects_oversized_single_values_before_writing() {
+            let pool = connect(":memory:").await.unwrap();
+            let value = "x".repeat(MAX_PAGE_KV_VALUE_BYTES + 1);
+            let err = put(&pool, "u1", "site", "key", &value).await.unwrap_err();
+            assert!(err.to_string().contains("operation limit"));
+            assert!(get(&pool, "u1", "site", "key").await.unwrap().is_none());
+        }
     }
 }
 

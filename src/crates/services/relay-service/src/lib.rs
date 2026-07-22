@@ -12,6 +12,7 @@
 pub mod admin;
 pub mod db;
 pub mod page_data;
+pub mod page_execution;
 pub mod relay;
 pub mod routes;
 
@@ -1050,6 +1051,9 @@ pub fn build_relay_router_with_page_data_and_origins(
         asset_store,
         db,
         page_data,
+        page_access_manager: Arc::new(routes::pages::PageAccessManager::new()),
+        page_upload_manager: Arc::new(routes::pages::PageUploadManager::new()),
+        page_execution_guard: Arc::new(crate::page_execution::PageExecutionGuard::new()),
         login_rate_limiter: std::sync::Arc::new(crate::routes::auth::LoginRateLimiter::new()),
         device_manager: crate::relay::DeviceManager::new(),
         cors_allow_origins: Arc::new(cors_allow_origins.clone()),

@@ -23,6 +23,11 @@ import SessionTitleConfig from './SessionTitleConfig';
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import { i18nService } from '@/infrastructure/i18n';
+import {
+  settleSubscriptionLoginStart,
+  SubscriptionLoginCoordinator,
+  type SubscriptionLoginOperation,
+} from './subscriptionLoginCoordinator';
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
@@ -49,6 +54,29 @@ interface ProviderGroup {
   providerName: string;
   providerId?: string;
   models: AIModelConfigType[];
+}
+
+interface SubscriptionLoginPanelState {
+  provider: SubscriptionProvider;
+  authorizationUrl: string;
+  userCode?: string | null;
+  deadlineMs: number;
+  status: 'starting' | 'pending' | 'cancelling' | 'failed';
+  error?: string;
+}
+
+interface SubscriptionLogoutRequest {
+  account: SubscriptionAccount;
+  affectedModels: AIModelConfigType[];
+}
+
+const SUBSCRIPTION_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+const SUBSCRIPTION_MIGRATION_NOTICE_KEY = 'bitfun.subscription-auth.secure-store-notice.v1';
+
+function subscriptionLoginCancelledError(): Error {
+  const error = new Error('Login cancelled');
+  error.name = 'SubscriptionLoginCancelled';
+  return error;
 }
 
 function isResponsesProvider(provider?: string): boolean {
@@ -421,6 +449,17 @@ const AIModelConfig: React.FC = () => {
   const [subscriptionAccounts, setSubscriptionAccounts] = useState<SubscriptionAccount[]>([]);
   const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
   const [loggingInProvider, setLoggingInProvider] = useState<SubscriptionProvider | null>(null);
+  const [subscriptionLoginPanel, setSubscriptionLoginPanel] = useState<SubscriptionLoginPanelState | null>(null);
+  const [subscriptionLoginClock, setSubscriptionLoginClock] = useState(() => Date.now());
+  const [subscriptionLogoutRequest, setSubscriptionLogoutRequest] = useState<SubscriptionLogoutRequest | null>(null);
+  const [showSubscriptionMigrationNotice, setShowSubscriptionMigrationNotice] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(SUBSCRIPTION_MIGRATION_NOTICE_KEY) !== 'dismissed';
+    } catch {
+      return true;
+    }
+  });
   const lastRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const activeRemoteFetchSignatureRef = React.useRef<string | null>(null);
 
@@ -587,6 +626,13 @@ const AIModelConfig: React.FC = () => {
   useEffect(() => {
     refreshSubscriptionAccounts();
   }, [refreshSubscriptionAccounts]);
+
+  useEffect(() => {
+    if (!subscriptionLoginPanel || subscriptionLoginPanel.status === 'failed') return;
+    setSubscriptionLoginClock(Date.now());
+    const timer = window.setInterval(() => setSubscriptionLoginClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [subscriptionLoginPanel]);
   
   // Provider options with translations (must be at top level, before any conditional returns)
   const providerOrder = useMemo(
@@ -942,17 +988,18 @@ const AIModelConfig: React.FC = () => {
     setIsEditing(true);
   }, [resetRemoteModelDiscovery]);
 
-  const loginAbortRef = React.useRef<{ provider: SubscriptionProvider; cancelled: boolean } | null>(null);
+  const loginCoordinatorRef = React.useRef(new SubscriptionLoginCoordinator());
+  const subscriptionLoginMountedRef = React.useRef(true);
 
-  const pollSubscriptionLogin = useCallback(async (provider: SubscriptionProvider) => {
-    const deadline = Date.now() + 5 * 60 * 1000;
+  const pollSubscriptionLogin = useCallback(async (
+    operation: SubscriptionLoginOperation,
+    deadline: number,
+  ) => {
     while (Date.now() < deadline) {
-      if (loginAbortRef.current?.provider === provider && loginAbortRef.current.cancelled) {
-        const error = new Error('Login cancelled');
-        error.name = 'SubscriptionLoginCancelled';
-        throw error;
+      if (!loginCoordinatorRef.current.isCurrent(operation)) {
+        throw subscriptionLoginCancelledError();
       }
-      const snapshot = await aiApi.getSubscriptionLoginStatus(provider);
+      const snapshot = await aiApi.getSubscriptionLoginStatus(operation.provider);
       if (snapshot.status === 'authorized') {
         return snapshot;
       }
@@ -967,20 +1014,58 @@ const AIModelConfig: React.FC = () => {
   // Cancel any in-flight subscription login when the page unmounts so the
   // backend loopback server / device poll does not linger.
   useEffect(() => {
+    const coordinator = loginCoordinatorRef.current;
+    subscriptionLoginMountedRef.current = true;
     return () => {
-      const pending = loginAbortRef.current;
+      subscriptionLoginMountedRef.current = false;
+      const pending = coordinator.current();
       if (pending && !pending.cancelled) {
-        pending.cancelled = true;
+        coordinator.requestCancel(pending.provider);
+        // Cancel immediately when the backend placeholder already exists;
+        // `settleSubscriptionLoginStart` retries after start returns to cover
+        // the opposite command-order race.
         void aiApi.cancelSubscriptionLogin(pending.provider).catch(() => {});
       }
     };
   }, []);
 
   const handleSubscriptionLogin = useCallback(async (provider: SubscriptionProvider) => {
-    loginAbortRef.current = { provider, cancelled: false };
+    // The settings surface intentionally permits one authorization flow at a
+    // time. This prevents a stale provider poll/finally block from clearing a
+    // newer provider's state or leaving an undiscoverable backend session.
+    const operation = loginCoordinatorRef.current.begin(provider);
+    if (!operation) return;
+    const deadlineMs = Date.now() + SUBSCRIPTION_LOGIN_TIMEOUT_MS;
     setLoggingInProvider(provider);
+    setSubscriptionLoginPanel({
+      provider,
+      authorizationUrl: '',
+      deadlineMs,
+      status: 'starting',
+    });
     try {
       const started = await aiApi.startSubscriptionLogin(provider);
+      const settlement = await settleSubscriptionLoginStart(
+        loginCoordinatorRef.current,
+        operation,
+        () => aiApi.cancelSubscriptionLogin(provider),
+      );
+      if (settlement.cleanupError) {
+        log.warn('Failed to cancel subscription login after start settled', {
+          provider,
+          error: String(settlement.cleanupError),
+        });
+      }
+      if (!settlement.shouldContinue) {
+        throw subscriptionLoginCancelledError();
+      }
+      setSubscriptionLoginPanel({
+        provider,
+        authorizationUrl: started.authorization_url,
+        userCode: started.user_code,
+        deadlineMs,
+        status: 'pending',
+      });
       if (started.authorization_url) {
         try {
           await systemAPI.openExternal(started.authorization_url);
@@ -998,28 +1083,105 @@ const AIModelConfig: React.FC = () => {
           );
         }
       }
+      if (!loginCoordinatorRef.current.isCurrent(operation)) {
+        throw subscriptionLoginCancelledError();
+      }
       if (started.user_code) {
         notification.info(t('subscriptionAuth.userCodeHint', { code: started.user_code }));
       }
-      await pollSubscriptionLogin(provider);
+      await pollSubscriptionLogin(operation, deadlineMs);
+      if (!loginCoordinatorRef.current.isCurrent(operation)) {
+        throw subscriptionLoginCancelledError();
+      }
       await refreshSubscriptionAccounts();
+      if (!loginCoordinatorRef.current.isCurrent(operation)) {
+        throw subscriptionLoginCancelledError();
+      }
+      setSubscriptionLoginPanel(null);
       notification.success(t('subscriptionAuth.loginSuccess'));
     } catch (e) {
-      if ((e as Error).name === 'SubscriptionLoginCancelled') {
-        notification.info(t('subscriptionAuth.loginCancelled'));
+      if ((e as Error).name === 'SubscriptionLoginCancelled' || operation.cancelled) {
+        // `startSubscriptionLogin` may reject instead of returning after an
+        // early cancellation. Mark that invocation settled and retry the
+        // idempotent backend cancellation so no placeholder/session survives.
+        if (!operation.startSettled && loginCoordinatorRef.current.owns(operation)) {
+          loginCoordinatorRef.current.markStartSettled(operation);
+        }
+        let authorizationAlreadyCompleted = false;
+        try {
+          await aiApi.cancelSubscriptionLogin(provider);
+        } catch (cancelError) {
+          log.warn('Failed to finish subscription login cancellation', {
+            provider,
+            error: String(cancelError),
+          });
+        }
+        try {
+          // The backend cancellation command is a commit barrier. Refreshing
+          // now truthfully surfaces the narrow case where authorization had
+          // already crossed its commit boundary before the user cancelled.
+          const accounts = await aiApi.listSubscriptionAccounts();
+          if (subscriptionLoginMountedRef.current) {
+            setSubscriptionAccounts(accounts);
+          }
+          authorizationAlreadyCompleted = accounts.some((account) => (
+            account.provider === provider && account.connected
+          ));
+        } catch (refreshError) {
+          log.warn('Failed to refresh subscription accounts after cancellation', {
+            provider,
+            error: String(refreshError),
+          });
+        }
+        if (
+          loginCoordinatorRef.current.owns(operation)
+          && subscriptionLoginMountedRef.current
+        ) {
+          setSubscriptionLoginPanel(null);
+          notification.info(t(
+            authorizationAlreadyCompleted
+              ? 'subscriptionAuth.loginCompletedBeforeCancel'
+              : 'subscriptionAuth.loginCancelled',
+          ));
+        }
       } else {
-        notification.error(t('subscriptionAuth.loginFailed', { error: String(e) }));
+        if (
+          loginCoordinatorRef.current.isCurrent(operation)
+          && subscriptionLoginMountedRef.current
+        ) {
+          setSubscriptionLoginPanel((current) => ({
+            provider,
+            authorizationUrl: current?.provider === provider ? current.authorizationUrl : '',
+            userCode: current?.provider === provider ? current.userCode : undefined,
+            deadlineMs,
+            status: 'failed',
+            error: String(e),
+          }));
+          notification.error(t('subscriptionAuth.loginFailed', { error: String(e) }));
+        }
       }
     } finally {
-      loginAbortRef.current = null;
-      setLoggingInProvider(null);
+      if (loginCoordinatorRef.current.complete(operation)) {
+        if (subscriptionLoginMountedRef.current) {
+          setLoggingInProvider(null);
+        }
+      }
     }
   }, [notification, pollSubscriptionLogin, refreshSubscriptionAccounts, t]);
 
   const handleCancelSubscriptionLogin = useCallback(async (provider: SubscriptionProvider) => {
-    if (loginAbortRef.current?.provider === provider) {
-      loginAbortRef.current.cancelled = true;
-    }
+    const operation = loginCoordinatorRef.current.requestCancel(provider);
+    if (!operation) return;
+    // Keep the coordinator slot and loading state reserved until the start
+    // command has settled and any backend session has been cancelled.
+    setSubscriptionLoginPanel((current) => (
+      current?.provider === provider
+        ? { ...current, status: 'cancelling' }
+        : current
+    ));
+    // This first attempt makes cancellation responsive if the backend has
+    // installed its placeholder. The start-settlement path retries, because
+    // desktop command scheduling can deliver this request first.
     try {
       await aiApi.cancelSubscriptionLogin(provider);
     } catch (e) {
@@ -1027,15 +1189,57 @@ const AIModelConfig: React.FC = () => {
     }
   }, []);
 
-  const handleSubscriptionLogout = useCallback(async (provider: SubscriptionProvider) => {
+  const handleOpenSubscriptionAuthorization = useCallback(async (url: string) => {
+    if (!url) return;
     try {
-      await aiApi.logoutSubscriptionAccount(provider);
+      await systemAPI.openExternal(url);
+    } catch (error) {
+      log.warn('Failed to open subscription authorization URL from pending card', {
+        url,
+        error: String(error),
+      });
+      notification.info(t('subscriptionAuth.openUrlManually', { url }));
+    }
+  }, [notification, t]);
+
+  const handleCopySubscriptionCode = useCallback(async (code: string) => {
+    try {
+      await systemAPI.setClipboard(code);
+      notification.success(t('subscriptionAuth.codeCopied'));
+    } catch (error) {
+      log.warn('Failed to copy subscription device code', { error: String(error) });
+      notification.error(t('subscriptionAuth.copyCodeFailed'));
+    }
+  }, [notification, t]);
+
+  const requestSubscriptionLogout = useCallback((account: SubscriptionAccount) => {
+    const affectedModels = aiModels.filter((model) => (
+      model.auth?.type === 'subscription' && model.auth.provider === account.provider
+    ));
+    setSubscriptionLogoutRequest({ account, affectedModels });
+  }, [aiModels]);
+
+  const confirmSubscriptionLogout = useCallback(async () => {
+    const request = subscriptionLogoutRequest;
+    if (!request) return;
+    try {
+      await aiApi.logoutSubscriptionAccount(request.account.provider);
       await refreshSubscriptionAccounts();
+      setSubscriptionLogoutRequest(null);
       notification.success(t('subscriptionAuth.logoutSuccess'));
     } catch (e) {
       notification.error(t('subscriptionAuth.logoutFailed', { error: String(e) }));
     }
-  }, [notification, refreshSubscriptionAccounts, t]);
+  }, [notification, refreshSubscriptionAccounts, subscriptionLogoutRequest, t]);
+
+  const dismissSubscriptionMigrationNotice = useCallback(() => {
+    setShowSubscriptionMigrationNotice(false);
+    try {
+      window.localStorage.setItem(SUBSCRIPTION_MIGRATION_NOTICE_KEY, 'dismissed');
+    } catch (error) {
+      log.debug('Unable to persist subscription migration notice dismissal', { error: String(error) });
+    }
+  }, []);
 
   const handleSubscriptionRefresh = useCallback(async (provider: SubscriptionProvider) => {
     try {
@@ -2728,6 +2932,19 @@ const AIModelConfig: React.FC = () => {
           )}
         >
           <div className="bitfun-ai-model-config__cli-discovery">
+            {showSubscriptionMigrationNotice && (
+              <div className="bitfun-ai-model-config__subscription-migration-notice" role="status">
+                <Info size={16} aria-hidden="true" />
+                <span>{t('subscriptionAuth.secureStoreMigrationNotice')}</span>
+                <Button
+                  size="small"
+                  variant="ghost"
+                  onClick={dismissSubscriptionMigrationNotice}
+                >
+                  {t('subscriptionAuth.dismissMigrationNotice')}
+                </Button>
+              </div>
+            )}
             {subscriptionAccounts.map((account) => {
               const descriptionParts: string[] = [];
               if (account.connected && account.account) {
@@ -2744,72 +2961,161 @@ const AIModelConfig: React.FC = () => {
                 );
               } else if (account.connected) {
                 descriptionParts.push(t('subscriptionAuth.tokenValid'));
+              } else if (account.vault_unavailable) {
+                descriptionParts.push(t('subscriptionAuth.vaultUnavailable'));
+              } else if (account.reauthentication_required) {
+                descriptionParts.push(t('subscriptionAuth.reauthenticationRequired'));
               } else {
                 descriptionParts.push(t('subscriptionAuth.notSignedIn'));
               }
               const isLoggingIn = loggingInProvider === account.provider;
+              const anyLoginInProgress = loggingInProvider !== null;
+              const loginPanel = subscriptionLoginPanel?.provider === account.provider
+                ? subscriptionLoginPanel
+                : null;
+              const remainingSeconds = loginPanel
+                ? Math.max(0, Math.ceil((loginPanel.deadlineMs - subscriptionLoginClock) / 1000))
+                : 0;
+              const countdown = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
               return (
-                <ConfigPageRow
-                  key={account.provider}
-                  label={account.display_label}
-                  description={descriptionParts.map((part) => (
-                    <span
-                      key={part}
-                      className="bitfun-ai-model-config__cli-description-line"
-                    >
-                      {part}
-                    </span>
-                  ))}
-                  className="bitfun-ai-model-config__cli-account"
-                  align="center"
-                >
-                  <div className="bitfun-ai-model-config__cli-actions">
-                    {account.connected ? (
-                      <>
+                <React.Fragment key={account.provider}>
+                  <ConfigPageRow
+                    label={account.display_label}
+                    description={descriptionParts.map((part) => (
+                      <span
+                        key={part}
+                        className="bitfun-ai-model-config__cli-description-line"
+                      >
+                        {part}
+                      </span>
+                    ))}
+                    className="bitfun-ai-model-config__cli-account"
+                    align="center"
+                  >
+                    <div className="bitfun-ai-model-config__cli-actions">
+                      {account.connected ? (
+                        <>
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            disabled={anyLoginInProgress}
+                            onClick={() => void handleSubscriptionRefresh(account.provider)}
+                          >
+                            {t('subscriptionAuth.refresh')}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            disabled={anyLoginInProgress}
+                            onClick={() => requestSubscriptionLogout(account)}
+                          >
+                            {t('subscriptionAuth.logout')}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="primary"
+                            disabled={anyLoginInProgress}
+                            onClick={() => handleImportFromSubscription(account)}
+                          >
+                            {t('subscriptionAuth.import')}
+                          </Button>
+                        </>
+                      ) : account.vault_unavailable ? (
                         <Button
                           size="small"
                           variant="secondary"
+                          disabled={anyLoginInProgress}
                           onClick={() => void handleSubscriptionRefresh(account.provider)}
                         >
-                          {t('subscriptionAuth.refresh')}
+                          {t('subscriptionAuth.retryVault')}
                         </Button>
-                        <Button
-                          size="small"
-                          variant="secondary"
-                          onClick={() => void handleSubscriptionLogout(account.provider)}
-                        >
-                          {t('subscriptionAuth.logout')}
-                        </Button>
+                      ) : (
                         <Button
                           size="small"
                           variant="primary"
-                          onClick={() => handleImportFromSubscription(account)}
+                          isLoading={isLoggingIn}
+                          disabled={anyLoginInProgress}
+                          onClick={() => void handleSubscriptionLogin(account.provider)}
                         >
-                          {t('subscriptionAuth.import')}
+                          {t('subscriptionAuth.login')}
                         </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="small"
-                        variant="primary"
-                        isLoading={isLoggingIn}
-                        disabled={isLoggingIn}
-                        onClick={() => void handleSubscriptionLogin(account.provider)}
-                      >
-                        {t('subscriptionAuth.login')}
-                      </Button>
-                    )}
-                    {isLoggingIn && (
-                      <Button
-                        size="small"
-                        variant="secondary"
-                        onClick={() => void handleCancelSubscriptionLogin(account.provider)}
-                      >
-                        {t('subscriptionAuth.cancel')}
-                      </Button>
-                    )}
-                  </div>
-                </ConfigPageRow>
+                      )}
+                      {isLoggingIn && (
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          disabled={loginPanel?.status === 'cancelling'}
+                          onClick={() => void handleCancelSubscriptionLogin(account.provider)}
+                        >
+                          {t('subscriptionAuth.cancel')}
+                        </Button>
+                      )}
+                    </div>
+                  </ConfigPageRow>
+
+                  {loginPanel && (
+                    <div
+                      className={`bitfun-ai-model-config__subscription-login-panel bitfun-ai-model-config__subscription-login-panel--${loginPanel.status}`}
+                      role={loginPanel.status === 'failed' ? 'alert' : 'status'}
+                    >
+                      <div className="bitfun-ai-model-config__subscription-login-summary">
+                        <strong>
+                          {loginPanel.status === 'failed'
+                            ? t('subscriptionAuth.loginNeedsRetry')
+                            : loginPanel.status === 'cancelling'
+                              ? t('subscriptionAuth.loginCancelling')
+                              : t('subscriptionAuth.loginPending')}
+                        </strong>
+                        {loginPanel.status !== 'failed' && loginPanel.status !== 'cancelling' && (
+                          <span>{t('subscriptionAuth.timeRemaining', { time: countdown })}</span>
+                        )}
+                        {loginPanel.status === 'failed' && loginPanel.error && (
+                          <span>{t('subscriptionAuth.loginFailedInline', { error: loginPanel.error })}</span>
+                        )}
+                      </div>
+
+                      {loginPanel.status !== 'cancelling' && loginPanel.userCode && (
+                        <div className="bitfun-ai-model-config__subscription-code">
+                          <span>{t('subscriptionAuth.verificationCode')}</span>
+                          <code>{loginPanel.userCode}</code>
+                        </div>
+                      )}
+
+                      {loginPanel.status !== 'cancelling' && (
+                        <div className="bitfun-ai-model-config__subscription-login-actions">
+                          {loginPanel.userCode && (
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              onClick={() => void handleCopySubscriptionCode(loginPanel.userCode!)}
+                            >
+                              {t('subscriptionAuth.copyCode')}
+                            </Button>
+                          )}
+                          {loginPanel.authorizationUrl && (
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              onClick={() => void handleOpenSubscriptionAuthorization(loginPanel.authorizationUrl)}
+                            >
+                              <ExternalLink size={14} aria-hidden="true" />
+                              {t('subscriptionAuth.openAuthorization')}
+                            </Button>
+                          )}
+                          {loginPanel.status === 'failed' && (
+                            <Button
+                              size="small"
+                              variant="primary"
+                              onClick={() => void handleSubscriptionLogin(account.provider)}
+                            >
+                              {t('subscriptionAuth.retryLogin')}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </React.Fragment>
               );
             })}
           </div>
@@ -2964,6 +3270,48 @@ const AIModelConfig: React.FC = () => {
           </ConfigPageRow>
         </ConfigPageSection>
       </ConfigPageContent>
+
+      <Modal
+        isOpen={!!subscriptionLogoutRequest}
+        onClose={() => setSubscriptionLogoutRequest(null)}
+        title={t('subscriptionAuth.logoutConfirmTitle')}
+        size="small"
+        closeOnOverlayClick={false}
+      >
+        <div className="bitfun-ai-model-config__subscription-logout-confirm">
+          <p>
+            {subscriptionLogoutRequest?.affectedModels.length
+              ? t('subscriptionAuth.logoutAffectedModels', {
+                  count: subscriptionLogoutRequest.affectedModels.length,
+                })
+              : t('subscriptionAuth.logoutNoAffectedModels')}
+          </p>
+          {!!subscriptionLogoutRequest?.affectedModels.length && (
+            <ul>
+              {subscriptionLogoutRequest.affectedModels.map((model) => (
+                <li key={model.id}>{model.name} · {model.model_name}</li>
+              ))}
+            </ul>
+          )}
+          <p>{t('subscriptionAuth.logoutConsequence')}</p>
+          <div className="bitfun-ai-model-config__subscription-logout-actions">
+            <Button
+              size="small"
+              variant="secondary"
+              onClick={() => setSubscriptionLogoutRequest(null)}
+            >
+              {t('subscriptionAuth.cancel')}
+            </Button>
+            <Button
+              size="small"
+              variant="danger"
+              onClick={() => void confirmSubscriptionLogout()}
+            >
+              {t('subscriptionAuth.confirmLogout')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isEditing && !!editingConfig}

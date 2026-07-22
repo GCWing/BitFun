@@ -144,6 +144,19 @@ jobs:
       - name: Run core and desktop Rust tests
         run: cargo test --locked -p bitfun-core -p bitfun-desktop
 
+      # These crates own platform-sensitive behavior that is not exercised by
+      # testing bitfun-core/bitfun-desktop alone. Keep their focused contract
+      # suites in the OS matrix so Linux success cannot hide Windows/macOS
+      # regressions in worker interruption, relay storage, or OAuth handling.
+      - name: Run Page Functions runtime tests
+        run: cargo test --locked -p bitfun-page-function-runtime
+
+      - name: Run Relay service tests
+        run: cargo test --locked -p bitfun-relay-service
+
+      - name: Run subscription authentication tests
+        run: cargo test --locked -p bitfun-ai-adapters --features subscription-auth subscription_auth
+
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:
     name: Frontend Build

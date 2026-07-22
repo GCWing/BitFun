@@ -1070,6 +1070,11 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("open_remote_workspace", RemoteWorkspacePolicy::RemoteRouted),
     ("open_workspace", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "page_create_open_link",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("page_delete", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
         "page_delete_version",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),

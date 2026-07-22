@@ -19,6 +19,8 @@ const TRANSLATIONS: Record<string, string> = {
   'permission.actions.mcp': 'MCP tool',
   'permission.actions.task': 'Run task',
   'permission.actions.skill': 'Run skill',
+  'permission.actions.pagePublish': 'Save page version',
+  'permission.actions.pageDeploy': 'Deploy page version',
   'permission.actions.customTool': 'External tool',
   'permission.actions.externalDirectory': 'Access external directory',
   'permission.actions.other': 'Other action',
@@ -32,6 +34,9 @@ vi.mock('react-i18next', () => ({
       }
       if (key === 'permission.allowAlwaysTooltip') {
         return `Always allow saves matching access for ${values?.projectPath}`;
+      }
+      if (key === 'permission.risks.pageSave') {
+        return `Save ${values?.slug} as ${values?.visibility} without deploying.`;
       }
       return TRANSLATIONS[key] ?? key;
     },
@@ -149,6 +154,34 @@ describe('PermissionRequestPanel', () => {
     expect(container.textContent).toContain('Run command');
   });
 
+  it('localizes structured Page risk details and hides persistent approval', () => {
+    const pageRequest = {
+      ...request(false),
+      action: 'page_publish',
+      resources: ['page:demo; visibility=private; deploy=saved-version-only'],
+      saveResources: [],
+      displayMetadata: {
+        pageOperation: 'save',
+        pageSlug: 'demo',
+        pageVisibility: 'private',
+        requiresFreshApproval: true,
+      },
+    };
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          requests={[pageRequest]}
+          onRespond={vi.fn()}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('Save demo as permission.visibility.private without deploying.');
+    expect([...container.querySelectorAll('button')]
+      .some((button) => button.textContent?.includes('permission.allowAlways'))).toBe(false);
+  });
+
   it('uses friendly labels for every recognized permission action', () => {
     const expectedActions = [
       ['read', 'Read files'],
@@ -161,6 +194,8 @@ describe('PermissionRequestPanel', () => {
       ['mcp', 'MCP tool'],
       ['task', 'Run task'],
       ['skill', 'Run skill'],
+      ['page_publish', 'Save page version'],
+      ['page_deploy', 'Deploy page version'],
       ['custom_tool', 'External tool'],
       ['external_directory', 'Access external directory'],
       ['future_action', 'Other action'],

@@ -6,7 +6,9 @@
 //! query parameters.
 
 use anyhow::{anyhow, Context, Result};
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -30,18 +32,8 @@ pub(crate) fn loopback_redirect_uri(port: u16, path: &str) -> String {
     format!("http://{LOOPBACK_REDIRECT_HOST}:{port}{path}")
 }
 
-/// Binds the OAuth callback listener on [`LOOPBACK_BIND_HOST`].
-pub(crate) async fn bind_loopback(port: u16) -> Result<TcpListener> {
-    TcpListener::bind((LOOPBACK_BIND_HOST, port))
-        .await
-        .with_context(|| {
-            format!(
-                "bind OAuth callback on {LOOPBACK_BIND_HOST}:{port} (is another app using this port?)"
-            )
-        })
-}
-
-/// Binds the first available registered callback port.
+/// Binds the first available provider-supported callback port. A final `0`
+/// entry requests an ephemeral port for desktop OAuth providers that permit it.
 ///
 /// Fallback is attempted only when a preferred port is already in use. The
 /// returned port must be used to construct both the authorize and token
@@ -60,7 +52,7 @@ pub(crate) async fn bind_loopback_ports(ports: &[u16]) -> Result<(TcpListener, u
                     .port();
                 if index > 0 {
                     log::warn!(
-                        "OAuth callback port {preferred_port} is unavailable; using registered fallback port {actual_port}"
+                        "OAuth callback port {preferred_port} is unavailable; using fallback port {actual_port}"
                     );
                 }
                 return Ok((listener, actual_port));
@@ -100,8 +92,14 @@ pub(crate) async fn wait_for_callback(
             }
         };
         let request = String::from_utf8_lossy(&buf[..n]);
+        let locale = preferred_locale(&request);
         let Some(request_line) = request.lines().next() else {
-            write_response(&mut stream, 400, &error_page("Bad request")).await;
+            write_response(
+                &mut stream,
+                400,
+                &error_page(&callback_messages(locale).bad_request, locale),
+            )
+            .await;
             continue;
         };
         let target = request_line
@@ -119,26 +117,39 @@ pub(crate) async fn wait_for_callback(
         }
 
         let params = parse_query(query);
+        // Ignore unsolicited loopback requests instead of letting a local
+        // process/browser probe terminate the real OAuth session. Validate
+        // state before accepting provider errors for the same reason.
+        match params.get("state") {
+            Some(state) if state == expected_state => {}
+            _ => {
+                write_response(
+                    &mut stream,
+                    400,
+                    &error_page(&callback_messages(locale).invalid_state, locale),
+                )
+                .await;
+                continue;
+            }
+        }
         if let Some(error) = params.get("error") {
             let message = params
                 .get("error_description")
                 .cloned()
                 .unwrap_or_else(|| error.clone());
-            write_response(&mut stream, 200, &error_page(&message)).await;
+            write_response(&mut stream, 200, &error_page(&message, locale)).await;
             return Err(anyhow!("authorization failed: {message}"));
         }
         if params.get("code").map(String::is_empty).unwrap_or(true) {
-            write_response(&mut stream, 400, &error_page("Missing authorization code")).await;
+            write_response(
+                &mut stream,
+                400,
+                &error_page(&callback_messages(locale).missing_code, locale),
+            )
+            .await;
             return Err(anyhow!("authorization callback missing code"));
         }
-        match params.get("state") {
-            Some(state) if state == expected_state => {}
-            _ => {
-                write_response(&mut stream, 400, &error_page("Invalid state")).await;
-                return Err(anyhow!("authorization state mismatch"));
-            }
-        }
-        write_response(&mut stream, 200, &success_page()).await;
+        write_response(&mut stream, 200, &success_page(locale)).await;
         return Ok(params);
     }
 }
@@ -181,25 +192,75 @@ async fn write_response(stream: &mut tokio::net::TcpStream, status: u16, body: &
     let _ = stream.flush().await;
 }
 
-fn success_page() -> String {
-    result_page(
-        "Sign-in complete",
-        "You are now signed in. You can close this window and return to BitFun.",
-    )
+#[derive(Debug, Deserialize)]
+struct CallbackMessages {
+    success_title: String,
+    success_message: String,
+    error_title: String,
+    bad_request: String,
+    missing_code: String,
+    invalid_state: String,
 }
 
-fn error_page(message: &str) -> String {
-    result_page("Sign-in failed", message)
+fn callback_locales() -> &'static HashMap<String, CallbackMessages> {
+    static LOCALES: OnceLock<HashMap<String, CallbackMessages>> = OnceLock::new();
+    LOCALES.get_or_init(|| {
+        serde_json::from_str(include_str!("oauth_callback_locales.json"))
+            .expect("embedded OAuth callback locales are valid JSON")
+    })
 }
 
-fn result_page(title: &str, message: &str) -> String {
+fn callback_messages(locale: &str) -> &'static CallbackMessages {
+    callback_locales()
+        .get(locale)
+        .or_else(|| callback_locales().get("en"))
+        .expect("OAuth callback English locale is embedded")
+}
+
+fn preferred_locale(request: &str) -> &'static str {
+    for line in request.lines() {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if !name.eq_ignore_ascii_case("accept-language") {
+            continue;
+        }
+        let language = value
+            .split(',')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        if language.starts_with("zh-tw") || language.starts_with("zh-hk") {
+            return "zh-TW";
+        }
+        if language.starts_with("zh") {
+            return "zh-CN";
+        }
+        break;
+    }
+    "en"
+}
+
+fn success_page(locale: &str) -> String {
+    let messages = callback_messages(locale);
+    result_page(locale, &messages.success_title, &messages.success_message)
+}
+
+fn error_page(message: &str, locale: &str) -> String {
+    result_page(locale, &callback_messages(locale).error_title, message)
+}
+
+fn result_page(language: &str, title: &str, message: &str) -> String {
     let message = escape_html(message);
     format!(
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>{title}</title>\
-<style>body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f172a;color:#e2e8f0;\
+        "<!doctype html><html lang=\"{language}\"><head><meta charset=\"utf-8\"><meta name=\"color-scheme\" content=\"light dark\"><title>{title}</title>\
+<style>:root{{color-scheme:light dark;--page:#f5f7fb;--card:#ffffff;--title:#172033;--text:#5d687c;--shadow:rgba(31,41,55,.14)}}\
+@media(prefers-color-scheme:dark){{:root{{--page:#0f172a;--card:#1e293b;--title:#e2e8f0;--text:#94a3b8;--shadow:rgba(0,0,0,.35)}}}}\
+body{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:var(--page);color:var(--title);\
 display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}\
-.card{{background:#1e293b;padding:32px 40px;border-radius:12px;max-width:420px;text-align:center;\
-box-shadow:0 10px 30px rgba(0,0,0,0.35)}}h1{{font-size:20px;margin:0 0 12px}}p{{margin:0;color:#94a3b8;\
+.card{{background:var(--card);padding:32px 40px;border-radius:12px;max-width:420px;text-align:center;\
+box-shadow:0 10px 30px var(--shadow)}}h1{{font-size:20px;margin:0 0 12px}}p{{margin:0;color:var(--text);\
 line-height:1.5}}</style></head><body><div class=\"card\"><h1>{title}</h1><p>{message}</p></div></body></html>"
     )
 }
@@ -217,9 +278,11 @@ fn escape_html(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        bind_loopback_ports, escape_html, loopback_redirect_uri, LOOPBACK_BIND_HOST,
+        bind_loopback_ports, callback_messages, escape_html, loopback_redirect_uri,
+        preferred_locale, success_page, wait_for_callback, LOOPBACK_BIND_HOST,
         LOOPBACK_REDIRECT_HOST,
     };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
     fn escapes_html_injection() {
@@ -241,6 +304,67 @@ mod tests {
         );
         assert_eq!(LOOPBACK_BIND_HOST, "127.0.0.1");
         assert_eq!(LOOPBACK_REDIRECT_HOST, "localhost");
+    }
+
+    #[tokio::test]
+    async fn invalid_state_does_not_terminate_the_real_callback_session() {
+        let listener = tokio::net::TcpListener::bind((LOOPBACK_BIND_HOST, 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let waiter = tokio::spawn(async move {
+            wait_for_callback(listener, "/auth/callback", "expected-state").await
+        });
+
+        let mut invalid = tokio::net::TcpStream::connect(address).await.unwrap();
+        invalid
+            .write_all(
+                b"GET /auth/callback?error=denied&state=attacker-state HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        let mut invalid_response = Vec::new();
+        invalid.read_to_end(&mut invalid_response).await.unwrap();
+        assert!(String::from_utf8_lossy(&invalid_response).contains("400 Bad Request"));
+        assert!(!waiter.is_finished());
+
+        let mut valid = tokio::net::TcpStream::connect(address).await.unwrap();
+        valid
+            .write_all(
+                b"GET /auth/callback?code=real-code&state=expected-state HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        let mut valid_response = Vec::new();
+        valid.read_to_end(&mut valid_response).await.unwrap();
+        assert!(String::from_utf8_lossy(&valid_response).contains("200 OK"));
+
+        let params = waiter.await.unwrap().unwrap();
+        assert_eq!(params.get("code").map(String::as_str), Some("real-code"));
+    }
+
+    #[test]
+    fn callback_page_uses_browser_language_and_color_scheme() {
+        assert_eq!(
+            preferred_locale("GET / HTTP/1.1\r\nAccept-Language: zh-CN,zh;q=0.9\r\n"),
+            "zh-CN"
+        );
+        assert_eq!(
+            preferred_locale("GET / HTTP/1.1\r\nAccept-Language: zh-TW,zh;q=0.9\r\n"),
+            "zh-TW"
+        );
+        assert_eq!(
+            preferred_locale("GET / HTTP/1.1\r\nAccept-Language: en-US,en;q=0.9\r\n"),
+            "en"
+        );
+        assert_ne!(
+            callback_messages("zh-CN").success_title,
+            callback_messages("en").success_title
+        );
+        let chinese = success_page("zh-CN");
+        assert!(chinese.contains("lang=\"zh-CN\""));
+        assert!(chinese.contains(&callback_messages("zh-CN").success_title));
+        assert!(chinese.contains("prefers-color-scheme:dark"));
     }
 
     #[tokio::test]

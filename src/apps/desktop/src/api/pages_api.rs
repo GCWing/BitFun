@@ -1,10 +1,11 @@
 //! BitFun Page Tauri commands (Save Version → Deploy).
 
 use bitfun_services_integrations::remote_connect::{
-    delete_page_version_on_relay, deploy_page_version_on_relay, list_page_versions_from_relay,
-    list_pages_from_relay, publish_page_to_relay, save_page_version_to_relay,
-    unpublish_page_from_relay, update_page_on_relay, PageInfo, PagePublishResult,
-    PageSaveVersionResult, PageVersionInfo,
+    create_page_open_link_on_relay, delete_page_from_relay, delete_page_version_on_relay,
+    deploy_page_version_on_relay, list_page_versions_from_relay, list_pages_from_relay,
+    publish_page_to_relay, save_page_version_to_relay, unpublish_page_from_relay,
+    update_page_on_relay, PageInfo, PageOpenLink, PagePublishResult, PageSaveVersionResult,
+    PageVersionInfo,
 };
 use serde::Deserialize;
 
@@ -41,6 +42,12 @@ pub struct PageDeployRequest {
 pub struct PageDeleteVersionRequest {
     pub slug: String,
     pub version_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PageOpenRequest {
+    pub slug: String,
+    pub version_id: Option<String>,
 }
 
 /// Save a new immutable version (does not change production).
@@ -95,6 +102,19 @@ pub async fn page_list_versions(request: PageSlugRequest) -> Result<Vec<PageVers
 }
 
 #[tauri::command]
+pub async fn page_create_open_link(request: PageOpenRequest) -> Result<PageOpenLink, String> {
+    let (session, relay_url) = read_account_context().await?;
+    create_page_open_link_on_relay(
+        &relay_url,
+        &session.token,
+        &request.slug,
+        request.version_id.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn page_deploy(request: PageDeployRequest) -> Result<PageInfo, String> {
     let (session, relay_url) = read_account_context().await?;
     deploy_page_version_on_relay(
@@ -138,6 +158,14 @@ pub async fn page_update(request: PageUpdateRequest) -> Result<PageInfo, String>
 pub async fn page_unpublish(request: PageSlugRequest) -> Result<(), String> {
     let (session, relay_url) = read_account_context().await?;
     unpublish_page_from_relay(&relay_url, &session.token, &request.slug)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn page_delete(request: PageSlugRequest) -> Result<(), String> {
+    let (session, relay_url) = read_account_context().await?;
+    delete_page_from_relay(&relay_url, &session.token, &request.slug)
         .await
         .map_err(|e| e.to_string())
 }

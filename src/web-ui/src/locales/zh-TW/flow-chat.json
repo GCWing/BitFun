@@ -10,6 +10,16 @@
     "allowAlwaysTooltip": "始終允許會為 {{projectPath}} 儲存相符的存取權限。",
     "allowAlwaysTooltipCurrentProject": "始終允許會為目前項目儲存相符的存取權限。",
     "allowAlwaysTooltipNoGrant": "此請求沒有可儲存的存取範圍；始終允許僅套用於這次請求。",
+    "risks": {
+      "pageSave": "以{{visibility}}可見性儲存「{{slug}}」的新不可變版本，不變更目前正式版本。",
+      "pagePublish": "以{{visibility}}可見性儲存「{{slug}}」，並切換其正式版本。",
+      "pageDeploy": "將「{{slug}}」的正式流量切換到不可變版本「{{version}}」。"
+    },
+    "visibility": {
+      "private": "僅自己可見",
+      "relay": "登入使用者可見",
+      "public": "公開"
+    },
     "reject": "拒絕",
     "batchCount": "{{count}} 個授權請求",
     "current": "目前",
@@ -25,6 +35,8 @@
       "mcp": "MCP 呼叫",
       "task": "執行任務",
       "skill": "執行技能",
+      "pagePublish": "儲存頁面版本",
+      "pageDeploy": "部署頁面版本",
       "customTool": "外部工具",
       "externalDirectory": "存取外部目錄",
       "other": "其他操作"
@@ -1391,6 +1403,7 @@
       "deployingShort": "…",
       "untitled": "（未命名）",
       "deployFailed": "無法部署 BitFun Page 版本",
+      "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1401,6 +1414,7 @@
       "publishingShort": "…",
       "untitled": "（未命名）",
       "publishFailed": "無法發佈 BitFun Page",
+      "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",

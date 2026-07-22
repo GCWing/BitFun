@@ -1,0 +1,674 @@
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  FileClock,
+  PanelsTopLeft,
+  RefreshCw,
+  Rocket,
+  Save,
+  Trash2,
+} from 'lucide-react';
+import {
+  Button,
+  Input,
+  Select,
+  confirmDanger,
+  confirmWarning,
+  type SelectOption,
+} from '@/component-library';
+import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
+import {
+  pageAPI,
+  type PageInfo,
+  type PageVersionInfo,
+  type PageVisibility,
+} from '@/infrastructure/api/service-api/PageAPI';
+import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { useI18n } from '@/infrastructure/i18n';
+import { useNotification } from '@/shared/notification-system';
+import { createLogger } from '@/shared/utils/logger';
+import './PagesScene.scss';
+
+const log = createLogger('PagesScene');
+const RemoteConnectDialog = lazy(() => import('@/app/components/RemoteConnectDialog'));
+
+interface PagesSceneProps {
+  isActive?: boolean;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function replacePage(pages: PageInfo[], updated: PageInfo): PageInfo[] {
+  return pages.map((page) => (page.slug === updated.slug ? updated : page));
+}
+
+const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
+  const { t, formatDate, formatNumber } = useI18n('scenes/pages');
+  const notification = useNotification();
+  const attemptedLoadRef = useRef(false);
+  const [pages, setPages] = useState<PageInfo[]>([]);
+  const [relayBaseUrl, setRelayBaseUrl] = useState('');
+  const [versionsBySlug, setVersionsBySlug] = useState<Record<string, PageVersionInfo[]>>({});
+  const [expandedSlugs, setExpandedSlugs] = useState<Set<string>>(() => new Set());
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loginRequired, setLoginRequired] = useState(false);
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
+  const [pendingBySlug, setPendingBySlug] = useState<Record<string, string>>({});
+  const busySlugsRef = useRef<Set<string>>(new Set());
+  const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
+
+  const beginPageAction = useCallback((slug: string, key: string): boolean => {
+    if (busySlugsRef.current.has(slug)) return false;
+    busySlugsRef.current.add(slug);
+    setPendingBySlug((current) => ({ ...current, [slug]: key }));
+    return true;
+  }, []);
+
+  const endPageAction = useCallback((slug: string, key: string) => {
+    busySlugsRef.current.delete(slug);
+    setPendingBySlug((current) => {
+      if (current[slug] !== key) return current;
+      const next = { ...current };
+      delete next[slug];
+      return next;
+    });
+  }, []);
+
+  const visibilityOptions = useMemo<SelectOption[]>(() => [
+    { value: 'private', label: t('visibility.private') },
+    { value: 'relay', label: t('visibility.relay') },
+    { value: 'public', label: t('visibility.public') },
+  ], [t]);
+
+  const visibilityLabel = useCallback((visibility: PageVisibility): string => {
+    switch (visibility) {
+      case 'private': return t('visibility.private');
+      case 'relay': return t('visibility.relay');
+      case 'public': return t('visibility.public');
+    }
+  }, [t]);
+
+  const formatBytes = useCallback((bytes: number): string => {
+    if (bytes < 1024) return t('bytes.b', { value: formatNumber(bytes) });
+    if (bytes < 1024 * 1024) {
+      return t('bytes.kb', { value: formatNumber(bytes / 1024, { maximumFractionDigits: 1 }) });
+    }
+    return t('bytes.mb', {
+      value: formatNumber(bytes / (1024 * 1024), { maximumFractionDigits: 1 }),
+    });
+  }, [formatNumber, t]);
+
+  const formatTimestamp = useCallback((seconds: number): string => formatDate(
+    new Date(seconds * 1000),
+    { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+  ), [formatDate]);
+
+  const loadPages = useCallback(async () => {
+    attemptedLoadRef.current = true;
+    setLoading(true);
+    setLoadError('');
+    setLoginRequired(false);
+    try {
+      const status = await remoteConnectAPI.accountStatus();
+      if (!status.logged_in) {
+        setPages([]);
+        setLoginRequired(true);
+        return;
+      }
+      const [nextPages, hint] = await Promise.all([
+        pageAPI.listPages(),
+        remoteConnectAPI.accountGetCredentialHint().catch(() => null),
+      ]);
+      setPages(nextPages);
+      setRelayBaseUrl(hint?.relay_url?.replace(/\/$/, '') ?? '');
+    } catch (error) {
+      log.error('Failed to load published Pages', { error });
+      const latestStatus = await remoteConnectAPI.accountStatus().catch(() => null);
+      if (latestStatus && !latestStatus.logged_in) {
+        setPages([]);
+        setLoginRequired(true);
+        return;
+      }
+      setLoadError(errorText(error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isActive && !attemptedLoadRef.current && !loading) {
+      void loadPages();
+    }
+  }, [isActive, loadPages, loading]);
+
+  const loadVersions = useCallback(async (slug: string) => {
+    const key = `versions:${slug}`;
+    if (!beginPageAction(slug, key)) return;
+    try {
+      const versions = await pageAPI.listVersions(slug);
+      setVersionsBySlug((current) => ({ ...current, [slug]: versions }));
+    } catch (error) {
+      log.error('Failed to load Page versions', { slug, error });
+      notification.error(t('notifications.versionsLoadFailed', { error: errorText(error) }));
+      throw error;
+    } finally {
+      endPageAction(slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t]);
+
+  const toggleVersions = useCallback(async (slug: string) => {
+    if (expandedSlugs.has(slug)) {
+      setExpandedSlugs((current) => {
+        const next = new Set(current);
+        next.delete(slug);
+        return next;
+      });
+      return;
+    }
+    if (!versionsBySlug[slug]) {
+      try {
+        await loadVersions(slug);
+      } catch {
+        return;
+      }
+    }
+    setExpandedSlugs((current) => new Set(current).add(slug));
+  }, [expandedSlugs, loadVersions, versionsBySlug]);
+
+  const openPage = useCallback(async (page: PageInfo, versionId?: string) => {
+    const key = `open:${page.slug}:${versionId ?? 'production'}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      const link = await pageAPI.createOpenLink(page.slug, versionId);
+      await systemAPI.openExternal(link.open_url);
+    } catch (error) {
+      log.error('Failed to open Page', { slug: page.slug, versionId, error });
+      notification.error(t('notifications.openFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t]);
+
+  const copyPageLink = useCallback(async (page: PageInfo, version?: PageVersionInfo) => {
+    const key = `copy:${page.slug}:${version?.version_id ?? 'production'}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      let url = '';
+      let temporary = false;
+      const path = version?.preview_url_path ?? page.url_path;
+      if (page.visibility === 'public' && relayBaseUrl && path) {
+        url = `${relayBaseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+      } else {
+        const link = await pageAPI.createOpenLink(page.slug, version?.version_id);
+        url = link.open_url;
+        temporary = true;
+      }
+      await systemAPI.setClipboard(url);
+      notification.success(temporary
+        ? t('notifications.temporaryLinkCopied')
+        : t('notifications.linkCopied'));
+    } catch (error) {
+      log.error('Failed to copy Page link', {
+        slug: page.slug,
+        versionId: version?.version_id,
+        error,
+      });
+      notification.error(t('notifications.copyFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, relayBaseUrl, t]);
+
+  const changeVisibility = useCallback(async (page: PageInfo, visibility: PageVisibility) => {
+    if (visibility === page.visibility) return;
+    const confirmed = await confirmWarning(
+      t('confirm.visibilityTitle'),
+      t('confirm.visibilityMessage', {
+        slug: page.slug,
+        current: visibilityLabel(page.visibility),
+        target: visibilityLabel(visibility),
+      }),
+      { confirmText: t('actions.changeVisibility') },
+    );
+    if (!confirmed) return;
+    const key = `visibility:${page.slug}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      const updated = await pageAPI.update(page.slug, { visibility });
+      setPages((current) => replacePage(current, updated));
+      notification.success(t('notifications.visibilityUpdated', {
+        visibility: visibilityLabel(visibility),
+      }));
+    } catch (error) {
+      log.error('Failed to update Page visibility', { slug: page.slug, visibility, error });
+      notification.error(t('notifications.visibilityFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t, visibilityLabel]);
+
+  const saveTitle = useCallback(async (page: PageInfo) => {
+    const title = (titleDrafts[page.slug] ?? page.title).trim();
+    if (!title || title === page.title) return;
+    const key = `title:${page.slug}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      const updated = await pageAPI.update(page.slug, { title });
+      setPages((current) => replacePage(current, updated));
+      setTitleDrafts((current) => ({ ...current, [page.slug]: updated.title }));
+      notification.success(t('notifications.titleUpdated'));
+    } catch (error) {
+      log.error('Failed to update Page title', { slug: page.slug, error });
+      notification.error(t('notifications.titleFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t, titleDrafts]);
+
+  const deployVersion = useCallback(async (page: PageInfo, version: PageVersionInfo) => {
+    if (version.deployed) return;
+    const confirmed = await confirmWarning(
+      t('confirm.deployTitle'),
+      t('confirm.deployMessage', {
+        slug: page.slug,
+        current: page.deployed_version_id ?? t('status.notDeployed'),
+        target: version.version_id,
+      }),
+      { confirmText: t('actions.deploy') },
+    );
+    if (!confirmed) return;
+    const key = `deploy:${page.slug}:${version.version_id}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      const updated = await pageAPI.deploy(page.slug, version.version_id);
+      setPages((current) => replacePage(current, updated));
+      setVersionsBySlug((current) => ({
+        ...current,
+        [page.slug]: (current[page.slug] ?? []).map((item) => ({
+          ...item,
+          deployed: item.version_id === version.version_id,
+        })),
+      }));
+      notification.success(t('notifications.deployed', { version: version.version_id }));
+    } catch (error) {
+      log.error('Failed to deploy Page version', {
+        slug: page.slug,
+        versionId: version.version_id,
+        error,
+      });
+      notification.error(t('notifications.deployFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t]);
+
+  const unpublishPage = useCallback(async (page: PageInfo) => {
+    if (!page.deployed_version_id) return;
+    const confirmed = await confirmWarning(
+      t('confirm.unpublishTitle'),
+      t('confirm.unpublishMessage', {
+        slug: page.slug,
+        current: page.deployed_version_id,
+      }),
+      { confirmText: t('actions.unpublish') },
+    );
+    if (!confirmed) return;
+    const key = `unpublish:${page.slug}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      await pageAPI.unpublish(page.slug);
+      setPages((current) => current.map((item) => (
+        item.slug === page.slug ? { ...item, deployed_version_id: null } : item
+      )));
+      setVersionsBySlug((current) => ({
+        ...current,
+        [page.slug]: (current[page.slug] ?? []).map((item) => ({ ...item, deployed: false })),
+      }));
+      notification.success(t('notifications.unpublished'));
+    } catch (error) {
+      log.error('Failed to unpublish Page', { slug: page.slug, error });
+      notification.error(t('notifications.unpublishFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t]);
+
+  const deleteVersion = useCallback(async (page: PageInfo, version: PageVersionInfo) => {
+    if (version.deployed) return;
+    const confirmed = await confirmDanger(
+      t('confirm.deleteVersionTitle'),
+      t('confirm.deleteVersionMessage', { version: version.version_id, title: page.title }),
+      { confirmText: t('actions.deleteVersion') },
+    );
+    if (!confirmed) return;
+    const key = `delete-version:${page.slug}:${version.version_id}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      await pageAPI.deleteVersion(page.slug, version.version_id);
+      setVersionsBySlug((current) => ({
+        ...current,
+        [page.slug]: (current[page.slug] ?? [])
+          .filter((item) => item.version_id !== version.version_id),
+      }));
+      notification.success(t('notifications.versionDeleted'));
+    } catch (error) {
+      log.error('Failed to delete Page version', {
+        slug: page.slug,
+        versionId: version.version_id,
+        error,
+      });
+      notification.error(t('notifications.versionDeleteFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t]);
+
+  const deletePage = useCallback(async (page: PageInfo) => {
+    const confirmed = await confirmDanger(
+      t('confirm.deletePageTitle'),
+      t('confirm.deletePageMessage', { title: page.title, slug: page.slug }),
+      { confirmText: t('actions.deletePage') },
+    );
+    if (!confirmed) return;
+    const key = `delete-page:${page.slug}`;
+    if (!beginPageAction(page.slug, key)) return;
+    try {
+      await pageAPI.deletePage(page.slug);
+      setPages((current) => current.filter((item) => item.slug !== page.slug));
+      setVersionsBySlug((current) => {
+        const next = { ...current };
+        delete next[page.slug];
+        return next;
+      });
+      notification.success(t('notifications.pageDeleted'));
+    } catch (error) {
+      log.error('Failed to delete Page', { slug: page.slug, error });
+      notification.error(t('notifications.pageDeleteFailed', { error: errorText(error) }));
+    } finally {
+      endPageAction(page.slug, key);
+    }
+  }, [beginPageAction, endPageAction, notification, t]);
+
+  const refreshButton = (
+    <Button
+      variant="secondary"
+      size="small"
+      onClick={() => void loadPages()}
+      disabled={loading}
+    >
+      <RefreshCw size={14} className={loading ? 'pages-scene__spinning' : undefined} />
+      {t('actions.refresh')}
+    </Button>
+  );
+
+  return (
+    <GalleryLayout className="pages-scene" data-testid="pages-scene">
+      <GalleryPageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        actions={refreshButton}
+      />
+
+      {loading && pages.length === 0 ? (
+        <GalleryEmpty
+          icon={<PanelsTopLeft size={36} />}
+          message={t('loading')}
+          testId="pages-loading"
+        />
+      ) : loginRequired ? (
+        <GalleryEmpty
+          icon={<PanelsTopLeft size={36} />}
+          message={<>{t('signInRequired')}<small>{t('signInHint')}</small></>}
+          action={(
+            <Button variant="primary" size="small" onClick={() => setShowAccountDialog(true)}>
+              {t('actions.signIn')}
+            </Button>
+          )}
+          testId="pages-sign-in-required"
+        />
+      ) : loadError && pages.length === 0 ? (
+        <GalleryEmpty
+          icon={<PanelsTopLeft size={36} />}
+          message={<>{t('loadFailed')}<small>{loadError}</small></>}
+          isError
+          action={<Button variant="secondary" size="small" onClick={() => void loadPages()}>{t('actions.retry')}</Button>}
+          testId="pages-error"
+        />
+      ) : pages.length === 0 ? (
+        <GalleryEmpty
+          icon={<PanelsTopLeft size={36} />}
+          message={<>{t('empty')}<small>{t('emptyHint')}</small></>}
+          testId="pages-empty"
+        />
+      ) : (
+        <div className="pages-scene__grid" role="list">
+          {pages.map((page) => {
+            const versions = versionsBySlug[page.slug] ?? [];
+            const expanded = expandedSlugs.has(page.slug);
+            const deployed = Boolean(page.deployed_version_id);
+            const pendingAction = pendingBySlug[page.slug];
+            const pageBusy = Boolean(pendingAction);
+            const titleDraft = titleDrafts[page.slug] ?? page.title;
+            return (
+              <article className="pages-scene__card" key={page.slug} role="listitem">
+                <div className="pages-scene__card-heading">
+                  <div className="pages-scene__identity">
+                    <h3>{page.title || page.slug}</h3>
+                    <code>/{page.slug}</code>
+                  </div>
+                  <span className={`pages-scene__status${deployed ? ' is-deployed' : ''}`}>
+                    {deployed ? t('status.deployed') : t('status.savedOnly')}
+                  </span>
+                </div>
+
+                <div className="pages-scene__meta">
+                  <span>{t('meta.updated', { date: formatTimestamp(page.updated_at) })}</span>
+                  <span>{t('meta.size', { size: formatBytes(page.total_bytes) })}</span>
+                  <span>{t('meta.files', { count: page.file_count })}</span>
+                </div>
+
+                <div className="pages-scene__title-row">
+                  <span>{t('titleField.label')}</span>
+                  <div className="pages-scene__title-control">
+                    <Input
+                      size="small"
+                      value={titleDraft}
+                      maxLength={120}
+                      disabled={pageBusy}
+                      onChange={(event) => setTitleDrafts((current) => ({
+                        ...current,
+                        [page.slug]: event.currentTarget.value,
+                      }))}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') void saveTitle(page);
+                      }}
+                      aria-label={t('titleField.inputAria', { slug: page.slug })}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      disabled={pageBusy || !titleDraft.trim() || titleDraft.trim() === page.title}
+                      isLoading={pendingAction === `title:${page.slug}`}
+                      onClick={() => void saveTitle(page)}
+                    >
+                      <Save size={13} /> {t('actions.saveTitle')}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pages-scene__visibility-row">
+                  <span>{t('visibility.label')}</span>
+                  <Select
+                    size="small"
+                    value={page.visibility}
+                    options={visibilityOptions}
+                    disabled={pageBusy}
+                    onChange={(value) => void changeVisibility(page, String(value) as PageVisibility)}
+                    triggerAriaLabel={t('visibility.changeAria', { title: page.title || page.slug })}
+                  />
+                </div>
+
+                <div className="pages-scene__actions">
+                  {deployed && (
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      onClick={() => void openPage(page)}
+                      disabled={pageBusy}
+                      isLoading={pendingAction === `open:${page.slug}:production`}
+                    >
+                      <ExternalLink size={13} /> {t('actions.openProduction')}
+                    </Button>
+                  )}
+                  {deployed && (
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => void unpublishPage(page)}
+                      disabled={pageBusy}
+                      isLoading={pendingAction === `unpublish:${page.slug}`}
+                    >
+                      {t('actions.unpublish')}
+                    </Button>
+                  )}
+                  {deployed && (
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => void copyPageLink(page)}
+                      disabled={pageBusy}
+                      isLoading={pendingAction === `copy:${page.slug}:production`}
+                    >
+                      <Copy size={13} /> {t('actions.copyLink')}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={() => void toggleVersions(page.slug)}
+                    disabled={pageBusy}
+                    isLoading={pendingAction === `versions:${page.slug}`}
+                    aria-expanded={expanded}
+                  >
+                    <FileClock size={13} /> {t('actions.versions')}
+                    {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="small"
+                    onClick={() => void deletePage(page)}
+                    disabled={pageBusy}
+                    isLoading={pendingAction === `delete-page:${page.slug}`}
+                  >
+                    <Trash2 size={13} /> {t('actions.deletePage')}
+                  </Button>
+                </div>
+
+                {expanded && (
+                  <div className="pages-scene__versions" data-testid={`page-versions-${page.slug}`}>
+                    <div className="pages-scene__versions-heading">
+                      <span>{t('versions.title')}</span>
+                      <Button
+                        variant="ghost"
+                        size="small"
+                        disabled={pageBusy}
+                        onClick={() => void loadVersions(page.slug)}
+                      >
+                        <RefreshCw size={12} /> {t('actions.refresh')}
+                      </Button>
+                    </div>
+                    {versions.length === 0 ? (
+                      <p className="pages-scene__versions-empty">{t('versions.empty')}</p>
+                    ) : versions.map((version) => (
+                      <div className="pages-scene__version" key={version.version_id}>
+                        <div className="pages-scene__version-copy">
+                          <div>
+                            <code>{version.version_id}</code>
+                            {version.deployed && <span className="pages-scene__current-badge">{t('versions.current')}</span>}
+                            {version.has_worker && <span className="pages-scene__worker-badge">{t('versions.worker')}</span>}
+                          </div>
+                          <span>{t('versions.meta', {
+                            date: formatTimestamp(version.created_at),
+                            size: formatBytes(version.total_bytes),
+                            count: version.file_count,
+                          })}</span>
+                          {version.note && <p>{version.note}</p>}
+                        </div>
+                        <div className="pages-scene__version-actions">
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            onClick={() => void openPage(page, version.version_id)}
+                            disabled={pageBusy}
+                            isLoading={pendingAction === `open:${page.slug}:${version.version_id}`}
+                            aria-label={t('actions.openVersionAria', { version: version.version_id })}
+                          >
+                            <ExternalLink size={13} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            onClick={() => void copyPageLink(page, version)}
+                            disabled={pageBusy}
+                            isLoading={pendingAction === `copy:${page.slug}:${version.version_id}`}
+                            aria-label={t('actions.copyVersionAria', { version: version.version_id })}
+                          >
+                            <Copy size={13} />
+                          </Button>
+                          {!version.deployed && (
+                            <Button
+                              variant="secondary"
+                              size="small"
+                              onClick={() => void deployVersion(page, version)}
+                              disabled={pageBusy}
+                              isLoading={pendingAction === `deploy:${page.slug}:${version.version_id}`}
+                            >
+                              <Rocket size={13} /> {t('actions.deploy')}
+                            </Button>
+                          )}
+                          {!version.deployed && (
+                            <Button
+                              variant="danger"
+                              size="small"
+                              onClick={() => void deleteVersion(page, version)}
+                              disabled={pageBusy}
+                              isLoading={pendingAction === `delete-version:${page.slug}:${version.version_id}`}
+                              aria-label={t('actions.deleteVersionAria', { version: version.version_id })}
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {showAccountDialog && (
+        <Suspense fallback={null}>
+          <RemoteConnectDialog
+            isOpen={showAccountDialog}
+            initialGroup="account"
+            onClose={() => {
+              setShowAccountDialog(false);
+              void loadPages();
+            }}
+          />
+        </Suspense>
+      )}
+    </GalleryLayout>
+  );
+};
+
+export default PagesScene;

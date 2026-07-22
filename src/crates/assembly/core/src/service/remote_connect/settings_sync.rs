@@ -26,7 +26,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use log::{debug, warn};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 
 use bitfun_services_integrations::remote_connect::account::{
     error_indicates_expired_token, AccountClient, AccountSession, SettingsBlob,
@@ -40,7 +40,7 @@ pub const SETTINGS_PUSH_DEBOUNCE: Duration = Duration::from_secs(5);
 
 /// Account context needed for every relay call: the session (token +
 /// master_key) and the relay base URL.
-pub type AccountContext = (AccountSession, String);
+pub type AccountContext = (AccountSession, String, u64);
 
 type AccountContextFn = dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<AccountContext>> + Send>>
     + Send
@@ -54,6 +54,10 @@ pub struct SettingsSyncHooks {
     /// logged out. Required for the background loop; one-shot helpers take
     /// the context explicitly.
     pub account_context: Option<Arc<AccountContextFn>>,
+    /// Confirms that a context generation captured before an async relay call
+    /// still belongs to the active account. Hosts bump the generation before
+    /// logout or replacement login.
+    pub is_account_context_current: Option<Arc<dyn Fn(u64) -> bool + Send + Sync>>,
     /// When true, push and pull are paused (Desktop: Peer controller mode).
     pub should_pause: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
     /// Fired after cloud settings were applied to the local config.
@@ -73,6 +77,7 @@ static PUSH_TX: OnceLock<mpsc::UnboundedSender<()>> = OnceLock::new();
 /// user-chosen direction. A counter (not a flag) so concurrent ops do not
 /// clear each other's in-flight state on completion.
 static SYNC_OPS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+static SYNC_OPS_IDLE: Notify = Notify::const_new();
 
 /// RAII guard that marks a sync upload/apply as in flight.
 struct SyncOpGuard;
@@ -84,19 +89,43 @@ impl SyncOpGuard {
 }
 impl Drop for SyncOpGuard {
     fn drop(&mut self) {
-        SYNC_OPS_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+        if SYNC_OPS_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst) == 1 {
+            SYNC_OPS_IDLE.notify_waiters();
+        }
+    }
+}
+
+/// Wait until every settings upload/apply critical section has completed.
+/// Hosts call this after invalidating their account generation and before
+/// completing logout or installing a replacement account.
+pub async fn wait_for_sync_operations_idle() {
+    loop {
+        let notified = SYNC_OPS_IDLE.notified();
+        if SYNC_OPS_IN_FLIGHT.load(Ordering::SeqCst) == 0 {
+            return;
+        }
+        notified.await;
     }
 }
 
 fn hooks() -> &'static SettingsSyncHooks {
     static DEFAULT: SettingsSyncHooks = SettingsSyncHooks {
         account_context: None,
+        is_account_context_current: None,
         should_pause: None,
         on_settings_applied: None,
         on_settings_pushed: None,
         on_token_expired: None,
     };
     HOOKS.get().unwrap_or(&DEFAULT)
+}
+
+fn is_account_context_current(generation: u64) -> bool {
+    hooks()
+        .is_account_context_current
+        .as_ref()
+        .map(|check| check(generation))
+        .unwrap_or(true)
 }
 
 fn should_pause() -> bool {
@@ -183,11 +212,29 @@ pub async fn upload_settings_payload(
     relay_url: &str,
     payload: &str,
 ) -> Result<i64> {
+    upload_settings_payload_for_generation(account, relay_url, payload, None).await
+}
+
+async fn upload_settings_payload_for_generation(
+    account: &AccountSession,
+    relay_url: &str,
+    payload: &str,
+    generation: Option<u64>,
+) -> Result<i64> {
+    if generation.is_some_and(|value| !is_account_context_current(value)) {
+        return Err(anyhow!("account context changed before settings upload"));
+    }
     let _op = SyncOpGuard::begin();
+    if generation.is_some_and(|value| !is_account_context_current(value)) {
+        return Err(anyhow!("account context changed before settings upload"));
+    }
     let client = AccountClient::new();
     // The version returned here is the exact one stored on the relay —
     // recording it keeps the next pull from re-applying our own upload.
     let version = client.upload_settings(relay_url, account, payload).await?;
+    if generation.is_some_and(|value| !is_account_context_current(value)) {
+        return Err(anyhow!("account context changed during settings upload"));
+    }
     let hash = settings_content_hash(payload).unwrap_or_default();
     record_settings_cursor(&account.user_id, version, hash);
     debug!("Settings sync: uploaded settings (version={version})");
@@ -198,6 +245,14 @@ pub async fn upload_settings_payload(
 /// Export the current config and upload it when the content differs from the
 /// last uploaded/applied blob. Returns `true` when an upload happened.
 pub async fn push_settings_now(account: &AccountSession, relay_url: &str) -> Result<bool> {
+    push_settings_now_for_generation(account, relay_url, None).await
+}
+
+async fn push_settings_now_for_generation(
+    account: &AccountSession,
+    relay_url: &str,
+    generation: Option<u64>,
+) -> Result<bool> {
     let config_service = crate::service::config::get_global_config_service()
         .await
         .map_err(|e| anyhow!("config service: {e}"))?;
@@ -207,6 +262,10 @@ pub async fn push_settings_now(account: &AccountSession, relay_url: &str) -> Res
         .map_err(|e| anyhow!("export config: {e}"))?;
     let payload = serde_json::to_string(&exported).map_err(|e| anyhow!("serialize config: {e}"))?;
 
+    if generation.is_some_and(|value| !is_account_context_current(value)) {
+        return Err(anyhow!("account context changed while exporting settings"));
+    }
+
     let hash = settings_content_hash(&payload)?;
     let known = sync_state::load_settings_cursor(&account.user_id);
     if known.hash == hash && known.version != 0 {
@@ -214,7 +273,7 @@ pub async fn push_settings_now(account: &AccountSession, relay_url: &str) -> Res
         return Ok(false);
     }
 
-    upload_settings_payload(account, relay_url, &payload).await?;
+    upload_settings_payload_for_generation(account, relay_url, &payload, generation).await?;
     Ok(true)
 }
 
@@ -227,13 +286,28 @@ pub async fn apply_settings_blob(
     blob: &SettingsBlob,
     force: bool,
 ) -> Result<bool> {
+    apply_settings_blob_for_generation(account, blob, force, None).await
+}
+
+async fn apply_settings_blob_for_generation(
+    account: &AccountSession,
+    blob: &SettingsBlob,
+    force: bool,
+    generation: Option<u64>,
+) -> Result<bool> {
     if !force {
         let known = sync_state::load_settings_cursor(&account.user_id);
         if blob.version == known.version {
             return Ok(false);
         }
     }
+    if generation.is_some_and(|value| !is_account_context_current(value)) {
+        return Err(anyhow!("account context changed before settings apply"));
+    }
     let _op = SyncOpGuard::begin();
+    if generation.is_some_and(|value| !is_account_context_current(value)) {
+        return Err(anyhow!("account context changed before settings apply"));
+    }
 
     let inner_config = inner_config_value(&blob.plaintext)?;
     let config_service = crate::service::config::get_global_config_service()
@@ -273,6 +347,14 @@ pub async fn apply_settings_blob(
 /// when new settings were applied; `Ok(false)` also when no cloud settings
 /// exist yet.
 pub async fn pull_and_apply_settings(account: &AccountSession, relay_url: &str) -> Result<bool> {
+    pull_and_apply_settings_for_generation(account, relay_url, None).await
+}
+
+async fn pull_and_apply_settings_for_generation(
+    account: &AccountSession,
+    relay_url: &str,
+    generation: Option<u64>,
+) -> Result<bool> {
     let client = AccountClient::new();
     let Some(blob) = client
         .fetch_settings_with_version(relay_url, account)
@@ -280,7 +362,10 @@ pub async fn pull_and_apply_settings(account: &AccountSession, relay_url: &str) 
     else {
         return Ok(false);
     };
-    apply_settings_blob(account, &blob, false).await
+    if generation.is_some_and(|value| !is_account_context_current(value)) {
+        return Err(anyhow!("account context changed during settings pull"));
+    }
+    apply_settings_blob_for_generation(account, &blob, false, generation).await
 }
 
 async fn account_context() -> Result<AccountContext> {
@@ -296,11 +381,17 @@ async fn push_from_loop() {
         debug!("Settings sync: push paused by host app");
         return;
     }
-    let (account, relay_url) = match account_context().await {
+    let (account, relay_url, generation) = match account_context().await {
         Ok(ctx) => ctx,
         Err(_) => return, // logged out — silently skip
     };
-    if let Err(e) = push_settings_now(&account, &relay_url).await {
+    if !is_account_context_current(generation) {
+        return;
+    }
+    if let Err(e) = push_settings_now_for_generation(&account, &relay_url, Some(generation)).await {
+        if !is_account_context_current(generation) {
+            return;
+        }
         note_relay_error(&e, "push");
     }
 }
@@ -314,11 +405,19 @@ async fn pull_from_loop() {
         debug!("Settings sync: pull skipped while an upload/apply is in flight");
         return;
     }
-    let (account, relay_url) = match account_context().await {
+    let (account, relay_url, generation) = match account_context().await {
         Ok(ctx) => ctx,
         Err(_) => return, // logged out — silently skip
     };
-    if let Err(e) = pull_and_apply_settings(&account, &relay_url).await {
+    if !is_account_context_current(generation) {
+        return;
+    }
+    if let Err(e) =
+        pull_and_apply_settings_for_generation(&account, &relay_url, Some(generation)).await
+    {
+        if !is_account_context_current(generation) {
+            return;
+        }
         note_relay_error(&e, "pull");
     }
 }

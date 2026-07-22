@@ -9,6 +9,7 @@ use std::path::Path;
 const MAX_UPLOAD_BATCH_BASE64_BYTES: usize = 256 * 1024;
 const MAX_PAGE_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_PAGE_FILES: usize = 4096;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 struct PageUploadManifestEntry {
@@ -51,6 +52,18 @@ pub struct PageVersionInfo {
     pub created_at: i64,
     pub deployed: bool,
     pub preview_url_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageOpenLink {
+    pub open_url: String,
+    pub expires_in_seconds: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct PageOpenLinkRelayResponse {
+    open_url_path: String,
+    expires_in_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -270,12 +283,17 @@ async fn save_page_version_from_collected_files(
             size: f.content.len() as u64,
         })
         .collect();
+    let upload_id = uuid::Uuid::new_v4().simple().to_string();
 
     let check_url = format!("{relay_base}/api/pages/check-files");
     let check_resp = client
         .post(&check_url)
         .header("Authorization", &auth)
-        .json(&serde_json::json!({ "slug": slug, "files": manifest }))
+        .json(&serde_json::json!({
+            "slug": slug,
+            "upload_id": upload_id,
+            "files": manifest,
+        }))
         .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
@@ -289,6 +307,9 @@ async fn save_page_version_from_collected_files(
         .json()
         .await
         .map_err(|e| anyhow!("parse check-files response: {e}"))?;
+    if check_body["upload_id"].as_str() != Some(upload_id.as_str()) {
+        return Err(anyhow!("check-files returned a mismatched upload session"));
+    }
     let needed: Vec<String> = check_body["needed"]
         .as_array()
         .map(|items| {
@@ -301,7 +322,7 @@ async fn save_page_version_from_collected_files(
 
     if !needed.is_empty() {
         upload_needed_page_files(
-            &client, relay_base, &auth, slug, &title, visibility, &all_files, &needed,
+            &client, relay_base, &auth, slug, &upload_id, &title, visibility, &all_files, &needed,
         )
         .await?;
     } else {
@@ -311,6 +332,7 @@ async fn save_page_version_from_collected_files(
             &format!("{relay_base}/api/pages/upload-files"),
             &auth,
             slug,
+            &upload_id,
             &title,
             visibility,
             &HashMap::new(),
@@ -325,6 +347,7 @@ async fn save_page_version_from_collected_files(
         .post(&freeze_url)
         .header("Authorization", &auth)
         .json(&serde_json::json!({
+            "upload_id": upload_id,
             "title": title,
             "note": note.unwrap_or(""),
         }))
@@ -416,6 +439,43 @@ pub async fn list_page_versions_from_relay(
         .json()
         .await
         .map_err(|e| anyhow!("parse list versions: {e}"))?)
+}
+
+/// Create a short-lived, one-time browser handoff URL for a production Page or
+/// a specific immutable preview. The account bearer token is sent only in the
+/// authenticated request header and is never embedded in the returned URL.
+pub async fn create_page_open_link_on_relay(
+    relay_url: &str,
+    token: &str,
+    slug: &str,
+    version_id: Option<&str>,
+) -> Result<PageOpenLink> {
+    validate_slug(slug)?;
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
+    let resp = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({ "version_id": version_id }))
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|e| anyhow!("create page open link failed: {e}"))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(anyhow!(
+            "create page open link failed: HTTP {status} — {body}"
+        ));
+    }
+    let result: PageOpenLinkRelayResponse = resp
+        .json()
+        .await
+        .map_err(|e| anyhow!("parse page open link response: {e}"))?;
+    Ok(PageOpenLink {
+        open_url: join_relay_url(relay_url, &result.open_url_path),
+        expires_in_seconds: result.expires_in_seconds,
+    })
 }
 
 pub async fn deploy_page_version_on_relay(
@@ -521,9 +581,13 @@ pub async fn update_page_on_relay(
 pub async fn unpublish_page_from_relay(relay_url: &str, token: &str, slug: &str) -> Result<()> {
     validate_slug(slug)?;
     let client = reqwest::Client::new();
-    let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
+    let url = format!(
+        "{}/api/pages/{}/unpublish",
+        relay_url.trim_end_matches('/'),
+        slug
+    );
     let resp = client
-        .delete(&url)
+        .post(&url)
         .header("Authorization", format!("Bearer {token}"))
         .timeout(std::time::Duration::from_secs(15))
         .send()
@@ -533,6 +597,25 @@ pub async fn unpublish_page_from_relay(relay_url: &str, token: &str, slug: &str)
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         return Err(anyhow!("unpublish page failed: HTTP {status} — {body}"));
+    }
+    Ok(())
+}
+
+pub async fn delete_page_from_relay(relay_url: &str, token: &str, slug: &str) -> Result<()> {
+    validate_slug(slug)?;
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/pages/{}", relay_url.trim_end_matches('/'), slug);
+    let resp = client
+        .delete(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|e| anyhow!("delete page failed: {e}"))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(anyhow!("delete page failed: HTTP {status} — {body}"));
     }
     Ok(())
 }
@@ -571,19 +654,22 @@ fn validate_visibility(v: &str) -> Result<()> {
 }
 
 fn collect_page_files(base: &Path) -> Result<Vec<CollectedPageFile>> {
-    if !base.is_dir() {
+    let base_metadata = std::fs::symlink_metadata(base)
+        .map_err(|_| anyhow!("page directory does not exist: {}", base.display()))?;
+    if base_metadata.file_type().is_symlink() || !base_metadata.is_dir() {
         return Err(anyhow!("page directory does not exist: {}", base.display()));
     }
-    let has_index = base.join("index.html").exists();
-    let has_worker = base.join("server").join("worker.js").exists();
+    let has_index = is_regular_page_source_file(&base.join("index.html"))?;
+    let has_worker = is_regular_page_source_file(&base.join("server").join("worker.js"))?;
     if !has_index && !has_worker {
         return Err(anyhow!(
             "page directory must contain index.html and/or server/worker.js: {}",
             base.display()
         ));
     }
+    let canonical_base = std::fs::canonicalize(base)?;
     let mut all_files = Vec::new();
-    collect_files_with_hash(base, base, &mut all_files)?;
+    collect_files_with_hash(&canonical_base, &canonical_base, &mut all_files)?;
     Ok(all_files)
 }
 
@@ -592,6 +678,12 @@ fn collect_inline_page_files(files: &HashMap<String, String>) -> Result<Vec<Coll
 
     if files.is_empty() {
         return Err(anyhow!("files map must not be empty"));
+    }
+    if files.len() > MAX_PAGE_FILES {
+        return Err(anyhow!(
+            "page exceeds file count limit ({} > {MAX_PAGE_FILES})",
+            files.len()
+        ));
     }
 
     let has_index = files.contains_key("index.html");
@@ -640,18 +732,35 @@ fn collect_files_with_hash(
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() {
-            collect_files_with_hash(base, &path, out)?;
-        } else if path.is_file() {
-            let rel = path
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            return Err(anyhow!(
+                "symbolic links are not allowed in Page sources: {}",
+                path.display()
+            ));
+        }
+        let canonical_path = std::fs::canonicalize(&path)?;
+        if !canonical_path.starts_with(base) {
+            return Err(anyhow!(
+                "Page source entry resolves outside its directory: {}",
+                path.display()
+            ));
+        }
+        if file_type.is_dir() {
+            collect_files_with_hash(base, &canonical_path, out)?;
+        } else if file_type.is_file() {
+            if out.len() >= MAX_PAGE_FILES {
+                return Err(anyhow!("page exceeds file count limit ({MAX_PAGE_FILES})"));
+            }
+            let rel = canonical_path
                 .strip_prefix(base)
-                .unwrap_or(&path)
+                .unwrap_or(&canonical_path)
                 .to_string_lossy()
                 .replace('\\', "/");
             if rel.contains("..") {
                 continue;
             }
-            let content = std::fs::read(&path)?;
+            let content = std::fs::read(&canonical_path)?;
             if content.len() as u64 > MAX_FILE_BYTES {
                 return Err(anyhow!(
                     "file exceeds size limit: {rel} ({} > {MAX_FILE_BYTES} bytes)",
@@ -666,9 +775,26 @@ fn collect_files_with_hash(
                 content,
                 hash,
             });
+        } else {
+            return Err(anyhow!(
+                "unsupported Page source entry type: {}",
+                path.display()
+            ));
         }
     }
     Ok(())
+}
+
+fn is_regular_page_source_file(path: &Path) -> Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(anyhow!(
+            "symbolic links are not allowed in Page sources: {}",
+            path.display()
+        )),
+        Ok(metadata) => Ok(metadata.is_file()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -677,6 +803,7 @@ async fn upload_needed_page_files(
     relay_base: &str,
     auth: &str,
     slug: &str,
+    upload_id: &str,
     title: &str,
     visibility: &str,
     all_files: &[CollectedPageFile],
@@ -710,6 +837,7 @@ async fn upload_needed_page_files(
                 &url,
                 auth,
                 slug,
+                upload_id,
                 title,
                 visibility,
                 &current_batch,
@@ -730,6 +858,7 @@ async fn upload_needed_page_files(
             &url,
             auth,
             slug,
+            upload_id,
             title,
             visibility,
             &current_batch,
@@ -747,6 +876,7 @@ async fn post_upload_batch(
     url: &str,
     auth: &str,
     slug: &str,
+    upload_id: &str,
     title: &str,
     visibility: &str,
     files: &HashMap<String, serde_json::Value>,
@@ -758,6 +888,7 @@ async fn post_upload_batch(
         .header("Authorization", auth)
         .json(&serde_json::json!({
             "slug": slug,
+            "upload_id": upload_id,
             "title": title,
             "visibility": visibility,
             "files": files,
@@ -833,6 +964,42 @@ mod tests {
         let mut empty_entry = HashMap::new();
         empty_entry.insert("styles.css".into(), "body{}".into());
         assert!(collect_inline_page_files(&empty_entry).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn directory_source_rejects_symlinks_to_external_files() {
+        use std::os::unix::fs::symlink;
+
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-page-symlink-external-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let page = root.join("page");
+        std::fs::create_dir_all(&page).unwrap();
+        std::fs::write(page.join("index.html"), b"<html></html>").unwrap();
+        std::fs::write(root.join("secret.txt"), b"secret").unwrap();
+        symlink(root.join("secret.txt"), page.join("secret.txt")).unwrap();
+
+        let error = collect_page_files(&page).expect_err("external symlink must be rejected");
+        assert!(error.to_string().contains("symbolic links are not allowed"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn directory_source_rejects_symlink_loops() {
+        use std::os::unix::fs::symlink;
+
+        let root =
+            std::env::temp_dir().join(format!("bitfun-page-symlink-loop-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("index.html"), b"<html></html>").unwrap();
+        symlink(&root, root.join("loop")).unwrap();
+
+        let error = collect_page_files(&root).expect_err("symlink loop must be rejected");
+        assert!(error.to_string().contains("symbolic links are not allowed"));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[tokio::test]

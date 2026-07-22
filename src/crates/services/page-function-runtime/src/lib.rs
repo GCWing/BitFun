@@ -7,6 +7,7 @@
 //! host bindings are synchronous.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -97,19 +98,34 @@ pub fn run_fetch(
     timeout: Duration,
 ) -> Result<FetchResponse, PageFunctionError> {
     let started = Instant::now();
+    let interrupted = Arc::new(AtomicBool::new(false));
     let runtime = Runtime::new().map_err(|e| PageFunctionError::Init(e.to_string()))?;
     runtime.set_memory_limit(16 * 1024 * 1024);
     runtime.set_max_stack_size(256 * 1024);
+    let interrupt_flag = Arc::clone(&interrupted);
+    runtime.set_interrupt_handler(Some(Box::new(move || {
+        let timed_out = started.elapsed() >= timeout;
+        if timed_out {
+            interrupt_flag.store(true, Ordering::Relaxed);
+        }
+        timed_out
+    })));
 
     let context = Context::full(&runtime).map_err(|e| PageFunctionError::Init(e.to_string()))?;
 
     let json_out: String = context.with(|ctx| {
-        if started.elapsed() > timeout {
+        if started.elapsed() >= timeout {
             return Err(PageFunctionError::Timeout(timeout));
         }
 
-        ctx.eval::<(), _>(worker_source)
-            .map_err(|e| PageFunctionError::Eval(format!("{e}")))?;
+        ctx.eval::<(), _>(worker_source).map_err(|e| {
+            execution_error(
+                &interrupted,
+                started,
+                timeout,
+                PageFunctionError::Eval(format!("{e}")),
+            )
+        })?;
 
         // Ensure fetch exists before wrapping.
         let globals = ctx.globals();
@@ -150,7 +166,14 @@ pub fn run_fetch(
             };
             "#,
         )
-        .map_err(|e| PageFunctionError::Eval(format!("wrap fetch: {e}")))?;
+        .map_err(|e| {
+            execution_error(
+                &interrupted,
+                started,
+                timeout,
+                PageFunctionError::Eval(format!("wrap fetch: {e}")),
+            )
+        })?;
 
         let invoke: Function = globals
             .get("__bitfun_invoke")
@@ -160,17 +183,29 @@ pub fn run_fetch(
         let req_obj = request_to_object(&ctx, request)?;
         let maybe: MaybePromise = invoke
             .call((req_obj, env))
-            .map_err(|e| PageFunctionError::Handler(format!("{e}")))?;
+            .map_err(|e| {
+                execution_error(
+                    &interrupted,
+                    started,
+                    timeout,
+                    PageFunctionError::Handler(format!("{e}")),
+                )
+            })?;
 
         // Drive QuickJS microtasks until the (maybe) promise settles, respecting timeout.
         let out = loop {
-            if started.elapsed() > timeout {
+            if started.elapsed() >= timeout {
                 return Err(PageFunctionError::Timeout(timeout));
             }
             match maybe.result::<String>() {
                 Some(Ok(s)) => break s,
                 Some(Err(e)) => {
-                    return Err(PageFunctionError::Handler(format!("async fetch failed: {e}")));
+                    return Err(execution_error(
+                        &interrupted,
+                        started,
+                        timeout,
+                        PageFunctionError::Handler(format!("async fetch failed: {e}")),
+                    ));
                 }
                 None => {
                     if !ctx.execute_pending_job() {
@@ -188,6 +223,19 @@ pub fn run_fetch(
 
     serde_json::from_str::<FetchResponse>(&json_out)
         .map_err(|e| PageFunctionError::Handler(format!("invalid fetch response JSON: {e}")))
+}
+
+fn execution_error(
+    interrupted: &AtomicBool,
+    started: Instant,
+    timeout: Duration,
+    fallback: PageFunctionError,
+) -> PageFunctionError {
+    if interrupted.load(Ordering::Relaxed) || started.elapsed() >= timeout {
+        PageFunctionError::Timeout(timeout)
+    } else {
+        fallback
+    }
 }
 
 fn build_env_object<'js>(
@@ -209,16 +257,22 @@ fn build_env_object<'js>(
             KV: {
               get: function(k) {
                 var r = JSON.parse(hostCall("kv_get", String(k), "", ""));
+                if (r.error) throw new Error(r.error);
                 return r.v;
               },
               put: function(k, v) {
-                JSON.parse(hostCall("kv_put", String(k), String(v), ""));
+                var r = JSON.parse(hostCall("kv_put", String(k), String(v), ""));
+                if (!r.ok) throw new Error(r.error || "KV put failed");
               },
               delete: function(k) {
-                return JSON.parse(hostCall("kv_delete", String(k), "", "")).ok;
+                var r = JSON.parse(hostCall("kv_delete", String(k), "", ""));
+                if (r.error) throw new Error(r.error);
+                return r.ok;
               },
               list: function() {
-                return JSON.parse(hostCall("kv_list", "", "", "")).keys;
+                var r = JSON.parse(hostCall("kv_list", "", "", ""));
+                if (r.error) throw new Error(r.error);
+                return r.keys;
               }
             },
             DB: {
@@ -231,14 +285,19 @@ fn build_env_object<'js>(
             },
             BLOBS: {
               put: function(id, contentType, dataB64) {
-                return JSON.parse(hostCall("blob_put", String(id), String(contentType||"application/octet-stream"), String(dataB64))).ok;
+                var r = JSON.parse(hostCall("blob_put", String(id), String(contentType||"application/octet-stream"), String(dataB64)));
+                if (!r.ok) throw new Error(r.error || "Blob put failed");
+                return true;
               },
               get: function(id) {
                 var r = JSON.parse(hostCall("blob_get", String(id), "", ""));
+                if (r.error) throw new Error(r.error);
                 return r.found ? { contentType: r.contentType, data: r.data } : null;
               },
               delete: function(id) {
-                return JSON.parse(hostCall("blob_delete", String(id), "", "")).ok;
+                var r = JSON.parse(hostCall("blob_delete", String(id), "", ""));
+                if (r.error) throw new Error(r.error);
+                return r.ok;
               }
             },
             ASSETS: {
@@ -273,14 +332,14 @@ fn host_call(host: &dyn PageHost, op: &str, a: &str, b: &str, c: &str) -> String
         },
         "kv_delete" => match host.kv_delete(a) {
             Ok(ok) => format!(r#"{{"ok":{ok}}}"#),
-            Err(_) => r#"{"ok":false}"#.into(),
+            Err(e) => format!(r#"{{"ok":false,"error":{}}}"#, json_str(&e)),
         },
         "kv_list" => match host.kv_list() {
             Ok(keys) => format!(
                 r#"{{"keys":{}}}"#,
                 serde_json::to_string(&keys).unwrap_or_else(|_| "[]".into())
             ),
-            Err(_) => r#"{"keys":[]}"#.into(),
+            Err(e) => format!(r#"{{"keys":[],"error":{}}}"#, json_str(&e)),
         },
         "db_execute" => host
             .db_execute(a, b)
@@ -303,7 +362,7 @@ fn host_call(host: &dyn PageHost, op: &str, a: &str, b: &str, c: &str) -> String
         },
         "blob_delete" => match host.blob_delete(a) {
             Ok(ok) => format!(r#"{{"ok":{ok}}}"#),
-            Err(_) => r#"{"ok":false}"#.into(),
+            Err(e) => format!(r#"{{"ok":false,"error":{}}}"#, json_str(&e)),
         },
         "assets_fetch" => match host.assets_get(a) {
             Ok(Some((ct, bytes))) => {
@@ -496,5 +555,47 @@ mod tests {
             resp.headers.get("content-type").map(String::as_str),
             Some("application/json")
         );
+    }
+
+    #[test]
+    fn top_level_infinite_loop_is_interrupted() {
+        let timeout = Duration::from_millis(25);
+        let started = Instant::now();
+        let err = run_fetch(
+            "while (true) {}",
+            &test_request(),
+            Arc::new(MemoryPageHost::default()),
+            timeout,
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, PageFunctionError::Timeout(value) if value == timeout));
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn fetch_handler_infinite_loop_is_interrupted() {
+        let timeout = Duration::from_millis(25);
+        let started = Instant::now();
+        let err = run_fetch(
+            "function fetch() { while (true) {} }",
+            &test_request(),
+            Arc::new(MemoryPageHost::default()),
+            timeout,
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, PageFunctionError::Timeout(value) if value == timeout));
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    fn test_request() -> FetchRequest {
+        FetchRequest {
+            method: "GET".into(),
+            url: "https://example/p/u/s/".into(),
+            path: "/".into(),
+            headers: HashMap::new(),
+            body: None,
+        }
     }
 }

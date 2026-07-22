@@ -515,12 +515,14 @@ class RemoteConnectAPIService {
     isFirstLogin: boolean,
     workspacePath: string,
     configJson: string,
+    syncOperationId: number,
   ): Promise<AutoSyncResult> {
     try {
       return await this.adapter.request<AutoSyncResult>('account_auto_sync', {
         isFirstLogin,
         workspacePath,
         configJson,
+        syncOperationId,
       });
     } catch (e) {
       log.error('accountAutoSync failed', e);

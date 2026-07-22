@@ -20,6 +20,13 @@
   color: var(--color-text-muted);
 }
 
+.bitfun-remote-disclaimer__section-title {
+  margin: 2px 0 0;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .bitfun-remote-disclaimer__list {
   margin: 0;
   padding-left: 20px;
@@ -31,6 +38,34 @@
     font-size: 12px;
     line-height: 1.45;
     color: var(--color-text-secondary);
+  }
+}
+
+.bitfun-remote-disclaimer__list--key {
+  gap: 7px;
+}
+
+.bitfun-remote-disclaimer__details {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--element-bg-subtle);
+
+  summary {
+    padding: 9px 12px;
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  &[open] summary {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .bitfun-remote-disclaimer__list {
+    max-height: 240px;
+    padding: 10px 14px 12px 32px;
+    overflow-y: auto;
   }
 }
 

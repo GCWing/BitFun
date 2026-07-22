@@ -24,6 +24,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::RwLock;
@@ -38,6 +39,88 @@ static ACCOUNT_SESSION: OnceLock<Arc<RwLock<Option<AccountSession>>>> = OnceLock
 /// The relay URL associated with the current account session (needed for sync
 /// and device-routing calls).
 static ACCOUNT_RELAY_URL: OnceLock<Arc<RwLock<Option<String>>>> = OnceLock::new();
+
+/// Serializes explicit login-time syncs and lets logout/new login invalidate
+/// the active operation before account state is changed.
+static ACCOUNT_AUTO_SYNC_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+static ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID: AtomicU64 = AtomicU64::new(0);
+static ACCOUNT_CONTEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+static ACCOUNT_CONTEXT_TRANSITIONS: AtomicUsize = AtomicUsize::new(0);
+
+fn account_context_generation() -> u64 {
+    ACCOUNT_CONTEXT_GENERATION.load(Ordering::Acquire)
+}
+
+fn account_context_is_current(generation: u64) -> bool {
+    ACCOUNT_CONTEXT_TRANSITIONS.load(Ordering::Acquire) == 0
+        && account_context_generation() == generation
+}
+
+struct AccountContextTransitionPermit;
+
+impl AccountContextTransitionPermit {
+    fn begin() -> Self {
+        ACCOUNT_CONTEXT_TRANSITIONS.fetch_add(1, Ordering::AcqRel);
+        ACCOUNT_CONTEXT_GENERATION.fetch_add(1, Ordering::AcqRel);
+        ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID.store(0, Ordering::Release);
+        Self
+    }
+}
+
+impl Drop for AccountContextTransitionPermit {
+    fn drop(&mut self) {
+        // Invalidate work queued during the transition before making the newly
+        // installed (or cleared) account context discoverable.
+        ACCOUNT_CONTEXT_GENERATION.fetch_add(1, Ordering::AcqRel);
+        ACCOUNT_CONTEXT_TRANSITIONS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+struct AccountContextTransitionGuard {
+    sync_guard: Option<tokio::sync::MutexGuard<'static, ()>>,
+    transition: Option<AccountContextTransitionPermit>,
+}
+
+impl Drop for AccountContextTransitionGuard {
+    fn drop(&mut self) {
+        // Release the operation lock before reopening context discovery. A
+        // queued operation that wins this handoff still fails on the gate.
+        drop(self.sync_guard.take());
+        drop(self.transition.take());
+    }
+}
+
+async fn lock_account_sync(
+    generation: u64,
+) -> Result<tokio::sync::MutexGuard<'static, ()>, String> {
+    let guard = ACCOUNT_AUTO_SYNC_LOCK.lock().await;
+    if !account_context_is_current(generation) {
+        return Err("account sync cancelled".to_string());
+    }
+    Ok(guard)
+}
+
+fn ensure_account_auto_sync_current(operation_id: u64) -> Result<(), String> {
+    if operation_id != 0
+        && ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID.load(Ordering::Acquire) == operation_id
+    {
+        Ok(())
+    } else {
+        Err("account sync cancelled".to_string())
+    }
+}
+
+async fn cancel_and_wait_for_account_auto_sync() -> AccountContextTransitionGuard {
+    // The permit exists before either await, so cancellation cannot leave a
+    // half-started transition permanently open or accidentally discoverable.
+    let transition = AccountContextTransitionPermit::begin();
+    let sync_guard = ACCOUNT_AUTO_SYNC_LOCK.lock().await;
+    bitfun_core::service::remote_connect::settings_sync::wait_for_sync_operations_idle().await;
+    AccountContextTransitionGuard {
+        sync_guard: Some(sync_guard),
+        transition: Some(transition),
+    }
+}
 
 /// Global handle to the DialogScheduler, set during app startup. Used by the
 /// device-routing background task to execute commands received from peer
@@ -99,6 +182,7 @@ fn emit_settings_applied() {
 
 /// Emit granular auto-sync progress for the account login / devices UI.
 fn emit_sync_progress(
+    operation_id: u64,
     phase: &str,
     percent: u8,
     current: Option<usize>,
@@ -108,6 +192,7 @@ fn emit_sync_progress(
     emit_account_event(
         "account://sync-progress",
         serde_json::json!({
+            "operation_id": operation_id,
             "phase": phase,
             "percent": percent.min(100),
             "current": current,
@@ -1396,6 +1481,8 @@ async fn persist_account_session(device_id: Option<&str>) -> Result<(), String> 
 /// overwrite UI must `account_logout` instead of leaving a memory-only session.
 #[tauri::command]
 pub async fn account_finalize_login() -> Result<(), String> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     let device = current_device_identity()?;
     persist_account_session(Some(device.device_id.as_str())).await?;
     PENDING_SYNC_CHOICE.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -1418,6 +1505,9 @@ pub async fn account_finalize_login() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
+    // A new login must never overlap a detached sync that cloned the prior
+    // account context. Hold the guard until the new session is installed.
+    let _sync_guard = cancel_and_wait_for_account_auto_sync().await;
     let device = current_device_identity()?;
     let client = AccountClient::new();
     let session = client
@@ -1508,6 +1598,10 @@ pub async fn account_status() -> Result<AccountStatus, String> {
 /// `revoke_relay_token` is false after deleting this device because the relay
 /// deletion already revoked the current token along with the device row.
 async fn clear_account_login(revoke_relay_token: bool) {
+    // Invalidate the active operation first, then wait for it to observe the
+    // cancellation and release its guard. This ensures no settings apply or
+    // progress event can happen after logout completes.
+    let _sync_guard = cancel_and_wait_for_account_auto_sync().await;
     // Disconnect device routing before clearing the session.
     if let Some(service) = get_service_holder().read().await.as_ref() {
         service.stop_device_connection().await;
@@ -1568,6 +1662,8 @@ pub struct OnlineDeviceInfo {
 /// that logs presence updates; device messages are forwarded to the RemoteConnectService.
 #[tauri::command]
 pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> {
+    let account_generation = account_context_generation();
+    let sync_guard = lock_account_sync(account_generation).await?;
     let (session, relay_url) = read_account_context().await?;
     let identity = current_device_identity()?;
     let device_name = identity.device_name.clone();
@@ -1608,6 +1704,9 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
         Ok(result) => result,
         Err(e) => {
             let msg = format!("{e}");
+            // Token invalidation re-enters the account transition path, so the
+            // current account-operation lease must be released first.
+            drop(sync_guard);
             drop(holder);
             if error_indicates_expired_token(&msg) {
                 invalidate_local_account_session(&msg).await;
@@ -1632,6 +1731,9 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
     tokio::spawn(async move {
         use bitfun_core::service::remote_connect::relay_client::RelayEvent;
         while let Some(event) = event_rx.recv().await {
+            if !account_context_is_current(account_generation) {
+                break;
+            }
             match event {
                 RelayEvent::AuthOk { user_id, device_id } => {
                     // Should not normally arrive — start_device_connection consumes AuthOk.
@@ -1671,8 +1773,8 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                     emit_device_presence(&pairs);
                     // Another device came online — pull cloud settings if needed.
                     if devices.len() > 1 {
-                        tokio::spawn(async {
-                            pull_and_reconcile().await;
+                        tokio::spawn(async move {
+                            pull_and_reconcile(account_generation).await;
                         });
                     }
                 }
@@ -1756,7 +1858,9 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                          session={session_id} bytes={}",
                                         session_data.len()
                                     );
-                                    match import_session_bundle(&session_data).await {
+                                    match import_session_bundle(&session_data, account_generation)
+                                        .await
+                                    {
                                         Ok(()) => {
                                             log::info!("Session {session_id} imported from device {source_device_id}");
                                         }
@@ -1952,6 +2056,8 @@ pub async fn account_fetch_synced_sessions() -> Result<Vec<SyncedSession>, Strin
 /// Delete a synced session blob from the relay.
 #[tauri::command]
 pub async fn account_delete_synced_session(session_id: String) -> Result<(), String> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     let (session, relay_url) = read_account_context().await?;
     AccountClient::new()
         .delete_session(&relay_url, &session, &session_id)
@@ -1966,6 +2072,8 @@ pub async fn account_delete_synced_session(session_id: String) -> Result<(), Str
 /// Upload settings blob (encrypted client-side with the master key).
 #[tauri::command]
 pub async fn account_sync_settings(settings_json: String) -> Result<(), String> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     let (session, relay_url) = read_account_context().await?;
     bitfun_core::service::remote_connect::settings_sync::upload_settings_payload(
         &session,
@@ -2049,6 +2157,8 @@ pub async fn account_export_local_session(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<(), String> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     let (acct_session, relay_url) = read_account_context().await?;
 
     let storage_path =
@@ -2109,6 +2219,8 @@ pub async fn account_export_all_sessions(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<usize, String> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     let (acct_session, relay_url) = read_account_context().await?;
 
     let storage_path =
@@ -2195,6 +2307,8 @@ pub async fn account_import_remote_sessions(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<Vec<String>, String> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     let (acct_session, relay_url) = read_account_context().await?;
 
     let storage_path =
@@ -2266,6 +2380,7 @@ pub async fn account_fetch_session_turns(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<bool, String> {
+    let generation = account_context_generation();
     // Soft-skip before any disk IO so accidental callers cannot fail-closed
     // Peer hydrate on metadata load errors. History comes from the peer host.
     if crate::api::peer_host_invoke::is_peer_controller_active() {
@@ -2300,7 +2415,10 @@ pub async fn account_fetch_session_turns(
         return Ok(false);
     }
 
-    // Fetch the full bundle from the relay (which includes turns).
+    // Fetch the full bundle from the relay (which includes turns). Keep the
+    // account lease through the local commit so an account switch cannot write
+    // a stale account's history after it completes.
+    let _sync_guard = lock_account_sync(generation).await?;
     let (acct_session, relay_url) = read_account_context().await?;
     let fetched = AccountClient::new()
         .fetch_session(&relay_url, &acct_session, &session_id)
@@ -2528,23 +2646,42 @@ pub async fn account_auto_sync(
     is_first_login: bool,
     workspace_path: String,
     config_json: String,
+    sync_operation_id: u64,
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<AutoSyncResult, String> {
-    account_auto_sync_inner(
+    if sync_operation_id == 0 {
+        return Err("sync operation id must be non-zero".to_string());
+    }
+    // Capture the account generation before queueing. A logout or replacement
+    // login that wins the lock invalidates this call instead of letting a stale
+    // request start against the newly installed account.
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
+    ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID.store(sync_operation_id, Ordering::Release);
+    let result = account_auto_sync_inner(
         is_first_login,
         workspace_path,
         config_json,
+        sync_operation_id,
         app_state,
         path_manager,
     )
-    .await
+    .await;
+    let _ = ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID.compare_exchange(
+        sync_operation_id,
+        0,
+        Ordering::AcqRel,
+        Ordering::Acquire,
+    );
+    result
 }
 
 async fn account_auto_sync_inner(
     is_first_login: bool,
     workspace_path: String,
     config_json: String,
+    sync_operation_id: u64,
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<AutoSyncResult, String> {
@@ -2558,27 +2695,37 @@ async fn account_auto_sync_inner(
             sessions_imported: 0,
         });
     }
+    ensure_account_auto_sync_current(sync_operation_id)?;
     let (acct_session, relay_url) = read_account_context().await?;
     let client = AccountClient::new();
     use bitfun_core::service::remote_connect::settings_sync;
 
     // 1. Settings sync
     let settings_synced = if is_first_login {
-        emit_sync_progress("uploading_settings", 5, None, None, None);
+        emit_sync_progress(sync_operation_id, "uploading_settings", 5, None, None, None);
         settings_sync::upload_settings_payload(&acct_session, &relay_url, &config_json)
             .await
             .map_err(|e| format!("upload settings: {e}"))?;
+        ensure_account_auto_sync_current(sync_operation_id)?;
         log::info!("First login: uploaded local settings to cloud");
-        emit_sync_progress("settings_done", 15, None, None, None);
+        emit_sync_progress(sync_operation_id, "settings_done", 15, None, None, None);
         true
     } else {
-        emit_sync_progress("downloading_settings", 5, None, None, None);
+        emit_sync_progress(
+            sync_operation_id,
+            "downloading_settings",
+            5,
+            None,
+            None,
+            None,
+        );
         let cloud = client
             .fetch_settings_with_version(&relay_url, &acct_session)
             .await
             .map_err(|e| format!("fetch settings: {e}"))?;
+        ensure_account_auto_sync_current(sync_operation_id)?;
         if let Some(blob) = cloud {
-            emit_sync_progress("applying_settings", 10, None, None, None);
+            emit_sync_progress(sync_operation_id, "applying_settings", 10, None, None, None);
             // Explicit user choice — always apply, even when the cursor says
             // this device already has this version. Applies into the global
             // config service, invalidates the AI client cache, reloads, and
@@ -2586,21 +2733,23 @@ async fn account_auto_sync_inner(
             settings_sync::apply_settings_blob(&acct_session, &blob, true)
                 .await
                 .map_err(|e| format!("apply cloud config: {e}"))?;
+            ensure_account_auto_sync_current(sync_operation_id)?;
             log::info!(
                 "Applied cloud settings to local device (version={})",
                 blob.version
             );
-            emit_sync_progress("settings_done", 15, None, None, None);
+            emit_sync_progress(sync_operation_id, "settings_done", 15, None, None, None);
             true
         } else {
-            emit_sync_progress("settings_done", 15, None, None, None);
+            emit_sync_progress(sync_operation_id, "settings_done", 15, None, None, None);
             false
         }
     };
 
     // 2. Session sync: upload local sessions only (backup). Do NOT import cloud
     // sessions into local disk — Remote peer mode reads the peer's live disk.
-    emit_sync_progress("listing_sessions", 18, None, None, None);
+    ensure_account_auto_sync_current(sync_operation_id)?;
+    emit_sync_progress(sync_operation_id, "listing_sessions", 18, None, None, None);
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
@@ -2613,6 +2762,7 @@ async fn account_auto_sync_inner(
 
     let export_candidates = local_sessions.len();
     emit_sync_progress(
+        sync_operation_id,
         "exporting_sessions",
         20,
         Some(0),
@@ -2623,6 +2773,7 @@ async fn account_auto_sync_inner(
     let mut sync_state_local = sync_state::load(&acct_session.user_id);
     let mut pending_uploads: Vec<(String, String, String)> = Vec::new();
     for meta in local_sessions.iter() {
+        ensure_account_auto_sync_current(sync_operation_id)?;
         let turns = manager
             .load_session_turns(&storage_path, &meta.session_id)
             .await
@@ -2650,7 +2801,14 @@ async fn account_auto_sync_inner(
     }
 
     let upload_total = pending_uploads.len();
-    emit_sync_progress("exporting_sessions", 20, Some(0), Some(upload_total), None);
+    emit_sync_progress(
+        sync_operation_id,
+        "exporting_sessions",
+        20,
+        Some(0),
+        Some(upload_total),
+        None,
+    );
 
     let completed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let uploaded: Vec<(String, String, i64)> = stream::iter(pending_uploads)
@@ -2660,6 +2818,9 @@ async fn account_auto_sync_inner(
             let acct_session = acct_session.clone();
             let completed = completed.clone();
             async move {
+                if ensure_account_auto_sync_current(sync_operation_id).is_err() {
+                    return None;
+                }
                 let result = client
                     .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
                     .await;
@@ -2669,7 +2830,11 @@ async fn account_auto_sync_inner(
                 } else {
                     20 + ((75 * done) / upload_total) as u8
                 };
+                if ensure_account_auto_sync_current(sync_operation_id).is_err() {
+                    return None;
+                }
                 emit_sync_progress(
+                    sync_operation_id,
                     "exporting_sessions",
                     percent.min(95),
                     Some(done),
@@ -2690,6 +2855,8 @@ async fn account_auto_sync_inner(
         .collect()
         .await;
 
+    ensure_account_auto_sync_current(sync_operation_id)?;
+
     let exported = uploaded.len();
     let mut max_uploaded_version = sync_state_local.last_session_since;
     for (session_id, hash, version) in uploaded {
@@ -2703,13 +2870,31 @@ async fn account_auto_sync_inner(
     }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
 
+    ensure_session_backup_complete(upload_total, exported)?;
+
     log::info!("Auto-sync: settings={settings_synced} exported={exported} imported=0");
-    emit_sync_progress("done", 100, Some(exported), Some(0), None);
+    emit_sync_progress(
+        sync_operation_id,
+        "done",
+        100,
+        Some(exported),
+        Some(0),
+        None,
+    );
     Ok(AutoSyncResult {
         settings_synced,
         sessions_exported: exported,
         sessions_imported: 0,
     })
+}
+
+fn ensure_session_backup_complete(total: usize, uploaded: usize) -> Result<(), String> {
+    if uploaded == total {
+        return Ok(());
+    }
+    Err(format!(
+        "session backup incomplete: uploaded {uploaded} of {total}; retry will resume remaining sessions"
+    ))
 }
 
 // ── Auto-sync: debounced upload on session changes ─────────────────────────
@@ -2750,8 +2935,20 @@ fn start_settings_sync_engine() {
     use bitfun_core::service::remote_connect::settings_sync;
     let hooks = settings_sync::SettingsSyncHooks {
         account_context: Some(std::sync::Arc::new(|| {
-            Box::pin(async { read_account_context().await.map_err(anyhow::Error::msg) })
+            Box::pin(async {
+                let generation = account_context_generation();
+                if !account_context_is_current(generation) {
+                    return Err(anyhow::anyhow!("account context is transitioning"));
+                }
+                let (account, relay_url) =
+                    read_account_context().await.map_err(anyhow::Error::msg)?;
+                if !account_context_is_current(generation) {
+                    return Err(anyhow::anyhow!("account context changed while reading"));
+                }
+                Ok((account, relay_url, generation))
+            })
         })),
+        is_account_context_current: Some(std::sync::Arc::new(account_context_is_current)),
         should_pause: Some(std::sync::Arc::new(|| {
             crate::api::peer_host_invoke::is_peer_controller_active()
         })),
@@ -2864,6 +3061,10 @@ async fn execute_debounced_sync(
         log::debug!("Debounced sync skipped while peer controller mode is active");
         return;
     }
+    let generation = account_context_generation();
+    let Ok(_sync_guard) = lock_account_sync(generation).await else {
+        return;
+    };
     // Need to be logged in
     let (acct_session, relay_url) = match read_account_context().await {
         Ok(ctx) => ctx,
@@ -3100,7 +3301,14 @@ async fn execute_local_remote_command(
 
 /// Import a SessionBundle JSON into local storage. Tries all workspace session
 /// directories and writes to the first one found (or creates one if none exist).
-async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
+async fn import_session_bundle(bundle_json: &str, account_generation: u64) -> anyhow::Result<()> {
+    let _sync_guard = lock_account_sync(account_generation)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    // A queued event from a disconnected account must not write into a new
+    // account's local session view even if its encrypted payload was already
+    // received before the socket closed.
+    read_account_context().await.map_err(anyhow::Error::msg)?;
     let bundle: SessionBundle = serde_json::from_str(bundle_json)?;
 
     let path_manager = std::sync::Arc::new(bitfun_core::infrastructure::PathManager::new()?);
@@ -3149,11 +3357,14 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
 
 /// One-shot cloud settings pull, triggered when another same-account device
 /// comes online. The periodic pull lives in the shared settings sync engine.
-async fn pull_and_reconcile() {
+async fn pull_and_reconcile(account_generation: u64) {
     if crate::api::peer_host_invoke::is_peer_controller_active() {
         log::debug!("Pull: skip while peer controller mode is active");
         return;
     }
+    let Ok(_sync_guard) = lock_account_sync(account_generation).await else {
+        return;
+    };
     let Ok((acct_session, relay_url)) = read_account_context().await else {
         return;
     };
@@ -3169,6 +3380,13 @@ async fn pull_and_reconcile() {
 #[cfg(test)]
 mod sync_state_tests {
     use super::*;
+
+    #[test]
+    fn partial_session_backup_is_not_reported_as_success() {
+        assert!(ensure_session_backup_complete(3, 3).is_ok());
+        let error = ensure_session_backup_complete(3, 2).unwrap_err();
+        assert!(error.contains("uploaded 2 of 3"));
+    }
 
     #[test]
     fn content_hash_is_stable() {

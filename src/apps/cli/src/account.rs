@@ -10,7 +10,7 @@
 //! The master key lives in memory only and is lost when the CLI exits.
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     Arc, OnceLock,
 };
 
@@ -27,6 +27,71 @@ static ACCOUNT_SESSION: OnceLock<Arc<RwLock<Option<AccountSession>>>> = OnceLock
 
 /// The relay URL associated with the current account session.
 static ACCOUNT_RELAY_URL: OnceLock<Arc<RwLock<Option<String>>>> = OnceLock::new();
+static ACCOUNT_CONTEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+static ACCOUNT_CONTEXT_TRANSITIONS: AtomicUsize = AtomicUsize::new(0);
+static ACCOUNT_SYNC_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+pub(crate) fn account_context_generation() -> u64 {
+    ACCOUNT_CONTEXT_GENERATION.load(Ordering::Acquire)
+}
+
+pub(crate) fn account_context_is_current(generation: u64) -> bool {
+    ACCOUNT_CONTEXT_TRANSITIONS.load(Ordering::Acquire) == 0
+        && account_context_generation() == generation
+}
+
+struct AccountContextTransitionPermit;
+
+impl AccountContextTransitionPermit {
+    fn begin() -> Self {
+        ACCOUNT_CONTEXT_TRANSITIONS.fetch_add(1, Ordering::AcqRel);
+        ACCOUNT_CONTEXT_GENERATION.fetch_add(1, Ordering::AcqRel);
+        Self
+    }
+}
+
+impl Drop for AccountContextTransitionPermit {
+    fn drop(&mut self) {
+        // Reject work queued during the transition before exposing the newly
+        // installed (or cleared) account context.
+        ACCOUNT_CONTEXT_GENERATION.fetch_add(1, Ordering::AcqRel);
+        ACCOUNT_CONTEXT_TRANSITIONS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+struct AccountContextTransitionGuard {
+    sync_guard: Option<tokio::sync::MutexGuard<'static, ()>>,
+    transition: Option<AccountContextTransitionPermit>,
+}
+
+impl Drop for AccountContextTransitionGuard {
+    fn drop(&mut self) {
+        drop(self.sync_guard.take());
+        drop(self.transition.take());
+    }
+}
+
+pub(crate) async fn lock_account_sync(
+    generation: u64,
+) -> Result<tokio::sync::MutexGuard<'static, ()>> {
+    let guard = ACCOUNT_SYNC_LOCK.lock().await;
+    if !account_context_is_current(generation) {
+        return Err(anyhow!("account sync cancelled"));
+    }
+    Ok(guard)
+}
+
+async fn invalidate_and_wait_for_account_sync() -> AccountContextTransitionGuard {
+    // Create the permit before awaiting so cancellation cannot leak a
+    // half-started transition or reopen discovery too early.
+    let transition = AccountContextTransitionPermit::begin();
+    let sync_guard = ACCOUNT_SYNC_LOCK.lock().await;
+    bitfun_core::service::remote_connect::settings_sync::wait_for_sync_operations_idle().await;
+    AccountContextTransitionGuard {
+        sync_guard: Some(sync_guard),
+        transition: Some(transition),
+    }
+}
 
 /// The background device-routing relay client. Holding this keeps the WS
 /// connection alive (the internal read/write tasks own the socket). Dropping it
@@ -79,6 +144,7 @@ pub(crate) async fn is_logged_in() -> bool {
 /// Attempt to restore a persisted session from disk.  Called at startup.
 /// Returns `Some(user_id)` if a session was restored.
 pub(crate) async fn try_restore_session() -> Option<String> {
+    let _sync_guard = invalidate_and_wait_for_account_sync().await;
     match session_store::load_session_detailed() {
         Ok(Some(loaded)) => {
             let user_id = loaded.user_id.clone();
@@ -142,6 +208,7 @@ pub(crate) async fn login_with_credentials(
     username: &str,
     password: &str,
 ) -> Result<LoginResult> {
+    let _sync_guard = invalidate_and_wait_for_account_sync().await;
     let relay_url = relay_url.trim();
     let username = username.trim();
     if relay_url.is_empty() {
@@ -227,6 +294,8 @@ pub(crate) async fn login_with_credentials(
 /// Persist the in-memory session after the user accepts the sync choice, then
 /// start device routing (same as a first login with no cloud settings).
 pub(crate) async fn finalize_login_after_sync_choice() -> Result<()> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     let device = current_device_identity()?;
     let (session, relay_url) = read_account_context().await?;
     session_store::save_session_with_device(
@@ -340,6 +409,7 @@ async fn is_current_routing_client(client: &Arc<RelayClient>) -> bool {
 
 /// Log out: tear down routing, revoke the token (best-effort), clear state.
 pub(crate) async fn logout() -> Result<()> {
+    let _sync_guard = invalidate_and_wait_for_account_sync().await;
     stop_device_routing().await;
     // Take the always-on daemon down with the account: the token is revoked
     // below, so leaving the daemon connected would keep this device online
@@ -393,6 +463,7 @@ async fn handle_relay_event(
         }
         RelayEvent::AuthError { message } => {
             tracing::warn!("Device routing auth error: {message}");
+            let _sync_guard = invalidate_and_wait_for_account_sync().await;
             TOKEN_EXPIRED.store(true, Ordering::Relaxed);
             // Keep CLI/daemon semantics aligned with Desktop: a relay-rejected
             // token is no longer a usable local login and must not be restored

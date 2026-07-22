@@ -15,7 +15,9 @@ use bitfun_core::service::config::get_global_config_service;
 use bitfun_core::service::remote_connect::settings_sync;
 use bitfun_core::service::remote_connect::{sync_state, AccountClient};
 
-use crate::account::read_account_context;
+use crate::account::{
+    account_context_generation, account_context_is_current, lock_account_sync, read_account_context,
+};
 
 const UPLOAD_CONCURRENCY_CHUNK: usize = 5;
 
@@ -27,8 +29,19 @@ const UPLOAD_CONCURRENCY_CHUNK: usize = 5;
 pub(crate) fn start_settings_sync_loop() {
     let hooks = settings_sync::SettingsSyncHooks {
         account_context: Some(Arc::new(|| {
-            Box::pin(async { read_account_context().await })
+            Box::pin(async {
+                let generation = account_context_generation();
+                if !account_context_is_current(generation) {
+                    return Err(anyhow!("account context is transitioning"));
+                }
+                let (account, relay_url) = read_account_context().await?;
+                if !account_context_is_current(generation) {
+                    return Err(anyhow!("account context changed while reading"));
+                }
+                Ok((account, relay_url, generation))
+            })
         })),
+        is_account_context_current: Some(Arc::new(account_context_is_current)),
         on_settings_applied: Some(Arc::new(|| {
             crate::peer_host::notify_controllers_settings_changed();
         })),
@@ -56,6 +69,10 @@ pub(crate) async fn push_settings_after_local_change() {
     if read_account_context().await.is_err() {
         crate::account::try_restore_session().await;
     }
+    let generation = account_context_generation();
+    let Ok(_sync_guard) = lock_account_sync(generation).await else {
+        return;
+    };
     let Ok((account, relay_url)) = read_account_context().await else {
         return;
     };
@@ -208,6 +225,8 @@ pub(crate) async fn run_auto_sync(
     is_first_login: bool,
     workspace_path: &Path,
 ) -> Result<AutoSyncResult> {
+    let generation = account_context_generation();
+    let _sync_guard = lock_account_sync(generation).await?;
     set_progress(|p| {
         *p = SyncProgress {
             status: SyncStatus::Syncing,
@@ -368,6 +387,8 @@ pub(crate) async fn run_auto_sync(
     }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
 
+    ensure_session_backup_complete(upload_total, exported)?;
+
     tracing::info!("Auto-sync: settings={settings_synced} exported={exported} imported=0");
     emit_progress("done", 100, Some(exported), Some(0), None).await;
 
@@ -376,6 +397,15 @@ pub(crate) async fn run_auto_sync(
         sessions_exported: exported,
         sessions_imported: 0,
     })
+}
+
+fn ensure_session_backup_complete(total: usize, uploaded: usize) -> Result<()> {
+    if uploaded == total {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "session backup incomplete: uploaded {uploaded} of {total}; retry will resume remaining sessions"
+    ))
 }
 
 pub(crate) fn sync_phase_label(progress: &SyncProgress) -> String {
@@ -396,5 +426,19 @@ pub(crate) fn sync_phase_label(progress: &SyncProgress) -> String {
         "starting" => "Starting sync…".into(),
         other if other.is_empty() => "Sync".into(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_session_backup_complete;
+
+    #[test]
+    fn partial_session_backup_is_not_reported_as_success() {
+        assert!(ensure_session_backup_complete(4, 4).is_ok());
+        assert!(ensure_session_backup_complete(4, 1)
+            .unwrap_err()
+            .to_string()
+            .contains("uploaded 1 of 4"));
     }
 }

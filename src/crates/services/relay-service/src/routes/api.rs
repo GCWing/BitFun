@@ -65,6 +65,13 @@ pub struct AppState {
     pub db: Option<Arc<crate::db::DbPool>>,
     /// Optional per-page mutable data root (KV/SQLite/blobs). Required for Page Functions data plane.
     pub page_data: Option<crate::page_data::PageDataStore>,
+    /// Short-lived browser handoff tickets and page-scoped grants. These stay
+    /// process-local so no account credential is persisted or exposed in URLs.
+    pub page_access_manager: Arc<crate::routes::pages::PageAccessManager>,
+    /// Manifest-bound Page draft upload sessions and per-Page serialization.
+    pub page_upload_manager: Arc<crate::routes::pages::PageUploadManager>,
+    /// Global/account/page admission control for public Page Function execution.
+    pub page_execution_guard: Arc<crate::page_execution::PageExecutionGuard>,
     /// Per-IP rate limiter for auth endpoints (brute-force protection).
     pub login_rate_limiter: Arc<crate::routes::auth::LoginRateLimiter>,
     /// Per-user online device registry for account-based device routing.
@@ -622,6 +629,9 @@ mod tests {
             asset_store: Arc::new(MemoryAssetStore::new()),
             db: None,
             page_data: None,
+            page_access_manager: Arc::new(crate::routes::pages::PageAccessManager::new()),
+            page_upload_manager: Arc::new(crate::routes::pages::PageUploadManager::new()),
+            page_execution_guard: Arc::new(crate::page_execution::PageExecutionGuard::new()),
             login_rate_limiter: Arc::new(crate::routes::auth::LoginRateLimiter::new()),
             device_manager: crate::relay::DeviceManager::new(),
             cors_allow_origins: Arc::new(Vec::new()),

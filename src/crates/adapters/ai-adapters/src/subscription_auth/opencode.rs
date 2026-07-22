@@ -178,14 +178,10 @@ async fn fetch_metadata(access: &str) -> serde_json::Value {
 }
 
 async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
-    let _guard = super::store_lock(super::SubscriptionProvider::Opencode)
-        .lock()
-        .await;
     let expires = now_ms() + tokens.expires_in * 1000;
     let metadata = fetch_metadata(&tokens.access_token).await;
-    let mut store = store::load().await.unwrap_or_default();
-    store.insert(
-        STORE_KEY.to_string(),
+    store::upsert(
+        STORE_KEY,
         StoredCredential::Oauth {
             refresh: tokens.refresh_token,
             access: tokens.access_token,
@@ -193,8 +189,8 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
             account_id: None,
             metadata: Some(metadata),
         },
-    );
-    store::save(&store).await?;
+    )
+    .await?;
     log::info!("opencode subscription tokens saved");
     Ok(())
 }
@@ -246,14 +242,15 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
     let authorization_url = absolute_verification_url(&device.verification_uri_complete);
 
     let runner = async move {
-        tokio::select! {
-            _ = cancel.cancelled() => Err(anyhow!("login cancelled")),
-            result = async {
+        super::authorize_then_persist(
+            super::SubscriptionProvider::Opencode,
+            cancel,
+            async {
                 let mut wait = interval;
                 loop {
                     tokio::time::sleep(Duration::from_secs(wait)).await;
                     match poll_once(&device_code).await? {
-                        DevicePoll::Authorized(tokens) => return persist_tokens(tokens).await,
+                        DevicePoll::Authorized(tokens) => return Ok(tokens),
                         DevicePoll::Pending => {
                             wait = interval;
                         }
@@ -264,8 +261,10 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
                         }
                     }
                 }
-            } => result,
-        }
+            },
+            persist_tokens,
+        )
+        .await
     };
 
     Ok(StartedLogin {
@@ -281,10 +280,8 @@ async fn ensure_fresh() -> Result<String> {
     let _guard = super::store_lock(super::SubscriptionProvider::Opencode)
         .lock()
         .await;
-    let mut store = store::load().await.unwrap_or_default();
-    let entry = store
-        .get(STORE_KEY)
-        .cloned()
+    let entry = store::load_entry(STORE_KEY)
+        .await?
         .ok_or_else(|| anyhow!("OpenCode Zen is not connected; sign in first"))?;
     match entry {
         StoredCredential::Api { key, .. } => Ok(key),
@@ -300,8 +297,8 @@ async fn ensure_fresh() -> Result<String> {
             }
             let refreshed = refresh(&refresh_token).await?;
             let new_expires = now_ms() + refreshed.expires_in * 1000;
-            store.insert(
-                STORE_KEY.to_string(),
+            store::upsert(
+                STORE_KEY,
                 StoredCredential::Oauth {
                     refresh: refreshed.refresh_token,
                     access: refreshed.access_token.clone(),
@@ -309,8 +306,8 @@ async fn ensure_fresh() -> Result<String> {
                     account_id,
                     metadata,
                 },
-            );
-            store::save(&store).await?;
+            )
+            .await?;
             log::info!("opencode subscription tokens refreshed");
             Ok(refreshed.access_token)
         }

@@ -19,6 +19,10 @@ import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { Button, Input, Alert } from '@/component-library';
 import {
+  confirmDanger,
+  confirmWarning,
+} from '@/component-library/components/ConfirmDialog/confirmService';
+import {
   User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
   ChevronRight, RefreshCw, Eye, EyeOff, X, Rocket, Copy, Check,
 } from 'lucide-react';
@@ -34,6 +38,7 @@ import { useAccountSyncStore, ensureAccountSyncProgressListener } from '@/infras
 import type { AccountSyncPhase } from '@/infrastructure/account/accountSyncStore';
 import { isAccountAuthFailure } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountPanel.scss';
 
@@ -106,9 +111,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const { enterPeerMode } = usePeerDeviceMode();
   const syncStatus = useAccountSyncStore((s) => s.status);
   const syncProgress = useAccountSyncStore((s) => s.progress);
+  const lastSyncIsFirstLogin = useAccountSyncStore((s) => s.lastSyncIsFirstLogin);
   const setSyncing = useAccountSyncStore((s) => s.setSyncing);
   const setSyncDone = useAccountSyncStore((s) => s.setDone);
   const setSyncFailed = useAccountSyncStore((s) => s.setFailed);
+  const clearSync = useAccountSyncStore((s) => s.clear);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -154,16 +161,19 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   const handleCopyRelayUrl = useCallback(async () => {
     if (!accountRelayUrl) return;
-    try {
-      await navigator.clipboard.writeText(accountRelayUrl);
+    const copied = await copyTextToClipboard(accountRelayUrl);
+    if (copied) {
       setCopiedServerUrl(true);
       window.setTimeout(() => setCopiedServerUrl(false), 1500);
-    } catch (e) {
-      log.warn('copy relay url failed', e);
+    } else {
+      warning(t('accountLogin.copyServerFailed'));
     }
-  }, [accountRelayUrl]);
+  }, [accountRelayUrl, t, warning]);
 
   const handleSessionExpired = useCallback(async (_error: unknown) => {
+    // Invalidate detached retries before the logout request yields control.
+    syncInFlightRef.current = false;
+    clearSync();
     try {
       await remoteConnectAPI.accountLogout();
     } catch (e) {
@@ -172,7 +182,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     resetState();
     setView('login');
     setError(t('accountLogin.sessionExpired'));
-  }, [resetState, t]);
+  }, [clearSync, resetState, t]);
 
   const markRelayUnreachable = useCallback(() => {
     setDevicesReady(false);
@@ -292,12 +302,14 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   useEffect(() => {
     return () => {
       if (viewRef.current === 'overwrite') {
+        syncInFlightRef.current = false;
+        clearSync();
         void remoteConnectAPI.accountLogout().catch((e) => {
           log.warn('logout on overwrite abandon failed', e);
         });
       }
     };
-  }, []);
+  }, [clearSync]);
 
   useEffect(() => {
     remoteConnectAPI.getDeviceInfo().then((info) => {
@@ -359,7 +371,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     }
     syncInFlightRef.current = true;
     ensureAccountSyncProgressListener();
-    setSyncing();
+    setSyncing(isFirstLogin);
+    const operationId = useAccountSyncStore.getState().operationId;
+    const isCurrentOperation = () => (
+      useAccountSyncStore.getState().operationId === operationId
+    );
     info(t('accountLogin.syncStarted'));
 
     // Connect device presence immediately so the device list can populate
@@ -373,6 +389,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         let configJson = '{}';
         if (isFirstLogin) {
           useAccountSyncStore.getState().applyProgress({
+            operation_id: operationId,
             phase: 'uploading_settings',
             percent: 2,
           });
@@ -382,22 +399,32 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
           } catch (e) {
             log.warn('export config failed', e);
           }
+          if (!isCurrentOperation()) return;
         }
         const wp = workspacePath || '/';
         const maxAttempts = 3;
         let result: Awaited<ReturnType<typeof remoteConnectAPI.accountAutoSync>> | null = null;
         let lastError: unknown = null;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          if (!isCurrentOperation()) return;
           try {
-            result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
+            result = await remoteConnectAPI.accountAutoSync(
+              isFirstLogin,
+              wp,
+              configJson,
+              operationId,
+            );
+            if (!isCurrentOperation()) return;
             lastError = null;
             break;
           } catch (e) {
+            if (!isCurrentOperation()) return;
             lastError = e;
             log.warn(`Auto-sync attempt ${attempt}/${maxAttempts} failed`, e);
             if (attempt < maxAttempts) {
               info(t('accountLogin.syncRetrying', { attempt, max: maxAttempts }));
               await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+              if (!isCurrentOperation()) return;
             }
           }
         }
@@ -406,28 +433,35 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             ? lastError
             : new Error(String(lastError ?? 'auto-sync failed'));
         }
+        if (!isCurrentOperation()) return;
         log.info(
           `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported}`,
         );
         if (result.settings_synced && !isFirstLogin) {
+          if (!isCurrentOperation()) return;
           try {
             await configAPI.reloadConfig();
+            if (!isCurrentOperation()) return;
             configManager.clearCache();
             success(t('accountLogin.settingsApplied'));
           } catch (e) {
             log.warn('reloadConfig after sync failed', e);
           }
         }
+        if (!isCurrentOperation()) return;
         setSyncDone(result);
         success(t('accountLogin.syncDone', {
           exported: result.sessions_exported,
         }));
       } catch (e) {
+        if (!isCurrentOperation()) return;
         log.error('Auto-sync failed', e);
         setSyncFailed(e instanceof Error ? e.message : String(e));
         warning(t('accountLogin.syncFailed'));
       } finally {
-        syncInFlightRef.current = false;
+        if (isCurrentOperation()) {
+          syncInFlightRef.current = false;
+        }
       }
     })();
   }, [
@@ -440,6 +474,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     warning,
     workspacePath,
   ]);
+
+  const handleRetrySync = useCallback(() => {
+    if (syncStatus !== 'failed' || syncInFlightRef.current) return;
+    startBackgroundSync(lastSyncIsFirstLogin ?? false);
+  }, [lastSyncIsFirstLogin, startBackgroundSync, syncStatus]);
 
   /** Landing path after a completed login: devices view + background sync. */
   const completeLogin = useCallback((relayUrl: string, isFirstLogin: boolean) => {
@@ -462,7 +501,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       completeLogin(server, true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally { setLoading(false); }
+    } finally {
+      // The account session has its own token after this call; retaining the
+      // password in React state while the device list is open is unnecessary.
+      setPassword('');
+      setLoading(false);
+    }
   }, [completeLogin, success, t]);
 
   const handleLogin = useCallback(async () => {
@@ -470,10 +514,16 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     const relayUrl = parseRelayServer(authServer);
     if (!relayUrl) return;
     const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(relayUrl.hostname);
-    if (relayUrl.protocol === 'http:'
-      && !isLoopback
-      && !window.confirm(t('accountLogin.insecureServerConfirm'))) {
-      return;
+    if (relayUrl.protocol === 'http:' && !isLoopback) {
+      const confirmed = await confirmWarning(
+        t('accountLogin.insecureServerTitle'),
+        t('accountLogin.insecureServerConfirm'),
+        {
+          confirmText: t('accountLogin.continueInsecure'),
+          cancelText: t('accountLogin.cancel'),
+        },
+      );
+      if (!confirmed) return;
     }
     await performLogin(authServer.trim(), username.trim(), password);
   }, [validate, authServer, username, password, performLogin, t]);
@@ -500,9 +550,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     } catch (e: unknown) {
       if (isAccountAuthFailure(e)) {
         await handleSessionExpired(e);
-      } else {
-        setError(e instanceof Error ? e.message : String(e));
+        return;
       }
+      setError(e instanceof Error ? e.message : String(e));
+      // Stop any detached work before accountLogout can yield.
+      syncInFlightRef.current = false;
+      clearSync();
       try { await remoteConnectAPI.accountLogout(); } catch (logoutErr) {
         log.warn('logout after finalize failure failed', logoutErr);
       }
@@ -511,7 +564,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [authServer, completeLogin, handleSessionExpired, resetState, success, t, username]);
+  }, [authServer, clearSync, completeLogin, handleSessionExpired, resetState, success, t, username]);
 
   const handleConfirmOverwrite = useCallback(() => {
     void finalizeAndSync(false);
@@ -522,13 +575,17 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   }, [finalizeAndSync]);
 
   const handleCancelOverwrite = useCallback(async () => {
+    syncInFlightRef.current = false;
+    clearSync();
     try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
     resetState();
     setView('login');
-  }, [resetState]);
+  }, [clearSync, resetState]);
 
   const handleLogout = useCallback(async () => {
     setLoading(true);
+    syncInFlightRef.current = false;
+    clearSync();
     try {
       await remoteConnectAPI.accountLogout();
       resetState();
@@ -536,16 +593,36 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [resetState]);
+  }, [clearSync, resetState]);
 
   const handleDeleteDevice = useCallback(async (deviceId: string, deviceName: string) => {
     const isLocal = localDeviceId === deviceId;
     const confirmation = isLocal
       ? t('accountLogin.confirmRemoveCurrentDevice', { name: deviceName })
       : t('accountLogin.confirmRemoveDevice', { name: deviceName });
-    if (!window.confirm(confirmation)) return;
+    const confirmed = await confirmDanger(
+      isLocal
+        ? t('accountLogin.removeCurrentDevice')
+        : t('accountLogin.removeDevice'),
+      confirmation,
+      {
+        confirmText: isLocal
+          ? t('accountLogin.removeCurrentDevice')
+          : t('accountLogin.removeDevice'),
+        cancelText: t('accountLogin.cancel'),
+      },
+    );
+    if (!confirmed) return;
+    const previousSyncStatus = syncStatus;
+    const previousSyncDirection = lastSyncIsFirstLogin;
     setLoading(true);
     setError(null);
+    if (isLocal) {
+      // A current-device removal is also a logout. Invalidate retries and
+      // late progress before the backend request yields.
+      syncInFlightRef.current = false;
+      clearSync();
+    }
     try {
       await remoteConnectAPI.accountDeleteDevice(deviceId);
       if (isLocal) {
@@ -560,12 +637,35 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (isAccountAuthFailure(e)) {
         await handleSessionExpired(e);
       } else {
-        setError(e instanceof Error ? e.message : String(e));
+        const message = e instanceof Error ? e.message : String(e);
+        setError(message);
+        if (
+          isLocal
+          && previousSyncDirection !== null
+          && (previousSyncStatus === 'syncing' || previousSyncStatus === 'failed')
+        ) {
+          // Preserve the direction so Retry remains meaningful after a failed
+          // current-device removal invalidated the previous generation.
+          setSyncing(previousSyncDirection);
+          setSyncFailed(message);
+        }
       }
     } finally {
       setLoading(false);
     }
-  }, [handleSessionExpired, localDeviceId, refreshDevices, resetState, success, t]);
+  }, [
+    clearSync,
+    handleSessionExpired,
+    lastSyncIsFirstLogin,
+    localDeviceId,
+    refreshDevices,
+    resetState,
+    setSyncFailed,
+    setSyncing,
+    success,
+    syncStatus,
+    t,
+  ]);
 
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
     if (!device.online) return;
@@ -573,6 +673,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     if (syncStatus === 'syncing') {
       info(t('accountLogin.syncInProgressHint'));
       return;
+    }
+    if (syncStatus === 'failed') {
+      warning(t('accountLogin.syncFailedPeerHint'));
     }
     setLoading(true);
     setError(null);
@@ -585,7 +688,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [enterPeerMode, info, localDeviceId, onCloseDialog, success, syncStatus, t]);
+  }, [enterPeerMode, info, localDeviceId, onCloseDialog, success, syncStatus, t, warning]);
 
   return (
     <>
@@ -731,6 +834,17 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     {syncStatus === 'done' && t('accountLogin.syncDoneShort')}
                     {syncStatus === 'failed' && t('accountLogin.syncFailed')}
                   </span>
+                  {syncStatus === 'failed' && (
+                    <button
+                      type="button"
+                      className="account-panel__sync-retry"
+                      onClick={handleRetrySync}
+                      disabled={loading}
+                    >
+                      <RefreshCw size={12} />
+                      {t('accountLogin.retrySync')}
+                    </button>
+                  )}
                   {syncStatus === 'syncing' && (
                     <span className="account-panel__sync-indicator-percent">
                       {t('accountLogin.syncProgressPercent', { percent: syncProgress.percent })}
@@ -781,43 +895,48 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 const displayName = d.device_name || t('accountLogin.unknownDevice');
                 return (
                 <div key={d.device_id}
-                  className={`account-panel__device-card ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''} ${syncStatus === 'syncing' && !isLocal ? 'syncing' : ''}`}
-                  onClick={() => isSelectable && selectDevice(d)}
-                  onKeyDown={(event) => {
-                    if (isSelectable && (event.key === 'Enter' || event.key === ' ')) {
-                      event.preventDefault();
-                      void selectDevice(d);
-                    }
-                  }}
-                  role={isSelectable ? 'button' : undefined}
-                  tabIndex={isSelectable ? 0 : undefined}>
-                  <Monitor size={16} />
-                  <div className="account-panel__device-info">
-                    <span className="account-panel__device-name">
-                      {displayName}
-                      {isLocal && <span className="account-panel__device-badge">{t('accountLogin.thisDevice')}</span>}
-                    </span>
-                    <span className="account-panel__device-meta">
-                      <span className="account-panel__device-id">
-                        {d.device_id.slice(0, 8)}
+                  className={`account-panel__device-card ${isSelectable ? 'selectable' : ''} ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''} ${syncStatus === 'syncing' && !isLocal ? 'syncing' : ''}`}>
+                  <button
+                    type="button"
+                    className="account-panel__device-select"
+                    onClick={() => void selectDevice(d)}
+                    disabled={!isSelectable || loading}
+                    aria-label={isSelectable
+                      ? t('accountLogin.openDevice', { name: displayName })
+                      : undefined}
+                  >
+                    <Monitor size={16} />
+                    <span className="account-panel__device-info">
+                      <span className="account-panel__device-name">
+                        {displayName}
+                        {isLocal && <span className="account-panel__device-badge">{t('accountLogin.thisDevice')}</span>}
                       </span>
-                      <span className="account-panel__device-status">
-                        {' · '}
-                        {d.online
-                          ? t('accountLogin.online')
-                          : d.last_seen_at
-                            ? t('accountLogin.lastSeen', {
-                              time: formatRelativeTime(d.last_seen_at * 1000),
-                            })
-                            : t('accountLogin.offline')}
+                      <span className="account-panel__device-meta">
+                        <span className="account-panel__device-id">
+                          {d.device_id.slice(0, 8)}
+                        </span>
+                        <span className="account-panel__device-status">
+                          {' · '}
+                          {d.online
+                            ? t('accountLogin.online')
+                            : d.last_seen_at
+                              ? t('accountLogin.lastSeen', {
+                                time: formatRelativeTime(d.last_seen_at * 1000),
+                              })
+                              : t('accountLogin.offline')}
+                        </span>
                       </span>
                     </span>
-                  </div>
-                  {!isLocal && d.online && syncStatus !== 'syncing' && <ChevronRight size={14} />}
-                  {!isLocal && d.online && syncStatus === 'syncing' && (
-                    <RefreshCw size={14} className="spinning" aria-label={t('accountLogin.syncing')} />
-                  )}
-                  <button className="account-panel__device-remove"
+                    {isSelectable && <ChevronRight size={14} />}
+                    {!isLocal && d.online && syncStatus === 'syncing' && (
+                      <RefreshCw
+                        size={14}
+                        className="spinning"
+                        aria-label={t('accountLogin.syncing')}
+                      />
+                    )}
+                  </button>
+                  <button type="button" className="account-panel__device-remove"
                     onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
                     title={removeLabel}
                     aria-label={`${removeLabel}: ${displayName}`}

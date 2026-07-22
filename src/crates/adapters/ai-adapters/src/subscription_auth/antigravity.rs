@@ -1,8 +1,9 @@
 //! Antigravity (Google) subscription login and credential resolution.
 //!
-//! Browser PKCE login against Google OAuth on the fixed loopback port `51121`,
-//! then Bearer access to the Cloud Code Assist (`cloudcode-pa`) endpoint using
-//! the `gemini-code-assist` request format. Constants mirror
+//! Browser PKCE login against Google OAuth on a loopback listener (preferring
+//! port `51121` and falling back to an ephemeral port), then Bearer access to
+//! the Cloud Code Assist (`cloudcode-pa`) endpoint using the
+//! `gemini-code-assist` request format. Constants mirror
 //! `opencode-antigravity-auth`.
 
 use super::store::{self, StoredCredential};
@@ -15,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 const CLIENT_ID: &str = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
 const CALLBACK_PATH: &str = "/oauth-callback";
 const CALLBACK_PORT: u16 = 51121;
+const CALLBACK_PORTS: &[u16] = &[CALLBACK_PORT, 0];
 const AUTHORIZE_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const CODE_ASSIST_BASE_URL: &str = "https://cloudcode-pa.googleapis.com";
@@ -26,8 +28,8 @@ const DEFAULT_MODEL: &str = "gemini-3-pro-high";
 const REFRESH_LEEWAY_MS: i64 = 5 * 60 * 1000;
 const STORE_KEY: &str = "antigravity";
 
-fn redirect_uri() -> String {
-    oauth_server::loopback_redirect_uri(CALLBACK_PORT, CALLBACK_PATH)
+fn redirect_uri(port: u16) -> String {
+    oauth_server::loopback_redirect_uri(port, CALLBACK_PATH)
 }
 
 const SCOPES: &[&str] = &[
@@ -49,18 +51,27 @@ fn client_secret() -> String {
 
 /// Returns the platform-specific User-Agent and Client-Metadata platform token.
 fn platform_tokens() -> (String, &'static str) {
-    if cfg!(target_os = "windows") {
-        ("windows/amd64".to_string(), "WINDOWS")
-    } else if cfg!(target_os = "macos") {
-        let arch = if cfg!(target_arch = "aarch64") {
-            "darwin/arm64"
-        } else {
-            "darwin/amd64"
-        };
-        (arch.to_string(), "MACOS")
-    } else {
-        ("linux/amd64".to_string(), "LINUX")
-    }
+    platform_tokens_for(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+fn platform_tokens_for(os: &str, arch: &str) -> (String, &'static str) {
+    let user_agent_os = match os {
+        "windows" => "windows",
+        "macos" => "darwin",
+        _ => "linux",
+    };
+    let metadata_os = match os {
+        "windows" => "WINDOWS",
+        "macos" => "MACOS",
+        _ => "LINUX",
+    };
+    let user_agent_arch = match arch {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        "x86" => "386",
+        other => other,
+    };
+    (format!("{user_agent_os}/{user_agent_arch}"), metadata_os)
 }
 
 #[derive(Debug, Deserialize)]
@@ -181,9 +192,6 @@ fn metadata_from(
 }
 
 async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
-    let _guard = super::store_lock(super::SubscriptionProvider::Antigravity)
-        .lock()
-        .await;
     let access = tokens
         .access_token
         .clone()
@@ -194,9 +202,8 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
         .ok_or_else(|| anyhow!("antigravity token response missing refresh_token"))?;
     let expires = now_ms() + tokens.expires_in.unwrap_or(3600) * 1000;
     let metadata = metadata_from(&tokens, None);
-    let mut store = store::load().await.unwrap_or_default();
-    store.insert(
-        STORE_KEY.to_string(),
+    store::upsert(
+        STORE_KEY,
         StoredCredential::Oauth {
             refresh,
             access,
@@ -204,8 +211,8 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
             account_id: None,
             metadata,
         },
-    );
-    store::save(&store).await?;
+    )
+    .await?;
     log::info!("antigravity subscription tokens saved");
     Ok(())
 }
@@ -214,25 +221,27 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
 pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = pkce::random_state();
-    let redirect_uri = redirect_uri();
+    let (listener, callback_port) = oauth_server::bind_loopback_ports(CALLBACK_PORTS).await?;
+    let redirect_uri = redirect_uri(callback_port);
     let authorization_url = build_authorize_url(&pkce, &state, &redirect_uri);
-    let listener = oauth_server::bind_loopback(CALLBACK_PORT).await?;
     let verifier = pkce.verifier.clone();
 
     let runner = async move {
-        tokio::select! {
-            _ = cancel.cancelled() => Err(anyhow!("login cancelled")),
-            result = async {
+        super::authorize_then_persist(
+            super::SubscriptionProvider::Antigravity,
+            cancel,
+            async {
                 let params =
                     oauth_server::wait_for_callback(listener, CALLBACK_PATH, &state).await?;
                 let code = params
                     .get("code")
                     .cloned()
                     .ok_or_else(|| anyhow!("antigravity callback missing code"))?;
-                let tokens = exchange_code(&code, &verifier, &redirect_uri).await?;
-                persist_tokens(tokens).await
-            } => result,
-        }
+                exchange_code(&code, &verifier, &redirect_uri).await
+            },
+            persist_tokens,
+        )
+        .await
     };
 
     Ok(StartedLogin {
@@ -249,10 +258,8 @@ async fn ensure_fresh() -> Result<(String, i64)> {
     let _guard = super::store_lock(super::SubscriptionProvider::Antigravity)
         .lock()
         .await;
-    let mut store = store::load().await.unwrap_or_default();
-    let entry = store
-        .get(STORE_KEY)
-        .cloned()
+    let entry = store::load_entry(STORE_KEY)
+        .await?
         .ok_or_else(|| anyhow!("Antigravity is not connected; sign in first"))?;
     let StoredCredential::Oauth {
         refresh: refresh_token,
@@ -277,8 +284,8 @@ async fn ensure_fresh() -> Result<(String, i64)> {
     let new_refresh = refreshed.refresh_token.clone().unwrap_or(refresh_token);
     let new_expires = now_ms() + refreshed.expires_in.unwrap_or(3600) * 1000;
     let new_metadata = metadata_from(&refreshed, metadata);
-    store.insert(
-        STORE_KEY.to_string(),
+    store::upsert(
+        STORE_KEY,
         StoredCredential::Oauth {
             refresh: new_refresh,
             access: new_access.clone(),
@@ -286,8 +293,8 @@ async fn ensure_fresh() -> Result<(String, i64)> {
             account_id,
             metadata: new_metadata,
         },
-    );
-    store::save(&store).await?;
+    )
+    .await?;
     log::info!("antigravity subscription tokens refreshed");
     Ok((new_access, new_expires))
 }
@@ -326,17 +333,41 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_authorize_url, redirect_uri};
+    use super::{build_authorize_url, platform_tokens_for, redirect_uri};
     use crate::subscription_auth::pkce::Pkce;
 
     #[test]
     fn uses_registered_localhost_redirect_uri() {
-        let redirect_uri = redirect_uri();
+        let redirect_uri = redirect_uri(super::CALLBACK_PORT);
         assert_eq!(redirect_uri, "http://localhost:51121/oauth-callback");
 
         let authorize_url = build_authorize_url(&Pkce::generate(), "state", &redirect_uri);
         assert!(
             authorize_url.contains("redirect_uri=http%3A%2F%2Flocalhost%3A51121%2Foauth-callback")
+        );
+    }
+
+    #[test]
+    fn reports_real_architecture_on_all_desktop_platforms() {
+        assert_eq!(
+            platform_tokens_for("windows", "x86_64"),
+            ("windows/amd64".to_string(), "WINDOWS")
+        );
+        assert_eq!(
+            platform_tokens_for("windows", "aarch64"),
+            ("windows/arm64".to_string(), "WINDOWS")
+        );
+        assert_eq!(
+            platform_tokens_for("macos", "aarch64"),
+            ("darwin/arm64".to_string(), "MACOS")
+        );
+        assert_eq!(
+            platform_tokens_for("linux", "x86_64"),
+            ("linux/amd64".to_string(), "LINUX")
+        );
+        assert_eq!(
+            platform_tokens_for("linux", "aarch64"),
+            ("linux/arm64".to_string(), "LINUX")
         );
     }
 }

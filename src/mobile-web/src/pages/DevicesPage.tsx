@@ -57,7 +57,7 @@ const NoIdentityIcon = () => (
 );
 
 const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
-  const { t } = useI18n();
+  const { t, formatRelativeTime } = useI18n();
   const { setControlTarget, resetForDeviceSwitch } = useMobileStore();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [identityReady, setIdentityReady] = useState(client.hasDelegatedIdentity);
@@ -270,7 +270,11 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                 </span>
                 <span className="devices-page__device-meta">
                   <span className={`devices-page__status-dot ${d.online ? 'is-online' : 'is-offline'}`} />
-                  {d.online ? t('devices.online') : t('devices.offline')}
+                  {d.online
+                    ? t('devices.online')
+                    : d.last_seen_at
+                      ? t('devices.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
+                      : t('devices.offline')}
                   <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
                 </span>
               </span>

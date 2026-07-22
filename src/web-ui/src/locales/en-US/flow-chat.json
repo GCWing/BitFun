@@ -10,6 +10,16 @@
     "allowAlwaysTooltip": "Always allow saves matching access for {{projectPath}}.",
     "allowAlwaysTooltipCurrentProject": "Always allow saves matching access for the current project.",
     "allowAlwaysTooltipNoGrant": "This request has no savable access scope; always allow applies only to this request.",
+    "risks": {
+      "pageSave": "Save a new immutable version of “{{slug}}” with {{visibility}} visibility without changing production.",
+      "pagePublish": "Save “{{slug}}” with {{visibility}} visibility and switch its production version.",
+      "pageDeploy": "Switch production traffic for “{{slug}}” to immutable version “{{version}}”."
+    },
+    "visibility": {
+      "private": "private",
+      "relay": "signed-in users",
+      "public": "public"
+    },
     "reject": "Reject",
     "batchCount": "{{count}} permission requests",
     "current": "Current",
@@ -25,6 +35,8 @@
       "mcp": "MCP tool",
       "task": "Run task",
       "skill": "Run skill",
+      "pagePublish": "Save page version",
+      "pageDeploy": "Deploy page version",
       "customTool": "External tool",
       "externalDirectory": "Access external directory",
       "other": "Other action"
@@ -1391,6 +1403,7 @@
       "deployingShort": "…",
       "untitled": "(unnamed)",
       "deployFailed": "Could not deploy BitFun Page version",
+      "openFailed": "Could not create a secure link for this Page.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1401,6 +1414,7 @@
       "publishingShort": "…",
       "untitled": "(unnamed)",
       "publishFailed": "Could not publish BitFun Page",
+      "openFailed": "Could not create a secure link for this Page.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",

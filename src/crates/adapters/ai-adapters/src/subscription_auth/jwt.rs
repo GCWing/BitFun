@@ -50,7 +50,7 @@ pub(crate) fn chatgpt_account_id(token: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
     fn make_token(payload: serde_json::Value) -> String {
         let header = URL_SAFE_NO_PAD.encode(b"{\"alg\":\"none\"}");

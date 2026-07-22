@@ -7,6 +7,7 @@ import {
   TYPEWRITER_MAX_CHARS_PER_SEC,
   commitTypewriterReveal,
   computeTypewriterCharsPerSec,
+  safeGraphemeRevealEnd,
 } from './useTypewriter';
 
 describe('computeTypewriterCharsPerSec', () => {
@@ -76,5 +77,28 @@ describe('commitTypewriterReveal', () => {
       chars: 0,
       fractionalCarry: 0,
     });
+  });
+});
+
+describe('safeGraphemeRevealEnd', () => {
+  it('never exposes half a surrogate pair', () => {
+    expect(safeGraphemeRevealEnd('A😀B', 2)).toBe(3);
+  });
+
+  it('keeps combining and ZWJ emoji sequences together', () => {
+    expect(safeGraphemeRevealEnd('e\u0301!', 1)).toBe(2);
+    const family = '👨‍👩‍👧‍👦';
+    expect(safeGraphemeRevealEnd(`${family}!`, 1)).toBe(family.length);
+  });
+
+  it('clamps offsets to the text bounds', () => {
+    expect(safeGraphemeRevealEnd('abc', -4)).toBe(0);
+    expect(safeGraphemeRevealEnd('abc', 100)).toBe(3);
+  });
+
+  it('can segment from a previously known boundary for long streams', () => {
+    const prefix = 'a'.repeat(10_000);
+    expect(safeGraphemeRevealEnd(`${prefix}😀!`, prefix.length + 1, prefix.length))
+      .toBe(prefix.length + 2);
   });
 });

@@ -500,6 +500,40 @@ fn permission_project_path(context: &ToolUseContext) -> BitFunResult<String> {
         .to_string())
 }
 
+const ACCOUNT_PERMISSION_SCOPE: &str = "account";
+const ACCOUNT_PERMISSION_PROJECT_ID: &str = "__bitfun_account_actions__";
+const ACCOUNT_PERMISSION_PROJECT_PATH: &str = "BitFun account";
+
+fn permission_scope(
+    context: &ToolUseContext,
+    intents: &[PermissionIntent],
+) -> BitFunResult<(String, String)> {
+    if context.workspace.is_some() {
+        return Ok((
+            permission_project_id(context)?,
+            permission_project_path(context)?,
+        ));
+    }
+
+    let account_scoped = intents.iter().all(|intent| {
+        intent
+            .display_metadata
+            .get("permissionScope")
+            .and_then(serde_json::Value::as_str)
+            == Some(ACCOUNT_PERMISSION_SCOPE)
+    });
+    if account_scoped {
+        return Ok((
+            ACCOUNT_PERMISSION_PROJECT_ID.to_string(),
+            ACCOUNT_PERMISSION_PROJECT_PATH.to_string(),
+        ));
+    }
+
+    Err(BitFunError::validation(
+        "A workspace is required for file permissions".to_string(),
+    ))
+}
+
 fn permission_resource_case_sensitivity(
     context: &ToolUseContext,
 ) -> PermissionResourceCaseSensitivity {
@@ -564,10 +598,21 @@ fn permission_intent_effect(
         }
     }
 
-    if intent.resources.is_empty() {
+    let effect = if intent.resources.is_empty() {
         PermissionEffect::Ask
     } else {
         aggregate
+    };
+    if effect != PermissionEffect::Deny
+        && intent
+            .display_metadata
+            .get("requiresFreshApproval")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    {
+        PermissionEffect::Ask
+    } else {
+        effect
     }
 }
 
@@ -623,8 +668,7 @@ impl ToolPipeline {
             return Ok(PermissionPlanDraft::Allowed);
         }
 
-        let project_id = permission_project_id(&context)?;
-        let project_path = permission_project_path(&context)?;
+        let (project_id, project_path) = permission_scope(&context, &intents)?;
         let permission_rules = task.options.permission_rules.clone();
         let case_sensitivity = permission_resource_case_sensitivity(&context);
         let round_id = task.context.round_id.clone();
@@ -2207,6 +2251,65 @@ mod tests {
             ),
             PermissionEffect::Deny
         );
+    }
+
+    #[test]
+    fn account_scoped_fresh_approval_works_without_a_workspace_and_ignores_allow_rules() {
+        let mut intent = PermissionIntent::new(
+            "page_publish",
+            vec!["page:demo; visibility=private; deploy=saved-version-only".to_string()],
+        );
+        intent.display_metadata.insert(
+            "permissionScope".to_string(),
+            json!(ACCOUNT_PERMISSION_SCOPE),
+        );
+        intent
+            .display_metadata
+            .insert("requiresFreshApproval".to_string(), json!(true));
+        let context = ToolUseContext::for_tool_listing(None, None);
+        assert_eq!(
+            permission_scope(&context, &[intent.clone()]).expect("account scope"),
+            (
+                ACCOUNT_PERMISSION_PROJECT_ID.to_string(),
+                ACCOUNT_PERMISSION_PROJECT_PATH.to_string(),
+            )
+        );
+
+        let allow = vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Allow,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &allow,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Ask
+        );
+        let deny = vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Deny,
+        )];
+        assert_eq!(
+            permission_intent_effect(
+                &intent,
+                &deny,
+                &[],
+                PermissionResourceCaseSensitivity::Sensitive,
+            ),
+            PermissionEffect::Deny
+        );
+    }
+
+    #[test]
+    fn ordinary_permission_intents_still_require_a_workspace() {
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let intent = PermissionIntent::new("edit", vec!["src/main.rs".to_string()]);
+        assert!(permission_scope(&context, &[intent]).is_err());
     }
 
     struct StaticTestTool {

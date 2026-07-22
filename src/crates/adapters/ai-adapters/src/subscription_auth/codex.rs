@@ -139,9 +139,6 @@ fn metadata_from(tokens: &TokenResponse) -> Option<serde_json::Value> {
 }
 
 async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
-    let _guard = super::store_lock(super::SubscriptionProvider::Codex)
-        .lock()
-        .await;
     let access = tokens
         .access_token
         .clone()
@@ -153,9 +150,8 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
     let expires = now_ms() + tokens.expires_in.unwrap_or(3600) * 1000;
     let account_id = account_id_from(&tokens);
     let metadata = metadata_from(&tokens);
-    let mut store = store::load().await.unwrap_or_default();
-    store.insert(
-        STORE_KEY.to_string(),
+    store::upsert(
+        STORE_KEY,
         StoredCredential::Oauth {
             refresh,
             access,
@@ -163,8 +159,8 @@ async fn persist_tokens(tokens: TokenResponse) -> Result<()> {
             account_id,
             metadata,
         },
-    );
-    store::save(&store).await?;
+    )
+    .await?;
     log::info!("codex subscription tokens saved");
     Ok(())
 }
@@ -179,19 +175,21 @@ pub(crate) async fn begin_login(cancel: CancellationToken) -> Result<StartedLogi
     let verifier = pkce.verifier.clone();
 
     let runner = async move {
-        tokio::select! {
-            _ = cancel.cancelled() => Err(anyhow!("login cancelled")),
-            result = async {
+        super::authorize_then_persist(
+            super::SubscriptionProvider::Codex,
+            cancel,
+            async {
                 let params =
                     oauth_server::wait_for_callback(listener, CALLBACK_PATH, &state).await?;
                 let code = params
                     .get("code")
                     .cloned()
                     .ok_or_else(|| anyhow!("codex callback missing code"))?;
-                let tokens = exchange_code(&code, &verifier, &redirect_uri).await?;
-                persist_tokens(tokens).await
-            } => result,
-        }
+                exchange_code(&code, &verifier, &redirect_uri).await
+            },
+            persist_tokens,
+        )
+        .await
     };
 
     Ok(StartedLogin {
@@ -208,10 +206,8 @@ async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
     let _guard = super::store_lock(super::SubscriptionProvider::Codex)
         .lock()
         .await;
-    let mut store = store::load().await.unwrap_or_default();
-    let entry = store
-        .get(STORE_KEY)
-        .cloned()
+    let entry = store::load_entry(STORE_KEY)
+        .await?
         .ok_or_else(|| anyhow!("Codex is not connected; sign in first"))?;
     let StoredCredential::Oauth {
         refresh: refresh_token,
@@ -237,8 +233,8 @@ async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
     let new_expires = now_ms() + refreshed.expires_in.unwrap_or(3600) * 1000;
     let new_account_id = account_id_from(&refreshed).or(account_id);
     let new_metadata = metadata_from(&refreshed).or(metadata);
-    store.insert(
-        STORE_KEY.to_string(),
+    store::upsert(
+        STORE_KEY,
         StoredCredential::Oauth {
             refresh: new_refresh,
             access: new_access.clone(),
@@ -246,8 +242,8 @@ async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
             account_id: new_account_id.clone(),
             metadata: new_metadata,
         },
-    );
-    store::save(&store).await?;
+    )
+    .await?;
     log::info!("codex subscription tokens refreshed");
     Ok((new_access, new_account_id, new_expires))
 }

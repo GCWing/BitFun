@@ -10,6 +10,16 @@
     "allowAlwaysTooltip": "始终允许会为 {{projectPath}} 保存匹配的访问权限。",
     "allowAlwaysTooltipCurrentProject": "始终允许会为当前项目保存匹配的访问权限。",
     "allowAlwaysTooltipNoGrant": "此请求没有可保存的访问范围；始终允许仅应用于本次请求。",
+    "risks": {
+      "pageSave": "以{{visibility}}可见性保存“{{slug}}”的新不可变版本，不改变当前生产版本。",
+      "pagePublish": "以{{visibility}}可见性保存“{{slug}}”，并切换其生产版本。",
+      "pageDeploy": "将“{{slug}}”的生产流量切换到不可变版本“{{version}}”。"
+    },
+    "visibility": {
+      "private": "仅自己可见",
+      "relay": "登录用户可见",
+      "public": "公开"
+    },
     "reject": "拒绝",
     "batchCount": "{{count}} 个权限请求",
     "current": "当前",
@@ -25,6 +35,8 @@
       "mcp": "MCP 调用",
       "task": "运行任务",
       "skill": "运行技能",
+      "pagePublish": "保存页面版本",
+      "pageDeploy": "部署页面版本",
       "customTool": "外部工具",
       "externalDirectory": "访问外部目录",
       "other": "其他操作"
@@ -1391,6 +1403,7 @@
       "deployingShort": "…",
       "untitled": "（未命名）",
       "deployFailed": "无法部署 BitFun Page 版本",
+      "openFailed": "无法为该页面创建安全访问链接。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -1401,6 +1414,7 @@
       "publishingShort": "…",
       "untitled": "（未命名）",
       "publishFailed": "无法发布 BitFun Page",
+      "openFailed": "无法为该页面创建安全访问链接。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
