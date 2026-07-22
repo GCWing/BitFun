@@ -59,7 +59,9 @@ If office-hours output exists, read it — the product context is pre-filled.
 
 If the codebase is empty and purpose is unclear, say: *"I don't have a clear picture of what you're building yet. Want to explore first with `/office-hours`? Once we know the product direction, we can set up the design system."*
 
-**Visual research tooling:** Use BitFun built-in browser/computer-use capability for screenshots and live-page inspection. Do not install, build, or call any external browse binary. If browser tooling is unavailable, continue with code inspection, WebSearch when allowed, and static visual analysis.
+**Visual research tooling:** Use agent-browser for screenshots and live-page inspection. If it is unavailable, continue with code inspection, WebSearch when allowed, and static visual analysis.
+
+Once per skill invocation, before the first browser command, run `agent-browser --version` (require 0.32.3 or newer) and load `agent-browser skills get core`; reuse that guidance for the rest of this invocation. If either step fails, do not install automatically; use the static fallback above or ask whether the user wants the pinned install from the bundled agent-browser skill.
 
 If browse is not available, that's fine — visual research is optional. The skill works without it using WebSearch and your built-in design knowledge.
 
@@ -67,7 +69,7 @@ If browse is not available, that's fine — visual research is optional. The ski
 
 ## DESIGN SETUP
 
-Use BitFun built-in image/design and browser/computer-use capabilities. Do not install, build, or call external `design` or `browse` binaries. Generate mockups, comparison boards, screenshots, and visual QA artifacts through BitFun tools; if a visual generation capability is not available in the current session, fall back to HTML wireframes and code-level design review.
+Use BitFun's built-in image/design capabilities and agent-browser for live-page work. Do not install or build external `design` binaries. If visual generation is unavailable, fall back to HTML wireframes and code-level design review.
 
 **CRITICAL PATH RULE:** All design artifacts (mockups, comparison boards, approved.json)
 MUST be saved to `$HOME/.bitfun/team/projects/$SLUG/designs/`, NEVER to `.context/`,
@@ -111,12 +113,12 @@ Use WebSearch to find 5-10 products in their space. Search for:
 
 **Step 2: Visual research via browse (if available)**
 
-If the BitFun browser/computer-use tooling is available (`BitFun browser/computer-use` is set), visit the top 3-5 sites in the space and capture visual evidence:
+If the agent-browser CLI is available, visit the top 3-5 sites in the space and capture visual evidence:
 
 ```bash
-BitFun browser/computer-use goto "https://example-site.com"
-BitFun browser/computer-use screenshot "/tmp/design-research-site-name.png"
-BitFun browser/computer-use snapshot
+agent-browser open "https://example-site.com"
+agent-browser screenshot "/tmp/design-research-site-name.png"
+agent-browser snapshot
 ```
 
 For each site, analyze: fonts actually used, color palette, layout approach, spacing density, aesthetic direction. The screenshot gives you the feel; the snapshot gives you structural data.
@@ -584,7 +586,7 @@ List all decisions. Flag any that used agent defaults without explicit user conf
 
 After shipping DESIGN.md, if the session produced screen-level mockups or page layouts
 (not just system-level tokens), suggest:
-"Want to see this design system as working Pretext-native HTML? Run /design-html."
+"Want to turn this design system into working HTML with an available prototyping capability?"
 
 ---
 

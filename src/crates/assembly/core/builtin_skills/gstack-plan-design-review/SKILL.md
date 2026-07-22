@@ -180,7 +180,7 @@ planning phase. Generating mockups during planning is the whole point.
 Allowed commands under this exception:
 - `mkdir -p $HOME/.bitfun/team/projects/$SLUG/designs/...`
 - `BitFun image/design capability generate`, `BitFun image/design capability variants`, `BitFun image/design capability compare`, `BitFun image/design capability iterate`, `BitFun image/design capability evolve`, `BitFun image/design capability check`
-- `open` (fallback for viewing boards when `BitFun browser/computer-use` is not available)
+- `open` (fallback for viewing boards when `agent-browser` is not available)
 
 First, set up the output directory. Name it after the screen/feature being designed and today's date:
 
@@ -194,7 +194,7 @@ echo "DESIGN_DIR: $_DESIGN_DIR"
 Replace `<screen-name>` with a descriptive kebab-case name (e.g., `homepage-variants`, `settings-page`, `onboarding-flow`).
 
 **Generate mockups ONE AT A TIME in this skill.** The inline review flow generates
-fewer variants and benefits from sequential control. Note: /design-shotgun uses
+fewer variants and benefits from sequential control. Note: parallel design exploration uses
 parallel Agent subagents for variant generation, which works at Tier 2+ (15+ RPM).
 The sequential constraint here is specific to plan-design-review's inline pattern.
 
@@ -784,8 +784,6 @@ Parse each JSONL entry. Each skill logs different fields:
   → Findings: "{issues_found} issues, {critical_gaps} critical gaps"
 - **plan-design-review**: \`status\`, \`initial_score\`, \`overall_score\`, \`unresolved\`, \`decisions_made\`, \`commit\`
   → Findings: "score: {initial_score}/10 → {overall_score}/10, {decisions_made} decisions"
-- **plan-devex-review**: \`status\`, \`initial_score\`, \`overall_score\`, \`product_type\`, \`tthw_current\`, \`tthw_target\`, \`mode\`, \`persona\`, \`competitive_tier\`, \`unresolved\`, \`commit\`
-  → Findings: "score: {initial_score}/10 → {overall_score}/10, TTHW: {tthw_current} → {tthw_target}"
 - **devex-review**: \`status\`, \`overall_score\`, \`product_type\`, \`tthw_measured\`, \`dimensions_tested\`, \`dimensions_inferred\`, \`boomerang\`, \`commit\`
   → Findings: "score: {overall_score}/10, TTHW: {tthw_measured}, {dimensions_tested} tested/{dimensions_inferred} inferred"
 - **outside-voice-review**: \`status\`, \`gate\`, \`findings\`, \`findings_fixed\`
@@ -806,7 +804,6 @@ Produce this markdown table:
 | outside-voice sub-agent Review | \`BitFun Task outside-voice review\` | Independent 2nd opinion | {runs} | {status} | {findings} |
 | Eng Review | \`/plan-eng-review\` | Architecture & tests (required) | {runs} | {status} | {findings} |
 | Design Review | \`/plan-design-review\` | UI/UX gaps | {runs} | {status} | {findings} |
-| DX Review | \`/plan-devex-review\` | Developer experience gaps | {runs} | {status} | {findings} |
 \`\`\`
 
 Below the table, add these lines (omit any that are empty/not applicable):
@@ -868,17 +865,17 @@ After displaying the Review Readiness Dashboard, recommend the next review(s) ba
 
 **If both are needed, recommend eng review first** (required gate).
 
-**Recommend design exploration skills when appropriate** — /design-shotgun and /design-html
+**Recommend design exploration capabilities when appropriate** — use capabilities available in the current session
 produce design artifacts (mockups, HTML previews), not application code. They belong in
 plan mode alongside reviews. If this design review found visual issues that would benefit
-from exploring new directions, recommend /design-shotgun. If approved mockups exist and
-need to be turned into working HTML, recommend /design-html.
+from exploring new directions, recommend the available design exploration capability. If approved mockups exist and
+need to be turned into working HTML, recommend the available HTML prototyping capability.
 
 Use AskUserQuestion to present the next step. Include only applicable options:
 - **A)** Run /plan-eng-review next (required gate)
 - **B)** Run /plan-ceo-review (only if fundamental product gaps found)
-- **C)** Run /design-shotgun — explore visual design variants for issues found
-- **D)** Run /design-html — generate Pretext-native HTML from approved mockups
+- **C)** Explore visual design variants for issues found using an available capability
+- **D)** Generate HTML from approved mockups using an available capability
 - **E)** Skip — I'll handle next steps manually
 
 ## Formatting Rules
