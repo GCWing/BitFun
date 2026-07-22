@@ -1256,6 +1256,26 @@
     "retryHistoryHide": "Hide retry history",
     "attemptLabel": "Attempt {{index}}",
     "attemptSuperseded": "superseded",
+    "attemptDiagnostics": {
+      "show": "Show retry diagnostic details",
+      "hide": "Hide retry diagnostic details",
+      "copy": "Copy",
+      "copied": "Copied",
+      "providerError": "Provider error",
+      "toolArguments": "Tool arguments: {{name}}",
+      "rawArguments": "Raw arguments",
+      "validationError": "Parser or validation error",
+      "unknownTool": "Unknown tool",
+      "categories": {
+        "transientRequestError": "Request failed before the provider responded",
+        "interruptedToolArguments": "Tool arguments were interrupted",
+        "partialStreamError": "Stream ended with a recoverable error",
+        "invalidToolArguments": "Provider returned invalid tool arguments",
+        "noEffectiveOutput": "Provider returned no usable output",
+        "transientStreamError": "Stream failed before usable output",
+        "unknown": "Retry diagnostic: {{category}}"
+      }
+    },
     "meta": {
       "label": "Response metadata",
       "completed": "Completed",

@@ -1256,6 +1256,26 @@
     "retryHistoryHide": "隐藏重试历史",
     "attemptLabel": "第 {{index}} 次尝试",
     "attemptSuperseded": "已被重试接替",
+    "attemptDiagnostics": {
+      "show": "显示本次重试诊断详情",
+      "hide": "隐藏本次重试诊断详情",
+      "copy": "复制",
+      "copied": "已复制",
+      "providerError": "服务商错误",
+      "toolArguments": "工具参数：{{name}}",
+      "rawArguments": "原始参数",
+      "validationError": "解析或校验错误",
+      "unknownTool": "未知工具",
+      "categories": {
+        "transientRequestError": "请求在服务商响应前失败",
+        "interruptedToolArguments": "工具参数输出被中断",
+        "partialStreamError": "流式输出以可恢复错误结束",
+        "invalidToolArguments": "服务商返回了不合法的工具参数",
+        "noEffectiveOutput": "服务商未返回可用输出",
+        "transientStreamError": "流式输出在产生可用内容前失败",
+        "unknown": "重试诊断：{{category}}"
+      }
+    },
     "meta": {
       "label": "回应元信息",
       "completed": "完成",

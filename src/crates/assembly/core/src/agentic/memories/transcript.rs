@@ -387,6 +387,7 @@ mod tests {
             first_visible_output_ms: None,
             stream_duration_ms: None,
             attempt_count: None,
+            attempt_diagnostics: vec![],
             failure_category: None,
             token_details: None,
             status: "completed".to_string(),

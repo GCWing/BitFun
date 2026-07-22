@@ -107,6 +107,8 @@ pub struct FinalizedToolCall {
     pub raw_arguments: String,
     pub arguments: Value,
     pub is_error: bool,
+    /// Original JSON parser error when the provider emitted invalid arguments.
+    pub parse_error: Option<String>,
     pub repair_kind: ToolArgumentRepairKind,
     /// True when the raw stream produced unparseable JSON (e.g. truncated by
     /// `max_tokens`) and we successfully patched the trailing brackets/strings
@@ -403,9 +405,10 @@ impl PendingToolCall {
         self.early_detected_emitted = false;
         let parsed_arguments = Self::parse_arguments(&tool_name, &raw_arguments);
 
-        let (arguments, is_error, repair_kind) = match parsed_arguments {
-            Ok(value) => (value, false, ToolArgumentRepairKind::None),
+        let (arguments, is_error, repair_kind, parse_error) = match parsed_arguments {
+            Ok(value) => (value, false, ToolArgumentRepairKind::None, None),
             Err(parse_err) => {
+                let original_parse_error = parse_err.message.clone();
                 let write_tail_repair = is_write_like_tool_name(&tool_name)
                     .then(|| repair_truncated_json(&raw_arguments))
                     .flatten()
@@ -421,7 +424,12 @@ impl PendingToolCall {
                         parse_err.is_eof,
                         options.completion
                     );
-                    (value, false, ToolArgumentRepairKind::WriteTailClosure)
+                    (
+                        value,
+                        false,
+                        ToolArgumentRepairKind::WriteTailClosure,
+                        Some(original_parse_error),
+                    )
                 } else if options.allow_normal_tool_json_repair
                     && options.completion.permits_normal_tool_json_repair()
                 {
@@ -446,6 +454,7 @@ impl PendingToolCall {
                                 value,
                                 false,
                                 ToolArgumentRepairKind::PermissiveNormalToolJsonRepair,
+                                Some(original_parse_error),
                             )
                         }
                         None => {
@@ -459,7 +468,12 @@ impl PendingToolCall {
                                 parse_err.category,
                                 parse_err.is_eof
                             );
-                            (json!({}), true, ToolArgumentRepairKind::None)
+                            (
+                                json!({}),
+                                true,
+                                ToolArgumentRepairKind::None,
+                                Some(original_parse_error),
+                            )
                         }
                     }
                 } else {
@@ -474,7 +488,12 @@ impl PendingToolCall {
                         parse_err.is_eof,
                         options.completion
                     );
-                    (json!({}), true, ToolArgumentRepairKind::None)
+                    (
+                        json!({}),
+                        true,
+                        ToolArgumentRepairKind::None,
+                        Some(original_parse_error),
+                    )
                 }
             }
         };
@@ -487,6 +506,7 @@ impl PendingToolCall {
             is_error,
             repair_kind,
             recovered_from_truncation: repair_kind.is_write_tail_closure(),
+            parse_error,
         })
     }
 }
@@ -645,6 +665,11 @@ mod tests {
 
         assert_eq!(finalized.arguments, json!({}));
         assert!(finalized.is_error);
+        assert_eq!(finalized.raw_arguments, "{\"a\":");
+        assert!(finalized
+            .parse_error
+            .as_deref()
+            .is_some_and(|error| error.contains("EOF")));
     }
 
     #[test]

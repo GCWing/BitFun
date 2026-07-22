@@ -477,6 +477,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         startTime: round.startTime,
         endTime: round.endTime,
         attemptCount: round.attemptCount,
+        attemptDiagnostics: round.attemptDiagnostics,
         status: round.status || 'completed',
       };
     }),

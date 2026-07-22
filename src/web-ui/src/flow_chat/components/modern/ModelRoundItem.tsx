@@ -9,8 +9,8 @@
 
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, Check } from 'lucide-react';
-import type { ModelRound, ModelRoundAttempt, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
+import { Copy, Check, CircleAlert } from 'lucide-react';
+import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
@@ -155,6 +155,123 @@ function sortRoundAttempts(attempts: ModelRoundAttempt[]): ModelRoundAttempt[] {
   return [...attempts].sort((left, right) => left.index - right.index);
 }
 
+function attemptDiagnosticCategoryLabel(
+  diagnostic: ModelRoundAttemptDiagnostic,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  switch (diagnostic.category) {
+    case 'transient_request_error':
+      return t('modelRound.attemptDiagnostics.categories.transientRequestError');
+    case 'interrupted_tool_arguments':
+      return t('modelRound.attemptDiagnostics.categories.interruptedToolArguments');
+    case 'partial_stream_error':
+      return t('modelRound.attemptDiagnostics.categories.partialStreamError');
+    case 'invalid_tool_arguments':
+      return t('modelRound.attemptDiagnostics.categories.invalidToolArguments');
+    case 'no_effective_output':
+      return t('modelRound.attemptDiagnostics.categories.noEffectiveOutput');
+    case 'transient_stream_error':
+      return t('modelRound.attemptDiagnostics.categories.transientStreamError');
+    default:
+      return t('modelRound.attemptDiagnostics.categories.unknown', { category: diagnostic.category });
+  }
+}
+
+const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnostic }> = ({ diagnostic }) => {
+  const { t } = useTranslation('flow-chat');
+  const [isOpen, setIsOpen] = useState(false);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
+
+  const copyValue = useCallback(async (value: string, valueKey: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedValue(valueKey);
+      window.setTimeout(() => setCopiedValue(current => current === valueKey ? null : current), 2000);
+    } catch (error) {
+      log.error('Failed to copy attempt diagnostic value', error);
+    }
+  }, []);
+
+  const renderCopyButton = (value: string, valueKey: string) => (
+    <Tooltip content={copiedValue === valueKey ? t('modelRound.attemptDiagnostics.copied') : t('modelRound.attemptDiagnostics.copy')} placement="top">
+      <button
+        type="button"
+        className="model-round-item__attempt-diagnostic-copy"
+        onClick={() => void copyValue(value, valueKey)}
+        aria-label={t('modelRound.attemptDiagnostics.copy')}
+      >
+        {copiedValue === valueKey ? <Check size={13} /> : <Copy size={13} />}
+      </button>
+    </Tooltip>
+  );
+
+  const detailsId = `attempt-diagnostic-${diagnostic.attemptId}`;
+
+  return (
+    <>
+      <Tooltip content={isOpen ? t('modelRound.attemptDiagnostics.hide') : t('modelRound.attemptDiagnostics.show')} placement="top">
+        <button
+          type="button"
+          className="model-round-item__attempt-diagnostic-toggle"
+          onClick={() => setIsOpen(current => !current)}
+          aria-expanded={isOpen}
+          aria-controls={detailsId}
+          aria-label={isOpen ? t('modelRound.attemptDiagnostics.hide') : t('modelRound.attemptDiagnostics.show')}
+        >
+          <CircleAlert size={13} aria-hidden="true" />
+        </button>
+      </Tooltip>
+
+      {isOpen && (
+        <div id={detailsId} className="model-round-item__attempt-diagnostic-details">
+          <div className="model-round-item__attempt-diagnostic-category">
+            {attemptDiagnosticCategoryLabel(diagnostic, t)}
+          </div>
+
+          {diagnostic.rawError && (
+            <div className="model-round-item__attempt-diagnostic-section">
+              <div className="model-round-item__attempt-diagnostic-section-header">
+                <span>{t('modelRound.attemptDiagnostics.providerError')}</span>
+                {renderCopyButton(diagnostic.rawError, 'raw-error')}
+              </div>
+              <pre>{diagnostic.rawError}</pre>
+            </div>
+          )}
+
+          {(diagnostic.toolCalls ?? []).map((toolCall, index) => {
+            const toolLabel = toolCall.toolName || toolCall.toolId || t('modelRound.attemptDiagnostics.unknownTool');
+            return (
+              <div key={`${toolCall.toolId ?? toolCall.toolName ?? 'tool'}:${index}`} className="model-round-item__attempt-diagnostic-section">
+                <div className="model-round-item__attempt-diagnostic-tool-title">
+                  {t('modelRound.attemptDiagnostics.toolArguments', { name: toolLabel })}
+                </div>
+                {toolCall.rawArguments && (
+                  <>
+                    <div className="model-round-item__attempt-diagnostic-section-header">
+                      <span>{t('modelRound.attemptDiagnostics.rawArguments')}</span>
+                      {renderCopyButton(toolCall.rawArguments, `raw-arguments:${index}`)}
+                    </div>
+                    <pre>{toolCall.rawArguments}</pre>
+                  </>
+                )}
+                {toolCall.validationError && (
+                  <>
+                    <div className="model-round-item__attempt-diagnostic-section-header">
+                      <span>{t('modelRound.attemptDiagnostics.validationError')}</span>
+                      {renderCopyButton(toolCall.validationError, `validation-error:${index}`)}
+                    </div>
+                    <pre>{toolCall.validationError}</pre>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+};
+
 function useTaskCollapsed(toolId: string): boolean {
   const [isCollapsed, setIsCollapsed] = useState(() =>
     taskCollapseStateManager.isCollapsed(toolId)
@@ -280,15 +397,15 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       () => sortRoundAttempts(round.attempts ?? []),
       [round.attempts]
     );
-    const olderAttempts = attempts.length > 1 ? attempts.slice(0, -1) : [];
-    const latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : undefined;
+    const activeAttempt = [...attempts].reverse().find(attempt => !attempt.diagnostic);
+    const historicalAttempts = attempts.filter(attempt => attempt !== activeAttempt);
     const historyRounds = round.historyRounds ?? [];
 
     useEffect(() => {
-      if (olderAttempts.length === 0 && showRetryHistory) {
+      if (historicalAttempts.length === 0 && showRetryHistory) {
         setShowRetryHistory(false);
       }
-    }, [olderAttempts.length, showRetryHistory]);
+    }, [historicalAttempts.length, showRetryHistory]);
 
     useEffect(() => {
       if (historyRounds.length === 0 && showRoundHistory) {
@@ -305,8 +422,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
     // Keep the recorded round order; FlowChatStore already applies immutable updates.
     const sortedItems = useMemo(
-      () => latestAttempt?.items ?? round.items,
-      [latestAttempt?.items, round.items]
+      () => activeAttempt?.items ?? (attempts.length === 0 ? round.items : []),
+      [activeAttempt?.items, attempts.length, round.items]
     );
     
     const latestCompletedToolEndTime = useMemo(() => {
@@ -705,7 +822,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                         return (
                           <div key={attempt.id} className="model-round-item__retry-attempt">
                             <div className="model-round-item__retry-attempt-label">
-                              {t('modelRound.attemptLabel', { index: attempt.index })}
+                              <span>{t('modelRound.attemptLabel', { index: attempt.index })}</span>
+                              {attempt.diagnostic && <AttemptDiagnosticDetails diagnostic={attempt.diagnostic} />}
                             </div>
                             {renderGroupList(attemptGroups, {
                               roundId: historyRound.id,
@@ -728,7 +846,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
 
-        {olderAttempts.length > 0 && (
+        {historicalAttempts.length > 0 && (
           <div className="model-round-item__retry-history">
             <button
               type="button"
@@ -737,10 +855,10 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             >
               {showRetryHistory
                 ? t('modelRound.retryHistoryHide')
-                : t('modelRound.retryHistoryShow', { count: olderAttempts.length })}
+                : t('modelRound.retryHistoryShow', { count: historicalAttempts.length })}
             </button>
 
-            {showRetryHistory && olderAttempts.map((attempt) => {
+            {showRetryHistory && historicalAttempts.map((attempt) => {
               const attemptGroups = buildModelRoundItemGroups({
                 items: attempt.items,
                 isStreaming: false,
@@ -752,7 +870,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               return (
                 <div key={attempt.id} className="model-round-item__retry-attempt">
                   <div className="model-round-item__retry-attempt-label">
-                    {t('modelRound.attemptLabel', { index: attempt.index })}
+                    <span>{t('modelRound.attemptLabel', { index: attempt.index })}</span>
+                    {attempt.diagnostic && <AttemptDiagnosticDetails diagnostic={attempt.diagnostic} />}
                   </div>
                   {renderGroupList(attemptGroups, {
                     roundId: round.id,
@@ -767,7 +886,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {renderGroupList(visibleGroupedItems, {
           roundId: round.id,
-          keyPrefix: latestAttempt ? `attempt:${latestAttempt.id}` : 'round',
+          keyPrefix: activeAttempt ? `attempt:${activeAttempt.id}` : 'round',
           isFinalSection: isLastRound,
         })}
 
@@ -827,6 +946,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     return (
       prev.round.id === next.round.id &&
       prev.round.items === next.round.items &&
+      prev.round.attempts === next.round.attempts &&
+      prev.round.attemptDiagnostics === next.round.attemptDiagnostics &&
       prev.round.historyRounds === next.round.historyRounds &&
       prev.isLastRound === next.isLastRound &&
       prev.isTurnComplete === next.isTurnComplete &&

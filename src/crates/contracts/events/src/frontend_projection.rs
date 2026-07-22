@@ -421,6 +421,20 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "tokenDetails": token_details,
             }),
         )),
+        AgenticEvent::ModelRoundAttemptSuperseded {
+            session_id,
+            turn_id,
+            round_id,
+            diagnostic,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://model-round-attempt-superseded",
+            json!({
+                "sessionId": session_id,
+                "turnId": turn_id,
+                "roundId": round_id,
+                "diagnostic": diagnostic,
+            }),
+        )),
         AgenticEvent::UserSteeringInjected {
             session_id,
             turn_id,
@@ -446,7 +460,10 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus};
+    use crate::{
+        DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus,
+        ModelRoundAttemptDiagnostic,
+    };
 
     #[test]
     fn thinking_chunk_projects_to_text_chunk_event() {
@@ -499,6 +516,58 @@ mod tests {
 
         assert_eq!(projected.payload["modelConfigId"], "model-config");
         assert_eq!(projected.payload["effectiveModelName"], "provider-model");
+    }
+
+    #[test]
+    fn model_round_completed_projects_completion_fields() {
+        let projected = project_agentic_frontend_event(AgenticEvent::ModelRoundCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            has_tool_calls: false,
+            duration_ms: None,
+            provider_id: None,
+            model_config_id: "model-config".to_string(),
+            effective_model_name: "provider-model".to_string(),
+            first_chunk_ms: None,
+            first_visible_output_ms: None,
+            stream_duration_ms: None,
+            attempt_count: Some(1),
+            failure_category: Some("invalid_tool_arguments".to_string()),
+            token_details: None,
+        })
+        .expect("projected");
+
+        assert_eq!(projected.event_name, "agentic://model-round-completed");
+        assert_eq!(projected.payload["attemptCount"], 1);
+    }
+
+    #[test]
+    fn model_round_attempt_superseded_projects_realtime_retry_diagnostic() {
+        let projected = project_agentic_frontend_event(AgenticEvent::ModelRoundAttemptSuperseded {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            diagnostic: ModelRoundAttemptDiagnostic {
+                attempt_id: "round-1:attempt:1".to_string(),
+                attempt_index: 1,
+                category: "invalid_tool_arguments".to_string(),
+                raw_error: Some("Provider rejected the payload".to_string()),
+                tool_calls: vec![],
+            },
+        })
+        .expect("projected");
+
+        assert_eq!(
+            projected.event_name,
+            "agentic://model-round-attempt-superseded"
+        );
+        assert_eq!(projected.payload["sessionId"], "session-1");
+        assert_eq!(projected.payload["diagnostic"]["attemptIndex"], 1);
+        assert_eq!(
+            projected.payload["diagnostic"]["rawError"],
+            "Provider rejected the payload"
+        );
     }
 
     #[test]
